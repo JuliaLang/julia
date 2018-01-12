@@ -334,3 +334,12 @@ end
         @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
     end
 end
+
+# b"" should be immutable
+let testb() = b"0123"
+    b = testb()
+    @test eltype(b) === UInt8
+    @test b isa AbstractVector
+    @test_throws ErrorException b[4] = '4'
+    @test testb() == UInt8['0','1','2','3']
+end

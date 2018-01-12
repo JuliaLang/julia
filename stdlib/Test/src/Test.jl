@@ -130,6 +130,10 @@ mutable struct Error <: Result
     source::LineNumberNode
 end
 function Base.show(io::IO, t::Error)
+    if t.test_type == :test_interrupted
+        print_with_color(Base.error_color(), io, "Interrupted")
+        return
+    end
     print_with_color(Base.error_color(), io, "Error During Test"; bold = true)
     print(io, " at ")
     print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
@@ -511,10 +515,10 @@ end
 
 # Test for warning messages (deprecated)
 
-ismatch_warn(s::AbstractString, output) = contains(output, s)
-ismatch_warn(s::Regex, output) = ismatch(s, output)
-ismatch_warn(s::Function, output) = s(output)
-ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+contains_warn(output, s::AbstractString) = contains(output, s)
+contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::Function) = s(output)
+contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 
 """
     @test_warn msg expr
@@ -536,7 +540,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($(esc(msg)), read(fname, String))
+                @test contains_warn(read(fname, String), $(esc(msg)))
                 ret
             finally
                 rm(fname, force=true)
@@ -666,13 +670,16 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
         print_with_color(:white, ts.description, ": ")
-        print(t)
-        # don't print the backtrace for Errors because it gets printed in the show
-        # method
-        if !isa(t, Error)
-            Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        # don't print for interrupted tests
+        if !(t isa Error) || t.test_type != :test_interrupted
+            print(t)
+            # don't print the backtrace for Errors because it gets printed in the show
+            # method
+            if !isa(t, Error)
+                Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+            end
+            println()
         end
-        println()
     end
     push!(ts.results, t)
     t, isa(t, Error) || backtrace()
@@ -895,6 +902,22 @@ end
 
 #-----------------------------------------------------------------------
 
+function _check_testset(testsettype, testsetname)
+    if !(testsettype isa Type && testsettype <: AbstractTestSet)
+        error("Expected `$testsetname` to be an AbstractTestSet, it is a ",
+              typeof(testsettype), ". ",
+              typeof(testsettype) == String ?
+                  """
+                  To use `$testsetname` as a testset name, interpolate it into a string, e.g:
+                      @testset "\$$testsetname" begin
+                          ...
+                      end"""
+             :
+                  ""
+            )
+    end
+end
+
 """
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
@@ -965,6 +988,7 @@ function testset_beginend(args, tests, source)
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
     ex = quote
+        _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
         # which is needed for backtrace scrubbing to work correctly.
@@ -1035,6 +1059,7 @@ function testset_forloop(args, testloop, source)
     # wrapped in the outer loop provided by the user
     tests = testloop.args[2]
     blk = quote
+        _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         # Trick to handle `break` and `continue` in the test code before
         # they can be handled properly by `finally` lowering.
         if !first_iteration
@@ -1269,12 +1294,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
-                            ambiguous_bottom::Bool = false,
-                            allow_bottom::Union{Bool,Nothing} = nothing)
-    if allow_bottom !== nothing
-        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
-        ambiguous_bottom = allow_bottom
-    end
+                            ambiguous_bottom::Bool = false)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)

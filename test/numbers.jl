@@ -720,6 +720,8 @@ end
     @test !isless(+NaN,+Inf)
     @test !isless(+NaN,-NaN)
     @test !isless(+NaN,+NaN)
+    @test !isless(+NaN,1)
+    @test !isless(-NaN,1)
 
     @test  isequal(   0, 0.0)
     @test  isequal( 0.0,   0)
@@ -729,11 +731,11 @@ end
     @test  !isless(   0,-0.0)
 
     @test isless(-0.0, 0.0f0)
-    @test lexcmp(-0.0, 0.0f0) == -1
-    @test lexcmp(0.0, -0.0f0) == 1
-    @test lexcmp(NaN, 1) == 1
-    @test lexcmp(1, NaN) == -1
-    @test lexcmp(NaN, NaN) == 0
+    @test cmp(isless, -0.0, 0.0f0) == -1
+    @test cmp(isless, 0.0, -0.0f0) == 1
+    @test cmp(isless, NaN, 1) == 1
+    @test cmp(isless, 1, NaN) == -1
+    @test cmp(isless, NaN, NaN) == 0
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -3024,8 +3026,8 @@ end
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
-    @test !isone(tril(ones(Int, 5, 5)))
-    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(tril(fill(1, 5, 5)))
+    @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF

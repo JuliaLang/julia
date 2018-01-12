@@ -2,7 +2,7 @@
 
 using Test
 
-using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, mul!, Adjoint, Transpose
+using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, mul!
 
 
 n = 10
@@ -27,8 +27,8 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = adjoint(a)+a                  # symmetric indefinite
-    apd  = a'*a                 # symmetric positive-definite
+    asym = a' + a                 # symmetric indefinite
+    apd  = a' * a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -53,7 +53,7 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                     @test size(lqa,3) == 1
                     @test size(lqa.Q,3) == 1
                     @test_throws ErrorException lqa.Z
-                    @test Array(adjoint(lqa)) ≈ a'
+                    @test Array(copy(adjoint(lqa))) ≈ a'
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
@@ -67,27 +67,27 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
                     @test lqa*b ≈ qra.Q*qra.R*b atol=3000ε
-                    @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), Adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) atol=5000ε
+                    @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) atol=5000ε
                     if eltya != Int
                         @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
                     @test q*b ≈ squareQ(q)*b atol=100ε
-                    @test Transpose(q)*b ≈ Transpose(squareQ(q))*b atol=100ε
+                    @test transpose(q)*b ≈ transpose(squareQ(q))*b atol=100ε
                     @test q'*b ≈ squareQ(q)'*b atol=100ε
                     @test a*q ≈ a*squareQ(q) atol=100ε
-                    @test a*Transpose(q) ≈ a*Transpose(squareQ(q)) atol=100ε
+                    @test a*transpose(q) ≈ a*transpose(squareQ(q)) atol=100ε
                     @test a*q' ≈ a*squareQ(q)' atol=100ε
                     @test a'*q ≈ a'*squareQ(q) atol=100ε
                     @test a'*q' ≈ a'*squareQ(q)' atol=100ε
                     @test_throws DimensionMismatch q*b[1:n1 + 1]
-                    @test_throws DimensionMismatch Adjoint(q) * ones(eltya,n+2,n+2)
-                    @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
+                    @test_throws DimensionMismatch adjoint(q) * Matrix{eltya}(uninitialized,n+2,n+2)
+                    @test_throws DimensionMismatch Matrix{eltyb}(uninitialized,n+2,n+2)*q
                     if isa(a, DenseArray) && isa(b, DenseArray)
                         # use this to test 2nd branch in mult code
                         pad_a = vcat(I, a)
                         pad_b = hcat(I, b)
                         @test pad_a*q ≈ pad_a*squareQ(q) atol=100ε
-                        @test Transpose(q)*pad_b ≈ Transpose(squareQ(q))*pad_b atol=100ε
+                        @test transpose(q)*pad_b ≈ transpose(squareQ(q))*pad_b atol=100ε
                         @test q'*pad_b ≈ squareQ(q)'*pad_b atol=100ε
                     end
                 end
@@ -100,8 +100,8 @@ rectangularQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
             @test rectangularQ(q)*rectangularQ(q)' ≈ Matrix(I, n1, n1)
             @test squareQ(q)'*squareQ(q) ≈ Matrix(I, n1, n1)
             @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1),q)
-            @test mul!(Adjoint(q), rectangularQ(q)) ≈ Matrix(I, n1, n1)
-            @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), Adjoint(q))
+            @test mul!(adjoint(q), rectangularQ(q)) ≈ Matrix(I, n1, n1)
+            @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n+1), adjoint(q))
             @test_throws BoundsError size(q,-1)
         end
     end
@@ -200,9 +200,9 @@ end
         implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
         C = randn(nA, nA)
         @test *(C, implicitQ) ≈ *(C, explicitQ)
-        @test *(C, Adjoint(implicitQ)) ≈ *(C, Adjoint(explicitQ))
-        @test *(Adjoint(C), implicitQ) ≈ *(Adjoint(C), explicitQ)
-        @test *(Adjoint(C), Adjoint(implicitQ)) ≈ *(Adjoint(C), Adjoint(explicitQ))
+        @test *(C, adjoint(implicitQ)) ≈ *(C, adjoint(explicitQ))
+        @test *(adjoint(C), implicitQ) ≈ *(adjoint(C), explicitQ)
+        @test *(adjoint(C), adjoint(implicitQ)) ≈ *(adjoint(C), adjoint(explicitQ))
     end
     # where the LQ-factored matrix has at least as many rows m as columns n,
     # Q's full/square and reduced/rectangular forms have the same shape (n-by-n). hence we expect
@@ -219,7 +219,7 @@ end
     zeroextCright = hcat(C, zeros(eltype(C), mA))
     zeroextCdown = vcat(C, zeros(eltype(C), (1, mA)))
     @test *(C, implicitQ) ≈ *(zeroextCright, explicitQ)
-    @test *(Adjoint(C), implicitQ) ≈ *(Adjoint(zeroextCdown), explicitQ)
-    @test_throws DimensionMismatch C * Adjoint(implicitQ)
-    @test_throws DimensionMismatch Adjoint(C) * Adjoint(implicitQ)
+    @test *(adjoint(C), implicitQ) ≈ *(adjoint(zeroextCdown), explicitQ)
+    @test_throws DimensionMismatch C * adjoint(implicitQ)
+    @test_throws DimensionMismatch adjoint(C) * adjoint(implicitQ)
 end

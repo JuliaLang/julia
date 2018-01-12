@@ -165,7 +165,7 @@ function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Nothing} = n
         full::Bool = !thin
     end
     F = svdfact(A, full = full)
-    F.U, F.S, adjoint(F.Vt)
+    F.U, F.S, copy(F.Vt')
 end
 function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7

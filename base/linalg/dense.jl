@@ -112,35 +112,21 @@ true
 isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-"""
-    stride1(A) -> Int
-
-Return the distance between successive array elements
-in dimension 1 in units of element size.
-
-# Examples
-```jldoctest
-julia> A = [1,2,3,4]
-4-element Array{Int64,1}:
- 1
- 2
- 3
- 4
-
-julia> Base.LinAlg.stride1(A)
-1
-
-julia> B = view(A, 2:2:4)
-2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
- 2
- 4
-
-julia> Base.LinAlg.stride1(B)
-2
-```
-"""
-stride1(x::Array) = 1
-stride1(x::StridedVector) = stride(x, 1)::Int
+# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
+# a tuple containing 1 and a cumulative product of the first N-1 sizes
+# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
+# which have the same memory storage as Array
+function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n = 1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
@@ -753,7 +739,7 @@ compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref)
 
 # Examples
 ```jldoctest
-julia> cos(ones(2, 2))
+julia> cos(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
   0.291927  -0.708073
  -0.708073   0.291927
@@ -786,7 +772,7 @@ compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 
 # Examples
 ```jldoctest
-julia> sin(ones(2, 2))
+julia> sin(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
  0.454649  0.454649
  0.454649  0.454649
@@ -820,7 +806,7 @@ Compute the matrix sine and cosine of a square matrix `A`.
 
 # Examples
 ```jldoctest
-julia> S, C = sincos(ones(2, 2));
+julia> S, C = sincos(fill(1.0, (2,2)));
 
 julia> S
 2×2 Array{Float64,2}:
@@ -872,7 +858,7 @@ compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@re
 
 # Examples
 ```jldoctest
-julia> tan(ones(2, 2))
+julia> tan(fill(1.0, (2,2)))
 2×2 Array{Float64,2}:
  -1.09252  -1.09252
  -1.09252  -1.09252
@@ -1144,7 +1130,7 @@ will return a Cholesky factorization.
 
 # Examples
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), :U))
+julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
@@ -1252,7 +1238,7 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*maximum(size(A))`, which is essentially machine epsilon
+`eps(real(float(one(eltype(M)))))*maximum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
 `tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
@@ -1350,7 +1336,7 @@ function nullspace(A::StridedMatrix{T}) where T
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
-    return adjoint(SVD.Vt[indstart:end,:])
+    return copy(SVD.Vt[indstart:end,:]')
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
@@ -1416,9 +1402,9 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
     RA, QA = schur(A)
     RB, QB = schur(B)
 
-    D = -(Adjoint(QA) * (C*QB))
+    D = -(adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*(Y * Adjoint(QB)), inv(scale))
+    scale!(QA*(Y * adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1459,9 +1445,9 @@ julia> A*X + X*A' + B
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
 
-    D = -(Adjoint(Q) * (C*Q))
+    D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*(Y * Adjoint(Q)), inv(scale))
+    scale!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

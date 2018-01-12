@@ -40,7 +40,7 @@ function complete_symbol(sym, ffunc)
 
     lookup_module = true
     t = Union{}
-    if rsearch(sym, non_identifier_chars) < rsearch(sym, '.')
+    if findlast(occursin(non_identifier_chars), sym) < findlast(equalto('.'), sym)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
@@ -116,7 +116,7 @@ function complete_keyword(s::Union{String,SubString{String}})
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.Sys.isunix() && ismatch(r"^~(?:/|$)", path)
+    if Base.Sys.isunix() && contains(path, r"^~(?:/|$)")
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -258,7 +258,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
+    startind = nextind(s, findprev(occursin(non_identifier_chars), s, method_name_end))
     return (startind:endof(s), method_name_end)
 end
 
@@ -406,15 +406,15 @@ function afterusing(string::String, startpos::Int)
     str = string[1:prevind(string,startpos)]
     isempty(str) && return false
     rstr = reverse(str)
-    r = search(rstr, r"\s(gnisu|tropmi)\b")
+    r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
     isempty(r) && return false
     fr = reverseind(str, last(r))
-    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
+    return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
 end
 
 function bslash_completions(string, pos)
-    slashpos = rsearch(string, '\\', pos)
-    if (rsearch(string, bslash_separators, pos) < slashpos &&
+    slashpos = findprev(equalto('\\'), string, pos)
+    if (findprev(occursin(bslash_separators), string, pos) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -459,7 +459,7 @@ function dict_identifier_key(str,tag)
         # Avoid `isdefined(::Array, ::Symbol)`
         isa(obj, Array) && return (nothing, nothing, nothing)
     end
-    begin_of_key = first(search(str, r"\S", nextind(str, end_of_identifier) + 1)) # 1 for [
+    begin_of_key = first(findnext(r"\S", str, nextind(str, end_of_identifier) + 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
     (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)
@@ -495,7 +495,7 @@ function completions(string, pos)
 
     # otherwise...
     if inc_tag in [:cmd, :string]
-        m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
+        m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
 
@@ -533,8 +533,8 @@ function completions(string, pos)
         return String[], 0:-1, false
     end
 
-    dotpos = rsearch(string, '.', pos)
-    startpos = nextind(string, rsearch(string, non_identifier_chars, pos))
+    dotpos = findprev(equalto('.'), string, pos)
+    startpos = nextind(string, findprev(occursin(non_identifier_chars), string, pos))
 
     ffunc = (mod,x)->true
     suggestions = String[]

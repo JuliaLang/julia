@@ -121,9 +121,9 @@ values such as `NaN`.
 """
 function isless end
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
 
 function ==(T::Type, S::Type)
@@ -300,7 +300,6 @@ const ≥ = >=
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
-lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 """
     ifelse(condition::Bool, x, y)
@@ -322,8 +321,7 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
-respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
-but throws an error for unordered arguments.
+respectively. Uses the total order implemented by `isless`.
 
 # Examples
 ```jldoctest
@@ -342,35 +340,12 @@ Stacktrace:
 cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
-    lexcmp(x, y)
+    cmp(<, x, y)
 
-Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
-less than, equal to, or greater than `y`, respectively. This function should be defined for
-lexicographically comparable types, and `lexless` will call `lexcmp` by default.
-
-# Examples
-```jldoctest
-julia> lexcmp("abc", "abd")
--1
-
-julia> lexcmp("abc", "abc")
-0
-```
+Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
+respectively. The first argument specifies a less-than comparison function to use.
 """
-lexcmp(x, y) = cmp(x, y)
-
-"""
-    lexless(x, y)
-
-Determine whether `x` is lexicographically less than `y`.
-
-# Examples
-```jldoctest
-julia> lexless("abc", "abd")
-true
-```
-"""
-lexless(x, y) = lexcmp(x,y) < 0
+cmp(<, x, y) = (x < y) ? -1 : ifelse(y < x, 1, 0)
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
@@ -415,16 +390,6 @@ julia> minmax('c','b')
 ```
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
-
-scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
-
-scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -500,7 +465,7 @@ julia> inv(A) * x
   4.5
 ```
 """
-\(x,y) = adjoint(Adjoint(y)/Adjoint(x))
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -739,32 +704,6 @@ fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
-# postfix apostophre
-Core.postfixapostrophize(x) = Adjoint(x)
-
-"""
-    adjoint(A)
-
-The conjugate transposition operator (`'`). Note that `adjoint` is applied recursively to
-elements.
-
-This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref).
-
-# Examples
-```jldoctest
-julia> A =  [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> adjoint(A)
-2×2 Array{Complex{Int64},2}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
-adjoint(x) = conj(transpose(x))
 conj(x) = x
 
 
@@ -867,3 +806,22 @@ The returned function is of type `Base.EqualTo`. This allows dispatching to
 specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
 """
 const equalto = EqualTo
+
+struct OccursIn{T} <: Function
+    x::T
+
+    OccursIn(x::T) where {T} = new{T}(x)
+end
+
+(f::OccursIn)(y) = y in f.x
+
+"""
+    occursin(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
+`y -> y in x`.
+
+The returned function is of type `Base.OccursIn`. This allows dispatching to
+specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+"""
+const occursin = OccursIn

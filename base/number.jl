@@ -53,7 +53,7 @@ ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
-iteratorsize(::Type{<:Number}) = HasShape()
+IteratorSize(::Type{<:Number}) = HasShape()
 keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
@@ -69,7 +69,7 @@ function getindex(x::Number, I::Integer...)
 end
 first(x::Number) = x
 last(x::Number) = x
-copy(x::Number) = x  # some code treats numbers as collection-like
+copy(x::Number) = x # some code treats numbers as collection-like
 
 """
     divrem(x, y)
@@ -171,6 +171,28 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
+"""
+    adjoint(A)
+
+Lazy adjoint (conjugate transposition) (also postfix `'`). Note that `adjoint` is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
 adjoint(x::Number) = conj(x)
 angle(z::Real) = atan2(zero(z), z)
 

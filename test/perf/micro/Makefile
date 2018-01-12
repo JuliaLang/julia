@@ -58,7 +58,7 @@ bin/perf%: perf.c perf.h
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories
 #	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
-	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -lblas -L$(LIBMDIR) $(LIBM) -lpthread
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -lopenblas -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \

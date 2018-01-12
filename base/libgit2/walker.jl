@@ -43,7 +43,7 @@ function Base.next(w::GitRevWalker, state)
     return (state[1], (id_ptr[], false))
 end
 
-Base.iteratorsize(::Type{GitRevWalker}) = Base.SizeUnknown()
+Base.IteratorSize(::Type{GitRevWalker}) = Base.SizeUnknown()
 
 """
     LibGit2.push_head!(w::GitRevWalker)

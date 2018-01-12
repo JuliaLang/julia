@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert, show
+                 ndims, IteratorSize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -31,7 +31,7 @@ module IteratorsMD
 
     # Examples
     ```jldoctest
-    julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+    julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
     2×2×2×2 Array{Int64,4}:
     [:, :, 1, 1] =
      1  3
@@ -189,7 +189,7 @@ module IteratorsMD
     CartesianIndex(1, 2, 2)
     CartesianIndex(2, 2, 2)
 
-    julia> CartesianIndices(ones(2,3))
+    julia> CartesianIndices(fill(1, (2,3)))
     2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
       CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
       CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
@@ -264,14 +264,14 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        all(x->axes(x) == axsA, B) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
+        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
         CartesianIndices(axsA)
     end
 
     eltype(R::CartesianIndices) = eltype(typeof(R))
     eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
-    iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
+    IteratorSize(::Type{<:CartesianIndices}) = Base.HasShape()
 
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
@@ -689,13 +689,39 @@ end
 # small helper function since we cannot use a closure in a generated function
 _countnz(x) = x != 0
 
+"""
+    findn(A)
+
+Return one vector for each dimension containing indices giving the
+locations of the non-zeros in `A` (determined by `A[i] != 0`).
+
+# Examples
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findn(A)
+([1, 1, 3, 2], [1, 2, 2, 3])
+
+julia> A = [0 0; 0 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+
+julia> findn(A)
+(Int64[], Int64[])
+```
+"""
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
         nnzA = count(_countnz, A)
         @nexprs $N d->(I_d = Vector{Int}(uninitialized, nnzA))
         k = 1
         @nloops $N i A begin
-            @inbounds if (@nref $N A i) != zero(T)
+            @inbounds if (@nref $N A i) != 0
                 @nexprs $N d->(I_d[k] = i_d)
                 k += 1
             end
@@ -1280,7 +1306,7 @@ arrays have overlapping indices, then on the domain of the overlap
 
 # Examples
 ```julia-repl
-julia> src = reshape(collect(1:16), (4,4))
+julia> src = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -1680,7 +1706,7 @@ Return unique regions of `A` along dimension `dim`.
 
 # Examples
 ```jldoctest
-julia> A = map(isodd, reshape(collect(1:8), (2,2,2)))
+julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
   true   true
@@ -1790,7 +1816,7 @@ Compute the minimum and maximum elements of an array over the given dimensions.
 
 # Examples
 ```jldoctest
-julia> A = reshape(collect(1:2:16), (2,2,2))
+julia> A = reshape(Vector(1:2:16), (2,2,2))
 2×2×2 Array{Int64,3}:
 [:, :, 1] =
  1  5

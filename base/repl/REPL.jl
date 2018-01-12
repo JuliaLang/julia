@@ -617,14 +617,15 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     !skip_current && searchdata == response_str[a:b] && return true
 
-    searchfunc, searchstart, skipfunc = backwards ? (rsearch, b, prevind) :
-                                                    (search,  a, nextind)
+    searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
+                                                      (findlast, findprev, b, prevind) :
+                                                      (findfirst, findnext, a, nextind)
     skip_current && (searchstart = skipfunc(response_str, searchstart))
 
     # Start searching
     # First the current response buffer
     if 1 <= searchstart <= endof(response_str)
-        match = searchfunc(response_str, searchdata, searchstart)
+        match = searchfunc2(searchdata, response_str, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match) - 1)
             return true
@@ -635,7 +636,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
     for idx in idxs
         h = hist.history[idx]
-        match = searchfunc(h, searchdata)
+        match = searchfunc1(searchdata, h)
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
@@ -802,7 +803,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(Docs.helpmode, repl, julia_prompt))
+        on_done = respond(Docs.helpmode, repl, julia_prompt, pass_empty=true))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -887,7 +888,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (nb_available(sbuffer) == curspos && search(sbuffer, UInt8('\n')) == 0)
+            shouldeval = (nb_available(sbuffer) == curspos && findfirst(equalto(UInt8('\n')), sbuffer) == 0)
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace
@@ -1049,7 +1050,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = rsearch(line, ';')
+    match = findlast(equalto(';'), line)
     if match != 0
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer

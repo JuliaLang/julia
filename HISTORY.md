@@ -611,12 +611,6 @@ Deprecated or removed
   * Parsing string dates from a `Dates.DateFormat` object has been deprecated as part of a
     larger effort toward faster, more extensible date parsing ([#20952]).
 
-  * `linspace` and `logspace` now require an explicit number of elements to be supplied rather than defaulting to `50`.
-
-  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
-    `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
-    `empty(::Associative, K, V)` ([#24390]).
-
 Command-line option changes
 ---------------------------
 
@@ -3025,4 +3019,3 @@ Too numerous to mention.
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
 [#21818]: https://github.com/JuliaLang/julia/issues/21818
-[#24390]: https://github.com/JuliaLang/julia/issues/24390

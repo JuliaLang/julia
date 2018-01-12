@@ -272,7 +272,7 @@ reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -484,8 +484,9 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 ## binary I/O ##
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-function write(io::IO, xs...)
+function write(io::IO, x1, xs...)
     local written::Int = 0
+    written += write(io, x1)
     for x in xs
         written += write(io, x)
     end
@@ -565,9 +566,11 @@ function write(io::IO, s::Symbol)
 end
 
 function write(to::IO, from::IO)
+    n = 0
     while !eof(from)
-        write(to, readavailable(from))
+        n += write(to, readavailable(from))
     end
+    return n
 end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
@@ -843,7 +846,7 @@ next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing
 
 eltype(::Type{EachLine}) = String
 
-iteratorsize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for

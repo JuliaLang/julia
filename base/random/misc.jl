@@ -158,7 +158,7 @@ optionally supplying the random-number generator `rng`.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> shuffle!(rng, collect(1:16))
+julia> shuffle!(rng, Vector(1:16))
 16-element Array{Int64,1}:
   2
  15
@@ -204,7 +204,7 @@ indices, see [`randperm`](@ref).
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> shuffle(rng, collect(1:10))
+julia> shuffle(rng, Vector(1:10))
 10-element Array{Int64,1}:
   6
   1
@@ -432,7 +432,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     function UUID(s::AbstractString)
         s = Base.Unicode.lowercase(s)
 
-        if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
+        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
             throw(ArgumentError("Malformed UUID string"))
         end
 

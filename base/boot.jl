@@ -111,7 +111,6 @@
 #    parent::Task
 #    storage::Any
 #    state::Symbol
-#    consumers::Any
 #    donenotify::Any
 #    result::Any
 #    exception::Any
@@ -211,8 +210,6 @@ end
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
-
-function postfixapostrophize end
 
 struct BoundsError <: Exception
     a::Any
@@ -459,6 +456,7 @@ struct GeneratedFunctionStub
     spnames::Union{Nothing, Array{Any,1}}
     line::Int
     file::Symbol
+    expand_early::Bool
 end
 
 # invoke and wrap the results of @generated

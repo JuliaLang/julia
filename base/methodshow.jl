@@ -11,7 +11,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = search(s,'#')
+    i = findfirst(equalto('#'), s)
     if i > 0
         s = s[1:i-1]
     end
@@ -202,7 +202,7 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -304,10 +304,12 @@ show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList
 # pretty-printing of AbstractVector{Method} for output of methodswith:
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
+    first = true
     for (i, m) in enumerate(mt)
+        first || println(io)
+        first = false
         print(io, "[$(i)] ")
         show(io, m)
-        println(io)
         push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
     end
 end

@@ -343,7 +343,7 @@ end
         # progressively less information.
         try
             msg = "Exception while generating log record in module $_module at $filepath:$line"
-            handle_message(logger, Error, msg, _module, group, id, filepath, line; exception=err)
+            handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=err)
         catch err2
             try
                 # Give up and write to STDERR, in three independent calls to

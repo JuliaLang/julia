@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Libdl
+
 # these could fail on an embedded installation
 # but for now, we don't handle that case
 dlls = Libdl.dllist()
@@ -13,7 +15,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return ismatch(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+        return contains(basename(dl), Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL

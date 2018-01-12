@@ -32,12 +32,12 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test_throws BoundsError A[0,3,2]
 @test_throws BoundsError S[0,3,2]
 # partial indexing
-S3 = OffsetArray(view(reshape(collect(1:4*3*1), 4, 3, 1), 1:3, 1:2, :), (-1,-2,1))
+S3 = OffsetArray(view(reshape(Vector(1:4*3*1), 4, 3, 1), 1:3, 1:2, :), (-1,-2,1))
 @test S3[1,-1] == 2
 @test S3[1,0] == 6
 @test_throws BoundsError S3[1,1]
 @test_throws BoundsError S3[1,-2]
-S4 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
+S4 = OffsetArray(view(reshape(Vector(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
 @test S4[1,-1,2] == 2
 @test S4[1,0,2] == 6
 @test_throws BoundsError S4[1,1,2]
@@ -123,16 +123,16 @@ S = view(A, :, :)
 @test_throws BoundsError S[1,1]
 @test axes(S) === (0:1, 3:4)
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
-g = OffsetArray(collect(-2:3), (-3,))
+g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
-@test collect(gv) == collect(-1:2)
+@test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
 @test axes(gv, 1) === -1:2
-@test collect(gv) == collect(-1:2)
+@test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
 @test axes(gv, 1) === 0:3
-@test collect(gv) == collect(-1:2)
+@test collect(gv) == -1:2
 
 # iteration
 for (a,d) in zip(A, A0)
@@ -188,7 +188,7 @@ targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
 for n = 0:4
-    a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
@@ -327,8 +327,8 @@ cv = copy(v)
 
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
-@test axes(adjoint(A)) === (6:9, -2:1)
-@test parent(adjoint(A)) == adjoint(parent(A))
+@test axes(A') === (6:9, -2:1)
+@test parent(copy(A')) == copy(parent(A)')
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
@@ -377,7 +377,7 @@ I,J,N = findnz(z)
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
 @test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
-@test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
+@test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))
 @test vecnorm(A) ≈ vecnorm(parent(A))
@@ -430,7 +430,7 @@ v = OffsetArray(rand(8), (-2,))
 
 @test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
-src = reshape(collect(1:16), (4,4))
+src = reshape(Vector(1:16), (4,4))
 dest = OffsetArray(Matrix{Int}(uninitialized, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]

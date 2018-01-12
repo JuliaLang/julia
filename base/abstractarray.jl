@@ -31,12 +31,12 @@ lengths of dimensions you asked for.
 
 # Examples
 ```jldoctest
-julia> A = ones(2,3,4);
+julia> A = fill(1, (2,3,4));
 
 julia> size(A, 2)
 3
 
-julia> size(A,3,2)
+julia> size(A, 3, 2)
 (4, 3)
 ```
 """
@@ -51,9 +51,9 @@ Return the valid range of indices for array `A` along dimension `d`.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
-julia> axes(A,2)
+julia> axes(A, 2)
 Base.OneTo(6)
 ```
 """
@@ -69,7 +69,7 @@ Return the tuple of valid indices for array `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> axes(A)
 (Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
@@ -104,7 +104,7 @@ exploit linear indexing.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> b = linearindices(A);
 
@@ -131,7 +131,7 @@ Return the number of dimensions of `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> ndims(A)
 3
@@ -219,13 +219,28 @@ julia> last([1; 2; 3; 4])
 last(a) = a[end]
 
 """
+    strides(A)
+
+Return a tuple of the memory strides in each dimension.
+
+# Examples
+```jldoctest
+julia> A = fill(1, (3,4,5));
+
+julia> strides(A)
+(1, 3, 12)
+```
+"""
+function strides end
+
+"""
     stride(A, k::Integer)
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> stride(A,2)
 3
@@ -234,31 +249,8 @@ julia> stride(A,3)
 12
 ```
 """
-function stride(a::AbstractArray, i::Integer)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
+stride(A::AbstractArray, k::Integer) = strides(A)[k]
 
-"""
-    strides(A)
-
-Return a tuple of the memory strides in each dimension.
-
-# Examples
-```jldoctest
-julia> A = ones(3,4,5);
-
-julia> strides(A)
-(1, 3, 12)
-```
-"""
-strides(A::AbstractArray) = size_to_strides(1, size(A)...)
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
@@ -857,9 +849,14 @@ eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = linearindices(A)
-    all(x->linearindices(x) == indsA, B) || throw_eachindex_mismatch(IndexLinear(), A, B...)
+    _all_match_first(linearindices, indsA, B...) || throw_eachindex_mismatch(IndexLinear(), A, B...)
     indsA
 end
+function _all_match_first(f::F, inds, A, B...) where F<:Function
+    @_inline_meta
+    (inds == f(A)) & _all_match_first(f, inds, B...)
+end
+_all_match_first(f::F, inds) where F<:Function = true
 
 isempty(a::AbstractArray) = (_length(a) == 0)
 
@@ -1055,7 +1052,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findin(I, indices1(A))
+    ind = find(occursin(indices1(A)), I)
     X[ind] = A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
@@ -1064,7 +1061,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
-    ind = findin(I, 1:length(A))
+    ind = find(occursin(1:length(A)), I)
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
@@ -1237,7 +1234,7 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
+dims2cat(dims) = ntuple(occursin(dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 
@@ -1556,13 +1553,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function lexcmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractVector, B::AbstractVector)
     for (a, b) in zip(A, B)
-        res = lexcmp(a, b)
-        res == 0 || return res
+        if !isequal(a, b)
+            return isless(a, b) ? -1 : 1
+        end
     end
     return cmp(length(A), length(B))
 end
+
+isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
@@ -1732,7 +1732,7 @@ for all `i` and `j`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16),(2,2,2,2))
+julia> a = reshape(Vector(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3

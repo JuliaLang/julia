@@ -14,7 +14,7 @@ end
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), Adjoint(convert(AbstractRotation{TS}, R)))
+    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), adjoint(convert(AbstractRotation{TS}, R)))
 end
 """
     LinAlg.Givens(i1,i2,c,s) -> G
@@ -47,8 +47,10 @@ Rotation{T}(R::Rotation) where {T} = Rotation{T}([Givens{T}(g) for g in R.rotati
 AbstractRotation{T}(G::Givens) where {T} = Givens{T}(G)
 AbstractRotation{T}(R::Rotation) where {T} = Rotation{T}(R)
 
-adjoint(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
-adjoint(R::Rotation{T}) where {T} = Rotation{T}(reverse!([adjoint(r) for r in R.rotations]))
+adjoint(G::Givens) = Adjoint(G)
+adjoint(R::Rotation) = Adjoint(R)
+Base.copy(aG::Adjoint{<:Any,<:Givens}) = (G = aG.parent; Givens(G.i1, G.i2, conj(G.c), -G.s))
+Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([copy(r') for r in aR.parent.rotations]))
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
@@ -364,25 +366,28 @@ end
 function mul!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
     R = adjR.parent
     @inbounds for i = 1:length(R.rotations)
-        mul!(A, Adjoint(R.rotations[i]))
+        mul!(A, adjoint(R.rotations[i]))
     end
     return A
 end
 *(G1::Givens{T}, G2::Givens{T}) where {T} = Rotation(push!(push!(Givens{T}[], G2), G1))
 
+# TODO: None of the following disambiguation methods are great. They should perhaps
+# instead be MethodErrors, or revised.
+#
 # dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = adjoint(A.parent) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = adjoint(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = transpose(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = transpose(A.parent) * B
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 # dismabiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = adjoint(A.parent) * B
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = transpose(A.parent) * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractRotation}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = A.parent * B
-# dismabiguation methods: *(Diag/RowVec/AbsTri, Adj of AbstractRotation)
-*(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
-*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
+*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
+# dismabiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
+*(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)
+*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)
 # moar disambiguation
 mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Givens}) = throw(MethodError(mul!, (A, B)))
 mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Rotation}) = throw(MethodError(mul!, (A, B)))

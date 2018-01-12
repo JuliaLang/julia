@@ -531,38 +531,6 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
     return 1;
 }
 
-int jl_array_isdefined(jl_value_t **args0, int nargs)
-{
-    assert(jl_is_array(args0[0]));
-    jl_depwarn("`isdefined(a::Array, i::Int)` is deprecated, "
-               "use `isassigned(a, i)` instead", (jl_value_t*)jl_symbol("isdefined"));
-
-    jl_array_t *a = (jl_array_t*)args0[0];
-    jl_value_t **args = &args0[1];
-    size_t nidxs = nargs-1;
-    size_t i=0;
-    size_t k, stride=1;
-    size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
-        if (!jl_is_long(args[k]))
-            jl_type_error("isdefined", (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
-        i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
-            return 0;
-        stride *= d;
-    }
-    for(; k < nd; k++)
-        stride *= jl_array_dim(a, k);
-    if (i >= stride)
-        return 0;
-
-    if (a->flags.ptrarray)
-        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
-    return 1;
-}
-
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     assert(i < jl_array_len(a));

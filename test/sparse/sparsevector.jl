@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!, Adjoint, Transpose
+using Base.LinAlg: mul!, ldiv!
 
 ### Data
 
@@ -392,7 +392,7 @@ end
     @test complex(acp) == acp
     @test isa(acp, SparseVector{ComplexF64,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(adjoint(adjoint(acp))) == acp
+    @test sparsevec((acp')') == acp
 end
 
 @testset "Type conversion" begin
@@ -457,9 +457,9 @@ end
         let N = 4
             spvec = spzeros(N)
             spmat = spzeros(N, 1)
-            densevec = ones(N)
-            densemat = ones(N, 1)
-            diagmat = Diagonal(ones(4))
+            densevec = fill(1., N)
+            densemat = fill(1., N, 1)
+            diagmat = Diagonal(densevec)
             # Test that concatenations of pairwise combinations of sparse vectors with dense
             # vectors/matrices, sparse matrices, or special matrices yield sparse arrays
             for othervecormat in (densevec, densemat, spmat)
@@ -830,12 +830,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test mul!(α, Transpose(A), x, β, y) === y
+                @test mul!(α, transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
-            y = *(Transpose(A), x)
+            y = *(transpose(A), x)
             @test isa(y, Vector{Float64})
-            @test y ≈ *(Transpose(A), xf)
+            @test y ≈ *(transpose(A), xf)
         end
     end
     @testset "sparse A * sparse x -> dense y" begin
@@ -859,12 +859,12 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test mul!(α, Transpose(A), x, β, y) === y
+                @test mul!(α, transpose(A), x, β, y) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')
             @test isa(y, Vector{Float64})
-            @test y ≈ *(Transpose(Af), xf)
+            @test y ≈ *(transpose(Af), xf)
         end
 
         let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -874,7 +874,7 @@ end
             xf = Array(x)
             x2f = Array(x2)
             @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
-            @test SparseArrays.densemv(A, x2; trans='T') ≈ Transpose(Af) * x2f
+            @test SparseArrays.densemv(A, x2; trans='T') ≈ transpose(Af) * x2f
             @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
             @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
         end
@@ -890,7 +890,7 @@ end
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af * xf
 
-            y = *(Transpose(A), x2)
+            y = *(transpose(A), x2)
             @test isa(y, SparseVector{Float64,Int})
             @test all(nonzeros(y) .!= 0.0)
             @test Array(y) ≈ Af'x2f
@@ -907,11 +907,11 @@ end
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af * xf
 
-            y = *(Transpose(A), x2)
+            y = *(transpose(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
-            @test Array(y) ≈ Transpose(Af) * x2f
+            @test Array(y) ≈ transpose(Af) * x2f
 
-            y = *(Adjoint(A), x2)
+            y = *(adjoint(A), x2)
             @test isa(y, SparseVector{ComplexF64,Int})
             @test Array(y) ≈ Af'x2f
         end
@@ -958,23 +958,23 @@ end
                     # test out-of-place left-division methods
                     for mat in (trimats..., unittrimats...)
                         @test \(mat, spvec)            ≈ \(mat, fspvec)
-                        @test \(Adjoint(mat), spvec)   ≈ \(Adjoint(mat), fspvec)
-                        @test \(Transpose(mat), spvec) ≈ \(Transpose(mat), fspvec)
+                        @test \(adjoint(mat), spvec)   ≈ \(adjoint(mat), fspvec)
+                        @test \(transpose(mat), spvec) ≈ \(transpose(mat), fspvec)
                     end
                     # test in-place left-division methods not involving quotients
                     if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
                         for mat in unittrimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
-                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
-                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
+                            @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
+                            @test ldiv!(transpose(mat), copy(spvec)) ≈ ldiv!(transpose(mat), copy(fspvec))
                         end
                     end
                     # test in-place left-division methods involving quotients
                     if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
                         for mat in trimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
-                            @test ldiv!(Adjoint(mat), copy(spvec)) ≈ ldiv!(Adjoint(mat), copy(fspvec))
-                            @test ldiv!(Transpose(mat), copy(spvec)) ≈ ldiv!(Transpose(mat), copy(fspvec))
+                            @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
+                            @test ldiv!(transpose(mat), copy(spvec)) ≈ ldiv!(transpose(mat), copy(fspvec))
                         end
                     end
                 end
@@ -984,7 +984,7 @@ end
     @testset "#16716" begin
         # The preceding tests miss the edge case where the sparse vector is empty
         origmat = [-1.5 -0.7; 0.0 1.0]
-        transmat = transpose(origmat)
+        transmat = copy(origmat')
         utmat = UpperTriangular(origmat)
         ltmat = LowerTriangular(transmat)
         uutmat = Base.LinAlg.UnitUpperTriangular(origmat)
@@ -995,11 +995,11 @@ end
 
         for mat in (utmat, ltmat, uutmat, ultmat)
             @test isequal(\(mat, zerospvec), zerodvec)
-            @test isequal(\(Adjoint(mat), zerospvec), zerodvec)
-            @test isequal(\(Transpose(mat), zerospvec), zerodvec)
+            @test isequal(\(adjoint(mat), zerospvec), zerodvec)
+            @test isequal(\(transpose(mat), zerospvec), zerodvec)
             @test isequal(ldiv!(mat, copy(zerospvec)), zerospvec)
-            @test isequal(ldiv!(Adjoint(mat), copy(zerospvec)), zerospvec)
-            @test isequal(ldiv!(Transpose(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(adjoint(mat), copy(zerospvec)), zerospvec)
+            @test isequal(ldiv!(transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
 end
@@ -1083,7 +1083,7 @@ sv[1] = 0
     # Compare stored zero semantics between SparseVector and SparseMatrixCSC
     let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10,[1,3,5,6,7],[0,1,2,0,3])
         @test nnz(S) == nnz(x) == 5
-        for I = (:, 1:10, collect(1:10))
+        for I = (:, 1:10, Vector(1:10))
             @test S[I,1] == S[I] == x[I] == x
             @test nnz(S[I,1]) == nnz(S[I]) == nnz(x[I]) == nnz(x)
         end
@@ -1112,19 +1112,19 @@ end
 @testset "Issue 14589" begin
     # test vectors with no zero elements
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
     end
     # test vectors with all zero elements
     let x = sparsevec(Int64[], Float64[], 7)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
     end
     # test vector with sparsity approx 1/2
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
-        @test collect(sort(x)) == sort(collect(x))
+        @test Vector(sort(x)) == sort(Vector(x))
         # apply three distinct tranformations where zeros sort into start/middle/end
-        @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
-        @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
-        @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+        @test Vector(sort(x, by=abs)) == sort(Vector(x), by=abs)
+        @test Vector(sort(x, by=sign)) == sort(Vector(x), by=sign)
+        @test Vector(sort(x, by=inv)) == sort(Vector(x), by=inv)
     end
 end
 @testset "fill!" begin
@@ -1135,11 +1135,9 @@ end
             for (siz, Sp) in zip(sizes, sptypes)
                 arr = rand(Tv, siz...)
                 sparr = Sp(arr)
-                fillval = rand(Tv)
-                fill!(sparr, fillval)
-                @test Array(sparr) == fillval * ones(Tv, siz...)
-                fill!(sparr, 0)
-                @test Array(sparr) == zeros(Tv, siz...)
+                x = rand(Tv)
+                @test fill!(sparr, x) == fill(x, siz)
+                @test fill!(sparr, 0) == fill(0, siz)
             end
         end
     end
@@ -1229,21 +1227,21 @@ end
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(A.nzval),eltype(A.nzind)}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.nzind)}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
-    @test simA.colptr == ones(eltype(A.nzind), 6+1)
+    @test simA.colptr == fill(1, 6+1)
     @test length(simA.rowval) == length(A.nzind)
     @test length(simA.nzval) == length(A.nzval)
 end
@@ -1259,8 +1257,8 @@ end
         @test Aj*0.1            == Ajview*0.1
         @test 0.1*Aj            == 0.1*Ajview
         @test Aj/0.1            == Ajview/0.1
-        @test LinAlg.axpy!(1.0, Aj,     sparse(ones(n))) ==
-              LinAlg.axpy!(1.0, Ajview, sparse(ones(n)))
+        @test LinAlg.axpy!(1.0, Aj,     sparse(fill(1., n))) ==
+              LinAlg.axpy!(1.0, Ajview, sparse(fill(1., n)))
         @test LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
               LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
     end

@@ -592,7 +592,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
             @testset "Arrays" begin
                 @test foo(zeros(2)) == 4
-                @test foo(ones(4)) == 15
+                @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=DevNull), String)
     @test contains(msg,
@@ -755,4 +755,20 @@ end
     srand(seed)
     @test a == rand()
     @test b == rand()
+end
+
+@testset "non AbstractTestSet as testset" begin
+    local f, err = tempname(), tempname()
+    write(f,
+    """
+    using Test
+    desc = "description"
+    @testset desc begin
+        @test 1==1
+    end
+    """)
+    run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=err))
+    msg = read(err, String)
+    @test contains(msg, "Expected `desc` to be an AbstractTestSet, it is a String")
+    rm(f; force=true)
 end

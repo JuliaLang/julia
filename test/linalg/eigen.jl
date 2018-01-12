@@ -17,8 +17,8 @@ aimg  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    asym = adjoint(aa)+aa                  # symmetric indefinite
-    apd  = aa'*aa                 # symmetric positive-definite
+    asym = aa' + aa                  # symmetric indefinite
+    apd  = aa' * aa                 # symmetric positive-definite
     for (a, asym, apd) in ((aa, asym, apd),
                            (view(aa, 1:n, 1:n),
                             view(asym, 1:n, 1:n),
@@ -49,8 +49,8 @@ aimg  = randn(n,n)/2
             h = asym
             @test minimum(eigvals(h)) ≈ eigmin(h)
             @test maximum(eigvals(h)) ≈ eigmax(h)
-            @test_throws DomainError eigmin(a - adjoint(a))
-            @test_throws DomainError eigmax(a - adjoint(a))
+            @test_throws DomainError eigmin(a - a')
+            @test_throws DomainError eigmax(a - a')
         end
         @testset "symmetric generalized eigenproblem" begin
             if isa(a, Array)

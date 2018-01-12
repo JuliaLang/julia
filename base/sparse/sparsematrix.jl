@@ -323,7 +323,7 @@ function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where 
 end
 # parent methods for similar that preserves only storage space (for when new and old dims differ)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.rowval, TiNew), similar(S.nzval, TvNew))
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.rowval, TiNew), similar(S.nzval, TvNew))
 # parent method for similar that allocates an empty sparse vector (when new dims are single)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
@@ -506,7 +506,7 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
                 throw(ArgumentError("row indices I[k] must satisfy 1 <= I[k] <= m"))
             end
         end
-        SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(), Vector{Tv}())
+        SparseMatrixCSC(m, n, fill(one(Ti), n+1), Vector{Ti}(), Vector{Tv}())
     else
         # Allocate storage for CSR form
         csrrowptr = Vector{Ti}(uninitialized, m+1)
@@ -729,7 +729,7 @@ end
 
 function sparse(D::Diagonal{T}) where T
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, collect(1:(m+1)), collect(1:m), Vector{T}(D.diag))
+    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{T}(D.diag))
 end
 
 ## Transposition and permutation methods
@@ -830,8 +830,10 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
                         Vector{Tv}(uninitialized, nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
-transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
-adjoint(A::SparseMatrixCSC) = ftranspose(A, conj)
+adjoint(A::SparseMatrixCSC) = Adjoint(A)
+transpose(A::SparseMatrixCSC) = Transpose(A)
+Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
+Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -1274,8 +1276,10 @@ function find(p::Function, S::SparseMatrixCSC)
     end
     sz = size(S)
     I, J = _findn(p, S)
-    return Base._sub2ind(sz, I, J)
+    return CartesianIndex.(I, J)
 end
+find(p::Base.OccursIn, x::SparseMatrixCSC) =
+    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
 
@@ -1311,6 +1315,42 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     end
 
     return (I, J, V)
+end
+
+function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
+    if i > length(m)
+        return zero(indtype(m))
+    end
+    row, col = Tuple(CartesianIndices(m)[i])
+    lo, hi = m.colptr[col], m.colptr[col+1]
+    n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    if lo <= n <= hi-1
+        return LinearIndices(m)[m.rowval[n], col]
+    end
+    nextcol = findnext(c->(c>hi), m.colptr, col+1)
+    if iszero(nextcol)
+        return zero(indtype(m))
+    end
+    nextlo = m.colptr[nextcol-1]
+    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
+end
+
+function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
+    if iszero(i)
+        return zero(indtype(m))
+    end
+    row, col = Tuple(CartesianIndices(m)[i])
+    lo, hi = m.colptr[col], m.colptr[col+1]
+    n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    if lo <= n <= hi-1
+        return LinearIndices(m)[m.rowval[n], col]
+    end
+    prevcol = findprev(c->(c<lo), m.colptr, col-1)
+    if iszero(prevcol)
+        return zero(indtype(m))
+    end
+    prevhi = m.colptr[prevcol+1]
+    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end
 
 import Base.Random.GLOBAL_RNG
@@ -1395,7 +1435,7 @@ function sprand(m::Integer, n::Integer, density::AbstractFloat,
     sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
 end
 
-truebools(r::AbstractRNG, n::Integer) = ones(Bool, n)
+truebools(r::AbstractRNG, n::Integer) = fill(true, n)
 
 sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
 
@@ -1449,7 +1489,7 @@ spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spzeros(Tv, Int, m, n)
 function spzeros(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(), Vector{Tv}())
+    SparseMatrixCSC(m, n, fill(one(Ti), n+1), Vector{Ti}(), Vector{Tv}())
 end
 # de-splatting variant
 function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}

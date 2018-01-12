@@ -1748,11 +1748,11 @@ static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
     jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
 }
 
-extern "C" void jl_binding_deprecation_warning(jl_binding_t *b);
+extern "C" void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 
 static void cg_bdw(jl_codectx_t &ctx, jl_binding_t *b)
 {
-    jl_binding_deprecation_warning(b);
+    jl_binding_deprecation_warning(ctx.module, b);
     if (b->deprecated == 1 && jl_options.depwarn) {
         show_source_loc(ctx, JL_STDERR);
         jl_printf(JL_STDERR, "\n");
@@ -4523,7 +4523,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     // check the cache
     jl_typemap_entry_t *sf = NULL;
     if (jl_cfunction_list.unknown != jl_nothing) {
-        sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
+        sf = jl_typemap_assoc_by_type(jl_cfunction_list, cfunc_sig, NULL, /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
         if (sf) {
             jl_value_t *v = sf->func.value;
             if (v) {

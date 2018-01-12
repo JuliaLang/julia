@@ -62,7 +62,7 @@ include("bindings.jl")
 
 import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
-import Base: Callable
+import Base: Callable, with_output_color
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -641,7 +641,7 @@ finddoc(λ, def) = false
 # Predicates and helpers for `docm` expression selection:
 
 const FUNC_HEADS    = [:function, :macro, :(=)]
-const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
+const BINDING_HEADS = [:const, :global, :(=)]
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&

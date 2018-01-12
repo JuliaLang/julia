@@ -20,7 +20,7 @@ end
 @test partialsort([3,6,30,1,9],3) == 6
 @test partialsort([3,6,30,1,9],3:4) == [6,9]
 @test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
-@test partialsortperm!(collect(1:5), [3,6,30,1,9], 3:4) == [2,5]
+@test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test partialsort(a, r) == [r;]
@@ -39,7 +39,7 @@ end
     @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
     @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
     @test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
-    @test searchsorted(ones(15), 1, 6, 10, Forward) == 6:10
+    @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
 
     for R in numTypes, T in numTypes
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
@@ -56,7 +56,7 @@ end
         @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
         @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
         @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
-        @test searchsorted(ones(R, 15), T(1), 6, 10, Forward) == 6:10
+        @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]

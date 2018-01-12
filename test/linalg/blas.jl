@@ -14,10 +14,10 @@ srand(100)
         end
         U = convert(Array{elty, 2}, U)
         V = convert(Array{elty, 2}, V)
-        @test tril(LinAlg.BLAS.syr2k('L','N',U,V)) ≈ tril(U*Transpose(V) + V*Transpose(U))
-        @test triu(LinAlg.BLAS.syr2k('U','N',U,V)) ≈ triu(U*Transpose(V) + V*Transpose(U))
-        @test tril(LinAlg.BLAS.syr2k('L','T',U,V)) ≈ tril(Transpose(U)*V + Transpose(V)*U)
-        @test triu(LinAlg.BLAS.syr2k('U','T',U,V)) ≈ triu(Transpose(U)*V + Transpose(V)*U)
+        @test tril(LinAlg.BLAS.syr2k('L','N',U,V)) ≈ tril(U*transpose(V) + V*transpose(U))
+        @test triu(LinAlg.BLAS.syr2k('U','N',U,V)) ≈ triu(U*transpose(V) + V*transpose(U))
+        @test tril(LinAlg.BLAS.syr2k('L','T',U,V)) ≈ tril(transpose(U)*V + transpose(V)*U)
+        @test triu(LinAlg.BLAS.syr2k('U','T',U,V)) ≈ triu(transpose(U)*V + transpose(V)*U)
     end
 
     if elty in (ComplexF32, ComplexF64)
@@ -35,13 +35,13 @@ srand(100)
         end
     end
 
-    o4 = ones(elty, 4)
+    o4 = fill(elty(1), 4)
     z4 = zeros(elty, 4)
 
     I4 = Matrix{elty}(I, 4, 4)
     I43 = Matrix{elty}(I, 4, 3)
-    L4 = tril(ones(elty, (4,4)))
-    U4 = triu(ones(elty, (4,4)))
+    L4 = tril(fill(elty(1), 4,4))
+    U4 = triu(fill(elty(1), 4,4))
     Z4 = zeros(elty, (4,4))
 
     elm1 = convert(elty, -1)
@@ -121,7 +121,7 @@ srand(100)
             A = triu(rand(elty,n,n))
             @testset "Vector and SubVector" for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
                 @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
+                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,Vector{elty}(uninitialized,n+1))
             end
         end
         @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
@@ -131,20 +131,20 @@ srand(100)
             α = rand(elty)
 
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
-            @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))
+            @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(uninitialized,n+1),y,copy(A))
 
             A = rand(elty,n,n)
             A = A + transpose(A)
             @test issymmetric(A)
-            @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*Transpose(x))
-            @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
+            @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*transpose(x))
+            @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
 
             if elty <: Complex
                 A = rand(elty,n,n)
-                A = A + adjoint(A)
+                A = A + A'
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
-                @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
+                @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
             end
         end
         @testset "copy" begin
@@ -163,35 +163,38 @@ srand(100)
         @testset "symmetric/Hermitian multiplication" begin
             x = rand(elty,n)
             A = rand(elty,n,n)
-            Aherm = A + adjoint(A)
+            Aherm = A + A'
             Asymm = A + transpose(A)
             @testset "symv and hemv" begin
                 @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
-                @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),ones(elty,n+1))
-                @test_throws DimensionMismatch BLAS.symv('U',ones(elty,n,n+1),x)
+                offsizevec, offsizemat = Array{elty}.(uninitialized,(n+1, (n,n+1)))
+                @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),offsizevec)
+                @test_throws DimensionMismatch BLAS.symv('U',offsizemat,x)
                 if elty <: BlasComplex
                     @test BLAS.hemv('U',Aherm,x) ≈ Aherm*x
-                    @test_throws DimensionMismatch BLAS.hemv('U',ones(elty,n,n+1),x)
-                    @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),ones(elty,n+1))
+                    @test_throws DimensionMismatch BLAS.hemv('U',offsizemat,x)
+                    @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),offsizevec)
                 end
             end
 
             @testset "symm error throwing" begin
-                @test_throws DimensionMismatch BLAS.symm('L','U',ones(elty,n,n-1),rand(elty,n,n))
-                @test_throws DimensionMismatch BLAS.symm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
-                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized,((n,n), (n,n-1), (n-1,n)))
+                @test_throws DimensionMismatch BLAS.symm('L','U',Cnm,Cnn)
+                @test_throws DimensionMismatch BLAS.symm('R','U',Cmn,Cnn)
+                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cmn)
+                @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cnm)
                 if elty <: BlasComplex
-                    @test_throws DimensionMismatch BLAS.hemm('L','U',ones(elty,n,n-1),rand(elty,n,n))
-                    @test_throws DimensionMismatch BLAS.hemm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
-                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+                    @test_throws DimensionMismatch BLAS.hemm('L','U',Cnm,Cnn)
+                    @test_throws DimensionMismatch BLAS.hemm('R','U',Cmn,Cnn)
+                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cmn)
+                    @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,Cnn,one(elty),Cnm)
                 end
             end
         end
         @testset "trmm error throwing" begin
-            @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n+1,n))
-            @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n,n+1))
+            Cnn, Cmn, Cnm = Matrix{elty}.(uninitialized,((n,n), (n+1,n), (n,n+1)))
+            @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(Cnn),Cmn)
+            @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(Cnn),Cnm)
         end
 
         #trsm
@@ -278,7 +281,7 @@ srand(100)
         @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
         @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
         @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, adjoint(I43))
+        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
     end
     @testset "gemm compared to (sy)(he)rk" begin
         if eltype(elm1) <: Complex
@@ -313,10 +316,10 @@ end
 
 @testset "syr for eltype $elty" for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     A = rand(elty, 5, 5)
-    @test triu(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
-    @test tril(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
-    @test triu(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), view(A, 1, :), zeros(elty, 5, 5))
-    @test tril(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
+    @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
+    @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
+    @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), view(A, 1, :), zeros(elty, 5, 5))
+    @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
 end
 
 @testset "her for eltype $elty" for elty in (Complex{Float32}, Complex{Float64})
@@ -325,4 +328,113 @@ end
     @test tril(A[1,:] * A[1,:]') ≈ BLAS.her!('L', one(real(elty)), A[1,:], zeros(elty, 5, 5))
     @test triu(A[1,:] * A[1,:]') ≈ BLAS.her!('U', one(real(elty)), view(A, 1, :), zeros(elty, 5, 5))
     @test tril(A[1,:] * A[1,:]') ≈ BLAS.her!('L', one(real(elty)), view(A, 1, :), zeros(elty, 5, 5))
+end
+
+struct WrappedArray{T,N} <: AbstractArray{T,N}
+    A::Array{T,N}
+end
+
+Base.size(A::WrappedArray) = size(A.A)
+Base.getindex(A::WrappedArray, i::Int) = A.A[i]
+Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
+Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
+Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
+Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
+
+@test_deprecated strides(WrappedArray(rand(5)))
+@test_deprecated stride(WrappedArray(rand(5)), 1)
+
+Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
+
+@testset "strided interface blas" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+    # Level 1
+        x = WrappedArray(elty[1, 2, 3, 4])
+        y = WrappedArray(elty[5, 6, 7, 8])
+        BLAS.blascopy!(2, x, 1, y, 2)
+        @test y == WrappedArray(elty[1, 6, 2, 8])
+        BLAS.scal!(2, elty(2), x, 1)
+        @test x == WrappedArray(elty[2, 4, 3, 4])
+        @test BLAS.nrm2(1, x, 2) == elty(2)
+        @test BLAS.nrm2(x) == BLAS.nrm2(x.A)
+        BLAS.asum(x) == elty(13)
+        BLAS.axpy!(4, elty(2), x, 1, y, 1)
+        @test y == WrappedArray(elty[5, 14, 8, 16])
+        BLAS.axpby!(elty(2), x, elty(3), y)
+        @test y == WrappedArray(elty[19, 50, 30, 56])
+        @test BLAS.iamax(x) == 2
+    # Level 2
+        A = WrappedArray(elty[1 2; 3 4])
+        x = WrappedArray(elty[1, 2])
+        y = WrappedArray(elty[3, 4])
+        @test BLAS.gemv!('N', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[13, 26])
+        @test BLAS.gbmv!('N', 2, 1, 0, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[15, 40])
+        @test BLAS.symv!('U', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[25, 60])
+        @test BLAS.trmv!('U', 'N', 'N', A, y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[145, 240])
+        @test BLAS.trsv!('U', 'N', 'N', A, y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[25,60])
+        @test BLAS.ger!(elty(2), x, y, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[51 122; 103 244])
+        @test BLAS.syr!('L', elty(2), x, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[53 122; 107 252])
+    # Level 3
+        A = WrappedArray(elty[1 2; 3 4])
+        B = WrappedArray(elty[5 6; 7 8])
+        C = WrappedArray(elty[9 10; 11 12])
+        BLAS.gemm!('N', 'N', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([47 54; 97 112])
+        BLAS.symm!('L', 'U', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([85 98; 173 200])
+        BLAS.syrk!('U', 'N', elty(2), A, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([95 120; 173 250])
+        BLAS.syr2k!('U', 'N', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([163 244; 173 462])
+        BLAS.trmm!('L', 'U', 'N', 'N', elty(2), A, B) isa WrappedArray{elty,2}
+        @test B == WrappedArray([38 44; 56 64])
+        BLAS.trsm!('L', 'U', 'N', 'N', elty(2), A, B) isa WrappedArray{elty,2}
+        @test B == WrappedArray([20 24; 28 32])
+    end
+    for elty in (Float32, Float64)
+    # Level 1
+        x = WrappedArray(elty[1, 2, 3, 4])
+        y = WrappedArray(elty[5, 6, 7, 8])
+        @test BLAS.dot(2, x, 1, y, 2) == elty(19)
+    # Level 2
+        A = WrappedArray(elty[1 2; 3 4])
+        x = WrappedArray(elty[1, 2])
+        y = WrappedArray(elty[3, 4])
+        BLAS.sbmv!('U', 1, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[17,24])
+    end
+    for elty in (ComplexF32, ComplexF64)
+    # Level 1
+        x = WrappedArray(elty[1+im, 2+2im, 3+3im, 4+im])
+        y = WrappedArray(elty[5-im, 6-2im, 7-3im, 8-im])
+        @test BLAS.dotc(2, x, 1, y, 2) == elty(12-26im)
+        @test BLAS.dotu(2, x, 1, y, 2) == elty(26+12im)
+    # Level 2
+        A = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        x = WrappedArray(elty[1+im, 2+2im])
+        y = WrappedArray(elty[5-im, 6-2im])
+        @test BLAS.hemv!('U', elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[7+17im, 30+14im])
+        BLAS.hbmv!('U', 1, elty(2), A, x, elty(1), y) isa WrappedArray{elty,1}
+        @test y == WrappedArray(elty[13+39im, 54+30im])
+        @test BLAS.her!('L', real(elty(2)), x, A) isa WrappedArray{elty,2}
+        @test A == WrappedArray(elty[5 2+2im; 11+3im 20])
+    # Level 3
+        A = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        B = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        C = WrappedArray(elty[1+im 2+2im; 3+3im 4+4im])
+        @test BLAS.hemm!('L', 'U', elty(2), A, B, elty(1), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([3+27im 6+38im; 35+27im 52+36im])
+        @test BLAS.herk!('U', 'N', real(elty(2)), A, real(elty(1)), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([23 50+38im; 35+27im 152])
+        @test BLAS.her2k!('U', 'N', elty(2), A, B, real(elty(1)), C) isa WrappedArray{elty,2}
+        @test C == WrappedArray([63 138+38im; 35+27im 352])
+    end
 end

@@ -294,8 +294,13 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
-include("libdl.jl")
-using .Libdl: DL_LOAD_PATH
+
+const DL_LOAD_PATH = String[]
+if Sys.isapple()
+    push!(DL_LOAD_PATH, "@loader_path/julia")
+    push!(DL_LOAD_PATH, "@loader_path")
+end
+
 include("env.jl")
 
 # Scheduling
@@ -409,12 +414,6 @@ include("client.jl")
 # misc useful functions & macros
 include("util.jl")
 
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
 # statistics
 include("statistics.jl")
 
@@ -426,12 +425,6 @@ include("libgit2/libgit2.jl")
 
 # package manager
 include("pkg/pkg.jl")
-
-# sparse matrices, vectors, and sparse linear algebra
-include("sparse/sparse.jl")
-using .SparseArrays
-
-include("asyncmap.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -447,6 +440,18 @@ INCLUDE_STATE = 3 # include = include_relative
 import Base64
 
 INCLUDE_STATE = 2
+
+# dense linear algebra
+include("linalg/linalg.jl")
+using .LinAlg
+const ⋅ = dot
+const × = cross
+
+# sparse matrices, vectors, and sparse linear algebra
+include("sparse/sparse.jl")
+using .SparseArrays
+
+include("asyncmap.jl")
 
 include("multimedia.jl")
 using .Multimedia
@@ -472,7 +477,7 @@ isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 function __init__()
     # Base library init
     reinit_stdio()
-    global_logger(SimpleLogger(STDERR))
+    global_logger(root_module(:Logging).ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
@@ -505,6 +510,7 @@ Base.require(:Unicode)
 Base.require(:Distributed)
 Base.require(:Printf)
 Base.require(:Future)
+Base.require(:Libdl)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"

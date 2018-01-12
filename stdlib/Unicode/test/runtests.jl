@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned
+using Unicode: normalize, isassigned, iscased
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -293,11 +293,16 @@ end
     @test_throws ArgumentError normalize("\u006e\u0303", compose=false, stripmark=true)
 end
 
-@testset "fastplus" begin
-    @test lowercase('A') == 'a'
-    @test uppercase('a') == 'A'
-
+@testset "isassigned" begin
+    @test isassigned('\x00')
     @test isassigned('A')
+    @test isassigned('α')
+    @test isassigned('柒')
+    @test !isassigned('\ufffe')
+    @test !isassigned('\uffff')
+    @test !isassigned("\xf4\x90\x80\x80"[1])
+    @test !isassigned("\xf7\xbf\xbf\xbf"[1])
+    @test !isassigned("\xff"[1])
 end
 
 @testset "isspace" begin
@@ -366,8 +371,14 @@ end
     @testset "titlecase" begin
         @test titlecase('ǉ') == 'ǈ'
         @test titlecase("ǉubljana") == "ǈubljana"
-        @test titlecase("aBc ABC") == "ABc ABC"
-        @test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
+        @test titlecase("aBc ABC")               == "Abc Abc"
+        @test titlecase("aBc ABC", strict=true)  == "Abc Abc"
+        @test titlecase("aBc ABC", strict=false) == "ABc ABC"
+        @test titlecase("abcD   EFG\n\thij", strict=true)  == "Abcd   Efg\n\tHij"
+        @test titlecase("abcD   EFG\n\thij", strict=false) == "AbcD   EFG\n\tHij"
+        @test titlecase("abc-def")                     == "Abc-Def"
+        @test titlecase("abc-def", wordsep = !iscased) == "Abc-Def"
+        @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
     end
 end
 

@@ -275,16 +275,16 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find index of ± separating real/imaginary parts (if any)
-    i₊ = search(s, ('+','-'), i)
+    i₊ = findnext(occursin(('+','-')), s, i)
     if i₊ == i # leading ± sign
-        i₊ = search(s, ('+','-'), i₊+1)
+        i₊ = findnext(occursin(('+','-')), s, i₊+1)
     end
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
-        i₊ = search(s, ('+','-'), i₊+1)
+        i₊ = findnext(occursin(('+','-')), s, i₊+1)
     end
 
     # find trailing im/i/j
-    iᵢ = rsearch(s, ('m','i','j'), e)
+    iᵢ = findprev(occursin(('m','i','j')), s, e)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'

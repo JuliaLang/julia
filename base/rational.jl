@@ -285,8 +285,12 @@ end
 for rel in (:<,:<=,:cmp)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
-            if isnan(x) || isnan(y)
-                $(rel == :cmp ? :(throw(DomainError((x,y), "Inputs cannot be NaN."))) :
+            if isnan(x)
+                $(rel == :cmp ? :(return isnan(y) ? 0 : 1) :
+                                :(return false))
+            end
+            if isnan(y)
+                $(rel == :cmp ? :(return -1) :
                                 :(return false))
             end
 

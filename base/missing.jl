@@ -77,15 +77,21 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
 end
 
 # Binary operators/functions
-for f in (:(+), :(-), :(*), :(/), :(^),
-          :(div), :(mod), :(fld), :(rem), :(min), :(max))
+for f in (:(+), :(-), :(*), :(/), :(^), :(div), :(mod), :(fld), :(rem))
     @eval begin
         # Scalar with missing
         ($f)(::Missing, ::Missing) = missing
-        ($f)(d::Missing, x::Number) = missing
-        ($f)(d::Number, x::Missing) = missing
+        ($f)(::Missing, ::Number)  = missing
+        ($f)(::Number,  ::Missing) = missing
     end
 end
+
+min(::Missing, ::Missing) = missing
+min(::Missing, ::Any)     = missing
+min(::Any,     ::Missing) = missing
+max(::Missing, ::Missing) = missing
+max(::Missing, ::Any)     = missing
+max(::Any,     ::Missing) = missing
 
 # Rounding and related functions
 for f in (:(ceil), :(floor), :(round), :(trunc))
@@ -158,8 +164,8 @@ skipmissing(itr) = SkipMissing(itr)
 struct SkipMissing{T}
     x::T
 end
-iteratorsize(::Type{<:SkipMissing}) = SizeUnknown()
-iteratoreltype(::Type{SkipMissing{T}}) where {T} = iteratoreltype(T)
+IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
+IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
 eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
 # Fallback implementation for general iterables: we cannot access a value twice,
 # so after finding the next non-missing element in start() or next(), we have to

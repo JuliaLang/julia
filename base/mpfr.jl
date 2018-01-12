@@ -97,7 +97,7 @@ widen(::Type{BigFloat}) = BigFloat
 BigFloat(x::BigFloat) = x
 
 # convert to BigFloat
-for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
+for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
     @eval begin
         function BigFloat(x::($fC))
             z = BigFloat()
@@ -105,6 +105,16 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
             return z
         end
     end
+end
+
+function BigFloat(x::Float64)
+    z = BigFloat()
+    ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, Int32), z, x, ROUNDING_MODE[])
+    if isnan(x) && signbit(x) != signbit(z)
+        # for some reason doing mpfr_neg in-place doesn't work here
+        return -z
+    end
+    return z
 end
 
 function BigFloat(x::BigInt)
@@ -247,19 +257,22 @@ function (::Type{T})(x::BigFloat) where T<:Integer
 end
 
 ## BigFloat -> AbstractFloat
+
+_cpynansgn(x::AbstractFloat, y::BigFloat) = isnan(x) && signbit(x) != signbit(y) ? -x : x
+
 Float64(x::BigFloat) =
-    ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[])
+    _cpynansgn(ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[]), x)
 Float32(x::BigFloat) =
-    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[])
+    _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, Int32), x, ROUNDING_MODE[]), x)
 # TODO: avoid double rounding
-Float16(x::BigFloat) = convert(Float16, convert(Float32, x))
+Float16(x::BigFloat) = Float16(Float32(x))
 
 Float64(x::BigFloat, r::RoundingMode) =
-    ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, to_mpfr(r))
+    _cpynansgn(ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, Int32), x, to_mpfr(r)), x)
 Float32(x::BigFloat, r::RoundingMode) =
-    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, Int32), x, to_mpfr(r))
+    _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, Int32), x, to_mpfr(r)), x)
 # TODO: avoid double rounding
-Float16(x::BigFloat, r::RoundingMode) = convert(Float16, Float32(x, r))
+Float16(x::BigFloat, r::RoundingMode) = Float16(Float32(x, r))
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
@@ -676,23 +689,23 @@ end
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 
 function cmp(x::BigFloat, y::BigInt)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(x) && return 1
     ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}), x, y)
 end
 function cmp(x::BigFloat, y::ClongMax)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(x) && return 1
     ccall((:mpfr_cmp_si, :libmpfr), Int32, (Ref{BigFloat}, Clong), x, y)
 end
 function cmp(x::BigFloat, y::CulongMax)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(x) && return 1
     ccall((:mpfr_cmp_ui, :libmpfr), Int32, (Ref{BigFloat}, Culong), x, y)
 end
 cmp(x::BigFloat, y::Integer) = cmp(x,big(y))
 cmp(x::Integer, y::BigFloat) = -cmp(y,x)
 
 function cmp(x::BigFloat, y::CdoubleMax)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
-    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
+    isnan(x) && return isnan(y) ? 0 : 1
+    isnan(y) && return -1
     ccall((:mpfr_cmp_d, :libmpfr), Int32, (Ref{BigFloat}, Cdouble), x, y)
 end
 cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)

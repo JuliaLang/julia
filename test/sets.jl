@@ -11,7 +11,7 @@ using Main.TestHelpers.OAs
     s = Set(data_in)
     data_out = collect(s)
     @test ===(typeof(data_out), Array{Any,1})
-    @test all(map(d->in(d,data_out), data_in))
+    @test all(map(occursin(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
@@ -61,6 +61,15 @@ end
     @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
     @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
 end
+
+@testset "hash and == for Set/BitSet" begin
+    for s = (Set([1]), Set(1:10), Set(-100:7:100))
+        b = BitSet(s)
+        @test hash(s) == hash(b)
+        @test s == b
+    end
+end
+
 @testset "eltype, empty" begin
     s1 = empty(Set([1,"hello"]))
     @test isequal(s1, Set())
@@ -482,9 +491,12 @@ end
         @test replace!(x->maybe(2x, iseven(x)), a) === a
         @test a == [1, 4, 3, 1]
         @test replace(a, 1=>0) == [0, 4, 3, 0]
-        @test replace(a, 1=>0, count=1) == [0, 4, 3, 1]
+        for count = (1, 0x1, big(1))
+            @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
+        end
         @test replace!(a, 1=>2) === a
         @test a == [2, 4, 3, 2]
+        @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
 
         d = Dict(1=>2, 3=>4)
         @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
@@ -493,24 +505,30 @@ end
         @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
         @test replace!(d, (3=>8)=>(2=>2)) === d
         @test d == Dict(1=>2, 2=>2)
-        @test replace(x->x.second == 2, d, 0=>0, count=1) in [Dict(1=>2, 0=>0),
-                                                              Dict(2=>2, 0=>0)]
-
+        for count = (1, 0x1, big(1))
+            @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
+                                                                      Dict(2=>2, 0=>0)]
+        end
         s = Set([1, 2, 3])
         @test replace(x->maybe(2x, x>1), s) == Set([1, 4, 6])
-        @test replace(x->maybe(2x, x>1), s, count=1) in [Set([1, 4, 3]), Set([1, 2, 6])]
+        for count = (1, 0x1, big(1))
+            @test replace(x->maybe(2x, x>1), s, count=count) in [Set([1, 4, 3]), Set([1, 2, 6])]
+        end
         @test replace(s, 1=>4) == Set([2, 3, 4])
         @test replace!(s, 1=>2) === s
         @test s == Set([2, 3])
+        @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
 
-        @test replace([1, 2], 1=>0, 2=>0, count=0) == [1, 2] # count=0 --> no replacements
+        for count = (0, 0x0, big(0))
+            @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+        end
     end
     # test collisions with AbstractSet/AbstractDict
     @test replace!(x->2x, Set([3, 6])) == Set([6, 12])
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
     @test replace!(kv -> (2kv[1] => kv[2]), Dict(1=>2, 2=>4, 4=>8, 8=>16)) == Dict(2=>2, 4=>4, 8=>8, 16=>16)
-    # test Some(nothing)
 
+    # test Some(nothing)
     a = [1, 2, nothing, 4]
     @test replace(x -> x === nothing ? 0 : Some(nothing), a) == [nothing, nothing, 0, nothing]
     @test replace(x -> x === nothing ? 0 : nothing, a) == [1, 2, 0, 4]
@@ -523,4 +541,44 @@ end
     @test replace(x -> x !== nothing ? Some(nothing) : nothing, s) == Set([nothing])
     @test replace(iseven, Set(Any[1, 2, 3, 4]), nothing) == Set([1, nothing, 3, nothing])
     @test replace(Set(Any[1, 2, 3, 4]), 1=>nothing, 3=>nothing) == Set([nothing, 2, nothing, 4])
+
+    # avoid recursive call issue #25384
+    @test_throws MethodError replace!("")
+end
+
+@testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
+    a = [1, 2]
+    b = [2, 1, 3]
+    for C = (Tuple, identity, Set, BitSet)
+        A = C(a)
+        B = C(b)
+        @test A ⊆ B
+        @test A ⊊ B
+        @test !(A ⊈ B)
+        @test !(A ⊇ B)
+        @test !(A ⊋ B)
+        @test A ⊉ B
+        @test !(B ⊆ A)
+        @test !(B ⊊ A)
+        @test B ⊈ A
+        @test B ⊇ A
+        @test B ⊋ A
+        @test !(B ⊉ A)
+        @test !issetequal(A, B)
+        @test !issetequal(B, A)
+        if A isa AbstractSet && B isa AbstractSet
+            @test A <= B
+            @test A <  B
+            @test !(A >= B)
+            @test !(A >  B)
+            @test !(B <= A)
+            @test !(B <  A)
+            @test B >= A
+            @test B >  A
+        end
+        for D = (Tuple, identity, Set, BitSet)
+            @test issetequal(A, D(A))
+            @test !issetequal(A, D(B))
+        end
+    end
 end

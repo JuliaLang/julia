@@ -62,23 +62,9 @@ function fullname(m::Module)
     end
     mp = module_parent(m)
     if mp === m
-        if mn !== :Main
-            return (mn,)
-        end
-        # top-level module, not Main, called :Main => prior Main module
-        n = (:Main,)
-        this = Main
-        while this !== m
-            if isdefined(this, :LastMain)
-                n = tuple(n..., :LastMain)
-                this = this.LastMain
-            else
-                error("no reference to module ", mn)
-            end
-        end
-        return n
+        return (mn,)
     end
-    return tuple(fullname(mp)..., mn)
+    return (fullname(mp)..., mn)
 end
 
 """
@@ -276,7 +262,8 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+
 isstructtype(t::DataType) = (@_pure_meta; length(t.types) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
 

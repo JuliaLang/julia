@@ -4,20 +4,20 @@
 
 ## Type of solve
 const UMFPACK_A     =  0     # Ax=b
-const UMFPACK_At    =  1     # Adjoint(A)x=b
-const UMFPACK_Aat   =  2     # Transpose(A)x=b
-const UMFPACK_Pt_L  =  3     # Adjoint(P)Lx=b
+const UMFPACK_At    =  1     # adjoint(A)x=b
+const UMFPACK_Aat   =  2     # transpose(A)x=b
+const UMFPACK_Pt_L  =  3     # adjoint(P)Lx=b
 const UMFPACK_L     =  4     # Lx=b
-const UMFPACK_Lt_P  =  5     # Adjoint(L)Px=b
-const UMFPACK_Lat_P =  6     # Transpose(L)Px=b
-const UMFPACK_Lt    =  7     # Adjoint(L)x=b
-const UMFPACK_Lat   =  8     # Transpose(L)x=b
-const UMFPACK_U_Qt  =  9     # U*Adjoint(Q)x=b
+const UMFPACK_Lt_P  =  5     # adjoint(L)Px=b
+const UMFPACK_Lat_P =  6     # transpose(L)Px=b
+const UMFPACK_Lt    =  7     # adjoint(L)x=b
+const UMFPACK_Lat   =  8     # transpose(L)x=b
+const UMFPACK_U_Qt  =  9     # U*adjoint(Q)x=b
 const UMFPACK_U     =  10    # Ux=b
-const UMFPACK_Q_Ut  =  11    # Q*Adjoint(U)x=b
-const UMFPACK_Q_Uat =  12    # Q*Transpose(U)x=b
-const UMFPACK_Ut    =  13    # Adjoint(U)x=b
-const UMFPACK_Uat   =  14    # Transpose(U)x=b
+const UMFPACK_Q_Ut  =  11    # Q*adjoint(U)x=b
+const UMFPACK_Q_Uat =  12    # Q*transpose(U)x=b
+const UMFPACK_Ut    =  13    # adjoint(U)x=b
+const UMFPACK_Uat   =  14    # transpose(U)x=b
 
 ## Sizes of Control and Info arrays for returning information from solver
 const UMFPACK_INFO = 90

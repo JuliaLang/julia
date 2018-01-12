@@ -4,7 +4,7 @@ using Test
 
 ix86 = r"i[356]86"
 
-if Sys.ARCH === :x86_64 || ismatch(ix86, string(Sys.ARCH))
+if Sys.ARCH === :x86_64 || contains(string(Sys.ARCH), ix86)
     function linear_foo()
         x = 4
         y = 5
@@ -17,16 +17,16 @@ if Sys.ARCH === :x86_64 || ismatch(ix86, string(Sys.ARCH))
     code_native(buf,linear_foo,(), syntax = :att)
     output=String(take!(buf))
 
-    @test ismatch(rgx,output)
+    @test contains(output,rgx)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf,linear_foo,(), syntax = :intel)
     output=String(take!(buf))
 
-    @test !(ismatch(rgx,output))
+    @test !contains(output,rgx)
 
     code_native(buf,linear_foo,())
     output=String(take!(buf))
 
-    @test ismatch(rgx, output)
+    @test contains(output,rgx)
 end

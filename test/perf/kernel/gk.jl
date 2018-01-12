@@ -52,7 +52,7 @@ function gk(n, myeps)
 
         eps = myeps[KK]
 
-        e = ones(n)
+        e = fill(1., n)
         X = zeros(n)
         U = zeros(n)
         p = e./n

@@ -322,3 +322,14 @@ end
 # the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
 @test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
 @test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")
+
+str_22330 = """
+Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
+             copyto!(Array{T,n}(uninitialized, size(a)), a)
+
+empty(Dict(),  Pair{Union{},Union{}})
+"""
+f_22330 = tempname()
+write(f_22330, str_22330)
+@test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
+

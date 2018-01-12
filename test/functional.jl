@@ -36,6 +36,9 @@ end
 @test isa(map(Integer, Any[1, 2]), Vector{Int})
 @test isa(map(Integer, Any[]), Vector{Integer})
 
+# issue #25433
+@test @inferred(collect(v for v in [1] if v > 0)) isa Vector{Int}
+
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
@@ -111,7 +114,7 @@ let gen = (x for x in 1:10)
 end
 
 let gen = (x * y for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test collect(gen) == Vector(1:10) .* Vector(1:10)'
     @test first(gen) == 1
     @test collect(gen)[1:10] == 1:10
 end

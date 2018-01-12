@@ -284,12 +284,12 @@ rng_native_52(::MersenneTwister) = Float64
 #### helper functions
 
 # precondition: !mt_empty(r)
-rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
-rand_inbounds(r::MersenneTwister, ::CloseOpen_64=CloseOpen()) =
-    rand_inbounds(r, Close1Open2()) - 1.0
+rand_inbounds(r::MersenneTwister, ::CloseOpen12_64) = mt_pop!(r)
+rand_inbounds(r::MersenneTwister, ::CloseOpen01_64=CloseOpen01()) =
+    rand_inbounds(r, CloseOpen12()) - 1.0
 
 rand_inbounds(r::MersenneTwister, ::UInt52Raw{T}) where {T<:BitInteger} =
-    reinterpret(UInt64, rand_inbounds(r, Close1Open2())) % T
+    reinterpret(UInt64, rand_inbounds(r, CloseOpen12())) % T
 
 function rand(r::MersenneTwister, x::SamplerTrivial{UInt52Raw{UInt64}})
     reserve_1(r)
@@ -308,7 +308,7 @@ end
 
 #### floats
 
-rand(r::MersenneTwister, sp::SamplerTrivial{Close1Open2_64}) =
+rand(r::MersenneTwister, sp::SamplerTrivial{CloseOpen12_64}) =
     (reserve_1(r); rand_inbounds(r, sp[]))
 
 #### integers
@@ -380,7 +380,7 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
         @gc_preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
         r.idxF = n-m
     end
-    if I isa CloseOpen
+    if I isa CloseOpen01
         for i=1:n
             A[i] -= 1.0
         end
@@ -389,10 +389,10 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
 end
 
 
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen_64) =
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen01_64) =
     dsfmt_fill_array_close_open!(s, A, n)
 
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Close1Open2_64) =
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen12_64) =
     dsfmt_fill_array_close1_open2!(s, A, n)
 
 
@@ -443,10 +443,10 @@ mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
 for T in (Float16, Float32)
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{Close1Open2{$T}})
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen12{$T}})
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
-        _rand!(r, A, 2*n128, Close1Open2())
+        _rand!(r, A, 2*n128, CloseOpen12())
         @gc_preserve A begin
             A128 = UnsafeView{UInt128}(pointer(A), n128)
             for i in 1:n128
@@ -471,8 +471,8 @@ for T in (Float16, Float32)
         A
     end
 
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen{$T}})
-        rand!(r, A, Close1Open2($T))
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen01{$T}})
+        rand!(r, A, CloseOpen12($T))
         I32 = one(Float32)
         for i in eachindex(A)
             @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
@@ -487,7 +487,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
     n::Int=length(A)
     i = n
     while true
-        rand!(r, UnsafeView{Float64}(A.ptr, 2i), Close1Open2())
+        rand!(r, UnsafeView{Float64}(A.ptr, 2i), CloseOpen12())
         n < 5 && break
         i = 0
         while n-i >= 5
@@ -536,34 +536,29 @@ end
 ### randjump
 
 """
-    randjump(r::MersenneTwister, jumps, steps=10^20) -> Vector{MersenneTwister}
+    randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}
 
-Create an array of size `jumps` of initialized `MersenneTwister` RNG objects. The
+Create an array of size `len` of initialized `MersenneTwister` RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
 generating numbers) from a previous RNG object array element by `steps` steps.
 One such step corresponds to the generation of two `Float64` numbers.
+For each different value of `steps`, a large polynomial has to be generated internally.
+One is already pre-computed for `steps=big(10)^20`.
 """
-randjump(r::MersenneTwister, jumps::Integer, steps::Integer=big(10)^20) =
-    randjump(r, jumps, dSFMT.calc_jump(steps))
+randjump(r::MersenneTwister, steps::Integer, len::Integer) =
+    _randjump(r, dSFMT.calc_jump(steps), len)
 
-"""
-    randjump(r::MersenneTwister, jumps, jumppoly::AbstractString) -> Vector{MersenneTwister}
 
-Similar to `randjump(r, jumps, steps)` where the number of steps is
-determined by a jump polynomial `jumppoly` with coefficients in
-``GF(2)`` (the field with two elements) encoded as an hexadecimal
-string.
-"""
-randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString) =
-    randjump(mt, jumps, dSFMT.GF2X(jumppoly))
+_randjump(r::MersenneTwister, jumppoly::dSFMT.GF2X) =
+    MersenneTwister(copy(r.seed), dSFMT.dsfmt_jump(r.state, jumppoly))
 
-function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::dSFMT.GF2X)
+function _randjump(mt::MersenneTwister, jumppoly::dSFMT.GF2X, len::Integer)
     mts = MersenneTwister[]
     push!(mts, mt)
-    for i in 1:jumps-1
+    for i in 1:len-1
         cmt = mts[end]
-        push!(mts, MersenneTwister(copy(cmt.seed), dSFMT.dsfmt_jump(cmt.state, jumppoly)))
+        push!(mts, _randjump(cmt, jumppoly))
     end
     return mts
 end

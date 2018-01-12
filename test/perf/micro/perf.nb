@@ -72,7 +72,7 @@ printfdperf[t_] := Module[
 	filename = "/dev/null";
 	fd = OpenWrite[filename];
 	For[i=1, i<=t, ++i,
-		 WriteString[fd, StringForm["`1` `2`\n", i, i]];
+		 WriteString[fd, StringForm["`1` `2`\n", i, i + 1]];
 	];
 	Close[fd];
 ];

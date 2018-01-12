@@ -220,7 +220,7 @@ try
             Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching, :Future,
                  :IterativeEigensolvers, :Logging, :Mmap, :Printf, :Profile, :SharedArrays,
-                 :SuiteSparse, :Test, :Unicode, :Distributed]))
+                 :SuiteSparse, :Test, :Unicode, :Distributed, :Libdl]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -274,7 +274,7 @@ try
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        !isempty(search(exc.msg, "__precompile__(false)")) && rethrow(exc)
+        contains(exc.msg, "__precompile__(false)") && rethrow(exc)
     end
 
     # Issue #12720
@@ -341,7 +341,7 @@ try
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
+        contains(exc.msg, "ERROR: LoadError: break me") && rethrow(exc)
     end
 
     # Test transitive dependency for #21266
@@ -458,7 +458,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test ismatch(Regex("Replacing module `$Test_module`"), read(fname, String))
+                @test contains(read(fname, String), Regex("Replacing module `$Test_module`"))
             finally
                 rm(fname, force=true)
             end
@@ -470,7 +470,7 @@ let dir = mktempdir()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
                 # e.g `@test_nowarn`
-                @test Test.ismatch_warn(r"^(?!.)"s, read(fname, String))
+                @test Test.contains_warn(read(fname, String), r"^(?!.)"s)
             finally
                 rm(fname, force=true)
             end

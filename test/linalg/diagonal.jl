@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
+using Base.LinAlg: mul!, ldiv!, rdiv!
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
@@ -89,7 +89,7 @@ srand(1)
             @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
             @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
 
-            @test Transpose(U)*D ≈ Transpose(U)*Array(D)
+            @test transpose(U)*D ≈ transpose(U)*Array(D)
             @test U'*D ≈ U'*Array(D)
 
             if relty != BigFloat
@@ -98,26 +98,26 @@ srand(1)
                 @test D\v ≈ DM\v atol=atol_two
                 @test D\U ≈ DM\U atol=atol_three
                 @test ldiv!(D, copy(v)) ≈ DM\v atol=atol_two
-                @test ldiv!(Transpose(D), copy(v)) ≈ DM\v atol=atol_two
-                @test ldiv!(Adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(transpose(D), copy(v)) ≈ DM\v atol=atol_two
+                @test ldiv!(adjoint(conj(D)), copy(v)) ≈ DM\v atol=atol_two
                 @test ldiv!(D, copy(U)) ≈ DM\U atol=atol_three
-                @test ldiv!(Transpose(D), copy(U)) ≈ DM\U atol=atol_three
-                @test ldiv!(Adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
-                Uc = adjoint(U)
+                @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
+                @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
+                Uc = copy(U')
                 target = scale!(Uc, inv.(D.diag))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
                 @test_throws DimensionMismatch rdiv!(Matrix{elty}(I, n-1, n-1), D)
                 @test_throws SingularException rdiv!(Uc, Diagonal(fill!(similar(D.diag), 0)))
-                @test rdiv!(Uc, Transpose(D)) ≈ target atol=atol_three
-                @test rdiv!(Uc, Adjoint(conj(D))) ≈ target atol=atol_three
+                @test rdiv!(Uc, transpose(D)) ≈ target atol=atol_three
+                @test rdiv!(Uc, adjoint(conj(D))) ≈ target atol=atol_three
                 @test ldiv!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
-                @test_throws DimensionMismatch ldiv!(D, ones(elty, n + 1))
+                @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
                 @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
                 b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
-                b = view(rand(elty, n), collect(1:n))
+                b = view(rand(elty, n), Vector(1:n))
                 b2 = copy(b)
                 c = ldiv!(D, b)
                 d = Array(D)\b2
@@ -126,7 +126,7 @@ srand(1)
                 b = rand(elty, n+1, n+1)
                 b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))
-                b = view(rand(elty, n+1), collect(1:n+1))
+                b = view(rand(elty, n+1), Vector(1:n+1))
                 @test_throws DimensionMismatch ldiv!(D, b)
             end
         end
@@ -147,15 +147,15 @@ srand(1)
                 b = rand(elty,n,n)
                 b = sparse(b)
                 @test mul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test mul!(Transpose(copy(D)), copy(b)) ≈ Transpose(Array(D))*Array(b)
-                @test mul!(Adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                @test mul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test mul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
         #a few missing mults
         bd = Bidiagonal(D2)
-        @test D*Transpose(D2) ≈ Array(D)*Transpose(Array(D2))
-        @test D2*Transpose(D) ≈ Array(D2)*Transpose(Array(D))
+        @test D*transpose(D2) ≈ Array(D)*transpose(Array(D2))
+        @test D2*transpose(D) ≈ Array(D2)*transpose(Array(D))
         @test D2*D' ≈ Array(D2)*Array(D)'
 
         #division of two Diagonals
@@ -165,13 +165,13 @@ srand(1)
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
-        @test (r = Matrix(D)' * vv  ; mul!(vvv, Adjoint(D), vv) ≈ r ≈ vvv)
-        @test (r = Transpose(Matrix(D)) * vv ; mul!(vvv, Transpose(D), vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D)' * vv  ; mul!(vvv, adjoint(D), vv) ≈ r ≈ vvv)
+        @test (r = transpose(Matrix(D)) * vv ; mul!(vvv, transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
         @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = Matrix(D)' * UU  ; mul!(UUU, Adjoint(D), UU) ≈ r ≈ UUU)
-        @test (r = Transpose(Matrix(D)) * UU ; mul!(UUU, Transpose(D), UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
+        @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
@@ -179,11 +179,11 @@ srand(1)
         r  = VV * Matrix(D)
         @test Array(mul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
-        r  = VV * Transpose(Array(D))
-        @test Array(mul!(VV, Transpose(DD))) ≈ r
+        r  = VV * transpose(Array(D))
+        @test Array(mul!(VV, transpose(DD))) ≈ r
         DD = copy(D)
         r  = VV * Array(D)'
-        @test Array(mul!(VV, Adjoint(DD))) ≈ r
+        @test Array(mul!(VV, adjoint(DD))) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -228,7 +228,7 @@ srand(1)
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
-        @test(Transpose(D) * vv == D * vv)
+        @test(transpose(D) * vv == D * vv)
     end
 
     #logdet
@@ -251,7 +251,7 @@ srand(1)
         @test issymmetric(D2)
         @test ishermitian(D2)
         if elty <: Complex
-            dc = d + im*convert(Vector{elty}, ones(n))
+            dc = d .+ elty(1im)
             D3 = Diagonal(dc)
             @test issymmetric(D3)
             @test !ishermitian(D3)
@@ -328,28 +328,28 @@ end
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
-    @test Diagonal(Matrix{t}[ones(t, 2, 2), ones(t, 3, 3)])[2,1] == zeros(t, 3, 2)
+    @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
 # Issue 15401
-@test Matrix(1.0I, 5, 5) \ Diagonal(ones(5)) == Matrix(I, 5, 5)
+@test Matrix(1.0I, 5, 5) \ Diagonal(fill(1.,5)) == Matrix(I, 5, 5)
 
 @testset "Triangular and Diagonal" begin
     for T in (LowerTriangular(randn(5,5)), LinAlg.UnitLowerTriangular(randn(5,5)))
         D = Diagonal(randn(5))
         @test T*D   == Array(T)*Array(D)
         @test T'D   == Array(T)'*Array(D)
-        @test Transpose(T)*D  == Transpose(Array(T))*Array(D)
+        @test transpose(T)*D  == transpose(Array(T))*Array(D)
         @test D*T'  == Array(D)*Array(T)'
-        @test D*Transpose(T) == Array(D)*Transpose(Array(T))
+        @test D*transpose(T) == Array(D)*transpose(Array(T))
         @test D*T   == Array(D)*Array(T)
     end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test_throws MethodError mul!(D1,D2)
-    @test_throws MethodError mul!(Transpose(D1),D2)
-    @test_throws MethodError mul!(Adjoint(D1),D2)
+    @test_throws MethodError mul!(transpose(D1),D2)
+    @test_throws MethodError mul!(adjoint(D1),D2)
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -373,7 +373,7 @@ end
 
     v = [[1, 2], [3, 4]]
     @test Dherm' * v == Dherm * v
-    @test Transpose(D) * v == [[7, 10], [15, 22]]
+    @test transpose(D) * v == [[7, 10], [15, 22]]
 
     @test issymmetric(D) == false
     @test issymmetric(Dherm) == false
@@ -395,8 +395,8 @@ end
         S = Symmetric(A)
         H = Hermitian(A)
         for (transform1, transform2) in ((identity,  identity),
-                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
-                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose) )
+                (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
+                (identity,  transpose), (transpose, identity ), (transpose, transpose) )
             @test *(transform1(D), transform2(S)) ≈ *(transform1(Matrix(D)), transform2(Matrix(S)))
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
@@ -414,15 +414,15 @@ end
         fullDD = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
         fullBB = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
-                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
-                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose) )
+                (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
+                (identity,  transpose), (transpose, identity ), (transpose, transpose) )
             @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
     end
 end
 
-@testset "Diagonal of Adjoint/Transpose vectors (#23649)" begin
-    @test Diagonal(Adjoint([1, 2, 3])) == Diagonal([1 2 3])
-    @test Diagonal(Transpose([1, 2, 3])) == Diagonal([1 2 3])
+@testset "Diagonal of adjoint/transpose vectors (#23649)" begin
+    @test Diagonal(adjoint([1, 2, 3])) == Diagonal([1 2 3])
+    @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
 end

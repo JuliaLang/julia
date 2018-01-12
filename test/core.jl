@@ -1164,7 +1164,10 @@ end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
-@test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
+let x = [1,2,3]
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
+end
 
 let
     local a, aa
@@ -2217,7 +2220,7 @@ function issue7897!(data, arr)
 end
 
 let
-    a = ones(UInt8, 10)
+    a = fill(0x01, 10)
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
@@ -2336,6 +2339,16 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
+
+# issue #24460
+f24460(x, y) = 1
+f24460(x::T, y::T) where {T} = 2.0
+f24460(x::Int, y::Int) = "3"
+@test f24460(1, 2) === "3"
+@test invoke(f24460, Tuple{T,T} where T, 1, 2) === 2.0
+const T24460 = Tuple{T,T} where T
+g24460() = invoke(f24460, T24460, 1, 2)
+@test @inferred(g24460()) === 2.0
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -3467,11 +3480,12 @@ end
 struct HasHasPadding
     x::HasPadding
 end
-hashaspadding = HasHasPadding(HasPadding(true,1))
-hashaspadding2 = HasHasPadding(HasPadding(true,1))
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
-@test object_id(hashaspadding) == object_id(hashaspadding2)
+let hashaspadding = Ref(HasHasPadding(HasPadding(true,1))),
+    hashaspadding2 = Ref(HasHasPadding(HasPadding(true,1)))
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
+    @test object_id(hashaspadding[]) == object_id(hashaspadding2[])
+end
 
 # issue #12517
 let x = (1,2)
@@ -4050,7 +4064,7 @@ end
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), ones(Int, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), fill(1, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -5638,10 +5652,11 @@ let
     @eval @noinline constant23367(a, b) = (a ? b : $b)
     b2 = Ref(b)[] # copy b via field assignment
     b3 = B23367[b][1] # copy b via array assignment
-    @test pointer_from_objref(b) == pointer_from_objref(b)
-    @test pointer_from_objref(b) != pointer_from_objref(b2)
-    @test pointer_from_objref(b) != pointer_from_objref(b3)
-    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    @test addr(b)  == addr(b)
+    @test addr(b)  != addr(b2)
+    @test addr(b)  != addr(b3)
+    @test addr(b2) != addr(b3)
 
     @test b === b2 === b3
     @test compare(b, b2)

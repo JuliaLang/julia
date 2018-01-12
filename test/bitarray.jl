@@ -93,8 +93,8 @@ timesofar("conversions")
     @test isequal(fill!(b1, false), falses(size(b1)))
 
     for (sz,T) in allsizes
-        @test isequal(Array(trues(sz...)), ones(Bool, sz...))
-        @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
+        @test isequal(Array(trues(sz...)), fill(true, sz...))
+        @test isequal(Array(falses(sz...)), fill(false, sz...))
 
         b1 = rand!(falses(sz...))
         @test isa(b1, T)
@@ -113,7 +113,7 @@ timesofar("conversions")
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]
-                u1 = ones(Bool, m)
+                u1 = fill(true, m)
                 for fu! in [u->fill!(u, true), u->rand!(u)]
                     fu!(u1)
                     c1 = convert(Vector{Int}, u1)
@@ -1306,13 +1306,13 @@ end
 
 # TODO
 
-@testset "Transpose" begin
+@testset "transpose" begin
     b1 = bitrand(v1)
     @check_bit_operation transpose(b1) Transpose{Bool,BitVector}
 
     for m1 = 0:n1, m2 = 0:n2
         b1 = bitrand(m1, m2)
-        @check_bit_operation transpose(b1) BitMatrix
+        @check_bit_operation copy(b1') BitMatrix
     end
 end
 
@@ -1390,7 +1390,7 @@ timesofar("cat")
     end
 
     b1 = bitrand(n1,n1)
-    b1 .|= transpose(b1)
+    b1 .|= copy(b1')
     @check_bit_operation issymmetric(b1) Bool
     @check_bit_operation ishermitian(b1) Bool
 
@@ -1406,7 +1406,8 @@ timesofar("cat")
     @check_bit_operation diff(b1) Vector{Int}
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1) Matrix{Int}
+    @check_bit_operation diff(b1, 1) Matrix{Int}
+    @check_bit_operation diff(b1, 2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
     @check_bit_operation svd(b1)

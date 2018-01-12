@@ -553,16 +553,16 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    @test iszero(ones(N, N) .= zeros(N, N))
-    @test iszero(ones(N, N) .= zeros(N, 1))
-    @test iszero(ones(N, N) .= zeros(1, N))
-    @test iszero(ones(N, N) .= zeros(1, 1))
+    @test iszero(fill(1, N, N) .= zeros(N, N))
+    @test iszero(fill(1, N, N) .= zeros(N, 1))
+    @test iszero(fill(1, N, N) .= zeros(1, N))
+    @test iszero(fill(1, N, N) .= zeros(1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin
-    A = fill(zeros(2,2), 4, 4)
-    A[1:3,1:3] .= [ones(2,2)]
-    @test all(A[1:3,1:3] .== [ones(2,2)])
+    A = fill([0 0; 0 0], 4, 4)
+    A[1:3,1:3] .= [[1 1; 1 1]]
+    @test all(A[1:3,1:3] .== [[1 1; 1 1]])
 end
 
 # Test that broadcast does not confuse eltypes. See also

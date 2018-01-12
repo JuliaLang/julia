@@ -561,22 +561,24 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
   there tends to be lots of variation there. The type of the 0th argument
   (the function) is always the same for most functions.
 */
-static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types,
+static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_value_t *types,
                                                      jl_svec_t **penv, size_t world, size_t max_world_mask)
 {
-    size_t n = jl_field_count(types);
-    int typesisva = n == 0 ? 0 : jl_is_vararg_type(jl_tparam(types, n-1));
+    jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
+    int isua = jl_is_unionall(types);
+    size_t n = jl_field_count(unw);
+    int typesisva = n == 0 ? 0 : jl_is_vararg_type(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > (ml->max_world | max_world_mask))
             continue; // ignore replaced methods
         size_t lensig = jl_field_count(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
-            if (ml->simplesig != (void*)jl_nothing) {
+            if (ml->simplesig != (void*)jl_nothing && !isua) {
                 size_t lensimplesig = jl_field_count(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
                 if (lensig == n || (isva && lensimplesig <= n + 1))
-                    ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
+                    ismatch = sig_match_by_type_simple(jl_svec_data(((jl_datatype_t*)types)->parameters), n,
                                                        ml->simplesig, lensimplesig, isva);
                 else
                     ismatch = 0;
@@ -584,14 +586,14 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
 
             if (ismatch == 0)
                 ; // nothing
-            else if (ml->isleafsig && !typesisva)
-                ismatch = sig_match_by_type_leaf(jl_svec_data(types->parameters),
+            else if (ml->isleafsig && !typesisva && !isua)
+                ismatch = sig_match_by_type_leaf(jl_svec_data(((jl_datatype_t*)types)->parameters),
                                                  ml->sig, lensig);
-            else if (ml->issimplesig && !typesisva)
-                ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
+            else if (ml->issimplesig && !typesisva && !isua)
+                ismatch = sig_match_by_type_simple(jl_svec_data(((jl_datatype_t*)types)->parameters), n,
                                                    ml->sig, lensig, ml->va);
             else {
-                ismatch = jl_subtype_matching((jl_value_t*)types, (jl_value_t*)ml->sig, penv);
+                ismatch = jl_subtype_matching(types, (jl_value_t*)ml->sig, penv);
                 if (ismatch && penv)
                     resetenv = 1;
             }
@@ -600,7 +602,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                 size_t i, l;
                 for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
                     // see corresponding code in jl_typemap_entry_assoc_exact
-                    if (jl_subtype((jl_value_t*)types, jl_svecref(ml->guardsigs, i))) {
+                    if (jl_subtype(types, jl_svecref(ml->guardsigs, i))) {
                         ismatch = 0;
                         break;
                     }
@@ -617,14 +619,14 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
 
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 
-static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types,
+static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_value_t *types,
                                                       size_t world, size_t max_world_mask)
 {
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > (ml->max_world | max_world_mask))
             continue;
         // TODO: more efficient
-        jl_value_t *a = (jl_value_t*)types;
+        jl_value_t *a = types;
         jl_value_t *b = (jl_value_t*)ml->sig;
         while (jl_is_unionall(a)) a = ((jl_unionall_t*)a)->body;
         while (jl_is_unionall(b)) b = ((jl_unionall_t*)b)->body;
@@ -651,7 +653,7 @@ static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl
 
 // this is the general entry point for looking up a type in the cache
 // as a subtype, or with type_equal
-jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
+jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_value_t *types, jl_svec_t **penv,
                                              int8_t subtype, int8_t offs, size_t world, size_t max_world_mask)
 {
     if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
@@ -978,7 +980,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     jl_value_t *ttype = jl_unwrap_unionall((jl_value_t*)type);
 
     if ((jl_value_t*)simpletype == jl_nothing) {
-        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 0, offs, min_world, 0);
+        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, (jl_value_t*)type, NULL, 0, offs, min_world, 0);
         if (ml && ml->simplesig == (void*)jl_nothing) {
             if (overwritten != NULL)
                 *overwritten = ml->func.value;

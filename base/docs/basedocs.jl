@@ -12,14 +12,14 @@ macro kw_str(text) Keyword(Symbol(text)) end
 
     https://docs.julialang.org/
 
-as well many great tutorials and learning resources:
+as well as many great tutorials and learning resources:
 
     https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 """
-kw"help", kw"?", kw"julia"
+kw"help", kw"?", kw"julia", kw""
 
 """
     using
@@ -926,14 +926,14 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 
 # Examples
 ```jldoctest
-julia> A = ones(7);
+julia> A = fill(1.0, 7);
 
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
  [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:758
 
-julia> B = ones(2, 3);
+julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]

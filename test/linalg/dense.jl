@@ -62,11 +62,11 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test zeros(eltya,n)\ones(eltya,n) ≈ (zeros(eltya,n,1)\ones(eltya,n,1))[1,1]
+                @test zeros(eltya,n)\fill(eltya(1),n) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(adjoint(a[:,1:n1]))
+                a15null = nullspace(copy(a[:,1:n1]'))
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
@@ -82,7 +82,7 @@ bimg  = randn(n,2)/2
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
-            @test size(pinv(ones(eltya,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin
@@ -95,7 +95,7 @@ bimg  = randn(n,2)/2
         @testset "Matrix square root" begin
             asq = sqrt(a)
             @test asq*asq ≈ a
-            asym = adjoint(a)+a # symmetric indefinite
+            asym = a + a' # symmetric indefinite
             asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
         end
@@ -154,7 +154,7 @@ end
     mmat = 10
     nmat = 8
     @testset "For $elty" for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
-        x = ones(elty,10)
+        x = fill(elty(1),10)
         @testset "Vector" begin
             xs = view(x,1:2:10)
             @test norm(x, -Inf) ≈ 1
@@ -234,7 +234,7 @@ end
         end
 
         @testset "Matrix (Operator)" begin
-            A = ones(elty,10,10)
+            A = fill(elty(1),10,10)
             As = view(A,1:5,1:5)
             @test norm(A, 1) ≈ 10
             elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A, 2) ≈ 10
@@ -349,9 +349,9 @@ end
 @testset "Matrix exponential" begin
     @testset "Tests for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-        eA1 = convert(Matrix{elty}, adjoint([147.866622446369 127.781085523181  127.781085523182;
+        eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
                                      183.765138646367 183.765138646366  163.679601723179;
-                                     71.797032399996  91.8825693231832 111.968106246371]))
+                                      71.797032399996  91.8825693231832 111.968106246371]')
         @test exp(A1) ≈ eA1
 
         A2  = convert(Matrix{elty},
@@ -365,9 +365,9 @@ end
         @test exp(A2) ≈ eA2
 
         A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
-        eA3 = convert(Matrix{elty}, adjoint([-1.50964415879218 -5.6325707998812  -4.934938326092;
-                                     0.367879439109187 1.47151775849686  1.10363831732856;
-                                     0.135335281175235 0.406005843524598 0.541341126763207]))
+        eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
+                                      0.367879439109187 1.47151775849686  1.10363831732856;
+                                      0.135335281175235 0.406005843524598 0.541341126763207]')
         @test exp(A3) ≈ eA3
 
         A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
@@ -744,7 +744,7 @@ end
 end
 
 @testset "Least squares solutions" begin
-    a = [ones(20) 1:20 1:20]
+    a = [fill(1, 20) 1:20 1:20]
     b = reshape(Matrix(1.0I, 8, 5), 20, 2)
     @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         a = convert(Matrix{elty}, a)
@@ -790,7 +790,7 @@ end
 @testset "/ and \\ consistency with pinv for vectors" begin
     @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         c = rand(elty, 5)
-        r = (elty <: Complex ? Adjoint : Transpose)(rand(elty, 5))
+        r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
         @testset "inner prodcuts" begin
@@ -817,9 +817,29 @@ end
     @test lyap(one(elty),a) == -a/2
 end
 
-@testset "stride1" begin
+@testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
+    A = rand(10,10)
+    B = view(A, 2:2:10, 2:2:10)
+
     @test Base.LinAlg.stride1(a) == 1
     @test Base.LinAlg.stride1(b) == 2
+
+    @test strides(a) == (1,)
+    @test strides(b) == (2,)
+    @test strides(A) == (1,10)
+    @test strides(B) == (2,20)
+
+    @test_deprecated strides(1:5)
+    @test_deprecated stride(1:5,1)
+
+    for M in (a, b, A, B)
+        @inferred strides(M)
+        strides_M = strides(M)
+
+        for (i, _stride) in enumerate(collect(strides_M))
+            @test _stride == stride(M, i)
+        end
+    end
 end

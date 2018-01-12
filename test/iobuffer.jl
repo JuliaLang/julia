@@ -190,7 +190,7 @@ end
 # pr #11554
 let a,
     io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
-    io2 = IOBuffer(b"goodnightmoon", true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
@@ -223,7 +223,7 @@ end
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
 let io = IOBuffer(0)
-   write(io, ones(UInt8, 1048577))
+   write(io, fill(0x01, 1048577))
 end
 
 let bstream = BufferStream()
@@ -292,4 +292,13 @@ let
     @test io isa IOBuffer
     io = IOBuffer(Int64(10))
     @test io isa IOBuffer
+end
+
+let
+    # 25398 return value for write(::IO, ::IO)
+    ioa = IOBuffer()
+    iob = IOBuffer("World")
+    n = write(ioa, iob)
+    @test String(take!(ioa)) == "World"
+    @test n == 5
 end

@@ -24,8 +24,8 @@ bimg  = randn(n,2)/2
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = transpose(a) + a                  # symmetric indefinite
-    aher = adjoint(a) + a                  # Hermitian indefinite
-    apd  = adjoint(a) * a                  # Positive-definite
+    aher = a' + a                  # Hermitian indefinite
+    apd  = a' * a                  # Positive-definite
     for (a, a2, aher, apd) in ((a, a2, aher, apd),
                                (view(a, 1:n, 1:n),
                                 view(a2, 1:n, 1:n),
@@ -66,8 +66,8 @@ bimg  = randn(n,2)/2
                 end
 
                 bc1 = bkfact(Symmetric(asym, uplo))
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
-                @test getproperty(bc1, uplo)*bc1.D*Transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*Transpose(bc1.P)
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
+                @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
                 @test_throws ErrorException bc1.Z
                 @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
             end
@@ -104,9 +104,9 @@ bimg  = randn(n,2)/2
             end
         end
         if eltya <: BlasReal
-            As1 = ones(eltya, n, n)
-            As2 = complex(ones(eltya, n, n))
-            As3 = complex(ones(eltya, n, n))
+            As1 = fill(eltya(1), n, n)
+            As2 = fill(complex(eltya(1)), n, n)
+            As3 = fill(complex(eltya(1)), n, n)
             As3[end, 1] += im/2
             As3[1, end] -= im/2
             for As = (As1, As2, As3)
@@ -120,7 +120,7 @@ bimg  = randn(n,2)/2
                             @test bks == "Failed factorization of type $(typeof(F))"
                             @test det(F) == 0
                             @test_throws LinAlg.SingularException inv(F)
-                            @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                            @test_throws LinAlg.SingularException F \ fill(1., size(As,1))
                         end
                     end
                 end

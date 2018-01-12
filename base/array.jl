@@ -77,11 +77,11 @@ types.
 
 # Examples
 ```jldoctest
-julia> eltype(ones(Float32,2,2))
+julia> eltype(fill(1f0, (2,2)))
 Float32
 
-julia> eltype(ones(Int8,2,2))
-Int8
+julia> eltype(fill(0x1, (2,2)))
+UInt8
 ```
 """
 eltype(::Type) = Any
@@ -343,7 +343,7 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`ones`](@ref), [`similar`](@ref).
+See also [`fill`](@ref), [`ones`](@ref).
 
 # Examples
 ```jldoctest
@@ -363,7 +363,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also [`zeros`](@ref), [`similar`](@ref).
+See also: [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
 ```jldoctest
@@ -429,7 +429,7 @@ julia> collect(Float64, 1:2:5)
  5.0
 ```
 """
-collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
+collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
 _collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
 _collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
@@ -467,11 +467,11 @@ julia> collect(1:2:13)
  13
 ```
 """
-collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
+collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
 
 collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
-collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
+collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
     copyto!(_similar_for(cont, eltype(itr), itr, isz), itr)
@@ -524,7 +524,7 @@ _array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(uninitialized, Int
 _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
 
 function collect(itr::Generator)
-    isz = iteratorsize(itr.iter)
+    isz = IteratorSize(itr.iter)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
@@ -583,8 +583,15 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
 end
 
 function grow_to!(dest, itr)
-    out = grow_to!(empty(dest, Union{}), itr, start(itr))
-    return isempty(out) ? dest : out
+    st = start(itr)
+    if done(itr, st)
+        return dest
+    else
+        v1, st = next(itr, st)
+        dest2 = empty(dest, typeof(v1))
+        push!(dest2, v1)
+        return grow_to!(dest2, itr, st)
+    end
 end
 
 function grow_to!(dest, itr, st)
@@ -821,7 +828,7 @@ function append!(a::Array{<:Any,1}, items::AbstractVector)
     return a
 end
 
-append!(a::Vector, iter) = _append!(a, iteratorsize(iter), iter)
+append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::Vector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
@@ -868,7 +875,7 @@ function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
+prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
@@ -1309,8 +1316,8 @@ end
 
 _memcmp(a, b, len) = ccall(:memcmp, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len) % Int
 
-# use memcmp for lexcmp on byte arrays
-function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
+# use memcmp for cmp on byte arrays
+function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     c = _memcmp(a, b, min(length(a),length(b)))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
@@ -1334,7 +1341,7 @@ for reverse-order iteration without making a copy.
 
 # Examples
 ```jldoctest
-julia> A = collect(1:5)
+julia> A = Vector(1:5)
 5-element Array{Int64,1}:
  1
  2
@@ -1392,7 +1399,7 @@ In-place version of [`reverse`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = collect(1:5)
+julia> A = Vector(1:5)
 5-element Array{Int64,1}:
  1
  2
@@ -1713,48 +1720,60 @@ findlast(testf::Function, A) = findprev(testf, A, endof(A))
 """
     find(f::Function, A)
 
-Return a vector `I` of the linear indices of `A` where `f(A[I])` returns `true`.
+Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, return an empty array.
+
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 0; 3 4 0]
-2×3 Array{Int64,2}:
- 1  2  0
- 3  4  0
+julia> x = [1, 3, 4]
+3-element Array{Int64,1}:
+ 1
+ 3
+ 4
 
-julia> find(isodd, A)
+julia> find(isodd, x)
 2-element Array{Int64,1}:
  1
  2
 
-julia> find(!iszero, A)
-4-element Array{Int64,1}:
- 1
- 2
- 3
- 4
+julia> A = [1 2 0; 3 4 0]
+2×3 Array{Int64,2}:
+ 1  2  0
+ 3  4  0
+julia> find(isodd, A)
+2-element Array{CartesianIndex{2},1}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 1)
 
-julia> find(isodd, [2, 4])
-0-element Array{Int64,1}
+julia> find(!iszero, A)
+4-element Array{CartesianIndex{2},1}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 1)
+ CartesianIndex(1, 2)
+ CartesianIndex(2, 2)
+
+julia> d = Dict(:A => 10, :B => -1, :C => 0)
+Dict{Symbol,Int64} with 3 entries:
+  :A => 10
+  :B => -1
+  :C => 0
+
+julia> find(x -> x >= 0, d)
+2-element Array{Symbol,1}:
+ :A
+ :C
+
 ```
 """
-function find(testf::Function, A)
-    # use a dynamic-length array to store the indices, then copy to a non-padded
-    # array for the return
-    tmpI = Vector{Int}()
-    inds = _index_remapper(A)
-    for (i,a) = enumerate(A)
-        if testf(a)
-            push!(tmpI, inds[i])
-        end
-    end
-    I = Vector{Int}(uninitialized, length(tmpI))
-    copyto!(I, tmpI)
-    return I
-end
-_index_remapper(A::AbstractArray) = linearindices(A)
-_index_remapper(iter) = OneTo(typemax(Int))  # safe for objects that don't implement length
+find(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
+
+_pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
+_pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't implement length
 
 """
     find(A)
@@ -1779,70 +1798,15 @@ julia> find(falses(3))
 ```
 """
 function find(A)
-    nnzA = count(t -> t != 0, A)
-    I = Vector{Int}(uninitialized, nnzA)
-    cnt = 1
-    inds = _index_remapper(A)
-    warned = false
-    for (i,a) in enumerate(A)
-        if !warned && !(a isa Bool)
-            depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
-            warned = true
-        end
-        if a != 0
-            I[cnt] = inds[i]
-            cnt += 1
-        end
+    if !(eltype(A) === Bool) && !all(x -> x isa Bool, A)
+        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
     end
-    return I
+    collect(first(p) for p in _pairs(A) if last(p) != 0)
 end
 
 find(x::Bool) = x ? [1] : Vector{Int}()
 find(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
-
-findn(A::AbstractVector) = find(A)
-
-"""
-    findn(A)
-
-Return a vector of indices for each dimension giving the locations of the non-zeros in `A`
-(determined by `A[i]!=0`).
-If there are no non-zero elements of `A`, return a 2-tuple of empty arrays.
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findn(A)
-([1, 1, 3, 2], [1, 2, 2, 3])
-
-julia> A = zeros(2,2)
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
-
-julia> findn(A)
-(Int64[], Int64[])
-```
-"""
-function findn(A::AbstractMatrix)
-    nnzA = count(t -> t != 0, A)
-    I = similar(A, Int, nnzA)
-    J = similar(A, Int, nnzA)
-    cnt = 1
-    for j=axes(A,2), i=axes(A,1)
-        if A[i,j] != 0
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return (I, J)
-end
+find(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
     findnz(A)
@@ -2052,7 +2016,7 @@ function _findin(a, b)
     ind
 end
 
-# If two collections are already sorted, findin can be computed with
+# If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
 # using a hash table (although it has the same complexity).
 function _sortedfindin(v, w)
@@ -2094,42 +2058,16 @@ function _sortedfindin(v, w)
     return out
 end
 
-"""
-    findin(a, b)
-
-Return the indices of elements in collection `a` that appear in collection `b`.
-
-# Examples
-```jldoctest
-julia> a = collect(1:3:15)
-5-element Array{Int64,1}:
-  1
-  4
-  7
- 10
- 13
-
-julia> b = collect(2:4:10)
-3-element Array{Int64,1}:
-  2
-  6
- 10
-
-julia> findin(a,b) # 10 is the only common element
-1-element Array{Int64,1}:
- 4
-```
-"""
-function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
-    if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
-        return _sortedfindin(a, b)
+function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+    if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
+        return _sortedfindin(x, pred.x)
     else
-        return _findin(a, b)
+        return _findin(x, pred.x)
     end
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findin(a, b) = _findin(a, b)
+find(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
@@ -2138,8 +2076,8 @@ function indcopy(sz::Dims, I::Vector)
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    dst = eltype(I)[findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
-    src = eltype(I)[I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
+    dst = eltype(I)[_findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
+    src = eltype(I)[I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
     dst, src
 end
 
@@ -2149,8 +2087,8 @@ function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    dst::typeof(I) = ntuple(i-> findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
-    src::typeof(I) = ntuple(i-> I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
+    dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
+    src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
 end
 
@@ -2186,7 +2124,7 @@ The function `f` is passed one argument.
 
 # Examples
 ```jldoctest
-julia> filter!(isodd, collect(1:10))
+julia> filter!(isodd, Vector(1:10))
 5-element Array{Int64,1}:
  1
  3

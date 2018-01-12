@@ -261,7 +261,7 @@ in linear algebra.
 
 The following table summarizes the types of matrix factorizations that have been implemented in
 Julia. Details of their associated methods can be found in the [Linear Algebra](@ref) section
-of the standard library documentation.
+of the Julia Base documentation.
 
 | Type              | Description                                                                                                    |
 |:----------------- |:-------------------------------------------------------------------------------------------------------------- |

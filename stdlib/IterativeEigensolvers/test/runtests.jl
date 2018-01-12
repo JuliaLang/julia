@@ -23,11 +23,11 @@ using Test
         end
         a_evs = eigvals(Array(a))
         a     = convert(SparseMatrixCSC{elty}, a)
-        asym  = adjoint(a) + a                  # symmetric indefinite
+        asym  = copy(a') + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
 
         b     = convert(SparseMatrixCSC{elty}, b)
-        bsym  = adjoint(b) + b
+        bsym  = copy(b') + b
         bpd   = b'*b
 
         (d,v) = eigs(a, nev=3)
@@ -88,8 +88,8 @@ using Test
             @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
             @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
             if elty == Float64
-                @test_throws ArgumentError eigs(a + transpose(a), which=:SI)
-                @test_throws ArgumentError eigs(a + transpose(a), which=:LI)
+                @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:SI)
+                @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:LI)
                 @test_throws ArgumentError eigs(a, sigma = rand(ComplexF32))
             end
         end
@@ -167,7 +167,7 @@ let
     v = real(v)
     # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
-    v = (v+adjoint(v))/2
+    v = (v + v')/2
     @test isposdef(v)
 
     # Repeat with starting vector
@@ -180,7 +180,7 @@ let
     # Adjust the tolerance a bit since matrices with repeated eigenvalues
     # can be very stressful to ARPACK and this may therefore fail with
     # info = 3 if the tolerance is too small
-    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
+    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ fill(1., 10) #Issue 4246
 end
 
 @testset "real svds" begin

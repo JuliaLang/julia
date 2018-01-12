@@ -188,8 +188,8 @@ end
     end
 end
 @testset "issue #10544" begin
-    a = ones(2,2)
-    b = ones(2,2)
+    a = fill(1.,2,2)
+    b = fill(1.,2,2)
     @test @fastmath(a[1] += 2.0) ≈ (b[1] += 2.0)
     @test @fastmath(a[2] -= 2.0) ≈ (b[2] -= 2.0)
     @test @fastmath(a[1,1] *= 2.0) ≈ (b[1,1] *= 2.0)
@@ -203,7 +203,7 @@ end
 
 @testset "issue #23218" begin
     a = zeros(1)
-    b = ones(1)
+    b = [1.0]
     idx = (1,)
     @fastmath a[idx...] += b[idx...]
     @test a == b

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Printf
+
 
 include("../perfutil.jl")
 
@@ -28,12 +30,11 @@ end
 
 ## array constructors ##
 
-@test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones" "description"
+@test all(fill(1.,200,200) .== 1)
 
 ## matmul and transpose ##
 
-A = ones(200,200)
+A = fill(1.,200,200)
 @test all(A*A' .== 200)
 # @timeit A*A' "AtA" "description"
 
@@ -126,8 +127,8 @@ function randmatstat(t)
         d = randn(n,n)
         P = [a b c d]
         Q = [a b; c d]
-        v[i] = trace((Transpose(P)*P)^4)
-        w[i] = trace((Transpose(Q)*Q)^4)
+        v[i] = trace((P'*P)^4)
+        w[i] = trace((Q'*Q)^4)
     end
     return (std(v)/mean(v), std(w)/mean(w))
 end

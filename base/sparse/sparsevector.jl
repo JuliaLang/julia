@@ -2,8 +2,7 @@
 
 ### Common definitions
 
-using Base.LinAlg: Adjoint, Transpose
-import Base: scalarmax, scalarmin, sort, find, findnz
+import Base: sort, find, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -70,7 +69,7 @@ _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) whe
     SparseVector(dims..., similar(S.nzind, TiNew, 0), similar(S.nzval, TvNew, 0))
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
@@ -188,7 +187,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Fun
             len = i
         end
     end
-    _sparsevector!(collect(I), collect(V), len, combine)
+    _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer, combine::Function)
@@ -197,7 +196,7 @@ function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer
     for i in I
         1 <= i <= len || throw(ArgumentError("An index is out of bound."))
     end
-    _sparsevector!(collect(I), collect(V), len, combine)
+    _sparsevector!(Vector(I), Vector(V), len, combine)
 end
 
 sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, args...) =
@@ -705,6 +704,8 @@ function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
 
     return I
 end
+find(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
+    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
@@ -731,6 +732,24 @@ function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     end
 
     return (I, V)
+end
+
+function _sparse_findnextnz(v::SparseVector, i::Integer)
+    n = searchsortedfirst(v.nzind, i)
+    if n > length(v.nzind)
+        return zero(indtype(v))
+    else
+        return v.nzind[n]
+    end
+end
+
+function _sparse_findprevnz(v::SparseVector, i::Integer)
+    n = searchsortedlast(v.nzind, i)
+    if iszero(n)
+        return zero(indtype(v))
+    else
+        return v.nzind[n]
+    end
 end
 
 ### Generic functions operating on AbstractSparseVector
@@ -847,8 +866,8 @@ function SparseMatrixCSC{Tv,Ti}(x::AbstractSparseVector) where {Tv,Ti}
     colptr = Ti[1, m+1]
     # Note that this *cannot* share data like normal array conversions, since
     # modifying one would put the other in an inconsistent state
-    rowval = collect(Ti, xnzind)
-    nzval = collect(Tv, xnzval)
+    rowval = Vector{Ti}(xnzind)
+    nzval = Vector{Tv}(xnzval)
     SparseMatrixCSC(n, 1, colptr, rowval, nzval)
 end
 
@@ -1354,8 +1373,8 @@ for (vop, fun, mode) in [(:_vadd, :+, 1),
                          (:_vmul, :*, 0)]
     @eval begin
         $(vop)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::StridedVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::AbstractSparseVector, y::StridedVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::AbstractVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::AbstractSparseVector, y::AbstractVector) = _binarymap($(fun), x, y, $mode)
     end
 end
 
@@ -1368,13 +1387,13 @@ broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y
 for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
     op != :* && @eval begin
         $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+        $(op)(x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
+        $(op)(x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
     end
     @eval begin
         broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
     end
 end
 
@@ -1382,17 +1401,17 @@ end
 
 broadcast(::typeof(min), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(min, x, y, 2)
 broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(min, x, y, 2)
 
 broadcast(::typeof(max), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(max, x, y, 2)
 broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(max, x, y, 2)
 
 complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(complex, x, y, 1)
 
 ### Reduction
 
@@ -1438,7 +1457,7 @@ adjoint(sv::SparseVector) = Adjoint(sv)
 
 # axpy
 
-function LinAlg.axpy!(a::Number, x::SparseVectorUnion, y::StridedVector)
+function LinAlg.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
     length(x) == length(y) || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1479,7 +1498,7 @@ scale!(a::Complex, x::SparseVectorUnion) = (scale!(nonzeros(x), a); x)
 (/)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
 
 # dot
-function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
+function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
@@ -1543,7 +1562,7 @@ end
 ### BLAS-2 / dense A * sparse x -> dense y
 
 # lowrankupdate (BLAS.ger! like)
-function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::SparseVectorUnion, α::Number = 1)
+function LinAlg.lowrankupdate!(A::StridedMatrix, x::AbstractVector, y::SparseVectorUnion, α::Number = 1)
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)
@@ -1565,10 +1584,10 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     mul!(y, A, x)
 end
 
-mul!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(one(Tx), A, x, zero(Ty), y)
 
-function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1592,7 +1611,7 @@ function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number,
     return y
 end
 
-# * and mul!(C, Transpose(A), B)
+# * and mul!(C, transpose(A), B)
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     A = transA.parent
@@ -1600,13 +1619,13 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
     length(x) == m || throw(DimensionMismatch())
     Ty = promote_type(Ta, Tx)
     y = Vector{Ty}(uninitialized, n)
-    mul!(y, Transpose(A), x)
+    mul!(y, transpose(A), x)
 end
 
-mul!(y::StridedVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
 
-function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::AbstractVector)
     A = transA.parent
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
@@ -1651,9 +1670,9 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::Char='N')
     if trans == 'N' || trans == 'N'
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
-        mul!(y, Transpose(A), x)
+        mul!(y, transpose(A), x)
     elseif trans == 'C' || trans == 'c'
-        mul!(y, Adjoint(A), x)
+        mul!(y, adjoint(A), x)
     else
         throw(ArgumentError("Invalid trans character $trans"))
     end
@@ -1662,10 +1681,10 @@ end
 
 # * and mul!
 
-mul!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(one(Tx), A, x, zero(Ty), y)
 
-function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1695,21 +1714,21 @@ end
 
 # * and *(Tranpose(A), B)
 
-mul!(y::StridedVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), Transpose(A), x, zero(Ty), y))
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
 
-mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::StridedVector) =
+mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, α, A, x, β, y))
 
-mul!(y::StridedVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(one(Tx), Adjoint(A), x, zero(Ty), y))
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+    (A = adjA.parent; mul!(one(Tx), adjoint(A), x, zero(Ty), y))
 
-mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::StridedVector) =
+mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, α, A, x, β, y))
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           α::Number, A::SparseMatrixCSC, x::AbstractSparseVector,
-                          β::Number, y::StridedVector)
+                          β::Number, y::AbstractVector)
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
@@ -1793,25 +1812,25 @@ for isunittri in (true, false), islowertri in (true, false)
     tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
 
     # build out-of-place left-division operations
-    for (istrans, applyxform, xform) in (
-            (false, false, :identity),
-            (true,  true,  :Transpose),
-            (true,  true,  :Adjoint) )
+    for (istrans, applyxform, xformtype, xformop) in (
+            (false, false, :identity,  :identity),
+            (true,  true,  :Transpose, :transpose),
+            (true,  true,  :Adjoint,   :adjoint) )
 
         # broad method where elements are Numbers
-        xformtritype = applyxform ? :($xform{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
+        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
                                     :($tritype{<:TA,<:AbstractMatrix})
         @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
             TAb = $(isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
-            Base.LinAlg.ldiv!($xform(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
+            Base.LinAlg.ldiv!($xformop(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
         end
 
         # faster method requiring good view support of the
         # triangular matrix type. hence the StridedMatrix restriction.
-        xformtritype = applyxform ? :($xform{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
+        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:TA,<:StridedMatrix})
         @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
@@ -1828,25 +1847,25 @@ for isunittri in (true, false), islowertri in (true, false)
                     :(1:b.nzind[end]) )
                 nzrangeviewr = view(r, nzrange)
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                Base.LinAlg.ldiv!($xform(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
+                Base.LinAlg.ldiv!($xformop(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
             end
             r
         end
 
         # fallback where elements are not Numbers
-        xformtritype = applyxform ? :($xform{<:Any,<:$tritype}) : :($tritype)
+        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype}) : :($tritype)
         @eval function \(xformA::$xformtritype, b::SparseVector)
             A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            Base.LinAlg.ldiv!($xform(A), copy(b))
+            Base.LinAlg.ldiv!($xformop(A), copy(b))
         end
     end
 
     # build in-place left-division operations
-    for (istrans, applyxform, xform) in (
-            (false, false, :identity),
-            (true,  true,  :Transpose),
-            (true,  true,  :Adjoint) )
-        xformtritype = applyxform ? :($xform{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
+    for (istrans, applyxform, xformtype, xformop) in (
+            (false, false, :identity,  :identity),
+            (true,  true,  :Transpose, :transpose),
+            (true,  true,  :Adjoint,   :adjoint) )
+        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:Any,<:StridedMatrix})
 
         # the generic in-place left-division methods handle these cases, but
@@ -1871,7 +1890,7 @@ for isunittri in (true, false), islowertri in (true, false)
                     :(1:b.nzind[end]) )
                 nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                Base.LinAlg.ldiv!($xform(nzrangeviewA), nzrangeviewbnz)
+                Base.LinAlg.ldiv!($xformop(nzrangeviewA), nzrangeviewbnz)
             end
             b
         end
@@ -1932,7 +1951,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
     z = findfirst(equalto(k),sinds)
-    newnzind = collect(Ti,1:k-1)
+    newnzind = Vector{Ti}(1:k-1)
     newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)

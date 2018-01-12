@@ -44,7 +44,7 @@ b=asyncmap(identity, c)
 
 # check with an iterator that has only implements length()
 len_only_iterable = (1,2,3,4,5)
-@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
+@test Base.IteratorSize(len_only_iterable) == Base.HasLength()
 @test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
 
 # Error conditions

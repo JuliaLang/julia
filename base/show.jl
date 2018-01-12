@@ -73,6 +73,28 @@ The following properties are in common use:
    `--color` command-line flag when `julia` was launched.
 
 # Examples
+
+```jldoctest
+julia> io = IOBuffer();
+
+julia> print_with_color(:red, IOContext(io, :color => true), "string")
+
+julia> String(take!(io))
+"\e[31mstring\e[39m"
+
+julia> print_with_color(:red, io, "string")
+
+julia> String(take!(io))
+"string"
+```
+
+```jldoctest
+julia> print(IOContext(STDOUT, :compact => false), 1.12341234)
+1.12341234
+julia> print(IOContext(STDOUT, :compact => true), 1.12341234)
+1.12341
+```
+
 ```jldoctest
 julia> function f(io::IO)
            if get(io, :short, false)
@@ -159,9 +181,12 @@ function show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        p = data_pointer_from_objref(x)
-        for i in (nb - 1):-1:0
-            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+        r = Ref(x)
+        @gc_preserve r begin
+            p = unsafe_convert(Ptr{Cvoid}, r)
+            for i in (nb - 1):-1:0
+                print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+            end
         end
     end
     print(io,')')

@@ -39,7 +39,10 @@ export
     current_logger,
     global_logger,
     disable_logging,
-    SimpleLogger
+    SimpleLogger,
+    ConsoleLogger
+
+include("ConsoleLogger.jl")
 
 # The following are also part of the public API, but not exported:
 #

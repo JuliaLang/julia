@@ -29,8 +29,8 @@ iterable type.
 Base.start
 Base.done
 Base.next
-Base.iteratorsize
-Base.iteratoreltype
+Base.IteratorSize
+Base.IteratorEltype
 ```
 
 Fully implemented by:
@@ -77,7 +77,6 @@ Fully implemented by:
 Base.in
 Base.eltype
 Base.indexin
-Base.findin
 Base.unique
 Base.unique!
 Base.allunique

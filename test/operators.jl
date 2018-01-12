@@ -52,13 +52,6 @@ p = 1=>:foo
 @test xor(2) == 2
 @test (⊻)(2) == 2
 
-@test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
-@test_throws ArgumentError Base.scalarmin('a',['c','d'])
-@test_throws ArgumentError Base.scalarmin(['a','b'],'c')
-@test_throws ArgumentError Base.scalarmax(['a','b'],['c','d'])
-@test_throws ArgumentError Base.scalarmax('a',['c','d'])
-@test_throws ArgumentError Base.scalarmax(['a','b'],'c')
-
 @test_throws MethodError min(Set([1]), Set([2]))
 @test_throws MethodError max(Set([1]), Set([2]))
 @test_throws MethodError minmax(Set([1]), Set([2]))
@@ -82,7 +75,7 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
-@test lexless('a','b')
+@test isless('a','b')
 
 @test 1 .!= 2
 @test 1 .== 1

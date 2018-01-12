@@ -62,12 +62,12 @@ end
 ###### Generic reduction functions #####
 
 ## initialization
-
-for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one))
+# initarray! is only called by sum!, prod!, etc.
+for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
     @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
-for Op in (:(typeof(scalarmax)), :(typeof(scalarmin)), :(typeof(max)), :(typeof(min)))
+for Op in (:(typeof(max)), :(typeof(min)))
     @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && copyfirst!(a, src); a)
 end
 
@@ -75,6 +75,7 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
     @eval initarray!(a::AbstractArray, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
+# reducedim_initarray is called by
 reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
 reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
@@ -104,10 +105,10 @@ reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = m
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
-function reducedim_init(f, op::typeof(+), A::AbstractArray, region)
+function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
+function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -123,13 +124,9 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
-reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
-
-reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
-reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
+reducedim_init(f, op::typeof(max), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
+reducedim_init(f, op::typeof(min), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -143,18 +140,11 @@ let
         [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
-    global reducedim_init(f::typeof(identity), op::typeof(+), A::T, region) =
-        reducedim_initarray(A, region, zero(eltype(A)))
-    global reducedim_init(f::typeof(identity), op::typeof(*), A::T, region) =
-        reducedim_initarray(A, region, one(eltype(A)))
-    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(+), A::T, region) =
-        reducedim_initarray(A, region, real(zero(eltype(A))))
-    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(*), A::T, region) =
-        reducedim_initarray(A, region, real(one(eltype(A))))
+    global reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region) =
+        reducedim_initarray(A, region, mapreduce_first(f, op, zero(eltype(A))))
+    global reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region) =
+        reducedim_initarray(A, region, mapreduce_first(f, op, one(eltype(A))))
 end
-
-reducedim_init(f::Union{typeof(identity),typeof(abs),typeof(abs2)}, op::typeof(+), A::AbstractArray{Bool}, region) =
-    reducedim_initarray(A, region, 0)
 
 ## generic (map)reduction
 
@@ -261,7 +251,7 @@ faster because the intermediate array is avoided.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16), (4,4))
+julia> a = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -295,7 +285,7 @@ associativity, e.g. left-to-right, you should write your own loop. See documenta
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16), (4,4))
+julia> a = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -610,18 +600,9 @@ julia> any!([1 1], A)
 """
 any!(r, A)
 
-for (fname, op) in [(:sum, :+), (:prod, :*),
-                    (:maximum, :scalarmax), (:minimum, :scalarmin),
+for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
+                    (:maximum, :max), (:minimum, :min),
                     (:all, :&), (:any, :|)]
-    function compose_promote_sys_size(x)
-        if fname === :sum
-            :(promote_sys_size_add ∘ $x)
-        elseif fname === :prod
-            :(promote_sys_size_mul ∘ $x)
-        else
-            x
-        end
-    end
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -629,7 +610,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim($(compose_promote_sys_size(:f)), $(op), A, region)
+            mapreducedim(f, $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end
 end

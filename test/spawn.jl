@@ -46,8 +46,8 @@ end
 @test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test search(out,"world") != 0:-1
-@test search(out,"hello") != 0:-1
+@test contains(out,"world")
+@test contains(out,"hello")
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
