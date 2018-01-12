@@ -62,23 +62,9 @@ function fullname(m::Module)
     end
     mp = module_parent(m)
     if mp === m
-        if mn !== :Main
-            return (mn,)
-        end
-        # top-level module, not Main, called :Main => prior Main module
-        n = (:Main,)
-        this = Main
-        while this !== m
-            if isdefined(this, :LastMain)
-                n = tuple(n..., :LastMain)
-                this = this.LastMain
-            else
-                error("no reference to module ", mn)
-            end
-        end
-        return n
+        return (mn,)
     end
-    return tuple(fullname(mp)..., mn)
+    return (fullname(mp)..., mn)
 end
 
 """
