@@ -2772,6 +2772,9 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+@deprecate findn(a::AbstractVector) (find(!iszero, a),)
+@deprecate findn(x::AbstractMatrix) (I = find(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
+@deprecate findn(a::AbstractArray{T, N}) where {T, N} (I = find(!iszero, x); ntuple(i -> getindex.(I, i), N))
 
 # END 0.7 deprecations
 

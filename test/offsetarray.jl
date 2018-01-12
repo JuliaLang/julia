@@ -359,9 +359,8 @@ pmax, ipmax = findmax(parent(A))
 @test A[iamax] == amax
 @test amax == parent(A)[ipmax]
 z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
-I,J = findn(z)
-@test I == [-1]
-@test J == [0]
+I = find(!iszero, z)
+@test I == [CartesianIndex(-1, 0)]
 I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]

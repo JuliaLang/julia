@@ -364,8 +364,8 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
-  * `findn(x::AbstractVector)` now returns a 1-tuple with the vector of indices, to be
-    consistent with higher order arrays ([#25365]).
+  * `findn(x::AbstractArray)` has been deprecated in favor of `find(!iszero, x)`, which
+    now returns cartesian indices for multidimensional arrays (see below, [#25532]).
 
   * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
@@ -1191,3 +1191,4 @@ Command-line option changes
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25532]: https://github.com/JuliaLang/julia/issues/25532

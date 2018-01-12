@@ -471,23 +471,6 @@ end
     @test find(isascii, g) == Int[]
     @test find(!iszero, (i % 2 for i in 1:10)) == 1:2:9
 end
-@testset "findn" begin
-    b = findn(fill(1,2,2,2,2))
-    @test (length(b[1]) == 16)
-    @test (length(b[2]) == 16)
-    @test (length(b[3]) == 16)
-    @test (length(b[4]) == 16)
-
-    #hand made case
-    a = ([2,1,2],[1,2,2],[2,2,2])
-    z = zeros(2,2,2)
-    for i = 1:3
-        z[a[1][i],a[2][i],a[3][i]] = 10
-    end
-    @test isequal(a,findn(z))
-
-    @test findn([1, 0, 2]) == ([1, 3], )
-end
 
 @testset "findmin findmax indmin indmax" begin
     @test indmax([10,12,9,11]) == 2
@@ -1851,16 +1834,6 @@ end
 
 fill!(B, 2)
 @test all(x->x==2, B)
-
-iall = repmat(1:size(A,1), 1, size(A,2))
-jall = repmat((1:size(A,2))', size(A,1), 1)
-i,j = findn(B)
-@test vec(i) == vec(iall)
-@test vec(j) == vec(jall)
-fill!(S, 2)
-i,j = findn(S)
-@test vec(i) == vec(iall)
-@test vec(j) == vec(jall)
 
 copyto!(B, A)
 copyto!(S, A)

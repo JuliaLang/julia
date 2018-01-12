@@ -495,7 +495,6 @@ export
     findmin,
     findmin!,
     findmax!,
-    findn,
     findnext,
     findprev,
     findnz,

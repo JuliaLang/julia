@@ -1629,9 +1629,10 @@ function find(B::BitArray)
     return I
 end
 
-findn(B::BitVector) = find(B)
+# For performance
+find(::typeof(!iszero), B::BitArray) = find(B)
 
-function findn(B::BitMatrix)
+function findnz(B::BitMatrix)
     nnzB = count(B)
     I = Vector{Int}(uninitialized, nnzB)
     J = Vector{Int}(uninitialized, nnzB)
@@ -1643,11 +1644,6 @@ function findn(B::BitMatrix)
             cnt += 1
         end
     end
-    return I, J
-end
-
-function findnz(B::BitMatrix)
-    I, J = findn(B)
     return I, J, trues(length(I))
 end
 
