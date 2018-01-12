@@ -26,8 +26,8 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
         resid = deepcopy(v0)
         info  = Ref{BlasInt}(1)
     end
-    iparam = zeros(BlasInt, 11)
-    ipntr  = zeros(BlasInt, (sym && !cmplx) ? 11 : 14)
+    iparam = fill(zero(BlasInt), 11)
+    ipntr  = fill(zero(BlasInt), (sym && !cmplx) ? 11 : 14)
     ido    = Ref{BlasInt}(0)
 
     iparam[1] = BlasInt(1)       # ishifts

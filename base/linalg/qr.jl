@@ -135,7 +135,7 @@ QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) wher
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
-    τ = zeros(T, min(m,n))
+    τ = fill(zero(T), min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
         x = view(A, k:m, k)
         τk = reflector!(x)
@@ -460,7 +460,7 @@ function getproperty(F::QRPivoted{T}, d::Symbol) where T
     elseif d == :P
         p = F.p
         n = length(p)
-        P = zeros(T, n, n)
+        P = fill(zero(T), n, n)
         for i in 1:n
             P[p[i],i] = one(T)
         end
@@ -514,9 +514,9 @@ size(A::AbstractQ) = size(A, 1), size(A, 2)
 
 
 function getindex(A::AbstractQ, i::Integer, j::Integer)
-    x = zeros(eltype(A), size(A, 1))
+    x = fill(zero(eltype(A)), size(A, 1))
     x[i] = 1
-    y = zeros(eltype(A), size(A, 2))
+    y = fill(zero(eltype(A)), size(A, 2))
     y[j] = 1
     return dot(x, mul!(A, y))
 end
@@ -558,7 +558,7 @@ function (*)(A::AbstractQ, b::StridedVector)
     if size(A.factors, 1) == length(b)
         bnew = copy_oftype(b, TAb)
     elseif size(A.factors, 2) == length(b)
-        bnew = [b; zeros(TAb, size(A.factors, 1) - length(b))]
+        bnew = [b; fill(zero(TAb), size(A.factors, 1) - length(b))]
     else
         throw(DimensionMismatch("vector must have length either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
@@ -570,7 +570,7 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     if size(A.factors, 1) == size(B, 1)
         Bnew = copy_oftype(B, TAB)
     elseif size(A.factors, 2) == size(B, 1)
-        Bnew = [B; zeros(TAB, size(A.factors, 1) - size(B,1), size(B, 2))]
+        Bnew = [B; fill(zero(TAB), size(A.factors, 1) - size(B,1), size(B, 2))]
     else
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
@@ -711,7 +711,7 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
         copyto!(AA, A)
         return mul!(AA, adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
-        return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
+        return mul!([A fill(zero(TAB), size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
     else
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
@@ -788,7 +788,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     R = A.R
     @inbounds begin
         if n > m # minimum norm solution
-            τ = zeros(T,m)
+            τ = fill(zero(T),m)
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
                 x = view(R, k, [k; m + 1:n])
                 τk = reflector!(x)
@@ -845,8 +845,8 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 ## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = fill(zero(T), max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = fill(zero(T), max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)

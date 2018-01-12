@@ -69,7 +69,7 @@ for p in procs(d)
 end
 
 @test fill(1., 10, 10, 10) == SharedArrays.shmem_fill(1.0, (10,10,10))
-@test zeros(Int32, 10, 10, 10) == SharedArrays.shmem_fill(0, (10,10,10))
+@test fill(zero(Int32), 10, 10, 10) == SharedArrays.shmem_fill(0, (10,10,10))
 
 d = SharedArrays.shmem_rand(dims)
 s = SharedArrays.shmem_rand(dims)

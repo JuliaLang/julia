@@ -12,7 +12,7 @@ end
 
 # get the list of boundary dof-indices
 function get_free(N)
-    L = zeros(Int, N, N)
+    L = fill(0, N, N)
     L[2:N-1, 2:N-1] = 1
     return find(L)
 end
@@ -37,7 +37,7 @@ function fem_perf()
 
     # runs the tests
     #NN = 2.^(3:8)
-    #TT = zeros(3, length(NN))
+    #TT = fill(0.0, 3, length(NN))
     #@printf("(All times are seconds)\n")
     #@printf("     N   |   assembly |   slice   |   lufact  | slice / N^4 \n")
     #@printf("---------|------------|-----------|-----------|-------------\n")

@@ -81,7 +81,7 @@ end
     @test isequal(convert(AbstractArray{Float64,ndims(b1)}, b1),
                   convert(AbstractArray{Float64,ndims(b1)}, Array(b1)))
 
-    i1 = rand!(zeros(Bool, sz...), false:true)
+    i1 = rand!(Array{Bool}(uninitialized, sz...), false:true)
     @test isequal(Array(BitArray(i1)), i1)
 end
 

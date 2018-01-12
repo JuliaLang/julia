@@ -880,7 +880,7 @@ function Vector(x::AbstractSparseVector{Tv}) where Tv
     n == 0 && return Vector{Tv}()
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
-    r = zeros(Tv, n)
+    r = fill(zero(Tv), n)
     for k in 1:nnz(x)
         i = nzind[k]
         v = nzval[k]

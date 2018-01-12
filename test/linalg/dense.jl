@@ -62,7 +62,7 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test zeros(eltya,n)\fill(eltya(1),n) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
+                @test fill(zero(eltya),n)\fill(eltya(1),n) ≈ (fill(zero(eltya),n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
@@ -71,7 +71,7 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
-                @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
+                @test nullspace(fill(zero(eltya), n)) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
@@ -275,7 +275,7 @@ end
 
             @testset "issue #10234" begin
                 if elty <: AbstractFloat || elty <: Complex
-                    z = zeros(elty, 100)
+                    z = fill(zero(elty), 100)
                     z[1] = -Inf
                     for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
                         @test norm(z, p) == (p < 0 ? 0 : Inf)
@@ -334,10 +334,8 @@ end
 end
 
 @testset "issue #4796" begin
-    dim=2
-    S=zeros(Complex,dim,dim)
-    T=zeros(Complex,dim,dim)
-    T[:] = 1
+    S = Complex[0 0; 0 0]
+    T = Complex[1 1 ; 1 1]
     z = 2.5 + 1.5im
     S[1] = z
     @test S*T == [z z; 0 0]
@@ -659,19 +657,22 @@ end
     @test diag(A, 3) == []
     @test_throws ArgumentError diag(A, 4)
 
-    @test diag(zeros(0,0)) == []
-    @test_throws ArgumentError diag(zeros(0,0),1)
-    @test_throws ArgumentError diag(zeros(0,0),-1)
+    A0x0 = Matrix{Float64}(uninitialized, (0,0))
+    @test diag(A0x0) == []
+    @test_throws ArgumentError diag(A0x0,1)
+    @test_throws ArgumentError diag(A0x0,-1)
 
-    @test diag(zeros(1,0)) == []
-    @test diag(zeros(1,0),-1) == []
-    @test_throws ArgumentError diag(zeros(1,0),1)
-    @test_throws ArgumentError diag(zeros(1,0),-2)
+    A1x0 = Matrix{Float64}(uninitialized, (1,0))
+    @test diag(A1x0) == []
+    @test diag(A1x0,-1) == []
+    @test_throws ArgumentError diag(A1x0,1)
+    @test_throws ArgumentError diag(A1x0,-2)
 
-    @test diag(zeros(0,1)) == []
-    @test diag(zeros(0,1),1) == []
-    @test_throws ArgumentError diag(zeros(0,1),-1)
-    @test_throws ArgumentError diag(zeros(0,1),2)
+    A0x1 = Matrix{Float64}(uninitialized, (0,1))
+    @test diag(A0x1) == []
+    @test diag(A0x1,1) == []
+    @test_throws ArgumentError diag(A0x1,-1)
+    @test_throws ArgumentError diag(A0x1,2)
 end
 
 @testset "Matrix to real power" for elty in (Float64, Complex{Float64})

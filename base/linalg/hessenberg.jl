@@ -67,9 +67,9 @@ function getproperty(F::Hessenberg, d::Symbol)
 end
 
 function getindex(A::HessenbergQ, i::Integer, j::Integer)
-    x = zeros(eltype(A), size(A, 1))
+    x = fill(zero(eltype(A)), size(A, 1))
     x[i] = 1
-    y = zeros(eltype(A), size(A, 2))
+    y = fill(zero(eltype(A)), size(A, 2))
     y[j] = 1
     return dot(x, mul!(A, y))
 end

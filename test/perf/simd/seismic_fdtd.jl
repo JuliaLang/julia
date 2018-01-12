@@ -44,8 +44,8 @@ for t in [Float32,Float64]
     A = fill(convert(t,0.2),m,n)
     B = fill(convert(t,0.25),m,n)
     U = rand(t,m,n) .- convert(t,.5)
-    Vx = zeros(t,m,n)
-    Vy = zeros(t,m,n)
+    Vx = fill(zero(t), m, n)
+    Vy = fill(zero(t), m, n)
     bits = 8*sizeof(t)
     @timeit(flog_fdtd(10,U,Vx,Vy,A,B),"seismic_fdtd_$bits","2D finite-difference seismic simulation for $t", "SIMD")
 end

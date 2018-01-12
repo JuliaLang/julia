@@ -72,9 +72,9 @@ end
 function init(board::Board, n::Int, seed::UInt32)
     board.size = n
     board.komi = 0.0
-    board.board = zeros(Int, n, n)
-    board.next_stone = zeros(Int, n, n)
-    board.final_status = zeros(Int, n, n)
+    board.board = fill(0, n, n)
+    board.next_stone = fill(0, n, n)
+    board.final_status = fill(0, n, n)
     board.ko_i = 0
     board.ko_j = 0
     board.rand = XorRand(seed)
@@ -299,7 +299,7 @@ end
 
 # Generate a move.
 function generate_move(board::Board, color::Int)
-    moves = zeros(Int, 2, board.size * board.size)
+    moves = fill(0, 2, board.size * board.size)
     num_moves = 0
 
     for ai = 1:board.size, aj = 1:board.size

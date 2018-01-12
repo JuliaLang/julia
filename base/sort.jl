@@ -776,7 +776,7 @@ Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `init
 
 # Examples
 ```jldoctest
-julia> v = [3, 1, 2]; p = zeros(Int, 3);
+julia> v = [3, 1, 2]; p = [0, 0, 0];
 
 julia> sortperm!(p, v); p
 3-element Array{Int64,1}:

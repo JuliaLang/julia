@@ -114,8 +114,8 @@ srand(1)
         end
 
         @testset "triu and tril" begin
-            zerosdv = zeros(elty, length(dv))
-            zerosev = zeros(elty, length(ev))
+            zerosdv = fill(zero(elty), length(dv))
+            zerosev = fill(zero(elty), length(ev))
             bidiagcopy(dv, ev, uplo) = Bidiagonal(copy(dv), copy(ev), uplo)
 
             @test istril(Bidiagonal(dv,ev,:L))
@@ -215,7 +215,7 @@ srand(1)
         @testset "diag" begin
             @test (@inferred diag(T))::typeof(dv) == dv
             @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
-            @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
+            @test (@inferred diag(T,2))::typeof(dv) == fill(zero(elty), n-2)
             @test_throws ArgumentError diag(T, -n - 1)
             @test_throws ArgumentError diag(T,  n + 1)
             # test diag with another wrapped vector type
@@ -223,7 +223,7 @@ srand(1)
             G = Bidiagonal(gdv, gev, uplo)
             @test (@inferred diag(G))::typeof(gdv) == gdv
             @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
-            @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
+            @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(fill(zero(elty), n-2))
         end
 
         @testset "Eigensystems" begin
@@ -298,7 +298,7 @@ end
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
     @test promote(B,A) == (B, convert(Matrix{Float64}, A))
     @test promote(B,A) isa Tuple{Matrix{Float64}, Matrix{Float64}}
-    @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+    @test promote(C,A) == (C,Tridiagonal(fill(0.0,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
     @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 

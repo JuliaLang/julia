@@ -2466,8 +2466,8 @@ ndigf(n) = Float64(log(Float32(n)))
     @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
     @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
     @test digits(100) == [0, 0, 1]
-    @test digits(BigInt(2)^128, 2) == [zeros(128); 1]
-    let a = zeros(Int, 3)
+    @test digits(BigInt(2)^128, 2) == [fill(0, 128); 1]
+    let a = [0, 0, 0]
         digits!(a, 50)
         @test a == [0, 5, 0]
         digits!(a, 9, 2)
@@ -2477,7 +2477,7 @@ ndigf(n) = Float64(log(Float32(n)))
     end
 end
 # Fill a pre allocated 2x4 matrix
-let a = zeros(Int,(2,4))
+let a = [0 0 0 0; 0 0 0 0]
     for i in 0:3
         digits!(view(a,:,i+1),i,2)
     end
@@ -3025,10 +3025,10 @@ end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
-    @test iszero(zeros(Int, 5))
+    @test iszero(fill(0, 5))
     @test !isone(tril(fill(1, 5, 5)))
     @test !isone(triu(fill(1, 5, 5)))
-    @test !isone(zeros(Int, 5, 5))
+    @test !isone(fill(0, (5, 5)))
     @test isone(Matrix(1I, 5, 5))
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end

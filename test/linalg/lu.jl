@@ -57,7 +57,7 @@ dimg  = randn(n)/2
         end
     end
     @testset "Singular LU" begin
-        lua = lufact(zeros(eltya, 3, 3))
+        lua = lufact(fill(zero(eltya), 3, 3))
         @test !LinAlg.issuccess(lua)
         @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
@@ -142,7 +142,7 @@ dimg  = randn(n)/2
         end
         @testset "Tridiagonal LU" begin
             lud   = factorize(d)
-            f = zeros(eltyb, n+1)
+            f = Vector{eltyb}(uninitialized, n+1)
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch transpose(lud)\f
             @test_throws DimensionMismatch lud'\f

@@ -202,7 +202,7 @@ end
 end
 
 @testset "issue #23218" begin
-    a = zeros(1)
+    a = [0.0]
     b = [1.0]
     idx = (1,)
     @fastmath a[idx...] += b[idx...]

@@ -335,7 +335,7 @@ end
 function diagm_container(kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
     n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
-    return zeros(T, n, n)
+    return fill(zero(T), n, n)
 end
 function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     n = mapreduce(x -> length(x.second) + abs(x.first), max, kv)
@@ -1280,7 +1280,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     if istril(A)
         if istriu(A)
             maxabsA = maximum(abs.(diag(A)))
-            B = zeros(Tout, n, m)
+            B = fill(zero(Tout), n, m)
             for i = 1:min(m, n)
                 if abs(A[i,i]) > tol*maxabsA
                     Aii = inv(A[i,i])
@@ -1294,7 +1294,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     end
     SVD         = svdfact(A, full = false)
     Stype       = eltype(SVD.S)
-    Sinv        = zeros(Stype, length(SVD.S))
+    Sinv        = fill(zero(Stype), length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[find(.!isfinite.(Sinv))] = zero(Stype)

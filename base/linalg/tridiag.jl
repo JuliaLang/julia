@@ -82,7 +82,7 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
-    Mf = zeros(T, n, n)
+    Mf = fill(zero(T), n, n)
     @inbounds begin
         @simd for i = 1:n-1
             Mf[i,i] = M.dv[i]

@@ -10,7 +10,7 @@ general nonsymmetric matrices respectively.
 
 For the single matrix version,
 
-`eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)`
+`eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=[]) -> (d,[v,],nconv,niter,nmult,resid)`
 
 the following keyword arguments are supported:
 
@@ -125,7 +125,7 @@ julia> λ
 
 For the two-input generalized eigensolution version,
 
-`eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)`
+`eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=[]) -> (d,[v,],nconv,niter,nmult,resid)`
 
 the following keyword arguments are supported:
 

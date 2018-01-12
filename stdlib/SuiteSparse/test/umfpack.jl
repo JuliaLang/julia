@@ -159,7 +159,7 @@
         N = 10
         p = 0.5
         A = N*I + sprand(N, N, p)
-        X = zeros(Complex{Float64}, N, N)
+        X = fill(0.0+0im, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
         @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)

@@ -32,16 +32,16 @@ end
 
 # Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
-let A = zeros(2, 2)
+let A = [0.0 0.0; 0.0 0.0]
     rand!(MersenneTwister(0), A)
     @test A == [0.8236475079774124  0.16456579813368521;
                 0.9103565379264364  0.17732884646626457]
 end
-let A = zeros(2, 2)
+let A = [0.0 0.0; 0.0 0.0]
     @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
     @test rand(MersenneTwister(0), Int64, 1) == [2118291759721269919]
 end
-let A = zeros(Int64, 2, 2)
+let A = [0 0; 0 0]
     rand!(MersenneTwister(0), A)
     @test A == [858542123778948672  5715075217119798169;
                 8690327730555225005 8435109092665372532]
@@ -64,13 +64,13 @@ end
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
-let A = zeros(2, 2)
+let A = [0.0 0.0; 0.0 0.0]
     randn!(MersenneTwister(42), A)
     @test A == [-0.5560268761463861  0.027155338009193845;
                 -0.444383357109696  -0.29948409035891055]
 end
 
-let B = zeros(ComplexF64, 2)
+let B = [0.0 + 0im, 0.0 + 0im]
     randn!(MersenneTwister(42), B)
     @test B == [ComplexF64(-0.5560268761463861,-0.444383357109696),
                 ComplexF64(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
@@ -442,7 +442,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
 end
 
 function hist(X, n)
-    v = zeros(Int, n)
+    v = fill(0, n)
     for x in X
         v[floor(Int, x*n) + 1] += 1
     end
@@ -560,19 +560,19 @@ let seed = rand(UInt32, 10)
 end
 
 # MersenneTwister initialization with invalid values
-@test_throws DomainError Base.dSFMT.DSFMT_state(zeros(Int32, rand(0:Base.dSFMT.JN32-1)))
+@test_throws DomainError Base.dSFMT.DSFMT_state(fill(zero(Int32), rand(0:Base.dSFMT.JN32-1)))
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, 10), fill(zero(UInt128), MT_CACHE_I>>4), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>4), -1, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>3), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
+@test_throws DomainError MersenneTwister(fill(zero(UInt32), 1), Base.dSFMT.DSFMT_state(),
+                                         fill(0.0, MT_CACHE_F), fill(zero(UInt128), MT_CACHE_I>>4), 0, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)

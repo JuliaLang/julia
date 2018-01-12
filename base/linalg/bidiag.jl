@@ -135,7 +135,7 @@ end
 #Converting from Bidiagonal to dense Matrix
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
-    B = zeros(T, n, n)
+    B = fill(zero(T), n, n)
     for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -605,7 +605,7 @@ function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(uninitialized, n,n)
     blks = [0; find(x -> x == 0, M.ev); n]
-    v = zeros(T, n)
+    v = fill(zero(T), n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
             fill!(v, zero(T))

@@ -118,8 +118,8 @@ end
 
 function randmatstat(t)
     n = 5
-    v = zeros(t)
-    w = zeros(t)
+    v = Vector{Float64}(uninitialized, t)
+    w = Vector{Float64}(uninitialized, t)
     for i=1:t
         a = randn(n,n)
         b = randn(n,n)

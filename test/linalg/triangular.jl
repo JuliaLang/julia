@@ -111,7 +111,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws ArgumentError tril!(A1, n)
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
-            @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
+            @test triu(A1,1)  == fill(0, size(A1)) # or just @test iszero(triu(A1,1))?
             @test_throws ArgumentError triu!(A1, -n)
             @test_throws ArgumentError triu!(A1, n + 2)
         else
@@ -122,7 +122,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws ArgumentError triu!(A1, n + 2)
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
-            @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
+            @test tril(A1,-1) == fill(0, size(A1)) # or just @test iszero(tril(A1,-1))?
             @test_throws ArgumentError tril!(A1, -n - 2)
             @test_throws ArgumentError tril!(A1, n)
         end
@@ -381,7 +381,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
-                @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),fill(eltyB(1),n))
+                @test_throws Base.LinAlg.SingularException naivesub!(t1(fill(zero(elty1),n,n)),fill(eltyB(1),n))
             end
             @test B/A1 ≈ B/Matrix(A1)
             @test B/transpose(A1) ≈ B/transpose(Matrix(A1))

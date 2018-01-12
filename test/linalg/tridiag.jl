@@ -161,7 +161,7 @@ end
             @test (@inferred diag(A, 0))::typeof(d) == d
             @test (@inferred diag(A, 1))::typeof(d) == (mat_type == Tridiagonal ? du : dl)
             @test (@inferred diag(A, -1))::typeof(d) == dl
-            @test (@inferred diag(A, n-1))::typeof(d) == zeros(elty, 1)
+            @test (@inferred diag(A, n-1))::typeof(d) == elty[0]
             @test_throws ArgumentError diag(A, -n - 1)
             @test_throws ArgumentError diag(A, n + 1)
             GA = mat_type == Tridiagonal ? mat_type(GenericArray.((dl, d, du))...) : mat_type(GenericArray.((d, dl))...)

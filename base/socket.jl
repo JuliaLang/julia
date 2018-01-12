@@ -986,7 +986,7 @@ getpeername(sock::TCPSocket) = _sockname(sock, false)
 
 function _sockname(sock, self=true)
     rport = Ref{Cushort}(0)
-    raddress = zeros(UInt8, 16)
+    raddress = fill(0x0, 16)
     rfamily = Ref{Cuint}(0)
 
     if self

@@ -288,7 +288,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 if Sys.iswindows()
 function realpath(path::AbstractString)
     p = cwstring(path)
-    buf = zeros(UInt16, length(p))
+    buf = fill(zero(UInt16), length(p))
     while true
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Cvoid}),
@@ -302,7 +302,7 @@ end
 
 function longpath(path::AbstractString)
     p = cwstring(path)
-    buf = zeros(UInt16, length(p))
+    buf = fill(zero(UInt16), length(p))
     while true
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),

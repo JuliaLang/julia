@@ -27,11 +27,11 @@ function spdiags(B,d,m,n)
     d = d[:]
     p = length(d)
 
-    len = zeros(Int, p+1, 1)
+    len = fill(0, p+1, 1)
     for k = 1:p
         len[k+1] = len[k] + length(max(1,1-d[k]):min(m,n-d[k]))
     end
-    a = zeros(Int, len[p+1], 3)
+    a = fill(0, len[p+1], 3)
     for k = 1:p
         # Append new d[k]-th diagonal to compact form
         i = max(1,1-d[k]):min(m,n-d[k])

@@ -117,7 +117,7 @@ mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedV
 function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
-    Y = zeros(promote_type(TX,TvA), mX, A.n)
+    Y = fill(zero(promote_type(TX, TvA)), mX, A.n)
     rowval = A.rowval
     nzval = A.nzval
     @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
@@ -162,8 +162,8 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 
     @inbounds begin
         ip = 1
-        xb = zeros(Ti, mA)
-        x  = zeros(Tv, mA)
+        xb = fill(zero(Ti), mA)
+        x  = fill(zero(Tv), mA)
         for i in 1:nB
             if ip + mA - 1 > nnzC
                 resize!(rowvalC, nnzC + max(nnzC,mA))
@@ -554,7 +554,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
         elseif p==2
             throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(Array(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
-            rowSum = zeros(Tsum,m)
+            rowSum = fill(zero(Tsum), m)
             for i=1:length(A.nzval)
                 rowSum[A.rowval[i]] += abs(A.nzval[i])
             end
@@ -599,7 +599,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     Ti = typeof(float(zero(T)))
 
-    S = zeros(T <: Real ? Int : Ti, n, t)
+    S = fill(zero(T <: Real ? Int : Ti), n, t)
 
     function _rand_pm1!(v)
         for i in eachindex(v)
@@ -693,7 +693,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
         # Use the conjugate transpose
         Z = F' \ S
         h_max = zero(real(eltype(Z)))
-        h = zeros(real(eltype(Z)), n)
+        h = fill(h_max, n)
         h_ind = 0
         for i = 1:n
             h[i] = norm(Z[i,1:t], Inf)

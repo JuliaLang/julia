@@ -1111,7 +1111,7 @@ for i in 2:5
 end
 
 # non-bitstypes
-global v2 = zeros(10)
+global v2 = fill(0.0, 10)
 for i in 1:5
     v2[i] = i
     @test remotecall_fetch(()->v2, id_other) == v2
@@ -1170,7 +1170,7 @@ v6 = FooModEverywhere
 end
 
 # hash value of tsc is not changed
-global tsc = TestSerCnt(zeros(10))
+global tsc = TestSerCnt(fill(0.0, 10))
 for i in 1:5
     remotecall_fetch(()->tsc, id_other)
 end
@@ -1217,7 +1217,7 @@ function wrapped_var_ser_tests()
     end
 
     # non-bitstypes
-    local lv2 = zeros(10)
+    local lv2 = fill(0.0, 10)
     for i in 1:5
         lv2[i] = i
         @test remotecall_fetch(()->lv2, id_other) == lv2

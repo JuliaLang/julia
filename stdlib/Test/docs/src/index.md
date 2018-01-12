@@ -124,7 +124,7 @@ julia> @testset "Foo Tests" begin
                @test foo("dog") == foo("cat")
            end
            @testset "Arrays $i" for i in 1:3
-               @test foo(zeros(i)) == i^2
+               @test foo(fill(0.0, i)) == i^2
                @test foo(fill(1.0, i)) == i^2
            end
        end;
@@ -146,7 +146,7 @@ julia> @testset "Foo Tests" begin
                end
            end
            @testset "Arrays" begin
-               @test foo(zeros(2)) == 4
+               @test foo(fill(0.0, 2)) == 4
                @test foo(fill(1.0, 4)) == 15
            end
        end

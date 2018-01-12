@@ -1683,12 +1683,13 @@ g4731() = f4731()
 @test g4731() == ""
 
 # issue #4675
+z50x50 = fill(0.0, 50, 50)
 f4675(x::StridedArray...) = 1
 f4675(x::StridedArray{T}...) where {T} = 2
-@test f4675(zeros(50,50), zeros(50,50)) == 2
+@test f4675(z50x50, z50x50) == 2
 g4675(x::StridedArray{T}...) where {T} = 2
 g4675(x::StridedArray...) = 1
-@test g4675(zeros(50,50), zeros(50,50)) == 2
+@test g4675(z50x50, z50x50) == 2
 
 # issue #4771
 module Lib4771
@@ -2124,7 +2125,7 @@ end
 @test @M6938.mac() == 0
 
 # issue #7012
-let x = zeros(2)
+let x = [0.0, 0.0]
     x[1]::Float64 = 1
     @test x == [1.0, 0.0]
     @test_throws TypeError (x[1]::Int = 1)
@@ -2150,7 +2151,7 @@ end
 
 # issue #7074
 let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
-    S = zeros(Complex,2,2)
+    S = Matrix{Complex}(uninitialized, (2,2))
     @test_throws MethodError z(S)
 end
 
@@ -2224,7 +2225,7 @@ let
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
-        issue7897!(sa, zeros(10))
+        issue7897!(sa, fill(0.0, 10))
     end
 end
 
@@ -2316,7 +2317,7 @@ end
 
 # issue #9134
 function f9134()
-    ii = zeros(Int32, 1)
+    ii = Int32[0]
     let i
         ii[1] = i
     end
@@ -3391,7 +3392,7 @@ mutable struct Sampler11587{N}
 end
 function Sampler11587()
     a = tuple(Any[32,32]...,)
-    Sampler11587(zeros(Int,a), zeros(Float64,a))
+    Sampler11587(fill(0, a), fill(0.0, a))
 end
 @test isa(Sampler11587(), Sampler11587{2})
 

@@ -27,7 +27,7 @@ const JN32 = (N+1)*4+1+1
 mutable struct DSFMT_state
     val::Vector{Int32}
 
-    function DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32))
+    function DSFMT_state(val::Vector{Int32} = fill(zero(Int32), JN32))
         length(val) == JN32 ||
             throw(DomainError(length(val), "Expected length: $JN32."))
         new(val)
@@ -188,7 +188,7 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     val = s.val
     nval = length(val)
     index = val[nval - 1]
-    work = zeros(Int32, JN32)
+    work = fill(zero(Int32), JN32)
     rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(uninitialized, nval >> 1)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),

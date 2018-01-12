@@ -35,7 +35,7 @@ function mandelbrot(n::Int=200, outfile="mandelbrot-output-julia.txt")
         error("Error: n of $n is not divisible by 8")
     end
 
-    M = zeros(UInt8, div(n, 8), n)
+    M = fill(0x0, div(n, 8), n)
     draw_mandel(M, n)
 
     output = open(outfile, "w")

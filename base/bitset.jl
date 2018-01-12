@@ -15,7 +15,7 @@ mutable struct BitSet <: AbstractSet{Int}
     # 1st stored Int equals 64*offset
     offset::Int
 
-    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
+    BitSet() = new(sizehint!(UInt64[], 4), NO_OFFSET)
 end
 
 """

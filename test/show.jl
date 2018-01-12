@@ -894,10 +894,10 @@ let fname = tempname()
     try
         open(fname, "w") do fout
             redirect_stdout(fout) do
-                @show zeros(2, 2)
+                @show fill(0.0, 2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "fill(0.0, 2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
     finally
         rm(fname, force=true)
     end
@@ -950,25 +950,25 @@ end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
-    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
+    @test replstr(fill(0+0im)) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
     A = Array{Pair,0}(uninitialized); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
-    @test replstr(zeros(Complex{Int}, 2)) ==
+    @test replstr(fill(0+0im, 2)) ==
         "2-element Array{Complex{$Int},1}:\n 0 + 0im\n 0 + 0im"
     @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1 => 2\n 3 => 4"
     # 2-dim
-    @test replstr(zeros(Complex{Int}, 2, 1)) ==
+    @test replstr(fill(0+0im, 2, 1)) ==
         "2×1 Array{Complex{$Int},2}:\n 0 + 0im\n 0 + 0im"
-    @test replstr(zeros(Complex{Int}, 1, 2)) ==
+    @test replstr(fill(0+0im, 1, 2)) ==
         "1×2 Array{Complex{$Int},2}:\n 0+0im  0+0im"
     @test replstr([1=>2 3=>4]) == "1×2 Array{Pair{$Int,$Int},2}:\n 1=>2  3=>4"
     @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
         "2×1 Array{Pair{$Int,$Int},2}:\n 1 => 2\n 1 => 2"
     # 3-dim
-    @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
+    @test replstr(fill(0+0im, 1, 1, 1)) ==
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
-    @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
+    @test replstr(fill(0+0im, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
 
@@ -988,12 +988,12 @@ end
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Array{Int64,1}:\n 1\n ⋮"
 
-    @test arrstr(zeros(4, 3), 4)  == "4×3 Array{Float64,2}: …"
-    @test arrstr(zeros(4, 30), 4) == "4×30 Array{Float64,2}: …"
-    @test arrstr(zeros(4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
-    @test arrstr(zeros(4, 30), 6) ==
+    @test arrstr(fill(0.0, 4, 3), 4)  == "4×3 Array{Float64,2}: …"
+    @test arrstr(fill(0.0, 4, 30), 4) == "4×30 Array{Float64,2}: …"
+    @test arrstr(fill(0.0, 4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(fill(0.0, 4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(fill(0.0, 4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
+    @test arrstr(fill(0.0, 4, 30), 6) ==
               string("4×30 Array{Float64,2}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                      ")
@@ -1083,7 +1083,7 @@ end
     @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
     @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
     # printing tuples (Issue #25042)
-    @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
+    @test replstr(fill((Int64(1), fill(zero(Float16), 3)), 1)) ==
                  "1-element Array{Tuple{Int64,Array{Float16,1}},1}:\n (1, [0.0, 0.0, 0.0])"
     @testset "nested Any eltype" begin
         x = Any[Any[Any[1]]]

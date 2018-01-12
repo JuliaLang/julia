@@ -2080,7 +2080,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Get the Gauss-Legendre quadrature points and weights
-    R = zeros(Float64, m, m)
+    R = fill(0.0, m, m)
     for i = 1:m - 1
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
@@ -2093,7 +2093,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Compute the Padé approximation
-    Y = zeros(T, n, n)
+    Y = fill(zero(T), n, n)
     for k = 1:m
         Y = Y + w[k] * (A / (x[k] * A + I))
     end
@@ -2297,7 +2297,7 @@ function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data
     n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
-    R = zeros(t, n, n)
+    R = fill(zero(t), n, n)
     tt = typeof(zero(t)*zero(t))
     @inbounds for j = 1:n
         R[j,j] = realmatrix ? sqrt(B[j,j]) : sqrt(complex(B[j,j]))
