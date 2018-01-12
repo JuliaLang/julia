@@ -436,12 +436,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
-            @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
-            @test B[vec(mask)] == A[vec(mask)] == find(mask)
+            @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == LinearIndices(mask)[find(mask)]
+            @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[find(mask)]
             mask1 = bitrand(size(A, 1))
             mask2 = bitrand(size(A, 2))
-            @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] == B[find(mask1), find(mask2), trailing2]
-            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == find(mask1)
+            @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
+                B[LinearIndices(mask1)[find(mask1)], LinearIndices(mask2)[find(mask2)], trailing2]
+            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[find(mask1)]
         end
     end
 end
