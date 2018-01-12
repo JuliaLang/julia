@@ -2782,6 +2782,13 @@ end
 @deprecate findn(x::AbstractMatrix) (I = find(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
 @deprecate findn(a::AbstractArray{T, N}) where {T, N} (I = find(!iszero, x); ntuple(i -> getindex.(I, i), N))
 
+# issue #9053
+if Sys.iswindows()
+function Filesystem.tempname(uunique::UInt32)
+    error("`tempname(::UInt32)` is discontinued.")
+end
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
