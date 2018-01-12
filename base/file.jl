@@ -81,8 +81,12 @@ Temporarily changes the current working directory and applies function `f` befor
 """
 cd(f::Function) = cd(f, homedir())
 
-checkmode(mode::Unsigned) = mode
-checkmode(mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
+function checkmode(mode::Int) =
+    if !(0 <= mode <= 511)
+        ArgumentError("Mode must be between 0 and 511 = 0o777")
+    end
+    mode
+end
 
 """
     mkdir(path::AbstractString; mode::Unsigned = 0o777)
