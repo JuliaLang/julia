@@ -932,6 +932,12 @@ function zeros(a::AbstractArray)
     return fill!(similar(a), zero(eltype(a)))
 end
 
+# deprecate ones
+@deprecate ones(::Type{T}, dims::Tuple) where {T} fill(one(T), dims)
+@deprecate ones(dims::Tuple) fill(1., dims)
+@deprecate ones(::Type{T}, dims...) where {T} fill(one(T), dims...)
+@deprecate ones(dims...) fill(1., dims...)
+
 # PR #23711
 @eval LibGit2 begin
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)

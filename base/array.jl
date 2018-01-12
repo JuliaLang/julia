@@ -343,7 +343,7 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`fill`](@ref), [`ones`](@ref).
+See also [`fill`](@ref).
 
 # Examples
 ```jldoctest
@@ -359,34 +359,10 @@ julia> zeros(Int8, 2, 3)
 """
 function zeros end
 
-"""
-    ones([T=Float64,] dims...)
-
-Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also: [`fill`](@ref), [`zeros`](@ref).
-
-# Examples
-```jldoctest
-julia> ones(1,2)
-1×2 Array{Float64,2}:
- 1.0  1.0
-
-julia> ones(ComplexF64, 2, 3)
-2×3 Array{Complex{Float64},2}:
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
-```
-"""
-function ones end
-
-for (fname, felt) in ((:zeros, :zero), (:ones, :one))
-    @eval begin
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, convert(Dims, dims)::Dims), $felt(T))
-        $fname(dims::Tuple) = ($fname)(Float64, dims)
-        $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
-        $fname(dims...) = $fname(dims)
-    end
-end
+zeros(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, convert(Dims, dims)::Dims), zero(T))
+zeros(dims::Tuple) = zeros(Float64, dims)
+zeros(::Type{T}, dims...) where {T} = zeros(T, dims)
+zeros(dims...) = zeros(dims)
 
 function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
