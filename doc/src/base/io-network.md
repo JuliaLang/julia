@@ -59,7 +59,7 @@ Base.showcompact
 Base.summary
 Base.print
 Base.println
-Base.print_with_color
+Base.printstyled
 Base.sprint
 Base.showerror
 Base.dump

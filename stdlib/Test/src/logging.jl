@@ -64,9 +64,9 @@ mutable struct LogTestFailure <: Result
     logs
 end
 function Base.show(io::IO, t::LogTestFailure)
-    print_with_color(Base.error_color(), io, "Log Test Failed"; bold = true)
+    printstyled(io, "Log Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     println(io, "  Expression: ", t.orig_expr)
     println(io, "  Log Pattern: ", join(t.patterns, " "))
     println(io, "  Captured Logs: ")
@@ -84,7 +84,7 @@ end
 
 function record(ts::DefaultTestSet, t::LogTestFailure)
     if myid() == 1
-        print_with_color(:white, ts.description, ": ")
+        printstyled(ts.description, ": ", color=:white)
         print(t)
         Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
         println()
