@@ -1093,6 +1093,11 @@ end
     export copyto!, unsafe_copyto!
 end
 
+# 0.7.0-DEV.3272
+@static if VERSION < v"0.7.0-DEV.3272"
+    Base.contains(str::AbstractString, r::Regex) = ismatch(r, str)
+end
+
 @static if VERSION < v"0.7.0-DEV.3025"
     import Base: convert, ndims, getindex, size, length, eltype,
                  start, next, done, first, last

@@ -278,6 +278,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `copy!` and `unsafe_copy!` are now `copyto!` and `unsafe_copyto!` ([#24808]).
 
+* `ismatch(r::Regex, str::AbstractString)` is now `contains(str, r)` ([#24673]).
+
 * `ipermute!` is now `invpermute!` ([#25168]).
 
 ## New macros
@@ -429,6 +431,7 @@ includes this fix. Find the minimum version from there.
 [#24648]: https://github.com/JuliaLang/julia/issues/24648
 [#24652]: https://github.com/JuliaLang/julia/issues/24652
 [#24657]: https://github.com/JuliaLang/julia/issues/24657
+[#24673]: https://github.com/JuliaLang/julia/issues/24673
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
