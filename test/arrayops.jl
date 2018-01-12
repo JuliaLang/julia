@@ -1229,18 +1229,18 @@ end
 
 @testset "reverse" begin
     @test reverse([2,3,1]) == [1,3,2]
-    @test reverse([1:10;], start = 1, stop = 4) == [4,3,2,1,5,6,7,8,9,10]
-    @test reverse([1:10;], start = 3, stop = 6) == [1,2,6,5,4,3,7,8,9,10]
-    @test reverse([1:10;], start = 6, stop = 10) == [1,2,3,4,5,10,9,8,7,6]
-    @test reverse(1:10, start = 1, stop = 4) == [4,3,2,1,5,6,7,8,9,10]
-    @test reverse(1:10, start = 3, stop = 6) == [1,2,6,5,4,3,7,8,9,10]
-    @test reverse(1:10, start = 6, stop = 10) == [1,2,3,4,5,10,9,8,7,6]
+    @test reverse([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+    @test reverse([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+    @test reverse([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
+    @test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
+    @test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
+    @test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
     @test reverse!([1:10;]) == [10,9,8,7,6,5,4,3,2,1]
-    @test reverse!([1:10;], start = 1, stop = 4) == [4,3,2,1,5,6,7,8,9,10]
-    @test reverse!([1:10;], start = 3, stop = 6) == [1,2,6,5,4,3,7,8,9,10]
-    @test reverse!([1:10;], start = 6, stop = 10) == [1,2,3,4,5,10,9,8,7,6]
-    @test reverse!([1:10;],  start = 11) == [1:10;]
-    @test_throws BoundsError reverse!([1:10;], start = 1, stop = 11)
+    @test reverse!([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+    @test reverse!([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+    @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
+    @test reverse!([1:10;], 11) == [1:10;]
+    @test_throws BoundsError reverse!([1:10;], 1, 11)
     @test reverse!(Any[]) == Any[]
 end
 
