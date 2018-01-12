@@ -27,7 +27,7 @@ export
     @fetch,
     @fetchfrom,
     @everywhere,
-    @parallel,
+    @distributed,
 
     AbstractWorkerPool,
     addprocs,
@@ -78,6 +78,8 @@ include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
+
+@eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
 
 function _require_callback(mod::Symbol)
     if Base.toplevel_load[] && myid() == 1 && nprocs() > 1

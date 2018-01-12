@@ -11,7 +11,7 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
 @test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
+@test 100 == @distributed (+) for i in 1:100
         1
     end
 
@@ -272,14 +272,14 @@ end
 test_regular_io_ser(Future())
 test_regular_io_ser(RemoteChannel())
 
-# Test @parallel load balancing - all processors should get either M or M+1
+# Test @distributed load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-ids = @parallel((a,b)->[a;b], for i=1:7; myid(); end)
+ids = @distributed((a,b)->[a;b], for i=1:7; myid(); end)
 workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test maximum(workloads) - minimum(workloads) <= 1
 
-# @parallel reduction should work even with very short ranges
-@test @parallel(+, for i=1:2; i; end) == 3
+# @distributed reduction should work even with very short ranges
+@test @distributed(+, for i=1:2; i; end) == 3
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
@@ -699,7 +699,7 @@ end
 
 # issue #8207
 let A = Any[]
-    @parallel (+) for i in (push!(A,1); 1:2)
+    @distributed (+) for i in (push!(A,1); 1:2)
         i
     end
     @test length(A) == 1
@@ -818,13 +818,13 @@ end
 
 # issue #16451
 rng=RandomDevice()
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
 
 rand(rng)
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
@@ -1268,7 +1268,7 @@ foreach(wait, refs)
 #6760
 if true
     a = 2
-    x = @parallel (vcat) for k=1:2
+    x = @distributed (vcat) for k=1:2
         sin(a)
     end
 end
