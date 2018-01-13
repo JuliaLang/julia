@@ -128,8 +128,8 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
-# promote_join returns a Union only with Void/Missing combined with concrete types
-for T in (Void, Missing)
+# promote_join returns a Union only with Nothing/Missing combined with concrete types
+for T in (Nothing, Missing)
     @test Base.promote_join(Int, Float64) === Real
     @test Base.promote_join(Int, T) === Union{Int, T}
     @test Base.promote_join(T, String) === Union{T, String}

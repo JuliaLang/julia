@@ -107,7 +107,7 @@ let fails = @testset NoThrowTestSet begin
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
         # Fail - function keyword splatting
-        k = [(:atol, 0), (:nans, true)]
+        k = Any[(:atol, 0), (:nans, true)]
         @test isapprox(1, 2; k...)
         # Error - unexpected pass
         @test_broken true

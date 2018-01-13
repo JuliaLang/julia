@@ -3,7 +3,7 @@
 using Base: findprevnot, findnextnot
 using Random, LinearAlgebra
 
-tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
+tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), Any[zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{Bool,Vector{Bool}}}) = true
 tc(r1::T, r2::T) where {T} = true
@@ -858,10 +858,10 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(-, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(*, u1, b2) Matrix{UInt8}
 
-        for (x1,t1) = [(f1, Float64),
-                       (ci1, Complex{Int}),
-                       (cu1, Complex{UInt8}),
-                       (cf1, ComplexF64)]
+        for (x1,t1) = Any[(f1, Float64),
+                          (ci1, Complex{Int}),
+                          (cu1, Complex{UInt8}),
+                          (cf1, ComplexF64)]
             @check_bit_operation broadcast(+, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(-, x1, b2)  Matrix{t1}
             @check_bit_operation broadcast(*, x1, b2) Matrix{t1}

@@ -181,6 +181,29 @@ end
         typejoin(Int, AbstractFloat, Bool)
     @test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) ===
         typejoin(Int, Float64, Bool)
+    @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+end
+
+@testset "promotion" begin
+    @test promote_type(Tuple{Int}, Tuple{Float64}) === Tuple{Float64}
+    @test promote_type(Tuple{Int,Float64}, Tuple{Float64,Int}) === Tuple{Float64,Float64}
+    @test promote_type(Tuple{Int,String}, Tuple{Float64,Int}) === Tuple{Float64,Any}
+
+    for T in (Nothing, Missing)
+        @test promote_type(Tuple{Int,Int}, Tuple{T,Union{T,Float64}}) ===
+            Tuple{Union{Int,T},Union{Float64,T}}
+
+        x = [(1, T()), (1, 2)]
+        @test x isa Vector{Tuple{Int,Union{Int,T}}}
+
+        y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
+        @test y isa Vector{Tuple{Int,Union{T,Int}}}
+        @test isequal(x, y)
+    end
+    y = map(v -> (v[1], v[1] + v[2]), [(1, missing), (1, 2)])
+    @test y isa Vector{Tuple{Int,Union{Missing,Int}}}
+    @test isequal(y, [(1, missing), (1, 3)])
 end
 
 @testset "mapping" begin
