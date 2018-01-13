@@ -284,8 +284,7 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
-    local r::T
-    r = 1
+    r::T = 1
     while true
         if p >= t
             r = mod(widemul(r,b),m)

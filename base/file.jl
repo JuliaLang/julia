@@ -514,8 +514,8 @@ function rename(src::AbstractString, dst::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    local src_open = false
-    local dst_open = false
+    src_open = false
+    dst_open = false
     local src_file, dst_file
     try
         src_file = open(src, JL_O_RDONLY)
