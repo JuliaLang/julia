@@ -119,6 +119,8 @@ end
         @test LinearIndices()[1] == 1
         @test_throws BoundsError LinearIndices()[2]
         @test LinearIndices()[1,1] == 1
+        @test LinearIndices()[] == 1
+        @test size(LinearIndices()) == ()
         @test CartesianIndices()[1] == CartesianIndex()
         @test_throws BoundsError CartesianIndices()[2]
     end
@@ -129,6 +131,8 @@ end
             @test CartesianIndices((3,))[i] == CartesianIndex(i,)
         end
         @test LinearIndices((3,))[2,1] == 2
+        @test LinearIndices((3,))[[1]] == [1]
+        @test size(LinearIndices((3,))) == (3,)
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -140,22 +144,39 @@ end
         k = 0
         cartesian = CartesianIndices((4,3))
         linear = LinearIndices(cartesian)
+        @test size(cartesian) == size(linear) == (4, 3)
         for j = 1:3, i = 1:4
-            @test linear[i,j] == (k+=1)
+            k += 1
+            @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
             @test LinearIndices(0:3,3:5)[i-1,j+2] == k
             @test CartesianIndices(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
         end
+        @test linear[linear] == linear
+        @test linear[vec(linear)] == vec(linear)
+        @test linear[cartesian] == linear
+        @test linear[vec(cartesian)] == vec(linear)
+        @test cartesian[linear] == cartesian
+        @test cartesian[vec(linear)] == vec(cartesian)
+        @test cartesian[cartesian] == cartesian
+        @test cartesian[vec(cartesian)] == vec(cartesian)
     end
 
     @testset "3-dimensional" begin
         l = 0
         for k = 1:2, j = 1:3, i = 1:4
-            @test LinearIndices((4,3,2))[i,j,k] == (l+=1)
+            l += 1
+            @test LinearIndices((4,3,2))[i,j,k] == l
+            @test LinearIndices((4,3,2))[l] == l
+            @test CartesianIndices((4,3,2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((4,3,2))[l] == CartesianIndex(i,j,k)
             @test LinearIndices(1:4,1:3,1:2)[i,j,k] == l
+            @test LinearIndices(1:4,1:3,1:2)[l] == l
+            @test CartesianIndices(1:4,1:3,1:2)[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
             @test LinearIndices(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
+            @test LinearIndices(0:3,3:5,-101:-100)[l] == l
+            @test CartesianIndices(0:3,3:5,-101:-100)[i,j,k] == CartesianIndex(i-1, j+2, k-102)
             @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
         end
 

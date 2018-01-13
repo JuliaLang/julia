@@ -371,7 +371,7 @@ This section lists changes that do not have deprecation warnings.
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
     In particular, this means that it returns `CartesianIndex` objects for matrices
     and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
+    Use `LinearIndices(a)[find(f, a)]` to compute linear indices.
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
