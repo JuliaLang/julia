@@ -207,7 +207,7 @@ Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
 sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
 a high-level interface with much of the same functionality: see the section on
-[Interacting With Julia](@ref).
+[The Julia REPL](@ref).
 
 ### `JULIA_ERROR_COLOR`
 

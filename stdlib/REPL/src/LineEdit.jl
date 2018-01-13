@@ -2,6 +2,7 @@
 
 module LineEdit
 
+import ..REPL
 using ..Terminals
 
 import ..Terminals: raw!, width, height, cmove, getX,
@@ -85,7 +86,7 @@ options(s::PromptState) =
         # in the REPL module
         s.p.repl.options
     else
-        Base.REPL.GlobalOptions
+        REPL.GlobalOptions
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)

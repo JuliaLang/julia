@@ -134,8 +134,8 @@ repl_corrections(s) = repl_corrections(STDOUT, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex)
-        for (k,v) in Base.REPLCompletions.latex_symbols
+    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+        for (k,v) in Base.REPL_MODULE_REF[].REPLCompletions.latex_symbols
             symbols_latex[v] = k
         end
     end

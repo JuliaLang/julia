@@ -21,7 +21,6 @@ Some general notes:
 Base.exit
 Base.quit
 Base.atexit
-Base.atreplinit
 Base.isinteractive
 Base.varinfo
 Base.summarysize
