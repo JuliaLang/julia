@@ -149,7 +149,7 @@ function display_error(io::IO, er, bt)
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
-    if eval_ind != 0
+    if eval_ind !== nothing
         bt = bt[1:eval_ind-1]
     end
     showerror(IOContext(io, :limit => true), er, bt)

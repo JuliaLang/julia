@@ -1,24 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+nothing_sentinel(i) = i == 0 ? nothing : i
+
 function findnext(pred::EqualTo{Char}, s::String, i::Integer)
     if i < 1 || i > sizeof(s)
-        i == sizeof(s) + 1 && return 0
+        i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
     c = pred.x
-    c ≤ '\x7f' && return _search(s, c % UInt8, i)
+    c ≤ '\x7f' && return nothing_sentinel(_search(s, c % UInt8, i))
     while true
         i = _search(s, first_utf8_byte(c), i)
-        (i == 0 || s[i] == c) && return i
+        i == 0 && return nothing
+        s[i] == c && return i
         i = next(s, i)[2]
     end
 end
 
-findfirst(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = _search(a, pred.x)
+findfirst(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_search(a, pred.x))
 
 findnext(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    _search(a, pred.x, i)
+    nothing_sentinel(_search(a, pred.x, i))
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
@@ -43,19 +46,20 @@ end
 
 function findprev(pred::EqualTo{Char}, s::String, i::Integer)
     c = pred.x
-    c ≤ '\x7f' && return _rsearch(s, c % UInt8, i)
+    c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
     b = first_utf8_byte(c)
     while true
         i = _rsearch(s, b, i)
-        (i == 0 || s[i] == c) && return i
+        i == 0 && return nothing
+        s[i] == c && return i
         i = prevind(s, i)
     end
 end
 
-findlast(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = _rsearch(a, pred.x)
+findlast(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_rsearch(a, pred.x))
 
 findprev(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    _rsearch(a, pred.x, i)
+    nothing_sentinel(_rsearch(a, pred.x, i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -109,10 +113,10 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
         end
         i = j
     end
-    return 0
+    return nothing
 end
 
-in(c::Char, s::AbstractString) = (findfirst(equalto(c),s)!=0)
+in(c::Char, s::AbstractString) = (findfirst(equalto(c),s)!==nothing)
 
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,Char,Int8,UInt8},
@@ -124,7 +128,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     t1, j2 = next(t,start(t))
     while true
         i = findnext(equalto(t1),s,i)
-        if i == 0 return 0 end
+        if i === nothing return 0 end
         c, ii = next(s,i)
         j = j2; k = ii
         matched = true
@@ -147,7 +151,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     end
 end
 
-_searchindex(s::AbstractString, t::Char, i::Integer) = findnext(equalto(t), s, i)
+_searchindex(s::AbstractString, t::Char, i::Integer) = coalesce(findnext(equalto(t), s, i), 0)
 
 function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
@@ -158,7 +162,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    endof(t) == 1 && return findnext(equalto(t[1]), s, i)
+    endof(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -171,7 +175,7 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return findnext(equalto(_nthbyte(t,1)), s, i)
+        return coalesce(findnext(equalto(_nthbyte(t,1)), s, i), 0)
     end
 
     w = m - n
@@ -284,17 +288,17 @@ findlast(pattern::AbstractString, string::AbstractString) =
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
     if i < 1
-        return i == 0 ? 0 : throw(BoundsError(s, i))
+        return i == 0 ? nothing : throw(BoundsError(s, i))
     end
     n = ncodeunits(s)
     if i > n
-        return i == n+1 ? 0 : throw(BoundsError(s, i))
+        return i == n+1 ? nothing : throw(BoundsError(s, i))
     end
     # r[reverseind(r,i)] == reverse(r)[i] == s[i]
     # s[reverseind(s,j)] == reverse(s)[j] == r[j]
     r = reverse(s)
     j = findnext(testf, r, reverseind(r, i))
-    j == 0 ? 0 : reverseind(s, j)
+    j === nothing ? nothing : reverseind(s, j)
 end
 
 function _rsearchindex(s::AbstractString,
@@ -310,7 +314,7 @@ function _rsearchindex(s::AbstractString,
     t1, j2 = next(t, start(t))
     while true
         i = findprev(equalto(t1), s, i)
-        i == 0 && return 0
+        i === nothing && return 0
         c, ii = next(rs, reverseind(rs, i))
         j = j2; k = ii
         matched = true
@@ -334,7 +338,7 @@ end
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     if endof(t) == 1
-        return findprev(equalto(t[1]), s, i)
+        return coalesce(findprev(equalto(t[1]), s, i), 0)
     elseif endof(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
@@ -356,7 +360,7 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return findprev(equalto(_nthbyte(t,1)), s, k)
+        return coalesce(findprev(equalto(_nthbyte(t,1)), s, k), 0)
     end
 
     w = m - n

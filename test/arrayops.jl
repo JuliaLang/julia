@@ -430,29 +430,29 @@ end
     @test find(isodd,a) == [2,4,6,8]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
-    @test findfirst(a.==5) == 0
+    @test findfirst(a.==5) == nothing
     @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
-    @test findfirst(isodd, [2,4,6,2,0]) == 0
+    @test findfirst(isodd, [2,4,6,2,0]) == nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
     @test findnext(equalto(1),a,4) == 6
-    @test findnext(equalto(5),a,4) == 0
+    @test findnext(equalto(5),a,4) == nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
-    @test findlast(a.==5) == 0
+    @test findlast(a.==5) == nothing
     @test findlast(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
-    @test findlast(isodd, [2,4,6,2,0]) == 0
+    @test findlast(isodd, [2,4,6,2,0]) == nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
-    @test findprev(!iszero,a,1) == 0
+    @test findprev(!iszero,a,1) == nothing
     @test findprev(equalto(1),a,4) == 2
     @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
-    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
     @test findfirst(equalto(0x00), [0x01, 0x00]) == 2
     @test findlast(equalto(0x00), [0x01, 0x00]) == 2
     @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3

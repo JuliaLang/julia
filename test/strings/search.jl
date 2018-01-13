@@ -26,38 +26,38 @@ end
 for str in [astr, GenericString(astr)]
     @test_throws BoundsError findnext(equalto('z'), str, 0)
     @test_throws BoundsError findnext(equalto('∀'), str, 0)
-    @test findfirst(equalto('x'), str) == 0
-    @test findfirst(equalto('\0'), str) == 0
-    @test findfirst(equalto('\u80'), str) == 0
-    @test findfirst(equalto('∀'), str) == 0
+    @test findfirst(equalto('x'), str) == nothing
+    @test findfirst(equalto('\0'), str) == nothing
+    @test findfirst(equalto('\u80'), str) == nothing
+    @test findfirst(equalto('∀'), str) == nothing
     @test findfirst(equalto('H'), str) == 1
     @test findfirst(equalto('l'), str) == 3
     @test findnext(equalto('l'), str, 4) == 4
     @test findnext(equalto('l'), str, 5) == 11
-    @test findnext(equalto('l'), str, 12) == 0
+    @test findnext(equalto('l'), str, 12) == nothing
     @test findfirst(equalto(','), str) == 6
-    @test findnext(equalto(','), str, 7) == 0
+    @test findnext(equalto(','), str, 7) == nothing
     @test findfirst(equalto('\n'), str) == 14
-    @test findnext(equalto('\n'), str, 15) == 0
+    @test findnext(equalto('\n'), str, 15) == nothing
     @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,endof(str))+1)
     @test_throws BoundsError findnext(equalto('a'), str, nextind(str,endof(str))+1)
 end
 
 # ascii backward search
 for str in [astr]
-    @test findlast(equalto('x'), str) == 0
-    @test findlast(equalto('\0'), str) == 0
-    @test findlast(equalto('\u80'), str) == 0
-    @test findlast(equalto('∀'), str) == 0
+    @test findlast(equalto('x'), str) == nothing
+    @test findlast(equalto('\0'), str) == nothing
+    @test findlast(equalto('\u80'), str) == nothing
+    @test findlast(equalto('∀'), str) == nothing
     @test findlast(equalto('H'), str) == 1
-    @test findprev(equalto('H'), str, 0) == 0
+    @test findprev(equalto('H'), str, 0) == nothing
     @test findlast(equalto('l'), str) == 11
     @test findprev(equalto('l'), str, 5) == 4
     @test findprev(equalto('l'), str, 4) == 4
     @test findprev(equalto('l'), str, 3) == 3
-    @test findprev(equalto('l'), str, 2) == 0
+    @test findprev(equalto('l'), str, 2) == nothing
     @test findlast(equalto(','), str) == 6
-    @test findprev(equalto(','), str, 5) == 0
+    @test findprev(equalto(','), str, 5) == nothing
     @test findlast(equalto('\n'), str) == 14
 end
 
@@ -65,53 +65,53 @@ end
 for str in (u8str, GenericString(u8str))
     @test_throws BoundsError findnext(equalto('z'), str, 0)
     @test_throws BoundsError findnext(equalto('∀'), str, 0)
-    @test findfirst(equalto('z'), str) == 0
-    @test findfirst(equalto('\0'), str) == 0
-    @test findfirst(equalto('\u80'), str) == 0
-    @test findfirst(equalto('∄'), str) == 0
+    @test findfirst(equalto('z'), str) == nothing
+    @test findfirst(equalto('\0'), str) == nothing
+    @test findfirst(equalto('\u80'), str) == nothing
+    @test findfirst(equalto('∄'), str) == nothing
     @test findfirst(equalto('∀'), str) == 1
     @test_throws StringIndexError findnext(equalto('∀'), str, 2)
-    @test findnext(equalto('∀'), str, 4) == 0
+    @test findnext(equalto('∀'), str, 4) == nothing
     @test findfirst(equalto('∃'), str) == 13
     @test_throws StringIndexError findnext(equalto('∃'), str, 15)
-    @test findnext(equalto('∃'), str, 16) == 0
+    @test findnext(equalto('∃'), str, 16) == nothing
     @test findfirst(equalto('x'), str) == 26
     @test findnext(equalto('x'), str, 27) == 43
-    @test findnext(equalto('x'), str, 44) == 0
+    @test findnext(equalto('x'), str, 44) == nothing
     @test findfirst(equalto('δ'), str) == 17
     @test_throws StringIndexError findnext(equalto('δ'), str, 18)
     @test findnext(equalto('δ'), str, nextind(str,17)) == 33
-    @test findnext(equalto('δ'), str, nextind(str,33)) == 0
+    @test findnext(equalto('δ'), str, nextind(str,33)) == nothing
     @test findfirst(equalto('ε'), str) == 5
     @test findnext(equalto('ε'), str, nextind(str,5)) == 54
-    @test findnext(equalto('ε'), str, nextind(str,54)) == 0
-    @test findnext(equalto('ε'), str, nextind(str,endof(str))) == 0
-    @test findnext(equalto('a'), str, nextind(str,endof(str))) == 0
+    @test findnext(equalto('ε'), str, nextind(str,54)) == nothing
+    @test findnext(equalto('ε'), str, nextind(str,endof(str))) == nothing
+    @test findnext(equalto('a'), str, nextind(str,endof(str))) == nothing
     @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,endof(str))+1)
     @test_throws BoundsError findnext(equalto('a'), str, nextind(str,endof(str))+1)
 end
 
 # utf-8 backward search
 for str in [u8str]
-    @test findlast(equalto('z'), str) == 0
-    @test findlast(equalto('\0'), str) == 0
-    @test findlast(equalto('\u80'), str) == 0
-    @test findlast(equalto('∄'), str) == 0
+    @test findlast(equalto('z'), str) == nothing
+    @test findlast(equalto('\0'), str) == nothing
+    @test findlast(equalto('\u80'), str) == nothing
+    @test findlast(equalto('∄'), str) == nothing
     @test findlast(equalto('∀'), str) == 1
-    @test findprev(equalto('∀'), str, 0) == 0
+    @test findprev(equalto('∀'), str, 0) == nothing
     @test findlast(equalto('∃'), str) == 13
     @test findprev(equalto('∃'), str, 14) == 13
     @test findprev(equalto('∃'), str, 13) == 13
-    @test findprev(equalto('∃'), str, 12) == 0
+    @test findprev(equalto('∃'), str, 12) == nothing
     @test findlast(equalto('x'), str) == 43
     @test findprev(equalto('x'), str, 42) == 26
-    @test findprev(equalto('x'), str, 25) == 0
+    @test findprev(equalto('x'), str, 25) == nothing
     @test findlast(equalto('δ'), str) == 33
     @test findprev(equalto('δ'), str, 32) == 17
-    @test findprev(equalto('δ'), str, 16) == 0
+    @test findprev(equalto('δ'), str, 16) == nothing
     @test findlast(equalto('ε'), str) == 54
     @test findprev(equalto('ε'), str, 53) == 5
-    @test findprev(equalto('ε'), str, 4) == 0
+    @test findprev(equalto('ε'), str, 4) == nothing
 end
 
 # string forward search with a single-char string
