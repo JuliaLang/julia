@@ -416,33 +416,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
 
-# Issue #14684: `display` should print associative types in full.
-let d = Dict(1 => 2, 3 => 45),
-    buf = IOBuffer(),
-    td = TextDisplay(buf)
-
-    display(td, d)
-    result = String(take!(td.io))
-    @test contains(result, summary(d))
-
-    # Is every pair in the string?
-    for el in d
-        @test contains(result, string(el))
-    end
-end
-
 # Issue #20108
 let err, buf = IOBuffer()
     try Array() catch err end
     Base.show_method_candidates(buf,err)
     @test isa(err, MethodError)
     @test contains(String(take!(buf)), "Closest candidates are:")
-end
-
-# Issue 20111
-let K20111(x) = y -> x, buf = IOBuffer()
-    show(buf, methods(K20111(1)))
-    @test contains(String(take!(buf)), " 1 method for generic function")
 end
 
 # @macroexpand tests
@@ -513,6 +492,7 @@ foo_9965(x::Int) = 2x
 end
 
 # Issue #20556
+import REPL
 module EnclosingModule
     abstract type AbstractTypeNoConstructors end
 end
@@ -533,7 +513,7 @@ let
     @test !contains(sprint(showerror, method_error), "where T at sysimg.jl")
 
     # Test that tab-completion will not show the 'default' sysimg.jl method.
-    for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
+    for method_string in REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
         @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
 end
@@ -580,49 +560,3 @@ end
     end
 end
 
-# issue #22798
-@generated f22798(x::Integer, y) = :x
-let buf = IOBuffer()
-    show(buf, methods(f22798))
-    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
-end
-
-@testset "Dict printing with limited rows" begin
-    local buf
-    buf = IOBuffer()
-    io = IOContext(buf, :displaysize => (4, 80), :limit => true)
-    d = Base.ImmutableDict(1=>2)
-    show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
-    show(io, MIME"text/plain"(), keys(d))
-    @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
-
-    io = IOContext(io, :displaysize => (5, 80))
-    show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
-    show(io, MIME"text/plain"(), keys(d))
-    @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
-    d = Base.ImmutableDict(d, 3=>4)
-    show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
-    show(io, MIME"text/plain"(), keys(d))
-    @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
-
-    io = IOContext(io, :displaysize => (6, 80))
-    show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
-    show(io, MIME"text/plain"(), keys(d))
-    @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
-    d = Base.ImmutableDict(d, 5=>6)
-    show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
-    show(io, MIME"text/plain"(), keys(d))
-    @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
-end
