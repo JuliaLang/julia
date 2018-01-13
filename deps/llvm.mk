@@ -484,6 +484,7 @@ $(eval $(call LLVM_PATCH,llvm-D32208-coerce-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
+$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
 ifeq ($(BUILD_LLVM_CLANG),1)
@@ -496,6 +497,7 @@ $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
 $(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_5.0))
 $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-5.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-D38765-gvn_5.0)) # Remove for 6.0
 endif # LLVM_VER
