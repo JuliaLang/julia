@@ -2763,10 +2763,10 @@ end
 @deprecate rsearchindex(s::AbstractString, t::AbstractString) first(findlast(t, s))
 @deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(findprev(t, s, i))
 
-@deprecate searchindex(s::AbstractString, c::Char) first(findfirst(equalto(c), s))
-@deprecate searchindex(s::AbstractString, c::Char, i::Integer) first(findnext(equalto(c), s, i))
-@deprecate rsearchindex(s::AbstractString, c::Char) first(findlast(equalto(c), s))
-@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) first(findprev(equalto(c), s, i))
+@deprecate searchindex(s::AbstractString, c::Char) findfirst(equalto(c), s)
+@deprecate searchindex(s::AbstractString, c::Char, i::Integer) findnext(equalto(c), s, i)
+@deprecate rsearchindex(s::AbstractString, c::Char) findlast(equalto(c), s)
+@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
