@@ -1208,7 +1208,6 @@ let c = CartesianIndices(1:3, 1:2), l = LinearIndices(1:3, 1:2)
     @test l[vec(c)] == collect(1:6)
 end
 
-
 if !isdefined(Base, Symbol("@info"))
     let fname = tempname()
         try
@@ -1297,9 +1296,5 @@ end
 # 0.7.0-DEV.3583
 @test lastindex(zeros(4)) == 4
 @test lastindex(zeros(4,4)) == 16
-
-if VERSION < v"0.6.0"
-    include("deprecated.jl")
-end
 
 nothing
