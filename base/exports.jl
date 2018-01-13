@@ -8,7 +8,6 @@ export
     StackTraces,
     Sys,
     Libc,
-    Libdl,
     LinAlg,
     BLAS,
     LAPACK,
@@ -434,7 +433,6 @@ export
     minimum,
     minmax,
     ndims,
-    nonzeros,
     ones,
     parent,
     parentindices,
@@ -442,7 +440,6 @@ export
     partialsort!,
     partialsortperm,
     partialsortperm!,
-    permute,
     permute!,
     permutedims,
     permutedims!,
@@ -513,7 +510,6 @@ export
 # linear algebra
     bkfact!,
     bkfact,
-    blkdiag,
     chol,
     cholfact!,
     cholfact,
@@ -594,10 +590,6 @@ export
     ⋅,
     ×,
 
-# sparse
-    dropzeros,
-    dropzeros!,
-
 # bitarrays
     falses,
     flipbits!,
@@ -642,6 +634,7 @@ export
     intersect,
     isempty,
     issubset,
+    issetequal,
     keys,
     keytype,
     length,
@@ -1183,22 +1176,4 @@ export
     @goto,
     @view,
     @views,
-    @static,
-
-# SparseArrays module re-exports
-    SparseArrays,
-    AbstractSparseArray,
-    AbstractSparseMatrix,
-    AbstractSparseVector,
-    SparseMatrixCSC,
-    SparseVector,
-    issparse,
-    sparse,
-    sparsevec,
-    spdiagm,
-    sprand,
-    sprandn,
-    spzeros,
-    rowvals,
-    nzrange,
-    nnz
+    @static

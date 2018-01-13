@@ -87,7 +87,7 @@ See also: [`PermutedDimsArray`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = reshape(collect(1:8), (2,2,2))
+julia> A = reshape(Vector(1:8), (2,2,2))
 2×2×2 Array{Int64,3}:
 [:, :, 1] =
  1  3

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!, rdiv!, Adjoint, Transpose
+using Base.LinAlg: mul!, ldiv!, rdiv!
 using Base.Printf: @printf
 
 @testset "issparse" begin
@@ -23,7 +23,7 @@ end
 end
 
 @testset "indtype" begin
-    @test Base.SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
+    @test SparseArrays.indtype(sparse(Int8[1,1],Int8[1,1],[1,1])) == Int8
 end
 
 @testset "sparse matrix construction" begin
@@ -163,7 +163,7 @@ end
         am = sprand(1, 20, 0.2)
         av = squeeze(am, 1)
         @test ndims(av) == 1
-        @test all(transpose(av) .== am)
+        @test all(av' .== am)
     end
 end
 
@@ -196,73 +196,73 @@ end
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(b), Transpose(a), b) - Transpose(Array(a))*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(c), Transpose(a), c) - Transpose(Array(a))*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), transpose(a), b) - transpose(Array(a))*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), transpose(a), c) - transpose(Array(a))*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
         @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*eps())
-        @test (maximum(abs.((α*Transpose(a)*c + β*d) - (α*Transpose(Array(a))*c + β*d))) < 1000*eps())
-        @test (maximum(abs.((Transpose(a)*c + d) - (Transpose(Array(a))*c + d))) < 1000*eps())
+        @test (maximum(abs.((α*transpose(a)*c + β*d) - (α*transpose(Array(a))*c + β*d))) < 1000*eps())
+        @test (maximum(abs.((transpose(a)*c + d) - (transpose(Array(a))*c + d))) < 1000*eps())
         c = randn(6) + im*randn(6)
-        @test_throws DimensionMismatch α*Transpose(a)*c + β*c
-        @test_throws DimensionMismatch α*Transpose(a)*fill(1.,5) + β*c
+        @test_throws DimensionMismatch α*transpose(a)*c + β*c
+        @test_throws DimensionMismatch α*transpose(a)*fill(1.,5) + β*c
 
         a = I + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         # UpperTriangular/LowerTriangular solve
         a = UpperTriangular(I + triu(0.1*sprandn(5, 5, 0.2)))
@@ -282,18 +282,18 @@ end
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         b = randn(5,3) + im*randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(Transpose(a)*b - Transpose(Array(a))*b)) < 100*eps())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
         @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(adjoint(a))\b)) < 1000*eps())
-        @test (maximum(abs.(Transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
     end
     end
 end
@@ -303,8 +303,8 @@ end
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
         @test Array(kron(a,b)) == kron(Array(a), Array(b))
         @test Array(kron(Array(a),b)) == kron(Array(a), Array(b))
         @test Array(kron(a,Array(b))) == kron(Array(a), Array(b))
@@ -341,11 +341,11 @@ dA = Array(sA)
 
     @testset "inverse scale!" begin
         bi = inv.(b)
-        dAt = transpose(dA)
-        sAt = transpose(sA)
+        dAt = copy(transpose(dA))
+        sAt = copy(transpose(sA))
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Transpose(Diagonal(b)))
-        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), Adjoint(Diagonal(b)))
+        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
+        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
@@ -403,7 +403,7 @@ end
     (m, n) = (smalldim, smalldim)
     A = sprand(m, n, nzprob)
     X = similar(A)
-    C = transpose(A)
+    C = copy(transpose(A))
     p = randperm(m)
     q = randperm(n)
     @testset "common error checking of [c]transpose! methods (ftranspose!)" begin
@@ -440,15 +440,15 @@ end
     @testset "overall functionality of [c]transpose[!] and permute[!]" begin
         for (m, n) in ((smalldim, smalldim), (smalldim, largedim), (largedim, smalldim))
             A = sprand(m, n, nzprob)
-            At = transpose(A)
+            At = copy(transpose(A))
             # transpose[!]
-            fullAt = transpose(Array(A))
-            @test transpose(A) == fullAt
+            fullAt = Array(transpose(A))
+            @test copy(transpose(A)) == fullAt
             @test transpose!(similar(At), A) == fullAt
             # adjoint[!]
             C = A + im*A/2
-            fullCh = adjoint(Array(C))
-            @test adjoint(C) == fullCh
+            fullCh = Array(C')
+            @test copy(C') == fullCh
             @test adjoint!(similar(sparse(fullCh)), C) == fullCh
             # permute[!]
             p = randperm(m)
@@ -466,8 +466,8 @@ end
 
 @testset "transpose of SubArrays" begin
     A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
-    @test  transpose(Array(A)) == Array(transpose(A))
-    @test adjoint(Array(A)) == Array(adjoint(A))
+    @test copy(transpose(Array(A))) == Array(transpose(A))
+    @test copy(adjoint(Array(A))) == Array(adjoint(A))
 end
 
 @testset "exp" begin
@@ -867,7 +867,7 @@ end
     @test nnz(A) == 13
     @test count(!iszero, A) == 3
     @test A[lininds] == A[X] == zeros(Int, 10)
-    c = collect(11:20); c[1] = c[3] = 0
+    c = Vector(11:20); c[1] = c[3] = 0
     A[lininds] = c
     @test nnz(A) == 13
     @test count(!iszero, A) == 11
@@ -929,47 +929,47 @@ end
     @test nnz(A) == 19
 
     # Test argument bounds checking for dropstored!(A, i, j)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0, 1)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 0)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 11)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 11, 1)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 0, 1)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 1, 0)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 1, 11)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 11, 1)
 
     # Test argument bounds checking for dropstored!(A, I, J)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0:1, 1:1)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 0:1)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 10:11, 1:1)
-    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 10:11)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 0:1, 1:1)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 1:1, 0:1)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 10:11, 1:1)
+    @test_throws BoundsError SparseArrays.dropstored!(A, 1:1, 10:11)
 
     # Test behavior of dropstored!(A, i, j)
     # --> Test dropping a single stored entry
-    Base.SparseArrays.dropstored!(A, 1, 2)
+    SparseArrays.dropstored!(A, 1, 2)
     @test nnz(A) == 18
     # --> Test dropping a single nonstored entry
-    Base.SparseArrays.dropstored!(A, 2, 1)
+    SparseArrays.dropstored!(A, 2, 1)
     @test nnz(A) == 18
 
     # Test behavior of dropstored!(A, I, J) and derivs.
     # --> Test dropping a single row including stored and nonstored entries
-    Base.SparseArrays.dropstored!(A, 1, :)
+    SparseArrays.dropstored!(A, 1, :)
     @test nnz(A) == 9
     # --> Test dropping a single column including stored and nonstored entries
-    Base.SparseArrays.dropstored!(A, :, 2)
+    SparseArrays.dropstored!(A, :, 2)
     @test nnz(A) == 0
     # --> Introduce nonzeros in rows one and two and columns two and three
     A[1:2,:] = 1
     A[:,2:3] = 2
     @test nnz(A) == 36
     # --> Test dropping multiple rows containing stored and nonstored entries
-    Base.SparseArrays.dropstored!(A, 1:3, :)
+    SparseArrays.dropstored!(A, 1:3, :)
     @test nnz(A) == 14
     # --> Test dropping multiple columns containing stored and nonstored entries
-    Base.SparseArrays.dropstored!(A, :, 2:4)
+    SparseArrays.dropstored!(A, :, 2:4)
     @test nnz(A) == 0
     # --> Introduce nonzeros in every other row
     A[1:2:9, :] = 1
     @test nnz(A) == 50
     # --> Test dropping a block of the matrix towards the upper left
-    Base.SparseArrays.dropstored!(A, 2:5, 2:5)
+    SparseArrays.dropstored!(A, 2:5, 2:5)
     @test nnz(A) == 42
 end
 
@@ -1048,95 +1048,95 @@ end
     @test iA === iS === nothing
 end
 
-# findmin/findmax/minumum/maximum
+@testset "findmin/findmax/minumum/maximum" begin
+    A = sparse([1.0 5.0 6.0;
+                5.0 2.0 4.0])
+    for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                              ((2,), reshape([1.0,2.0], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,2)], 2, 1)),
+                              ((1,2), fill(1.0,1,1),fill(CartesianIndex(1,1),1,1))]
+        @test findmin(A, tup) == (rval, rind)
+    end
 
-A = sparse([1.0 5.0 6.0;
-            5.0 2.0 4.0])
-for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
-                          ((2,), reshape([1.0,2.0], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,2)], 2, 1)),
-                          ((1,2), fill(1.0,1,1),fill(CartesianIndex(1,1),1,1))]
-    @test findmin(A, tup) == (rval, rind)
+    for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                              ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
+        @test findmax(A, tup) == (rval, rind)
+    end
+
+    #issue 23209
+
+    A = sparse([1.0 5.0 6.0;
+                NaN 2.0 4.0])
+    for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                              ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                              ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse([1.0 NaN 6.0;
+                NaN 2.0 4.0])
+    for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
+                              ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                              ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse([Inf -Inf Inf  -Inf;
+                Inf  Inf -Inf -Inf])
+    for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
+                              ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
+                              ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
+                              ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse([BigInt(10)])
+    for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse([BigInt(-10)])
+    for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse([BigInt(10) BigInt(-10)])
+    for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
+
+    for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
+
+    A = sparse(["a", "b"])
+    @test_throws MethodError findmin(A, 1)
 end
-
-for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
-                          ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
-    @test findmax(A, tup) == (rval, rind)
-end
-
-#issue 23209
-
-A = sparse([1.0 5.0 6.0;
-            NaN 2.0 4.0])
-for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
-                          ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
-                          ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse([1.0 NaN 6.0;
-            NaN 2.0 4.0])
-for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse([Inf -Inf Inf  -Inf;
-            Inf  Inf -Inf -Inf])
-for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
-                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
-                          ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
-                          ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse([BigInt(10)])
-for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse([BigInt(-10)])
-for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse([BigInt(10) BigInt(-10)])
-for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
-
-for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
-    @test isequal(findmax(A, tup), (rval, rind))
-end
-
-A = sparse(["a", "b"])
-@test_throws MethodError findmin(A, 1)
 
 # Support the case when user defined `zero` and `isless` for non-numerical type
 struct CustomType
@@ -1144,14 +1144,16 @@ struct CustomType
 end
 Base.zero(::Type{CustomType}) = CustomType("")
 Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
-A = sparse([CustomType("a"), CustomType("b")])
+@testset "findmin/findmax for non-numerical type" begin
+    A = sparse([CustomType("a"), CustomType("b")])
 
-for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
-    @test isequal(findmin(A, tup), (rval, rind))
-end
+    for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
+        @test isequal(findmin(A, tup), (rval, rind))
+    end
 
-for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
-    @test isequal(findmax(A, tup), (rval, rind))
+    for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
+        @test isequal(findmax(A, tup), (rval, rind))
+    end
 end
 
 @testset "findn" begin
@@ -1190,9 +1192,9 @@ function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abs
         ((minj < 1) || (maxj > n)) && BoundsError()
     end
 
-    (alg == 0) ? Base.SparseArrays.getindex_I_sorted_bsearch_A(A, I, J) :
-    (alg == 1) ? Base.SparseArrays.getindex_I_sorted_bsearch_I(A, I, J) :
-    Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
+    (alg == 0) ? SparseArrays.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? SparseArrays.getindex_I_sorted_bsearch_I(A, I, J) :
+    SparseArrays.getindex_I_sorted_linear(A, I, J)
 end
 
 @testset "test_getindex_algs" begin
@@ -1313,7 +1315,7 @@ end
 end
 
 @testset "issue #9917" begin
-    @test sparse(adjoint([])) == reshape(sparse([]), 1, 0)
+    @test sparse([]') == reshape(sparse([]), 1, 0)
     @test Array(sparse([])) == zeros(0)
     @test_throws BoundsError sparse([])[1]
     @test_throws BoundsError sparse([])[1] = 1
@@ -1396,8 +1398,8 @@ end
     local A = guardsrand(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test Base.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
-    @test isequal(Base.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
+    @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
+    @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
 @testset "dropzeros[!]" begin
@@ -1487,10 +1489,10 @@ end
 
 @testset "expandptr" begin
     local A = sparse(1.0I, 5, 5)
-    @test Base.SparseArrays.expandptr(A.colptr) == 1:5
+    @test SparseArrays.expandptr(A.colptr) == 1:5
     A[1,2] = 1
-    @test Base.SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
-    @test_throws ArgumentError Base.SparseArrays.expandptr([2; 3])
+    @test SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
+    @test_throws ArgumentError SparseArrays.expandptr([2; 3])
 end
 
 @testset "triu/tril" begin
@@ -1697,18 +1699,18 @@ end
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
         # NOTE: normestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
-        @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
-        @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
-        @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
-        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+        @test SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
+        @test SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
+        @test SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
+        @test_throws ArgumentError SparseArrays.normestinv(Ac,0)
+        @test_throws ArgumentError SparseArrays.normestinv(Ac,21)
     end
-    @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
+    @test_throws DimensionMismatch SparseArrays.normestinv(sprand(3,5,.9))
 end
 
 @testset "issue #13008" begin
-    @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
-    @test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
+    @test_throws ArgumentError sparse(Vector(1:100), Vector(1:100), fill(5,100), 5, 5)
+    @test_throws ArgumentError sparse(Int[], Vector(1:5), Vector(1:5))
 end
 
 @testset "issue #13024" begin
@@ -1746,16 +1748,16 @@ end
     srand(123)
     local A
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-    A = A + adjoint(A)
+    A = A + copy(A')
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A*A'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A + transpose(A)
+    A = A + copy(transpose(A))
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A*Transpose(A)
+    A = A*transpose(A)
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     @test factorize(triu(A)) == triu(A)
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
@@ -1846,13 +1848,13 @@ end
     m = 5
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
-    @test \(Transpose(ltintmat), sparse(intmat)) ≈ \(Transpose(ltintmat), intmat)
+    @test \(transpose(ltintmat), sparse(intmat)) ≈ \(transpose(ltintmat), intmat)
 end
 
 # Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
 @testset "issue #16548" begin
     ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
-    @test all(m -> m.module == Base.SparseArrays, ms)
+    @test all(m -> m.module == SparseArrays, ms)
 end
 
 @testset "row indexing a SparseMatrixCSC with non-Int integer type" begin
@@ -1864,7 +1866,7 @@ end
 # are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
 # eliminating the former operation classes.
 @testset "issue #18705" begin
-    S = sparse(Diagonal(collect(1.0:5.0)))
+    S = sparse(Diagonal(1.0:5.0))
     @test isa(sin.(S), SparseMatrixCSC)
 end
 
@@ -1906,31 +1908,31 @@ end
 # Check that `broadcast` methods specialized for unary operations over
 # `SparseMatrixCSC`s determine a reasonable return type.
 @testset "issue #18974" begin
-    S = sparse(Diagonal(collect(Int64(1):Int64(4))))
+    S = sparse(Diagonal(Int64(1):Int64(4)))
     @test eltype(sin.(S)) == Float64
 end
 
 # Check calling of unary minus method specialized for SparseMatrixCSCs
 @testset "issue #19503" begin
-    @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
+    @test which(-, (SparseMatrixCSC,)).module == SparseArrays
 end
 
 @testset "issue #14398" begin
-    @test transpose(view(sparse(I, 10, 10), 1:5, 1:5)) ≈ Matrix(I, 5, 5)
+    @test collect(view(sparse(I, 10, 10), 1:5, 1:5)') ≈ Matrix(I, 5, 5)
 end
 
 @testset "dropstored issue #20513" begin
     x = sparse(rand(3,3))
-    Base.SparseArrays.dropstored!(x, 1, 1)
+    SparseArrays.dropstored!(x, 1, 1)
     @test x[1, 1] == 0.0
     @test x.colptr == [1, 3, 6, 9]
-    Base.SparseArrays.dropstored!(x, 2, 1)
+    SparseArrays.dropstored!(x, 2, 1)
     @test x.colptr == [1, 2, 5, 8]
     @test x[2, 1] == 0.0
-    Base.SparseArrays.dropstored!(x, 2, 2)
+    SparseArrays.dropstored!(x, 2, 2)
     @test x.colptr == [1, 2, 4, 7]
     @test x[2, 2] == 0.0
-    Base.SparseArrays.dropstored!(x, 2, 3)
+    SparseArrays.dropstored!(x, 2, 3)
     @test x.colptr == [1, 2, 4, 6]
     @test x[2, 3] == 0.0
 end
@@ -1949,47 +1951,47 @@ end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries"
 
     ioc = IOContext(io, :displaysize => (5, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
-    @test String(take!(io)) == "1×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
+    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
 
     # even number of rows
     ioc = IOContext(io, :displaysize => (8, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
-    @test String(take!(io)) == string("4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
+    @test String(take!(io)) == string("4×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
                                       "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
 
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
-    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(fill(1.,5,3)))
-    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("5×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
 
     # odd number of rows
     ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
-    @test String(take!(io)) == string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+    @test String(take!(io)) == string("5×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
                                       "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
-    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 
     show(ioc, MIME"text/plain"(), sparse(fill(1.,6,3)))
-    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
 
     ioc = IOContext(io, :displaysize => (9, 80))
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
-    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
+    @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 end
 
@@ -2012,7 +2014,7 @@ end
     A = guardsrand(1234) do
         sprand(5, 5, 1/5)
     end
-    A = max.(A, adjoint(A))
+    A = max.(A, copy(A'))
     LinAlg.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
@@ -2079,7 +2081,7 @@ end
     a = sparse(rand(3,3) .+ 0.1)
     b = similar(a, Float32, Int32)
     c = similar(b, Float32, Int32)
-    Base.SparseArrays.dropstored!(b, 1, 1)
+    SparseArrays.dropstored!(b, 1, 1)
     @test length(c.rowval) == 9
     @test length(c.nzval) == 9
 end

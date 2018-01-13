@@ -107,19 +107,19 @@ end
     @test var([1], 1; mean=[2], corrected=false) ≈ [1.0]
 
     @test var(1:8) == 6.
-    @test varm(1:8,1) == varm(collect(1:8),1)
+    @test varm(1:8,1) == varm(Vector(1:8),1)
     @test isnan(varm(1:1,1))
     @test isnan(var(1:1))
     @test isnan(var(1:-1))
 
     @test @inferred(var(1.0:8.0)) == 6.
-    @test varm(1.0:8.0,1.0) == varm(collect(1.0:8.0),1)
+    @test varm(1.0:8.0,1.0) == varm(Vector(1.0:8.0),1)
     @test isnan(varm(1.0:1.0,1.0))
     @test isnan(var(1.0:1.0))
     @test isnan(var(1.0:-1.0))
 
     @test @inferred(var(1.0f0:8.0f0)) === 6.f0
-    @test varm(1.0f0:8.0f0,1.0f0) == varm(collect(1.0f0:8.0f0),1)
+    @test varm(1.0f0:8.0f0,1.0f0) == varm(Vector(1.0f0:8.0f0),1)
     @test isnan(varm(1.0f0:1.0f0,1.0f0))
     @test isnan(var(1.0f0:1.0f0))
     @test isnan(var(1.0f0:-1.0f0))
@@ -137,8 +137,8 @@ end
     @test var((1,2,3); mean=0, corrected=false) ≈ 14.0/3
     @test_throws ArgumentError var((1,2,3); mean=())
 
-    @test var([1 2 3 4 5; 6 7 8 9 10], 2) ≈ adjoint([2.5 2.5])
-    @test var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ adjoint([2.0 2.0])
+    @test var([1 2 3 4 5; 6 7 8 9 10], 2) ≈ [2.5 2.5]'
+    @test var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ [2.0 2.0]'
 
     @test stdm([1,2,3], 2) ≈ 1.
     @test std([1,2,3]) ≈ 1.
@@ -152,8 +152,8 @@ end
     @test std((1,2,3); mean=0) ≈ sqrt(7.0)
     @test std((1,2,3); mean=0, corrected=false) ≈ sqrt(14.0/3)
 
-    @test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.(adjoint([2.5 2.5]))
-    @test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.(adjoint([2.0 2.0]))
+    @test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.([2.5 2.5]')
+    @test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.([2.0 2.0]')
 
     let A = ComplexF64[exp(i*im) for i in 1:10^4]
         @test varm(A, 0.) ≈ sum(map(abs2, A)) / (length(A) - 1)
@@ -175,8 +175,16 @@ function safe_cov(x, y, zm::Bool, cr::Bool)
     end
     dot(vec(x), vec(y)) / (n - Int(cr))
 end
-X = adjoint([1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.])
-Y = adjoint([6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.])
+X = [1.0  5.0;
+     2.0  4.0;
+     3.0  6.0;
+     4.0  2.0;
+     5.0  1.0]
+Y = [6.0  2.0;
+     1.0  7.0;
+     5.0  8.0;
+     3.0  4.0;
+     2.0  3.0]
 
 @testset "covariance" begin
     for vd in [1, 2], zm in [true, false], cr in [true, false]
@@ -328,7 +336,7 @@ end
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
     let tmp = linspace(1, 85, 100)
-        tmp2 = collect(tmp)
+        tmp2 = Vector(tmp)
         @test cor(tmp, tmp) <= 1.0
         @test cor(tmp, tmp2) <= 1.0
     end
@@ -338,9 +346,9 @@ end
     @test quantile([1,2,3,4],0.5) == 2.5
     @test quantile([1,2,3,4],[0.5]) == [2.5]
     @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
-    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == collect(0.0:10.0:100.0)
-    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == collect(0.0:10.0:100.0)
-    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == collect(0f0:10f0:100f0)
+    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == 0.0:10.0:100.0
+    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == 0.0:10.0:100.0
+    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == 0f0:10f0:100f0
     @test quantile([Inf,Inf],0.5) == Inf
     @test quantile([-Inf,1],0.5) == -Inf
     @test quantile([0,1],1e-18) == 1e-18
@@ -417,7 +425,7 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers: Furlong
 @testset "Unitful elements" begin
     r = Furlong(1):Furlong(1):Furlong(2)
-    a = collect(r)
+    a = Vector(r)
     @test sum(r) == sum(a) == Furlong(3)
     @test cumsum(r) == Furlong.([1,3])
     @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)

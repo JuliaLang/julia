@@ -177,15 +177,14 @@ julia> rstrip(a)
 ```
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
-    a = start(s)
     i = endof(s)
-    while a ≤ i
+    while 1 ≤ i
         c = s[i]
         j = prevind(s, i)
         c in chars || return SubString(s, 1:i)
         i = j
     end
-    SubString(s, a, a-1)
+    SubString(s, 1, 0)
 end
 
 """

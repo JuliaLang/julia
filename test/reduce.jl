@@ -43,10 +43,10 @@
 @test mapreduce(-, +, [-10]) == 10
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
-@test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+@test mapreduce(-, +, Vector(linspace(1.0, 10000.0, 10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
-@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
 @test_throws ArgumentError mapreduce(abs2, |, Float64[])
@@ -209,7 +209,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test minimum(abs2, 3:7) == 9
 
 @test maximum(Int16[1]) === Int16(1)
-@test maximum(collect(Int16(1):Int16(100))) === Int16(100)
+@test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
 A = circshift(reshape(1:24,2,3,4), (0,1,1))
@@ -357,8 +357,8 @@ let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
 
-@test sum(collect(map(UInt8,0:255))) == 32640
-@test sum(collect(map(UInt8,254:255))) == 509
+@test sum(Vector(map(UInt8,0:255))) == 32640
+@test sum(Vector(map(UInt8,254:255))) == 509
 
 A = reshape(map(UInt8, 101:109), (3,3))
 @test @inferred(sum(A)) == 945
@@ -374,7 +374,7 @@ A = reshape(map(UInt8, 1:100), (10,10))
 @test prod([-0.0, -0.0]) === 0.0
 
 #contains
-let A = collect(1:10)
+let A = Vector(1:10)
     @test A ∋ 5
     @test A ∌ 11
     @test any(y->y==6,A)

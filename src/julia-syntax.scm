@@ -362,7 +362,8 @@
                                                            'nothing
                                                            (cons 'list (map car sparams)))
                                                       ,(if (null? loc) 0 (cadr loc))
-                                                      (inert ,(if (null? loc) 'none (caddr loc))))))))
+                                                      (inert ,(if (null? loc) 'none (caddr loc)))
+                                                      false)))))
                              (list gf))
                            '()))
             (types (llist-types argl))
@@ -2258,35 +2259,38 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call (core postfixapostrophize) ,(cadr e))))
+   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
    '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `.'` for transposition is deprecated, "
                                              "and the special lowering of `.'` in multiplication "
                                              "(`*`), left-division (`\\`), and right-division (`/`) "
                                              "operations, for example `A.'*B` lowering to `At_mul_B(A, B)`, "
                                              "`A\\B.'` lowering to `A_ldiv_Bt(A, B)`, and `A.'/B.'` "
                                              "lowering to `At_rdiv_Bt(A, B)`, has been removed "
-                                             "in favor of a lazy `Transpose` wrapper type and "
+                                             "in favor of lazy transposition via `transpose`, "
+                                             "a corresponding lazy `Transpose` wrapper type, and "
                                              "dispatch on that type. Two rewrites for `A.'` for "
-                                             "matrix `A` exist: eager or materializing `transpose(A)`, "
-                                             "which constructs a freshly allocated matrix of `A`'s type "
-                                             "and containing the transpose of `A`, and lazy "
-                                             "`Transpose(A)`, which wraps `A` in a `Transpose` "
-                                             "view type. Which rewrite is appropriate depends on "
+                                             "matrix `A` exist: "
+                                             "`transpose(A)`, which yields a lazily transposed "
+                                             "version of `A` (often by wrapping in the `Transpose` type), "
+                                             "and `copy(transpose(A))` which lazily transposes "
+                                             "`A` as above and then materializes that lazily "
+                                             "transposed `A` into a freshly allocated matrix "
+                                             "of `A`'s type. Which rewrite is appropriate depends on "
                                              "context: If `A.'` appears in a multiplication, "
                                              "left-division, or right-division operation that "
                                              "was formerly specially lowered to an `A_mul_B`-like "
-                                             "call, then the lazy `Tranpose(A)` is the correct "
+                                             "call, then the lazy `transpose(A)` is the correct "
                                              "replacement and will result in dispatch to a method "
                                              "equivalent to the former `A_mul_B`-like call. For "
                                              "example, `A.'*B`, formerly yielding `At_mul_B(A, B)`, "
-                                             "should be rewritten `Transpose(A)*B`, which will "
+                                             "should be rewritten `transpose(A)*B`, which will "
                                              "dispatch to a method equivalent to the former "
                                              "`At_mul_B(A, B)` method. If `A.'` appears outside "
-                                             "such an operation, then `transpose(A)` is the "
-                                             "correct rewrite. For vector `A`, `A.'` already "
-                                             "transposed lazily to a `RowVector`, so `Transpose(A)`. "
+                                             "such an operation, then `copy(transpose(A))` is the "
+                                             "functionally equivalent rewrite. For vector `A`, `A.'` already "
+                                             "transposed lazily to a `RowVector`, so `transpose(A)`, "
                                              "which now yields a `Transpose`-wrapped vector "
-                                             "behaviorally equivalent to the former `RowVector` "
+                                             "behaviorally equivalent to the former `RowVector`, "
                                              "is always the correct rewrite for vectors. For "
                                              "more information, see issue #5332 on Julia's "
                                              "issue tracker on GitHub." #\newline) #f)

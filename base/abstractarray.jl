@@ -849,9 +849,14 @@ eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = linearindices(A)
-    all(x->linearindices(x) == indsA, B) || throw_eachindex_mismatch(IndexLinear(), A, B...)
+    _all_match_first(linearindices, indsA, B...) || throw_eachindex_mismatch(IndexLinear(), A, B...)
     indsA
 end
+function _all_match_first(f::F, inds, A, B...) where F<:Function
+    @_inline_meta
+    (inds == f(A)) & _all_match_first(f, inds, B...)
+end
+_all_match_first(f::F, inds) where F<:Function = true
 
 isempty(a::AbstractArray) = (_length(a) == 0)
 
@@ -1548,7 +1553,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function cmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractVector, B::AbstractVector)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -1557,7 +1562,7 @@ function cmp(A::AbstractArray, B::AbstractArray)
     return cmp(length(A), length(B))
 end
 
-isless(A::AbstractArray, B::AbstractArray) = cmp(A, B) < 0
+isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
@@ -1727,7 +1732,7 @@ for all `i` and `j`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16),(2,2,2,2))
+julia> a = reshape(Vector(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3

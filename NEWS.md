@@ -179,6 +179,9 @@ Language changes
   * The syntax `using A.B` can now only be used when `A.B` is a module, and the syntax
     `using A: B` can only be used for adding single bindings ([#8000]).
 
+  * `=>` now has its own precedence level, giving it strictly higher precedence than
+    `=` and `,` ([#25391]).
+
 Breaking changes
 ----------------
 
@@ -356,7 +359,7 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
-  * `findn(x::AbstractVector)` now return a 1-tuple with the vector of indices, to be
+  * `findn(x::AbstractVector)` now returns a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
 
   * Broadcasting operations are no longer fused into a single operation by Julia's parser.
@@ -366,6 +369,24 @@ This section lists changes that do not have deprecation warnings.
     `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`.
     See the [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1)
     for more information.
+
+  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
+    In particular, this means that it returns `CartesianIndex` objects for matrices
+    and higher-dimensional arrays instead of linear indices as was previously the case.
+    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
+
+ * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
+    elements are equal ([#25368]). This has required changing the hashing algorithm
+    for `BitSet`.
+
+  * the default behavior of `titlecase` is changed in two ways ([#23393]):
+    + characters not starting a word are converted to lowercase;
+      a new keyword argument `strict` is added which
+      allows to get the old behavior when it's `false`.
+    + any non-letter character is considered as a word separator;
+      to get the old behavior (only "space" characters are considered as
+      word separators), use the keyword `wordsep=isspace`.
 
 Library improvements
 --------------------
@@ -849,8 +870,9 @@ Deprecated or removed
   * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
     for an alternative workflow ([#25046]).
 
-  * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
-    argument instead of defaulting to using the first dimension ([#24684]).
+  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
+    argument instead of defaulting to using the first dimension unless there is only
+    one dimension ([#24684], [#25457]).
 
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
@@ -863,6 +885,8 @@ Deprecated or removed
 
   * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
     library module ([#24714]).
+
+  * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
 
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
@@ -919,6 +943,7 @@ Deprecated or removed
     `empty(::Associative, K, V)` ([#24390]).
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+
 
 Command-line option changes
 ---------------------------
@@ -1142,6 +1167,7 @@ Command-line option changes
 [#24713]: https://github.com/JuliaLang/julia/issues/24713
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24715]: https://github.com/JuliaLang/julia/issues/24715
+[#24774]: https://github.com/JuliaLang/julia/issues/24774
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786

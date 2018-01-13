@@ -163,10 +163,10 @@ end
     α, β = 'f', 'g'
     @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
     @test_throws DimensionMismatch Base.LinAlg.axpby!(α,x,β,['g'])
-    @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
-    @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(-1:5))
-    @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))
-    @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,collect(1:3),y,collect(1:5))
+    @test_throws BoundsError Base.LinAlg.axpy!(α,x,Vector(-1:5),y,Vector(1:7))
+    @test_throws BoundsError Base.LinAlg.axpy!(α,x,Vector(1:7),y,Vector(-1:5))
+    @test_throws BoundsError Base.LinAlg.axpy!(α,x,Vector(1:7),y,Vector(1:7))
+    @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,Vector(1:3),y,Vector(1:5))
 end
 
 @test !issymmetric(fill(1,5,3))

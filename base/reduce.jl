@@ -284,8 +284,8 @@ mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::Union{typeof(scalarmax), typeof(max)}, T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) = abs2(zero(T))
+mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
 mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
@@ -488,10 +488,7 @@ prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::Union{typeof(scalarmax),
-                                     typeof(scalarmin),
-                                     typeof(max),
-                                     typeof(min)},
+function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     @inbounds a1 = A[first]
@@ -505,8 +502,8 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
-minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
+maximum(f::Callable, a) = mapreduce(f, max, a)
+minimum(f::Callable, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
@@ -521,7 +518,7 @@ julia> maximum([1,2,3])
 3
 ```
 """
-maximum(a) = mapreduce(identity, scalarmax, a)
+maximum(a) = mapreduce(identity, max, a)
 
 """
     minimum(itr)
@@ -536,7 +533,7 @@ julia> minimum([1,2,3])
 1
 ```
 """
-minimum(a) = mapreduce(identity, scalarmin, a)
+minimum(a) = mapreduce(identity, min, a)
 
 ## extrema
 

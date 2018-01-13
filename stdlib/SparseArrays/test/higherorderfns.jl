@@ -415,8 +415,10 @@ end
         @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
         # Issue #20954 combinations of sparse arrays and Adjoint/Transpose vectors
-        @test broadcast(+, A, adjoint(X))::SparseMatrixCSC == sparse(broadcast(+, fA, adjoint(X)))
-        @test broadcast(*, V, adjoint(X))::SparseMatrixCSC == sparse(broadcast(*, fV, adjoint(X)))
+        if X isa Vector
+            @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
+            @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
+        end
     end
     @test V .+ ntuple(identity, N) isa Vector
     @test A .+ ntuple(identity, N) isa Matrix
@@ -427,7 +429,7 @@ end
     # to the generic AbstractArray broadcast! code (at least for now).
     N, p = 5, 0.4
     A = sprand(N, N, p)
-    sA = A + transpose(A)
+    sA = A + copy(A')
     D = Diagonal(rand(N))
     B = Bidiagonal(rand(N), rand(N - 1), :U)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))

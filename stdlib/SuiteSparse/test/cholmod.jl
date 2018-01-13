@@ -183,7 +183,7 @@ end
     @test sparse(cmA'*cmA) ≈ A'*A
 
     # A_mul_Ac for symmetric A
-    A = 0.5*(A + adjoint(A))
+    A = 0.5*(A + copy(A'))
     cmA = CHOLMOD.Sparse(A)
     @test sparse(cmA*cmA') ≈ A*A'
 end
@@ -374,7 +374,7 @@ end
     @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
-    C = A1 + adjoint(A1)
+    C = A1 + copy(adjoint(A1))
     λmaxC = eigmax(Array(C))
     b = fill(1., size(A1, 1))
     @test_throws LinAlg.PosDefException cholfact(C - 2λmaxC*I)\b
@@ -396,7 +396,7 @@ end
     bT = fill(elty(1), 5)
     @test F'\bT ≈ Array(A1pd)'\b
     @test F'\sparse(bT) ≈ Array(A1pd)'\b
-    @test Transpose(F)\bT ≈ conj(A1pd)'\bT
+    @test transpose(F)\bT ≈ conj(A1pd)'\bT
     @test F\CHOLMOD.Sparse(sparse(bT)) ≈ A1pd\b
     @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
@@ -408,7 +408,7 @@ end
     @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + adjoint(A1) |> t -> t - 2eigmax(Array(t))*I)
+    @test !isposdef(A1 + copy(A1') |> t -> t - 2eigmax(Array(t))*I)
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
@@ -692,7 +692,7 @@ end
 @testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
-    M = [I adjoint(A); A -I]
+    M = [I copy(A'); A -I]
     b = M * fill(1., m+n)
     F = ldltfact(M)
     s = unsafe_load(pointer(F))
@@ -713,8 +713,8 @@ end
     @test Fs\fill(1., 4) ≈ Fd\fill(1., 4)
 end
 
-@testset "\\ '\\ and Transpose(...)\\" begin
-    # Test that \ and '\ and Transpose(...)\ work for Symmetric and Hermitian. This is just
+@testset "\\ '\\ and transpose(...)\\" begin
+    # Test that \ and '\ and transpose(...)\ work for Symmetric and Hermitian. This is just
     # a dispatch exercise so it doesn't matter that the complex matrix has
     # zero imaginary parts
     Apre = sprandn(10, 10, 0.2) - I
@@ -725,7 +725,7 @@ end
         x = fill(1., 10)
         b = A*x
         @test x ≈ A\b
-        @test Transpose(A)\b ≈ A'\b
+        @test transpose(A)\b ≈ A'\b
     end
 end
 

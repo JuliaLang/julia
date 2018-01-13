@@ -111,7 +111,8 @@ end
 # On the other hand, similar(S, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
-similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+# The method below is moved to SparseArrays for now
+# similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 function copyto!(dest::SymTridiagonal, bc::Broadcasted{PromoteToSparse})
     axs = axes(dest)
@@ -130,8 +131,11 @@ for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 
-transpose(M::SymTridiagonal) = M #Identity operation
-adjoint(M::SymTridiagonal) = conj(M)
+transpose(S::SymTridiagonal) = S
+adjoint(S::SymTridiagonal{<:Real}) = S
+adjoint(S::SymTridiagonal) = Adjoint(S)
+Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
+Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -497,7 +501,8 @@ Array(M::Tridiagonal) = Matrix(M)
 # On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+# The method below is moved to SparseArrays for now
+# similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
@@ -509,10 +514,14 @@ for func in (:conj, :copy, :real, :imag)
     end
 end
 
-transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
-adjoint(M::Tridiagonal) = conj(transpose(M))
+adjoint(S::Tridiagonal) = Adjoint(S)
+transpose(S::Tridiagonal) = Transpose(S)
+adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
+transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
+Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
+Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = adjoint(A.parent) \ adjoint(B.parent)
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ copy(B)
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the

@@ -260,13 +260,6 @@ function asyncmap(f, b::BitArray; kwargs...)
     return b2
 end
 
-# TODO: Optimize for sparse arrays
-# For now process as regular arrays and convert back
-function asyncmap(f, s::AbstractSparseArray...; kwargs...)
-    sa = map(Array, s)
-    return sparse(asyncmap(f, sa...; kwargs...))
-end
-
 mutable struct AsyncCollector
     f
     results

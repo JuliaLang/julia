@@ -371,9 +371,13 @@ function _validate(linfo::MethodInstance, src::CodeInfo, kind::String)
 end
 
 function get_staged(li::MethodInstance)
-    return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+    try
+        # user code might throw errors – ignore them
+        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+    catch
+        return nothing
+    end
 end
-
 
 mutable struct OptimizationState
     linfo::MethodInstance
@@ -472,12 +476,7 @@ end
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
     if isdefined(m, :generator)
-        try
-            # user code might throw errors – ignore them
-            c = get_staged(linfo)
-        catch
-            return nothing
-        end
+        return get_staged(linfo)
     else
         # TODO: post-inference see if we can swap back to the original arrays?
         if isa(m.source, Array{UInt8,1})
@@ -487,6 +486,35 @@ function retrieve_code_info(linfo::MethodInstance)
         end
     end
     return c
+end
+
+# TODO: Use these functions instead of directly manipulating
+# the "actual" method for appropriate places in inference (see #24676)
+function method_for_inference_heuristics(cinfo, default)
+    if isa(cinfo, CodeInfo)
+        # appropriate format for `sig` is svec(ftype, argtypes, world)
+        sig = cinfo.signature_for_inference_heuristics
+        if isa(sig, SimpleVector) && length(sig) == 3
+            methods = _methods(sig[1], sig[2], -1, sig[3])
+            if length(methods) == 1
+                _, _, m = methods[]
+                if isa(m, Method)
+                    return m
+                end
+            end
+        end
+    end
+    return default
+end
+
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            return method_for_inference_heuristics(get_staged(method_instance), method)
+        end
+    end
+    return method
 end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
@@ -1681,7 +1709,7 @@ function invoke_tfunc(@nospecialize(f), @nospecialize(types), @nospecialize(argt
         return Bottom
     end
     ft = type_typeof(f)
-    types = Tuple{ft, types.parameters...}
+    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
     argtype = Tuple{ft, argtype.parameters...}
     entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, sv.params.world)
     if entry === nothing
@@ -3396,6 +3424,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
+                    tree.signature_for_inference_heuristics = nothing
                     tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                     tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
                     tree.slottypes = nothing
@@ -4649,8 +4678,8 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
              invoke_tt.parameters[1] <: Tuple)
             return NF
         end
-        invoke_tt_params = invoke_tt.parameters[1].parameters
-        invoke_types = Tuple{ft, invoke_tt_params...}
+        invoke_tt = invoke_tt.parameters[1]
+        invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
         invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
                              invoke_types, sv.params.world)
         invoke_entry === nothing && return NF

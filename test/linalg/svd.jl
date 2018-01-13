@@ -46,8 +46,8 @@ a2img  = randn(n,n)/2
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    asym = adjoint(aa)+aa                  # symmetric indefinite
-    apd  = aa'*aa                 # symmetric positive-definite
+    asym = aa' + aa                 # symmetric indefinite
+    apd  = aa' * aa                 # symmetric positive-definite
     for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 

@@ -756,3 +756,19 @@ end
     @test a == rand()
     @test b == rand()
 end
+
+@testset "non AbstractTestSet as testset" begin
+    local f, err = tempname(), tempname()
+    write(f,
+    """
+    using Test
+    desc = "description"
+    @testset desc begin
+        @test 1==1
+    end
+    """)
+    run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=err))
+    msg = read(err, String)
+    @test contains(msg, "Expected `desc` to be an AbstractTestSet, it is a String")
+    rm(f; force=true)
+end

@@ -14,10 +14,10 @@ srand(100)
         end
         U = convert(Array{elty, 2}, U)
         V = convert(Array{elty, 2}, V)
-        @test tril(LinAlg.BLAS.syr2k('L','N',U,V)) ≈ tril(U*Transpose(V) + V*Transpose(U))
-        @test triu(LinAlg.BLAS.syr2k('U','N',U,V)) ≈ triu(U*Transpose(V) + V*Transpose(U))
-        @test tril(LinAlg.BLAS.syr2k('L','T',U,V)) ≈ tril(Transpose(U)*V + Transpose(V)*U)
-        @test triu(LinAlg.BLAS.syr2k('U','T',U,V)) ≈ triu(Transpose(U)*V + Transpose(V)*U)
+        @test tril(LinAlg.BLAS.syr2k('L','N',U,V)) ≈ tril(U*transpose(V) + V*transpose(U))
+        @test triu(LinAlg.BLAS.syr2k('U','N',U,V)) ≈ triu(U*transpose(V) + V*transpose(U))
+        @test tril(LinAlg.BLAS.syr2k('L','T',U,V)) ≈ tril(transpose(U)*V + transpose(V)*U)
+        @test triu(LinAlg.BLAS.syr2k('U','T',U,V)) ≈ triu(transpose(U)*V + transpose(V)*U)
     end
 
     if elty in (ComplexF32, ComplexF64)
@@ -136,12 +136,12 @@ srand(100)
             A = rand(elty,n,n)
             A = A + transpose(A)
             @test issymmetric(A)
-            @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*Transpose(x))
+            @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*transpose(x))
             @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
 
             if elty <: Complex
                 A = rand(elty,n,n)
-                A = A + adjoint(A)
+                A = A + A'
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
                 @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
@@ -163,7 +163,7 @@ srand(100)
         @testset "symmetric/Hermitian multiplication" begin
             x = rand(elty,n)
             A = rand(elty,n,n)
-            Aherm = A + adjoint(A)
+            Aherm = A + A'
             Asymm = A + transpose(A)
             @testset "symv and hemv" begin
                 @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
@@ -281,7 +281,7 @@ srand(100)
         @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I43, I4, elm1, I4)
         @test_throws DimensionMismatch BLAS.gemm!('T','N', one(elty), I43, I4, elm1, I43)
         @test_throws DimensionMismatch BLAS.gemm!('N','T', one(elty), I43, I43, elm1, I43)
-        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, adjoint(I43))
+        @test_throws DimensionMismatch BLAS.gemm!('T','T', one(elty), I43, I43, elm1, Matrix{elty}(I, 3, 4))
     end
     @testset "gemm compared to (sy)(he)rk" begin
         if eltype(elm1) <: Complex
@@ -316,10 +316,10 @@ end
 
 @testset "syr for eltype $elty" for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     A = rand(elty, 5, 5)
-    @test triu(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
-    @test tril(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
-    @test triu(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), view(A, 1, :), zeros(elty, 5, 5))
-    @test tril(A[1,:] * Transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
+    @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
+    @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
+    @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), view(A, 1, :), zeros(elty, 5, 5))
+    @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
 end
 
 @testset "her for eltype $elty" for elty in (Complex{Float32}, Complex{Float64})

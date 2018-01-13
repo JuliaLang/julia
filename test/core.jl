@@ -3,6 +3,8 @@
 # test core language features
 const Bottom = Union{}
 
+using SparseArrays
+
 # For curmod_*
 include("testenv.jl")
 
@@ -2339,6 +2341,16 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
+
+# issue #24460
+f24460(x, y) = 1
+f24460(x::T, y::T) where {T} = 2.0
+f24460(x::Int, y::Int) = "3"
+@test f24460(1, 2) === "3"
+@test invoke(f24460, Tuple{T,T} where T, 1, 2) === 2.0
+const T24460 = Tuple{T,T} where T
+g24460() = invoke(f24460, T24460, 1, 2)
+@test @inferred(g24460()) === 2.0
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()

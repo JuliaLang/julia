@@ -170,7 +170,7 @@ end
         lU,lS,lVt = LAPACK.gesvd!('S','S',A)
         @test U ≈ lU
         @test S ≈ lS
-        @test adjoint(V) ≈ lVt
+        @test V' ≈ lVt
         B = rand(elty,10,10)
         # xggsvd3 replaced xggsvd in LAPACK 3.6.0
         if LAPACK.version() < v"3.6.0"
@@ -203,7 +203,7 @@ end
         Bvs = eigvecs(B)
         Avs = eigvecs(A)
         Bvs = LAPACK.gebak!('S','R',ilo,ihi,scale,Bvs)
-        @test norm(diff(Avs ./ Bvs)) < 100 * eps(abs(float(one(elty))))
+        @test norm(diff(Avs ./ Bvs, 1)) < 100 * eps(abs(float(one(elty))))
     end
 end
 
@@ -396,7 +396,7 @@ end
 @testset "hetrf, hetrs" begin
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
-        A = A + adjoint(A) #hermitian!
+        A = A + A' #hermitian!
         B = copy(A)
         B,ipiv = LAPACK.hetrf!('U',B)
         @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
@@ -459,14 +459,14 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         srand(935)
         A = rand(elty,10,10)
-        A = A + adjoint(A) #hermitian!
+        A = A + A' #hermitian!
         b = rand(elty,10)
         c = A \ b
         b,A = LAPACK.hesv!('U',A,b)
         @test b ≈ c
         @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
         A = rand(elty,10,10)
-        A = A + adjoint(A) #hermitian!
+        A = A + A' #hermitian!
         b = rand(elty,10)
         c = A \ b
         b,A = LAPACK.hesv_rook!('U',A,b)
@@ -523,7 +523,7 @@ end
         A = rand(elty,n,n)/100
         A += real(diagm(0 => n*real(rand(elty,n))))
         if elty <: Complex
-            A = A + adjoint(A)
+            A = A + A'
         else
             A = A + transpose(A)
         end

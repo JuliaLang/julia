@@ -937,7 +937,7 @@ In addition to [`yieldto`](@ref), a few other basic functions are needed to use 
 ### Tasks and events
 
 Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
 The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);

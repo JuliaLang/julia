@@ -900,7 +900,7 @@ function binomial(n::T, k::T) where T<:Integer
     rr = 2
     while rr <= k
         xt = div(widemul(x, nn), rr)
-        x = xt
+        x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
         rr += 1
         nn += 1

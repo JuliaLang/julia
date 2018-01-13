@@ -324,3 +324,7 @@ end
 @test findnext(equalto('('), "(⨳(", 2) == 5
 @test findlast(equalto('('), "(⨳(") == 5
 @test findprev(equalto('('), "(⨳(", 2) == 1
+
+@test @inferred find(equalto('a'), "éa") == [3]
+@test @inferred find(equalto('€'), "€€") == [1, 4]
+@test @inferred isempty(find(equalto('é'), ""))

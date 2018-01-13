@@ -1246,3 +1246,9 @@ function f25055()
     return x
 end
 @test f25055() !== f25055()
+
+# issue #25391
+@test Meta.parse("0:-1, \"\"=>\"\"") == Meta.parse("(0:-1, \"\"=>\"\")") ==
+    Expr(:tuple, Expr(:(:), 0, -1), Expr(:call, :(=>), "", ""))
+@test Meta.parse("a => b = c") == Expr(:(=), Expr(:call, :(=>), :a, :b), Expr(:block, LineNumberNode(1, :none), :c))
+@test Meta.parse("a = b => c") == Expr(:(=), :a, Expr(:call, :(=>), :b, :c))

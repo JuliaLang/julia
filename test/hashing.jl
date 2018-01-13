@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SparseArrays
+
 types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
@@ -96,7 +98,7 @@ vals = Any[
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
     if a isa AbstractArray
-        @test hash(a) == hash(collect(a)) == hash(collect(Any, a))
+        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
 end
 
@@ -166,7 +168,7 @@ vals = Any[
 ]
 
 for a in vals
-    @test hash(collect(a)) == hash(a)
+    @test hash(Array(a)) == hash(a)
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")

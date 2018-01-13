@@ -3,7 +3,6 @@
 module SPQR
 
 import Base: \
-using Base.LinAlg: Adjoint, Transpose
 
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
@@ -22,7 +21,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using ..SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -340,14 +339,14 @@ function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    c2r = reshape(transpose(reinterpret(Float64, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(transpose(reinterpret(Float64, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    return collect(reshape(reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2))), _ret_size(F, B)))
+    return collect(reshape(reinterpret(Complex{Float64}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
 end
 
 function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
@@ -375,7 +374,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
-    Base.LinAlg.mul!(Adjoint(F.Q), X0)
+    Base.LinAlg.mul!(adjoint(F.Q), X0)
 
     # Zero out to get basic solution
     X[rnk + 1:end, :] = 0

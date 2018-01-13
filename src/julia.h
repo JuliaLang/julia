@@ -229,6 +229,7 @@ typedef struct _jl_llvm_functions_t {
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
+    jl_value_t *signature_for_inference_heuristics; // optional method used during inference
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_array_t *slotflags;  // local var bit flags
@@ -1512,7 +1513,6 @@ typedef struct _jl_task_t {
     struct _jl_task_t *parent;
     jl_value_t *tls;
     jl_sym_t *state;
-    jl_value_t *consumers;
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *exception;

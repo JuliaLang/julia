@@ -43,7 +43,7 @@ end
 """
     bkfact(A, rook::Bool=false) -> BunchKaufman
 
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or Hermitian matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on which triangle is stored in `A`, and return a `BunchKaufman` object. Note that if `A` is complex symmetric then `U'` and `L'` denote the unconjugated transposes, i.e. `Transpose(U)` and `Transpose(L)`.
+Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or Hermitian matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on which triangle is stored in `A`, and return a `BunchKaufman` object. Note that if `A` is complex symmetric then `U'` and `L'` denote the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
 
 If `rook` is `true`, rook pivoting is used. If `rook` is false, rook pivoting is not used.
 
@@ -115,7 +115,7 @@ end
     getproperty(B::BunchKaufman, d::Symbol)
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
-two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*Transpose(L)` in the complex symmetric case)
+two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*transpose(L)` in the complex symmetric case)
 where `P` is a (symmetric) permutation matrix, `L` is a `UnitLowerTriangular` matrix, `U` is a
 `UnitUpperTriangular`, and `D` is a block diagonal symmetric or Hermitian matrix with
 1x1 or 2x2 blocks. The argument `d` can be
@@ -191,13 +191,13 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
             if getfield(B, :uplo) == 'L'
                 return UnitLowerTriangular(LUD)
             else
-                throw(ArgumentError("factorization is U*D*Transpose(U) but you requested L"))
+                throw(ArgumentError("factorization is U*D*transpose(U) but you requested L"))
             end
         else # :U
             if B.uplo == 'U'
                 return UnitUpperTriangular(LUD)
             else
-                throw(ArgumentError("factorization is L*D*Transpose(L) but you requested U"))
+                throw(ArgumentError("factorization is L*D*transpose(L) but you requested U"))
             end
         end
     else

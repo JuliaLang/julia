@@ -1,9 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module Libdl
 @doc """
 Interface to libdl. Provides dynamic linking support.
 """ -> Libdl
+
+import Base.DL_LOAD_PATH
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
@@ -15,11 +19,7 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
 When calling [`dlopen`](@ref), the paths in this list will be searched first, in
 order, before searching the system locations for a valid library handle.
 """
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
-    push!(DL_LOAD_PATH, "@loader_path")
-end
+DL_LOAD_PATH
 
 # note: constants to match JL_RTLD_* in src/julia.h, translated
 #       to system-specific values by JL_RTLD macro in src/dlload.c
@@ -46,7 +46,6 @@ Enum constant for [`dlopen`](@ref). See your platform man page for details, if
 applicable.
 """ ->
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
-
 
 """
     dlsym(handle, sym)

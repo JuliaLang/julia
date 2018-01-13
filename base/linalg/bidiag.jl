@@ -194,7 +194,8 @@ end
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
-similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+# The method below is moved to SparseArrays for now
+# similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 
 ###################
@@ -254,8 +255,14 @@ for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.uplo)
 end
 
-transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, M.uplo == 'U' ? :L : :U)
-adjoint(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal) = Adjoint(B)
+transpose(B::Bidiagonal) = Transpose(B)
+adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
+transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
+Base.copy(aB::Adjoint{<:Any,<:Bidiagonal}) =
+    (B = aB.parent; Bidiagonal(map(x -> copy.(adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
+Base.copy(tB::Transpose{<:Any,<:Bidiagonal}) =
+    (B = tB.parent; Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
@@ -501,15 +508,15 @@ const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
-*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(Adjoint(Array(adjA.parent)), B)
-*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), Adjoint(adjB.parent))
+*(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
+*(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = *(Array(A), adjoint(adjB.parent))
 /(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = /(Array(A), B)
-/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = /(Array(A), Adjoint(adjB.parent))
+/(A::Bidiagonal{T}, adjB::Adjoint{<:Any,<:AbstractVector{T}}) where {T} = /(Array(A), adjoint(adjB.parent))
 
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(transA::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(transpose(transA.parent), b)
-ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(adjoint(adjA.parent), b)
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -534,7 +541,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(Adjoint(A), tmp)
+        ldiv!(adjoint(A), tmp)
         copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
@@ -549,7 +556,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(Transpose(A), tmp)
+        ldiv!(transpose(A), tmp)
         copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
@@ -587,16 +594,16 @@ function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrM
     A = transA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(Transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
+    ldiv!(transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(Transpose(transA.parent), copy(B))
+\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(transpose(transA.parent), copy(B))
 function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = adjA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-    ldiv!(Adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
+    ldiv!(adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(Adjoint(adjA.parent), copy(B))
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjoint(adjA.parent), copy(B))
 
 factorize(A::Bidiagonal) = A
 

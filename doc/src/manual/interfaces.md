@@ -131,7 +131,7 @@ julia> sum(Squares(1803))
 1955361914
 ```
 
-This is a very common pattern throughout the Julia standard library: a small set of required methods
+This is a very common pattern throughout Julia Base: a small set of required methods
 define an informal interface that enable many fancier behaviors. In some cases, types will want
 to additionally specialize those extra behaviors when they know a more efficient algorithm can
 be used in their specific case.
@@ -234,7 +234,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
-the [arrays manual page](@ref man-multi-dim-arrays) and [standard library section](@ref lib-arrays) for more supported methods.
+the [arrays manual page](@ref man-multi-dim-arrays) and the [Julia Base section](@ref lib-arrays) for more supported methods.
 
 A key part in defining an `AbstractArray` subtype is [`IndexStyle`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
@@ -373,7 +373,7 @@ julia> copy(A)
 ```
 
 In addition to all the iterable and indexable methods from above, these types can also interact
-with each other and use most of the methods defined in the standard library for `AbstractArrays`:
+with each other and use most of the methods defined in Julia Base for `AbstractArrays`:
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]

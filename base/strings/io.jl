@@ -374,7 +374,7 @@ function unescape_string(io, s::AbstractString)
 end
 
 macro b_str(s)
-    v = Vector{UInt8}(codeunits(unescape_string(s)))
+    v = codeunits(unescape_string(s))
     QuoteNode(v)
 end
 

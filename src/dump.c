@@ -2568,7 +2568,7 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     jl_method_t *_new;
     while (1) {
         entry = jl_typemap_assoc_by_type(
-            mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
+            mt->defs, (jl_value_t*)sig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
         if (!entry)
             break;
         _new = (jl_method_t*)entry->func.value;
@@ -2581,7 +2581,7 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     // If we failed to find a method (perhaps due to method deletion),
     // grab anything
     entry = jl_typemap_assoc_by_type(
-        mt->defs, sig, NULL, /*subtype*/0, /*offs*/0, /*world*/jl_world_counter, /*max_world_mask*/(~(size_t)0) >> 1);
+        mt->defs, (jl_value_t*)sig, NULL, /*subtype*/0, /*offs*/0, /*world*/jl_world_counter, /*max_world_mask*/(~(size_t)0) >> 1);
     assert(entry);
     assert(entry->max_world != ~(size_t)0);
     *max_world = entry->max_world;

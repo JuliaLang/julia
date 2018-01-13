@@ -9,6 +9,8 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
+using SparseArrays
+
 # For curmod_*
 include("testenv.jl")
 
@@ -255,6 +257,12 @@ end
 @test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
 @test length(detect_ambiguities(Ambig9)) == 0
 
+# issue #25341
+module M25341
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
+end
+@test length(detect_unbound_args(M25341; recursive=true)) == 1
+
 # Test that Core and Base are free of UndefVarErrors
 # not using isempty so this prints more information when it fails
 @testset "detect_unbound_args in Base and Core" begin
@@ -278,9 +286,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes, (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:Number,)))
         pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes,
                                                 (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:(AbstractArray{<:Number}),)))
-        pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_vcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
-        pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_hcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
-        pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, Base.SparseArrays._TypedDenseConcatGroup{T} where T)))
+        pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))
         pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, S}} where S, Type{T} where T}))

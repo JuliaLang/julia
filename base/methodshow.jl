@@ -304,10 +304,12 @@ show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList
 # pretty-printing of AbstractVector{Method} for output of methodswith:
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
+    first = true
     for (i, m) in enumerate(mt)
+        first || println(io)
+        first = false
         print(io, "[$(i)] ")
         show(io, m)
-        println(io)
         push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
     end
 end

@@ -2,6 +2,8 @@
 
 import Base.copy, Base.==
 
+import Libdl
+
 const libccalltest = "libccalltest"
 
 const verbose = false

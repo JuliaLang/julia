@@ -261,9 +261,11 @@ function symdiff!(s::AbstractSet, itr)
     s
 end
 
-==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
-<=(l::Set, r::Set) = issubset(l, r)
+==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
+# convenience functions for AbstractSet
+# (if needed, only their synonyms ⊊ and ⊆ must be specialized)
+<( l::AbstractSet, r::AbstractSet) = l ⊊ r
+<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
 """
     issubset(a, b)
@@ -290,21 +292,35 @@ function issubset(l, r)
     end
     return true
 end
-
 # use the implementation below when it becoms as efficient
 # issubset(l, r) = all(_in(r), l)
 
 const ⊆ = issubset
-⊊(l::Set, r::Set) = <(l, r)
-⊈(l::Set, r::Set) = !⊆(l, r)
-⊇(l, r) = issubset(r, l)
-⊉(l::Set, r::Set) = !⊇(l, r)
-⊋(l::Set, r::Set) = <(r, l)
 
-⊊(l::T, r::T) where {T<:AbstractSet} = <(l, r)
-⊈(l::T, r::T) where {T<:AbstractSet} = !⊆(l, r)
-⊉(l::T, r::T) where {T<:AbstractSet} = !⊇(l, r)
-⊋(l::T, r::T) where {T<:AbstractSet} = <(r, l)
+"""
+    issetequal(a, b)
+
+Determine whether `a` and `b` have the same elements. Equivalent
+to `a ⊆ b && b ⊆ a`.
+
+# Examples
+```jldoctest
+julia> issetequal([1, 2], [1, 2, 3])
+false
+
+julia> issetequal([1, 2], [2, 1])
+true
+```
+"""
+issetequal(l, r) = length(l) == length(r) && l ⊆ r
+issetequal(l::AbstractSet, r::AbstractSet) = l == r
+
+⊊(l, r) = length(l) < length(r) && l ⊆ r
+⊈(l, r) = !⊆(l, r)
+
+⊇(l, r) = r ⊆ l
+⊉(l, r) = r ⊈ l
+⊋(l, r) = r ⊊ l
 
 """
     unique(itr)
@@ -534,7 +550,7 @@ function mapfilter(pred, f, itr, res)
 end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
-function hash(s::Set, h::UInt)
+function hash(s::AbstractSet, h::UInt)
     hv = hashs_seed
     for x in s
         hv ⊻= hash(x)
@@ -547,6 +563,10 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 
 ## replace/replace! ##
+
+# to make replace/replace! work for a new container type Cont, only
+# replace!(prednew::Callable, A::Cont; count::Integer=typemax(Int))
+# has to be implemented
 
 """
     replace!(A, old_new::Pair...; [count::Integer])
@@ -641,12 +661,12 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-replace!(prednew::Callable, A; count::Integer=typemax(Int)) =
-    replace!(prednew, A, count=clamp(count, typemin(Int), typemax(Int)) % Int)
-
-
-replace!(prednew::Callable, A; count::Int=typemax(Int)) =
-    throw(MethodError(replace!, (prednew, A)))
+function replace!(prednew::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
+                  count::Integer=typemax(Int))
+    count < 0 && throw(DomainError(count, "`count` must not be negative"))
+    count != 0 && _replace!(prednew, A, min(count, typemax(Int)) % Int)
+    A
+end
 
 """
     replace(A, old_new::Pair...; [count::Integer])
@@ -746,9 +766,7 @@ end
 _replace_update_dict!(repl::Vector{<:Pair}, x, ::Nothing) = false
 _replace_update_dict!(repl::Vector{<:Pair}, x, y) = _replace_update_dict!(repl, x, Some(y))
 
-function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
     repl = Pair{eltype(A),eltype(A)}[]
     c = 0
     for x in A
@@ -761,7 +779,6 @@ function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::
     for oldnew in repl
         push!(A, last(oldnew))
     end
-    A
 end
 
 ### AbstractArray
@@ -774,13 +791,10 @@ end
 _replace_update!(A::AbstractArray, i::Integer, ::Nothing) = false
 _replace_update!(A::AbstractArray, i::Integer, y) = _replace_update!(A, i, Some(y))
 
-function replace!(prednew::Callable, A::AbstractArray; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(prednew::Callable, A::AbstractArray, count::Int)
     c = 0
     for i in eachindex(A)
         c += _replace_update!(A, i, prednew(A[i]))
         c == count && break
     end
-    A
 end

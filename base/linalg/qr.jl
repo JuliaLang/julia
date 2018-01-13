@@ -161,7 +161,7 @@ end
 
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
-    piv = collect(UnitRange{BlasInt}(1,n))
+    piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(uninitialized, min(m,n))
     for j = 1:min(m,n)
 
@@ -614,7 +614,7 @@ end
 function *(adjQ::Adjoint{<:Any,<:AbstractQ}, B::StridedVecOrMat)
     Q = adjQ.parent
     TQB = promote_type(eltype(Q), eltype(B))
-    return mul!(Adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
+    return mul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
 end
 
 ### QBc/QcBc
@@ -630,7 +630,7 @@ function *(adjQ::Adjoint{<:Any,<:AbstractQ}, adjB::Adjoint{<:Any,<:StridedVecOrM
     TQB = promote_type(eltype(Q), eltype(B))
     Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
     adjoint!(Bc, B)
-    return mul!(Adjoint(convert(AbstractMatrix{TQB}, Q)), Bc)
+    return mul!(adjoint(convert(AbstractMatrix{TQB}, Q)), Bc)
 end
 
 ### AQ
@@ -709,14 +709,14 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     if size(A,2) == size(B.factors, 1)
         AA = similar(A, TAB, size(A))
         copyto!(AA, A)
-        return mul!(AA, Adjoint(BB))
+        return mul!(AA, adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
-        return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], Adjoint(BB))
+        return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
     else
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
-*(u::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractQ}) = Adjoint(A.parent * u.parent)
+*(u::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractQ}) = adjoint(A.parent * u.parent)
 
 
 ### AcQ/AcQc
@@ -732,13 +732,13 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
     TAQ = promote_type(eltype(A), eltype(Q))
     Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    return mul!(Ac, Adjoint(convert(AbstractMatrix{TAQ}, Q)))
+    return mul!(Ac, adjoint(convert(AbstractMatrix{TAQ}, Q)))
 end
 
 ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(mul!(Adjoint(A.Q), b), 1:size(A, 2))); b)
+    (ldiv!(UpperTriangular(A.R), view(mul!(adjoint(A.Q), b), 1:size(A, 2))); b)
 ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(mul!(Adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+    (ldiv!(UpperTriangular(A.R), view(mul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -770,7 +770,7 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         rnk += 1
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(mul!(Adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
+    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(mul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
@@ -784,7 +784,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    mul!(Adjoint(A.Q), view(B, 1:m, :))
+    mul!(adjoint(A.Q), view(B, 1:m, :))
     R = A.R
     @inbounds begin
         if n > m # minimum norm solution
@@ -792,7 +792,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
                 x = view(R, k, [k; m + 1:n])
                 τk = reflector!(x)
-                τ[k] = adjoint(τk)
+                τ[k] = conj(τk)
                 for i = 1:k - 1
                     vRi = R[i,k]
                     for j = m + 1:n
@@ -878,7 +878,7 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    B = reshape(transpose(reinterpret(T, reshape(BIn, (1, length(BIn))))), size(BIn, 1), 2*size(BIn, 2))
+    B = reshape(copy(transpose(reinterpret(T, reshape(BIn, (1, length(BIn)))))), size(BIn, 1), 2*size(BIn, 2))
 
     X = _zeros(T, B, n)
     X[1:size(B, 1), :] = B
@@ -889,7 +889,7 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    XX = reshape(collect(reinterpret(Complex{T}, transpose(reshape(X, div(length(X), 2), 2)))), _ret_size(A, BIn))
+    XX = reshape(collect(reinterpret(Complex{T}, copy(transpose(reshape(X, div(length(X), 2), 2))))), _ret_size(A, BIn))
     return _cut_B(XX, 1:n)
 end
 

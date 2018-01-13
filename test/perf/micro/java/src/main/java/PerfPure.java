@@ -149,7 +149,7 @@ public class PerfPure {
             PrintStream ps = new PrintStream(f);
             long i = 0;
             for (i = 0; i < n; i++) {
-                ps.println(i+" "+i);
+                ps.println(i + " " + (i+1));
             }
             ps.close();
         } catch (FileNotFoundException e) {

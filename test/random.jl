@@ -2,6 +2,7 @@
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
+using SparseArrays
 
 using Base.Random.dSFMT
 using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
@@ -483,9 +484,9 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test randsubseq(mta,1:10,0.4) == randsubseq(mtb,1:10,0.4)
     @test randsubseq!(mta,Int[],1:10,0.4) == randsubseq!(mtb,Int[],1:10,0.4)
 
-    @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
-    @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
-    @test shuffle(mta,collect(2:11)) == shuffle(mtb,2:11)
+    @test shuffle(mta,Vector(1:10)) == shuffle(mtb,Vector(1:10))
+    @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
+    @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
@@ -525,10 +526,10 @@ let seed = rand(UInt)
 
     # test PRNG jump
 
-    mts = randjump(mta, size, jump25000)
+    mts = randjump(mta, 25000, size)
     @test length(mts) == 4
 
-for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
+    for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
     end
 end
@@ -579,7 +580,7 @@ let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     # RNGs do not share their seed in randjump
-    let rs = randjump(r, 2)
+    let rs = randjump(r, big(10)^20, 2)
         @test  rs[1].seed !== rs[2].seed
         srand(rs[2])
         @test seed == rs[1].seed != rs[2].seed

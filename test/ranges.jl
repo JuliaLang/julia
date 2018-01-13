@@ -251,7 +251,7 @@ end
         @test length(1:2:0) == 0
     end
     @testset "find(::OccursIn, ::Array)" begin
-        @test find(occursin(3:20), [5.2, 3.3]) == find(occursin(collect(3:20)), [5.2, 3.3])
+        @test find(occursin(3:20), [5.2, 3.3]) == find(occursin(Vector(3:20)), [5.2, 3.3])
 
         let span = 5:20,
             r = -7:3:42
@@ -505,8 +505,8 @@ end
                                     (0, 1, 5, 0), (0, -10, 5, 0), (0, -10, 0, 1),
                                     (0, -1, 1, 0), (0, 1, -1, 0), (0, -1, -10, 11))
         r = start/10:step/10:stop/10
-        a = collect(start:step:stop)./10
-        ra = collect(r)
+        a = Vector(start:step:stop)./10
+        ra = Vector(r)
 
         @test r == a
         @test isequal(r, a)
@@ -519,7 +519,7 @@ end
 
         if len > 0
             l = linspace(start/10, stop/10, len)
-            la = collect(l)
+            la = Vector(l)
 
             @test a == l
             @test r == l
@@ -536,8 +536,8 @@ end
 
     @test 1.0:1/49:27.0 == linspace(1.0,27.0,1275) == [49:1323;]./49
     @test isequal(1.0:1/49:27.0, linspace(1.0,27.0,1275))
-    @test isequal(1.0:1/49:27.0, collect(49:1323)./49)
-    @test hash(1.0:1/49:27.0) == hash(linspace(1.0,27.0,1275)) == hash(collect(49:1323)./49)
+    @test isequal(1.0:1/49:27.0, Vector(49:1323)./49)
+    @test hash(1.0:1/49:27.0) == hash(linspace(1.0,27.0,1275)) == hash(Vector(49:1323)./49)
 
     @test [prevfloat(0.1):0.1:0.3;] == [prevfloat(0.1), 0.2, 0.3]
     @test [nextfloat(0.1):0.1:0.3;] == [nextfloat(0.1), 0.2]
@@ -697,12 +697,12 @@ end
                        linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         local r
-        ar = collect(r)
+        ar = Vector(r)
         @test r == ar
         @test isequal(r,ar)
         @test hash(r) == hash(ar)
         for s in Rs
-            as = collect(s)
+            as = Vector(s)
             @test isequal(r,s) == (hash(r)==hash(s))
             @test (r==s) == (ar==as)
         end
@@ -956,15 +956,15 @@ end
 
     function test_linspace_identity(r::AbstractRange{T}, mr) where T
         @test -r == mr
-        @test -collect(r) == collect(mr)
+        @test -Vector(r) == Vector(mr)
         @test isa(-r, typeof(r))
 
         @test broadcast(+, broadcast(+, 1, r), -1) == r
-        @test 1 .+ collect(r) == collect(1 .+ r) == collect(r .+ 1)
+        @test 1 .+ Vector(r) == Vector(1 .+ r) == Vector(r .+ 1)
         @test isa(broadcast(+, broadcast(+, 1, r), -1), typeof(r))
         @test broadcast(-, broadcast(-, 1, r), 1) == mr
-        @test 1 .- collect(r) == collect(1 .- r) == collect(1 .+ mr)
-        @test collect(r) .- 1 == collect(r .- 1) == -collect(mr .+ 1)
+        @test 1 .- Vector(r) == Vector(1 .- r) == Vector(1 .+ mr)
+        @test Vector(r) .- 1 == Vector(r .- 1) == -Vector(mr .+ 1)
         @test isa(broadcast(-, broadcast(-, 1, r), 1), typeof(r))
 
         @test 1 * r * 1 == r
@@ -975,9 +975,9 @@ end
         @test r / T(0.5) * T(0.5) == r
         @test isa(r / 1, typeof(r))
 
-        @test (2 * collect(r) == collect(r * 2) == collect(2 * r) ==
-               collect(r * T(2.0)) == collect(T(2.0) * r) ==
-               collect(r / T(0.5)) == -collect(mr * T(2.0)))
+        @test (2 * Vector(r) == Vector(r * 2) == Vector(2 * r) ==
+               Vector(r * T(2.0)) == Vector(T(2.0) * r) ==
+               Vector(r / T(0.5)) == -Vector(mr * T(2.0)))
     end
 
     test_linspace_identity(linspace(1.0, 27.0, 10), linspace(-1.0, -27.0, 10))
@@ -1033,10 +1033,10 @@ end
         @test r1 - r2 == r_diff
         @test r2 - r1 == -r_diff
 
-        @test collect(r1) + collect(r2) == collect(r_sum)
-        @test collect(r2) + collect(r1) == collect(r_sum)
-        @test collect(r1) - collect(r2) == collect(r_diff)
-        @test collect(r2) - collect(r1) == collect(-r_diff)
+        @test Vector(r1) + Vector(r2) == Vector(r_sum)
+        @test Vector(r2) + Vector(r1) == Vector(r_sum)
+        @test Vector(r1) - Vector(r2) == Vector(r_diff)
+        @test Vector(r2) - Vector(r1) == Vector(-r_diff)
     end
 
     test_range_sum_diff(1:5, 0:2:8, 1:3:13, 1:-1:-3)
@@ -1205,11 +1205,11 @@ Base.isless(x, y::NotReal) = isless(x, y.val)
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers: Furlong
 @testset "dimensional correctness" begin
-    @test length(collect(Furlong(2):Furlong(10))) == 9
+    @test length(Vector(Furlong(2):Furlong(10))) == 9
     @test length(range(Furlong(2), 9)) == 9
-    @test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
-    @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
-          collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+    @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
+    @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
+          Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
 end
 
 @testset "issue #22270" begin
