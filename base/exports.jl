@@ -482,7 +482,7 @@ export
     eachmatch,
     endswith,
     equalto,
-    find,
+    findall,
     findfirst,
     findlast,
     findmax,

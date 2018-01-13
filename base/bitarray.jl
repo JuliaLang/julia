@@ -1598,7 +1598,7 @@ function findprev(testf::Function, B::BitArray, start::Integer)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function find(B::BitArray)
+function findall(B::BitArray)
     l = length(B)
     nnzB = count(B)
     ind = first(keys(B))
@@ -1632,7 +1632,7 @@ function find(B::BitArray)
 end
 
 # For performance
-find(::typeof(!iszero), B::BitArray) = find(B)
+findall(::typeof(!iszero), B::BitArray) = findall(B)
 
 function findnz(B::BitMatrix)
     nnzB = count(B)

@@ -1052,7 +1052,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = find(occursin(indices1(A)), I)
+    ind = findall(occursin(indices1(A)), I)
     X[ind] = A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
@@ -1061,7 +1061,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
-    ind = find(occursin(1:length(A)), I)
+    ind = findall(occursin(1:length(A)), I)
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default

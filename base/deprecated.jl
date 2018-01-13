@@ -1179,7 +1179,7 @@ end
 # (2) base/linalg/qr.jl
 # (3) base/linalg/lq.jl
 
-@deprecate find(x::Number)            find(!iszero, x)
+@deprecate find(x::Number)            findall(!iszero, x)
 @deprecate findnext(A, v, i::Integer) findnext(equalto(v), A, i)
 @deprecate findfirst(A, v)            findfirst(equalto(v), A)
 @deprecate findprev(A, v, i::Integer) findprev(equalto(v), A, i)
@@ -2783,11 +2783,13 @@ end
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
-@deprecate findin(a, b) find(occursin(b), a)
+@deprecate findin(a, b) findall(occursin(b), a)
 
-@deprecate findn(a::AbstractVector) (find(!iszero, a),)
-@deprecate findn(x::AbstractMatrix) (I = find(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
-@deprecate findn(a::AbstractArray{T, N}) where {T, N} (I = find(!iszero, x); ntuple(i -> getindex.(I, i), N))
+@deprecate find findall
+
+@deprecate findn(x::AbstractVector) (findall(!iszero, x),)
+@deprecate findn(x::AbstractMatrix) (I = findall(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
+@deprecate findn(x::AbstractArray{T, N}) where {T, N} (I = findall(!iszero, x); ntuple(i -> getindex.(I, i), N))
 
 # END 0.7 deprecations
 

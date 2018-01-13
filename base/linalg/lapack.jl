@@ -3759,7 +3759,7 @@ for (stev, stebz, stegr, stein, elty) in
             chklapackerror(info[])
             if any(ifail .!= 0)
                 # TODO: better error message / type
-                error("failed to converge eigenvectors:\n$(find(!iszero, ifail))")
+                error("failed to converge eigenvectors:\n$(findall(!iszero, ifail))")
             end
             z
         end

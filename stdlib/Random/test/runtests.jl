@@ -14,7 +14,7 @@ using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
     srand(0)
     rand()
     x = rand(384)
-    @test find(x .== rand()) == []
+    @test findall(x .== rand()) == []
 end
 
 @test rand() != rand()

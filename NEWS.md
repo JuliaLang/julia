@@ -364,14 +364,15 @@ This section lists changes that do not have deprecation warnings.
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
-  * `findn(x::AbstractArray)` has been deprecated in favor of `find(!iszero, x)`, which
+  * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
 
-  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
-    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
+  * `find` has been renamed to `findall`, and now returns the same type of indices
+    as `keys`/`pairs` for `AbstractArray`, `AbstractDict`, `AbstractString`, `Tuple`
+    and `NamedTuple` objects ([#24774], [#25545]).
     In particular, this means that it returns `CartesianIndex` objects for matrices
     and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `LinearIndices(a)[find(f, a)]` to compute linear indices.
+    Use `LinearIndices(a)[findall(f, a)]` to compute linear indices.
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
@@ -935,7 +936,7 @@ Deprecated or removed
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
 
-  * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+  * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
@@ -1192,3 +1193,4 @@ Command-line option changes
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
+[#25545]: https://github.com/JuliaLang/julia/issues/25545

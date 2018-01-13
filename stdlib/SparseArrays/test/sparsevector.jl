@@ -270,13 +270,13 @@ end
     @test SparseArrays.dropstored!(x, 5) == SparseVector(10, [7, 9], [7.0, 9.0])
 end
 
-@testset "find and findnz" begin
-    @test find(!iszero, spv_x1) == find(!iszero, x1_full)
-    @test find(spv_x1 .> 1) == find(x1_full .> 1)
-    @test find(x->x>1, spv_x1) == find(x->x>1, x1_full)
-    @test findnz(spv_x1) == (find(!iszero, x1_full), filter(x->x!=0, x1_full))
+@testset "findall and findnz" begin
+    @test findall(!iszero, spv_x1) == findall(!iszero, x1_full)
+    @test findall(spv_x1 .> 1) == findall(x1_full .> 1)
+    @test findall(x->x>1, spv_x1) == findall(x->x>1, x1_full)
+    @test findnz(spv_x1) == (findall(!iszero, x1_full), filter(x->x!=0, x1_full))
     let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = Array(xc)
-        @test find(!iszero, xc) == find(!iszero, fc)
+        @test findall(!iszero, xc) == findall(!iszero, fc)
         @test findnz(xc) == ([2, 5], [1.25, -0.75])
     end
 end
@@ -1038,7 +1038,7 @@ end
     let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
         for m in testdims
             v = sprand(m, nzprob)
-            struczerosv = find(x -> x == 0, v)
+            struczerosv = findall(x -> x == 0, v)
             poszerosinds = unique(rand(struczerosv, targetnumposzeros))
             negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
             vposzeros = setindex!(copy(v), 2, poszerosinds)

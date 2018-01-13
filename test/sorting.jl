@@ -221,7 +221,7 @@ randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
-    x = find(rand(n).<p)
+    x = findall(rand(n).<p)
     v[x] = randnans(length(x))
     return v
 end

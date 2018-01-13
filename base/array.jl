@@ -1718,7 +1718,7 @@ true
 findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
-    find(f::Function, A)
+    findall(f::Function, A)
 
 Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, return an empty array.
@@ -1736,7 +1736,7 @@ julia> x = [1, 3, 4]
  3
  4
 
-julia> find(isodd, x)
+julia> findall(isodd, x)
 2-element Array{Int64,1}:
  1
  2
@@ -1745,12 +1745,12 @@ julia> A = [1 2 0; 3 4 0]
 2×3 Array{Int64,2}:
  1  2  0
  3  4  0
-julia> find(isodd, A)
+julia> findall(isodd, A)
 2-element Array{CartesianIndex{2},1}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
 
-julia> find(!iszero, A)
+julia> findall(!iszero, A)
 4-element Array{CartesianIndex{2},1}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
@@ -1763,20 +1763,20 @@ Dict{Symbol,Int64} with 3 entries:
   :B => -1
   :C => 0
 
-julia> find(x -> x >= 0, d)
+julia> findall(x -> x >= 0, d)
 2-element Array{Symbol,1}:
  :A
  :C
 
 ```
 """
-find(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
+findall(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
 
 _pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't implement length
 
 """
-    find(A)
+    findall(A)
 
 Return a vector `I` of the `true` indices or keys of `A`.
 If there are no such elements of `A`, return an empty array.
@@ -1796,7 +1796,7 @@ julia> A = [true, false, false, true]
  false
   true
 
-julia> find(A)
+julia> findall(A)
 2-element Array{Int64,1}:
  1
  4
@@ -1806,25 +1806,25 @@ julia> A = [true false; false true]
   true  false
  false   true
 
-julia> find(A)
+julia> findall(A)
 2-element Array{Int64,1}:
  1
  4
 
-julia> find(falses(3))
+julia> findall(falses(3))
 0-element Array{Int64,1}
 ```
 """
-function find(A)
+function findall(A)
     if !(eltype(A) === Bool) && !all(x -> x isa Bool, A)
-        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :find)
     end
     collect(first(p) for p in _pairs(A) if last(p) != 0)
 end
 
-find(x::Bool) = x ? [1] : Vector{Int}()
-find(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
-find(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
+findall(x::Bool) = x ? [1] : Vector{Int}()
+findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
+findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
     findnz(A)
@@ -2076,7 +2076,7 @@ function _sortedfindin(v, w)
     return out
 end
 
-function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
     if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
         return _sortedfindin(x, pred.x)
     else
@@ -2085,7 +2085,7 @@ function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-find(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

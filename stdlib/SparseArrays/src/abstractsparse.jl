@@ -44,9 +44,9 @@ function Base.reinterpret(::Type, A::AbstractSparseArray)
 end
 
 # The following two methods should be overloaded by concrete types to avoid
-# allocating the I = find(...)
-_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
-_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
+# allocating the I = findall(...)
+_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
+_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
 
 function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
     j = _sparse_findnextnz(v, i)

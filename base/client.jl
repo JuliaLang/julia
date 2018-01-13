@@ -254,7 +254,7 @@ try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, pa
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
-        idxs = find(x -> x == "--", ARGS)
+        idxs = findall(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
     quiet                 = (opts.quiet != 0)
