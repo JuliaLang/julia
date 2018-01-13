@@ -584,6 +584,13 @@ let
     @test @inferred(s[2,2,1]) === 4
 end
 
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
+end
+
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
