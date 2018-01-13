@@ -59,6 +59,8 @@ similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 
+String(v::SubArray{UInt8,1}) = String(Vector{UInt8}(v))
+
 """
     parent(A)
 
