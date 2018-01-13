@@ -640,3 +640,9 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# PR #24997: test that `varinfo` doesn't fail when encountering `missing`
+module A
+    export missing
+    varinfo(A)
+end

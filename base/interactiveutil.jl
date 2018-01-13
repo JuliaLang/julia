@@ -742,7 +742,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
-                     (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
+                     (any(x -> x === value, (Base, Main, Core)) ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
              for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]
