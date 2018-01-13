@@ -694,15 +694,18 @@ functions may be unexpectedly slow. Concrete types should also typically provide
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
-the length of the tuple returned by [`size`](@ref).
+the length of the tuple returned by [`size`](@ref). For more details on defining custom
+`AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
 laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout. Subtypes should provide a method [`stride(A,k)`](@ref)
-that returns the "stride" of dimension `k`: increasing the index of dimension `k` by `1` should
+functions expecting this memory layout. Subtypes should provide a [`strides(A)`](@ref) method
+that returns a tuple of "strides" for each dimension; a provided [`stride(A,k)`](@ref) method accesses
+the `k`th element within this tuple. Increasing the index of dimension `k` by `1` should
 increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
 method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
-in the same way to these strides.
+in the same way to these strides. More concrete examples can be found within the [interface guide
+for strided arrays](@ref man-interface-strided-arrays).
 
 The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
 order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
