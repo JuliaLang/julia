@@ -746,7 +746,7 @@ end
 
 emphasize(io, str::AbstractString) = get(io, :color, false) ?
     print_with_color(Base.error_color(), io, str; bold = true) :
-    print(io, Unicode.uppercase(str))
+    print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")

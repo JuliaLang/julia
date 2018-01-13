@@ -174,7 +174,7 @@ The steps required to add a new docstring are listed below:
 Examples written within docstrings can be used as testcases known as "doctests" by annotating code blocks with `jldoctest`.
 
     ```jldoctest
-    julia> Unicode.uppercase("Docstring test")
+    julia> uppercase("Docstring test")
     "DOCSTRING TEST"
     ```
 

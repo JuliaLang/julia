@@ -92,7 +92,7 @@ function available()
     for (pkg, vers) in all_avail
         any(x->Types.satisfies("julia", VERSION, x[2].requires), vers) && push!(avail, pkg)
     end
-    sort!(avail, by=Base.Unicode.lowercase)
+    sort!(avail, by=lowercase)
 end
 
 function available(pkg::AbstractString)

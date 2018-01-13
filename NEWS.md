@@ -874,11 +874,11 @@ Deprecated or removed
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
-  * Unicode-related string functions have been moved to the new `Unicode` standard
-    library module ([#25021]). This applies to `normalize_string`, `graphemes`,
-    `is_assigned_char`, `textwidth`, `islower`, `isupper`, `isalpha`,
-    `isdigit`, `isxdigit`, `isnumber`, `isalnum`, `iscntrl`, `ispunct`, `isspace`,
-    `isprint`, `isgraph`, `lowercase`, `uppercase`, `titlecase`, `lcfirst` and `ucfirst`.
+  * `isnumber` has been renamed to `isnumeric` ([#25021]).
+
+  * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
+    `normalize`, and moved to the new `Unicode` standard library module.
+    `graphemes` has also been moved to that module ([#25021]).
 
   * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
     library module ([#24714]).
@@ -886,10 +886,6 @@ Deprecated or removed
   * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
 
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
-
-  * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`
-    in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
-    in the new `Unicode` standard library module ([#25021]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
     `ComplexF32` and `ComplexF64` respectively ([#24647]).
