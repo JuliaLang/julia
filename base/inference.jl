@@ -5895,7 +5895,7 @@ function split_undef_flag_pass!(sv::OptimizationState)
     end
     for i in 1:norigslots
         if flagslots[i] != 0
-            sv.src.slotflags[i] = (sv.src.slotflags[i] | Slot_StaticUndef) & ~UInt8(Slot_UsedUndef)
+            sv.src.slotflags[i] = (sv.src.slotflags[i] | Slot_StaticUndef) & !UInt8(Slot_UsedUndef)
         end
     end
 end

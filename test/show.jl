@@ -70,7 +70,7 @@ end
 @test_repr "2e"
 @test_repr "!x"
 @test_repr "f(1, 2, 3)"
-@test_repr "x = ~y"
+@test_repr "x = !y"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
 
@@ -211,17 +211,17 @@ end"""
     # line meta
     if delta_kd == 0
         # line meta
-        msk_d0 = ~(u << ld0) | (u << ld1 << 1)
+        msk_d0 = !(u << ld0) | (u << ld1 << 1)
     else
         # line meta
-        msk_d0 = ~(u << ld0)
+        msk_d0 = !(u << ld0)
         # line meta
         msk_d1 = (u << ld1 << 1)
     end
     # line meta
     if delta_ks == 0
         # line meta
-        msk_s0 = (u << ls0) & ~(u << ls1 << 1)
+        msk_s0 = (u << ls0) & !(u << ls1 << 1)
     else
         # line meta
         msk_s0 = (u << ls0)
@@ -229,7 +229,7 @@ end"""
     # line meta
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
     # line meta
-    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & !msk_d0)
     # line meta
     if delta_kd == 0
         # line meta
@@ -257,7 +257,7 @@ end"""
     # line meta
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
     # line meta
-    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & !msk_d1)
     # line meta
     return
 end"""
@@ -815,7 +815,7 @@ test_repr(":a.b")
 test_repr("a.:+")
 test_repr("(+).a")
 test_repr("(+).:-")
-test_repr("(!).:~")
+test_repr("(!).:-")
 test_repr("a.:(begin
         #= none:3 =#
     end)")

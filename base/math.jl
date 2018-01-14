@@ -542,7 +542,7 @@ julia> ldexp(5., 2)
 """
 function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = xu & ~sign_mask(T)
+    xs = xu & !sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
@@ -568,7 +568,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
+        xu = (xu & !exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -578,7 +578,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
+        xu = (xu & !exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
@@ -592,7 +592,7 @@ Get the exponent of a normalized floating-point number.
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
     @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
-    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    xs = reinterpret(Unsigned, x) & !sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
@@ -621,15 +621,15 @@ julia> significand(15.2)*8
 """
 function significand(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = xu & ~sign_mask(T)
+    xs = xu & !sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
-    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+    if xs <= (!exponent_mask(T) & !sign_mask(T)) # x is subnormal
         xs == 0 && return x # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
         xu = xs | (xu & sign_mask(T))
     end
-    xu = (xu & ~exponent_mask(T)) | exponent_one(T)
+    xu = (xu & !exponent_mask(T)) | exponent_one(T)
     return reinterpret(T, xu)
 end
 
@@ -641,7 +641,7 @@ and `val` is equal to ``x \\times 2^{exp}``.
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
-    xs = xu & ~sign_mask(T)
+    xs = xu & !sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
@@ -652,7 +652,7 @@ function frexp(x::T) where T<:IEEEFloat
         k = 1 - m
     end
     k -= (exponent_bias(T) - 1)
-    xu = (xu & ~exponent_mask(T)) | exponent_half(T)
+    xu = (xu & !exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
 end
 

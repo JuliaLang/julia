@@ -247,7 +247,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
     [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
     `UInt64` and 17 to 32 hex digits type `UInt128`. This needs to be taken into account when defining
-    hexadecimal masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
+    hexadecimal masks, for example `!0xf == 0xf0` is very different from `!0x000f == 0xfff0`. 64 bit `Float64`
     and 32 bit [`Float32`](@ref) bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
     literals are rounded (and not promoted to the `BigFloat` type) if they can not be exactly represented.
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary

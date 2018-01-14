@@ -20,7 +20,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `⊻`         | bitwise xor operator                                                                        |
 | `*`         | multiply, or matrix multiply                                                                |
 | `()`        | the empty tuple                                                                             |
-| `~`         | bitwise not operator                                                                        |
+| `!`         | bitwise not operator                                                                        |
 | `\`         | backslash operator                                                                          |
 | `'`         | complex transpose operator Aᴴ                                                               |
 | `a[]`       | array indexing (calling [`getindex`](@ref) or [`setindex!`](@ref))                          |

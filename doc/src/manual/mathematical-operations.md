@@ -55,7 +55,7 @@ are supported on all primitive integer types:
 
 | Expression | Name                                                                     |
 |:---------- |:------------------------------------------------------------------------ |
-| `~x`       | bitwise not                                                              |
+| `!x`       | bitwise not                                                              |
 | `x & y`    | bitwise and                                                              |
 | `x \| y`   | bitwise or                                                               |
 | `x ⊻ y`    | bitwise xor (exclusive or)                                               |
@@ -66,7 +66,7 @@ are supported on all primitive integer types:
 Here are some examples with bitwise operators:
 
 ```jldoctest
-julia> ~123
+julia> !123
 -124
 
 julia> 123 & 234
@@ -81,10 +81,10 @@ julia> 123 ⊻ 234
 julia> xor(123, 234)
 145
 
-julia> ~UInt32(123)
+julia> !UInt32(123)
 0xffffff84
 
-julia> ~UInt8(123)
+julia> !UInt8(123)
 0x84
 ```
 

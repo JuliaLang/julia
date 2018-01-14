@@ -81,7 +81,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
 ## aux functions ##
 
-const _msk64 = ~UInt64(0)
+const _msk64 = !UInt64(0)
 @inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
 @inline _msk_end(l::Integer) = _msk64 >>> _mod64(-l)
@@ -94,7 +94,7 @@ function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt6
     @inbounds begin
         chunk = ((src[k] & msk_s0) >>> ls0)
         if ks1 > k && ls0 > 0
-            chunk_n = (src[k + 1] & ~msk_s0)
+            chunk_n = (src[k + 1] & !msk_s0)
             chunk |= (chunk_n << (64 - ls0))
         end
     end
@@ -117,20 +117,20 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = ~(u << ld0) | (u << (ld1+1))
+        msk_d0 = !(u << ld0) | (u << (ld1+1))
     else
-        msk_d0 = ~(u << ld0)
+        msk_d0 = !(u << ld0)
         msk_d1 = (u << (ld1+1))
     end
     if delta_ks == 0
-        msk_s0 = (u << ls0) & ~(u << (ls1+1))
+        msk_s0 = (u << ls0) & !(u << (ls1+1))
     else
         msk_s0 = (u << ls0)
     end
 
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
 
-    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & !msk_d0)
 
     delta_kd == 0 && return
 
@@ -152,7 +152,7 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64},
 
     chunk_s = (chunk_s0 >>> (64 - ld0)) | (chunk_s1 << ld0)
 
-    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & !msk_d1)
 
     return
 end
@@ -177,24 +177,24 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Integer, pos_s::Intege
         delta_ks = ks1 - ks0
 
         if delta_kd == 0
-            msk_d0 = ~(u << ld0) | (u << (ld1+1))
+            msk_d0 = !(u << ld0) | (u << (ld1+1))
         else
-            msk_d0 = ~(u << ld0)
+            msk_d0 = !(u << ld0)
             msk_d1 = (u << (ld1+1))
         end
         if delta_ks == 0
-            msk_s0 = (u << ls0) & ~(u << (ls1+1))
+            msk_s0 = (u << ls0) & !(u << (ls1+1))
         else
             msk_s0 = (u << ls0)
         end
 
-        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << s)
-        chunks[kd0] = (chunks[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & !(u << s)
+        chunks[kd0] = (chunks[kd0] & msk_d0) | ((chunk_s0 << ld0) & !msk_d0)
 
         if delta_kd != 0
             chunk_s = (chunk_s0 >>> (64 - ld0))
 
-            chunks[kd1] = (chunks[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+            chunks[kd1] = (chunks[kd1] & msk_d1) | (chunk_s & !msk_d1)
         end
 
         left -= s
@@ -212,10 +212,10 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
 
     u = _msk64
     if k1 == k0
-        msk0 = (u << l0) & ~(u << (l1+1))
+        msk0 = (u << l0) & !(u << (l1+1))
     else
         msk0 = (u << l0)
-        msk1 = ~(u << (l1+1))
+        msk1 = !(u << (l1+1))
     end
     @inbounds if x
         Bc[k0] |= msk0
@@ -224,11 +224,11 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
         end
         k1 > k0 && (Bc[k1] |= msk1)
     else
-        Bc[k0] &= ~msk0
+        Bc[k0] &= !msk0
         for k = k0+1:k1-1
             Bc[k] = 0
         end
-        k1 > k0 && (Bc[k1] &= ~msk1)
+        k1 > k0 && (Bc[k1] &= !msk1)
     end
 end
 
@@ -253,10 +253,10 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
+        msk_d0 = msk_d1 = !(u << ld0) | (u << (ld1+1))
         lt0 = ld1
     else
-        msk_d0 = ~(u << ld0)
+        msk_d0 = !(u << ld0)
         msk_d1 = (u << (ld1+1))
         lt0 = 63
     end
@@ -269,7 +269,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
             c |= (UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
+        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & !msk_d0)
         bind += 1
     end
 
@@ -306,7 +306,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
             c |= (UInt64(C[ind]) << j)
             ind += 1
         end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
+        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & !msk_d1)
     end
 end
 
@@ -408,7 +408,7 @@ function copyto!(dest::BitArray, src::BitArray)
             destc[nc] = srcc[nc]
         else
             msk_s = _msk_end(src)
-            msk_d = ~msk_s
+            msk_d = !msk_s
             destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
         end
     end
@@ -634,7 +634,7 @@ end
     u = UInt64(1) << i2
     @inbounds begin
         c = Bc[i1]
-        Bc[i1] = ifelse(x, c | u, c & ~u)
+        Bc[i1] = ifelse(x, c | u, c & !u)
     end
 end
 
@@ -676,7 +676,7 @@ function _unsafe_setindex!(B::BitArray, x, I::BitArray)
         end
     else
         for i = 1:length(Bc)
-            Bc[i] &= ~Ic[i]
+            Bc[i] &= !Ic[i]
         end
     end
     return B
@@ -705,7 +705,7 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
             if Imsk & u != 0
                 lx < c && throw_setindex_mismatch(X, c)
                 @inbounds x = convert(Bool, X[c])
-                C = ifelse(x, C | u, C & ~u)
+                C = ifelse(x, C | u, C & !u)
                 c += 1
             end
             u <<= 1
@@ -879,7 +879,7 @@ function insert!(B::BitVector, i::Integer, item)
     end
 
     msk_aft = (_msk64 << j)
-    msk_bef = ~msk_aft
+    msk_bef = !msk_aft
     Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
     B[i] = item
     B
@@ -889,7 +889,7 @@ function _deleteat!(B::BitVector, i::Integer)
     k, j = get_chunks_id(i)
 
     msk_bef = _msk64 >>> (63 - j)
-    msk_aft = ~msk_bef
+    msk_aft = !msk_bef
     msk_bef >>>= 1
 
     Bc = B.chunks
@@ -1088,13 +1088,13 @@ function (-)(B::BitArray)
 end
 broadcast(::typeof(sign), B::BitArray) = copy(B)
 
-function broadcast(::typeof(~), B::BitArray)
+function broadcast(::typeof(!), B::BitArray)
     C = similar(B)
     Bc = B.chunks
     if !isempty(Bc)
         Cc = C.chunks
         for i = 1:length(Bc)
-            Cc[i] = ~Bc[i]
+            Cc[i] = !Bc[i]
         end
         Cc[end] &= _msk_end(B)
     end
@@ -1104,7 +1104,7 @@ end
 """
     flipbits!(B::BitArray{N}) -> BitArray{N}
 
-Performs a bitwise not operation on `B`. See [`~`](@ref).
+Performs a bitwise not operation on `B`. See [`!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1123,7 +1123,7 @@ function flipbits!(B::BitArray)
     Bc = B.chunks
     @inbounds if !isempty(Bc)
         for i = 1:length(Bc)
-            Bc[i] = ~Bc[i]
+            Bc[i] = !Bc[i]
         end
         Bc[end] &= _msk_end(B)
     end
@@ -1162,7 +1162,7 @@ broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
 broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
 broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
 broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
-broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .~B : copy(B)
+broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .!B : copy(B)
 broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
 for f in (:&, :|, :xor)
     @eval begin
@@ -1471,7 +1471,7 @@ end
 
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
-# aux function: same as findnext(~B, start), but performed without temporaries
+# aux function: same as findnext(!B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
@@ -1482,7 +1482,7 @@ function findnextnot(B::BitArray, start::Integer)
 
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
-    mask = ~(_msk64 << within_chunk_start)
+    mask = !(_msk64 << within_chunk_start)
 
     @inbounds if chunk_start < l
         if Bc[chunk_start] | mask != _msk64
@@ -1558,7 +1558,7 @@ function findprevnot(B::BitArray, start::Integer)
     Bc = B.chunks
 
     chunk_start = _div64(start-1)+1
-    mask = ~_msk_end(start)
+    mask = !_msk_end(start)
 
     @inbounds begin
         if Bc[chunk_start] | mask != _msk64
@@ -1690,12 +1690,13 @@ maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-em
 # arrays since there can be a 64x speedup by working at the level of Int64
 # instead of looping bit-by-bit.
 
-map(::Union{typeof(~), typeof(!)}, A::BitArray) = bit_map!(~, similar(A), A)
+map(::typeof(!), A::BitArray) = bit_map!(!, similar(A), A)
 map(::typeof(zero), A::BitArray) = fill!(similar(A), false)
 map(::typeof(one), A::BitArray) = fill!(similar(A), true)
 map(::typeof(identity), A::BitArray) = copy(A)
 
-map!(::Union{typeof(~), typeof(!)}, dest::BitArray, A::BitArray) = bit_map!(~, dest, A)
+map!(::typeof(!), dest::BitArray, A::BitArray) = bit_map!(!, dest, A)
+
 map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
 map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
 map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
@@ -1703,11 +1704,11 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
                (:(Union{typeof(xor), typeof(!=)}),           :xor),
-               (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | ~q)),
-               (:(typeof(<=)),                               :((p, q) -> ~p | q)),
-               (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),
-               (:(typeof(<)),                                :((p, q) -> ~p & q)),
-               (:(typeof(>)),                                :((p, q) -> p & ~q)))
+               (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | !q)),
+               (:(typeof(<=)),                               :((p, q) -> !p | q)),
+               (:(typeof(==)),                               :((p, q) -> !xor(p, q))),
+               (:(typeof(<)),                                :((p, q) -> !p & q)),
+               (:(typeof(>)),                                :((p, q) -> p & !q)))
     @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
     @eval map!(::$T, dest::BitArray, A::BitArray, B::BitArray) = bit_map!($f, dest, A, B)
 end

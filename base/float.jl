@@ -82,7 +82,7 @@ function Float64(x::UInt128)
     else
         y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+        y &= !UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, d + y)
@@ -98,7 +98,7 @@ function Float64(x::Int128)
     else
         y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+        y &= !UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, s | d + y)
@@ -112,7 +112,7 @@ function Float32(x::UInt128)
     else
         y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+        y &= !UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, d + y)
@@ -128,7 +128,7 @@ function Float32(x::Int128)
     else
         y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+        y &= !UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
     end
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, s | d + y)
@@ -177,7 +177,7 @@ function Float32(val::Float16)
             end
             sign = sign << 31
             exp = (-14 - n_bit + 127) << 23
-            sig = ((sig & (~bit)) << n_bit) << (23 - 10)
+            sig = ((sig & (!bit)) << n_bit) << (23 - 10)
             ret = sign | exp | sig
         end
     elseif exp == 0x1f
@@ -856,7 +856,7 @@ uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
 
-Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
+Base.iszero(x::Float16) = reinterpret(UInt16, x) & !sign_mask(Float16) == 0x0000
 
 ## Array operations on floating point numbers ##
 

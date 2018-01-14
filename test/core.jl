@@ -569,7 +569,7 @@ let
 end
 
 # tricky space sensitive syntax cases
-@test [-1 ~1] == [(-1) (~1)]
+@test [-1 !1] == [(-1) (!1)]
 
 # undefinedness
 mutable struct UndefField
