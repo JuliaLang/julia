@@ -820,3 +820,8 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     push!(v, UInt8('x'))
     @test s == "abc"
 end
+
+# PR #25535
+let v = [0x40,0x41,0x42]
+    @test String(view(v, 2:3)) == "AB"
+end
