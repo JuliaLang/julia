@@ -1,4 +1,5 @@
 using SHA
+using Compat
 
 # Define some data we will run our tests on
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
@@ -101,7 +102,7 @@ sha3_512 => [
 ]
 )
 
-function describe_hash{S<:SHA.SHA_CTX}(T::Type{S})
+function describe_hash(T::Type{S}) where {S <: SHA.SHA_CTX}
     if T <: SHA.SHA1_CTX return "SHA1" end
     if T <: SHA.SHA2_CTX return "SHA2-$(SHA.digestlen(T)*8)" end
     if T <: SHA.SHA3_CTX return "SHA3-$(SHA.digestlen(T)*8)" end
@@ -112,6 +113,8 @@ println("Loaded hash types: $(join(sort([describe_hash(t[2]) for t in sha_types]
 # First, test processing the data in one go
 nerrors = 0
 for idx in 1:length(data)
+    global nerrors
+
     desc = data_desc[idx]
     print("Testing on $desc$(join(["." for z in 1:(34-length(desc))]))")
     nerrors_old = nerrors
@@ -149,6 +152,8 @@ end
 print("Testing on one million a's (chunked properly)")
 nerrors_old = nerrors
 for sha_idx in 1:length(sha_funcs)
+    global nerrors
+
     ctx = sha_types[sha_funcs[sha_idx]]()
     SHA.update!(ctx, so_many_as_array[1:2*SHA.blocklen(typeof(ctx))])
     SHA.update!(ctx, so_many_as_array[2*SHA.blocklen(typeof(ctx))+1:end])
@@ -175,6 +180,7 @@ println("Done! [$(nerrors - nerrors_old) errors]")
 print("Testing on one million a's (chunked clumsily)")
 nerrors_old = nerrors
 for sha_idx in 1:length(sha_funcs)
+    global nerrors
     ctx = sha_types[sha_funcs[sha_idx]]()
 
     # Get indices awkwardly placed for the blocklength of this hash type
@@ -218,7 +224,8 @@ for (key, msg, fun, hash) in (
     (b"key", b"The quick brown fox jumps over the lazy dog", hmac_sha1, "de7c9b85b8b78aa6bc8a7a36f70a90701c9db4d9"),
     (b"key", b"The quick brown fox jumps over the lazy dog", hmac_sha256, "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"),
 )
-    digest = bytes2hex(fun(key, msg))
+    global nerrors
+    digest = bytes2hex(fun(Vector(key), Vector(msg)))
     if digest != hash
         print("\n")
         warn(
@@ -242,6 +249,7 @@ else
 end
 
 for idx in 1:length(ctxs)
+    global nerrors
     # Part #1: copy
     print("Testing copy function @ $(ctxs[idx]) ...")
     try
@@ -265,6 +273,7 @@ end
 
 # test error if eltype of input is not UInt8
 for f in sha_funcs
+    global nerrors
     try
         f(UInt32[0x23467, 0x324775])
         warn("Non-UInt8 Arrays should fail")

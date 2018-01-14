@@ -4,7 +4,7 @@ function transform!(context::T) where {T<:SHA3_CTX}
     for idx in 1:div(blocklen(T),8)
         context.state[idx] = context.state[idx] ⊻ unsafe_load(pbuf, idx)
     end
-    bc = Vector{UInt64}(5)
+    bc = Vector{UInt64}(uninitialized, 5)
 
     # We always assume 24 rounds
     for round in 0:23
