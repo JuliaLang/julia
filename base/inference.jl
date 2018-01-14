@@ -171,11 +171,20 @@ struct Const
     Const(@nospecialize(v), a::Bool) = new(v, a)
 end
 
-# The type of a value might be Bool,
-# but where the value of the boolean can be used in back-propagation to
-# limit the type of some other variable
-# The Conditional type tracks the set of branches on variable type info
-# that was used to create the boolean condition
+# The type of this value might be Bool.
+# However, to enable a limited amount of back-propagagation,
+# we also keep some information about how this Bool value was created.
+# In particular, if you branch on this value, then may assume that in
+# the true branch, the type of `var` will be limited by `vtype` and in
+# the false branch, it will be limited by `elsetype`. Example:
+# ```
+# cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
+# if cond
+#    # May assume x is `Int` now
+# else
+#    # May assume x is `Float` now
+# end
+# ```
 mutable struct Conditional
     var::Union{Slot,SSAValue}
     vtype
