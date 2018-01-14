@@ -91,6 +91,8 @@ const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 wrapperop(A::Adjoint) = adjoint
 wrapperop(A::Transpose) = transpose
 
+
+
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
@@ -99,6 +101,18 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
+
+adjoint(::MemoryLayout{T}) where {T} = UnknownLayout{T}()
+adjoint(::StridedLayout{T}) where {T<:Real} = TransposeStridedLayout{T}()
+adjoint(::TransposeStridedLayout{T}) where {T<:Real} = StridedLayout{T}()
+adjoint(::StridedLayout{T}) where {T<:Complex} = CTransposeStridedLayout{T}()
+adjoint(::CTransposeStridedLayout{T}) where {T<:Complex} = StridedLayout{T}()
+transpose(::MemoryLayout{T}) where {T} = UnknownLayout{T}()
+transpose(::StridedLayout{T}) where {T} = TransposeStridedLayout{T}()
+transpose(::TransposeStridedLayout{T}) where {T} = StridedLayout{T}()
+MemoryLayout(::Type{A}) where A<:Adjoint{T,S} where {T,S} = adjoint(MemoryLayout(S))
+MemoryLayout(::Type{A}) where A<:Transpose{T,S} where {T,S} = transpose(MemoryLayout(S))
+
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i])
 @propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i); v)

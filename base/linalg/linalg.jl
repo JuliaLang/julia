@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat
+    @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -157,6 +157,45 @@ if USE_BLAS64
 else
     const BlasInt = Int32
 end
+
+## Traits for memory layouts ##
+
+abstract type MemoryLayout{T} end
+struct UnknownLayout{T} <: MemoryLayout{T} end
+struct StridedLayout{T} <: MemoryLayout{T} end
+struct TransposeStridedLayout{T} <: MemoryLayout{T} end
+struct CTransposeStridedLayout{T} <: MemoryLayout{T} end
+
+"""
+    MemoryLayout(A)
+    MemoryLayout(typeof(A))
+
+`MemoryLayout` specifies the layout in memory for an array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+memory layout to indicate that an array is strided in memory. If you decide to
+implement memory layout, then you must set this trait for your array
+type:
+
+    Base.MemoryLayout(::Type{M}) where M <: MyArray{T,N} where {T,N} = Base.StridedLayout{T,N}()
+
+The default is `Base.UnknownLayout{T,N}()` to indicate that the layout
+in memory is unknown.
+
+Julia's internal linear algebra machinery will automatically (and invisibly)
+dispatch to BLAS and LAPACK routines if the memory layout is BLAS and
+the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
+In this case, one must implement the strided array interface, which requires
+overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`
+"""
+MemoryLayout(A::AbstractArray) = MemoryLayout(typeof(A))
+MemoryLayout(::Type{A}) where A <: AbstractArray{T,N} where {T,N} = UnknownLayout{T}()
+MemoryLayout(::Type{A}) where A <: Array{T,N} where {T,N} = StridedLayout{T}()
+MemoryLayout(::Type{A}) where A <: SubArray{T,N,P,I} where {T,N,P,I} =
+    submemorylayout(MemoryLayout(P), I)
+
+submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
+LinAlg.submemorylayout(::StridedLayout{T}, ::Type{NTuple{N,I}}) where {T,N,I<:Union{RangeIndex, AbstractCartesianIndex}} =
+    StridedLayout{T}()
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
