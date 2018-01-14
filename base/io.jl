@@ -191,7 +191,7 @@ to provide more efficient implementations:
 `unsafe_write(s::T, p::Ptr{UInt8}, n::UInt)`
 """
 function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
-    local written::Int = 0
+    written::Int = 0
     for i = 1:n
         written += write(s, unsafe_load(p, i))
     end
@@ -485,8 +485,7 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
 function write(io::IO, x1, xs...)
-    local written::Int = 0
-    written += write(io, x1)
+    written::Int = write(io, x1)
     for x in xs
         written += write(io, x)
     end

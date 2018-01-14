@@ -375,7 +375,6 @@ function _start()
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1
 
-        local term
         global active_repl
         global active_repl_backend
         if repl
