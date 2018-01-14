@@ -690,13 +690,14 @@ end
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
 rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S} = promote_op(op, T, S)
-rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
-rcum_promote_type(op, ::Type{T}) where {T} = T
+rcum_promote_type(op, ::Type{T}) where {T} = rcum_promote_type(op, T,T)
 
 # handle sums of Vector{Bool} and similar.   it would be nice to handle
 # any AbstractArray here, but it's not clear how that would be possible
 rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
 
+rcum_convert(::Type{T}, x) where {T} = convert(T,x)
+rcum_convert(::Type{T}, c::Char) where {T <: AbstractString} = T(string(c))
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
@@ -977,7 +978,7 @@ function accumulate!(op, B, A, dim::Integer)
         # register usage and will be slightly faster
         ind1 = inds_t[1]
         @inbounds for I in CartesianIndices(tail(inds_t))
-            tmp = convert(eltype(B), A[first(ind1), I])
+            tmp = rcum_convert(eltype(B), A[first(ind1), I])
             B[first(ind1), I] = tmp
             for i_1 = first(ind1)+1:last(ind1)
                 tmp = op(tmp, A[i_1, I])
@@ -1027,7 +1028,7 @@ end
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
     @inbounds for J in R2, I in R1
-        B[I, ii, J] = A[I, ii, J]
+        B[I, ii, J] = rcum_convert(eltype(B), A[I, ii, J])
     end
     # Accumulate
     @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
@@ -1075,7 +1076,7 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
     i1 = inds[1]
-    cur_val = v1
+    cur_val = rcum_convert(eltype(B), v1)
     B[i1] = cur_val
     @inbounds for i in inds[2:end]
         cur_val = op(cur_val, A[i])

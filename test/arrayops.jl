@@ -2155,6 +2155,10 @@ end
 
     #25506
     @test accumulate((acc, x) -> acc+x[1], 0, [(1,2), (3,4), (5,6)]) == [1, 4, 9]
+    @test accumulate(*, ['a', 'b']) == ["a", "ab"]
+    @inferred accumulate(*, String[])
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], 1) == ["a" "b"; "ac" "bd"]
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], 2) == ["a" "ab"; "c" "cd"]
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
