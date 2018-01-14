@@ -781,7 +781,7 @@ end
 
 function cumsum!(out, v::AbstractVector, dim::Integer)
     # we dispatch on the possibility of numerical stability issues
-    _cumsum!(out, v, dim, TypeArithmetic(eltype(out)))
+    _cumsum!(out, v, dim, ArithmeticStyle(eltype(out)))
 end
 
 function _cumsum!(out, v, dim, ::ArithmeticRounds)
@@ -790,7 +790,7 @@ end
 function _cumsum!(out, v, dim, ::ArithmeticUnknown)
     _cumsum!(out, v, dim, ArithmeticRounds())
 end
-function _cumsum!(out, v, dim, ::TypeArithmetic)
+function _cumsum!(out, v, dim, ::ArithmeticStyle)
     dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
 end
 

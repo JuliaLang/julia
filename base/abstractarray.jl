@@ -1959,7 +1959,7 @@ end
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
+    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
         return hash_range(a, h)
     end
 

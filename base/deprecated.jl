@@ -2721,6 +2721,13 @@ end
 @deprecate_binding iteratorsize IteratorSize
 @deprecate_binding iteratoreltype IteratorEltype
 
+# issue #25440
+@deprecate_binding TypeOrder           OrderStyle
+@deprecate_binding TypeArithmetic      ArithmeticStyle
+@deprecate_binding TypeRangeStep       RangeStepStyle
+@deprecate_binding HasOrder            Ordered
+@deprecate_binding ArithmeticOverflows ArithmeticWraps
+
 @deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) findnext(re, str, idx)
 @deprecate search(s::AbstractString, r::Regex, idx::Integer) findnext(r, s, idx)
 @deprecate search(s::AbstractString, r::Regex) findfirst(r, s)
