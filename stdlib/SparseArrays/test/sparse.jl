@@ -2183,7 +2183,7 @@ end
          1 0 1 1 0]
     y_sp = sparse(y)
 
-    for i=1:length(y)
+    for i in keys(y)
         @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
         @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
     end
@@ -2191,7 +2191,7 @@ end
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
     z = collect(z_sp)
 
-    for i=1:length(z)
+    for i in keys(z)
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end

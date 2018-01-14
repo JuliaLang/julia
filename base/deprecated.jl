@@ -1184,6 +1184,9 @@ end
 @deprecate findfirst(A, v)            findfirst(equalto(v), A)
 @deprecate findprev(A, v, i::Integer) findprev(equalto(v), A, i)
 @deprecate findlast(A, v)             findlast(equalto(v), A)
+# to fix ambiguities introduced by deprecations
+findnext(pred::Function, A, i::Integer) = invoke(findnext, Tuple{Function, Any, Any}, pred, A, i)
+findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, Any}, pred, A, i)
 # also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
 # and sparse/sparsevector.jl.
 
