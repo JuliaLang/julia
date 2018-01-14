@@ -938,8 +938,8 @@ Deprecated or removed
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
-     have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
-     array interface should define their own `strides` method ([#25321]).
+    have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
+    array interface should define their own `strides` method ([#25321]).
 
 
 Command-line option changes
@@ -1100,6 +1100,7 @@ Command-line option changes
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
+[#23393]: https://github.com/JuliaLang/julia/issues/23393
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23504]: https://github.com/JuliaLang/julia/issues/23504
@@ -1189,5 +1190,10 @@ Command-line option changes
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
+[#25249]: https://github.com/JuliaLang/julia/issues/25249
+[#25321]: https://github.com/JuliaLang/julia/issues/25321
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
+[#25368]: https://github.com/JuliaLang/julia/issues/25368
+[#25391]: https://github.com/JuliaLang/julia/issues/25391
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25457]: https://github.com/JuliaLang/julia/issues/25457
