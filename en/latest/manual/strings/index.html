@@ -185,15 +185,13 @@ true</code></pre><p>You can search for the index of a particular character using
 julia&gt; findfirst(equalto(&#39;p&#39;), &quot;xylophone&quot;)
 5
 
-julia&gt; findfirst(equalto(&#39;z&#39;), &quot;xylophone&quot;)
-0</code></pre><p>You can start the search for a character at a given offset by using <a href="../../base/strings/#Base.findnext-Tuple{AbstractString,AbstractString,Integer}"><code>findnext</code></a> with a third argument:</p><pre><code class="language-julia-repl">julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 1)
+julia&gt; findfirst(equalto(&#39;z&#39;), &quot;xylophone&quot;)</code></pre><p>You can start the search for a character at a given offset by using <a href="../../base/strings/#Base.findnext-Tuple{AbstractString,AbstractString,Integer}"><code>findnext</code></a> with a third argument:</p><pre><code class="language-julia-repl">julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 1)
 4
 
 julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 5)
 7
 
-julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 8)
-0</code></pre><p>You can use the <a href="../../base/strings/#Base.contains"><code>contains</code></a> function to check if a substring is contained in a string:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;Hello, world.&quot;, &quot;world&quot;)
+julia&gt; findnext(equalto(&#39;o&#39;), &quot;xylophone&quot;, 8)</code></pre><p>You can use the <a href="../../base/strings/#Base.contains"><code>contains</code></a> function to check if a substring is contained in a string:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;Hello, world.&quot;, &quot;world&quot;)
 true
 
 julia&gt; contains(&quot;Xylophon&quot;, &quot;o&quot;)
