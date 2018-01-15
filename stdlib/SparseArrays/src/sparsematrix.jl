@@ -1274,31 +1274,22 @@ function find(p::Function, S::SparseMatrixCSC)
     if p(zero(eltype(S)))
         return invoke(find, Tuple{Function, Any}, p, S)
     end
-    sz = size(S)
-    I, J = _findn(p, S)
-    return CartesianIndex.(I, J)
-end
-find(p::Base.OccursIn, x::SparseMatrixCSC) =
-    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
-findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
-
-function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
-    I = Vector{Ti}(uninitialized, numnz)
-    J = Vector{Ti}(uninitialized, numnz)
+    inds = Vector{CartesianIndex{2}}(uninitialized, numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if p(S.nzval[k])
-            I[count] = S.rowval[k]
-            J[count] = col
+            inds[count] = CartesianIndex(S.rowval[k], col)
             count += 1
         end
     end
 
-    return (I, J)
+    return inds
 end
+find(p::Base.OccursIn, x::SparseMatrixCSC) =
+    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)

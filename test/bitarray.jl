@@ -1106,6 +1106,8 @@ timesofar("datamove")
     end
 
     b1 = bitrand(n1, n2)
+    @check_bit_operation find(b1) Vector{CartesianIndex{2}}
+    @check_bit_operation find(!iszero, b1) Vector{CartesianIndex{2}}
     @check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
 end
 

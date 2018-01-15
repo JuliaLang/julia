@@ -1157,12 +1157,6 @@ Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
     end
 end
 
-@testset "findn" begin
-    b = findn( sparse(1.0I, 4, 4) )
-    @test (length(b[1]) == 4)
-    @test (length(b[2]) == 4)
-end
-
 @testset "rotations" begin
     a = sparse( [1,1,2,3], [1,3,4,1], [1,2,3,4] )
 

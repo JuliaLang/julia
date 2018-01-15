@@ -1601,20 +1601,20 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
+    ind = first(keys(B))
+    I = Vector{typeof(ind)}(uninitialized, nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
-    Bcount = 1
     Icount = 1
     for i = 1:length(Bc)-1
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
             if c & u != 0
-                I[Icount] = Bcount
+                I[Icount] = ind
                 Icount += 1
             end
-            Bcount += 1
+            ind = nextind(B, ind)
             u <<= 1
         end
     end
@@ -1622,18 +1622,19 @@ function find(B::BitArray)
     c = Bc[end]
     for j = 0:_mod64(l-1)
         if c & u != 0
-            I[Icount] = Bcount
+            I[Icount] = ind
             Icount += 1
         end
-        Bcount += 1
+        ind = nextind(B, ind)
         u <<= 1
     end
     return I
 end
 
-findn(B::BitVector) = find(B)
+# For performance
+find(::typeof(!iszero), B::BitArray) = find(B)
 
-function findn(B::BitMatrix)
+function findnz(B::BitMatrix)
     nnzB = count(B)
     I = Vector{Int}(uninitialized, nnzB)
     J = Vector{Int}(uninitialized, nnzB)
@@ -1645,11 +1646,6 @@ function findn(B::BitMatrix)
             cnt += 1
         end
     end
-    return I, J
-end
-
-function findnz(B::BitMatrix)
-    I, J = findn(B)
     return I, J, trues(length(I))
 end
 

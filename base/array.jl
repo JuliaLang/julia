@@ -1778,11 +1778,29 @@ _pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't imp
 """
     find(A)
 
-Return a vector of the linear indices of the `true` values in `A`.
+Return a vector `I` of the `true` indices or keys of `A`.
+If there are no such elements of `A`, return an empty array.
 To search for other kinds of values, pass a predicate as the first argument.
+
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
+julia> A = [true, false, false, true]
+4-element Array{Bool,1}:
+  true
+ false
+ false
+  true
+
+julia> find(A)
+2-element Array{Int64,1}:
+ 1
+ 4
+
 julia> A = [true false; false true]
 2×2 Array{Bool,2}:
   true  false
