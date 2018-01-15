@@ -910,18 +910,13 @@ Deprecated or removed
 
   * `unshift!` and `shift!` have been renamed to `pushfirst!` and `popfirst!` ([#23902])
 
-  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
-    Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
-    (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
-    and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
-
   * `ipermute!` has been deprecated in favor of `invpermute!` ([#25168]).
 
   * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
-  * `getindex(F::Factorizion, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
+  * `getindex(F::Factorization, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
     in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
     `F.Q` instead of `F[:Q]` ([#25184]).
 
