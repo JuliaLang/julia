@@ -415,7 +415,7 @@ function showerror(io::IO, ex::MethodError)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
-        @error "Error showing method candidates, aborted" exception=ex
+        @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
 end
 

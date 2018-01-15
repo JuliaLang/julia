@@ -602,7 +602,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                 @error \"""
                     ------------------------------------------------------------
                     # Build failed for \$pkg
-                    \""" exception=err
+                    \""" exception=err,catch_backtrace()
                 serialize(f, pkg)
                 serialize(f, err)
             end
@@ -679,7 +679,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
                 @error """
                     ------------------------------------------------------------
                     # Update hook failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 errs[pkg] = err
             end
         end
@@ -739,7 +739,7 @@ function test!(pkg::AbstractString,
                 @error """
                     ------------------------------------------------------------
                     # Testing failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 push!(errs,pkg)
             end
         end
