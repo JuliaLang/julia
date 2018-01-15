@@ -501,6 +501,14 @@ function __init__()
     init_threadcall()
 end
 
+macro check(x)
+    if JLOptions().julia_debug == 1
+        return :($(esc(x)))
+    else
+        return nothing
+    end
+end
+
 INCLUDE_STATE = 3 # include = include_relative
 
 end # baremodule Base

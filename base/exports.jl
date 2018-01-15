@@ -1168,6 +1168,7 @@ export
     @polly,
 
     @assert,
+    @check,
     @__dot__,
     @enum,
     @label,

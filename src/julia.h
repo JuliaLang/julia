@@ -1716,6 +1716,7 @@ typedef struct {
     int8_t malloc_log;
     int8_t opt_level;
     int8_t debug_level;
+    int8_t julia_debug;
     int8_t check_bounds;
     int8_t depwarn;
     int8_t warn_overwrite;

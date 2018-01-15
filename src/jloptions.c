@@ -50,6 +50,11 @@ jl_options_t jl_options = { 0,    // quiet
                             1,    // debug_level [release build]
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
+#ifdef JL_DEBUG_BUILD
+                            1, // julia debug mode [debug build]
+#else
+                            0, // julia debug mode [release build]
+#endif
                             JL_OPTIONS_DEPWARN_ON,    // deprecation warning
                             0,    // method overwrite warning
                             1,    // can_inline
@@ -118,6 +123,7 @@ static const char opts[]  =
 #endif
     " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+    " --debug={yes|no}          Enable the @check macro and always emit bounds checks\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -151,6 +157,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_code_coverage,
            opt_track_allocation,
            opt_check_bounds,
+           opt_julia_debug,
            opt_output_jit_bc,
            opt_output_unopt_bc,
            opt_output_bc,
@@ -200,6 +207,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
+        { "debug",           required_argument, 0, opt_julia_debug },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
         { "output-jit-bc",   required_argument, 0, opt_output_jit_bc },
@@ -488,6 +496,16 @@ restart_switch:
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
             else
                 jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)", optarg);
+            break;
+        case opt_julia_debug:
+            if (!strcmp(optarg,"yes")) {
+                jl_options.check_bounds = 1;
+                jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_ON;
+            }
+            else if (!strcmp(optarg,"no"))
+                jl_options.check_bounds = 0;
+            else
+                jl_errorf("julia: invalid argument to --debug={yes|no} (%s)", optarg);
             break;
         case opt_output_bc:
             jl_options.outputbc = optarg;
