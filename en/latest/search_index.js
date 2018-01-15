@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "Base64\nCRC32c\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nSparse Arrays\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nShared Arrays\nUnit Testing\nUnicode"
+    "text": "Base64\nCRC32c\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nSparse Arrays\nUnicode\nUnit Testing"
 },
 
 {
@@ -5317,7 +5317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
 },
 
 {
@@ -9117,7 +9117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -10273,102 +10273,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers/#Base.Random.srand",
-    "page": "Numbers",
-    "title": "Base.Random.srand",
-    "category": "Function",
-    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator: rng will give a reproducible sequence of numbers if and only if a seed is provided. Some RNGs don't accept a seed, like RandomDevice. After the call to srand, rng is equivalent to a newly created object initialized with the same seed.\n\nExamples\n\njulia> srand(1234);\n\njulia> x1 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> srand(1234);\n\njulia> x2 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\njulia> rng = MersenneTwister(1234); rand(rng, 2) == x1\ntrue\n\njulia> MersenneTwister(1) == srand(rng, 1)\ntrue\n\njulia> rand(srand(rng), Bool) # not reproducible\ntrue\n\njulia> rand(srand(rng), Bool)\nfalse\n\njulia> rand(MersenneTwister(), Bool) # not reproducible either\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.MersenneTwister",
-    "page": "Numbers",
-    "title": "Base.Random.MersenneTwister",
-    "category": "Type",
-    "text": "MersenneTwister(seed)\nMersenneTwister()\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers. The seed may be a non-negative integer or a vector of UInt32 integers. If no seed is provided, a randomly generated one is created (using entropy from the system). See the srand function for reseeding an already existing MersenneTwister object.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> x1 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> rng = MersenneTwister(1234);\n\njulia> x2 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> x1 == x2\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.RandomDevice",
-    "page": "Numbers",
-    "title": "Base.Random.RandomDevice",
-    "category": "Type",
-    "text": "RandomDevice()\n\nCreate a RandomDevice RNG object. Two such objects will always generate different streams of random numbers. The entropy is obtained from the operating system.\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.rand",
-    "page": "Numbers",
-    "title": "Base.Random.rand",
-    "category": "Function",
-    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan AbstractDict or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{AbstractDict,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and BitSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.rand!",
-    "page": "Numbers",
-    "title": "Base.Random.rand!",
-    "category": "Function",
-    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copyto!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n 0.5662374165061859\n 0.4600853424625171\n 0.7940257103317943\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.bitrand",
-    "page": "Numbers",
-    "title": "Base.Random.bitrand",
-    "category": "Function",
-    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> bitrand(rng, 10)\n10-element BitArray{1}:\n  true\n  true\n  true\n false\n  true\n false\n false\n  true\n false\n  true\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.randn",
-    "page": "Numbers",
-    "title": "Base.Random.randn",
-    "category": "Function",
-    "text": "randn([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a normally-distributed random number of type T with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default), and their Complex counterparts. When the type argument is complex, the values are drawn from the circularly symmetric complex normal distribution.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn(rng, ComplexF64)\n0.6133070881429037 - 0.6376291670853887im\n\njulia> randn(rng, ComplexF32, (2, 3))\n2×3 Array{Complex{Float32},2}:\n -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im\n  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.randn!",
-    "page": "Numbers",
-    "title": "Base.Random.randn!",
-    "category": "Function",
-    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn!(rng, zeros(5))\n5-element Array{Float64,1}:\n  0.8673472019512456\n -0.9017438158568171\n -0.4944787535042339\n -0.9029142938652416\n  0.8644013132535154\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.randexp",
-    "page": "Numbers",
-    "title": "Base.Random.randexp",
-    "category": "Function",
-    "text": "randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a random number of type T according to the exponential distribution with scale 1. Optionally generate an array of such random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp(rng, Float32)\n2.4835055f0\n\njulia> randexp(rng, 3, 3)\n3×3 Array{Float64,2}:\n 1.5167    1.30652   0.344435\n 0.604436  2.78029   0.418516\n 0.695867  0.693292  0.643644\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.randexp!",
-    "page": "Numbers",
-    "title": "Base.Random.randexp!",
-    "category": "Function",
-    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp!(rng, zeros(5))\n5-element Array{Float64,1}:\n 2.4835053723904896\n 1.516703605376473\n 0.6044364871025417\n 0.6958665886385867\n 1.3065196315496677\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.Random.randjump",
-    "page": "Numbers",
-    "title": "Base.Random.randjump",
-    "category": "Function",
-    "text": "randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}\n\nCreate an array of size len of initialized MersenneTwister RNG objects. The first RNG object given as a parameter and following MersenneTwister RNGs in the array are initialized such that a state of the RNG object in the array would be moved forward (without generating numbers) from a previous RNG object array element by steps steps. One such step corresponds to the generation of two Float64 numbers. For each different value of steps, a large polynomial has to be generated internally. One is already pre-computed for steps=big(10)^20.\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Random-Numbers-1",
-    "page": "Numbers",
-    "title": "Random Numbers",
-    "category": "section",
-    "text": "Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG as the first argument, rng , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate random numbers of the following types: Float16, Float32, Float64, BigFloat, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big(1:6))).Base.Random.srand\nBase.Random.MersenneTwister\nBase.Random.RandomDevice\nBase.Random.rand\nBase.Random.rand!\nBase.Random.bitrand\nBase.Random.randn\nBase.Random.randn!\nBase.Random.randexp\nBase.Random.randexp!\nBase.Random.randjump"
-},
-
-{
     "location": "base/strings/#",
     "page": "Strings",
     "title": "Strings",
@@ -10841,14 +10745,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings/#Base.Random.randstring",
-    "page": "Strings",
-    "title": "Base.Random.randstring",
-    "category": "Function",
-    "text": "randstring([rng=GLOBAL_RNG], [chars], [len=8])\n\nCreate a random string of length len, consisting of characters from chars, which defaults to the set of upper- and lower-case letters and the digits 0-9. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> srand(0); randstring()\n\"c03rgKi1\"\n\njulia> randstring(MersenneTwister(0), 'a':'z', 6)\n\"wijzek\"\n\njulia> randstring(\"ACGT\")\n\"TATCGGTC\"\n\nnote: Note\nchars can be any collection of characters, of type Char or UInt8 (more efficient), provided rand can randomly pick characters from it.\n\n\n\n"
-},
-
-{
     "location": "base/strings/#Base.Unicode.textwidth",
     "page": "Strings",
     "title": "Base.Unicode.textwidth",
@@ -10973,7 +10869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Strings",
     "category": "section",
-    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.ncodeunits(::AbstractString)\nBase.codeunit\nBase.codeunits\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.findfirst(::AbstractString, ::AbstractString)\nBase.findnext(::AbstractString, ::AbstractString, ::Integer)\nBase.findlast(::AbstractString, ::AbstractString)\nBase.findprev(::AbstractString, ::AbstractString, ::Integer)\nBase.contains\nBase.reverse(::Union{String,SubString{String}})\nBase.replace(s::AbstractString, ::Pair)\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.uppercase\nBase.lowercase\nBase.titlecase\nBase.ucfirst\nBase.lcfirst\nBase.join\nBase.chop\nBase.chomp\nBase.thisind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nBase.textwidth\nBase.isalpha\nBase.isascii\nBase.iscntrl\nBase.isdigit\nBase.islower\nBase.isnumeric\nBase.isprint\nBase.ispunct\nBase.isspace\nBase.isupper\nBase.isxdigit\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
+    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repeat(::AbstractString, ::Integer)\nBase.repeat(::Char, ::Integer)\nBase.repr\nCore.String(::AbstractString)\nBase.SubString\nBase.transcode\nBase.unsafe_string\nBase.ncodeunits(::AbstractString)\nBase.codeunit\nBase.codeunits\nBase.ascii\nBase.@r_str\nBase.@raw_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.match\nBase.eachmatch\nBase.matchall\nBase.isless(::AbstractString, ::AbstractString)\nBase.:(==)(::AbstractString, ::AbstractString)\nBase.cmp(::AbstractString, ::AbstractString)\nBase.lpad\nBase.rpad\nBase.findfirst(::AbstractString, ::AbstractString)\nBase.findnext(::AbstractString, ::AbstractString, ::Integer)\nBase.findlast(::AbstractString, ::AbstractString)\nBase.findprev(::AbstractString, ::AbstractString, ::Integer)\nBase.contains\nBase.reverse(::Union{String,SubString{String}})\nBase.replace(s::AbstractString, ::Pair)\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.first(::AbstractString, ::Integer)\nBase.last(::AbstractString, ::Integer)\nBase.uppercase\nBase.lowercase\nBase.titlecase\nBase.ucfirst\nBase.lcfirst\nBase.join\nBase.chop\nBase.chomp\nBase.thisind\nBase.nextind\nBase.prevind\nBase.textwidth\nBase.isalpha\nBase.isascii\nBase.iscntrl\nBase.isdigit\nBase.islower\nBase.isnumeric\nBase.isprint\nBase.ispunct\nBase.isspace\nBase.isupper\nBase.isxdigit\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
 },
 
 {
@@ -11241,27 +11137,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays/#Base.Random.randsubseq",
-    "page": "Arrays",
-    "title": "Base.Random.randsubseq",
-    "category": "Function",
-    "text": "randsubseq(A, p) -> Vector\n\nReturn a vector consisting of a random subsequence of the given array A, where each element of A is included (in order) with independent probability p. (Complexity is linear in p*length(A), so this function is efficient even if p is small and A is large.) Technically, this process is known as \"Bernoulli sampling\" of A.\n\n\n\n"
-},
-
-{
-    "location": "base/arrays/#Base.Random.randsubseq!",
-    "page": "Arrays",
-    "title": "Base.Random.randsubseq!",
-    "category": "Function",
-    "text": "randsubseq!(S, A, p)\n\nLike randsubseq, but the results are stored in S (which is resized as needed).\n\n\n\n"
-},
-
-{
     "location": "base/arrays/#Constructors-and-Types-1",
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::Uninitialized, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.Uninitialized\nCore.uninitialized\nBase.Vector\nBase.Vector(::Uninitialized, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::Uninitialized, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::Uninitialized, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::Uninitialized, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.Uninitialized\nCore.uninitialized\nBase.Vector\nBase.Vector(::Uninitialized, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::Uninitialized, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::Uninitialized, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.linspace\nBase.logspace"
 },
 
 {
@@ -11985,22 +11865,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays/#Base.Random.randperm",
-    "page": "Arrays",
-    "title": "Base.Random.randperm",
-    "category": "Function",
-    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute an arbitrary vector, see shuffle or shuffle!.\n\nExamples\n\njulia> randperm(MersenneTwister(1234), 4)\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
-},
-
-{
-    "location": "base/arrays/#Base.Random.randperm!",
-    "page": "Arrays",
-    "title": "Base.Random.randperm!",
-    "category": "Function",
-    "text": "randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})\n\nConstruct in A a random permutation of length length(A). The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute an arbitrary vector, see shuffle or shuffle!.\n\nExamples\n\njulia> randperm!(MersenneTwister(1234), Vector{Int}(uninitialized, 4))\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
-},
-
-{
     "location": "base/arrays/#Base.invperm",
     "page": "Arrays",
     "title": "Base.invperm",
@@ -12033,38 +11897,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays/#Base.Random.randcycle",
-    "page": "Arrays",
-    "title": "Base.Random.randcycle",
-    "category": "Function",
-    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> randcycle(MersenneTwister(1234), 6)\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
-},
-
-{
-    "location": "base/arrays/#Base.Random.randcycle!",
-    "page": "Arrays",
-    "title": "Base.Random.randcycle!",
-    "category": "Function",
-    "text": "randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})\n\nConstruct in A a random cyclic permutation of length length(A). The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> randcycle!(MersenneTwister(1234), Vector{Int}(uninitialized, 6))\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
-},
-
-{
-    "location": "base/arrays/#Base.Random.shuffle",
-    "page": "Arrays",
-    "title": "Base.Random.shuffle",
-    "category": "Function",
-    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle(rng, Vector(1:10))\n10-element Array{Int64,1}:\n  6\n  1\n 10\n  2\n  3\n  9\n  5\n  7\n  4\n  8\n\n\n\n"
-},
-
-{
-    "location": "base/arrays/#Base.Random.shuffle!",
-    "page": "Arrays",
-    "title": "Base.Random.shuffle!",
-    "category": "Function",
-    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle!(rng, Vector(1:16))\n16-element Array{Int64,1}:\n  2\n 15\n  5\n 14\n  1\n  9\n 10\n  6\n 11\n  3\n 16\n  7\n  4\n 12\n  8\n 13\n\n\n\n"
-},
-
-{
     "location": "base/arrays/#Base.reverse",
     "page": "Arrays",
     "title": "Base.reverse",
@@ -12093,7 +11925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Combinatorics",
     "category": "section",
-    "text": "Base.Random.randperm\nBase.Random.randperm!\nBase.invperm\nBase.isperm\nBase.permute!(::Any, ::AbstractVector)\nBase.invpermute!\nBase.Random.randcycle\nBase.Random.randcycle!\nBase.Random.shuffle\nBase.Random.shuffle!\nBase.reverse\nBase.reverseind\nBase.reverse!"
+    "text": "Base.invperm\nBase.isperm\nBase.permute!(::Any, ::AbstractVector)\nBase.invpermute!\nBase.reverse\nBase.reverseind\nBase.reverse!"
 },
 
 {
@@ -19006,6 +18838,182 @@ var documenterSearchIndex = {"docs": [
     "title": "Profiling",
     "category": "section",
     "text": "Profile.@profileThe methods in Profile are not exported and need to be called e.g. as Profile.print().Profile.clear\nProfile.print\nProfile.init\nProfile.fetch\nProfile.retrieve\nProfile.callers\nProfile.clear_malloc_data"
+},
+
+{
+    "location": "stdlib/Random/#",
+    "page": "Random Numbers",
+    "title": "Random Numbers",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Random/#Random.srand",
+    "page": "Random Numbers",
+    "title": "Random.srand",
+    "category": "Function",
+    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator: rng will give a reproducible sequence of numbers if and only if a seed is provided. Some RNGs don't accept a seed, like RandomDevice. After the call to srand, rng is equivalent to a newly created object initialized with the same seed.\n\nExamples\n\njulia> srand(1234);\n\njulia> x1 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> srand(1234);\n\njulia> x2 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\njulia> rng = MersenneTwister(1234); rand(rng, 2) == x1\ntrue\n\njulia> MersenneTwister(1) == srand(rng, 1)\ntrue\n\njulia> rand(srand(rng), Bool) # not reproducible\ntrue\n\njulia> rand(srand(rng), Bool)\nfalse\n\njulia> rand(MersenneTwister(), Bool) # not reproducible either\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.MersenneTwister",
+    "page": "Random Numbers",
+    "title": "Random.MersenneTwister",
+    "category": "Type",
+    "text": "MersenneTwister(seed)\nMersenneTwister()\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers. The seed may be a non-negative integer or a vector of UInt32 integers. If no seed is provided, a randomly generated one is created (using entropy from the system). See the srand function for reseeding an already existing MersenneTwister object.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> x1 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> rng = MersenneTwister(1234);\n\njulia> x2 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> x1 == x2\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.RandomDevice",
+    "page": "Random Numbers",
+    "title": "Random.RandomDevice",
+    "category": "Type",
+    "text": "RandomDevice()\n\nCreate a RandomDevice RNG object. Two such objects will always generate different streams of random numbers. The entropy is obtained from the operating system.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Base.rand",
+    "page": "Random Numbers",
+    "title": "Base.rand",
+    "category": "Function",
+    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan AbstractDict or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{AbstractDict,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and BitSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.rand!",
+    "page": "Random Numbers",
+    "title": "Random.rand!",
+    "category": "Function",
+    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copyto!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n 0.5662374165061859\n 0.4600853424625171\n 0.7940257103317943\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.bitrand",
+    "page": "Random Numbers",
+    "title": "Random.bitrand",
+    "category": "Function",
+    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> bitrand(rng, 10)\n10-element BitArray{1}:\n  true\n  true\n  true\n false\n  true\n false\n false\n  true\n false\n  true\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Base.randn",
+    "page": "Random Numbers",
+    "title": "Base.randn",
+    "category": "Function",
+    "text": "randn([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a normally-distributed random number of type T with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default), and their Complex counterparts. When the type argument is complex, the values are drawn from the circularly symmetric complex normal distribution.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn(rng, ComplexF64)\n0.6133070881429037 - 0.6376291670853887im\n\njulia> randn(rng, ComplexF32, (2, 3))\n2×3 Array{Complex{Float32},2}:\n -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im\n  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randn!",
+    "page": "Random Numbers",
+    "title": "Random.randn!",
+    "category": "Function",
+    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn!(rng, zeros(5))\n5-element Array{Float64,1}:\n  0.8673472019512456\n -0.9017438158568171\n -0.4944787535042339\n -0.9029142938652416\n  0.8644013132535154\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randexp",
+    "page": "Random Numbers",
+    "title": "Random.randexp",
+    "category": "Function",
+    "text": "randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a random number of type T according to the exponential distribution with scale 1. Optionally generate an array of such random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp(rng, Float32)\n2.4835055f0\n\njulia> randexp(rng, 3, 3)\n3×3 Array{Float64,2}:\n 1.5167    1.30652   0.344435\n 0.604436  2.78029   0.418516\n 0.695867  0.693292  0.643644\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randexp!",
+    "page": "Random Numbers",
+    "title": "Random.randexp!",
+    "category": "Function",
+    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp!(rng, zeros(5))\n5-element Array{Float64,1}:\n 2.4835053723904896\n 1.516703605376473\n 0.6044364871025417\n 0.6958665886385867\n 1.3065196315496677\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randjump",
+    "page": "Random Numbers",
+    "title": "Random.randjump",
+    "category": "Function",
+    "text": "randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}\n\nCreate an array of size len of initialized MersenneTwister RNG objects. The first RNG object given as a parameter and following MersenneTwister RNGs in the array are initialized such that a state of the RNG object in the array would be moved forward (without generating numbers) from a previous RNG object array element by steps steps. One such step corresponds to the generation of two Float64 numbers. For each different value of steps, a large polynomial has to be generated internally. One is already pre-computed for steps=big(10)^20.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randstring",
+    "page": "Random Numbers",
+    "title": "Random.randstring",
+    "category": "Function",
+    "text": "randstring([rng=GLOBAL_RNG], [chars], [len=8])\n\nCreate a random string of length len, consisting of characters from chars, which defaults to the set of upper- and lower-case letters and the digits 0-9. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> srand(0); randstring()\n\"c03rgKi1\"\n\njulia> randstring(MersenneTwister(0), 'a':'z', 6)\n\"wijzek\"\n\njulia> randstring(\"ACGT\")\n\"TATCGGTC\"\n\nnote: Note\nchars can be any collection of characters, of type Char or UInt8 (more efficient), provided rand can randomly pick characters from it.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randsubseq",
+    "page": "Random Numbers",
+    "title": "Random.randsubseq",
+    "category": "Function",
+    "text": "randsubseq(A, p) -> Vector\n\nReturn a vector consisting of a random subsequence of the given array A, where each element of A is included (in order) with independent probability p. (Complexity is linear in p*length(A), so this function is efficient even if p is small and A is large.) Technically, this process is known as \"Bernoulli sampling\" of A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randsubseq!",
+    "page": "Random Numbers",
+    "title": "Random.randsubseq!",
+    "category": "Function",
+    "text": "randsubseq!(S, A, p)\n\nLike randsubseq, but the results are stored in S (which is resized as needed).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randperm",
+    "page": "Random Numbers",
+    "title": "Random.randperm",
+    "category": "Function",
+    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute an arbitrary vector, see shuffle or shuffle!.\n\nExamples\n\njulia> randperm(MersenneTwister(1234), 4)\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randperm!",
+    "page": "Random Numbers",
+    "title": "Random.randperm!",
+    "category": "Function",
+    "text": "randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})\n\nConstruct in A a random permutation of length length(A). The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute an arbitrary vector, see shuffle or shuffle!.\n\nExamples\n\njulia> randperm!(MersenneTwister(1234), Vector{Int}(uninitialized, 4))\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randcycle",
+    "page": "Random Numbers",
+    "title": "Random.randcycle",
+    "category": "Function",
+    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> randcycle(MersenneTwister(1234), 6)\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.randcycle!",
+    "page": "Random Numbers",
+    "title": "Random.randcycle!",
+    "category": "Function",
+    "text": "randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})\n\nConstruct in A a random cyclic permutation of length length(A). The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> randcycle!(MersenneTwister(1234), Vector{Int}(uninitialized, 6))\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.shuffle",
+    "page": "Random Numbers",
+    "title": "Random.shuffle",
+    "category": "Function",
+    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle(rng, Vector(1:10))\n10-element Array{Int64,1}:\n  6\n  1\n 10\n  2\n  3\n  9\n  5\n  7\n  4\n  8\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.shuffle!",
+    "page": "Random Numbers",
+    "title": "Random.shuffle!",
+    "category": "Function",
+    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle!(rng, Vector(1:16))\n16-element Array{Int64,1}:\n  2\n 15\n  5\n 14\n  1\n  9\n 10\n  6\n 11\n  3\n 16\n  7\n  4\n 12\n  8\n 13\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random-Numbers-1",
+    "page": "Random Numbers",
+    "title": "Random Numbers",
+    "category": "section",
+    "text": "Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG as the first argument, rng , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate random numbers of the following types: Float16, Float32, Float64, BigFloat, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big(1:6))).Random.srand\nRandom.MersenneTwister\nRandom.RandomDevice\nRandom.rand\nRandom.rand!\nRandom.bitrand\nRandom.randn\nRandom.randn!\nRandom.randexp\nRandom.randexp!\nRandom.randjump\nRandom.randstring\nRandom.randsubseq\nRandom.randsubseq!\nRandom.randperm\nRandom.randperm!\nRandom.randcycle\nRandom.randcycle!\nRandom.shuffle\nRandom.shuffle!"
 },
 
 {
