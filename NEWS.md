@@ -182,6 +182,9 @@ Language changes
   * `=>` now has its own precedence level, giving it strictly higher precedence than
     `=` and `,` ([#25391]).
 
+  * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
+    parser. ([#25564])
+
 Breaking changes
 ----------------
 
