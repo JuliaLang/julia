@@ -78,7 +78,7 @@ copyto!(s, d)
 s = SharedArrays.shmem_rand(dims)
 copyto!(s, sdata(d))
 @test s == d
-a = rand(dims)
+a = rand(Float64, dims)
 @test sdata(a) == a
 
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))

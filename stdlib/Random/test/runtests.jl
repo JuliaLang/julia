@@ -355,7 +355,6 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         f(rng..., 5)                  ::Vector{Float64}
         f(rng..., 2, 3)               ::Array{Float64, 2}
         f(rng..., b2, u3)             ::Array{Float64, 2}
-        f(rng..., (2, 3))             ::Array{Float64, 2}
         for T in functypes[f]
             a0 = f(rng..., T)         ::T
             a1 = f(rng..., T, 5)      ::Vector{T}

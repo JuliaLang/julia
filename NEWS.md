@@ -386,6 +386,9 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * The `tempname` function used to create a file on Windows but not on other
+    platforms. It now never creates a file ([#9053]).
+
 Library improvements
 --------------------
 
@@ -941,6 +944,9 @@ Deprecated or removed
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).
+
+  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
+    `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
 
 Command-line option changes
