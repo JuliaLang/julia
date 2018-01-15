@@ -2154,11 +2154,11 @@ end
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
-struct F21666{T <: Base.TypeArithmetic}
+struct F21666{T <: Base.ArithmeticStyle}
     x::Float32
 end
 
-Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
 Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin

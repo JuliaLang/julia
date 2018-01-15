@@ -360,7 +360,7 @@ This section lists changes that do not have deprecation warnings.
   * `AbstractRange` objects are now considered as equal to other `AbstractArray` objects
     by `==` and `isequal` if all of their elements are equal ([#16401]).
     This has required changing the hashing algorithm: ranges now use an O(N) fallback
-    instead of a O(1) specialized method unless they define the `Base.TypeRangeStep`
+    instead of a O(1) specialized method unless they define the `Base.RangeStepStyle`
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
 
