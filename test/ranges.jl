@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Dates
+using Dates, Random
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.

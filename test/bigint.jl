@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
 c = parse(BigInt,"246913578024691357802469135780")

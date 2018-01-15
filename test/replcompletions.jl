@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.REPLCompletions
+using Random
 
 let ex = quote
     module CompletionFoo
+        using Random
+
         mutable struct Test_y
             yy
         end
@@ -51,7 +54,7 @@ let ex = quote
         test5(x::Float64) = pass
         const a=x->x
         test6()=[a, a]
-        test7() = rand() > 0.5 ? 1 : 1.0
+        test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
         kwtest(; x=1, y=2, w...) = pass
 

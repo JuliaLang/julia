@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed
+using Test, Distributed, Random
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -18,7 +18,7 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-@everywhere using Test
+@everywhere using Test, Random
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
@@ -1498,4 +1498,3 @@ end
 # cluster at any time only supports a single topology.
 rmprocs(workers())
 include("topology.jl")
-

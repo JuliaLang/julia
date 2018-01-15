@@ -1195,14 +1195,4 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     Regex(pattern, compile_options, match_options)
 end
 
-if !Sys.iswindows()
-    function serialize(s::AbstractSerializer, rd::RandomDevice)
-        serialize_type(s, typeof(rd))
-        serialize(s, rd.unlimited)
-    end
-    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
-        unlimited = deserialize(s)
-        return RandomDevice(unlimited)
-    end
-end
 end

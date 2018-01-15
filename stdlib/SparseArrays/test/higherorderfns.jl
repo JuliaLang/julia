@@ -4,6 +4,8 @@
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
 
+using Random
+
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12
     for shapeA in ((N,), (N, M))

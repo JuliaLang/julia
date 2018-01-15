@@ -1,17 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module Random
 
-using Base.dSFMT
+include("dSFMT.jl")
+
+using .dSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+
 using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
 
-import Base: copymutable, copy, copy!, ==, hash
+import Base: copymutable, copy, copy!, ==, hash, serialize, deserialize, convert
+import Base: rand, randn
 
 export srand,
-       rand, rand!,
-       randn, randn!,
+       rand!, randn!,
        randexp, randexp!,
        bitrand,
        randstring,
@@ -20,12 +25,14 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
+       defaultRNG, randjump
 
 
 ## general definitions
 
 abstract type AbstractRNG end
+
+defaultRNG() = GLOBAL_RNG
 
 
 ### integers
@@ -64,6 +71,7 @@ for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
         uint_default(::$UI) = $UI{uint_sup($UI)}()
     end
 end
+
 
 ### floats
 
@@ -248,7 +256,7 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
-
+include("deprecated.jl")
 
 ## rand & rand! & srand docstrings
 

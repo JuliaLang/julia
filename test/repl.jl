@@ -7,6 +7,7 @@ include("testenv.jl")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers
 import Base: REPL, LineEdit
+using Random
 
 function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads

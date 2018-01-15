@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays
+using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)

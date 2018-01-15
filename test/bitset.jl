@@ -2,6 +2,8 @@
 
 # Test functionality of BitSet
 
+using Random
+
 @testset "Construction, collect" begin
     data_in = (1,5,100)
     s = BitSet(data_in)

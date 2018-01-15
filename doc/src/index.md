@@ -85,14 +85,15 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [Delimited Files](@ref)
   * [Distributed Computing](@ref)
   * [File Events](@ref lib-filewatching)
-  * [Sparse Arrays](@ref)
   * [Iterative Eigensolvers](@ref lib-itereigen)
   * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
   * [Profiling](@ref lib-profiling)
+  * [Random Numbers](@ref)
   * [Shared Arrays](@ref)
-  * [Unit Testing](@ref)
+  * [Sparse Arrays](@ref)
   * [Unicode](@ref)
+  * [Unit Testing](@ref)
 
 ## Developer Documentation
 

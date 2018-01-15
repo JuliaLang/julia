@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using SparseArrays
+using Random, SparseArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
