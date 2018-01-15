@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# copied verbatim from julia/test/TestHelpers.jl
+# OffsetArrays (arrays with indexing that doesn't start at 1)
+
+# This test file is designed to exercise support for generic indexing,
+# even though offset arrays aren't implemented in Base.
 
 module OAs
 
@@ -121,4 +124,4 @@ indsoffset(i::Integer) = 0
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
-end
+end # module OAs

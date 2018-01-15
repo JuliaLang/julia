@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
+
+using Test.OAs
 
 @testset "Construction, collect" begin
     @test ===(typeof(Set([1,2,3])), Set{Int})
