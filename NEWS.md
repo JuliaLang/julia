@@ -385,6 +385,9 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * The `tempname` function used to create a file on Windows but not on other
+    platforms. It now never creates a file ([#9053]).
+
 Library improvements
 --------------------
 
