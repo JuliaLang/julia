@@ -359,13 +359,17 @@ end
     nothing
 end
 
-# Log a message. Called from the julia C code; kwargs is in the format
-# Any[key1,val1, ...] for simplicity in construction on the C side.
-function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
+# Log a message. Called from the julia C code; `kwargs` is in the format
+# `Any[key1,val1, ...]` for simplicity in construction on the C side.
+# `srctask` is `nothing` or the task from which the message originated and
+# which we should yield to when done. (The source task may be in a state
+# where it can not call julia functions directly.)
+function logmsg_shim(srctask, level, message, _module, group, id, file, line, kwargs)
     real_kws = Any[(kwargs[i],kwargs[i+1]) for i in 1:2:length(kwargs)]
     @logmsg(convert(LogLevel, level), message,
             _module=_module, _id=id, _group=group,
             _file=String(file), _line=line, real_kws...)
+    srctask === nothing || yieldto(srctask)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log
