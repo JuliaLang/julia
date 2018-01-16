@@ -52,6 +52,23 @@ struct InvalidCodeError <: Exception
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
+function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
+    if JLOptions().debug_level == 2
+        # this is a debug build of julia, so let's validate linfo
+        errors = validate_code(linfo, src)
+        if !isempty(errors)
+            for e in errors
+                if linfo.def isa Method
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for method ",
+                            linfo.def, ": ", e)
+                else
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
+                            linfo.def, ": ", e)
+                end
+            end
+        end
+    end
+end
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
@@ -157,7 +174,7 @@ end
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, mi::MethodInstance,
-                   c::Union{Nothing,CodeInfo} = Core.Inference.retrieve_code_info(mi))
+                   c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi))
 
 Validate `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
@@ -165,14 +182,14 @@ If `isa(c, CodeInfo)`, also call `validate_code!(errors, c)`. It is assumed that
 the `CodeInfo` instance associated with `mi`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
-                        c::Union{Nothing,CodeInfo} = Core.Inference.retrieve_code_info(mi))
+                        c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi))
     is_top_level = mi.def isa Module
     if is_top_level
         mnargs = 0
     else
         m = mi.def::Method
         mnargs = m.nargs
-        n_sig_params = length(Core.Inference.unwrap_unionall(m.sig).parameters)
+        n_sig_params = length(Core.Compiler.unwrap_unionall(m.sig).parameters)
         if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
             push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
         end
