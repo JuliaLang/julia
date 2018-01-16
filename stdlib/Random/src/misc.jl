@@ -345,11 +345,7 @@ randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
 
 ## random UUID generation
 
-struct UUID
-    value::UInt128
-
-    UUID(u::UInt128) = new(u)
-end
+import Base: UUID
 
 """
     uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
@@ -409,55 +405,3 @@ function uuid4(rng::AbstractRNG=GLOBAL_RNG)
     u |= 0x00000000000040008000000000000000
     UUID(u)
 end
-
-"""
-    uuid_version(u::UUID) -> Integer
-
-Inspects the given UUID and returns its version (see RFC 4122).
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> Random.uuid_version(Random.uuid4(rng))
-4
-```
-"""
-uuid_version(u::UUID) = Int((u.value >> 76) & 0xf)
-
-UInt128(u::UUID) = u.value
-
-let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
-    global UUID
-    function UUID(s::AbstractString)
-        s = lowercase(s)
-
-        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-            throw(ArgumentError("Malformed UUID string"))
-        end
-
-        u = UInt128(0)
-        for i in groupings
-            u <<= 4
-            d = s[i] - '0'
-            u |= 0xf & (d - 39*(d > 9))
-        end
-        return UUID(u)
-    end
-end
-
-let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
-    function Base.string(u::UUID)
-        u = u.value
-        a = Base.StringVector(36)
-        for i in groupings
-            d = u & 0xf
-            a[i] = '0' + d + 39*(d > 9)
-            u >>= 4
-        end
-        a[24] = a[19] = a[14] = a[9] = '-'
-        return String(a)
-    end
-end
-
-Base.show(io::IO, u::UUID) = write(io, string(u))

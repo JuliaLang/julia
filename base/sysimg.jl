@@ -446,6 +446,7 @@ include("pkg/pkg.jl")
 include("threadcall.jl")
 
 # code loading
+include("uuid.jl")
 include("loading.jl")
 
 # set up load path to be able to find stdlib packages
