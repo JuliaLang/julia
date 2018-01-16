@@ -111,6 +111,14 @@ function issubconditional(a::Conditional, b::Conditional)
     return false
 end
 
+maybe_extract_const_bool(c::Const) = isa(c.val, Bool) ? c.val : nothing
+function maybe_extract_const_bool(c::Conditional)
+    (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
+    (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
+    nothing
+end
+maybe_extract_const_bool(c) = nothing
+
 function ⊑(@nospecialize(a), @nospecialize(b))
     (a === NOT_FOUND || b === Any) && return true
     (a === Any || b === NOT_FOUND) && return false
@@ -119,6 +127,8 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     if isa(a, Conditional)
         if isa(b, Conditional)
             return issubconditional(a, b)
+        elseif isa(b, Const) && isa(b.val, Bool)
+            return maybe_extract_const_bool(a) === b.val
         end
         a = Bool
     elseif isa(b, Conditional)
