@@ -620,7 +620,7 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
 end
 
 """
-    chown(path::AbstractString, owner::Integer; group::Integer = missing)
+    chown(path::AbstractString, owner::Integer; group::Integer = nothing)
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If the value
 entered for `owner` or `group` is `missing` the corresponding ID will not
