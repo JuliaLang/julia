@@ -664,8 +664,6 @@ julia> mod1(4, 3)
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
-# efficient version for integers
-mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -689,9 +687,7 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
-# efficient version for integers
-fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
 
 """
     fldmod1(x, y)
@@ -700,9 +696,7 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
-# efficient version for integers
-fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 conj(x) = x
 

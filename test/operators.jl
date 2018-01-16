@@ -131,3 +131,37 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
     @test TypeWrapper(Int) <= TypeWrapper(Real)
     @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
 end
+
+# issue #20355
+@testset "mod1, fld1" begin
+    for T in [Int64, Float64],
+        x in T.(-10:10),
+        y in T.(vcat(-10:-1, 1:10))
+
+        m = mod1(x, y)
+        f = fld1(x, y)
+        @test mod(x, y) == mod(m, y)
+        if y > 0
+            @test 0 < m <= y
+        else
+            @test y <= m < 0
+        end
+        @test (f - 1) * y + m == x
+    end
+
+    for x in UInt64.(0:10),
+        y in UInt64.(1:10)
+
+        m = mod1(x, y)
+        f = fld1(x, y)
+        @test mod(x, y) == mod(m, y)
+        if y > 0
+            @test 0 < m <= y
+        else
+            @test y <= m < 0
+        end
+        @test (f - 1) * y + m == x
+    end
+
+    @test fldmod1(4.0, 3) == fldmod1(4, 3)
+end
