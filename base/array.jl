@@ -1492,6 +1492,11 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 ## find ##
 
+_pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
+_pairs(iter) = _pairs(IteratorSize(iter), iter)
+_pairs(::Union{HasLength, HasShape}, iter) = zip(1:length(iter), iter)
+_pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
+
 """
     findnext(A, i::Integer)
 
@@ -1545,12 +1550,14 @@ end
 """
     findfirst(A)
 
-Return the index of the first `true` value in `A`.
+Return the index or key of the first `true` value in `A`.
 Return `nothing` if no such value is found.
 To search for other kinds of values, pass a predicate as the first argument.
 
-Indices are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref).
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1576,7 +1583,22 @@ julia> findfirst(A)
 CartesianIndex(2, 1)
 ```
 """
-findfirst(A) = isempty(A) ? nothing : findnext(A, first(keys(A)))
+function findfirst(A)
+    warned = false
+    for (i, a) in _pairs(A)
+        if !warned && !(a isa Bool)
+            depwarn("In the future `findfirst` will only work on boolean collections. Use `findfirst(x->x!=0, A)` instead.", :findfirst)
+            warned = true
+        end
+        if a != 0
+            return i
+        end
+    end
+    return nothing
+end
+
+# Needed for bootstrap, and allows defining only an optimized findnext method
+findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
 
 """
     findnext(predicate::Function, A, i)
@@ -1626,11 +1648,13 @@ end
 """
     findfirst(predicate::Function, A)
 
-Return the index of the first element of `A` for which `predicate` returns `true`.
+Return the index or key of the first element of `A` for which `predicate` returns `true`.
 Return `nothing` if there is no such element.
 
-Indices are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref).
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1659,7 +1683,16 @@ julia> findfirst(iseven, A)
 CartesianIndex(2, 1)
 ```
 """
-findfirst(testf::Function, A) = isempty(A) ? nothing : findnext(testf, A, first(keys(A)))
+function findfirst(testf::Function, A)
+    for (i, a) in _pairs(A)
+        testf(a) && return i
+    end
+    return nothing
+end
+
+# Needed for bootstrap, and allows defining only an optimized findnext method
+findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
+    findnext(testf, A, first(keys(A)))
 
 """
     findprev(A, i)
@@ -1711,11 +1744,13 @@ end
 """
     findlast(A)
 
-Return the index of the last `true` value in `A`.
+Return the index or key of the last `true` value in `A`.
 Return `nothing` if there is no `true` value in `A`.
 
-Indices are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref).
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1743,7 +1778,22 @@ julia> findlast(A)
 CartesianIndex(2, 1)
 ```
 """
-findlast(A) = isempty(A) ? nothing : findprev(A, last(keys(A)))
+function findlast(A)
+    warned = false
+    for (i, a) in Iterators.reverse(_pairs(A))
+        if !warned && !(a isa Bool)
+            depwarn("In the future `findlast` will only work on boolean collections. Use `findlast(x->x!=0, A)` instead.", :findlast)
+            warned = true
+        end
+        if a != 0
+            return i
+        end
+    end
+    return nothing
+end
+
+# Needed for bootstrap, and allows defining only an optimized findprev method
+findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
 
 """
     findprev(predicate::Function, A, i)
@@ -1790,11 +1840,13 @@ end
 """
     findlast(predicate::Function, A)
 
-Return the index of the last element of `A` for which `predicate` returns `true`.
+Return the index or key of the last element of `A` for which `predicate` returns `true`.
 Return `nothing` if there is no such element.
 
-Indices are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref).
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1820,7 +1872,16 @@ julia> findlast(isodd, A)
 CartesianIndex(2, 1)
 ```
 """
-findlast(testf::Function, A) = isempty(A) ? nothing : findprev(testf, A, last(keys(A)))
+function findlast(testf::Function, A)
+    for (i, a) in Iterators.reverse(_pairs(A))
+        testf(a) && return i
+    end
+    return nothing
+end
+
+# Needed for bootstrap, and allows defining only an optimized findprev method
+findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
+    findprev(testf, A, last(keys(A)))
 
 """
     findall(f::Function, A)
@@ -1828,8 +1889,10 @@ findlast(testf::Function, A) = isempty(A) ? nothing : findprev(testf, A, last(ke
 Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, return an empty array.
 
-Indices are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref).
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
@@ -1874,9 +1937,6 @@ julia> findall(x -> x >= 0, d)
 ```
 """
 findall(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
-
-_pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
-_pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't implement length
 
 """
     findall(A)
