@@ -56,6 +56,11 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
+function is_inlineable_constant(@nospecialize(x))
+    x isa Type && return true
+    return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
+end
+
 # count occurrences up to n+1
 function occurs_more(@nospecialize(e), pred, n)
     if isa(e,Expr)
