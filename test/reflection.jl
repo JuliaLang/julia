@@ -97,9 +97,6 @@ has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
 @test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
-# Make sure Union{} is not highlighted
-@test !warntype_hastag(error, Tuple{}, "UNION")
-
 # Make sure that "expected" unions are highlighted with warning color instead of error color
 iob = IOBuffer()
 code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
