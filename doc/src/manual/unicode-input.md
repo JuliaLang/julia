@@ -37,7 +37,7 @@ function unicode_data()
         for line in readlines(unidata)
             id, name, desc = split(line, ";")[[1, 2, 11]]
             codepoint = parse(UInt32, "0x$id")
-            names[codepoint] = Base.Unicode.titlecase(Base.Unicode.lowercase(
+            names[codepoint] = titlecase(lowercase(
                 name == "" ? desc : desc == "" ? name : "$name / $desc"))
         end
     end
@@ -61,7 +61,7 @@ function table_entries(completions, unicode_dict)
     for (chars, inputs) in sort!(collect(completions), by = first)
         code_points, unicode_names, characters = String[], String[], String[]
         for char in chars
-            push!(code_points, "U+$(Base.Unicode.uppercase(hex(char, 5)))")
+            push!(code_points, "U+$(uppercase(hex(char, 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
             push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
         end

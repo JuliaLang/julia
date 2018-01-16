@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers.OAs
+using SparseArrays
+
+using Random
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -266,30 +269,30 @@ end
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = find(occursin(b), a)
+    ind = findall(occursin(b), a)
     @test ind == [3,4]
-    @test find(occursin(Int[]), a) == Int[]
-    @test find(occursin(a), Int[]) == Int[]
+    @test findall(occursin(Int[]), a) == Int[]
+    @test findall(occursin(a), Int[]) == Int[]
 
     a = [1,2,3,4,5]
     b = [2,3,4,6]
-    @test find(occursin(b), a) == [2,3,4]
-    @test find(occursin(a), b) == [1,2,3]
-    @test find(occursin(Int[]), a) == Int[]
-    @test find(occursin(a), Int[]) == Int[]
+    @test findall(occursin(b), a) == [2,3,4]
+    @test findall(occursin(a), b) == [1,2,3]
+    @test findall(occursin(Int[]), a) == Int[]
+    @test findall(occursin(a), Int[]) == Int[]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
-    @test find(occursin(b), a) == [4]
-    @test find(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
+    @test findall(occursin(b), a) == [4]
+    @test findall(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
 
-    @test find(occursin(NaN), [1.0, NaN, 2.0]) == [2]
-    @test find(occursin(NaN), [1.0, 2.0, NaN]) == [3]
+    @test findall(occursin(NaN), [1.0, NaN, 2.0]) == [2]
+    @test findall(occursin(NaN), [1.0, 2.0, NaN]) == [3]
 
-    @testset "find(::OccursIn, b) for uncomparable element types" begin
+    @testset "findall(::OccursIn, b) for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
-        @test find(occursin(1 + 1im), a) == [1]
-        @test find(occursin(a), a)       == [1,2]
+        @test findall(occursin(1 + 1im), a) == [1]
+        @test findall(occursin(a), a)       == [1,2]
     end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
@@ -422,70 +425,53 @@ end
     @test X[end,Y[end]] == 11
 end
 
-@testset "find, findfirst, findnext, findlast, findprev" begin
+@testset "findall, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
-    @test find(!iszero, a) == [2,3,4,6,7,8]
-    @test find(a.==2) == [3,7]
-    @test find(isodd,a) == [2,4,6,8]
+    @test findall(!iszero, a) == [2,3,4,6,7,8]
+    @test findall(a.==2) == [3,7]
+    @test findall(isodd,a) == [2,4,6,8]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
-    @test findfirst(a.==5) == 0
+    @test findfirst(a.==5) == nothing
     @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
-    @test findfirst(isodd, [2,4,6,2,0]) == 0
+    @test findfirst(isodd, [2,4,6,2,0]) == nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
     @test findnext(equalto(1),a,4) == 6
-    @test findnext(equalto(5),a,4) == 0
+    @test findnext(equalto(5),a,4) == nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
-    @test findlast(a.==5) == 0
+    @test findlast(a.==5) == nothing
     @test findlast(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
-    @test findlast(isodd, [2,4,6,2,0]) == 0
+    @test findlast(isodd, [2,4,6,2,0]) == nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
-    @test findprev(!iszero,a,1) == 0
+    @test findprev(!iszero,a,1) == nothing
     @test findprev(equalto(1),a,4) == 2
     @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
-    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
     @test findfirst(equalto(0x00), [0x01, 0x00]) == 2
     @test findlast(equalto(0x00), [0x01, 0x00]) == 2
     @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
-@testset "find with Matrix" begin
+@testset "findall with Matrix" begin
     A = [1 2 0; 3 4 0]
-    @test find(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
-    @test find(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
+    @test findall(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
+    @test findall(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
                                CartesianIndex(1, 2), CartesianIndex(2, 2)]
 end
-@testset "find with general iterables" begin
+@testset "findall with general iterables" begin
     s = "julia"
-    @test find(c -> c == 'l', s) == [3]
+    @test findall(c -> c == 'l', s) == [3]
     g = Base.Unicode.graphemes("日本語")
-    @test find(isascii, g) == Int[]
-    @test find(!iszero, (i % 2 for i in 1:10)) == 1:2:9
-end
-@testset "findn" begin
-    b = findn(fill(1,2,2,2,2))
-    @test (length(b[1]) == 16)
-    @test (length(b[2]) == 16)
-    @test (length(b[3]) == 16)
-    @test (length(b[4]) == 16)
-
-    #hand made case
-    a = ([2,1,2],[1,2,2],[2,2,2])
-    z = zeros(2,2,2)
-    for i = 1:3
-        z[a[1][i],a[2][i],a[3][i]] = 10
-    end
-    @test isequal(a,findn(z))
-
-    @test findn([1, 0, 2]) == ([1, 3], )
+    @test findall(isascii, g) == Int[]
+    @test findall(!iszero, (i % 2 for i in 1:10)) == 1:2:9
 end
 
 @testset "findmin findmax indmin indmax" begin
@@ -1851,16 +1837,6 @@ end
 fill!(B, 2)
 @test all(x->x==2, B)
 
-iall = repmat(1:size(A,1), 1, size(A,2))
-jall = repmat((1:size(A,2))', size(A,1), 1)
-i,j = findn(B)
-@test vec(i) == vec(iall)
-@test vec(j) == vec(jall)
-fill!(S, 2)
-i,j = findn(S)
-@test vec(i) == vec(iall)
-@test vec(j) == vec(jall)
-
 copyto!(B, A)
 copyto!(S, A)
 
@@ -2178,11 +2154,11 @@ end
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
-struct F21666{T <: Base.TypeArithmetic}
+struct F21666{T <: Base.ArithmeticStyle}
     x::Float32
 end
 
-Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
 Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin

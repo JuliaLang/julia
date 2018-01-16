@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
 
@@ -31,12 +33,12 @@ in the `choices` argument:
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "subarray", "core", "inference", "worlds",
+        "linalg", "subarray", "core", "compiler", "worlds",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
-        "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
-        "intfuncs", "simdloop", "vecelement", "sparse",
+        "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
+        "intfuncs", "simdloop", "vecelement",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
@@ -51,7 +53,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream", "specificity", "codegen", "codevalidation",
+        "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -101,15 +103,6 @@ function choosetests(choices = [])
         prepend!(tests, stringtests)
     end
 
-    sparsetests = ["sparse/sparse", "sparse/sparsevector", "sparse/higherorderfns"]
-    if "sparse" in skip_tests
-        filter!(x -> (x != "sparse" && !(x in sparsetests)), tests)
-    elseif "sparse" in tests
-        # specifically selected case
-        filter!(x -> x != "sparse", tests)
-        prepend!(tests, sparsetests)
-    end
-
     # do subarray before sparse but after linalg
     if "subarray" in skip_tests
         filter!(x -> x != "subarray", tests)
@@ -133,6 +126,16 @@ function choosetests(choices = [])
         # specifically selected case
         filter!(x -> x != "linalg", tests)
         prepend!(tests, linalgtests)
+    end
+
+    compilertests = ["compiler/compiler", "compiler/validation"]
+
+    if "compiler" in skip_tests
+        filter!(x -> (x != "compiler" && !(x in compilertests)), tests)
+    elseif "compiler" in tests
+        # specifically selected case
+        filter!(x -> x != "compiler", tests)
+        prepend!(tests, compilertests)
     end
 
     net_required_for = ["socket", "stdlib", "libgit2"]

@@ -303,8 +303,6 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 [`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
 
-See also: [`spdiagm`](@ref)
-
 # Examples
 ```jldoctest
 julia> diagm(1 => [1,2,3])
@@ -1297,7 +1295,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[find(.!isfinite.(Sinv))] = zero(Stype)
+    Sinv[findall(.!isfinite.(Sinv))] = zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T

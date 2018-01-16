@@ -346,8 +346,8 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_inline_meta; T)
 
-if isdefined(Core, :Inference)
-    const _return_type = Core.Inference.return_type
+if isdefined(Core, :Compiler)
+    const _return_type = Core.Compiler.return_type
 else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end

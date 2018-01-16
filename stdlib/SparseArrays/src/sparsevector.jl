@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, find, findnz
+import Base: sort, findall, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -472,28 +472,28 @@ copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
 
 
 ### Rand Construction
-sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(GLOBAL_RNG, n, p, rfn, T)
+sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(defaultRNG(), n, p, rfn, T)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where T
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, T, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(GLOBAL_RNG, n, p, rfn)
+sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(defaultRNG(), n, p, rfn)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     I = randsubseq(r, 1:convert(Int, n), p)
     V = rfn(r, length(I))
     SparseVector(n, I, V)
 end
 
-sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
+sprand(n::Integer, p::AbstractFloat) = sprand(defaultRNG(), n, p, rand)
 
 sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
 sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(r, n, p, (r, i) -> rand(r, T, i))
 sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
-sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, n, p)
+sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(defaultRNG(), T, n, p)
 
-sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
+sprandn(n::Integer, p::AbstractFloat) = sprand(defaultRNG(), n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
 
 ## Indexing into Matrices can return SparseVectors
@@ -672,16 +672,16 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find(x::SparseVector)
+function findall(x::SparseVector)
     if !(eltype(x) <: Bool)
-        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        Base.depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :findall)
     end
-    return find(x->x!=0, x)
+    return findall(x->x!=0, x)
 end
 
-function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
+function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti
     if p(zero(eltype(x)))
-        return invoke(find, Tuple{Function, Any}, p, x)
+        return invoke(findall, Tuple{Function, Any}, p, x)
     end
     numnz = nnz(x)
     I = Vector{Ti}(uninitialized, numnz)
@@ -704,8 +704,8 @@ function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
 
     return I
 end
-find(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
-    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
+    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
@@ -737,7 +737,7 @@ end
 function _sparse_findnextnz(v::SparseVector, i::Integer)
     n = searchsortedfirst(v.nzind, i)
     if n > length(v.nzind)
-        return zero(indtype(v))
+        return nothing
     else
         return v.nzind[n]
     end
@@ -746,7 +746,7 @@ end
 function _sparse_findprevnz(v::SparseVector, i::Integer)
     n = searchsortedlast(v.nzind, i)
     if iszero(n)
-        return zero(indtype(v))
+        return nothing
     else
         return v.nzind[n]
     end
@@ -797,8 +797,8 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {T
     SparseVector(length(I), rind, rval)
 end
 
-getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[find(I)]
-getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[find(I)]
+getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
+getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
@@ -895,12 +895,6 @@ Array(x::AbstractSparseVector) = Vector(x)
 vec(x::AbstractSparseVector) = x
 copy(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), copy(nonzeros(x)))
-
-function reinterpret(::Type{T}, x::AbstractSparseVector{Tv}) where {T,Tv}
-    sizeof(T) == sizeof(Tv) ||
-        throw(ArgumentError("reinterpret of sparse vectors only supports element types of the same size."))
-    SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))
-end
 
 float(x::AbstractSparseVector{<:AbstractFloat}) = x
 float(x::AbstractSparseVector) =
@@ -1950,7 +1944,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
-    z = findfirst(equalto(k),sinds)
+    z = findfirst(equalto(k),sinds)::Int
     newnzind = Vector{Ti}(1:k-1)
     newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]

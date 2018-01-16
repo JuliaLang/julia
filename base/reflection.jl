@@ -612,7 +612,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generat
     return map(method_instances(f, t)) do m
         if expand_generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
-                return Core.Inference.get_staged(m)
+                return Core.Compiler.get_staged(m)
             else # isa(m, Method)
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -750,7 +750,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     results = Vector{Union{Method,Core.MethodInstance}}()
     for method_data in _methods_by_ftype(tt, -1, world)
         mtypes, msp, m = method_data
-        instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+        instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
         push!(results, ifelse(isa(instance, Core.MethodInstance), instance, m))
     end
     return results
@@ -876,11 +876,11 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     types = to_tuple_type(types)
     asts = []
     world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Inference.InferenceParams(world)
+    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
-        code === nothing && error("inference not successful") # Inference disabled?
+        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        code === nothing && error("inference not successful") # inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
     return asts
@@ -894,11 +894,11 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     types = to_tuple_type(types)
     rt = []
     world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Inference.InferenceParams(world)
+    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Inference.typeinf_type(meth, x[1], x[2], true, params)
-        ty === nothing && error("inference not successful") # Inference disabled?
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
     return rt

@@ -34,8 +34,6 @@ Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
 Base.linspace
 Base.logspace
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Basic functions
@@ -124,9 +122,8 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.find(::Any)
-Base.find(::Function, ::Any)
-Base.findn
+Base.findall(::Any)
+Base.findall(::Function, ::Any)
 Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)
@@ -164,16 +161,10 @@ Base.mapslices
 ## Combinatorics
 
 ```@docs
-Base.Random.randperm
-Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
-Base.Random.randcycle
-Base.Random.randcycle!
-Base.Random.shuffle
-Base.Random.shuffle!
 Base.reverse
 Base.reverseind
 Base.reverse!
@@ -187,31 +178,4 @@ and can be converted to/from the latter via `Array(bitarray)` and `BitArray(arra
 
 ```@docs
 Base.flipbits!
-```
-
-## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)
-
-Sparse vectors and matrices largely support the same set of operations as their dense counterparts.
-The following functions are specific to sparse arrays.
-
-```@docs
-Base.SparseArrays.SparseVector
-Base.SparseArrays.SparseMatrixCSC
-Base.SparseArrays.sparse
-Base.SparseArrays.sparsevec
-Base.SparseArrays.issparse
-Base.SparseArrays.nnz
-Base.SparseArrays.spzeros
-Base.SparseArrays.spdiagm
-Base.SparseArrays.sprand
-Base.SparseArrays.sprandn
-Base.SparseArrays.nonzeros
-Base.SparseArrays.rowvals
-Base.SparseArrays.nzrange
-Base.SparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)
-Base.SparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)
-Base.SparseArrays.dropzeros!(::SparseVector, ::Bool)
-Base.SparseArrays.dropzeros(::SparseVector, ::Bool)
-Base.SparseArrays.permute
-Base.permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})
 ```

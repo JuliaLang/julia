@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.MathConstants
+using Random
+
 const ≣ = isequal # convenient for comparing NaNs
 
 # remove these tests and re-enable the same ones in the

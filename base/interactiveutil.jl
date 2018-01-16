@@ -51,7 +51,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && Unicode.uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
@@ -639,12 +639,14 @@ end
 
 downloadcmd = nothing
 if Sys.iswindows()
+    downloadcmd = :powershell
     function download(url::AbstractString, filename::AbstractString)
-        res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                    (Ptr{Cvoid},Cwstring,Cwstring,Cuint,Ptr{Cvoid}),C_NULL,url,filename,0,C_NULL)
-        if res != 0
-            error("automatic download failed (error: $res): $url")
-        end
+        ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+        tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
+        client = "New-Object System.Net.Webclient"
+        # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
+        downloadfile = "($client).DownloadFile('$(replace(url, "'" => "''"))', '$(replace(filename, "'" => "''"))')"
+        run(`$ps -NoProfile -Command "$tls12; $downloadfile"`)
         filename
     end
 else
@@ -740,7 +742,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
-                     (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
+                     (any(x -> x === value, (Base, Main, Core)) ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
              for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]

@@ -27,6 +27,16 @@ else # !windows
     end
 
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
+
+    function serialize(s::AbstractSerializer, rd::RandomDevice)
+        Serializer.serialize_type(s, typeof(rd))
+        serialize(s, rd.unlimited)
+    end
+    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
+        unlimited = deserialize(s)
+        return RandomDevice(unlimited)
+    end
+
 end # os-test
 
 # NOTE: this can't be put within the if-else block above

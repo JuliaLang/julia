@@ -7,11 +7,11 @@ Provide the [`SharedArray`](@ref) type. It represents an array, which is shared 
 """
 module SharedArrays
 
-using Mmap, Distributed
+using Mmap, Distributed, Random
 
 import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
-             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copyto!, unsafe_convert
-import Base.Random
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+import Random
 import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
@@ -507,7 +507,7 @@ function fill!(S::SharedArray, v)
     return S
 end
 
-function rand!(S::SharedArray{T}) where T
+function Random.rand!(S::SharedArray{T}) where T
     f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)

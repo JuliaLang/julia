@@ -362,7 +362,7 @@ according to section 4.5 of the RFC.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> Base.Random.uuid1(rng)
+julia> Random.uuid1(rng)
 2cc938da-5937-11e7-196e-0f4ef71aa64b
 ```
 """
@@ -399,7 +399,7 @@ as specified by RFC 4122.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> Base.Random.uuid4(rng)
+julia> Random.uuid4(rng)
 82015f10-44cc-4827-996e-0f4ef71aa64b
 ```
 """
@@ -419,7 +419,7 @@ Inspects the given UUID and returns its version (see RFC 4122).
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> Base.Random.uuid_version(Base.Random.uuid4(rng))
+julia> Random.uuid_version(Random.uuid4(rng))
 4
 ```
 """
@@ -430,7 +430,7 @@ UInt128(u::UUID) = u.value
 let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     global UUID
     function UUID(s::AbstractString)
-        s = Base.Unicode.lowercase(s)
+        s = lowercase(s)
 
         if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
             throw(ArgumentError("Malformed UUID string"))

@@ -92,7 +92,7 @@ function available()
     for (pkg, vers) in all_avail
         any(x->Types.satisfies("julia", VERSION, x[2].requires), vers) && push!(avail, pkg)
     end
-    sort!(avail, by=Base.Unicode.lowercase)
+    sort!(avail, by=lowercase)
 end
 
 function available(pkg::AbstractString)
@@ -633,19 +633,13 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
-    errfile = tempname()
-    touch(errfile)  # create empty file
-    try
+    mktemp() do errfile, f
         build!(pkgs, seen, errfile)
-        open(errfile, "r") do f
-            while !eof(f)
-                pkg = deserialize(f)
-                err = deserialize(f)
-                errs[pkg] = err
-            end
+        while !eof(f)
+            pkg = deserialize(f)
+            err = deserialize(f)
+            errs[pkg] = err
         end
-    finally
-        isfile(errfile) && Base.rm(errfile)
     end
 end
 

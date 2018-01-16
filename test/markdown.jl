@@ -10,6 +10,9 @@ import Base: show
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"foo _bar_ baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"foo **bar** baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
+@test md"foo __bar__ baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
 @test md"""foo
 bar""" == MD(Paragraph(["foo bar"]))
 @test md"""foo\
@@ -1079,3 +1082,17 @@ t = """
     :-- | --:
     1   |   2"""
 @test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+
+# test Base.copy
+let
+    md = doc"test"
+    md′ = copy(md)
+    @test length(md) == length(md′) == 1
+    push!(md, "new")
+    @test length(md) == 2
+    @test length(md′) == 1
+
+    @test !haskey(md.meta, :foo)
+    md.meta[:foo] = 42
+    @test !haskey(md′.meta, :foo)
+end

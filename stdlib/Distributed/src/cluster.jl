@@ -1106,6 +1106,8 @@ function init_bind_addr()
     LPROC.bind_port = UInt16(bind_port)
 end
 
+using Random: randstring
+
 function init_parallel()
     start_gc_msgs_task()
     atexit(terminate_all_workers)

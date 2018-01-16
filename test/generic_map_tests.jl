@@ -76,7 +76,6 @@ end
 
 function run_map_equivalence_tests(mapf)
     testmap_equivalence(mapf, identity, (1,2,3,4))
-    testmap_equivalence(mapf, x->x>0 ? 1.0 : 0.0, sparse(sparse(1.0I, 5, 5)))
     testmap_equivalence(mapf, (x,y,z)->x+y+z, 1,2,3)
     testmap_equivalence(mapf, x->x ? false : true, BitMatrix(uninitialized, 10,10))
     testmap_equivalence(mapf, x->"foobar", BitMatrix(uninitialized, 10,10))

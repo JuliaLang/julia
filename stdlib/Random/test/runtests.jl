@@ -1,16 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers.OAs
+using Test, SparseArrays
 
-using Base.Random.dSFMT
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
+include("OAs.jl")
+using .OAs
+
+using Random
+using Random.dSFMT
+
+using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
 
 @testset "Issue #6573" begin
     srand(0)
     rand()
     x = rand(384)
-    @test find(x .== rand()) == []
+    @test findall(x .== rand()) == []
 end
 
 @test rand() != rand()
@@ -93,10 +97,10 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt
     end
 end
 
-@test !any([(Base.Random.maxmultiple(i)+i) > 0xFF for i in 0x00:0xFF])
-@test all([(Base.Random.maxmultiple(i)+1) % i for i in 0x01:0xFF] .== 0)
-@test all([(Base.Random.maxmultiple(i)+1+i) > 0xFF for i in 0x00:0xFF])
-@test length(0x00:0xFF)== Base.Random.maxmultiple(0x0)+1
+@test !any([(Random.maxmultiple(i)+i) > 0xFF for i in 0x00:0xFF])
+@test all([(Random.maxmultiple(i)+1) % i for i in 0x01:0xFF] .== 0)
+@test all([(Random.maxmultiple(i)+1+i) > 0xFF for i in 0x00:0xFF])
+@test length(0x00:0xFF)== Random.maxmultiple(0x0)+1
 
 
 if sizeof(Int32) < sizeof(Int)
@@ -109,7 +113,6 @@ if sizeof(Int32) < sizeof(Int)
         @test all(div(one(UInt128) << 64, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
                   for k in 13 .+ Int64(2).^(52:62))
     end
-
 end
 
 # BigInt specific
@@ -206,12 +209,12 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
-@test all(ki == Base.Random.ki)
-@test all(wi == Base.Random.wi)
-@test all(fi == Base.Random.fi)
-@test all(ke == Base.Random.ke)
-@test all(we == Base.Random.we)
-@test all(fe == Base.Random.fe)
+@test all(ki == Random.ki)
+@test all(wi == Random.wi)
+@test all(fi == Random.fi)
+@test all(ke == Random.ke)
+@test all(we == Random.we)
+@test all(fe == Random.fe)
 
 #same random numbers on for small ranges on all systems
 guardsrand() do
@@ -232,7 +235,7 @@ for U in (Int64, UInt64)
 end
 
 
-import Base.Random: uuid1, uuid4, UUID, uuid_version
+import Random: uuid1, uuid4, UUID, uuid_version
 
 # UUID
 u1 = uuid1()
@@ -286,12 +289,12 @@ let mt = MersenneTwister(0)
     end
 
     srand(mt, 0)
-    AF64 = Vector{Float64}(uninitialized, Base.Random.dsfmt_get_min_array_size()-1)
+    AF64 = Vector{Float64}(uninitialized, Random.dsfmt_get_min_array_size()-1)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
-    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Base.Random.SamplerTrivial{Base.Random.CloseOpen01_64}},
-                 mt, AF64, Base.Random.SamplerTrivial(Base.Random.CloseOpen01()))[end]  == 0.1142787906708973
+    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Random.SamplerTrivial{Random.CloseOpen01_64}},
+                 mt, AF64, Random.SamplerTrivial(Random.CloseOpen01()))[end]  == 0.1142787906708973
 end
 
 # Issue #9037
@@ -352,7 +355,6 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         f(rng..., 5)                  ::Vector{Float64}
         f(rng..., 2, 3)               ::Array{Float64, 2}
         f(rng..., b2, u3)             ::Array{Float64, 2}
-        f(rng..., (2, 3))             ::Array{Float64, 2}
         for T in functypes[f]
             a0 = f(rng..., T)         ::T
             a1 = f(rng..., T, 5)      ::Vector{T}
@@ -560,18 +562,18 @@ let seed = rand(UInt32, 10)
 end
 
 # MersenneTwister initialization with invalid values
-@test_throws DomainError Base.dSFMT.DSFMT_state(zeros(Int32, rand(0:Base.dSFMT.JN32-1)))
+@test_throws DomainError dSFMT.DSFMT_state(zeros(Int32, rand(0:dSFMT.JN32-1)))
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), dSFMT.DSFMT_state(),
                                          zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), dSFMT.DSFMT_state(),
                                          zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), dSFMT.DSFMT_state(),
                                          zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), dSFMT.DSFMT_state(),
                                          zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
 
 # seed is private to MersenneTwister
@@ -590,7 +592,7 @@ end
 
 # srand(rng, ...) returns rng (#21248)
 guardsrand() do
-    g = Base.Random.GLOBAL_RNG
+    g = Random.GLOBAL_RNG
     m = MersenneTwister(0)
     @test srand() === g
     @test srand(rand(UInt)) === g
@@ -603,8 +605,8 @@ end
 
 # Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
 let r = MersenneTwister(0)
-    @inferred Base.Random.reserve_1(r)
-    @inferred Base.Random.reserve(r, 1)
+    @inferred Random.reserve_1(r)
+    @inferred Random.reserve(r, 1)
 end
 
 # test randstring API

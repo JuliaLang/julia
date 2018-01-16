@@ -149,7 +149,7 @@ function display_error(io::IO, er, bt)
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
-    if eval_ind != 0
+    if eval_ind !== nothing
         bt = bt[1:eval_ind-1]
     end
     showerror(IOContext(io, :limit => true), er, bt)
@@ -254,7 +254,7 @@ try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, pa
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
-        idxs = find(x -> x == "--", ARGS)
+        idxs = findall(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
     quiet                 = (opts.quiet != 0)
@@ -375,7 +375,6 @@ function _start()
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1
 
-        local term
         global active_repl
         global active_repl_backend
         if repl

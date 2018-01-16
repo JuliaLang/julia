@@ -89,9 +89,11 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
   * [Profiling](@ref lib-profiling)
+  * [Random Numbers](@ref)
   * [Shared Arrays](@ref)
-  * [Unit Testing](@ref)
+  * [Sparse Arrays](@ref)
   * [Unicode](@ref)
+  * [Unit Testing](@ref)
 
 ## Developer Documentation
 

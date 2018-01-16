@@ -1,17 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module Random
 
-using Base.dSFMT
+include("dSFMT.jl")
+
+using .dSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+
 using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
 
-import Base: copymutable, copy, copy!, ==, hash
+import Base: copymutable, copy, copy!, ==, hash, serialize, deserialize, convert
+import Base: rand, randn
 
 export srand,
-       rand, rand!,
-       randn, randn!,
+       rand!, randn!,
        randexp, randexp!,
        bitrand,
        randstring,
@@ -20,12 +25,14 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
+       defaultRNG, randjump
 
 
 ## general definitions
 
 abstract type AbstractRNG end
+
+defaultRNG() = GLOBAL_RNG
 
 
 ### integers
@@ -64,6 +71,7 @@ for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
         uint_default(::$UI) = $UI{uint_sup($UI)}()
     end
 end
+
 
 ### floats
 
@@ -212,10 +220,8 @@ function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
     A
 end
 
-rand(r::AbstractRNG, dims::Dims)       = rand(r, Float64, dims)
-rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
-rand(                dims::Integer...) = rand(Dims(dims))
+rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
+rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
 rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
@@ -248,7 +254,7 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
-
+include("deprecated.jl")
 
 ## rand & rand! & srand docstrings
 
@@ -265,7 +271,8 @@ Pick a random element or array of random elements from the set of values specifi
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
-`S` defaults to [`Float64`](@ref).
+`S` defaults to [`Float64`](@ref)
+(except when `dims` is a tuple of integers, in which case `S` must be specified).
 
 # Examples
 ```julia-repl

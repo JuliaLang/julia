@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536

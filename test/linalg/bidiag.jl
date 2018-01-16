@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 using Base.LinAlg: mul!
 import Base.LinAlg: BlasReal, BlasFloat
+using SparseArrays
 
 n = 10 #Size of test matrix
 srand(1)

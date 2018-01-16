@@ -357,5 +357,5 @@ Timer(time::Period; interval::Period = Second(0)) =
     Timer(toms(time) / 1000, interval = toms(interval) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-Base.TypeOrder(::Type{<:AbstractTime}) = Base.HasOrder()
-Base.TypeArithmetic(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()
+Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
+Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()

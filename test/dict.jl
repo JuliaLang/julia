@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "Pair" begin
     p = Pair(10,20)
     @test p == (10=>20)
@@ -282,7 +284,7 @@ end
             Base.show(io, MIME("text/plain"), d)
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
-                @test Base.Unicode.textwidth(line) <= cols
+                @test textwidth(line) <= cols
             end
             @test length(out) <= rows
 
@@ -292,7 +294,7 @@ end
                 Base.show(io, MIME("text/plain"), f(d))
                 out = split(String(take!(s)),'\n')
                 for line in out[2:end]
-                    @test Base.Unicode.textwidth(line) <= cols
+                    @test textwidth(line) <= cols
                 end
                 @test length(out) <= rows
             end
@@ -758,9 +760,9 @@ end
     @test map(string, keys(d)) == Set(["1","3"])
 end
 
-@testset "find" begin
-    @test @inferred find(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test @inferred sort(find(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test @inferred isempty(find(equalto(1), Dict()))
-    @test @inferred isempty(find(equalto(1), Dict(:a=>2, :b=>3)))
+@testset "findall" begin
+    @test @inferred findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test @inferred sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test @inferred isempty(findall(equalto(1), Dict()))
+    @test @inferred isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
 end

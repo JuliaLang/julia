@@ -127,7 +127,7 @@ function show(io::IO, c::Char)
             (u <<= 8) == 0 && break
         end
         write(io, 0x27)
-    elseif Unicode.isprint(c)
+    elseif isprint(c)
         write(io, 0x27, c, 0x27)
     else # unprintable, well-formed, non-overlong Unicode
         u = UInt32(c)

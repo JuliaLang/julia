@@ -131,7 +131,7 @@ end
 
     alnums=vcat(alphas,anumber,unumber)
     for c in alnums
-        @test isalnum(c) == true
+        @test isalpha(c) || isnumeric(c)
         @test ispunct(c) == false
     end
 
@@ -143,12 +143,11 @@ end
 
     for c in vcat(apunct,upunct)
         @test ispunct(c) == true
-        @test isalnum(c) == false
+        @test !isalpha(c) && !isnumeric(c)
     end
 
     for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
         @test isprint(c) == true
-        @test isgraph(c) == true
         @test isspace(c) == false
         @test iscntrl(c) == false
     end
@@ -165,13 +164,11 @@ end
     for c in vcat(aspace,uspace)
         @test isspace(c) == true
         @test isprint(c) == true
-        @test isgraph(c) == false
     end
 
     for c in vcat(acntrl_space)
         @test isspace(c) == true
         @test isprint(c) == false
-        @test isgraph(c) == false
     end
 
     @test isspace(ZWSPACE) == false # zero-width space
@@ -182,23 +179,20 @@ end
 
     for c in vcat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
-        @test isalnum(c) == false
+        @test !isalpha(c) && !isnumeric(c)
         @test isprint(c) == false
-        @test isgraph(c) == false
     end
 
     for c in ucontrol  #non-latin1 controls
         if c!=Char(0x0085)
             @test iscntrl(c) == false
             @test isspace(c) == false
-            @test isalnum(c) == false
+            @test !isalpha(c) && !isnumeric(c)
             @test isprint(c) == false
-            @test isgraph(c) == false
         end
     end
 
     @test  all(isspace,"  \t   \n   \r  ")
-    @test !all(isgraph,"  \t   \n   \r  ")
     @test !all(isprint,"  \t   \n   \r  ")
     @test !all(isalpha,"  \t   \n   \r  ")
     @test !all(isnumeric,"  \t   \n   \r  ")
@@ -206,7 +200,6 @@ end
 
     @test !all(isspace,"ΣβΣβ")
     @test  all(isalpha,"ΣβΣβ")
-    @test  all(isgraph,"ΣβΣβ")
     @test  all(isprint,"ΣβΣβ")
     @test !all(isupper,"ΣβΣβ")
     @test !all(islower,"ΣβΣβ")
@@ -216,7 +209,6 @@ end
 
     @test  all(isnumeric,"23435")
     @test  all(isdigit,"23435")
-    @test  all(isalnum,"23435")
     @test !all(isalpha,"23435")
     @test  all(iscntrl,string(Char(0x0080)))
     @test  all(ispunct, "‡؟჻")

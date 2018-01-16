@@ -1248,7 +1248,7 @@ run during inference, it must respect all of the limitations of that code.
 Some operations that should not be attempted include:
 
 1. Caching of native pointers.
-2. Interacting with the contents or methods of Core.Inference in any way.
+2. Interacting with the contents or methods of Core.Compiler in any way.
 3. Observing any mutable state.
 
      * Inference on the generated function may be run at *any* time, including while your code is attempting

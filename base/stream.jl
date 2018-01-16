@@ -271,13 +271,13 @@ end
 
 function wait_readbyte(x::LibuvStream, c::UInt8)
     if isopen(x) # fast path
-        findfirst(equalto(c), x.buffer) > 0 && return
+        findfirst(equalto(c), x.buffer) !== nothing && return
     else
         return
     end
     preserve_handle(x)
     try
-        while isopen(x) && findfirst(equalto(c), x.buffer) <= 0
+        while isopen(x) && coalesce(findfirst(equalto(c), x.buffer), 0) <= 0
             start_reading(x) # ensure we are reading
             wait(x.readnotify)
         end
@@ -1073,7 +1073,7 @@ for (x, writable, unix_fd, c_symbol) in
         ((:STDIN, false, 0, :jl_uv_stdin),
          (:STDOUT, true, 1, :jl_uv_stdout),
          (:STDERR, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_",Unicode.lowercase(string(x)))
+    f = Symbol("redirect_",lowercase(string(x)))
     _f = Symbol("_",f)
     @eval begin
         function ($_f)(stream)
@@ -1237,7 +1237,7 @@ end
 show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nb_available(s.buffer),", isopen:", s.is_open)
 
 function wait_readbyte(s::BufferStream, c::UInt8)
-    while isopen(s) && findfirst(equalto(c), s.buffer) <= 0
+    while isopen(s) && findfirst(equalto(c), s.buffer) === nothing
         wait(s.r_c)
     end
 end

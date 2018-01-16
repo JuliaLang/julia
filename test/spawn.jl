@@ -4,6 +4,8 @@
 # Cross Platform tests for spawn. #
 ###################################
 
+using Random
+
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
 yescmd = `yes`

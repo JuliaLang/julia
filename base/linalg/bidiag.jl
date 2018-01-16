@@ -178,7 +178,8 @@ broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.u
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
-similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+# The method below is moved to SparseArrays for now
+# similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 
 ###################
@@ -604,7 +605,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(uninitialized, n,n)
-    blks = [0; find(x -> x == 0, M.ev); n]
+    blks = [0; findall(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
