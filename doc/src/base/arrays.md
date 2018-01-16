@@ -122,8 +122,8 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.find(::Any)
-Base.find(::Function, ::Any)
+Base.findall(::Any)
+Base.findall(::Function, ::Any)
 Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)

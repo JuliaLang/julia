@@ -605,7 +605,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(uninitialized, n,n)
-    blks = [0; find(x -> x == 0, M.ev); n]
+    blks = [0; findall(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

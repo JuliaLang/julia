@@ -494,13 +494,13 @@ julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
 Often referred to as logical indexing or indexing with a logical mask, indexing
 by a boolean array selects elements at the indices where its values are `true`.
 Indexing by a boolean vector `B` is effectively the same as indexing by the
-vector of integers that is returned by [`find(B)`](@ref). Similarly, indexing
+vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
 must be a vector of the same length as the dimension it indexes into, or it
 must be the only index provided and match the size and dimensionality of the
 array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`find`](@ref).
+indices directly instead of first calling [`findall`](@ref).
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)

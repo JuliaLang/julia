@@ -537,7 +537,7 @@ end
 
 @testset "issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
     A = sparse(I, 5, 5)
-    @test find(A) == find(x -> x == true, A) == find(Array(A))
+    @test findall(A) == findall(x -> x == true, A) == findall(Array(A))
 end
 
 @testset "issue #5824" begin
@@ -1405,7 +1405,7 @@ end
     targetnumnegzeros = 5
     for (m, n) in ((largedim, largedim), (smalldim, largedim), (largedim, smalldim))
         local A = sprand(m, n, nzprob)
-        struczerosA = find(x -> x == 0, A)
+        struczerosA = findall(x -> x == 0, A)
         poszerosinds = unique(rand(struczerosA, targetnumposzeros))
         negzerosinds = unique(rand(struczerosA, targetnumnegzeros))
         Aposzeros = setindex!(copy(A), 2, poszerosinds)

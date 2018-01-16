@@ -760,9 +760,9 @@ end
     @test map(string, keys(d)) == Set(["1","3"])
 end
 
-@testset "find" begin
-    @test @inferred find(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test @inferred sort(find(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test @inferred isempty(find(equalto(1), Dict()))
-    @test @inferred isempty(find(equalto(1), Dict(:a=>2, :b=>3)))
+@testset "findall" begin
+    @test @inferred findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test @inferred sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test @inferred isempty(findall(equalto(1), Dict()))
+    @test @inferred isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
 end

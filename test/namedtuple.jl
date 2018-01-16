@@ -209,7 +209,7 @@ abstr_nt_22194_3()
 @test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
                              (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}
 
-@test @inferred find(equalto(1), (a=1, b=2)) == [:a]
-@test @inferred find(equalto(1), (a=1, b=1)) == [:a, :b]
-@test @inferred isempty(find(equalto(1), NamedTuple()))
-@test @inferred isempty(find(equalto(1), (a=2, b=3)))
+@test @inferred findall(equalto(1), (a=1, b=2)) == [:a]
+@test @inferred findall(equalto(1), (a=1, b=1)) == [:a, :b]
+@test @inferred isempty(findall(equalto(1), NamedTuple()))
+@test @inferred isempty(findall(equalto(1), (a=2, b=3)))

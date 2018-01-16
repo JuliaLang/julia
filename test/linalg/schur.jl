@@ -56,7 +56,7 @@ aimg  = randn(n,n)/2
             S = schurfact(ordschura)
             select = bitrand(n)
             O = ordschur(S, select)
-            sum(select) != 0 && @test S.values[find(select)] ≈ O.values[1:sum(select)]
+            sum(select) != 0 && @test S.values[findall(select)] ≈ O.values[1:sum(select)]
             @test O.vectors*O.Schur*O.vectors' ≈ ordschura
             @test_throws ErrorException f.A
             Snew = Base.LinAlg.Schur(S.T, S.Z, S.values)
@@ -90,7 +90,7 @@ aimg  = randn(n,n)/2
             @test S.Q*S.S*S.Z' ≈ a1_sf
             @test S.Q*S.T*S.Z' ≈ a2_sf
             # Make sure that we have sorted it correctly
-            @test NS.values[find(select)] ≈ S.values[1:m]
+            @test NS.values[findall(select)] ≈ S.values[1:m]
 
             Snew = Base.LinAlg.GeneralizedSchur(NS.S, NS.T, NS.alpha, NS.beta, NS.Q, NS.Z)
             SchurNew = ordschur!(copy(Snew), select)

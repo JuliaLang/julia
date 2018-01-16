@@ -1263,16 +1263,16 @@ dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
 ## Find methods
 
-function find(S::SparseMatrixCSC)
+function findall(S::SparseMatrixCSC)
     if !(eltype(S) <: Bool)
-        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        Base.depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :findall)
     end
-    return find(x->x!=0, S)
+    return findall(x->x!=0, S)
 end
 
-function find(p::Function, S::SparseMatrixCSC)
+function findall(p::Function, S::SparseMatrixCSC)
     if p(zero(eltype(S)))
-        return invoke(find, Tuple{Function, Any}, p, S)
+        return invoke(findall, Tuple{Function, Any}, p, S)
     end
 
     numnz = nnz(S)
@@ -1288,8 +1288,8 @@ function find(p::Function, S::SparseMatrixCSC)
 
     return inds
 end
-find(p::Base.OccursIn, x::SparseMatrixCSC) =
-    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.OccursIn, x::SparseMatrixCSC) =
+    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
@@ -2292,12 +2292,12 @@ end
 getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{Bool}) = error("Cannot index with AbstractRange{Bool}")
 getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with AbstractRange{Bool}")
 
-getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[find(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[findall(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[findall(I),findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[findall(I),J]
 
 ## setindex!
 function setindex!(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer) where Tv where Ti
@@ -2636,17 +2636,17 @@ end
 
 # Logical setindex!
 
-setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), find(I), J)
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), find(I), find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, sparse(x), find(I),J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), findall(I), J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), findall(I), findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, sparse(x), findall(I),J)
 
-setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, Array(x), find(I), J)
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, Array(x), find(I), find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, Array(x), findall(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, Array(x), findall(I), findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), findall(I), J)
 
 setindex!(A::SparseMatrixCSC, x, I::AbstractVector{Bool}) = throw(BoundsError())
 function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})

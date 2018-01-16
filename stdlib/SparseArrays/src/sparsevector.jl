@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, find, findnz
+import Base: sort, findall, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -672,16 +672,16 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find(x::SparseVector)
+function findall(x::SparseVector)
     if !(eltype(x) <: Bool)
-        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        Base.depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :findall)
     end
-    return find(x->x!=0, x)
+    return findall(x->x!=0, x)
 end
 
-function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
+function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti
     if p(zero(eltype(x)))
-        return invoke(find, Tuple{Function, Any}, p, x)
+        return invoke(findall, Tuple{Function, Any}, p, x)
     end
     numnz = nnz(x)
     I = Vector{Ti}(uninitialized, numnz)
@@ -704,8 +704,8 @@ function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
 
     return I
 end
-find(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
-    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
+    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
@@ -797,8 +797,8 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {T
     SparseVector(length(I), rind, rval)
 end
 
-getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[find(I)]
-getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[find(I)]
+getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
+getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
