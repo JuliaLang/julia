@@ -2990,7 +2990,6 @@ end
 @deprecate dropzeros!(x, trim) dropzeros!(x, trim = trim)
 @deprecate mkdir(path, mode) mkdir(path, mode = mode)
 @deprecate mkpath(path, mode) mkpath(path, mode = mode)
-@deprecate chown(path, owner, mode) chown(path, owner, mode = mode)
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
