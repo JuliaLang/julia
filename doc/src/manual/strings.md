@@ -447,8 +447,31 @@ I have $100 in my account.
 ## Triple-Quoted String Literals
 
 When strings are created using triple-quotes (`"""..."""`) they have some special behavior that
-can be useful for creating longer blocks of text. First, if the opening `"""` is followed by a
-newline, the newline is stripped from the resulting string.
+can be useful for creating longer blocks of text.
+
+First, triple-quoted strings are also dedented to the level of the least-indented line.
+This is useful for defining strings within code that is indented. For example:
+
+```jldoctest
+julia> str = """
+           Hello,
+           world.
+         """
+"  Hello,\n  world.\n"
+```
+
+In this case the final (empty) line before the closing `"""` sets the indentation level.
+
+The dedentation is performed for all lines excluding the text following the opening `"""`, e.g.:
+```jldoctest
+julia> """    This
+         is
+           a test"""
+"    This\nis\n  a test"
+```
+
+Next, if the opening `"""` is followed by a newline,
+the newline is stripped from the resulting string.
 
 ```julia
 """hello"""
@@ -469,20 +492,18 @@ but
 hello"""
 ```
 
-will contain a literal newline at the beginning. Trailing whitespace is left unaltered. They can
-contain `"` symbols without escaping. Triple-quoted strings are also dedented to the level of
-the least-indented line. This is useful for defining strings within code that is indented. For
-example:
+will contain a literal newline at the beginning.
+
+Stripping of the newline is performed after the dedentation for example:
 
 ```jldoctest
-julia> str = """
-           Hello,
-           world.
-         """
-"  Hello,\n  world.\n"
+julia> """
+         Hello,
+         world."""
+"Hello,\nworld."
 ```
 
-In this case the final (empty) line before the closing `"""` sets the indentation level.
+Trailing whitespace is left unaltered. They can contain `"` symbols without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
