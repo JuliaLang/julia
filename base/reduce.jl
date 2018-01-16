@@ -269,6 +269,12 @@ reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
 reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(&), ::Type{Bool}) = true
+reduce_empty(::typeof(&), ::Type{T}) where {T<:Integer} = -1 % T
+reduce_empty(::typeof(|), ::Type{Bool}) = false
+reduce_empty(::typeof(|), ::Type{T}) where {T<:Integer} = zero(T)
+reduce_empty(::typeof(xor), ::Type{Bool}) = false
+reduce_empty(::typeof(xor), ::Type{T}) where {T<:Integer} = zero(T)
 
 """
     Base.mapreduce_empty(f, op, T)
