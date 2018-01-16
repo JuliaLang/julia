@@ -518,6 +518,12 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif
+
+# Independent to the llvm version add a JL prefix to the version map
+# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
+
+
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
 ifeq ($(LLVM_USE_CMAKE),1)
