@@ -471,9 +471,21 @@ function finish(me::InferenceState)
     nothing
 end
 
+function maybe_widen_conditional(vt)
+    if isa(vt, Conditional)
+        if vt.vtype === Bottom
+            vt = Const(false)
+        elseif vt.elsetype === Bottom
+            vt = Const(true)
+        end
+    end
+    vt
+end
+
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     head = e.head
     i0 = 1
+    e.typ = maybe_widen_conditional(e.typ)
     if is_meta_expr_head(head) || head === :const
         return
     end
@@ -487,7 +499,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = s.typ
+            vt = maybe_widen_conditional(s.typ)
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
