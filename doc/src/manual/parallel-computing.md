@@ -394,11 +394,11 @@ in.
 
 Notice that our use of this pattern with `count_heads` can be generalized. We used two explicit
 [`@spawn`](@ref) statements, which limits the parallelism to two processes. To run on any number
-of processes, we can use a *parallel for loop*, which can be written in Julia using [`@parallel`](@ref)
-like this:
+of processes, we can use a *parallel for loop*, running in distributed memory, which can be written
+in Julia using [`@distributed`](@ref) like this:
 
 ```julia
-nheads = @parallel (+) for i = 1:200000000
+nheads = @distributed (+) for i = 1:200000000
     Int(rand(Bool))
 end
 ```
@@ -417,7 +417,7 @@ For example, the following code will not work as intended:
 
 ```julia
 a = zeros(100000)
-@parallel for i = 1:100000
+@distributed for i = 1:100000
     a[i] = i
 end
 ```
@@ -430,7 +430,7 @@ to get around this limitation:
 using SharedArrays
 
 a = SharedArray{Float64}(10)
-@parallel for i = 1:10
+@distributed for i = 1:10
     a[i] = i
 end
 ```
@@ -439,7 +439,7 @@ Using "outside" variables in parallel loops is perfectly reasonable if the varia
 
 ```julia
 a = randn(1000)
-@parallel (+) for i = 1:100000
+@distributed (+) for i = 1:100000
     f(a[rand(1:end)])
 end
 ```
@@ -450,7 +450,7 @@ As you could see, the reduction operator can be omitted if it is not needed. In 
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
 an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
 the [`Future`](@ref) completions at a later point by calling [`fetch`](@ref) on them, or wait
-for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @parallel for`.
+for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @distributed for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
 in some range (or, more generally, to all elements in some collection). This is another useful
@@ -464,9 +464,9 @@ julia> pmap(svd, M);
 ```
 
 Julia's [`pmap`](@ref) is designed for the case where each function call does a large amount
-of work. In contrast, `@parallel for` can handle situations where each iteration is tiny, perhaps
-merely summing two numbers. Only worker processes are used by both [`pmap`](@ref) and `@parallel for`
-for the parallel computation. In case of `@parallel for`, the final reduction is done on the calling
+of work. In contrast, `@distributed for` can handle situations where each iteration is tiny, perhaps
+merely summing two numbers. Only worker processes are used by both [`pmap`](@ref) and `@distributed for`
+for the parallel computation. In case of `@distributed for`, the final reduction is done on the calling
 process.
 
 ## Synchronization With Remote References
@@ -989,12 +989,12 @@ Now let's compare three different versions, one that runs in a single process:
 julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
-one that uses [`@parallel`](@ref):
+one that uses [`@distributed`](@ref):
 
 ```julia-repl
 julia> function advection_parallel!(q, u)
            for t = 1:size(q,3)-1
-               @sync @parallel for j = 1:size(q,2)
+               @sync @distributed for j = 1:size(q,2)
                    for i = 1:size(q,1)
                        q[i,j,t+1]= q[i,j,t] + u[i,j,t]
                    end
@@ -1437,7 +1437,7 @@ julia> a
  4.0
 ```
 
-Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@parallel`](@ref).
+Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
