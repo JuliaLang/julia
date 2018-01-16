@@ -97,7 +97,16 @@ has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
 @test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
-# Make sure getproperty and setproperty! works with warntype
+# Make sure Union{} is not highlighted
+@test !warntype_hastag(error, Tuple{}, "UNION")
+
+# Make sure that "expected" unions are highlighted with warning color instead of error color
+iob = IOBuffer()
+code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
+str = String(take!(iob))
+@test contains(str, Base.text_colors[Base.warn_color()])
+
+# Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
     t::Int
 end
