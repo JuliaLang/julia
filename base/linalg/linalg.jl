@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex
+    @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex, RangeIndex
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -163,8 +163,12 @@ end
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
 struct StridedLayout{T} <: MemoryLayout{T} end
-struct TransposeStridedLayout{T} <: MemoryLayout{T} end
-struct CTransposeStridedLayout{T} <: MemoryLayout{T} end
+struct TransposeLayout{T} <: MemoryLayout{T} end
+struct CTransposeLayout{T} <: MemoryLayout{T} end
+struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UnitLowerTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UpperTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UnitUpperTriangularLayout{trans,T} <: MemoryLayout{T} end
 
 """
     MemoryLayout(A)
@@ -187,15 +191,14 @@ the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
 In this case, one must implement the strided array interface, which requires
 overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`
 """
-MemoryLayout(A::AbstractArray) = MemoryLayout(typeof(A))
-MemoryLayout(::Type{A}) where A <: AbstractArray{T,N} where {T,N} = UnknownLayout{T}()
-MemoryLayout(::Type{A}) where A <: Array{T,N} where {T,N} = StridedLayout{T}()
-MemoryLayout(::Type{A}) where A <: SubArray{T,N,P,I} where {T,N,P,I} =
-    submemorylayout(MemoryLayout(P), I)
+MemoryLayout(A::AbstractArray{T,N}) where {T,N} = UnknownLayout{T}()
+MemoryLayout(A::Vector{T}) where {T} = StridedLayout{T}()
+MemoryLayout(A::Matrix{T}) where {T} = StridedLayout{T}()
+MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
 
 submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-LinAlg.submemorylayout(::StridedLayout{T}, ::Type{NTuple{N,I}}) where {T,N,I<:Union{RangeIndex, AbstractCartesianIndex}} =
-    StridedLayout{T}()
+submemorylayout(S::StridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex, AbstractCartesianIndex}} = S
+submemorylayout(S::StridedLayout{T}, ::NTuple{2,I}) where {T,I<:Union{RangeIndex, AbstractCartesianIndex}} = S
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
