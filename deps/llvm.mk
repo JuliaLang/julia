@@ -508,6 +508,11 @@ $(eval $(call LLVM_PATCH,llvm-3.9-osx-10.12))
 endif
 endif
 
+# Independent to the llvm version add a JL prefix to the version map
+# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
+
+
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
