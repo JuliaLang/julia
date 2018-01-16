@@ -169,6 +169,12 @@ struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
 struct UnitLowerTriangularLayout{trans,T} <: MemoryLayout{T} end
 struct UpperTriangularLayout{trans,T} <: MemoryLayout{T} end
 struct UnitUpperTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct SymmetricLayout{T} <: MemoryLayout{T}
+    uplo::Char
+end
+struct HermitianLayout{T} <: MemoryLayout{T}
+    uplo::Char
+end
 
 """
     MemoryLayout(A)

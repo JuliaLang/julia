@@ -362,6 +362,33 @@ diag(A::UnitLowerTriangular) = fill(one(eltype(A)), size(A,1))
 diag(A::UpperTriangular) = diag(A.data)
 diag(A::UnitUpperTriangular) = fill(one(eltype(A)), size(A,1))
 
+MemoryLayout(A::UpperTriangular) = trilayout(UpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, MemoryLayout(parent(A)))
+trilayout(::Type{TriT}, ::MemoryLayout{T}) where {TriT,T} = UnknownLayout{T}()
+trilayout(::Type{TriT}, ::StridedLayout{T}) where {TriT,T} = TriT{'N',T}()
+trilayout(::Type{TriT}, ::TransposeLayout{T}) where {TriT,T} = TriT{'T',T}()
+trilayout(::Type{TriT}, ::CTransposeLayout{T}) where {TriT,T} = TriT{'C',T}()
+transpose(::UpperTriangularLayout{'N',T}) where {T} = LowerTriangularLayout{'T',T}()
+transpose(::UnitUpperTriangularLayout{'N',T}) where {T} = UnitLowerTriangularLayout{'T',T}()
+transpose(::LowerTriangularLayout{'N',T}) where {T} = UpperTriangularLayout{'T',T}()
+transpose(::UnitLowerTriangularLayout{'N',T}) where {T} = UnitUpperTriangularLayout{'T',T}()
+transpose(::UpperTriangularLayout{'T',T}) where {T} = LowerTriangularLayout{'N',T}()
+transpose(::UnitUpperTriangularLayout{'T',T}) where {T} = UnitLowerTriangularLayout{'N',T}()
+transpose(::LowerTriangularLayout{'T',T}) where {T} = UpperTriangularLayout{'N',T}()
+transpose(::UnitLowerTriangularLayout{'T',T}) where {T} = UnitUpperTriangularLayout{'N',T}()
+
+
+adjoint(::UpperTriangularLayout{'N',T}) where {T<:Complex} = LowerTriangularLayout{'C',T}()
+adjoint(::UnitUpperTriangularLayout{'N',T}) where {T<:Complex} = UnitLowerTriangularLayout{'C',T}()
+adjoint(::LowerTriangularLayout{'N',T}) where {T<:Complex} = UpperTriangularLayout{'C',T}()
+adjoint(::UnitLowerTriangularLayout{'N',T}) where {T<:Complex} = UnitUpperTriangularLayout{'C',T}()
+adjoint(::UpperTriangularLayout{'C',T}) where {T<:Complex} = LowerTriangularLayout{'N',T}()
+adjoint(::UnitUpperTriangularLayout{'C',T}) where {T<:Complex} = UnitLowerTriangularLayout{'N',T}()
+adjoint(::LowerTriangularLayout{'C',T}) where {T<:Complex} = UpperTriangularLayout{'N',T}()
+adjoint(::UnitLowerTriangularLayout{'C',T}) where {T<:Complex} = UnitUpperTriangularLayout{'N',T}()
+
 # Unary operations
 -(A::LowerTriangular) = LowerTriangular(-A.data)
 -(A::UpperTriangular) = UpperTriangular(-A.data)
@@ -460,72 +487,43 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 mul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
 mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
-mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; mul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; mul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; mul!(A, adjoint!(C, B)))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; mul!(A, adjoint!(C, B)))
-# The three methods for each op are neceesary to avoid ambiguities with definitions in matmul.jl
-mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = mul!(A, copyto!(C, B))
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = mul!(A, copyto!(C, B))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(A, copyto!(C, B))
-mul!(C::AbstractVector  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = adjA.parent; mul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractMatrix  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; mul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractVecOrMat, adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; mul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractVector  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = transA.parent; mul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; mul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; mul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
-
-for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
-                            (:UnitLowerTriangular, 'L', 'U'),
-                            (:UpperTriangular, 'U', 'N'),
-                            (:UnitUpperTriangular, 'U', 'U'))
+for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, 'L', 'N'),
+                                    (:UnitLowerTriangular, :UnitLowerTriangularLayout, 'L', 'U'),
+                                    (:UpperTriangular, :UpperTriangularLayout, 'U', 'N'),
+                                    (:UnitUpperTriangular, :UnitUpperTriangularLayout, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        mul!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
+        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
+            mul!(A, copyto!(y, b))
+
+        _mul!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        mul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasFloat} =
-            (A = transA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        mul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasReal} =
-            (A = adjA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        mul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasComplex} =
-            (A = adjA.parent; BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
+        _mul!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::StridedLayout) where {T<:BlasFloat} =
+            (A = transpose(transA); BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
+        _mul!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::StridedLayout) where {T<:BlasComplex} =
+            (A = adjoint(adjA); BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
 
         # Matrix multiplication
-        mul!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
+            mul!(A, copyto!(C, B))
+        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::StridedLayout, ::$memlay) where {T<:BlasFloat}  =
+            mul!(A, copyto!(C, B))
+
+        _mul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        mul!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        _mul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'N'}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        mul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-            (A = transA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        mul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasComplex} =
-            (A = adjA.parent; BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
-        mul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasReal} =
-            (A = adjA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
+        _mul!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::StridedLayout) where {T<:BlasFloat} =
+            (A = transpose(transA); BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
+        _mul!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::StridedLayout) where {T<:BlasComplex} =
+            (A = adjoint(adjA); BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
 
-        mul!(A::StridedMatrix{T}, transB::Transpose{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-            (B = transB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasComplex} =
-            (B = adjB.parent; BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
-        mul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasReal} =
-            (B = adjB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
+        _mul!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'T'}) where {T<:BlasFloat} =
+            (B = transpose(transB); BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
+        _mul!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'C'}) where {T<:BlasComplex} =
+            (B = adjoint(adjB); BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
 
         # Left division
         ldiv!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =

@@ -167,7 +167,7 @@ end
 Calculate the matrix-matrix product ``AB``, overwriting one of `A` or `B` (but not both),
 and return the result (the overwritten argument).
 """
-mul!(A, B)
+mul!(A, B) = _mul!(A, B, MemoryLayout(A), MemoryLayout(B))
 
 _mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, _1, _2, _3) = generic_matmatmul!(C, 'N', 'N', A, B)
 
