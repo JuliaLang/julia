@@ -256,19 +256,12 @@ with reduction `op` over an empty array with element type of `T`.
 If not defined, this will throw an `ArgumentError`.
 """
 reduce_empty(op, T) = _empty_reduce_error()
-reduce_empty(::typeof(+), T) = zero(T)
-reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), T) = one(T)
-reduce_empty(::typeof(*), ::Type{Char}) = ""
-reduce_empty(::typeof(&), ::Type{Bool}) = true
-reduce_empty(::typeof(|), ::Type{Bool}) = false
-
-reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(op::typeof(+), T)       = zero(Base.promote_op(op, T, T))
+reduce_empty(op::typeof(add_sum), T) = zero(Base.promote_op(op, T, T))
+reduce_empty(op::typeof(*), T)        = one(Base.promote_op(op, T, T))
+reduce_empty(op::typeof(mul_prod), T) = one(Base.promote_op(op, T, T))
+reduce_empty(op::typeof(&), ::Type{Bool}) = true
+reduce_empty(op::typeof(|), ::Type{Bool}) = false
 
 """
     Base.mapreduce_empty(f, op, T)
@@ -305,16 +298,12 @@ The default is `x` for most types. The main purpose is to ensure type stability,
 additional methods should only be defined for cases where `op` gives a result with
 different types than its inputs.
 """
-reduce_first(op, x) = x
-reduce_first(::typeof(+), x::Bool) = Int(x)
-reduce_first(::typeof(*), x::Char) = string(x)
+reduce_first(op, x::T) where {T} = convert(Base.promote_op(op, T, T), x)
 
-reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
-reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+# there is no convert(String, ::Char) method
+reduce_first(op::typeof(*), x::Char) = string(x)
+reduce_first(op::typeof(mul_prod), x::Char) = string(x)
+
 
 """
     Base.mapreduce_first(f, op, x)
