@@ -647,4 +647,31 @@ finally
     rm(dir, recursive=true)
 end
 
+# issue #19030 and #25279
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        ModuleA = :Issue19030
+
+        write(joinpath(load_path, "$ModuleA.jl"),
+            """
+            __precompile__(true)
+            module $ModuleA
+                __init__() = push!(Base.package_callbacks, sym->nothing)
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(Base.LOAD_CACHE_PATH, load_cache_path)
+
+        l0 = length(Base.package_callbacks)
+        @eval using $ModuleA
+        @test length(Base.package_callbacks) == l0 + 1
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
+
 end # !withenv
