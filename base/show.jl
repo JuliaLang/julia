@@ -604,7 +604,7 @@ const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'),
-                         :braces=>('{','}'), :bracescat=>('{','}'))
+                         :braces=>('{','}'), :bracescat=>('{','}'), :braceshcat=>('{','}'))
 
 ## AST decoding helpers ##
 
@@ -1006,7 +1006,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         op, cl = expr_parens[head]
         if head === :vcat || head === :bracescat
             sep = "; "
-        elseif head === :hcat || head === :row
+        elseif head === :hcat || head === :row || head === :braceshcat
             sep = " "
         else
             sep = ", "
@@ -1016,7 +1016,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if nargs == 1
             if head === :tuple
                 print(io, ',')
-            elseif head === :vcat
+            elseif head === :vcat || head === :bracescat
                 print(io, ';')
             end
         end

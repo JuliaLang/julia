@@ -85,6 +85,7 @@
                 ((row)        (deparse-arglist (cdr e) " "))
                 ((braces)     (string #\{ (deparse-arglist (cdr e) ", ") #\}))
                 ((bracescat)  (string #\{ (deparse-arglist (cdr e) "; ") #\}))
+                ((braceshcat) (string #\{ (deparse-arglist (cdr e) " ") #\}))
                 ((const)  (string "const " (deparse (cadr e))))
                 ((global local)
                  (string (car e) " " (string.join (map deparse (cdr e)) ", ")))

@@ -2284,7 +2284,7 @@
                      '(braces)
                      (case (car vex)
                        ((vect) `(braces ,@(cdr vex)))
-                       ((hcat) `(bracescat (row ,@(cdr vex))))
+                       ((hcat) `(braceshcat ,@(cdr vex)))
                        ((comprehension) `(braces ,@(cdr vex)))
                        (else   `(bracescat ,@(cdr vex))))))))
 
