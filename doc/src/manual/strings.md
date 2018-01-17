@@ -462,7 +462,12 @@ julia> str = """
 
 In this case the final (empty) line before the closing `"""` sets the indentation level.
 
-The dedentation is performed for all lines excluding the text following the opening `"""`, e.g.:
+The dedentation level is determined as the longest common statring sequence of spaces or
+tabs in all lines, excluding the line following the opening `"""` and lines containing
+only spaces or tabs (the line containing the closing `"""` is always included).
+Then for all lines, excluding the text following the opening `"""`, the common starting
+sequence is removed (including lines containing only spaces and tabs if they start with
+this sequence), e.g.:
 ```jldoctest
 julia> """    This
          is
