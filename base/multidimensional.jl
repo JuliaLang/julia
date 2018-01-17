@@ -685,16 +685,6 @@ _iterable(v) = Iterators.repeated(v)
     end
 end
 
-##
-
-# see discussion in #18364 ... we try not to widen type of the resulting array
-# from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S} = promote_op(op, T, S)
-rcum_promote_type(op, ::Type{T}) where {T} = rcum_promote_type(op, T,T)
-
-# handle sums of Vector{Bool} and similar.   it would be nice to handle
-# any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
 
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
@@ -729,7 +719,7 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, rcum_promote_type(op, T))
+    out = similar(v, promote_op(op, T))
     return accumulate_pairwise!(op, out, v)
 end
 
@@ -774,7 +764,7 @@ julia> cumsum(a,2)
 ```
 """
 function cumsum(A::AbstractArray{T}, dim::Integer) where T
-    out = similar(A, rcum_promote_type(+, T))
+    out = similar(A, promote_op(+, T))
     cumsum!(out, A, dim)
 end
 
@@ -908,7 +898,7 @@ julia> accumulate(+, fill(1, 3, 3), 2)
 ```
 """
 function accumulate(op, A, dim::Integer)
-    out = similar(A, rcum_promote_type(op, eltype(A)))
+    out = similar(A, promote_op(op, eltype(A)))
     accumulate!(op, out, A, dim)
 end
 
@@ -1057,7 +1047,7 @@ julia> accumulate(min, 0, [1,2,-1])
 ```
 """
 function accumulate(op, v0, x::AbstractVector)
-    T = rcum_promote_type(op, typeof(v0), eltype(x))
+    T = promote_op(op, typeof(v0), eltype(x))
     out = similar(x, T)
     accumulate!(op, out, v0, x)
 end
