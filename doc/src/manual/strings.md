@@ -462,7 +462,7 @@ julia> str = """
 
 In this case the final (empty) line before the closing `"""` sets the indentation level.
 
-The dedentation level is determined as the longest common statring sequence of spaces or
+The dedentation level is determined as the longest common starting sequence of spaces or
 tabs in all lines, excluding the line following the opening `"""` and lines containing
 only spaces or tabs (the line containing the closing `"""` is always included).
 Then for all lines, excluding the text following the opening `"""`, the common starting
@@ -508,7 +508,9 @@ julia> """
 "Hello,\nworld."
 ```
 
-Trailing whitespace is left unaltered. They can contain `"` symbols without escaping.
+Trailing whitespace is left unaltered.
+
+Triple-quoted string literals can contain `"` symbols without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
