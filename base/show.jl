@@ -737,15 +737,21 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
         print(io, "::I")
     else
         if emph && (!_isleaftype(ty) || ty == Core.Box)
-            emphasize(io, "::$ty")
+            if ty isa Union && is_expected_union(ty)
+                emphasize(io, "::$ty", Base.warn_color())
+            else
+                emphasize(io, "::$ty")
+            end
         else
             print(io, "::$ty")
         end
     end
 end
 
-emphasize(io, str::AbstractString) = get(io, :color, false) ?
-    print_with_color(Base.error_color(), io, str; bold = true) :
+is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
+
+emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
+    print_with_color(col, io, str; bold = true) :
     print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
