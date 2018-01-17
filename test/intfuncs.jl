@@ -43,7 +43,7 @@ end
         @test gcd(T[0, 15]) === T(15)
         @test gcd(T[3,-15]) === T(3)
         @test gcd(T[-3,-15]) === T(3)
-        @test gcd(T(0, 0)) === T(0)
+        @test gcd(T[0, 0]) === T(0)
 
         @test gcd(T[2, 4, 6]) === T(2)
         @test gcd(T[2, 4, 3, 5]) === T(1)
