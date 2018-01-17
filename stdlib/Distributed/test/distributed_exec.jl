@@ -1161,8 +1161,8 @@ v6 = FooModEverywhere
         Base.Serializer.serialize_type(s, TestSerCnt)
         serialize(s, t.v)
         global testsercnt_d
-        cnt = get!(testsercnt_d, object_id(t), 0)
-        testsercnt_d[object_id(t)] = cnt+1
+        cnt = get!(testsercnt_d, objectid(t), 0)
+        testsercnt_d[objectid(t)] = cnt+1
     end
 
     Base.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
@@ -1174,22 +1174,22 @@ for i in 1:5
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized only once
-@test testsercnt_d[object_id(tsc)] == 1
+@test testsercnt_d[objectid(tsc)] == 1
 
 # hash values are changed
 n=5
-testsercnt_d[object_id(tsc)] = 0
+testsercnt_d[objectid(tsc)] = 0
 for i in 1:n
     tsc.v[i] = i
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized as many times as the loop
-@test testsercnt_d[object_id(tsc)] == n
+@test testsercnt_d[objectid(tsc)] == n
 
 # Multiple references in a closure should be serialized only once.
 global mrefs = TestSerCnt(fill(1.,10))
 @test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (fill(1.,10), fill(2.,10), fill(3.,10))
-@test testsercnt_d[object_id(mrefs)] == 1
+@test testsercnt_d[objectid(mrefs)] == 1
 
 
 # nested anon functions
@@ -1239,9 +1239,9 @@ global ids_func = ()->ids_cleanup
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 

@@ -216,11 +216,11 @@ macro isdefined(s::Symbol)
 end
 
 """
-    object_id(x)
+    objectid(x)
 
-Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
+Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
 """
-object_id(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
+objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32

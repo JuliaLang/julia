@@ -2799,6 +2799,8 @@ end
 
 @deprecate method_exists hasmethod
 
+@deprecate object_id objectid
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)

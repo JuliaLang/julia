@@ -114,7 +114,7 @@ Core.typeassert
 Core.typeof
 Core.tuple
 Base.ntuple
-Base.object_id
+Base.objectid
 Base.hash
 Base.finalizer
 Base.finalize

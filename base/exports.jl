@@ -788,7 +788,7 @@ export
     isimmutable,
     isless,
     ifelse,
-    object_id,
+    objectid,
     sizeof,
 
 # tasks and conditions
