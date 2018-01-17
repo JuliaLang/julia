@@ -2,7 +2,8 @@
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
 import Main.TestHelpers: challenge_prompt
-using Base.Unicode: lowercase
+
+using Random
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
@@ -1277,7 +1278,7 @@ mktempdir() do dir
         LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
             # check index for file
             LibGit2.with(LibGit2.GitIndex(repo)) do idx
-                i = find(test_file, idx)
+                i = findall(test_file, idx)
                 @test i !== nothing
                 idx_entry = idx[i]
                 @test idx_entry !== nothing
@@ -1285,7 +1286,7 @@ mktempdir() do dir
                 @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
                 @test LibGit2.stage(idx_entry) == 0
 
-                i = find("zzz", idx)
+                i = findall("zzz", idx)
                 @test i === nothing
                 idx_str = sprint(show, idx)
                 @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"

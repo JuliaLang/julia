@@ -41,7 +41,7 @@ Distributed.@fetch
 Distributed.@fetchfrom
 Distributed.@async
 Distributed.@sync
-Distributed.@parallel
+Distributed.@distributed
 Distributed.@everywhere
 Distributed.clear!(::Any, ::Any; ::Any)
 Distributed.remoteref_id

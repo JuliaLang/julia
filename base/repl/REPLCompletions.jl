@@ -5,7 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions
 
 using Base.Meta
-using Base: propertynames
+using Base: propertynames, coalesce
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -42,7 +42,7 @@ function complete_symbol(sym, ffunc)
     lookup_module = true
     t = Union{}
     val = nothing
-    if findlast(occursin(non_identifier_chars), sym) < findlast(equalto('.'), sym)
+    if coalesce(findlast(occursin(non_identifier_chars), sym), 0) < coalesce(findlast(equalto('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
@@ -268,7 +268,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, findprev(occursin(non_identifier_chars), s, method_name_end))
+    startind = nextind(s, coalesce(findprev(occursin(non_identifier_chars), s, method_name_end), 0))
     return (startind:endof(s), method_name_end)
 end
 
@@ -320,8 +320,8 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    params = Core.Inference.InferenceParams(world)
-    return_type = Core.Inference.typeinf_type(m[3], m[1], m[2], true, params)
+    params = Core.Compiler.Params(world)
+    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], true, params)
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end
@@ -423,8 +423,8 @@ function afterusing(string::String, startpos::Int)
 end
 
 function bslash_completions(string, pos)
-    slashpos = findprev(equalto('\\'), string, pos)
-    if (findprev(occursin(bslash_separators), string, pos) < slashpos &&
+    slashpos = coalesce(findprev(equalto('\\'), string, pos), 0)
+    if (coalesce(findprev(occursin(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -543,8 +543,8 @@ function completions(string, pos)
         return String[], 0:-1, false
     end
 
-    dotpos = findprev(equalto('.'), string, pos)
-    startpos = nextind(string, findprev(occursin(non_identifier_chars), string, pos))
+    dotpos = coalesce(findprev(equalto('.'), string, pos), 0)
+    startpos = nextind(string, coalesce(findprev(occursin(non_identifier_chars), string, pos), 0))
 
     ffunc = (mod,x)->true
     suggestions = String[]

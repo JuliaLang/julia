@@ -7,7 +7,6 @@ module Markdown
 
 import Base: show, ==, with_output_color
 import Core: @doc_str
-using Base.Unicode: lowercase, ucfirst, isspace
 
 include(joinpath("parse", "config.jl"))
 include(joinpath("parse", "util.jl"))

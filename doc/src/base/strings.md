@@ -48,13 +48,29 @@ Base.startswith
 Base.endswith
 Base.first(::AbstractString, ::Integer)
 Base.last(::AbstractString, ::Integer)
+Base.uppercase
+Base.lowercase
+Base.titlecase
+Base.ucfirst
+Base.lcfirst
 Base.join
 Base.chop
 Base.chomp
 Base.thisind
 Base.nextind
 Base.prevind
-Base.Random.randstring
+Base.textwidth
+Base.isalpha
+Base.isascii
+Base.iscntrl
+Base.isdigit
+Base.islower
+Base.isnumeric
+Base.isprint
+Base.ispunct
+Base.isspace
+Base.isupper
+Base.isxdigit
 Core.Symbol
 Base.escape_string
 Base.unescape_string

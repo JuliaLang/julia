@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 1

@@ -91,7 +91,6 @@ Base.LinAlg.pinv
 Base.LinAlg.nullspace
 Base.repmat
 Base.kron
-Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
 Base.LinAlg.exp(::StridedMatrix{<:Base.LinAlg.BlasFloat})
 Base.LinAlg.log(::StridedMatrix)

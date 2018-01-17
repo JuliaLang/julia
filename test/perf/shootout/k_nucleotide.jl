@@ -70,7 +70,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
     i, j = 1, 1
     while i <= length(data)
         if data[i] != '\n'
-            data[j] = Base.Unicode.uppercase(data[i])
+            data[j] = uppercase(data[i])
             j += 1
         end
         i += 1

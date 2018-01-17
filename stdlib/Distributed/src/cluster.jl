@@ -1074,7 +1074,7 @@ function terminate_all_workers()
             try
                 rmprocs(workers(); waitfor=5.0)
             catch _ex2
-                @error "Unable to terminate all workers" exception=_ex2
+                @error "Unable to terminate all workers" exception=_ex2,catch_backtrace()
             end
         end
     end
@@ -1105,6 +1105,8 @@ function init_bind_addr()
     LPROC.bind_addr = bind_addr
     LPROC.bind_port = UInt16(bind_port)
 end
+
+using Random: randstring
 
 function init_parallel()
     start_gc_msgs_task()

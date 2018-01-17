@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 using Base.LinAlg: mul!, ldiv!, rdiv!
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
+using SparseArrays
 
 n=12 #Size of matrix problem to test
 srand(1)

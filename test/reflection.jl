@@ -5,7 +5,7 @@
 # sufficient to catch segfault bugs.
 
 module ReflectionTest
-using Test
+using Test, Random
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -55,7 +55,7 @@ end # module ReflectionTest
 
 # code_warntype
 module WarnType
-using Test
+using Test, Random
 
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
@@ -97,7 +97,13 @@ has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
 @test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
-# Make sure getproperty and setproperty! works with warntype
+# Make sure that "expected" unions are highlighted with warning color instead of error color
+iob = IOBuffer()
+code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
+str = String(take!(iob))
+@test contains(str, Base.text_colors[Base.warn_color()])
+
+# Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
     t::Int
 end
@@ -666,11 +672,11 @@ let
 
     code_typed(f18888, Tuple{}; optimize=false)
     @test m.specializations !== nothing  # uncached, but creates the specializations entry
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
 
@@ -768,8 +774,8 @@ x22979 = (1, 2.0, 3.0 + im)
 T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
 world = typemax(UInt)
 mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
-instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
-cinfo_generated = Core.Inference.get_staged(instance)
+instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
+cinfo_generated = Core.Compiler.get_staged(instance)
 @test_throws ErrorException Base.uncompressed_ast(m)
 
 test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
@@ -782,7 +788,7 @@ test_similar_codeinfo(cinfo, cinfo_generated)
 @test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)
 
 module MethodDeletion
-using Test
+using Test, Random
 
 # Deletion after compiling top-level call
 bar1(x) = 1

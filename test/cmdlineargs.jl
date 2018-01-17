@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Libdl
+
 catcmd = `cat`
 if Sys.iswindows()
     busybox = joinpath(Sys.BINDIR, "busybox.exe")

@@ -25,7 +25,7 @@ hash(@nospecialize(x), h::UInt) = hash_uint(3h - object_id(x))
 ## core data hashing functions ##
 
 function hash_64_64(n::UInt64)
-    local a::UInt64 = n
+    a::UInt64 = n
     a = ~a + a << 21
     a =  a ⊻ a >> 24
     a =  a + a << 3 + a << 8
@@ -37,7 +37,7 @@ function hash_64_64(n::UInt64)
 end
 
 function hash_64_32(n::UInt64)
-    local a::UInt64 = n
+    a::UInt64 = n
     a = ~a + a << 18
     a =  a ⊻ a >> 31
     a =  a * 21
@@ -48,7 +48,7 @@ function hash_64_32(n::UInt64)
 end
 
 function hash_32_32(n::UInt32)
-    local a::UInt32 = n
+    a::UInt32 = n
     a = a + 0x7ed55d16 + a << 12
     a = a ⊻ 0xc761c23c ⊻ a >> 19
     a = a + 0x165667b1 + a << 5

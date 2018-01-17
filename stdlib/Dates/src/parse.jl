@@ -16,7 +16,7 @@ function character_codes(directives::SimpleVector)
     return letters
 end
 
-genvar(t::DataType) = Symbol(Base.Unicode.lowercase(string(Base.datatype_name(t))))
+genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
 
 """
     tryparsenext_core(str::AbstractString, pos::Int, len::Int, df::DateFormat, raise=false)
@@ -183,7 +183,7 @@ end
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
         c, ii = next(str, i)
-        if Base.Unicode.isalpha(c)
+        if isalpha(c)
             word_end = i
         else
             break

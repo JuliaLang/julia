@@ -183,7 +183,7 @@ v11801, t11801 = @timed sin(1)
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Inference) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -226,6 +226,7 @@ end
 
 # Issue 14173
 module Tmp14173
+    using Random
     export A
     A = randn(2000, 2000)
 end
@@ -640,3 +641,9 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# PR #24997: test that `varinfo` doesn't fail when encountering `missing`
+module A
+    export missing
+    varinfo(A)
+end

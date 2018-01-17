@@ -83,7 +83,7 @@ although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`j
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [`typeinf()` in `inference.jl`](https://github.com/JuliaLang/julia/blob/master/base/inference.jl).
+Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinf.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinf.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time

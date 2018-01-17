@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 mainres = ([4, 5, 3],
            [1, 5, 3])
 bitres = ([true, true, false],

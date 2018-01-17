@@ -25,7 +25,7 @@ constructs introducing scope blocks are:
 
     - local scope (don't allow nesting)
 
-      + type, immutable, macro
+      + (mutable) struct, macro
 
   * Scope blocks which may nest anywhere (in global or local scope):
 

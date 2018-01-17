@@ -492,18 +492,18 @@ function _collect_indices(indsA, A)
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
-# define this as a macro so that the call to Inference
+# define this as a macro so that the call to Core.Compiler
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Inference)
+if isdefined(Core, :Compiler)
     macro default_eltype(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
                 ($I).f
             else
-                Core.Inference.return_type(first, Tuple{typeof($I)})
+                Core.Compiler.return_type(first, Tuple{typeof($I)})
             end
         end
     end
@@ -1495,7 +1495,7 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 """
     findnext(A, i::Integer)
 
-Find the next linear index >= `i` of a `true` element of `A`, or `0` if not found.
+Find the next linear index >= `i` of a `true` element of `A`, or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1508,7 +1508,6 @@ julia> findnext(A, 1)
 2
 
 julia> findnext(A, 3)
-0
 ```
 """
 function findnext(A, start::Integer)
@@ -1526,14 +1525,14 @@ function findnext(A, start::Integer)
         end
         i = nextind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findfirst(A)
 
 Return the linear index of the first `true` value in `A`.
-Return `0` if no such value is found.
+Return `nothing` if no such value is found.
 To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
@@ -1546,8 +1545,8 @@ julia> A = [false false; true false]
 julia> findfirst(A)
 2
 
-julia> findfirst(falses(3))
-0
+julia> findfirst(falses(3)) == nothing
+true
 ```
 """
 findfirst(A) = findnext(A, 1)
@@ -1555,7 +1554,8 @@ findfirst(A) = findnext(A, 1)
 """
     findnext(predicate::Function, A, i::Integer)
 
-Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
+Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`,
+or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1567,8 +1567,8 @@ julia> A = [1 4; 2 2]
 julia> findnext(isodd, A, 1)
 1
 
-julia> findnext(isodd, A, 2)
-0
+julia> findnext(isodd, A, 2) == nothing
+true
 ```
 """
 function findnext(testf::Function, A, start::Integer)
@@ -1580,14 +1580,14 @@ function findnext(testf::Function, A, start::Integer)
         end
         i = nextind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findfirst(predicate::Function, A)
 
 Return the linear index of the first element of `A` for which `predicate` returns `true`.
-Return `0` if there is no such element.
+Return `nothing` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1599,8 +1599,8 @@ julia> A = [1 4; 2 2]
 julia> findfirst(iseven, A)
 2
 
-julia> findfirst(x -> x>10, A)
-0
+julia> findfirst(x -> x>10, A) == nothing
+true
 
 julia> findfirst(equalto(4), A)
 3
@@ -1611,7 +1611,7 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 """
     findprev(A, i::Integer)
 
-Find the previous linear index <= `i` of a `true` element of `A`, or `0` if not found.
+Find the previous linear index <= `i` of a `true` element of `A`, or `nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1623,8 +1623,8 @@ julia> A = [false false; true true]
 julia> findprev(A,2)
 2
 
-julia> findprev(A,1)
-0
+julia> findprev(A,1) == nothing
+true
 ```
 """
 function findprev(A, start::Integer)
@@ -1639,14 +1639,14 @@ function findprev(A, start::Integer)
         a != 0 && return i
         i = prevind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findlast(A)
 
 Return the linear index of the last `true` value in `A`.
-Return `0` if there is no `true` value in `A`.
+Return `nothing` if there is no `true` value in `A`.
 
 # Examples
 ```jldoctest
@@ -1660,8 +1660,8 @@ julia> findlast(A)
 
 julia> A = falses(2,2);
 
-julia> findlast(A)
-0
+julia> findlast(A) == nothing
+true
 ```
 """
 findlast(A) = findprev(A, endof(A))
@@ -1670,7 +1670,7 @@ findlast(A) = findprev(A, endof(A))
     findprev(predicate::Function, A, i::Integer)
 
 Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
-`0` if not found.
+`nothing` if not found.
 
 # Examples
 ```jldoctest
@@ -1679,8 +1679,8 @@ julia> A = [4 6; 1 2]
  4  6
  1  2
 
-julia> findprev(isodd, A, 1)
-0
+julia> findprev(isodd, A, 1) == nothing
+true
 
 julia> findprev(isodd, A, 3)
 2
@@ -1692,14 +1692,14 @@ function findprev(testf::Function, A, start::Integer)
         testf(A[i]) && return i
         i = prevind(A, i)
     end
-    return 0
+    return nothing
 end
 
 """
     findlast(predicate::Function, A)
 
 Return the linear index of the last element of `A` for which `predicate` returns `true`.
-Return `0` if there is no such element.
+Return `nothing` if there is no such element.
 
 # Examples
 ```jldoctest
@@ -1711,14 +1711,14 @@ julia> A = [1 2; 3 4]
 julia> findlast(isodd, A)
 2
 
-julia> findlast(x -> x > 5, A)
-0
+julia> findlast(x -> x > 5, A) == nothing
+true
 ```
 """
 findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
-    find(f::Function, A)
+    findall(f::Function, A)
 
 Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, return an empty array.
@@ -1736,7 +1736,7 @@ julia> x = [1, 3, 4]
  3
  4
 
-julia> find(isodd, x)
+julia> findall(isodd, x)
 2-element Array{Int64,1}:
  1
  2
@@ -1745,12 +1745,12 @@ julia> A = [1 2 0; 3 4 0]
 2×3 Array{Int64,2}:
  1  2  0
  3  4  0
-julia> find(isodd, A)
+julia> findall(isodd, A)
 2-element Array{CartesianIndex{2},1}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
 
-julia> find(!iszero, A)
+julia> findall(!iszero, A)
 4-element Array{CartesianIndex{2},1}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
@@ -1763,50 +1763,68 @@ Dict{Symbol,Int64} with 3 entries:
   :B => -1
   :C => 0
 
-julia> find(x -> x >= 0, d)
+julia> findall(x -> x >= 0, d)
 2-element Array{Symbol,1}:
  :A
  :C
 
 ```
 """
-find(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
+findall(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
 
 _pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = zip(OneTo(typemax(Int)), iter)  # safe for objects that don't implement length
 
 """
-    find(A)
+    findall(A)
 
-Return a vector of the linear indices of the `true` values in `A`.
+Return a vector `I` of the `true` indices or keys of `A`.
+If there are no such elements of `A`, return an empty array.
 To search for other kinds of values, pass a predicate as the first argument.
+
+Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
+and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
+`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+for other iterables.
 
 # Examples
 ```jldoctest
+julia> A = [true, false, false, true]
+4-element Array{Bool,1}:
+  true
+ false
+ false
+  true
+
+julia> findall(A)
+2-element Array{Int64,1}:
+ 1
+ 4
+
 julia> A = [true false; false true]
 2×2 Array{Bool,2}:
   true  false
  false   true
 
-julia> find(A)
+julia> findall(A)
 2-element Array{Int64,1}:
  1
  4
 
-julia> find(falses(3))
+julia> findall(falses(3))
 0-element Array{Int64,1}
 ```
 """
-function find(A)
+function findall(A)
     if !(eltype(A) === Bool) && !all(x -> x isa Bool, A)
-        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :find)
     end
     collect(first(p) for p in _pairs(A) if last(p) != 0)
 end
 
-find(x::Bool) = x ? [1] : Vector{Int}()
-find(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
-find(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
+findall(x::Bool) = x ? [1] : Vector{Int}()
+findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
+findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
     findnz(A)
@@ -2058,7 +2076,7 @@ function _sortedfindin(v, w)
     return out
 end
 
-function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
     if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
         return _sortedfindin(x, pred.x)
     else
@@ -2067,7 +2085,7 @@ function find(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-find(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

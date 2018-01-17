@@ -7,8 +7,8 @@ export UmfpackLU
 import Base: (\), findnz, getproperty, show, size
 import Base.LinAlg: Factorization, det, lufact, ldiv!
 
-using ..SparseArrays
-import ..SparseArrays: nnz
+using SparseArrays
+import SparseArrays: nnz
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 

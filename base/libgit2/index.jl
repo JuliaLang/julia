@@ -178,7 +178,7 @@ function Base.getindex(idx::GitIndex, i::Integer)
     return elem
 end
 
-function Base.find(path::String, idx::GitIndex)
+function Base.findall(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)
     ret = ccall((:git_index_find, :libgit2), Cint,
                   (Ref{Csize_t}, Ptr{Cvoid}, Cstring), pos_ref, idx.ptr, path)

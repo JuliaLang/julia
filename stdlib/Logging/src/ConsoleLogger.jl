@@ -48,7 +48,7 @@ function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
     showerror(io, ex, bt; backtrace = bt!=nothing)
 end
-showvalue(io, ex::Exception) = showvalue(io, (ex,catch_backtrace()))
+showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level)
     level < Info  ? Base.debug_color() :

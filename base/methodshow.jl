@@ -12,7 +12,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     end
     s = string(n)
     i = findfirst(equalto('#'), s)
-    if i > 0
+    if i !== nothing
         s = s[1:i-1]
     end
     if t === Any && !isempty(s)
@@ -84,7 +84,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
         i = findfirst(x -> endswith(string(x), "..."), kws)
-        i == 0 && return kws
+        i === nothing && return kws
         push!(kws, kws[i])
         return deleteat!(kws, i)
     end

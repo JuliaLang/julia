@@ -429,8 +429,8 @@ read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_availa
 function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
     q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nb_available(buf))
-    nb::Int = (q == C_NULL ? 0 : q-p+1)
-    return nb
+    q == C_NULL && return nothing
+    return Int(q-p+1)
 end
 
 function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
@@ -441,7 +441,7 @@ function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
             return i - buf.ptr + 1
         end
     end
-    return 0
+    return nothing
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8)

@@ -365,9 +365,9 @@ end
     @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
 end
 
-@testset "find" begin
-    @test @inferred find(equalto(1), (1, 2)) == [1]
-    @test @inferred find(equalto(1), (1, 1)) == [1, 2]
-    @test @inferred isempty(find(equalto(1), ()))
-    @test @inferred isempty(find(equalto(1), (2, 3)))
+@testset "findall" begin
+    @test @inferred findall(equalto(1), (1, 2)) == [1]
+    @test @inferred findall(equalto(1), (1, 1)) == [1, 2]
+    @test @inferred isempty(findall(equalto(1), ()))
+    @test @inferred isempty(findall(equalto(1), (2, 3)))
 end

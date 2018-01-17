@@ -102,7 +102,7 @@ function union!(A::VersionSet, B::VersionSet)
     for intB in B.intervals
         lB, uB = intB.lower, intB.upper
         k0 = findfirst(i->(i.upper > lB), ivals)
-        if k0 == 0
+        if k0 === nothing
             push!(ivals, intB)
             continue
         end

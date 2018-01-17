@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays
+using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
@@ -78,7 +78,7 @@ copyto!(s, d)
 s = SharedArrays.shmem_rand(dims)
 copyto!(s, sdata(d))
 @test s == d
-a = rand(dims)
+a = rand(Float64, dims)
 @test sdata(a) == a
 
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
@@ -190,7 +190,7 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
+remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)
@@ -242,7 +242,7 @@ end
 
 # Issue #14664
 d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     d[i] = i
 end
 
@@ -253,7 +253,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
 end

@@ -92,13 +92,11 @@ Base.Iterators
 Base.LAPACK
 Base.LibGit2
 Base.Libc
-Base.Libdl
 Base.LinAlg
 Base.Markdown
 Base.Meta
 Base.Pkg
 Base.Serializer
-Base.SparseArrays
 Base.StackTraces
 Base.Sys
 Base.Threads

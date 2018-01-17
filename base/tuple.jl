@@ -21,7 +21,7 @@ size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple di
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -211,7 +211,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Inference!
+# NOTE: this means this constructor must be avoided in Core.Compiler!
 if module_name(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples

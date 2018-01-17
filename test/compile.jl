@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed
+using Test, Distributed, Random
 
 import Base: root_module
 
@@ -218,9 +218,9 @@ try
                 [:Base, :Core, Foo2_module, FooBase_module, :Main]),
             # plus modules included in the system image
             Dict(s => Base.module_uuid(Base.root_module(s)) for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching, :Future,
-                 :IterativeEigensolvers, :Logging, :Mmap, :Printf, :Profile, :SharedArrays,
-                 :SuiteSparse, :Test, :Unicode, :Distributed]))
+                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching,
+                 :Future, :IterativeEigensolvers,  :Libdl, :Logging, :Mmap, :Printf,
+                 :Profile, :Random, :SharedArrays, :SparseArrays, :SuiteSparse, :Test, :Unicode]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -645,6 +645,33 @@ finally
     popfirst!(LOAD_PATH)
     popfirst!(Base.LOAD_CACHE_PATH)
     rm(dir, recursive=true)
+end
+
+# issue #19030 and #25279
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        ModuleA = :Issue19030
+
+        write(joinpath(load_path, "$ModuleA.jl"),
+            """
+            __precompile__(true)
+            module $ModuleA
+                __init__() = push!(Base.package_callbacks, sym->nothing)
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(Base.LOAD_CACHE_PATH, load_cache_path)
+
+        l0 = length(Base.package_callbacks)
+        @eval using $ModuleA
+        @test length(Base.package_callbacks) == l0 + 1
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
 end
 
 end # !withenv

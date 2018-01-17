@@ -8,8 +8,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
 import Base: ensureroom, peek, show, AnyDict, position
-
-using Base.Unicode: lowercase, uppercase, ucfirst, textwidth, isspace
+using Base: coalesce
 
 abstract type TextInterface end
 abstract type ModeState end
@@ -581,10 +580,10 @@ end
 
 function edit_move_up(buf::IOBuffer)
     npos = findprev(equalto(UInt8('\n')), buf.data, position(buf))
-    npos == 0 && return false # we're in the first line
+    npos === nothing && return false # we're in the first line
     # We're interested in character count, not byte count
     offset = length(content(buf, npos => position(buf)))
-    npos2 = findprev(equalto(UInt8('\n')), buf.data, npos-1)
+    npos2 = coalesce(findprev(equalto(UInt8('\n')), buf.data, npos-1), 0)
     seek(buf, npos2)
     for _ = 1:offset
         pos = position(buf)
@@ -603,11 +602,11 @@ function edit_move_up(s)
 end
 
 function edit_move_down(buf::IOBuffer)
-    npos = findprev(equalto(UInt8('\n')), buf.data[1:buf.size], position(buf))
+    npos = coalesce(findprev(equalto(UInt8('\n')), buf.data[1:buf.size], position(buf)), 0)
     # We're interested in character count, not byte count
     offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = findnext(equalto(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
-    if npos2 == 0 #we're in the last line
+    if npos2 === nothing #we're in the last line
         return false
     end
     seek(buf, npos2)
@@ -700,7 +699,7 @@ function edit_insert_newline(s::PromptState, align=-1)
     buf = buffer(s)
     if align < 0
         beg = beginofline(buf)
-        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+        align = min(coalesce(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
     end
@@ -727,11 +726,11 @@ const _space = UInt8(' ')
 
 _notspace(c) = c != _space
 
-beginofline(buf, pos=position(buf)) = findprev(equalto(_newline), buf.data, pos)
+beginofline(buf, pos=position(buf)) = coalesce(findprev(equalto(_newline), buf.data, pos), 0)
 
 function endofline(buf, pos=position(buf))
     eol = findnext(equalto(_newline), buf.data[pos+1:buf.size], 1)
-    eol == 0 ? buf.size : pos + eol - 1
+    eol === nothing ? buf.size : pos + eol - 1
 end
 
 function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
@@ -745,12 +744,12 @@ function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
     if align && c == ' ' # maybe delete multiple spaces
         beg = beginofline(buf, newpos)
         align = textwidth(String(buf.data[1+beg:newpos])) % 4
-        nonspace = findprev(_notspace, buf.data, newpos)
+        nonspace = coalesce(findprev(_notspace, buf.data, newpos), 0)
         if newpos - align >= nonspace
             newpos -= align
             seek(buf, newpos)
             if adjust
-                spaces = findnext(_notspace, buf.data[newpos+2:buf.size], 1)
+                spaces = coalesce(findnext(_notspace, buf.data[newpos+2:buf.size], 1), 0)
                 oldpos = spaces == 0 ? buf.size :
                     buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
                     newpos + min(spaces, 4)
@@ -1107,7 +1106,7 @@ end
 # compute the number of spaces from b till the next non-space on the right
 # (which can also be "end of line" or "end of buffer")
 function leadingspaces(buf::IOBuffer, b::Int)::Int
-    ls = findnext(_notspace, buf.data, b+1)-1
+    ls = coalesce(findnext(_notspace, buf.data, b+1), 0)-1
     ls == -1 && (ls = buf.size)
     ls -= b
     ls
@@ -1849,7 +1848,7 @@ function move_line_start(s::MIState)
     if s.key_repeats > 0
         move_input_start(s)
     else
-        seek(buf, findprev(equalto(UInt8('\n')), buf.data, curpos))
+        seek(buf, coalesce(findprev(equalto(UInt8('\n')), buf.data, curpos), 0))
     end
 end
 
@@ -1863,7 +1862,7 @@ end
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
     pos = findnext(equalto(UInt8('\n')), buf.data, position(buf)+1)
-    if pos == 0
+    if pos === nothing
         move_input_end(buf)
         return
     end
@@ -1922,7 +1921,7 @@ end
 function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
     i = position(buf)
     if jump_spaces && i < buf.size && buf.data[i+1] == _space
-        spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
+        spaces = coalesce(findnext(_notspace, buf.data[i+1:buf.size], 1), 0)
         if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
             edit_splice!(buf, i => (spaces == 0 ? buf.size : i+spaces-1))
         else
@@ -2318,7 +2317,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             try
                 status = fcn(s, kdata)
             catch e
-                @error "Error in the keymap" exception=e
+                @error "Error in the keymap" exception=e,catch_backtrace()
                 # try to cleanup and get `s` back to its original state before returning
                 transition(s, :reset)
                 transition(s, old_state)

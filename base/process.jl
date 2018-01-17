@@ -138,7 +138,7 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if Unicode.lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
+        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
             @warn "For portability use DevNull instead of a file redirect" maxlog=1
         end
         new(filename, append)
@@ -634,19 +634,6 @@ function open(f::Function, cmds::AbstractCmd, args...)
     end
     success(P) || pipeline_error(P)
     return ret
-end
-
-# TODO: deprecate this
-
-"""
-    readandwrite(command)
-
-Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
-output stream and input stream of the process, and the process object itself.
-"""
-function readandwrite(cmds::AbstractCmd)
-    processes = open(cmds, "r+")
-    return (processes.out, processes.in, processes)
 end
 
 function read(cmd::AbstractCmd)
