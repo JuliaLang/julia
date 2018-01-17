@@ -5576,16 +5576,20 @@ initvalue2(::Type{T}) where {T <: Number} = T(1)
 
 U = unboxedunions[1]
 
+@noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+
 mutable struct UnionField
     u::U
 end
 
-x = UnionField(initvalue(Base.uniontypes(U)[1]))
-@test x.u === initvalue(Base.uniontypes(U)[1])
-x.u = initvalue2(Base.uniontypes(U)[1])
-@test x.u === initvalue2(Base.uniontypes(U)[1])
-x.u = initvalue(Base.uniontypes(U)[2])
-@test x.u === initvalue(Base.uniontypes(U)[2])
+let x = UnionField(initvalue(Base.uniontypes(U)[1]))
+    @test x.u === initvalue(Base.uniontypes(U)[1])
+    x.u = initvalue2(Base.uniontypes(U)[1])
+    @test x.u === initvalue2(Base.uniontypes(U)[1])
+    x.u = initvalue(Base.uniontypes(U)[2])
+    @test x.u === initvalue(Base.uniontypes(U)[2])
+end
 
 mutable struct UnionField2
     x::Union{Nothing, Int}
@@ -5613,10 +5617,12 @@ let x4 = UnionField4(nothing, Int8(3))
     @test x4.x === nothing
     @test x4.y === Int8(3)
     @test x4.z[1] === 0x11
-    @test x4 === x4
+    @test compare(x4, x4)
     @test x4 == x4
+    @test egal(x4, x4)
     @test !(x4 === x4copy)
     @test !(x4 == x4copy)
+    @test !egal(x4, x4copy)
 end
 
 struct UnionField5
@@ -5633,10 +5639,11 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5.x === nothing
     @test x5.y === Int8(3)
     @test x5.z[1] === 0x11
-    @test x5 === x5
+    @test compare(x5, x5)
     @test x5 == x5
-    @test x5 === x5copy
+    @test compare(x5, x5copy)
     @test x5 == x5copy
+    @test egal(x5, x5copy)
     @test objectid(x5) === objectid(x5copy)
     @test hash(x5) === hash(x5copy)
 end
@@ -5651,7 +5658,6 @@ struct B23367
     y::A23367
     z::Int8
 end
-@noinline compare(a, b) = (a === b) # test code-generation of `is`
 @noinline get_x(a::A23367) = a.x
 function constant23367 end
 let
@@ -5665,9 +5671,9 @@ let
     @test addr(b)  != addr(b3)
     @test addr(b2) != addr(b3)
 
-    @test b === b2 === b3
-    @test compare(b, b2)
-    @test compare(b, b3)
+    @test b === b2 === b3 === b
+    @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
+    @test compare(b, b2) && compare(b, b3) && compare(b2, b3)
     @test objectid(b) === objectid(b2) == objectid(b3)
     @test b.x === Int8(91)
     @test b.z === Int8(23)
