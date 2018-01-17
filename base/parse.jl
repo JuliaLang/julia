@@ -202,7 +202,7 @@ end
 end
 
 """
-    tryparse(type, str, base = base)
+    tryparse(type, str, base = 0)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
