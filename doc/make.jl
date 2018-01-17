@@ -165,6 +165,7 @@ makedocs(
     analytics = "UA-28835595-6",
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
+    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
 )
 
 if "deploy" in ARGS
