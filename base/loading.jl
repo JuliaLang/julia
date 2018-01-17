@@ -134,6 +134,31 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
+function _tryrequire_from_serialized(modname::Symbol, uuid::UInt64, modpath::Union{Nothing, String})
+    if root_module_exists(modname)
+        M = root_module(modname)
+        if module_name(M) === modname && module_uuid(M) === uuid
+            return M
+        end
+    else
+        if modpath === nothing
+            modpath = find_package(string(modname))
+            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
+        end
+        mod = _require_search_from_serialized(modname, String(modpath))
+        if !isa(mod, Bool)
+            for callback in package_callbacks
+                invokelatest(callback, modname)
+            end
+            for M in mod::Vector{Any}
+                if module_name(M) === modname && module_uuid(M) === uuid
+                    return M
+                end
+            end
+        end
+    end
+    return nothing
+end
 
 function _require_from_serialized(path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
@@ -151,28 +176,9 @@ function _require_from_serialized(path::String)
     depmods = Vector{Any}(uninitialized, ndeps)
     for i in 1:ndeps
         modname, uuid = depmodnames[i]
-        if root_module_exists(modname)
-            M = root_module(modname)
-            if module_name(M) === modname && module_uuid(M) === uuid
-                depmods[i] = M
-            end
-        else
-            modpath = find_package(string(modname))
-            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
-            mod = _require_search_from_serialized(modname, String(modpath))
-            if !isa(mod, Bool)
-                for M in mod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        depmods[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-        end
-        isassigned(depmods, i) || return ErrorException("Required dependency $modname failed to load from a cache file.")
+        dep = _tryrequire_from_serialized(modname, uuid, nothing)
+        dep === nothing && return ErrorException("Required dependency $modname failed to load from a cache file.")
+        depmods[i] = dep::Module
     end
     # then load the file
     return _include_from_serialized(path, depmods)
@@ -184,33 +190,27 @@ end
 function _require_search_from_serialized(mod::Symbol, sourcepath::String)
     paths = find_all_in_cache_path(String(mod)) # cache files for sourcepath are stored keyed by the `mod` symbol name
     for path_to_try in paths::Vector{String}
-        deps = stale_cachefile(sourcepath, path_to_try)
-        if deps === true
+        staledeps = stale_cachefile(sourcepath, path_to_try)
+        if staledeps === true
             continue
         end
-        # finish loading module graph into deps
-        for i in 1:length(deps)
-            dep = deps[i]
+        # finish loading module graph into staledeps
+        for i in 1:length(staledeps)
+            dep = staledeps[i]
             dep isa Module && continue
             modpath, modname, uuid = dep::Tuple{String, Symbol, UInt64}
-            reqmod = _require_search_from_serialized(modname, modpath)
-            if !isa(reqmod, Bool)
-                for M in reqmod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        deps[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-            if !isa(deps[i], Module)
+            dep = _tryrequire_from_serialized(modname, uuid, modpath)
+            if dep === nothing
                 @debug "Required dependency $modname failed to load from cache file for $modpath."
-                continue
+                staledeps = true
+                break
             end
+            staledeps[i] = dep::Module
         end
-        restored = _include_from_serialized(path_to_try, deps)
+        if staledeps === true
+            continue
+        end
+        restored = _include_from_serialized(path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
