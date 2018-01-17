@@ -841,7 +841,6 @@ export
     StackTrace,
     StackFrame,
     stacktrace,
-    catch_stacktrace,
 
 # types
     convert,
