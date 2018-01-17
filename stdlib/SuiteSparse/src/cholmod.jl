@@ -165,7 +165,7 @@ function __init__()
         end
 
     catch ex
-        @error "Error during initialization of module CHOLMOD" exception=ex
+        @error "Error during initialization of module CHOLMOD" exception=ex,catch_backtrace()
     end
 end
 

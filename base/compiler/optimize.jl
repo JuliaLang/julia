@@ -345,7 +345,9 @@ function optimize(me::InferenceState)
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
-            me.const_api = true
+            if !(isa(me.bestguess, Const) && !is_inlineable_constant(me.bestguess.val))
+                me.const_api = true
+            end
             force_noinline || (me.src.inlineable = true)
         end
     end
@@ -471,9 +473,21 @@ function finish(me::InferenceState)
     nothing
 end
 
+function maybe_widen_conditional(vt)
+    if isa(vt, Conditional)
+        if vt.vtype === Bottom
+            vt = Const(false)
+        elseif vt.elsetype === Bottom
+            vt = Const(true)
+        end
+    end
+    vt
+end
+
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     head = e.head
     i0 = 1
+    e.typ = maybe_widen_conditional(e.typ)
     if is_meta_expr_head(head) || head === :const
         return
     end
@@ -487,7 +501,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = s.typ
+            vt = maybe_widen_conditional(s.typ)
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
@@ -1092,7 +1106,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
-                (isbits(val) && Core.sizeof(val) <= MAX_INLINE_CONST_SIZE &&
+                (is_inlineable_constant(val) &&
                  (contains_is(_PURE_BUILTINS, f) ||
                   (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
                   (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
@@ -1222,7 +1236,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             elseif isa(e.typ, Const)
                 return inline_as_constant(e.typ.val, argexprs, sv, invoke_data)
             end
-        elseif method.pure && isa(e.typ, Const) && e.typ.actual
+        elseif method.pure && isa(e.typ, Const) && e.typ.actual && is_inlineable_constant(e.typ.val)
             return inline_as_constant(e.typ.val, argexprs, sv, invoke_data)
         end
     end
@@ -1291,7 +1305,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             elseif isconstType(result)
                 inferred_const = result.parameters[1]
             end
-            if @isdefined inferred_const
+            if @isdefined(inferred_const) && is_inlineable_constant(inferred_const)
                 add_backedge!(linfo, sv)
                 return inline_as_constant(inferred_const, argexprs, sv, invoke_data)
             end
@@ -2203,7 +2217,7 @@ function fold_constant_getfield_pass!(sv::OptimizationState)
         obj = exprtype(ex.args[2], sv.src, sv.mod)
         isa(obj, Const) || continue
         obj = obj.val
-        !typeof(obj).mutable || isa(obj, DataType) || continue
+        is_inlineable_constant(obj) || continue
         fld = ex.args[3]
         if isa(fld, Int)
             fld = fld
@@ -2690,7 +2704,7 @@ function propagate_const_def!(ctx::AllocOptContext, info, key)
         # We don't want to probagate this constant since this is a token.
         isa(defex, Expr) && defex.head === :gc_preserve_begin && return false
         v = exprtype(defex, ctx.sv.src, ctx.sv.mod)
-        isa(v, Const) || return false
+        (isa(v, Const) && is_inlineable_constant(v.val)) || return false
         v = v.val
         @isdefined(constv) && constv !== v && return false
         constv = v
@@ -2831,7 +2845,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
             end
         end
         ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
-        if isa(ty, Const)
+        if isa(ty, Const) && is_inlineable_constant(ty.val)
             replace_use_expr_with!(ctx, use, quoted(ty.val))
         elseif isa(ty, Conditional)
             exprs = []
@@ -3527,7 +3541,7 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
             # OK so no setfield
             # First check if the field was a constant
             cv = exprtype(orig_def, ctx.sv.src, ctx.sv.mod)
-            if isa(cv, Const)
+            if isa(cv, Const) && is_inlineable_constant(cv.val)
                 vars[i] = quoted(cv.val)
                 # Constants don't need to be preserved
                 continue

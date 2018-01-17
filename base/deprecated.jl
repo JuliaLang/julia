@@ -2801,6 +2801,21 @@ function Filesystem.tempname(uunique::UInt32)
 end
 end
 
+"""
+    readandwrite(command)
+
+Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
+output stream and input stream of the process, and the process object itself.
+"""
+function readandwrite(cmds::AbstractCmd)
+    depwarn("""`readandwrite(::Cmd)` is deprecated in favor of `open(::Cmd, \"r+\").
+               You may read/write the returned process object for access to stdio.""",
+            :readandwrite)
+    processes = open(cmds, "r+")
+    return (processes.out, processes.in, processes)
+end
+export readandwrite
+
 #25395 keywords unlocked
 @deprecate method_exists(f, t, world) method_exists(f, t, world = world)
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)

@@ -242,7 +242,7 @@ end
 
 # Issue #14664
 d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     d[i] = i
 end
 
@@ -253,7 +253,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
 end

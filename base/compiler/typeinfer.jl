@@ -307,7 +307,7 @@ function typeinf_work(frame::InferenceState)
                 hd = stmt.head
                 if hd === :gotoifnot
                     condt = abstract_eval(stmt.args[1], s[pc], frame)
-                    condval = isa(condt, Const) ? condt.val : nothing
+                    condval = maybe_extract_const_bool(condt)
                     l = stmt.args[2]::Int
                     changes = changes::VarTable
                     # constant conditions

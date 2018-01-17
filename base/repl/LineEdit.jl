@@ -2317,7 +2317,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             try
                 status = fcn(s, kdata)
             catch e
-                @error "Error in the keymap" exception=e
+                @error "Error in the keymap" exception=e,catch_backtrace()
                 # try to cleanup and get `s` back to its original state before returning
                 transition(s, :reset)
                 transition(s, old_state)

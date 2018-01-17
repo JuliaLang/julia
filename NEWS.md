@@ -106,6 +106,8 @@ Language changes
     For example, `f() = (global sin = "gluttony"; nothing)` will now resolve which module
     contains `sin` eagerly, rather than delaying that decision until `f` is run. ([#22984]).
 
+  * `global const` declarations may no longer appear inside functions ([#12010]).
+
   * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
     deprecated in favor of equivalents accepting `uninitialized` (an alias for
     `Uninitialized()`) as their first argument, as in

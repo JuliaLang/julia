@@ -473,7 +473,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
     tm = _topmod(sv)
     if isa(f, Builtin) || isa(f, IntrinsicFunction)
         rt = builtin_tfunction(f, argtypes[2:end], sv)
-        if rt === Bool && isa(fargs, Vector{Any})
+        if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
                 a = fargs[2]
@@ -502,13 +502,13 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     if isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
                         return Conditional(b, aty, typesubtract(widenconst(bty), typeof(aty.val)))
                     end
-                    return Conditional(b, aty, bty)
+                    return isa(rt, Const) ? rt : Conditional(b, aty, bty)
                 end
                 if isa(bty, Const) && isa(a, fieldtype(Conditional, :var))
                     if isdefined(typeof(bty.val), :instance) # same for b
                         return Conditional(a, bty, typesubtract(widenconst(aty), typeof(bty.val)))
                     end
-                    return Conditional(a, bty, aty)
+                    return isa(rt, Const) ? rt : Conditional(a, bty, aty)
                 end
             elseif f === Core.Compiler.not_int
                 aty = argtypes[2]
