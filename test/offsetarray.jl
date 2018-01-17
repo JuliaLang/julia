@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 using DelimitedFiles
 using Random
 using LinearAlgebra

@@ -61,7 +61,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->cache = jl_emptysvec;
     tn->linearcache = jl_emptysvec;
     tn->names = NULL;
-    tn->hash = bitmix(bitmix(module ? module->uuid : 0, name->hash), 0xa1ada1da);
+    tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
     return tn;
 }

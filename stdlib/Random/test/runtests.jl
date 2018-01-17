@@ -4,7 +4,7 @@ using Test, SparseArrays
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 
 using Random
 using Random.DSFMT

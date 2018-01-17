@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
-import Main.TestHelpers: challenge_prompt
+import .Main.TestHelpers: challenge_prompt
 
 using Random, Serialization
 

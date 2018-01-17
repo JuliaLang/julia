@@ -345,7 +345,7 @@ randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
 
 ## random UUID generation
 
-import Base: UUID
+import Base: UUID, uuid_version
 
 """
     uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID

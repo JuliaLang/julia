@@ -7,6 +7,22 @@ UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
 UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) |
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))
 
+function convert(::Type{NTuple{2, UInt64}}, uuid::UUID)
+    uuid = uuid.value
+    hi = UInt64((uuid >> 64) & 0xffffffffffffffff)
+    lo = UInt64(uuid & 0xffffffffffffffff)
+    return (hi, lo)
+end
+
+function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
+    uuid = uuid.value
+    hh = UInt32((uuid >> 96) & 0xffffffff)
+    hl = UInt32((uuid >> 64) & 0xffffffff)
+    lh = UInt32((uuid >> 32) & 0xffffffff)
+    ll = UInt32(uuid & 0xffffffff)
+    return (hh, hl, lh, ll)
+end
+
 # TODO: update documentation for new location
 """
     uuid_version(u::UUID) -> Int
@@ -32,7 +48,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
         s = lowercase(s)
 
         if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-            throw(ArgumentError("Malformed UUID string"))
+            throw(ArgumentError("Malformed UUID string: $(repr(s))"))
         end
 
         u = UInt128(0)

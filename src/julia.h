@@ -424,13 +424,19 @@ typedef struct {
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
+typedef struct {
+    uint64_t hi;
+    uint64_t lo;
+} jl_uuid_t;
+
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint64_t uuid;
+    uint64_t build_id;
+    jl_uuid_t uuid;
     size_t primary_world;
     uint32_t counter;
     uint8_t istopmod;
