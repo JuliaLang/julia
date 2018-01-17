@@ -339,8 +339,8 @@ function require(mod::Symbol)
     return root_module(mod)
 end
 
-const loaded_modules = ObjectIdDict()
-const module_keys = ObjectIdDict()
+const loaded_modules = IdDict()
+const module_keys = IdDict()
 
 function register_root_module(key, m::Module)
     if haskey(loaded_modules, key)

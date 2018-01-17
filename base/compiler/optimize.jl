@@ -176,15 +176,15 @@ end
 struct AllocOptContext
     infomap::ValueInfoMap
     sv::OptimizationState
-    todo::ObjectIdDict
-    changes::ObjectIdDict
-    sym_count::ObjectIdDict
-    all_fld::ObjectIdDict
-    setfield_typ::ObjectIdDict
-    undef_fld::ObjectIdDict
+    todo::IdDict
+    changes::IdDict
+    sym_count::IdDict
+    all_fld::IdDict
+    setfield_typ::IdDict
+    undef_fld::IdDict
     structinfos::Vector{StructInfo}
     function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
-        todo = ObjectIdDict()
+        todo = IdDict()
         for i in 1:length(infomap.ssas)
             isassigned(infomap.ssas, i) || continue
             todo[i=>true] = nothing
@@ -194,11 +194,10 @@ struct AllocOptContext
             i > sv.nargs || continue
             todo[i=>false] = nothing
         end
-        return new(infomap, sv, todo, ObjectIdDict(), ObjectIdDict(),
-                   ObjectIdDict(), ObjectIdDict(), ObjectIdDict(), StructInfo[])
+        return new(infomap, sv, todo, IdDict(), IdDict(),
+                   IdDict(), IdDict(), IdDict(), StructInfo[])
     end
 end
-
 
 #############
 # constants #
@@ -2347,7 +2346,7 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new use(s) if any.
-function check_valid(use::ValueUse, changes::ObjectIdDict)
+function check_valid(use::ValueUse, changes::IdDict)
     haskey(changes, use.stmts=>use.stmtidx) && return false
     isdefined(use, :expr) && haskey(changes, use.expr) && return false
     return true
@@ -2356,10 +2355,10 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::ObjectIdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
 
 
-function remove_invalid!(info::ValueInfo, changes::ObjectIdDict)
+function remove_invalid!(info::ValueInfo, changes::IdDict)
     if isempty(changes)
         return
     end
@@ -2535,8 +2534,6 @@ function collect_value_infos(body::Vector{Any}, src::CodeInfo, nargs::Int)
 
     return infomap
 end
-
-
 
 function delete_valueinfo!(ctx::AllocOptContext, key)
     # Slot
@@ -2758,7 +2755,7 @@ end
 function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     key.second && return false
     isleaftype(ctx.sv.src.slottypes[key.first]) && return false
-    alltypes = ObjectIdDict()
+    alltypes = IdDict()
     ndefs = length(info.defs)
     deftypes = Vector{Any}(uninitialized, ndefs)
     for i in 1:ndefs
@@ -3212,7 +3209,7 @@ function split_struct_alloc_multi!(ctx::AllocOptContext, info, key)
     # First, assign a slot to each variable.
     # The slot types at this point is determined only by the setfield that are applied.
     # We'll include the initialization type as we go through the defs
-    vars = ObjectIdDict()
+    vars = IdDict()
     create_struct_field_slots!(ctx, key, vars)
 
     # Now, for each def. Assign all the slots.
@@ -3733,10 +3730,10 @@ macro check_ast(ctx, ex)
 end
 
 function verify_value_infomap(ctx::AllocOptContext)
-    seen = ObjectIdDict()
-    in_methods = ObjectIdDict()
+    seen = IdDict()
+    in_methods = IdDict()
     infomap = ctx.infomap
-    all_stmts = ObjectIdDict()
+    all_stmts = IdDict()
     for i in 1:length(infomap.ssas)
         isassigned(infomap.ssas, i) || continue
         info = infomap.ssas[i]
@@ -4091,7 +4088,7 @@ end
 
 # Clone expressions that appears multiple times in the code
 function copy_duplicated_expr_pass!(sv::OptimizationState)
-    copy_expr_in_array!(sv.src.code, ObjectIdDict())
+    copy_expr_in_array!(sv.src.code, IdDict())
 end
 
 # fix label numbers to always equal the statement index of the label
