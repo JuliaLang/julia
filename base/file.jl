@@ -83,7 +83,7 @@ cd(f::Function) = cd(f, homedir())
 
 function checkmode(mode::Int) =
     if !(0 <= mode <= 511)
-        ArgumentError("Mode must be between 0 and 511 = 0o777")
+        throw(ArgumentError("Mode must be between 0 and 511 = 0o777"))
     end
     mode
 end
