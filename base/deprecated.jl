@@ -2815,8 +2815,6 @@ end
 @deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 @deprecate tryparse(T::Type{<:Integer}, s, base) tryparse(T, s, base = base)
 @deprecate parse(T::Type{<:Integer}, s, base) parse(T, s, base = base)
-@deprecate dropzeros(x, trim) dropzeros(x, trim = trim)
-@deprecate dropzeros!(x, trim) dropzeros!(x, trim = trim)
 @deprecate mkdir(path, mode) mkdir(path, mode = mode)
 @deprecate mkpath(path, mode) mkpath(path, mode = mode)
 @deprecate countlines(x, eol) countlines(x, eol = eol)
