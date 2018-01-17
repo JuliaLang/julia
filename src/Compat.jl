@@ -796,12 +796,18 @@ else
     import IterativeEigensolvers
 end
 
+if VERSION < v"0.7.0-DEV.3389"
+    const SparseArrays = Base.SparseArrays
+else
+    import SparseArrays
+end
+
 if VERSION < v"0.7.0-DEV.2609"
     @eval module SuiteSparse
         if Base.USE_GPL_LIBS
-            using Base.SparseArrays: CHOLMOD, SPQR, UMFPACK
+            using Compat.SparseArrays: CHOLMOD, SPQR, UMFPACK
         end
-        using Base.SparseArrays: increment, increment!, decrement, decrement!
+        using Compat.SparseArrays: increment, increment!, decrement, decrement!
     end
 else
     import SuiteSparse
@@ -843,10 +849,10 @@ end
 
 # 0.7.0-DEV.2116
 @static if VERSION < v"0.7.0-DEV.2116"
-    import Base: spdiagm
+    import Compat.SparseArrays: spdiagm
     function spdiagm(kv::Pair...)
-        I, J, V = Base.SparseArrays.spdiagm_internal(last.(kv), first.(kv))
-        m = max(Base.SparseArrays.dimlub(I), Base.SparseArrays.dimlub(J))
+        I, J, V = Compat.SparseArrays.spdiagm_internal(last.(kv), first.(kv))
+        m = max(Compat.SparseArrays.dimlub(I), Compat.SparseArrays.dimlub(J))
         return sparse(I, J, V, m, m)
     end
 end

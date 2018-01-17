@@ -107,6 +107,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.SuiteSparse` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#24648]).
 
+* `using Compat.SparseArrays` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#25249]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -446,4 +449,5 @@ includes this fix. Find the minimum version from there.
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25227]: https://github.com/JuliaLang/julia/issues/25227
+[#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
