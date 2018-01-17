@@ -14,13 +14,28 @@ Typically, any type that implements `hash` should also implement its own `==` (h
 `isequal`) to guarantee the property mentioned above. Types supporting subtraction
 (operator `-`) should also implement [`widen`](@ref), which is required to hash
 values inside heterogeneous arrays.
+
+The default hash function simply returns `h`, in order to be compatible with any
+possible user-defined equality function. Therefore hash-based collections like `Dict`
+work correctly but very slowly for user-defined types without `hash` methods.
 """
 hash(x::Any) = hash(x, zero(UInt))
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 ## hashing general objects ##
 
-hash(@nospecialize(x), h::UInt) = hash_uint(3h - object_id(x))
+# do no hashing by default, to be consistent with any user-defined equality method
+hash(@nospecialize(x), h::UInt) = h
+
+hash_by_id(@nospecialize(x), h::UInt) = hash_uint(3h - object_id(x))
+
+# some types for which == and === are the same
+hash(x::Union{Symbol, Task, TypeName, Method, Module, Nothing, Missing, Core.IntrinsicFunction,
+              GlobalRef, LineNumberNode, LabelNode, GotoNode, Slot, SSAValue, NewvarNode, TypeVar},
+     h::UInt) = hash_by_id(x, h)
+
+# this is too strict, but the best we can do
+hash(x::Type, h::UInt) = hash_by_id(x, h)
 
 ## core data hashing functions ##
 
