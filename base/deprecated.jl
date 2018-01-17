@@ -1573,6 +1573,9 @@ end
 
 @deprecate object_id objectid
 
+@deprecate gc GC.gc
+@deprecate gc_enable GC.enable
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)

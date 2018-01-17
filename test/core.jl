@@ -3,10 +3,10 @@
 # test core language features
 
 using Random
+using SparseArrays
 
 const Bottom = Union{}
 
-using SparseArrays
 
 # For curmod_*
 include("testenv.jl")
@@ -905,7 +905,7 @@ let A = [1]
     finalize(A)
     @test x == 1
     A = 0
-    gc(); gc()
+    GC.gc(); GC.gc()
     @test x == 1
 end
 
@@ -1475,7 +1475,7 @@ end
 
 function foo4075(f::Foo4075, s::Symbol)
     x = getfield(f,s)
-    gc()
+    GC.gc()
     x
 end
 
@@ -2473,10 +2473,10 @@ mutable struct Obj; x; end
         wref = []
         mk_wr(ref, wref)
         test_wr(ref, wref)
-        gc()
+        GC.gc()
         test_wr(ref, wref)
         pop!(ref)
-        gc()
+        GC.gc()
         @test wref[1].value === nothing
     end
     test_wr()
@@ -2553,7 +2553,7 @@ try
         val::Bar{T}
     end
 end
-gc()
+GC.gc()
 redirect_stdout(OLD_STDOUT)
 close(file)
 rm(fname)
@@ -3097,7 +3097,7 @@ struct Array_512_Uint8
     d511::UInt8
     d512::UInt8
 end
-gc()
+GC.gc()
 
 # issue #10867
 @test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
@@ -3653,11 +3653,11 @@ let
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
-    gc(false)
+    GC.gc(false)
     # GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_MARKED; age = 1
     finalize(obj)
     @test finalized == 1
@@ -3666,14 +3666,14 @@ end
 # check if finalizers for the old gen can be triggered manually
 # PR #14181
 let
-    # The following three `gc(false)` clears the `finalizer_list`. It is
+    # The following three `GC.gc(false)` clears the `finalizer_list`. It is
     # not strictly necessary to make the test pass but should make the failure
     # more repeatable if something breaks.
-    gc(false)
+    GC.gc(false)
     # At least: GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # At least: GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
 
     obj1 = Ref(1)
@@ -3719,9 +3719,9 @@ let i = 9.0
 end
 
 # Make sure the old f() method is GC'd if it was not rooted properly
-gc()
-gc()
-gc()
+GC.gc()
+GC.gc()
+GC.gc()
 
 # Run again.
 g()
@@ -3982,9 +3982,9 @@ let ary = Vector{Any}(uninitialized, 10)
         ary = Vector{Any}(uninitialized, n)
         # Try to free the previous buffer that was filled with random content
         # and to increase the chance of getting a non-zero'd buffer next time
-        gc()
-        gc()
-        gc()
+        GC.gc()
+        GC.gc()
+        GC.gc()
         ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
         ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
         ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
@@ -4027,16 +4027,16 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
-let gc_enabled13995 = gc_enable(false)
+let gc_enabled13995 = GC.enable(false)
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
-    gc_enable(true)
+    GC.enable(true)
     # obj is unreachable and young, a single young gc should collect it
     # and trigger all the finalizers.
-    gc(false)
-    gc_enable(false)
+    GC.gc(false)
+    GC.enable(false)
     @test finalized13995 == [true, true, true, true]
-    gc_enable(gc_enabled13995)
+    GC.enable(gc_enabled13995)
 end
 
 # issue #15283
@@ -4831,7 +4831,7 @@ end
 # issue #17255, take `deferred_alloc` into account
 # when calculating total allocation size.
 @noinline function f17255(n)
-    gc_enable(false)
+    GC.enable(false)
     b0 = Base.gc_bytes()
     local a
     for i in 1:n
@@ -4845,7 +4845,7 @@ end
     return true, a
 end
 @test f17255(10000)[1]
-gc_enable(true)
+GC.enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
@@ -5023,7 +5023,7 @@ if Sys.WORD_SIZE == 64
         try
             # Do no touch the string to avoid triggering OOM
             slot[] = Base._string_n(2^32)
-            gc(false)
+            GC.gc(false)
         catch ex
             # This can happen if there's a virtual address size limit
             @test isa(ex, OutOfMemoryError)
@@ -5032,13 +5032,13 @@ if Sys.WORD_SIZE == 64
         return
     end
     @noinline function tester20360()
-        gc()
-        # Makes sure the string is rooted during the `gc(false)`
+        GC.gc()
+        # Makes sure the string is rooted during the `GC.gc(false)`
         # but is not before the last gc in this function.
         slot = Ref{Any}()
         test_large_string20360(slot)
         slot[] = nothing
-        gc()
+        GC.gc()
         return
     end
     @test_nowarn tester20360()

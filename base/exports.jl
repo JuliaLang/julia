@@ -806,10 +806,9 @@ export
     include_dependency,
 
 # RTS internals
+    GC,
     finalizer,
     finalize,
-    gc,
-    gc_enable,
     precompile,
 
 # misc

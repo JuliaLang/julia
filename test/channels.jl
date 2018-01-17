@@ -232,14 +232,14 @@ end
 # test for yield/wait/event failures
 @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
 let t, run = Ref(0)
-    gc_enable(false)
+    GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
     garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
     t = @task begin
-        gc_enable(true)
-        gc()
+        GC.enable(true)
+        GC.gc()
     end
     oldstderr = STDERR
     local newstderr, errstream

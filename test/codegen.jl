@@ -234,13 +234,13 @@ let was_gced = false
         a = Ref(1)
         use(x); use(a); use(y)
         c = Ref(3)
-        gc()
+        GC.gc()
         assert_not_gced()
         use(x)
         use(c)
     end
     foo22770()
-    gc()
+    GC.gc()
     @test was_gced
 end
 

@@ -326,8 +326,8 @@ Base.@functionloc
 ## Internals
 
 ```@docs
-Base.gc
-Base.gc_enable
+Base.GC.gc
+Base.GC.enable
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

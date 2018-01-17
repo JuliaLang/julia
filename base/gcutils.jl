@@ -38,18 +38,28 @@ Immediately run finalizers registered for object `x`.
 finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Ptr{Cvoid}, Any,),
                                    Core.getptls(), o)
 
-"""
-    gc()
+module GC
 
-Perform garbage collection. This should not generally be used.
+"""
+    GC.gc()
+
+Perform garbage collection.
+
+!!! warning
+    Excessive use will likely lead to poor performance.
 """
 gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Int32,), full)
 
 """
-    gc_enable(on::Bool)
+    GC.enable(on::Bool)
 
 Control whether garbage collection is enabled using a boolean argument (`true` for enabled,
-`false` for disabled). Return previous GC state. Disabling garbage collection should be
-used only with extreme caution, as it can cause memory use to grow without bound.
+`false` for disabled). Return previous GC state.
+
+!!! warning
+    Disabling garbage collection should be used only with caution, as it can cause memory
+    use to grow without bound.
 """
-gc_enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
+enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
+
+end # module GC

@@ -48,14 +48,14 @@ function mtest_create_strings()
     for i in 1:10^8
         string("$i")
     end
-    gc()
+    GC.gc()
 end
 
 function mtest_remotecall_fetch()
     for i in 1:10^5
         remotecall_fetch(myid, 1)
     end
-    gc()
+    GC.gc()
 end
 
 run_mtest("create_strings", () -> mtest_create_strings())
