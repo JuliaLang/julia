@@ -719,7 +719,7 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, promote_op(op, T))
+    out = similar(v, promote_op(op, T, T))
     return accumulate_pairwise!(op, out, v)
 end
 
@@ -764,7 +764,7 @@ julia> cumsum(a,2)
 ```
 """
 function cumsum(A::AbstractArray{T}, dim::Integer) where T
-    out = similar(A, promote_op(+, T))
+    out = similar(A, promote_op(+, T, T))
     cumsum!(out, A, dim)
 end
 
@@ -898,7 +898,7 @@ julia> accumulate(+, fill(1, 3, 3), 2)
 ```
 """
 function accumulate(op, A, dim::Integer)
-    out = similar(A, promote_op(op, eltype(A)))
+    out = similar(A, promote_op(op, eltype(A), eltype(A)))
     accumulate!(op, out, A, dim)
 end
 
