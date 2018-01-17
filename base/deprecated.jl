@@ -586,7 +586,7 @@ end
 
 # PR #22088
 function hex2num(s::AbstractString)
-    depwarn("hex2num(s) is deprecated. Use reinterpret(Float64, parse(UInt64, s, base = 16)) instead.", :hex2num)
+    depwarn("`hex2num(s)` is deprecated. Use `reinterpret(Float64, parse(UInt64, s, base = 16))` instead.", :hex2num)
     if length(s) <= 4
         return reinterpret(Float16, parse(UInt16, s, base = 16))
     end
