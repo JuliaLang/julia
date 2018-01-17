@@ -1418,3 +1418,30 @@ for expr25261 in opt25261[i:end]
     global foundslot = true
 end
 @test foundslot
+
+function f25579(g)
+    h = g[]
+    t = (h === nothing)
+    h = 3.0
+    return t ? typeof(h) : typeof(h)
+end
+@test @inferred f25579(Ref{Union{Nothing, Int}}(nothing)) == Float64
+@test @inferred f25579(Ref{Union{Nothing, Int}}(1)) == Float64
+function g25579(g)
+    h = g[]
+    h = (h === nothing)
+    return h ? typeof(h) : typeof(h)
+end
+@test @inferred g25579(Ref{Union{Nothing, Int}}(nothing)) == Bool
+@test @inferred g25579(Ref{Union{Nothing, Int}}(1)) == Bool
+function h25579(g)
+    h = g[]
+    t = (h === nothing)
+    try
+        h = -1.25
+        error("continue at catch block")
+    end
+    return t ? typeof(h) : typeof(h)
+end
+@test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
+        Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
