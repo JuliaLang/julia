@@ -1,9 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, SparseArrays
-
-include("OAs.jl")
-using .OAs
+using Test, Test.OAs, SparseArrays
 
 using Random
 using Random.dSFMT

@@ -1,10 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Array test
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
-using SparseArrays
 
+using Test.OAs
+using SparseArrays
 using Random
 
 @testset "basics" begin
