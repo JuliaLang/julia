@@ -7,7 +7,10 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigensolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!
+using LinearAlgebra: BlasFloat, BlasInt, SVD, checksquare, mul!,
+              UniformScaling, issymmetric, ishermitian,
+              factorize, I, scale!, qr
+import LinearAlgebra
 
 export eigs, svds
 
@@ -205,14 +208,14 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function LinearAlgebra.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
     mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
     mul!(view(y, m + 1:mn), adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
-Base.ishermitian(A::SVDAugmented) = true
+LinearAlgebra.ishermitian(A::SVDAugmented) = true
 
 struct AtA_or_AAt{T,S} <: AbstractArray{T, 2}
     A::S
@@ -225,7 +228,7 @@ function AtA_or_AAt(A::AbstractMatrix{T}) where T
     AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
 end
 
-function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function LinearAlgebra.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
         mul!(A.buffer, A.A, x)
         return mul!(y, adjoint(A.A), A.buffer)
@@ -235,7 +238,7 @@ function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVecto
     end
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
-Base.ishermitian(s::AtA_or_AAt) = true
+LinearAlgebra.ishermitian(s::AtA_or_AAt) = true
 
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)

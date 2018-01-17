@@ -322,13 +322,6 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "  BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "  BLAS: ",libblas_name)
-    end
-    println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
     println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 

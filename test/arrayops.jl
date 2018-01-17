@@ -5,7 +5,7 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers.OAs
 using SparseArrays
 
-using Random
+using Random, LinearAlgebra
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -1723,7 +1723,7 @@ end
     b = rand(6,7)
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
-    @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+    @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
 module RetTypeDecl

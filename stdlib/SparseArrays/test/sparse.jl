@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!, rdiv!
+using LinearAlgebra: mul!, ldiv!, rdiv!
 using Base.Printf: @printf
 using Random
 
@@ -348,7 +348,7 @@ dA = Array(sA)
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
         @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
-        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+        @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
 end
 
@@ -1736,7 +1736,7 @@ end
 end
 
 @testset "fillstored!" begin
-    @test LinAlg.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
+    @test LinearAlgebra.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
 end
 
 @testset "factorization" begin
@@ -1774,8 +1774,8 @@ end
     @test UpperTriangular(A)\(UpperTriangular(A)*b) ≈ b
     A[2,2] = 0
     dropzeros!(A)
-    @test_throws LinAlg.SingularException LowerTriangular(A)\b
-    @test_throws LinAlg.SingularException UpperTriangular(A)\b
+    @test_throws LinearAlgebra.SingularException LowerTriangular(A)\b
+    @test_throws LinearAlgebra.SingularException UpperTriangular(A)\b
 end
 
 @testset "issue described in https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
@@ -1788,15 +1788,15 @@ end
     @test issparse(Symmetric(m))
     @test issparse(Hermitian(m))
     @test issparse(LowerTriangular(m))
-    @test issparse(LinAlg.UnitLowerTriangular(m))
+    @test issparse(LinearAlgebra.UnitLowerTriangular(m))
     @test issparse(UpperTriangular(m))
-    @test issparse(LinAlg.UnitUpperTriangular(m))
+    @test issparse(LinearAlgebra.UnitUpperTriangular(m))
     @test issparse(Symmetric(Array(m))) == false
     @test issparse(Hermitian(Array(m))) == false
     @test issparse(LowerTriangular(Array(m))) == false
-    @test issparse(LinAlg.UnitLowerTriangular(Array(m))) == false
+    @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
-    @test issparse(LinAlg.UnitUpperTriangular(Array(m))) == false
+    @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
 end
 
 @testset "test created type of sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat)" begin
@@ -2010,7 +2010,7 @@ end
         sprand(5, 5, 1/5)
     end
     A = max.(A, copy(A'))
-    LinAlg.fillstored!(A, 1)
+    LinearAlgebra.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end

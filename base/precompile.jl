@@ -1234,7 +1234,6 @@ precompile(Tuple{typeof(Base.join), Base.GenericIOBuffer{Array{UInt8, 1}}, Tuple
 precompile(Tuple{typeof(Base.setindex!), Base.Dict{Int64, Nothing}, Nothing, Int64})
 precompile(Tuple{Type{Array{Union{Tuple{Any, Int64}, Tuple{Tuple{}, Any, Bool}}, 1}}, Tuple{Int64}})
 precompile(Tuple{typeof(Base.eachindex), Array{Union{Tuple{Any, Int64}, Tuple{Tuple{}, Any, Bool}}, 1}})
-precompile(Tuple{typeof(Base.LinAlg.BLAS.set_num_threads), Int64})
 precompile(Tuple{typeof(Base.eltype), Type{Base.Union{IO, Nothing}}})
 precompile(Tuple{Type{Base.Union{IO, Nothing}}})
 precompile(Tuple{typeof(Base.eltype), Type{Base.Union{AbstractString, Nothing}}})

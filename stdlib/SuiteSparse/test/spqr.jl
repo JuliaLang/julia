@@ -2,7 +2,7 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
-using Base.LinAlg: mul!, Adjoint, Transpose
+using LinearAlgebra: mul!, Adjoint, Transpose
 
 @testset "Sparse QR" begin
 m, n = 100, 10
