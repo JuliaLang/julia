@@ -3859,7 +3859,7 @@ end
 # issue #14610
 let sometypes = (Int,Int8)
     f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
-    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+    @test hasmethod(f, (Union{Type{Int},Type{Int8}},))
 end
 
 let

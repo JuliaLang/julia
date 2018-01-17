@@ -179,7 +179,7 @@ Base.Enums.@enum
 
 ```@docs
 Core.Function
-Base.method_exists
+Base.hasmethod
 Core.applicable
 Core.invoke
 Base.invokelatest

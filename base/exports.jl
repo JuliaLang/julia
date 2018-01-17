@@ -883,7 +883,7 @@ export
     isconst,
     isinteractive,
     less,
-    method_exists,
+    hasmethod,
     methods,
     methodswith,
     module_name,

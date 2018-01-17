@@ -1004,18 +1004,18 @@ function function_module(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
+    hasmethod(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
 
 # Examples
 ```jldoctest
-julia> method_exists(length, Tuple{Array})
+julia> hasmethod(length, Tuple{Array})
 true
 ```
 """
-function method_exists(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0

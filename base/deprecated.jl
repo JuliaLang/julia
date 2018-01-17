@@ -2797,6 +2797,8 @@ end
 @deprecate catch_stacktrace(c_funcs::Bool)  stacktrace(catch_backtrace(), c_funcs)
 @deprecate catch_stacktrace()               stacktrace(catch_backtrace())
 
+@deprecate method_exists hasmethod
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)
