@@ -2343,16 +2343,12 @@
             `(call (top typed_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
-   '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `x.'` for transposition is deprecated, "
-                                             "use `transpose(x)` or `copy(transpose(x))` instead. "
-                                             "The `transpose` function now always returns a lazy view into "
-                                             "its argument, avoiding intermediate allocations. "
-                                             "This means that modifying the transpose will also "
-                                             "modify the original array. Use `transpose(x)` in "
-                                             "cases where the result is an intermediate computation "
-                                             "(like as a replacement within `x.' * A`), or add a "
-                                             "call to `copy` to ensure the result is independent "
-                                             "from its argument." #\newline) #f)
+   '|.'| (lambda (e) (begin (deprecation-message (string "The postfix .' syntax is deprecated. "
+                                             "For vector v in v.', use transpose(v) "
+                                             "instead. For matrix A in A.', use "
+                                             "copy(transpose(A)) instead, unless A.' "
+                                             "appears as an argument of *, / or \\. In "
+                                             "those cases, use transpose(A) instead. " #\newline) #f)
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
