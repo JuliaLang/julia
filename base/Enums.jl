@@ -14,6 +14,8 @@ Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
+Base.hash(x::Enum, h::UInt) = Base.hash_by_id(x, h)
+
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
     lo, hi = extrema(values)

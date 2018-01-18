@@ -332,7 +332,8 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    hashval = hash(key)
+    index = (((hashval%Int) & (sz-1)) + 1)::Int
     avail = 0
     keys = h.keys
 
@@ -361,7 +362,13 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
 
     avail < 0 && return avail
 
-    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+    if hashval == 0
+        # assume a hash value of 0 means we're using the fallback hash function,
+        # so gracefully decay to linear lookup.
+        maxallowed = sz - 1
+    else
+        maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+    end
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
         if !isslotfilled(h,index)

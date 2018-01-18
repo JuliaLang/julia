@@ -332,6 +332,23 @@ Base.show(io::IO, ::Alpha) = print(io,"α")
     @test endswith(str, "α => 1")
 end
 
+mutable struct Foo12198
+    x
+end
+Base.:(==)(x::Foo12198, y::Foo12198) = x.x == y.x
+@testset "issue #12198" begin
+    a = [Foo12198(1), Foo12198(1)]
+    @test length(unique(a)) == 1
+    a = [Foo12198(1), Foo12198(2)]
+    @test length(unique(a)) == 2
+    d = Dict()
+    d[Foo12198(1)] = 1
+    @test haskey(d, Foo12198(1))
+    d[Foo12198(1)] = 2
+    @test length(d) == 1
+    @test d[Foo12198(1)] == 2
+end
+
 @testset "issue #2540" begin
     d = Dict{Any,Any}(Dict(x => 1 for x in ['a', 'b', 'c']))
     @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)

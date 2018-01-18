@@ -1509,3 +1509,16 @@ The following examples may help you interpret expressions marked as containing n
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
+
+## Define `hash` for custom types used as dictionary keys
+
+The default `hash` function returns a constant `0` value, causing `Dict`s and `Set`s to perform
+linear-time (instead of near-constant-time) lookup. This allows these collections to work
+correctly by default for arbitrary new definitions of `==`, but can cause performance problems.
+If you encounter this problem, simply add an appropriate method for `Base.hash(x::MyType, h::UInt)`.
+If the built-in equality function `===` already has the desired behavior for your type, this
+definition can be used:
+
+```julia
+Base.hash(x::MyType, h::UInt) = Base.hash_by_id(x, h)
+```

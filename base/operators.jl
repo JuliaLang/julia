@@ -64,6 +64,9 @@ Collections should generally implement `==` by calling `==` recursively on all c
 
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
+
+If a type that implements `==` will be used in sets or as dictionary keys, it should also
+implement [`hash`](@ref).
 """
 ==(x, y) = x === y
 
