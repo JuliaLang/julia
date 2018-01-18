@@ -899,7 +899,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, ":")
             print(io, value)
         else
-            print(io, "Symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(\"", Unicode.escape(s), "\")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1266,7 +1266,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 end
                 print(io, ")")
             else
-                escape_string(io, x, "\"\$")
+                print(io, Unicode.escape(x, "\"\$"))
             end
         end
         print(io, '"')

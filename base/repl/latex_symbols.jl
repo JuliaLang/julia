@@ -40,7 +40,7 @@ for c in child_nodes(root(xdoc))
 end
 println("# ", length(latexsym), " symbols generated from unicode.xml")
 for (L, U) in latexsym
-    println("    \"$(escape_string(L))\" => \"$(escape_string(U))\",")
+    println("    \"$(Unicode.escape(L))\" => \"$(Unicode.escape(U))\",")
 end
 =#
 
@@ -57,12 +57,12 @@ open(fname) do f
         c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
-            tabcomname = escape_string(x[3])
+            tabcomname = Unicode.escape(x[3])
             if startswith(tabcomname, "\\\\math")
                 tabcomname = string("\\\\", tabcomname[7:end])
             end
             println("    \"", tabcomname, "\" => \"",
-                    escape_string("$c"), "\",  # ", x[5])
+                    Unicode.escape("$c"), "\",  # ", x[5])
         end
     end
 end

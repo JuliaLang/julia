@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Libdl
+using Unicode
 
 catcmd = `cat`
 if Sys.iswindows()
@@ -314,7 +315,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         write(a, """
             println(@__FILE__)
             println(PROGRAM_FILE)
-            include(\"$(escape_string(b))\")
+            include(\"$(Unicode.escape(b))\")
             """)
         write(b, """
             println(@__FILE__)

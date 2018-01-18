@@ -591,8 +591,8 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
-        open("$(escape_string(errfile))", "a") do f
-            pkg, build_file = "$pkg", "$(escape_string(build_file))"
+        open("$(Unicode.escape(errfile))", "a") do f
+            pkg, build_file = "$pkg", "$(Unicode.escape(build_file))"
             try
                 @info "Building \$pkg"
                 cd(dirname(build_file)) do

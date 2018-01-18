@@ -19,8 +19,8 @@ skeys = sort(collect(keys(result)))
 open("emoji_symbols.jl", "w") do fh
     println(fh, "const emoji_symbols = Dict(")
     for key in skeys
-        println(fh, "    \"", escape_string(key), "\" => \"",
-                 escape_string(result[key]), "\",")
+        println(fh, "    \"", Unicode.escape(key), "\" => \"",
+                Unicode.escape(result[key]), "\",")
     end
     println(fh, ")")
 end

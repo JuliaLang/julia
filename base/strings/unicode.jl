@@ -744,4 +744,117 @@ show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) 
 
 ############################################################################
 
+## string escaping & unescaping ##
+
+need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
+
+escape_nul(s::AbstractString, i::Int) =
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
+
+"""
+    Unicode.escape(str::AbstractString[, esc::AbstractString]) -> AbstractString
+
+General escaping of traditional C and Unicode escape sequences.
+Any characters in `esc` are also escaped (with a backslash).
+The reverse is [`Unicode.unescape`](@ref).
+"""
+function escape(s::AbstractString, esc::AbstractString="\"")
+    io = IOBuffer()
+    i = start(s)
+    while !done(s,i)
+        c, j = next(s,i)
+        if c in esc
+            print(io, '\\', c)
+        elseif isascii(c)
+            c == '\0'          ? print(io, escape_nul(s,j)) :
+            c == '\e'          ? print(io, "\\e") :
+            c == '\\'          ? print(io, "\\\\") :
+            c in esc           ? print(io, '\\', c) :
+            '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
+            isprint(c)         ? print(io, c) :
+                                 print(io, "\\x", hex(c, 2))
+        elseif !isoverlong(c) && !ismalformed(c)
+            isprint(c)         ? print(io, c) :
+            c <= '\x7f'        ? print(io, "\\x", hex(c, 2)) :
+            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(s, j) ? 4 : 2)) :
+                                 print(io, "\\U", hex(c, need_full_hex(s, j) ? 8 : 4))
+        else # malformed or overlong
+            u = bswap(reinterpret(UInt32, c))
+            while true
+                print(io, "\\x", hex(u % UInt8, 2))
+                (u >>= 8) == 0 && break
+            end
+        end
+        i = j
+    end
+    String(take!(io))
+end
+
+# general unescaping of traditional C and Unicode escape sequences
+
+# TODO: handle unescaping invalid UTF-8 sequences
+
+"""
+    Unicode.unescape(str::AbstractString) -> AbstractString
+
+General unescaping of traditional C and Unicode escape sequences. Reverse of
+[`Unicode.escape`](@ref).
+"""
+function unescape(s::AbstractString)
+    io = IOBuffer()
+    i = start(s)
+    while !done(s,i)
+        c, i = next(s,i)
+        if !done(s,i) && c == '\\'
+            c, i = next(s,i)
+            if c == 'x' || c == 'u' || c == 'U'
+                n = k = 0
+                m = c == 'x' ? 2 :
+                    c == 'u' ? 4 : 8
+                while (k += 1) <= m && !done(s,i)
+                    c, j = next(s,i)
+                    n = '0' <= c <= '9' ? n<<4 + (c-'0') :
+                        'a' <= c <= 'f' ? n<<4 + (c-'a'+10) :
+                        'A' <= c <= 'F' ? n<<4 + (c-'A'+10) : break
+                    i = j
+                end
+                if k == 1 || n > 0x10ffff
+                    u = m == 4 ? 'u' : 'U'
+                    throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
+                                        "unicode (\\$u)") escape sequence"))
+                end
+                if m == 2 # \x escape sequence
+                    write(io, UInt8(n))
+                else
+                    print(io, Char(n))
+                end
+            elseif '0' <= c <= '7'
+                k = 1
+                n = c-'0'
+                while (k += 1) <= 3 && !done(s,i)
+                    c, j = next(s,i)
+                    n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
+                    i = j
+                end
+                if n > 255
+                    throw(ArgumentError("octal escape sequence out of range"))
+                end
+                write(io, UInt8(n))
+            else
+                print(io, c == 'a' ? '\a' :
+                          c == 'b' ? '\b' :
+                          c == 't' ? '\t' :
+                          c == 'n' ? '\n' :
+                          c == 'v' ? '\v' :
+                          c == 'f' ? '\f' :
+                          c == 'r' ? '\r' :
+                          c == 'e' ? '\e' : c)
+            end
+        else
+            print(io, c)
+        end
+    end
+    String(take!(io))
+end
+
 end # module

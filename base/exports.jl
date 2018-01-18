@@ -684,7 +684,6 @@ export
     digits,
     digits!,
     dump,
-    escape_string,
     hex,
     hex2bytes,
     hex2bytes!,
@@ -737,7 +736,6 @@ export
     titlecase,
     transcode,
     ucfirst,
-    unescape_string,
     uppercase,
     warn,
 
