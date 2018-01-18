@@ -163,9 +163,9 @@ datatype_name(t::DataType) = t.name.name
 datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
-    Base.datatype_module(t::DataType) -> Module
+    parentmodule(t::DataType) -> Module
 
-Determine the module containing the definition of a (potentially UnionAll-wrapped) `DataType`.
+Determine the module containing the definition of a (potentially `UnionAll`-wrapped) `DataType`.
 
 # Examples
 ```jldoctest
@@ -174,15 +174,15 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_module(Int)
+julia> parentmodule(Int)
 Core
 
-julia> Base.datatype_module(Foo.Int)
+julia> parentmodule(Foo.Int)
 Foo
 ```
 """
-datatype_module(t::DataType) = t.name.module
-datatype_module(t::UnionAll) = datatype_module(unwrap_unionall(t))
+parentmodule(t::DataType) = t.name.module
+parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
@@ -988,7 +988,7 @@ end
 Determine the module containing the (first) definition of a generic
 function.
 """
-function_module(f::Function) = datatype_module(typeof(f))
+function_module(f::Function) = parentmodule(typeof(f))
 
 """
     Base.function_module(f::Function, types) -> Module

@@ -318,7 +318,6 @@ Base.fieldnames
 Base.fieldname
 Base.fieldcount
 Base.propertynames
-Base.datatype_module
 Base.datatype_name
 Base.isconst
 Base.function_name
