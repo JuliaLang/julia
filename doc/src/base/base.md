@@ -306,7 +306,7 @@ Base.AsyncCondition(::Function)
 
 ```@docs
 Base.module_name
-Base.module_parent
+Base.parentmodule
 Base.@__MODULE__
 Base.fullname
 Base.names
@@ -315,12 +315,9 @@ Base.fieldnames
 Base.fieldname
 Base.fieldcount
 Base.propertynames
-Base.datatype_module
 Base.datatype_name
 Base.isconst
 Base.function_name
-Base.function_module(::Function)
-Base.function_module(::Any, ::Any)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@functionloc

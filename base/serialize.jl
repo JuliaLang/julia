@@ -357,7 +357,7 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     if Base.is_root_module(m)
         serialize(s, Base.root_module_key(m))
     else
-        serialize_mod_names(s, module_parent(m))
+        serialize_mod_names(s, parentmodule(m))
         serialize(s, module_name(m))
     end
 end

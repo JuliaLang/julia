@@ -16,20 +16,20 @@ julia> module_name(Base.LinAlg)
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
-    module_parent(m::Module) -> Module
+    parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
 # Examples
 ```jldoctest
-julia> module_parent(Main)
+julia> parentmodule(Main)
 Main
 
-julia> module_parent(Base.LinAlg.BLAS)
+julia> parentmodule(Base.LinAlg.BLAS)
 Base.LinAlg
 ```
 """
-module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
     @__MODULE__ -> Module
@@ -60,7 +60,7 @@ function fullname(m::Module)
     if m === Main || m === Base || m === Core
         return (mn,)
     end
-    mp = module_parent(m)
+    mp = parentmodule(m)
     if mp === m
         return (mn,)
     end
@@ -163,9 +163,9 @@ datatype_name(t::DataType) = t.name.name
 datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
-    Base.datatype_module(t::DataType) -> Module
+    parentmodule(t::DataType) -> Module
 
-Determine the module containing the definition of a (potentially UnionAll-wrapped) `DataType`.
+Determine the module containing the definition of a (potentially `UnionAll`-wrapped) `DataType`.
 
 # Examples
 ```jldoctest
@@ -174,15 +174,15 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_module(Int)
+julia> parentmodule(Int)
 Core
 
-julia> Base.datatype_module(Foo.Int)
+julia> parentmodule(Foo.Int)
 Foo
 ```
 """
-datatype_module(t::DataType) = t.name.module
-datatype_module(t::UnionAll) = datatype_module(unwrap_unionall(t))
+parentmodule(t::DataType) = t.name.module
+parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
@@ -983,19 +983,19 @@ function functionloc(@nospecialize(f))
 end
 
 """
-    Base.function_module(f::Function) -> Module
+    parentmodule(f::Function) -> Module
 
 Determine the module containing the (first) definition of a generic
 function.
 """
-function_module(f::Function) = datatype_module(typeof(f))
+parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    Base.function_module(f::Function, types) -> Module
+    parentmodule(f::Function, types) -> Module
 
 Determine the module containing a given definition of a generic function.
 """
-function function_module(@nospecialize(f), @nospecialize(types))
+function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")

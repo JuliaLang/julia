@@ -133,7 +133,7 @@ function (ss::SummarySize)(obj::Module)
     for binding in names(obj, true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
+            if !isa(value, Module) || parentmodule(value) === obj
                 size += ss(value)::Int
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)
