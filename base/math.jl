@@ -12,7 +12,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, clamp!, modf, ^, mod2pi, rem2pi,
+       clamp, modf, ^, mod2pi, rem2pi,
        beta, lbeta, @evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
@@ -68,19 +68,6 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
            ifelse(x < lo,
                   convert(promote_type(X,L,H), lo),
                   convert(promote_type(X,L,H), x)))
-
-"""
-    clamp!(array::AbstractArray, lo, hi)
-
-Restrict values in `array` to the specified range, in-place.
-See also [`clamp`](@ref).
-"""
-function clamp!(x::AbstractArray, lo, hi)
-    @inbounds for i in eachindex(x)
-        x[i] = clamp(x[i], lo, hi)
-    end
-    x
-end
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
 macro horner(x, p...)

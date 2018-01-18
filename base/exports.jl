@@ -393,7 +393,6 @@ export
     circcopy!,
     circshift,
     circshift!,
-    clamp!,
     colon,
     conj!,
     copy!,

@@ -2819,6 +2819,10 @@ export readandwrite
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
+# Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
+# PR #22247
+@deprecate clamp!(A::AbstractArray, lo, hi) A .= clamp.(A, lo, hi)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
