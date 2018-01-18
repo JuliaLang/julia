@@ -444,7 +444,7 @@ end
 @test Meta.parse("A=>B") == Expr(:call, :(=>), :A, :B)
 
 @test Meta.parse("{1,2,3}") == Expr(:braces, 1, 2, 3)
-@test Meta.parse("{1 2 3 4}") == Expr(:bracescat, Expr(:row, 1, 2, 3, 4))
+@test Meta.parse("{1 2 3 4}") == Expr(:braceshcat, 1, 2, 3, 4)
 @test Meta.parse("{1 2; 3 4}") == Expr(:bracescat, Expr(:row, 1, 2), Expr(:row, 3, 4))
 @test Meta.parse("{x for x in 1:10}") == Expr(:braces, :(x for x in 1:10))
 @test Meta.parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}") == Expr(:braces, :(x=>y for (x,y) in zip([1,2,3],[4,5,6])))
