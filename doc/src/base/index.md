@@ -10,7 +10,6 @@
   * [Distributed Computing](@ref)
   * [Shared Arrays](@ref)
   * [Multi-Threading](@ref)
-  * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
   * [Delimited Files](@ref)

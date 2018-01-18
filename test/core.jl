@@ -1955,6 +1955,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 
 # issue #6142
 import Base: +
+import LinearAlgebra: UniformScaling, I
 mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::UniformScaling) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"

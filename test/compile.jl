@@ -219,7 +219,7 @@ try
             # plus modules included in the system image
             Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching,
-                 :Future, :IterativeEigensolvers,  :Libdl, :Logging, :Mmap, :Printf,
+                 :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :SharedArrays, :SparseArrays, :SuiteSparse, :Test, :Unicode]))
         @test discard_module.(deps) == deps1
 

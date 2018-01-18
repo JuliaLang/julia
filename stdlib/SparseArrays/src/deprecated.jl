@@ -29,7 +29,7 @@ for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
 end
 
 # PR 23341
-import Base.LinAlg: diagm
+import LinearAlgebra: diagm
 @deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
 
 # PR #23757
@@ -61,8 +61,8 @@ end
 @deprecate sparse(s::UniformScaling, m::Integer) sparse(s, m, m)
 
 # PR #25037
-@deprecate spones(A::SparseMatrixCSC) LinAlg.fillstored!(copy(A), 1)
-@deprecate spones(A::SparseVector)    LinAlg.fillstored!(copy(A), 1)
+@deprecate spones(A::SparseMatrixCSC) LinearAlgebra.fillstored!(copy(A), 1)
+@deprecate spones(A::SparseVector)    LinearAlgebra.fillstored!(copy(A), 1)
 export spones
 
 # full for sparse arrays
@@ -133,13 +133,14 @@ function speye(S::SparseMatrixCSC{T}) where T
 end
 
 # former imports into SparseArrays
-import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
+import Base: Ac_mul_B, At_mul_B
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
-import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
-import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!, mul!, ldiv!, rdiv!
+import Base: At_ldiv_B, Ac_ldiv_B
+import LinearAlgebra: A_mul_B!, Ac_mul_B!, At_mul_B!, A_ldiv_B!
+import LinearAlgebra: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!, mul!, ldiv!, rdiv!
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
-using Base.LinAlg: Adjoint, Transpose
+using LinearAlgebra: Adjoint, Transpose
 @deprecate Ac_ldiv_B(A::SparseMatrixCSC, B::RowVector)  (\)(adjoint(A), B)
 @deprecate At_ldiv_B(A::SparseMatrixCSC, B::RowVector)  (\)(transpose(A), B)
 @deprecate Ac_ldiv_B(A::SparseMatrixCSC, B::AbstractVecOrMat)   (\)(adjoint(A), B)
@@ -178,9 +179,9 @@ using Base.LinAlg: Adjoint, Transpose
 for isunittri in (true, false), islowertri in (true, false)
     unitstr = isunittri ? "Unit" : ""
     halfstr = islowertri ? "Lower" : "Upper"
-    tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
+    tritype = :(LinearAlgebra.$(Symbol(unitstr, halfstr, "Triangular")))
     @eval #=Base.SparseArrays=# begin
-        using Base.LinAlg: Adjoint, Transpose
+        using LinearAlgebra: Adjoint, Transpose
         @deprecate At_ldiv_B(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}   (\)(transpose(A), b)
         @deprecate At_ldiv_B(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}    (\)(transpose(A), b)
         @deprecate At_ldiv_B(A::$tritype, b::SparseVector)  (\)(transpose(A), b)
@@ -193,7 +194,7 @@ for isunittri in (true, false), islowertri in (true, false)
     end
 end
 
-using Base.LinAlg: Adjoint, Transpose
+using LinearAlgebra: Adjoint, Transpose
 @deprecate Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(adjoint(A), x)
 @deprecate At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(transpose(A), x)
 @deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(α, adjoint(A), x, β, y)
@@ -215,7 +216,7 @@ using Base.LinAlg: Adjoint, Transpose
 
 # methods involving RowVector from base/sparse/higherorderfns.jl, to deprecate
 @eval SparseArrays.HigherOrderFns begin
-    BroadcastStyle(::Type{<:Base.RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle()
+    BroadcastStyle(::Type{<:RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle()
 end
 
 import Base: asyncmap

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, SparseArrays
+using Random, LinearAlgebra, SparseArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -682,9 +682,9 @@ end
 
 # checksquare
 function test_checksquare()
-    @test LinAlg.checksquare(zeros(2,2)) == 2
-    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
-    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
+    @test LinearAlgebra.checksquare(zeros(2,2)) == 2
+    @test LinearAlgebra.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
+    @test_throws DimensionMismatch LinearAlgebra.checksquare(zeros(2,3))
 end
 
 #----- run tests -------------------------------------------------------------#

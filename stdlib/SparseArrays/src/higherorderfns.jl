@@ -10,6 +10,7 @@ using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
 using Base.Broadcast: BroadcastStyle
+using LinearAlgebra
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -987,8 +988,8 @@ Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcas
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{0}) = PromoteToSparse()
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
-BroadcastStyle(::Type{<:Base.Adjoint{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
-BroadcastStyle(::Type{<:Base.Transpose{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
+BroadcastStyle(::Type{<:Adjoint{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
+BroadcastStyle(::Type{<:Transpose{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.VectorStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.MatrixStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.DefaultArrayStyle{N}) where N =

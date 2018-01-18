@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.LinAlg: checksquare
+import LinearAlgebra: checksquare
 
 ## sparse matrix multiplication
 
@@ -128,11 +128,11 @@ end
 
 function (*)(D::Diagonal, A::SparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
-    scale!(LinAlg.copy_oftype(A, T), D.diag, A)
+    scale!(LinearAlgebra.copy_oftype(A, T), D.diag, A)
 end
 function (*)(A::SparseMatrixCSC, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
-    scale!(LinAlg.copy_oftype(A, T), A, D.diag)
+    scale!(LinearAlgebra.copy_oftype(A, T), A, D.diag)
 end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
@@ -207,7 +207,7 @@ end
 function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     nrowB, ncolB  = size(B, 1), size(B, 2)
-    ncol = LinAlg.checksquare(A)
+    ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
@@ -236,7 +236,7 @@ function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
                 B[joff + jai] = bj
                 ii += 1
             else
-                throw(LinAlg.SingularException(j))
+                throw(LinearAlgebra.SingularException(j))
             end
 
             # update remaining part
@@ -252,7 +252,7 @@ end
 function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
     nrowB, ncolB = size(B, 1), size(B, 2)
-    ncol = LinAlg.checksquare(A)
+    ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
@@ -281,7 +281,7 @@ function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
                 B[joff + jai] = bj
                 ii -= 1
             else
-                throw(LinAlg.SingularException(j))
+                throw(LinearAlgebra.SingularException(j))
             end
 
             # update remaining part
@@ -312,7 +312,7 @@ function rdiv!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     @inbounds for j in 1:k
         ddj = dd[j]
         if iszero(ddj)
-            throw(LinAlg.SingularException(j))
+            throw(LinearAlgebra.SingularException(j))
         end
         for i in nzrange(A, j)
             nonz[i] /= ddj
@@ -983,16 +983,16 @@ end
 
 # function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
 #     F = cholfact(A)
-#     if LinAlg.issuccess(F)
+#     if LinearAlgebra.issuccess(F)
 #         return F
 #     else
 #         ldltfact!(F, A)
 #         return F
 #     end
 # end
-function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
+function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
     F = cholfact(A)
-    if LinAlg.issuccess(F)
+    if LinearAlgebra.issuccess(F)
         return F
     else
         ldltfact!(F, A)

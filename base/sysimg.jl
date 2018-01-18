@@ -460,12 +460,6 @@ import Base64
 
 INCLUDE_STATE = 2
 
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
 include("asyncmap.jl")
 
 include("multimedia.jl")
@@ -520,6 +514,7 @@ Base.require(:FileWatching)
 Base.require(:Future)
 Base.require(:IterativeEigensolvers)
 Base.require(:Libdl)
+Base.require(:LinearAlgebra)
 Base.require(:Logging)
 Base.require(:Mmap)
 Base.require(:Printf)
@@ -551,6 +546,9 @@ Base.require(:Unicode)
         ", run `using SparseArrays` to load sparse array functionality")
     @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
+
+    # PR #25571
+    @deprecate_binding LinAlg root_module(:LinearAlgebra) true ", run `using LinearAlgebra` instead"
 end
 
 empty!(LOAD_PATH)

@@ -506,7 +506,7 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = vecnorm(x)
+hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
 """
     atan2(y, x)

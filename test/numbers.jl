@@ -2,6 +2,7 @@
 
 using Base.MathConstants
 using Random
+using LinearAlgebra
 
 const ≣ = isequal # convenient for comparing NaNs
 

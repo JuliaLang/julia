@@ -5,7 +5,8 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
              IndexStyle, IndexLinear, IndexCartesian, adjoint
 
-import Base.LinAlg: (\),
+using LinearAlgebra
+import LinearAlgebra: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
@@ -348,8 +349,8 @@ end
 Factor(ptr::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(ptr)
 Factor(x::Factor) = x
 
-Base.LinAlg.adjoint(F::Factor) = Adjoint(F)
-Base.LinAlg.transpose(F::Factor) = Transpose(F)
+Base.adjoint(F::Factor) = Adjoint(F)
+Base.transpose(F::Factor) = Transpose(F)
 
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
@@ -773,7 +774,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
     if !issuccess(F)
         s = unsafe_load(pointer(F))
         if s.is_ll == 1
-            throw(LinAlg.PosDefException(s.minor))
+            throw(LinearAlgebra.PosDefException(s.minor))
         else
             throw(ArgumentError("factorized matrix has one or more zero pivots. Try using lufact instead."))
         end

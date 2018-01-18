@@ -391,7 +391,12 @@ end
 function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    Matrix{T}(I, m, m)
+    # Matrix{T}(I, m, m)
+    I = zeros(T, m, m)
+    for i in 1:m
+        I[i,i] = 1
+    end
+    I
 end
 
 one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)

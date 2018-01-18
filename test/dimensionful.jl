@@ -32,7 +32,8 @@ canonical_p(p) = isinteger(p) ? Int(p) : Rational{Int}(p)
 Base.abs(x::Furlong{p}) where {p} = Furlong{p}(abs(x.val))
 @generated Base.abs2(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(2p))}(abs2(x.val)))
 @generated Base.inv(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(-p))}(inv(x.val)))
-Base.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
+import LinearAlgebra: sylvester
+sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
 for f in (:isfinite, :isnan, :isreal)
     @eval Base.$f(x::Furlong) = $f(x.val)

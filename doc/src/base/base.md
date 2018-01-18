@@ -86,13 +86,10 @@ primitive type
 
 ## Base Modules
 ```@docs
-Base.BLAS
 Base.Docs
 Base.Iterators
-Base.LAPACK
 Base.LibGit2
 Base.Libc
-Base.LinAlg
 Base.Markdown
 Base.Meta
 Base.Pkg

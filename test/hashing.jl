@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, SparseArrays
+using Random, LinearAlgebra, SparseArrays
 
 types = Any[
     Bool,
