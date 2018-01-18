@@ -321,8 +321,6 @@ Base.propertynames
 Base.datatype_name
 Base.isconst
 Base.function_name
-Base.function_module(::Function)
-Base.function_module(::Any, ::Any)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@functionloc

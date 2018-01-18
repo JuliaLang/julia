@@ -272,11 +272,11 @@ let
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
-    @test Base.function_module(foo7648, (Any,)) == TestMod7648
-    @test Base.function_module(foo7648) == TestMod7648
-    @test Base.function_module(foo7648_nomethods) == TestMod7648
-    @test Base.function_module(foo9475, (Any,)) == TestMod7648.TestModSub9475
-    @test Base.function_module(foo9475) == TestMod7648.TestModSub9475
+    @test parentmodule(foo7648, (Any,)) == TestMod7648
+    @test parentmodule(foo7648) == TestMod7648
+    @test parentmodule(foo7648_nomethods) == TestMod7648
+    @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
+    @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
     @test Base.datatype_name(Foo7648) == :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"

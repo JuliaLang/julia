@@ -983,19 +983,19 @@ function functionloc(@nospecialize(f))
 end
 
 """
-    Base.function_module(f::Function) -> Module
+    parentmodule(f::Function) -> Module
 
 Determine the module containing the (first) definition of a generic
 function.
 """
-function_module(f::Function) = parentmodule(typeof(f))
+parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    Base.function_module(f::Function, types) -> Module
+    parentmodule(f::Function, types) -> Module
 
 Determine the module containing a given definition of a generic function.
 """
-function function_module(@nospecialize(f), @nospecialize(types))
+function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
