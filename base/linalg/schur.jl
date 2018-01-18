@@ -77,6 +77,8 @@ function getproperty(F::Schur, d::Symbol)
     end
 end
 
+Base.propertynames(F::Schur) = append!([:Schur,:vectors], fieldnames(typeof(F)))
+
 function show(io::IO, F::Schur)
     println(io, "$(typeof(F)) with factors T and Z:")
     show(io, F.T)
@@ -273,6 +275,8 @@ function getproperty(F::GeneralizedSchur, d::Symbol)
         getfield(F, d)
     end
 end
+
+Base.propertynames(F::GeneralizedSchur) = append!([:values,:left,:right], fieldnames(typeof(F)))
 
 """
     schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector

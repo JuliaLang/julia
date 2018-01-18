@@ -264,3 +264,10 @@ U factor:
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0"""
 end
+
+@testset "propertynames" begin
+    names = sort!(string.(Base.propertynames(lufact(rand(3,3)))))
+    @test names == ["L", "P", "U", "p"]
+    allnames = sort!(string.(Base.propertynames(lufact(rand(3,3)), true)))
+    @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
+end

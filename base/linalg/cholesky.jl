@@ -393,6 +393,8 @@ function getproperty(C::Cholesky, d::Symbol)
         return getfield(C, d)
     end
 end
+Base.propertynames(F::Cholesky, private::Bool=false) = append!([:U,:L,:UL], private ? fieldnames(typeof(F)) : Symbol[])
+
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
@@ -413,6 +415,7 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
         return getfield(C, d)
     end
 end
+Base.propertynames(F::CholeskyPivoted, private::Bool=false) = append!([:U,:L,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
 
 issuccess(C::Cholesky) = C.info == 0
 

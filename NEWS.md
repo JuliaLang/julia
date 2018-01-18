@@ -38,7 +38,8 @@ New language features
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
   * Field access via dot-syntax can now be overloaded by adding methods to
-    `Base.getproperty` and `Base.setproperty!` ([#1974]).
+    `Base.getproperty` and `Base.setproperty!` ([#1974]), optionally along with
+    a corresponding `Base.propertynames` method for reflection ([#25311]).
 
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
