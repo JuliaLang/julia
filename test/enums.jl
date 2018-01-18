@@ -3,7 +3,7 @@
 # For curmod_*
 include("testenv.jl")
 
-using Test
+using Test, Serialization
 
 @test_throws MethodError convert(Enum, 1.0)
 

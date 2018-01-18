@@ -32,9 +32,6 @@ Base.isreadonly
 Base.iswritable
 Base.isreadable
 Base.isopen
-Base.Serializer.serialize
-Base.Serializer.deserialize
-Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout

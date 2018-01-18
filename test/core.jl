@@ -5725,6 +5725,8 @@ t4 = vcat(A23567, t2, t3)
 @test t4[6:10] == A23567
 @test t4[11:15] == A23567
 
+using Serialization
+
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)

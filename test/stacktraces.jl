@@ -2,6 +2,8 @@
 
 # Tests for /base/stacktraces.jl
 
+using Serialization
+
 let
     @noinline child() = stacktrace()
     @noinline parent() = child()

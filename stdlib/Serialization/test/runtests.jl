@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Test, Random, Serialization
 
 # Check that serializer hasn't gone out-of-frame
-@test Serializer.sertag(Symbol) == 1
-@test Serializer.sertag(()) == 68
-@test Serializer.sertag(false) == 76
+@test Serialization.sertag(Symbol) == 1
+@test Serialization.sertag(()) == 68
+@test Serialization.sertag(false) == 76
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -15,20 +15,20 @@ end
 
 # Tags
 create_serialization_stream() do s
-    Serializer.writetag(s, Serializer.sertag(Bool))
-    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
+    Serialization.writetag(s, Serialization.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serialization.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Serializer.write_as_tag(s, Serializer.sertag(Bool))
-    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
+    Serialization.write_as_tag(s, Serialization.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serialization.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Serializer.write_as_tag(s, Serializer.sertag(Symbol))
+    Serialization.write_as_tag(s, Serialization.sertag(Symbol))
     data = take!(s)
     @test data[end-1] == 0x00
-    @test data[end] == UInt8(Serializer.sertag(Symbol))
+    @test data[end] == UInt8(Serialization.sertag(Symbol))
 end
 
 # SubString
@@ -306,13 +306,14 @@ end
 
 # Anonymous Functions
 main_ex = quote
+    using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
         serialize(s, g)
         serialize(s, g)
 
         seekstart(s)
-        ds = SerializationState(s)
+        ds = Serializer(s)
         local g2 = deserialize(ds)
         $Test.@test g2 !== g
         $Test.@test g2() == :magic_token_anon_fun_test
@@ -425,7 +426,7 @@ end
 
 # issue #13452
 module Test13452
-using Test
+using Test, Serialization
 
 module Shell
 export foo
@@ -510,9 +511,9 @@ let io = IOBuffer()
     serialize(io, ())
     seekstart(io)
     b = read(io)
-    @test b[1] == Serializer.HEADER_TAG
+    @test b[1] == Serialization.HEADER_TAG
     @test b[2:3] == b"JL"
-    @test b[4] == Serializer.ser_version
+    @test b[4] == Serialization.ser_version
     @test (b[5] & 0x3) == (ENDIAN_BOM == 0x01020304)
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0

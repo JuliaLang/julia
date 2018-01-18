@@ -48,7 +48,7 @@ function serialize(S::AbstractSerializer, pool::WorkerPool)
     # initialize the `ref` to point to self and only send the ref.
     # Other workers will forward all put!, take!, calls to the process owning
     # the ref (and hence the pool).
-    Serializer.serialize_type(S, typeof(pool))
+    Serialization.serialize_type(S, typeof(pool))
     serialize(S, pool.ref)
 end
 

@@ -978,6 +978,11 @@ end
 @deprecate_moved randjump "Random" true true
 @deprecate_moved GLOBAL_RNG "Random" false true
 
+@deprecate_moved serialize "Serialization" true true
+@deprecate_moved deserialize "Serialization" true true
+@deprecate_moved AbstractSerializer "Serialization" true true
+@deprecate_moved SerializationState "Serialization" true true
+
 # 24595
 @deprecate falses(A::AbstractArray) falses(size(A))
 @deprecate trues(A::AbstractArray) trues(size(A))

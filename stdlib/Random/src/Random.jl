@@ -12,7 +12,9 @@ using Base.GMP: Limb
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
 
-import Base: copymutable, copy, copy!, ==, hash, serialize, deserialize, convert
+import Base: copymutable, copy, copy!, ==, hash, convert
+using Serialization
+import Serialization: serialize, deserialize
 import Base: rand, randn
 
 export srand,

@@ -55,8 +55,6 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     end
 end
 
-abstract type AbstractSerializer end
-
 # Dict
 
 # These can be changed, to trade off better performance for space
