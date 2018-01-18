@@ -185,6 +185,9 @@ Language changes
   * `=>` now has its own precedence level, giving it strictly higher precedence than
     `=` and `,` ([#25391]).
 
+  * `begin` is disallowed inside indexing expressions, in order to enable the syntax
+    `a[begin]` (for selecting the first element) in the future ([#23354]).
+
   * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
     parser. ([#25564])
 
