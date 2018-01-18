@@ -95,7 +95,7 @@ julia> chop(a, head = 5, tail = 5)
 function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
     SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
-# TODO: optization for the default case based on
+# TODO: optimization for the default case based on
 # chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
 
 """
