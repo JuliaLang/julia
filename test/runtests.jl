@@ -1084,6 +1084,10 @@ let A = [0, 0, 0], B = [1, 2, 3]
     @test unsafe_copyto!(A, 2, B, 1, 1) === A == [0, 1, 0]
 end
 
+# 0.7.0-DEV.3406
+using Compat.Random
+@test rand(MersenneTwister(1234)) == 0.5908446386657102
+
 # 0.7
 @test contains("Hello, World!", r"World")
 

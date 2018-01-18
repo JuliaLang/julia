@@ -802,6 +802,12 @@ else
     import SparseArrays
 end
 
+if VERSION < v"0.7.0-DEV.3406"
+    const Random = Base.Random
+else
+    import Random
+end
+
 if VERSION < v"0.7.0-DEV.2609"
     @eval module SuiteSparse
         if Base.USE_GPL_LIBS

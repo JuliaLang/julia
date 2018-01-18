@@ -110,6 +110,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.SparseArrays` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#25249]).
 
+* `using Compat.Random` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#24874]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -438,6 +441,7 @@ includes this fix. Find the minimum version from there.
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
+[#24874]: https://github.com/JuliaLang/julia/issues/24874
 [#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
