@@ -551,6 +551,10 @@ Library improvements
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
 
+  * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
+    like other `AbstractDict` subtypes and its constructors mirror the
+    ones of `Dict`. ([#25210])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -948,6 +952,7 @@ Deprecated or removed
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
 
 Command-line option changes
 ---------------------------

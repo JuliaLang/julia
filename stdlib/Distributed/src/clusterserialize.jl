@@ -9,7 +9,7 @@ import Base.Serializer: object_number, lookup_object_number, remember_object
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::ObjectIdDict
+    table::IdDict
     pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
@@ -20,7 +20,7 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     anonfunc_id::UInt64
 
     function ClusterSerializer{I}(io::I) where I<:IO
-        new(io, 0, ObjectIdDict(), Int[], worker_id_from_socket(io),
+        new(io, 0, IdDict(), Int[], worker_id_from_socket(io),
             Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
     end
 end
@@ -265,4 +265,3 @@ clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
 
 clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
 clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && @eval(mod, global $sym = nothing)
-

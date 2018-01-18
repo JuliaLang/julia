@@ -971,7 +971,7 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
 
-function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
+function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]
     prec = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)

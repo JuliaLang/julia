@@ -76,7 +76,7 @@ export
     MergeSort,
     Missing,
     NTuple,
-    ObjectIdDict,
+    IdDict,
     OrdinalRange,
     Pair,
     PartialQuickSort,
