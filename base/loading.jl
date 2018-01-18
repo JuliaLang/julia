@@ -88,7 +88,7 @@ macro return_if_file(path)
 end
 
 function find_package(name::String)
-    endswith(name, ".jl") && (name = chop(name, 0, 3))
+    endswith(name, ".jl") && (name = chop(name, tail = 3))
     for dir in [Pkg.dir(); LOAD_PATH]
         dir = abspath(dir)
         @return_if_file joinpath(dir, "$name.jl")
@@ -596,7 +596,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         close(in)
     catch ex
         close(in)
-        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        process_running(io) && Timer(t -> kill(io), interval = 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
         rethrow(ex)
     end
     return io

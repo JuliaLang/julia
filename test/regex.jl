@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function collect_eachmatch(re, str, overlap=false)
-    [m.match for m in collect(eachmatch(re, str, overlap))]
+    [m.match for m in collect(eachmatch(re, str, overlap = overlap))]
 end
 
 for f in [matchall, collect_eachmatch]

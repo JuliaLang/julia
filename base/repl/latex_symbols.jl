@@ -22,7 +22,7 @@ for c in child_nodes(root(xdoc))
         if latex !== nothing
             L = strip(content(latex))
             id = attribute(ce, "id")
-            U = string(map(s -> Char(parse(Int, s, 16)),
+            U = string(map(s -> Char(parse(Int, s, base = 16)),
                            split(id[2:end], "-"))...)
             if contains(L, r"^\\[A-Za-z]+$") && !isa(U,String)
                 if L in Ls
@@ -54,7 +54,7 @@ open(fname) do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+" => "\t"), "\t"))
-        c = Char(parse(Int, x[2], 16))
+        c = Char(parse(Int, x[2], base = 16))
         if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             tabcomname = escape_string(x[3])

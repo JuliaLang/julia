@@ -1995,7 +1995,7 @@ algorithmic information, see `fkeep!`.
 """
 dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
 """
-    dropzeros(x::SparseVector, trim::Bool = true)
+    dropzeros(x::SparseVector; trim::Bool = true)
 
 Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
@@ -2016,7 +2016,7 @@ julia> dropzeros(A)
   [3]  =  1.0
 ```
 """
-dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
+dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim)
 
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}

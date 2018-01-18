@@ -21,8 +21,8 @@ function appendmacro!(syms, macros, needle, endchar)
     end
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
-    ssyms = names(mod, all, imported)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
+    ssyms = names(mod, all = all, imported = imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
     macros =  filter(x -> startswith(x, "@" * name), syms)

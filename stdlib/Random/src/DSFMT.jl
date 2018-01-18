@@ -105,7 +105,7 @@ struct GF2X
     z::BigInt
 end
 
-GF2X(s::AbstractString) = GF2X(parse(BigInt, reverse(s), 16))
+GF2X(s::AbstractString) = GF2X(parse(BigInt, reverse(s), base = 16))
 Base.string(f::GF2X) = reverse(base(16, f.z))
 Base.:(==)(f::GF2X, g::GF2X) = f.z == g.z
 Base.copy(f::GF2X) = GF2X(MPZ.set(f.z))

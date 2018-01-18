@@ -1281,7 +1281,7 @@ function detect_ambiguities(mods...;
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
@@ -1322,7 +1322,7 @@ function detect_unbound_args(mods...;
                              recursive::Bool = false)
     ambs = Set{Method}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
