@@ -81,7 +81,7 @@ Temporarily changes the current working directory and applies function `f` befor
 """
 cd(f::Function) = cd(f, homedir())
 
-function checkmode(mode::Int)
+function checkmode(mode::Integer)
     if !(0 <= mode <= 511)
         throw(ArgumentError("Mode must be between 0 and 511 = 0o777"))
     end
