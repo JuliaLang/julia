@@ -386,13 +386,13 @@ function showerror(io::IO, ex::MethodError)
     # Check for local functions that shadow methods in Base
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
-        if basef !== ex.f && method_exists(basef, arg_types)
+        if basef !== ex.f && hasmethod(basef, arg_types)
             println(io)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
-        !method_exists(ex.f, arg_types, ex.world))
+    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
+        !hasmethod(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")

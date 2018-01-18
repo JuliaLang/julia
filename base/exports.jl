@@ -692,7 +692,7 @@ export
     isimmutable,
     isless,
     ifelse,
-    object_id,
+    objectid,
     sizeof,
 
 # tasks and conditions
@@ -745,7 +745,6 @@ export
     StackTrace,
     StackFrame,
     stacktrace,
-    catch_stacktrace,
 
 # types
     convert,
@@ -789,7 +788,7 @@ export
     isconst,
     isinteractive,
     less,
-    method_exists,
+    hasmethod,
     methods,
     methodswith,
     module_name,

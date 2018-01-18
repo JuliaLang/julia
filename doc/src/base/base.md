@@ -111,7 +111,7 @@ Core.typeassert
 Core.typeof
 Core.tuple
 Base.ntuple
-Base.object_id
+Base.objectid
 Base.hash
 Base.finalizer
 Base.finalize
@@ -176,7 +176,7 @@ Base.Enums.@enum
 
 ```@docs
 Core.Function
-Base.method_exists
+Base.hasmethod
 Core.applicable
 Core.invoke
 Base.invokelatest

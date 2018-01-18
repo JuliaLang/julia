@@ -32,7 +32,7 @@ macro staged(fdef)
             ($gengf)() = 0    # should be initially empty GF
             function ($fname)($(argspec...))
                 ($argtypes) = typeof(tuple($(argnames...)))
-                if !method_exists($gengf, $argtypes)
+                if !hasmethod($gengf, $argtypes)
                     ($genbody) = apply(($expander), ($argtypes))
                     add_method($gengf, Any[$(qargnames...)],
                                    $argtypes, $genbody)

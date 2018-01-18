@@ -18,7 +18,7 @@ using Random
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
         for x in strs, y in strs
-            @test (x === y) == (object_id(x) == object_id(y))
+            @test (x === y) == (objectid(x) == objectid(y))
         end
     end
 end

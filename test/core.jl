@@ -3478,7 +3478,7 @@ const const_array_int2 = Array{Int}
 test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
-# object_id of haspadding field
+# objectid of haspadding field
 struct HasPadding
     x::Bool
     y::Int
@@ -3490,7 +3490,7 @@ let hashaspadding = Ref(HasHasPadding(HasPadding(true,1))),
     hashaspadding2 = Ref(HasHasPadding(HasPadding(true,1)))
     unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
     unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
-    @test object_id(hashaspadding[]) == object_id(hashaspadding2[])
+    @test objectid(hashaspadding[]) == objectid(hashaspadding2[])
 end
 
 # issue #12517
@@ -3801,7 +3801,7 @@ let
 end
 
 # issue #14564
-@test isa(object_id(Tuple.name.cache), Integer)
+@test isa(objectid(Tuple.name.cache), Integer)
 
 # issue #14691
 mutable struct T14691; a::UInt; end
@@ -3860,7 +3860,7 @@ end
 # issue #14610
 let sometypes = (Int,Int8)
     f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
-    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+    @test hasmethod(f, (Union{Type{Int},Type{Int8}},))
 end
 
 let
@@ -5637,7 +5637,7 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5 == x5
     @test x5 === x5copy
     @test x5 == x5copy
-    @test object_id(x5) === object_id(x5copy)
+    @test objectid(x5) === objectid(x5copy)
     @test hash(x5) === hash(x5copy)
 end
 
@@ -5668,7 +5668,7 @@ let
     @test b === b2 === b3
     @test compare(b, b2)
     @test compare(b, b3)
-    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test objectid(b) === objectid(b2) == objectid(b3)
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))

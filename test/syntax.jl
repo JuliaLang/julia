@@ -795,7 +795,7 @@ module Mod18756
 mutable struct Type
 end
 end
-@test method_exists(Mod18756.Type, ())
+@test hasmethod(Mod18756.Type, ())
 
 # issue 18002
 @test Meta.parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))

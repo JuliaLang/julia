@@ -11,7 +11,7 @@ import Base.Serializer: serialize, deserialize
 using Base.Printf: @printf
 using Base: coalesce
 
-export StackTrace, StackFrame, stacktrace, catch_stacktrace
+export StackTrace, StackFrame, stacktrace
 
 """
     StackFrame
@@ -71,7 +71,7 @@ StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
     StackTrace
 
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
-`stacktrace` and `catch_stacktrace`.
+`stacktrace`.
 """
 const StackTrace = Vector{StackFrame}
 
@@ -260,14 +260,6 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
 end
 
 stacktrace(c_funcs::Bool=false) = stacktrace(backtrace(), c_funcs)
-
-"""
-    catch_stacktrace([c_funcs::Bool=false]) -> StackTrace
-
-Returns the stack trace for the most recent error thrown, rather than the current execution
-context.
-"""
-catch_stacktrace(c_funcs::Bool=false) = stacktrace(catch_backtrace(), c_funcs)
 
 """
     remove_frames!(stack::StackTrace, name::Symbol)

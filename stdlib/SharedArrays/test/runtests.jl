@@ -284,7 +284,7 @@ finalize(d)
 let
     aorig = a1 = SharedArray{Float64}((3, 3))
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    @test object_id(aorig) == object_id(a1)
+    @test objectid(aorig) == objectid(a1)
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)

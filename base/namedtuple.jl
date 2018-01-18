@@ -101,7 +101,7 @@ isequal(a::NamedTuple, b::NamedTuple) = false
 _nt_names(::NamedTuple{names}) where {names} = names
 _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
-hash(x::NamedTuple, h::UInt) = xor(object_id(_nt_names(x)), hash(Tuple(x), h))
+hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
 # TODO: case where one argument's names are a prefix of the other's
