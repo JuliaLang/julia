@@ -8,6 +8,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers
 import Base: REPL, LineEdit
 using Random
+using Unicode
 
 function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
@@ -82,8 +83,8 @@ fake_repl() do stdin_write, stdout_read, repl
     mktempdir() do tmpdir
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+        write(stdin_write, "cd $(Unicode.escape(tmpdir))\n")
+        readuntil(stdout_read, "cd $(Unicode.escape(tmpdir))"[max(1,end-39):end])
         readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")

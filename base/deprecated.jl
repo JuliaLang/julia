@@ -2621,6 +2621,9 @@ end
 @deprecate_moved graphemes "Unicode" true true
 @deprecate_moved is_assigned_char "Unicode" true true
 
+@deprecate_moved escape_string "Unicode" true true
+@deprecate_moved unescape_string "Unicode" true true
+
 @deprecate isalnum(c::Char) isalpha(c) || isnumeric(c)
 @deprecate isgraph(c::Char) isprint(c) && !isspace(c)
 @deprecate isnumber(c::Char) isnumeric(c)

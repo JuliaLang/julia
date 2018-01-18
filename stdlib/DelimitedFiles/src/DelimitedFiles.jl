@@ -9,6 +9,7 @@ See [`readdlm`](@ref) and [`writedlm`](@ref).
 module DelimitedFiles
 
 using Mmap
+using Unicode
 
 import Base: _default_delims, tryparse_internal, show
 
@@ -694,7 +695,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
                     col = 0
                     state = 4
                 elseif (is_cr && was_cr) || !is_cr
-                    error_str = escape_string("unexpected character '$(Char(val))' after quoted field at row $(nrows+1) column $(col+1)")
+                    error_str = Unicode.escape("unexpected character '$(Char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break
                 end
             elseif 5 == state # skip start

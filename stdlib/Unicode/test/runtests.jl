@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned, iscased
+using Unicode: normalize, isassigned, iscased, escape, unescape
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -395,4 +395,153 @@ end
     @test one(String) == ""
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
+end
+
+@testset "string escaping & unescaping" begin
+    cx = Any[
+        0x00000000      '\0'        "\\0"
+        0x00000001      '\x01'      "\\x01"
+        0x00000006      '\x06'      "\\x06"
+        0x00000007      '\a'        "\\a"
+        0x00000008      '\b'        "\\b"
+        0x00000009      '\t'        "\\t"
+        0x0000000a      '\n'        "\\n"
+        0x0000000b      '\v'        "\\v"
+        0x0000000c      '\f'        "\\f"
+        0x0000000d      '\r'        "\\r"
+        0x0000000e      '\x0e'      "\\x0e"
+        0x0000001a      '\x1a'      "\\x1a"
+        0x0000001b      '\e'        "\\e"
+        0x0000001c      '\x1c'      "\\x1c"
+        0x0000001f      '\x1f'      "\\x1f"
+        0x00000020      ' '         " "
+        0x0000002f      '/'         "/"
+        0x00000030      '0'         "0"
+        0x00000039      '9'         "9"
+        0x0000003a      ':'         ":"
+        0x00000040      '@'         "@"
+        0x00000041      'A'         "A"
+        0x0000005a      'Z'         "Z"
+        0x0000005b      '['         "["
+        0x00000060      '`'         "`"
+        0x00000061      'a'         "a"
+        0x0000007a      'z'         "z"
+        0x0000007b      '{'         "{"
+        0x0000007e      '~'         "~"
+        0x0000007f      '\x7f'      "\\x7f"
+        0x000000bf      '\ubf'      "\\ubf"
+        0x000000ff      '\uff'      "\\uff"
+        0x00000100      '\u100'     "\\u100"
+        0x000001ff      '\u1ff'     "\\u1ff"
+        0x00000fff      '\ufff'     "\\ufff"
+        0x00001000      '\u1000'    "\\u1000"
+        0x00001fff      '\u1fff'    "\\u1fff"
+        0x0000ffff      '\uffff'    "\\uffff"
+        0x00010000      '\U10000'   "\\U10000"
+        0x0001ffff      '\U1ffff'   "\\U1ffff"
+        0x0002ffff      '\U2ffff'   "\\U2ffff"
+        0x00030000      '\U30000'   "\\U30000"
+        0x000dffff      '\Udffff'   "\\Udffff"
+        0x000e0000      '\Ue0000'   "\\Ue0000"
+        0x000effff      '\Ueffff'   "\\Ueffff"
+        0x000f0000      '\Uf0000'   "\\Uf0000"
+        0x000fffff      '\Ufffff'   "\\Ufffff"
+        0x00100000      '\U100000'  "\\U100000"
+        0x0010ffff      '\U10ffff'  "\\U10ffff"
+    ]
+
+    buf = IOBuffer()
+    @test typeof(escape(buf, "test")) == Nothing
+    @test String(take!(buf)) == "test"
+    @test typeof(escape(buf, "hello", "l")) == Nothing
+    @test String(take!(buf)) == "he\\l\\lo"
+
+    @test typeof(escape("test", "t")) == String
+    @test escape("test", "t") == "\\tes\\t"
+
+    for i = 1:size(cx,1)
+        cp, ch, st = cx[i,:]
+        @test cp == convert(UInt32, ch)
+        @test string(ch) == unescape(st)
+        if isascii(ch) || !isprint(ch)
+            @test st == escape(string(ch))
+        end
+        for j = 1:size(cx,1)
+            local str = string(ch, cx[j,2])
+            @test str == unescape(escape(str))
+        end
+        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+    end
+
+    for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
+                         "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
+        c = Char(i)
+        cp = string(c,p)
+        op = string(Char(div(i,8)), oct(i%8), p)
+        hp = string(Char(div(i,16)), hex(i%16), p)
+        @test string(unescape(string("\\",oct(i,1),p))) == cp
+        @test string(unescape(string("\\",oct(i,2),p))) == cp
+        @test string(unescape(string("\\",oct(i,3),p))) == cp
+        @test string(unescape(string("\\",oct(i,4),p))) == op
+        @test string(unescape(string("\\x",hex(i,1),p))) == cp
+        @test string(unescape(string("\\x",hex(i,2),p))) == cp
+        @test string(unescape(string("\\x",hex(i,3),p))) == hp
+    end
+
+    @testset "unescape" begin
+        @test "\0" == unescape("\\0")
+        @test "\1" == unescape("\\1")
+        @test "\7" == unescape("\\7")
+        @test "\0x" == unescape("\\0x")
+        @test "\1x" == unescape("\\1x")
+        @test "\7x" == unescape("\\7x")
+        @test "\00" == unescape("\\00")
+        @test "\01" == unescape("\\01")
+        @test "\07" == unescape("\\07")
+        @test "\70" == unescape("\\70")
+        @test "\71" == unescape("\\71")
+        @test "\77" == unescape("\\77")
+        @test "\00x" == unescape("\\00x")
+        @test "\01x" == unescape("\\01x")
+        @test "\07x" == unescape("\\07x")
+        @test "\70x" == unescape("\\70x")
+        @test "\71x" == unescape("\\71x")
+        @test "\77x" == unescape("\\77x")
+        @test "\000" == unescape("\\000")
+        @test "\001" == unescape("\\001")
+        @test "\007" == unescape("\\007")
+        @test "\070" == unescape("\\070")
+        @test "\071" == unescape("\\071")
+        @test "\077" == unescape("\\077")
+        @test "\170" == unescape("\\170")
+        @test "\171" == unescape("\\171")
+        @test "\177" == unescape("\\177")
+        @test "\0001" == unescape("\\0001")
+        @test "\0011" == unescape("\\0011")
+        @test "\0071" == unescape("\\0071")
+        @test "\0701" == unescape("\\0701")
+        @test "\0711" == unescape("\\0711")
+        @test "\0771" == unescape("\\0771")
+        @test "\1701" == unescape("\\1701")
+        @test "\1711" == unescape("\\1711")
+        @test "\1771" == unescape("\\1771")
+
+        @test "\x0" == unescape("\\x0")
+        @test "\x1" == unescape("\\x1")
+        @test "\xf" == unescape("\\xf")
+        @test "\xF" == unescape("\\xF")
+        @test "\x0x" == unescape("\\x0x")
+        @test "\x1x" == unescape("\\x1x")
+        @test "\xfx" == unescape("\\xfx")
+        @test "\xFx" == unescape("\\xFx")
+        @test "\x00" == unescape("\\x00")
+        @test "\x01" == unescape("\\x01")
+        @test "\x0f" == unescape("\\x0f")
+        @test "\x0F" == unescape("\\x0F")
+    end
+end
+
+@testset "unescape ArgumentErrors" begin
+    @test_throws ArgumentError unescape(string('\\',"xZ"))
+    @test_throws ArgumentError unescape(string('\\',"777"))
 end

@@ -9,6 +9,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
 
 import Base: ensureroom, peek, show, AnyDict, position
 using Base: coalesce
+using Base.Unicode
 
 abstract type TextInterface end
 abstract type ModeState end
@@ -1250,7 +1251,7 @@ function add_nested_key!(keymap::Dict, key, value; override = false)
     while !done(key, i)
         c, i = next(key, i)
         if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
-            error("Conflicting definitions for keyseq " * escape_string(key) *
+            error("Conflicting definitions for keyseq " * Unicode.escape(key) *
                   " within one keymap")
         end
         if done(key, i)
@@ -1431,7 +1432,7 @@ function keymap_merge(target,source)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
-                error("Eager redirection cycle detected for key " * escape_string(key))
+                error("Eager redirection cycle detected for key " * Unicode.escape(key))
             end
             push!(visited,value)
             if !haskey(source,value)
@@ -1443,7 +1444,7 @@ function keymap_merge(target,source)
         if isa(value, Union{Char,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
-                error("Could not find redirected value " * escape_string(source[key]))
+                error("Could not find redirected value " * Unicode.escape(source[key]))
             end
         end
         add_nested_key!(ret, key, value; override = true)
