@@ -557,13 +557,13 @@ For each different value of `steps`, a large polynomial has to be generated inte
 One is already pre-computed for `steps=big(10)^20`.
 """
 randjump(r::MersenneTwister, steps::Integer, len::Integer) =
-    _randjump(r, dSFMT.calc_jump(steps), len)
+    _randjump(r, DSFMT.calc_jump(steps), len)
 
 
-_randjump(r::MersenneTwister, jumppoly::dSFMT.GF2X) =
-    MersenneTwister(copy(r.seed), dSFMT.dsfmt_jump(r.state, jumppoly))
+_randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
+    MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly))
 
-function _randjump(mt::MersenneTwister, jumppoly::dSFMT.GF2X, len::Integer)
+function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
     mts = MersenneTwister[]
     push!(mts, mt)
     for i in 1:len-1
