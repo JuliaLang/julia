@@ -1092,3 +1092,30 @@ end
 struct t_docs_abc end
 @test "t_docs_abc" in Docs.accessible(@__MODULE__)
 
+# Call overloading issue #20087
+"""
+Docs for `MyFunc` struct.
+"""
+mutable struct MyFunc
+    x
+end
+
+"""
+Docs for calling `f::MyFunc`.
+"""
+function (f::MyFunc)(x)
+    f.x = x
+    return f
+end
+
+@test docstrings_equal(@doc(MyFunc(2)),
+doc"""
+Docs for calling `f::MyFunc`.
+""")
+
+struct A_20087 end
+
+"""a"""
+(a::A_20087)() = a
+
+@test docstrings_equal(@doc(A_20087()), doc"a")

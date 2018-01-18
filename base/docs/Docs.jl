@@ -462,6 +462,9 @@ namify(x) = nameof(x, isexpr(x, :macro))
 function nameof(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
+    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
+    elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
+        return nameof(x.args[1].args[1].args[2], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         nameof(x.args[n], ismacro)
