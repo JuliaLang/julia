@@ -304,6 +304,17 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@nospecialize` has been added ([#22666]).
 
+* The logging macros `@error`, `@warn`, `@info` and `@debug` can be used as
+  `Compat.@error`, `Compat.@warn`, `Compat.@info` and `Compat.@debug` on Julia 0.6 ([#24490]).
+  Note that the behavior do not mirror the logging macros in Julia 0.7, instead on Julia 0.6:
+  - Messages are printed to `STDERR` (like `info` and `warn` on Julia 0.6) and not to a
+    dedicated logging stream.
+  - The loglevel can not be controlled, but `Compat.@debug` messages can be turned on/off
+    by calling `Compat.enable_debug(true/false)`.
+  - Extra metadata sent to the macros are ignored.
+
+  As an alternative, see the MicroLogging.jl package for a logging interface similar to the one in Julia 0.7.
+
 ## Other changes
 
 * On versions of Julia that do not contain a Base.Threads module, Compat defines a Threads module containing a no-op `@threads` macro.
@@ -432,6 +443,7 @@ includes this fix. Find the minimum version from there.
 [#24361]: https://github.com/JuliaLang/julia/issues/24361
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
+[#24490]: https://github.com/JuliaLang/julia/issues/24490
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
 [#24647]: https://github.com/JuliaLang/julia/issues/24647
 [#24648]: https://github.com/JuliaLang/julia/issues/24648

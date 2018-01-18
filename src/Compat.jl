@@ -1235,6 +1235,54 @@ end
     end
 end
 
+@static if !isdefined(Base, Symbol("@info"))
+    macro info(msg, args...)
+        return :(info($(esc(msg)), prefix = "Info: "))
+    end
+else
+    @eval const $(Symbol("@info")) = Base.$(Symbol("@info"))
+end
+@static if !isdefined(Base, Symbol("@warn"))
+    macro warn(msg, args...)
+        return :(warn($(esc(msg)), prefix = "Warning: "))
+    end
+else
+    @eval const $(Symbol("@warn")) = Base.$(Symbol("@warn"))
+end
+
+const DEBUG = Ref(false) # debug printing off by default, as on 0.7
+enable_debug(x::Bool) = DEBUG[] = x
+@static if !isdefined(Base, Symbol("@debug"))
+    function debug(msg)
+        DEBUG[] || return
+        buf = IOBuffer()
+        iob = Base.redirect(IOContext(buf, STDERR), Base.log_info_to, :debug)
+        print_with_color(:blue, iob, "Debug: "; bold = true)
+        Base.println_with_color(:blue, iob, chomp(string(msg)))
+        print(STDERR, String(take!(buf)))
+        return
+    end
+    macro debug(msg, args...)
+        return :(debug($(esc(msg))))
+    end
+else
+    @eval const $(Symbol("@debug")) = Base.$(Symbol("@debug"))
+end
+@static if !isdefined(Base, Symbol("@error"))
+    function _error(msg)
+        buf = IOBuffer()
+        iob = Base.redirect(IOContext(buf, STDERR), Base.log_error_to, :error)
+        print_with_color(Base.error_color(), iob, "Error: "; bold = true)
+        Base.println_with_color(Base.error_color(), iob, chomp(string(msg)))
+        print(STDERR, String(take!(buf)))
+        return
+    end
+    macro error(msg, args...)
+        return :(_error($(esc(msg))))
+    end
+else
+    @eval const $(Symbol("@error")) = Base.$(Symbol("@error"))
+end
 
 include("deprecated.jl")
 

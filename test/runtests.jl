@@ -1119,6 +1119,32 @@ let c = CartesianIndices(1:3, 1:2), l = LinearIndices(1:3, 1:2)
     @test l[vec(c)] == collect(1:6)
 end
 
+
+if !isdefined(Base, Symbol("@info"))
+    let fname = tempname()
+        try
+            open(fname, "w") do fout
+                redirect_stderr(fout) do
+                    Compat.@info  "A"
+                    Compat.@warn  "B"
+                    oldstate = Compat.DEBUG[]
+                    Compat.enable_debug(false)
+                    Compat.@debug "C"
+                    Compat.enable_debug(true)
+                    Compat.@debug "D"
+                    Compat.enable_debug(oldstate)
+                    Compat.@error "E"
+                end
+            end
+            @test read(fname, String) == (Base.have_color ? "\e[1m\e[36mInfo: \e[39m\e[22m\e[36mA\n\e[39m\e[1m\e[33mWarning: \e[39m\e[22m\e[33mB\e[39m\n\e[1m\e[34mDebug: \e[39m\e[22m\e[34mD\n\e[39m\e[1m\e[91mError: \e[39m\e[22m\e[91mE\n\e[39m" :
+                "Info: A\nWarning: B\nDebug: D\nError: E\n")
+        finally
+            rm(fname, force=true)
+        end
+    end
+end
+
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
