@@ -291,6 +291,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `ipermute!` is now `invpermute!` ([#25168]).
 
+* `module_parent`, `Base.function_module`, and `Base.datatype_module` are now methods of
+  a new function called `parentmodule` ([#25629]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -470,3 +473,4 @@ includes this fix. Find the minimum version from there.
 [#25227]: https://github.com/JuliaLang/julia/issues/25227
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
+[#25629]: https://github.com/JuliaLang/julia/issues/25629

@@ -1150,6 +1150,12 @@ if !isdefined(Base, Symbol("@info"))
     end
 end
 
+# 0.7.0-DEV.3460
+@test parentmodule(Compat.Sys) == Compat
+@test parentmodule(sin) == Base
+@test parentmodule(sin, Tuple{Int}) == Base.Math
+@test parentmodule(Int) == Core
+@test parentmodule(Array) == Core
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")
