@@ -21,7 +21,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Manual",
     "category": "section",
-    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nLinear Algebra\nMissing Values\nNetworking and Streams\nParallel Computing\nDate and DateTime\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nEnvironment Variables\nInteracting With Julia\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
+    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nMissing Values\nNetworking and Streams\nParallel Computing\nDate and DateTime\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nEnvironment Variables\nInteracting With Julia\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
 },
 
 {
@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Base",
     "category": "section",
-    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks\nDistributed Computing\nMulti-Threading\nShared Arrays\nLinear Algebra\nConstants\nFilesystem\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nIteration utilities\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support"
+    "text": "Essentials\nCollections and Data Structures\nMathematics\nNumbers\nStrings\nArrays\nTasks\nDistributed Computing\nMulti-Threading\nShared Arrays\nConstants\nFilesystem\nI/O and Network\nPunctuation\nSorting and Related Functions\nPackage Manager Functions\nIteration utilities\nC Interface\nC Standard Library\nDynamic Linker\nStackTraces\nSIMD Support"
 },
 
 {
@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "Base64\nCRC32c\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nSparse Arrays\nUnicode\nUnit Testing"
+    "text": "Base64\nCRC32c\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
 },
 
 {
@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia v0.7.0 Release Notes",
     "title": "Deprecated or removed",
     "category": "section",
-    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nwhos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, ','; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, ','[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default juliarc.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler's number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of a simpler predicate isconcrete. Concrete types are those that might equal typeof(x) for some x; isleaftype includes some types for which this is not true. If you are certain you need the old behavior, it is temporarily available as Base._isleaftype (#17086).\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nlinspace and logspace now require an explicit number of elements to be supplied rather than defaulting to 50(#24794, #24805).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210)."
+    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nwhos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, ','; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, ','[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default juliarc.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler's number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of a simpler predicate isconcrete. Concrete types are those that might equal typeof(x) for some x; isleaftype includes some types for which this is not true. If you are certain you need the old behavior, it is temporarily available as Base._isleaftype (#17086).\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nlinspace and logspace now require an explicit number of elements to be supplied rather than defaulting to 50(#24794, #24805).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210)."
 },
 
 {
@@ -2238,62 +2238,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Implementation",
     "category": "section",
     "text": "The base array type in Julia is the abstract type AbstractArray{T,N}. It is parametrized by the number of dimensions N and the element type T. AbstractVector and AbstractMatrix are aliases for the 1-d and 2-d cases. Operations on AbstractArray objects are defined using higher level operators and functions, in a way that is independent of the underlying storage. These operations generally work correctly as a fallback for any specific array implementation.The AbstractArray type includes anything vaguely array-like, and implementations of it might be quite different from conventional arrays. For example, elements might be computed on request rather than stored. However, any concrete AbstractArray{T,N} type should generally implement at least size(A) (returning an Int tuple), getindex(A,i) and getindex(A,i1,...,iN); mutable arrays should also implement setindex!. It is recommended that these operations have nearly constant time complexity, or technically Õ(1) complexity, as otherwise some array functions may be unexpectedly slow. Concrete types should also typically provide a similar(A,T=eltype(A),dims=size(A)) method, which is used to allocate a similar array for copy and other out-of-place operations. No matter how an AbstractArray{T,N} is represented internally, T is the type of object returned by integer indexing (A[1, ..., 1], when A is not empty) and N should be the length of the tuple returned by size. For more details on defining custom AbstractArray implementations, see the array interface guide in the interfaces chapter.DenseArray is an abstract subtype of AbstractArray intended to include all arrays that are laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran functions expecting this memory layout. Subtypes should provide a strides(A) method that returns a tuple of \"strides\" for each dimension; a provided stride(A,k) method accesses the kth element within this tuple. Increasing the index of dimension k by 1 should increase the index i of getindex(A,i) by stride(A,k). If a pointer conversion method Base.unsafe_convert(Ptr{T}, A) is provided, the memory layout should correspond in the same way to these strides. More concrete examples can be found within the interface guide for strided arrays.The Array type is a specific instance of DenseArray where elements are stored in column-major order (see additional notes in Performance Tips). Vector and Matrix are aliases for the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other basic storage-specific operations are all that have to be implemented for Array, so that the rest of the array library can be implemented in a generic manner.SubArray is a specialization of AbstractArray that performs indexing by reference rather than by copying. A SubArray is created with the view function, which is called the same way as getindex (with an array and a series of index arguments). The result of view looks the same as the result of getindex, except the data is left in place. view stores the input index vectors in a SubArray object, which can later be used to index the original array indirectly.  By putting the @views macro in front of an expression or block of code, any array[...] slice in that expression will be converted to create a SubArray view instead.StridedVector and StridedMatrix are convenient aliases defined to make it possible for Julia to call a wider range of BLAS and LAPACK functions by passing them either Array or SubArray objects, and thus saving inefficiencies from memory allocation and copying.The following example computes the QR decomposition of a small section of a larger array, without creating any temporaries, and by calling the appropriate LAPACK function with the right leading dimension size and stride parameters.julia> a = rand(10,10)\n10×10 Array{Float64,2}:\n 0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964\n 0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788\n 0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965\n 0.0470779  0.736979   0.264822  0.228787      0.161441  0.897023   0.567641\n 0.343935   0.32327    0.795673  0.452242      0.468819  0.628507   0.511528\n 0.935597   0.991511   0.571297  0.74485    …  0.84589   0.178834   0.284413\n 0.160706   0.672252   0.133158  0.65554       0.371826  0.770628   0.0531208\n 0.306617   0.836126   0.301198  0.0224702     0.39344   0.0370205  0.536062\n 0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672\n 0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476\n\njulia> b = view(a, 2:2:8,2:2:4)\n4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:\n 0.537192  0.996234\n 0.736979  0.228787\n 0.991511  0.74485\n 0.836126  0.0224702\n\njulia> (q,r) = qr(b);\n\njulia> q\n4×2 Array{Float64,2}:\n -0.338809   0.78934\n -0.464815  -0.230274\n -0.625349   0.194538\n -0.527347  -0.534856\n\njulia> r\n2×2 Array{Float64,2}:\n -1.58553  -0.921517\n  0.0       0.866567"
-},
-
-{
-    "location": "manual/linear-algebra/#",
-    "page": "Linear algebra",
-    "title": "Linear algebra",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "manual/linear-algebra/#Linear-algebra-1",
-    "page": "Linear algebra",
-    "title": "Linear algebra",
-    "category": "section",
-    "text": "In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations of many common and useful linear algebra operations. Basic operations, such as trace, det, and inv are all supported:julia> A = [1 2 3; 4 1 6; 7 8 1]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  1  6\n 7  8  1\n\njulia> trace(A)\n3\n\njulia> det(A)\n104.0\n\njulia> inv(A)\n3×3 Array{Float64,2}:\n -0.451923   0.211538    0.0865385\n  0.365385  -0.192308    0.0576923\n  0.240385   0.0576923  -0.0673077As well as other useful operations, such as finding eigenvalues or eigenvectors:julia> A = [-4. -17.; 2. 2.]\n2×2 Array{Float64,2}:\n -4.0  -17.0\n  2.0    2.0\n\njulia> eigvals(A)\n2-element Array{Complex{Float64},1}:\n -1.0 + 5.0im\n -1.0 - 5.0im\n\njulia> eigvecs(A)\n2×2 Array{Complex{Float64},2}:\n  0.945905+0.0im        0.945905-0.0im\n -0.166924-0.278207im  -0.166924+0.278207imIn addition, Julia provides many factorizations which can be used to speed up problems such as linear solve or matrix exponentiation by pre-factorizing a matrix into a form more amenable (for performance or memory reasons) to the problem. See the documentation on factorize for more information. As an example:julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]\n3×3 Array{Float64,2}:\n   1.5   2.0  -4.0\n   3.0  -1.0  -6.0\n -10.0   2.3   4.0\n\njulia> factorize(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]\n[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]Since A is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the best we can do. Compare with:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> factorize(B)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n3×3 Tridiagonal{Float64,Array{Float64,1}}:\n -1.64286   0.0   ⋅\n  0.0      -2.8  0.0\n   ⋅        0.0  5.0\nU factor:\n3×3 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.142857  -0.8\n 0.0  1.0       -0.6\n 0.0  0.0        1.0\npermutation:\n3-element Array{Int64,1}:\n 1\n 2\n 3Here, Julia was able to detect that B is in fact symmetric, and used a more appropriate factorization. Often it's possible to write more efficient code for a matrix that is known to have certain properties e.g. it is symmetric, or tridiagonal. Julia provides some special types so that you can \"tag\" matrices as having these properties. For instance:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0sB has been tagged as a matrix that's (real) symmetric, so for later operations we might perform on it, such as eigenfactorization or computing matrix-vector products, efficiencies can be found by only referencing half of it. For example:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> x = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> sB\\x\n3-element Array{Float64,1}:\n -1.7391304347826084\n -1.1086956521739126\n -1.4565217391304346The \\ operation here performs the linear solution. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations."
-},
-
-{
-    "location": "manual/linear-algebra/#Special-matrices-1",
-    "page": "Linear algebra",
-    "title": "Special matrices",
-    "category": "section",
-    "text": "Matrices with special symmetries and structures arise often in linear algebra and are frequently associated with various matrix factorizations. Julia features a rich collection of special matrix types, which allow for fast computation with specialized routines that are specially developed for particular matrix types.The following tables summarize the types of special matrices that have been implemented in Julia, as well as whether hooks to various optimized methods for them in LAPACK are available.Type Description\nSymmetric Symmetric matrix\nHermitian Hermitian matrix\nUpperTriangular Upper triangular matrix\nLowerTriangular Lower triangular matrix\nTridiagonal Tridiagonal matrix\nSymTridiagonal Symmetric tridiagonal matrix\nBidiagonal Upper/lower bidiagonal matrix\nDiagonal Diagonal matrix\nUniformScaling Uniform scaling operator"
-},
-
-{
-    "location": "manual/linear-algebra/#Elementary-operations-1",
-    "page": "Linear algebra",
-    "title": "Elementary operations",
-    "category": "section",
-    "text": "Matrix type + - * \\ Other functions with optimized methods\nSymmetric    MV inv, sqrt, exp\nHermitian    MV inv, sqrt, exp\nUpperTriangular   MV MV inv, det\nLowerTriangular   MV MV inv, det\nSymTridiagonal M M MS MV eigmax, eigmin\nTridiagonal M M MS MV \nBidiagonal M M MS MV \nDiagonal M M MV MV inv, det, logdet, /\nUniformScaling M M MVS MVS /Legend:Key Description\nM (matrix) An optimized method for matrix-matrix operations is available\nV (vector) An optimized method for matrix-vector operations is available\nS (scalar) An optimized method for matrix-scalar operations is available"
-},
-
-{
-    "location": "manual/linear-algebra/#Matrix-factorizations-1",
-    "page": "Linear algebra",
-    "title": "Matrix factorizations",
-    "category": "section",
-    "text": "Matrix type LAPACK eig eigvals eigvecs svd svdvals\nSymmetric SY  ARI   \nHermitian HE  ARI   \nUpperTriangular TR A A A  \nLowerTriangular TR A A A  \nSymTridiagonal ST A ARI AV  \nTridiagonal GT     \nBidiagonal BD    A A\nDiagonal DI  A   Legend:Key Description Example\nA (all) An optimized method to find all the characteristic values and/or vectors is available e.g. eigvals(M)\nR (range) An optimized method to find the ilth through the ihth characteristic values are available eigvals(M, il, ih)\nI (interval) An optimized method to find the characteristic values in the interval [vl, vh] is available eigvals(M, vl, vh)\nV (vectors) An optimized method to find the characteristic vectors corresponding to the characteristic values x=[x1, x2,...] is available eigvecs(M, x)"
-},
-
-{
-    "location": "manual/linear-algebra/#The-uniform-scaling-operator-1",
-    "page": "Linear algebra",
-    "title": "The uniform scaling operator",
-    "category": "section",
-    "text": "A UniformScaling operator represents a scalar times the identity operator, λ*I. The identity operator I is defined as a constant and is an instance of UniformScaling. The size of these operators are generic and match the other matrix in the binary operations +, -, * and \\. For A+I and A-I this means that A must be square. Multiplication with the identity operator I is a noop (except for checking that the scaling factor is one) and therefore almost without overhead.To see the UniformScaling operator in action:julia> U = UniformScaling(2);\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> a + U\n2×2 Array{Int64,2}:\n 3  2\n 3  6\n\njulia> a * U\n2×2 Array{Int64,2}:\n 2  4\n 6  8\n\njulia> [a U]\n2×4 Array{Int64,2}:\n 1  2  2  0\n 3  4  0  2\n\njulia> b = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> b - U\nERROR: DimensionMismatch(\"matrix is not square: dimensions are (2, 3)\")\nStacktrace:\n [1] checksquare at ./linalg/linalg.jl:220 [inlined]\n [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156\n [3] top-level scope"
-},
-
-{
-    "location": "manual/linear-algebra/#man-linalg-factorizations-1",
-    "page": "Linear algebra",
-    "title": "Matrix factorizations",
-    "category": "section",
-    "text": "Matrix factorizations (a.k.a. matrix decompositions) compute the factorization of a matrix into a product of matrices, and are one of the central concepts in linear algebra.The following table summarizes the types of matrix factorizations that have been implemented in Julia. Details of their associated methods can be found in the Linear Algebra section of the Julia Base documentation.Type Description\nCholesky Cholesky factorization\nCholeskyPivoted Pivoted Cholesky factorization\nLU LU factorization\nLUTridiagonal LU factorization for Tridiagonal matrices\nQR QR factorization\nQRCompactWY Compact WY form of the QR factorization\nQRPivoted Pivoted QR factorization\nHessenberg Hessenberg decomposition\nEigen Spectral decomposition\nSVD Singular value decomposition\nGeneralizedSVD Generalized SVD"
 },
 
 {
@@ -5089,14 +5033,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.LinAlg.BLAS",
-    "page": "Essentials",
-    "title": "Base.LinAlg.BLAS",
-    "category": "Module",
-    "text": "Interface to BLAS subroutines.\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.Docs",
     "page": "Essentials",
     "title": "Base.Docs",
@@ -5113,14 +5049,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.LinAlg.LAPACK",
-    "page": "Essentials",
-    "title": "Base.LinAlg.LAPACK",
-    "category": "Module",
-    "text": "Interfaces to LAPACK subroutines.\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.LibGit2",
     "page": "Essentials",
     "title": "Base.LibGit2",
@@ -5134,14 +5062,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.Libc",
     "category": "Module",
     "text": "Interface to libc, the C standard library.\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.LinAlg",
-    "page": "Essentials",
-    "title": "Base.LinAlg",
-    "category": "Module",
-    "text": "Linear algebra module. Provides array arithmetic, matrix factorizations and other linear algebra related functionality.\n\n\n\n"
 },
 
 {
@@ -5205,7 +5125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base Modules",
     "category": "section",
-    "text": "Base.BLAS\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.StackTraces\nBase.Sys\nBase.Threads"
+    "text": "Base.Docs\nBase.Iterators\nBase.LibGit2\nBase.Libc\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Serializer\nBase.StackTraces\nBase.Sys\nBase.Threads"
 },
 
 {
@@ -7285,7 +7205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7317,7 +7237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n"
 },
 
 {
@@ -7925,7 +7845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -11241,19 +11161,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays/#Base.LinAlg.checksquare",
-    "page": "Arrays",
-    "title": "Base.LinAlg.checksquare",
-    "category": "Function",
-    "text": "LinAlg.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExamples\n\njulia> A = fill(1, (4,4)); B = fill(1, (5,5));\n\njulia> LinAlg.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
-},
-
-{
     "location": "base/arrays/#Basic-functions-1",
     "page": "Arrays",
     "title": "Basic functions",
     "category": "section",
-    "text": "Base.ndims\nBase.size\nBase.axes(::Any)\nBase.axes(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.conj!\nBase.stride\nBase.strides\nBase.LinAlg.checksquare"
+    "text": "Base.ndims\nBase.size\nBase.axes(::Any)\nBase.axes(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.conj!\nBase.stride\nBase.strides"
 },
 
 {
@@ -11793,9 +11705,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays/#Base.LinAlg.diff",
+    "location": "base/arrays/#LinearAlgebra.diff",
     "page": "Arrays",
-    "title": "Base.LinAlg.diff",
+    "title": "LinearAlgebra.diff",
     "category": "Function",
     "text": "diff(A::AbstractVector)\ndiff(A::AbstractMatrix, dim::Integer)\n\nFinite difference operator of matrix or vector A. If A is a matrix, specify the dimension over which to operate with the dim argument.\n\nExamples\n\njulia> a = [2 4; 6 16]\n2×2 Array{Int64,2}:\n 2   4\n 6  16\n\njulia> diff(a,2)\n2×1 Array{Int64,2}:\n  2\n 10\n\njulia> diff(vec(a))\n3-element Array{Int64,1}:\n  4\n -2\n 12\n\n\n\n"
 },
@@ -11861,7 +11773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Array functions",
     "category": "section",
-    "text": "Base.accumulate(::Any, ::Any, ::Integer)\nBase.accumulate!\nBase.cumprod\nBase.cumprod!\nBase.cumsum\nBase.cumsum!\nBase.LinAlg.diff\nBase.repeat(::AbstractArray)\nBase.rot180\nBase.rotl90\nBase.rotr90\nBase.reducedim\nBase.mapreducedim\nBase.mapslices"
+    "text": "Base.accumulate(::Any, ::Any, ::Integer)\nBase.accumulate!\nBase.cumprod\nBase.cumprod!\nBase.cumsum\nBase.cumsum!\nLinearAlgebra.diff\nBase.repeat(::AbstractArray)\nBase.rot180\nBase.rotl90\nBase.rotr90\nBase.reducedim\nBase.mapreducedim\nBase.mapslices"
 },
 
 {
@@ -12406,2166 +12318,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Synchronization Primitives",
     "category": "section",
     "text": "Base.Threads.AbstractLock\nBase.lock\nBase.unlock\nBase.trylock\nBase.islocked\nBase.ReentrantLock\nBase.Threads.Mutex\nBase.Threads.SpinLock\nBase.Threads.RecursiveSpinLock\nBase.Semaphore\nBase.acquire\nBase.release"
-},
-
-{
-    "location": "base/linalg/#",
-    "page": "Linear Algebra",
-    "title": "Linear Algebra",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "base/linalg/#Linear-Algebra-1",
-    "page": "Linear Algebra",
-    "title": "Linear Algebra",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "base/linalg/#Base.:*-Tuple{AbstractArray{T,2} where T,AbstractArray{T,2} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.:*",
-    "category": "Method",
-    "text": "*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.:\\-Tuple{AbstractArray{T,2} where T,Union{AbstractArray{T,1}, AbstractArray{T,2}} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.:\\",
-    "category": "Method",
-    "text": "\\(A, B)\n\nMatrix division using a polyalgorithm. For input matrices A and B, the result X is such that A*X == B when A is square. The solver that is used depends upon the structure of A.  If A is upper or lower triangular (or diagonal), no factorization of A is required and the system is solved with either forward or backward substitution. For non-triangular square matrices, an LU factorization is used.\n\nFor rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor.\n\nWhen A is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.\n\nExamples\n\njulia> A = [1 0; 1 -2]; B = [32; -4];\n\njulia> X = A \\ B\n2-element Array{Float64,1}:\n 32.0\n 18.0\n\njulia> A * X == B\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.dot",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.dot",
-    "category": "Function",
-    "text": "dot(x, y)\n⋅(x,y)\n\nCompute the dot product between two vectors. For complex vectors, the first vector is conjugated. When the vectors have equal lengths, calling dot is semantically equivalent to sum(vx'vy for (vx,vy) in zip(x, y)).\n\nExamples\n\njulia> dot([1; 1], [2; 3])\n5\n\njulia> dot([im; im], [1; 1])\n0 - 2im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.vecdot",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.vecdot",
-    "category": "Function",
-    "text": "vecdot(x, y)\n\nFor any iterable containers x and y (including arrays of any dimension) of numbers (or any element type for which dot is defined), compute the Euclidean dot product (the sum of dot(x[i],y[i])) as if they were vectors.\n\nExamples\n\njulia> vecdot(1:5, 2:6)\n70\n\njulia> x = fill(2., (5,5));\n\njulia> y = fill(3., (5,5));\n\njulia> vecdot(x, y)\n150.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.cross",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.cross",
-    "category": "Function",
-    "text": "cross(x, y)\n×(x,y)\n\nCompute the cross product of two 3-vectors.\n\nExamples\n\njulia> a = [0;1;0]\n3-element Array{Int64,1}:\n 0\n 1\n 0\n\njulia> b = [0;0;1]\n3-element Array{Int64,1}:\n 0\n 0\n 1\n\njulia> cross(a,b)\n3-element Array{Int64,1}:\n 1\n 0\n 0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.factorize",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.factorize",
-    "category": "Function",
-    "text": "factorize(A)\n\nCompute a convenient factorization of A, based upon the type of the input matrix. factorize checks A to see if it is symmetric/triangular/etc. if A is passed as a generic matrix. factorize checks every element of A to verify/rule out each property. It will short-circuit as soon as it can rule out symmetry/triangular structure. The return value can be reused for efficient solving of multiple systems. For example: A=factorize(A); x=A\\b; y=A\\C.\n\nProperties of A type of factorization\nPositive-definite Cholesky (see cholfact)\nDense Symmetric/Hermitian Bunch-Kaufman (see bkfact)\nSparse Symmetric/Hermitian LDLt (see ldltfact)\nTriangular Triangular\nDiagonal Diagonal\nBidiagonal Bidiagonal\nTridiagonal LU (see lufact)\nSymmetric real tridiagonal LDLt (see ldltfact)\nGeneral square LU (see lufact)\nGeneral non-square QR (see qrfact)\n\nIf factorize is called on a Hermitian positive-definite matrix, for instance, then factorize will return a Cholesky factorization.\n\nExamples\n\njulia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))\n5×5 Array{Float64,2}:\n 1.0  1.0  0.0  0.0  0.0\n 0.0  1.0  1.0  0.0  0.0\n 0.0  0.0  1.0  1.0  0.0\n 0.0  0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  0.0  1.0\n\njulia> factorize(A) # factorize will check to see that A is already factorized\n5×5 Bidiagonal{Float64,Array{Float64,1}}:\n 1.0  1.0   ⋅    ⋅    ⋅\n  ⋅   1.0  1.0   ⋅    ⋅\n  ⋅    ⋅   1.0  1.0   ⋅\n  ⋅    ⋅    ⋅   1.0  1.0\n  ⋅    ⋅    ⋅    ⋅   1.0\n\nThis returns a 5×5 Bidiagonal{Float64}, which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for Bidiagonal types.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Diagonal",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Diagonal",
-    "category": "Type",
-    "text": "Diagonal(A::AbstractMatrix)\n\nConstruct a matrix from the diagonal of A.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> Diagonal(A)\n3×3 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅\n ⋅  5  ⋅\n ⋅  ⋅  9\n\n\n\nDiagonal(V::AbstractVector)\n\nConstruct a matrix with V as its diagonal.\n\nExamples\n\njulia> V = [1, 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> Diagonal(V)\n2×2 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅\n ⋅  2\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Bidiagonal",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Bidiagonal",
-    "category": "Type",
-    "text": "Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector\n\nConstructs an upper (uplo=:U) or lower (uplo=:L) bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors. The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The length of ev must be one less than the length of dv.\n\nExamples\n\njulia> dv = [1, 2, 3, 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7, 8, 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(A, uplo::Symbol)\n\nConstruct a Bidiagonal matrix from the main diagonal of A and its first super- (if uplo=:U) or sub-diagonal (if uplo=:L).\n\nExamples\n\njulia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]\n4×4 Array{Int64,2}:\n 1  1  1  1\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4\n\njulia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  1  ⋅  ⋅\n ⋅  2  2  ⋅\n ⋅  ⋅  3  3\n ⋅  ⋅  ⋅  4\n\njulia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅  ⋅\n 2  2  ⋅  ⋅\n ⋅  3  3  ⋅\n ⋅  ⋅  4  4\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.SymTridiagonal",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.SymTridiagonal",
-    "category": "Type",
-    "text": "SymTridiagonal(dv::V, ev::V) where V <: AbstractVector\n\nConstruct a symmetric tridiagonal matrix from the diagonal (dv) and first sub/super-diagonal (ev), respectively. The result is of type SymTridiagonal and provides efficient specialized eigensolvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short).\n\nExamples\n\njulia> dv = [1, 2, 3, 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7, 8, 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> SymTridiagonal(dv, ev)\n4×4 SymTridiagonal{Int64,Array{Int64,1}}:\n 1  7  ⋅  ⋅\n 7  2  8  ⋅\n ⋅  8  3  9\n ⋅  ⋅  9  4\n\n\n\nSymTridiagonal(A::AbstractMatrix)\n\nConstruct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, of the symmetric matrix A.\n\nExamples\n\njulia> A = [1 2 3; 2 4 5; 3 5 6]\n3×3 Array{Int64,2}:\n 1  2  3\n 2  4  5\n 3  5  6\n\njulia> SymTridiagonal(A)\n3×3 SymTridiagonal{Int64,Array{Int64,1}}:\n 1  2  ⋅\n 2  4  5\n ⋅  5  6\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Tridiagonal",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Tridiagonal",
-    "category": "Type",
-    "text": "Tridiagonal(dl::V, d::V, du::V) where V <: AbstractVector\n\nConstruct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively. The result is of type Tridiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The lengths of dl and du must be one less than the length of d.\n\nExamples\n\njulia> dl = [1, 2, 3];\n\njulia> du = [4, 5, 6];\n\njulia> d = [7, 8, 9, 0];\n\njulia> Tridiagonal(dl, d, du)\n4×4 Tridiagonal{Int64,Array{Int64,1}}:\n 7  4  ⋅  ⋅\n 1  8  5  ⋅\n ⋅  2  9  6\n ⋅  ⋅  3  0\n\n\n\nTridiagonal(A)\n\nConstruct a tridiagonal matrix from the first sub-diagonal, diagonal and first super-diagonal of the matrix A.\n\nExamples\n\njulia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]\n4×4 Array{Int64,2}:\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n\njulia> Tridiagonal(A)\n4×4 Tridiagonal{Int64,Array{Int64,1}}:\n 1  2  ⋅  ⋅\n 1  2  3  ⋅\n ⋅  2  3  4\n ⋅  ⋅  3  4\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Symmetric",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Symmetric",
-    "category": "Type",
-    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == transpose(A)).\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Hermitian",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Hermitian",
-    "category": "Type",
-    "text": "Hermitian(A, uplo=:U)\n\nConstruct a Hermitian view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];\n\njulia> Hupper = Hermitian(A)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  2+2im  0+0im  3-3im\n 0+0im  4+0im  0+0im  5+0im  0+0im\n 2-2im  0+0im  7+0im  0+0im  8+8im\n 0+0im  5+0im  0+0im  1+0im  0+0im\n 3+3im  0+0im  8-8im  0+0im  4+0im\n\njulia> Hlower = Hermitian(A, :L)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  6+6im  0+0im  2-2im\n 0+0im  4+0im  0+0im  9+0im  0+0im\n 6-6im  0+0im  7+0im  0+0im  3+3im\n 0+0im  9+0im  0+0im  1+0im  0+0im\n 2+2im  0+0im  3-3im  0+0im  4+0im\n\nNote that Hupper will not be equal to Hlower unless A is itself Hermitian (e.g. if A == adjoint(A)).\n\nAll non-real parts of the diagonal will be ignored.\n\nHermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LowerTriangular",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LowerTriangular",
-    "category": "Type",
-    "text": "LowerTriangular(A::AbstractMatrix)\n\nConstruct a LowerTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> LowerTriangular(A)\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n 1.0   ⋅    ⋅\n 4.0  5.0   ⋅\n 7.0  8.0  9.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.UpperTriangular",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.UpperTriangular",
-    "category": "Type",
-    "text": "UpperTriangular(A::AbstractMatrix)\n\nConstruct an UpperTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> UpperTriangular(A)\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0  3.0\n  ⋅   5.0  6.0\n  ⋅    ⋅   9.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.UniformScaling",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.UniformScaling",
-    "category": "Type",
-    "text": "UniformScaling{T<:Number}\n\nGenerically sized uniform scaling operator defined as a scalar times the identity operator, λ*I. See also I.\n\nExamples\n\njulia> J = UniformScaling(2.)\nUniformScaling{Float64}\n2.0*I\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> J*A\n2×2 Array{Float64,2}:\n 2.0  4.0\n 6.0  8.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lu",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lu",
-    "category": "Function",
-    "text": "lu(A, pivot=Val(true)) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val(false) for the second argument.\n\nSee also lufact.\n\nExamples\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lufact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lufact",
-    "category": "Function",
-    "text": "lufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF.L L (lower triangular) part of LU\nF.U U (upper triangular) part of LU\nF.p (right) permutation Vector\nF.P (right) permutation Matrix\n\nThe relationship between F and A is\n\nF.L*F.U == A[F.p, :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}\nL factor:\n2×2 Array{Float64,2}:\n 1.0  0.0\n 1.5  1.0\nU factor:\n2×2 Array{Float64,2}:\n 4.0   3.0\n 0.0  -1.5\n\njulia> F.L * F.U == A[F.p, :]\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lufact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lufact!",
-    "category": "Function",
-    "text": "lufact!(A, pivot=Val(true)) -> LU\n\nlufact! is the same as lufact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 6.0  3.0\n 4.0  3.0\n\njulia> F = lufact!(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}\nL factor:\n2×2 Array{Float64,2}:\n 1.0       0.0\n 0.666667  1.0\nU factor:\n2×2 Array{Float64,2}:\n 6.0  3.0\n 0.0  1.0\n\njulia> iA = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> lufact!(iA)\nERROR: InexactError: convert(Int64, 0.6666666666666666)\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.chol",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.chol",
-    "category": "Function",
-    "text": "chol(A) -> U\n\nCompute the Cholesky factorization of a positive definite matrix A and return the UpperTriangular matrix U such that A = U'U.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.]\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\njulia> U = chol(A)\n2×2 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0\n  ⋅   6.78233\n\njulia> U'U\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\n\n\nchol(x::Number) -> y\n\nCompute the square root of a non-negative number x.\n\nExamples\n\njulia> chol(16)\n4.0\n\n\n\nchol(J::UniformScaling) -> C\n\nCompute the square root of a non-negative UniformScaling J.\n\nExamples\n\njulia> chol(16I)\nUniformScaling{Float64}\n4.0*I\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.cholfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.cholfact",
-    "category": "Function",
-    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F.L and F.U. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}}\nU factor:\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C.U\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C.L\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C.L * C.U == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F.L and F.U. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.cholfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.cholfact!",
-    "category": "Function",
-    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lowrankupdate",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lowrankupdate",
-    "category": "Function",
-    "text": "lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nUpdate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U + v*v') but the computation of CC only uses O(n^2) operations.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lowrankdowndate",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lowrankdowndate",
-    "category": "Function",
-    "text": "lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nDowndate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U - v*v') but the computation of CC only uses O(n^2) operations.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lowrankupdate!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lowrankupdate!",
-    "category": "Function",
-    "text": "lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nUpdate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U + v*v') but the computation of CC only uses O(n^2) operations. The input factorization C is updated in place such that on exit C == CC. The vector v is destroyed during the computation.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lowrankdowndate!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lowrankdowndate!",
-    "category": "Function",
-    "text": "lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nDowndate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U - v*v') but the computation of CC only uses O(n^2) operations. The input factorization C is updated in place such that on exit C == CC. The vector v is destroyed during the computation.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ldltfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ldltfact",
-    "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of the real symmetric tridiagonal matrix S such that S = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(S) is to solve the linear system of equations Sx = b with F\\b.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact(S);\n\njulia> b = [6., 7., 8.];\n\njulia> ldltS \\ b\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\njulia> S \\ b\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ldltfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ldltfact!",
-    "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input S, instead of creating a copy.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact!(S);\n\njulia> ldltS === S\nfalse\n\njulia> S\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0       0.333333   ⋅\n 0.333333  3.66667   0.545455\n  ⋅        0.545455  3.90909\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.qr",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.qr",
-    "category": "Function",
-    "text": "qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]\n\nCompute the (pivoted) QR factorization of A such that either A = Q*R or A[:,p] = Q*R. Also see qrfact. The default is to compute a \"thin\" factorization. Note that R is not extended with zeros when a full/square orthogonal factor Q is requested (via full = true).\n\n\n\nqr(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Returns w, a unit vector in the direction of v, and r, the norm of v.\n\nSee also normalize, normalize!, and LinAlg.qr!.\n\nExamples\n\njulia> v = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> w, r = qr(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w*r == v\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.qr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.qr!",
-    "category": "Function",
-    "text": "LinAlg.qr!(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Instead of returning a new vector as qr(v::AbstractVector), this function mutates the input vector v in place. Returns w, a unit vector in the direction of v (this is a mutation of v), and r, the norm of v.\n\nSee also normalize, normalize!, and qr.\n\nExamples\n\njulia> v = [1.; 2.]\n2-element Array{Float64,1}:\n 1.0\n 2.0\n\njulia> w, r = Base.LinAlg.qr!(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w === v\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.qrfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.qrfact",
-    "category": "Function",
-    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, ComplexF32 or ComplexF64), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF.Q: the orthogonal/unitary matrix Q\nF.R: the upper triangular matrix R\nF.p: the permutation vector of the pivot (QRPivoted only)\nF.P: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either full/square or non-full/square Q is allowed, i.e. both F.Q*F.R and F.Q*A are supported. A Q matrix can be converted into a regular matrix with Matrix.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F.Q * F.R == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.qrfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.qrfact!",
-    "category": "Function",
-    "text": "qrfact!(A, pivot=Val(false))\n\nqrfact! is the same as qrfact when A is a subtype of StridedMatrix, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> a = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> qrfact!(a)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.316228 -0.948683; -0.948683 0.316228]\n[-3.16228 -4.42719; 0.0 -0.632456]\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> qrfact!(a)\nERROR: InexactError: convert(Int64, -3.1622776601683795)\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.QR",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.QR",
-    "category": "Type",
-    "text": "QR <: Factorization\n\nA QR matrix factorization stored in a packed format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA = Q R\n\nwhere Q is an orthogonal/unitary matrix and R is upper triangular. The matrix Q is stored as a sequence of Householder reflectors v_i and coefficients tau_i where:\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T)\n\nThe object has two fields:\n\nfactors is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format where v_i is the ith column of the matrix V = I + tril(F.factors, -1).\nτ is a vector  of length min(m,n) containing the coefficients au_i.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.QRCompactWY",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.QRCompactWY",
-    "category": "Type",
-    "text": "QRCompactWY <: Factorization\n\nA QR matrix factorization stored in a compact blocked format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA = Q R\n\nwhere Q is an orthogonal/unitary matrix and R is upper triangular. It is similar to the QR format except that the orthogonal/unitary matrix Q is stored in Compact WY format [Schreiber1989], as a lower trapezoidal matrix V and an upper triangular matrix T where\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T) = I - V T V^T\n\nsuch that v_i is the ith column of V, and au_i is the ith diagonal element of T.\n\nThe object has two fields:\n\nfactors, as in the QR type, is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format such that V = I + tril(F.factors, -1).\nT is a square matrix with min(m,n) columns, whose upper triangular part gives the matrix T above (the subdiagonal elements are ignored).\n\nnote: Note\nThis format should not to be confused with the older WY representation [Bischof1987].\n\n[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009\n\n[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.QRPivoted",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.QRPivoted",
-    "category": "Type",
-    "text": "QRPivoted <: Factorization\n\nA QR matrix factorization with column pivoting in a packed format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA P = Q R\n\nwhere P is a permutation matrix, Q is an orthogonal/unitary matrix and R is upper triangular. The matrix Q is stored as a sequence of Householder reflectors:\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T)\n\nThe object has three fields:\n\nfactors is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format where v_i is the ith column of the matrix V = I + tril(F.factors, -1).\nτ is a vector of length min(m,n) containing the coefficients au_i.\njpvt is an integer vector of length n corresponding to the permutation P.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lqfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lqfact!",
-    "category": "Function",
-    "text": "lqfact!(A) -> LQ\n\nCompute the LQ factorization of A, using the input matrix as a workspace. See also lq.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lqfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lqfact",
-    "category": "Function",
-    "text": "lqfact(A) -> LQ\n\nCompute the LQ factorization of A. See also lq.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lq",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lq",
-    "category": "Function",
-    "text": "lq(A; full = false) -> L, Q\n\nPerform an LQ factorization of A such that A = L*Q. The default (full = false) computes a factorization with possibly-rectangular L and Q, commonly the \"thin\" factorization. The LQ factorization is the QR factorization of transpose(A). If the explicit, full/square form of Q is requested via full = true, L is not extended with zeros.\n\nnote: Note\nWhile in QR factorization the \"thin\" factorization is so named due to yielding either a square or \"tall\"/\"thin\" rectangular factor Q, in LQ factorization the \"thin\" factorization somewhat confusingly produces either a square or \"short\"/\"wide\" rectangular factor Q. \"Thin\" factorizations more broadly are also referred to as \"reduced\" factorizatons.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.bkfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.bkfact",
-    "category": "Function",
-    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as P*U*D*U*P or P*L*D*L*P, depending on which triangle is stored in A, and return a BunchKaufman object. Note that if A is complex symmetric then U' and L' denote the unconjugated transposes, i.e. transpose(U) and transpose(L).\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nBase.LinAlg.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.bkfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.bkfact!",
-    "category": "Function",
-    "text": "bkfact!(A, rook::Bool=false) -> BunchKaufman\n\nbkfact! is the same as bkfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eig",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eig",
-    "category": "Function",
-    "text": "eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V\neig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V\neig(A, permute::Bool=true, scale::Bool=true) -> D, V\n\nComputes eigenvalues (D) and eigenvectors (V) of A. See eigfact for details on the irange, vl, and vu arguments (for SymTridiagonal, Hermitian, and Symmetric matrices) and the permute and scale keyword arguments. The eigenvectors are returned columnwise.\n\nExamples\n\njulia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\n\n\neig(A, B) -> D, V\n\nComputes generalized eigenvalues (D) and vectors (V) of A with respect to B.\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eig(A, B)\n(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigvals",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigvals",
-    "category": "Function",
-    "text": "eigvals(A; permute::Bool=true, scale::Bool=true) -> values\n\nReturn the eigenvalues of A.\n\nFor general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvalue calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExamples\n\njulia> diag_matrix = [1 0; 0 4]\n2×2 Array{Int64,2}:\n 1  0\n 0  4\n\njulia> eigvals(diag_matrix)\n2-element Array{Float64,1}:\n 1.0\n 4.0\n\n\n\neigvals(A, B) -> values\n\nComputes the generalized eigenvalues of A and B.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvals(A,B)\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a UnitRange irange covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, 2:2)\n1-element Array{Float64,1}:\n 0.9999999999999996\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a pair vl and vu for the lower and upper boundaries of the eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, -1, 2)\n1-element Array{Float64,1}:\n 1.0000000000000009\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigvals!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigvals!",
-    "category": "Function",
-    "text": "eigvals!(A; permute::Bool=true, scale::Bool=true) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm.\n\nnote: Note\nThe input matrix A will not contain its eigenvalues after eigvals! is called on it - A is used as a workspace.\n\nExamples\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> eigvals!(A)\n2-element Array{Float64,1}:\n -0.3722813232690143\n  5.372281323269014\n\njulia> A\n2×2 Array{Float64,2}:\n -0.372281  -1.0\n  0.0        5.37228\n\n\n\neigvals!(A, B) -> values\n\nSame as eigvals, but saves space by overwriting the input A (and B), instead of creating copies.\n\nnote: Note\nThe input matrices A and B will not contain their eigenvalues after eigvals! is called. They are used as workspaces.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> eigvals!(A, B)\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\njulia> A\n2×2 Array{Float64,2}:\n -0.0  -1.0\n  1.0  -0.0\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\n\n\neigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. irange is a range of eigenvalue indices to search for - for instance, the 2nd to 8th eigenvalues.\n\n\n\neigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. vl is the lower bound of the interval to search for eigenvalues, and vu is the upper bound.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigmax",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigmax",
-    "category": "Function",
-    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturn the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigmin",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigmin",
-    "category": "Function",
-    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturn the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigvecs",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigvecs",
-    "category": "Function",
-    "text": "eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix\n\nReturn a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nIf the optional vector of eigenvalues eigvals is specified, eigvecs returns the specific corresponding eigenvectors.\n\nExamples\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\njulia> eigvecs(A)\n3×3 Array{Float64,2}:\n  0.418304  -0.83205      0.364299\n -0.656749  -7.39009e-16  0.754109\n  0.627457   0.5547       0.546448\n\njulia> eigvecs(A, [1.])\n3×1 Array{Float64,2}:\n  0.8320502943378438\n  4.263514128092366e-17\n -0.5547001962252291\n\n\n\neigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix\n\nReturn a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].) The permute and scale keywords are the same as for eigfact.\n\nExamples\n\njulia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigvecs(A, B) -> Matrix\n\nReturn a matrix M whose columns are the generalized eigenvectors of A and B. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvecs(A, B)\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigfact",
-    "category": "Function",
-    "text": "eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F.values and the eigenvectors in the columns of the matrix F.vectors. (The kth eigenvector can be obtained from the slice F.vectors[:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nFor general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExamples\n\njulia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\nBase.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\njulia> F.values\n3-element Array{Float64,1}:\n  1.0\n  3.0\n 18.0\n\njulia> F.vectors\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigfact(A, B) -> GeneralizedEigen\n\nComputes the generalized eigenvalue decomposition of A and B, returning a GeneralizedEigen factorization object F which contains the generalized eigenvalues in F.values and the generalized eigenvectors in the columns of the matrix F.vectors. (The kth generalized eigenvector can be obtained from the slice F.vectors[:, k].)\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> F = eigfact(A, B);\n\njulia> F.values\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\njulia> F.vectors\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nThe UnitRange irange specifies indices of the sorted eigenvalues to search for.\n\nnote: Note\nIf irange is not 1:n, where n is the dimension of A, then the returned factorization will be a truncated factorization.\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nvl is the lower bound of the window of eigenvalues to search for, and vu is the upper bound.\n\nnote: Note\nIf [vl, vu] does not contain all eigenvalues of A, then the returned factorization will be a truncated factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.eigfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.eigfact!",
-    "category": "Function",
-    "text": "eigfact!(A, [B])\n\nSame as eigfact, but saves space by overwriting the input A (and B), instead of creating a copy.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.hessfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.hessfact",
-    "category": "Function",
-    "text": "hessfact(A) -> Hessenberg\n\nCompute the Hessenberg decomposition of A and return a Hessenberg object. If F is the factorization object, the unitary matrix can be accessed with F.Q and the Hessenberg matrix with F.H. When Q is extracted, the resulting type is the HessenbergQ object, and may be converted to a regular matrix with convert(Array, _)  (or Array(_) for short).\n\nExamples\n\njulia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\njulia> F = hessfact(A);\n\njulia> F.Q * F.H * F.Q'\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.hessfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.hessfact!",
-    "category": "Function",
-    "text": "hessfact!(A) -> Hessenberg\n\nhessfact! is the same as hessfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.schurfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.schurfact",
-    "category": "Function",
-    "text": "schurfact(A::StridedMatrix) -> F::Schur\n\nComputes the Schur factorization of the matrix A. The (quasi) triangular Schur factor can be obtained from the Schur object F with either F.Schur or F.T and the orthogonal/unitary Schur vectors can be obtained with F.vectors or F.Z such that A = F.vectors * F.Schur * F.vectors'. The eigenvalues of A can be obtained with F.values.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> F = schurfact(A)\nBase.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[3.0 9.0; 0.0 -2.0]\n[0.961524 0.274721; -0.274721 0.961524]\nand values:\n[3.0, -2.0]\n\njulia> F.vectors * F.Schur * F.vectors'\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\n\n\nschurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nComputes the Generalized Schur (or QZ) factorization of the matrices A and B. The (quasi) triangular Schur factors can be obtained from the Schur object F with F.S and F.T, the left unitary/orthogonal Schur vectors can be obtained with F.left or F.Q and the right unitary/orthogonal Schur vectors can be obtained with F.right or F.Z such that A=F.left*F.S*F.right' and B=F.left*F.T*F.right'. The generalized eigenvalues of A and B can be obtained with F.alpha./F.beta.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.schurfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.schurfact!",
-    "category": "Function",
-    "text": "schurfact!(A::StridedMatrix) -> F::Schur\n\nSame as schurfact but uses the input argument A as workspace.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> F = schurfact!(A)\nBase.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[3.0 9.0; 0.0 -2.0]\n[0.961524 0.274721; -0.274721 0.961524]\nand values:\n[3.0, -2.0]\n\njulia> A\n2×2 Array{Float64,2}:\n 3.0   9.0\n 0.0  -2.0\n\n\n\nschurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nSame as schurfact but uses the input matrices A and B as workspace.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.schur",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.schur",
-    "category": "Function",
-    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z * T * Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> T, Z, lambda = schur(A)\n([3.0 9.0; 0.0 -2.0], [0.961524 0.274721; -0.274721 0.961524], [3.0, -2.0])\n\njulia> Z * Z'\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> Z * T * Z'\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ordschur",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ordschur",
-    "category": "Function",
-    "text": "ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur\n\nReorders the Schur factorization F of a matrix A = Z*T*Z' according to the logical array select returning the reordered factorization F object. The selected eigenvalues appear in the leading diagonal of F.Schur and the corresponding leading columns of F.vectors form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via select.\n\n\n\nordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector\n\nReorders the Schur factorization of a real matrix A = Z*T*Z' according to the logical array select returning the reordered matrices T and Z as well as the vector of eigenvalues λ. The selected eigenvalues appear in the leading diagonal of T and the corresponding leading columns of Z form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via select.\n\n\n\nordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur\n\nReorders the Generalized Schur factorization F of a matrix pair (A, B) = (Q*S*Z', Q*T*Z') according to the logical array select and returns a GeneralizedSchur object F. The selected eigenvalues appear in the leading diagonal of both F.S and F.T, and the left and right orthogonal/unitary Schur vectors are also reordered such that (A, B) = F.Q*(F.S, F.T)*F.Z' still holds and the generalized eigenvalues of A and B can still be obtained with F.alpha./F.beta.\n\n\n\nordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nReorders the Generalized Schur factorization of a matrix pair (A, B) = (Q*S*Z', Q*T*Z') according to the logical array select and returns the matrices S, T, Q, Z and vectors α and β.  The selected eigenvalues appear in the leading diagonal of both S and T, and the left and right unitary/orthogonal Schur vectors are also reordered such that (A, B) = Q*(S, T)*Z' still holds and the generalized eigenvalues of A and B can still be obtained with α./β.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ordschur!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ordschur!",
-    "category": "Function",
-    "text": "ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur\n\nSame as ordschur but overwrites the factorization F.\n\n\n\nordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector\n\nSame as ordschur but overwrites the input arguments.\n\n\n\nordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur\n\nSame as ordschur but overwrites the factorization F.\n\n\n\nordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSame as ordschur but overwrites the factorization the input arguments.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.svdfact",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.svdfact",
-    "category": "Function",
-    "text": "svdfact(A; full::Bool = false) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F.U, F.S, F.V and F.Vt, such that A = U * Diagonal(S) * Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V. The singular values in S are sorted in descending order.\n\nIf full = false (default), a \"thin\" SVD is returned. For a M times N matrix A, U is M times M for a \"full\" SVD (full = true) and M times min(M N) for a \"thin\" SVD.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A);\n\njulia> F.U * Diagonal(F.S) * F.Vt\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F.U*F.D1*F.R0*F.Q' and B = F.V*F.D2*F.R0*F.Q'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nU is a M-by-M orthogonal matrix,\nV is a P-by-P orthogonal matrix,\nQ is a N-by-N orthogonal matrix,\nR0 is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nD1 is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nD2 is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F.D1 and F.D2 are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> F = svdfact(A, B);\n\njulia> F.U*F.D1*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> F.V*F.D2*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.svdfact!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.svdfact!",
-    "category": "Function",
-    "text": "svdfact!(A; full::Bool = false) -> SVD\n\nsvdfact! is the same as svdfact, but saves space by overwriting the input A, instead of creating a copy.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact!(A);\n\njulia> F.U * Diagonal(F.S) * F.Vt\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> A\n4×5 Array{Float64,2}:\n -2.23607   0.0   0.0  0.0  0.618034\n  0.0      -3.0   1.0  0.0  0.0\n  0.0       0.0   0.0  0.0  0.0\n  0.0       0.0  -2.0  0.0  0.0\n\n\n\nsvdfact!(A, B) -> GeneralizedSVD\n\nsvdfact! is the same as svdfact, but modifies the arguments A and B in-place, instead of making copies.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> F = svdfact!(A, B);\n\njulia> F.U*F.D1*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> F.V*F.D2*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> A\n2×2 Array{Float64,2}:\n 1.41421   0.0\n 0.0      -1.41421\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  -0.0\n 0.0  -1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.svd",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.svd",
-    "category": "Function",
-    "text": "svd(A; full::Bool = false) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U * Diagonal(S) * V'. The singular values in S are sorted in descending order.\n\nIf full = false (default), a \"thin\" SVD is returned. For a M times N matrix A, U is M times M for a \"full\" SVD (full = true) and M times min(M N) for a \"thin\" SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A);\n\njulia> U * Diagonal(S) * V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> U, V, Q, D1, D2, R0 = svd(A, B);\n\njulia> U*D1*R0*Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> V*D2*R0*Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.svdvals",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.svdvals",
-    "category": "Function",
-    "text": "svdvals(A)\n\nReturn the singular values of A in descending order.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23606797749979\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B. See also svdfact.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> svdvals(A, B)\n2-element Array{Float64,1}:\n 1.0\n 1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.svdvals!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.svdvals!",
-    "category": "Function",
-    "text": "svdvals!(A)\n\nReturn the singular values of A, saving space by overwriting the input. See also svdvals and svdfact.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals!(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23606797749979\n 2.0\n 0.0\n\njulia> A\n4×5 Array{Float64,2}:\n -2.23607   0.0   0.0  0.0  0.618034\n  0.0      -3.0   1.0  0.0  0.0\n  0.0       0.0   0.0  0.0  0.0\n  0.0       0.0  -2.0  0.0  0.0\n\n\n\nsvdvals!(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B, saving space by overwriting A and B. See also svdfact and svdvals.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> svdvals!(A, B)\n2-element Array{Float64,1}:\n 1.0\n 1.0\n\njulia> A\n2×2 Array{Float64,2}:\n 1.41421   0.0\n 0.0      -1.41421\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  -0.0\n 0.0  -1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.Givens",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.Givens",
-    "category": "Type",
-    "text": "LinAlg.Givens(i1,i2,c,s) -> G\n\nA Givens rotation linear operator. The fields c and s represent the cosine and sine of the rotation angle, respectively. The Givens type supports left multiplication G*A and conjugated transpose right multiplication A*G'. The type doesn't have a size and can therefore be multiplied with matrices of arbitrary size as long as i2<=size(A,2) for G*A or i2<=size(A,1) for A*G'.\n\nSee also: givens\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.givens",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.givens",
-    "category": "Function",
-    "text": "givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)\n\nComputes the Givens rotation G and scalar r such that for any vector x where\n\nx[i1] = f\nx[i2] = g\n\nthe result of the multiplication\n\ny = G*x\n\nhas the property that\n\ny[i1] = r\ny[i2] = 0\n\nSee also: LinAlg.Givens\n\n\n\ngivens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)\n\nComputes the Givens rotation G and scalar r such that the result of the multiplication\n\nB = G*A\n\nhas the property that\n\nB[i1,j] = r\nB[i2,j] = 0\n\nSee also: LinAlg.Givens\n\n\n\ngivens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)\n\nComputes the Givens rotation G and scalar r such that the result of the multiplication\n\nB = G*x\n\nhas the property that\n\nB[i1] = r\nB[i2] = 0\n\nSee also: LinAlg.Givens\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.triu",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.triu",
-    "category": "Function",
-    "text": "triu(M)\n\nUpper triangle of a matrix.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 0.0  1.0  1.0  1.0\n 0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  1.0\n\n\n\ntriu(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a,3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  1.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n\njulia> triu(a,-3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.triu!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.triu!",
-    "category": "Function",
-    "text": "triu!(M)\n\nUpper triangle of a matrix, overwriting M in the process. See also triu.\n\n\n\ntriu!(M, k::Integer)\n\nReturn the upper triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> triu!(M, 1)\n5×5 Array{Int64,2}:\n 0  2  3  4  5\n 0  0  3  4  5\n 0  0  0  4  5\n 0  0  0  0  5\n 0  0  0  0  0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.tril",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.tril",
-    "category": "Function",
-    "text": "tril(M)\n\nLower triangle of a matrix.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a)\n4×4 Array{Float64,2}:\n 1.0  0.0  0.0  0.0\n 1.0  1.0  0.0  0.0\n 1.0  1.0  1.0  0.0\n 1.0  1.0  1.0  1.0\n\n\n\ntril(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,-3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 1.0  0.0  0.0  0.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.tril!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.tril!",
-    "category": "Function",
-    "text": "tril!(M)\n\nLower triangle of a matrix, overwriting M in the process. See also tril.\n\n\n\ntril!(M, k::Integer)\n\nReturn the lower triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> tril!(M, 2)\n5×5 Array{Int64,2}:\n 1  2  3  0  0\n 1  2  3  4  0\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.diagind",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.diagind",
-    "category": "Function",
-    "text": "diagind(M, k::Integer=0)\n\nAn AbstractRange giving the indices of the kth diagonal of the matrix M.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diagind(A,-1)\n2:4:6\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.diag",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.diag",
-    "category": "Function",
-    "text": "diag(M, k::Integer=0)\n\nThe kth diagonal of a matrix, as a vector.\n\nSee also: diagm\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diag(A,1)\n2-element Array{Int64,1}:\n 2\n 6\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.diagm",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.diagm",
-    "category": "Function",
-    "text": "diagm(kv::Pair{<:Integer,<:AbstractVector}...)\n\nConstruct a square matrix from Pairs of diagonals and vectors. Vector kv.second will be placed on the kv.first diagonal. diagm constructs a full matrix; if you want storage-efficient versions with fast arithmetic, see Diagonal, Bidiagonal Tridiagonal and SymTridiagonal.\n\nExamples\n\njulia> diagm(1 => [1,2,3])\n4×4 Array{Int64,2}:\n 0  1  0  0\n 0  0  2  0\n 0  0  0  3\n 0  0  0  0\n\njulia> diagm(1 => [1,2,3], -1 => [4,5])\n4×4 Array{Int64,2}:\n 0  1  0  0\n 4  0  2  0\n 0  5  0  3\n 0  0  0  0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.scale!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.scale!",
-    "category": "Function",
-    "text": "scale!(A, b)\nscale!(b, A)\n\nScale an array A by a scalar b overwriting A in-place.\n\nIf A is a matrix and b is a vector, then scale!(A,b) scales each column i of A by b[i] (similar to A*Diagonal(b)), while scale!(b,A) scales each row i of A by b[i] (similar to Diagonal(b)*A), again operating in-place on A. An InexactError exception is thrown if the scaling produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> scale!(a,b)\n2×2 Array{Int64,2}:\n 1  4\n 3  8\n\njulia> a = [1 2; 3 4];\n\njulia> b = [1; 2];\n\njulia> scale!(b,a)\n2×2 Array{Int64,2}:\n 1  2\n 6  8\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.rank",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.rank",
-    "category": "Function",
-    "text": "rank(A[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of A have magnitude greater than tol*σ₁ where σ₁ is A's largest singular values. By default, the value of tol is the smallest dimension of A multiplied by the eps of the eltype of A.\n\nExamples\n\njulia> rank(Matrix(I, 3, 3))\n3\n\njulia> rank(diagm(0 => [1, 0, 2]))\n2\n\njulia> rank(diagm(0 => [1, 0.001, 2]), 0.1)\n2\n\njulia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)\n3\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.norm",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.norm",
-    "category": "Function",
-    "text": "norm(A::AbstractArray, p::Real=2)\n\nCompute the p-norm of a vector or the operator norm of a matrix A, defaulting to the 2-norm.\n\nnorm(A::AbstractVector, p::Real=2)\n\nFor vectors, this is equivalent to vecnorm and equal to:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, norm(A, Inf) returns the largest value in abs(A), whereas norm(A, -Inf) returns the smallest.\n\nExamples\n\njulia> v = [3, -2, 6]\n3-element Array{Int64,1}:\n  3\n -2\n  6\n\njulia> norm(v)\n7.0\n\njulia> norm(v, Inf)\n6.0\n\n\n\nnorm(A::AbstractMatrix, p::Real=2)\n\nFor matrices, the matrix norm induced by the vector p-norm is used, where valid values of p are 1, 2, or Inf. (Note that for sparse matrices, p=2 is currently not implemented.) Use vecnorm to compute the Frobenius norm.\n\nWhen p=1, the matrix norm is the maximum absolute column sum of A:\n\nA_1 = max_1  j  n sum_i=1^m  a_ij \n\nwith a_ij the entries of A, and m and n its dimensions.\n\nWhen p=2, the matrix norm is the spectral norm, equal to the largest singular value of A.\n\nWhen p=Inf, the matrix norm is the maximum absolute row sum of A:\n\nA_infty = max_1  i  m sum _j=1^n  a_ij \n\nExamples\n\njulia> A = [1 -2 -3; 2 3 -1]\n2×3 Array{Int64,2}:\n 1  -2  -3\n 2   3  -1\n\njulia> norm(A, Inf)\n6.0\n\n\n\nnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right)^1p. This is equivalent to vecnorm.\n\n\n\nnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)\nnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)\n\nFor Adjoint/Transpose-wrapped vectors, return the q-norm of A, which is equivalent to the p-norm with value p = q/(q-1). They coincide at p = q = 2.\n\nThe difference in norm between a vector space and its dual arises to preserve the relationship between duality and the inner product, and the result is consistent with the p-norm of 1 × n matrix.\n\nExamples\n\njulia> v = [1; im];\n\njulia> vc = v';\n\njulia> norm(vc, 1)\n1.0\n\njulia> norm(v, 1)\n2.0\n\njulia> norm(vc, 2)\n1.4142135623730951\n\njulia> norm(v, 2)\n1.4142135623730951\n\njulia> norm(vc, Inf)\n2.0\n\njulia> norm(v, Inf)\n1.0\n\n\n\nnorm(A::RowVector, q::Real=2)\n\nFor row vectors, return the q-norm of A, which is equivalent to the p-norm with value p = q/(q-1). They coincide at p = q = 2.\n\nThe difference in norm between a vector space and its dual arises to preserve the relationship between duality and the inner product, and the result is consistent with the p-norm of 1 × n matrix.\n\nExamples\n\njulia> v = [1; im];\n\njulia> vc = RowVector(v);\n\njulia> norm(vc, 1)\n1.0\n\njulia> norm(v, 1)\n2.0\n\njulia> norm(vc, 2)\n1.4142135623730951\n\njulia> norm(v, 2)\n1.4142135623730951\n\njulia> norm(vc, Inf)\n2.0\n\njulia> norm(v, Inf)\n1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.vecnorm",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.vecnorm",
-    "category": "Function",
-    "text": "vecnorm(A, p::Real=2)\n\nFor any iterable container A (including arrays of any dimension) of numbers (or any element type for which norm is defined), compute the p-norm (defaulting to p=2) as if A were a vector of the corresponding length.\n\nThe p-norm is defined as:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, vecnorm(A, Inf) returns the largest value in abs(A), whereas vecnorm(A, -Inf) returns the smallest. If A is a matrix and p=2, then this is equivalent to the Frobenius norm.\n\nExamples\n\njulia> vecnorm([1 2 3; 4 5 6; 7 8 9])\n16.881943016134134\n\njulia> vecnorm([1 2 3 4 5 6 7 8 9])\n16.881943016134134\n\n\n\nvecnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right) ^1p.\n\nExamples\n\njulia> vecnorm(2, 1)\n2\n\njulia> vecnorm(-2, 1)\n2\n\njulia> vecnorm(2, 2)\n2\n\njulia> vecnorm(-2, 2)\n2\n\njulia> vecnorm(2, Inf)\n2\n\njulia> vecnorm(-2, Inf)\n2\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.normalize!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.normalize!",
-    "category": "Function",
-    "text": "normalize!(v::AbstractVector, p::Real=2)\n\nNormalize the vector v in-place so that its p-norm equals unity, i.e. norm(v, p) == 1. See also normalize and vecnorm.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.normalize",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.normalize",
-    "category": "Function",
-    "text": "normalize(v::AbstractVector, p::Real=2)\n\nNormalize the vector v so that its p-norm equals unity, i.e. norm(v, p) == vecnorm(v, p) == 1. See also normalize! and vecnorm.\n\nExamples\n\njulia> a = [1,2,4];\n\njulia> b = normalize(a)\n3-element Array{Float64,1}:\n 0.2182178902359924\n 0.4364357804719848\n 0.8728715609439696\n\njulia> norm(b)\n1.0\n\njulia> c = normalize(a, 1)\n3-element Array{Float64,1}:\n 0.14285714285714285\n 0.2857142857142857\n 0.5714285714285714\n\njulia> norm(c, 1)\n1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.cond",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.cond",
-    "category": "Function",
-    "text": "cond(M, p::Real=2)\n\nCondition number of the matrix M, computed using the operator p-norm. Valid values for p are 1, 2 (default), or Inf.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.condskeel",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.condskeel",
-    "category": "Function",
-    "text": "condskeel(M, [x, p::Real=Inf])\n\nkappa_S(M p) = leftVert leftvert M rightvert leftvert M^-1 rightvert rightVert_p \nkappa_S(M x p) = leftVert leftvert M rightvert leftvert M^-1 rightvert leftvert x rightvert rightVert_p\n\nSkeel condition number kappa_S of the matrix M, optionally with respect to the vector x, as computed using the operator p-norm. leftvert M rightvert denotes the matrix of (entry wise) absolute values of M; leftvert M rightvert_ij = leftvert M_ij rightvert. Valid values for p are 1, 2 and Inf (default).\n\nThis quantity is also known in the literature as the Bauer condition number, relative condition number, or componentwise relative condition number.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.trace",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.trace",
-    "category": "Function",
-    "text": "trace(M)\n\nMatrix trace. Sums the diagonal elements of M.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trace(A)\n5\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.det",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.det",
-    "category": "Function",
-    "text": "det(M)\n\nMatrix determinant.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> det(M)\n2.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.logdet",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.logdet",
-    "category": "Function",
-    "text": "logdet(M)\n\nLog of matrix determinant. Equivalent to log(det(M)), but may provide increased accuracy and/or speed.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> logdet(M)\n0.6931471805599453\n\njulia> logdet(Matrix(I, 3, 3))\n0.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.logabsdet",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.logabsdet",
-    "category": "Function",
-    "text": "logabsdet(M)\n\nLog of absolute value of matrix determinant. Equivalent to (log(abs(det(M))), sign(det(M))), but may provide increased accuracy and/or speed.\n\nExamples\n\njulia> A = [-1. 0.; 0. 1.]\n2×2 Array{Float64,2}:\n -1.0  0.0\n  0.0  1.0\n\njulia> det(A)\n-1.0\n\njulia> logabsdet(A)\n(0.0, -1.0)\n\njulia> B = [2. 0.; 0. 1.]\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  1.0\n\njulia> det(B)\n2.0\n\njulia> logabsdet(B)\n(0.6931471805599453, 1.0)\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.inv-Tuple{AbstractArray{T,2} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.inv",
-    "category": "Method",
-    "text": "inv(M)\n\nMatrix inverse. Computes matrix N such that M * N = I, where I is the identity matrix. Computed by solving the left-division N = M \\ I.\n\nExamples\n\njulia> M = [2 5; 1 3]\n2×2 Array{Int64,2}:\n 2  5\n 1  3\n\njulia> N = inv(M)\n2×2 Array{Float64,2}:\n  3.0  -5.0\n -1.0   2.0\n\njulia> M*N == N*M == Matrix(I, 2, 2)\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.pinv",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.pinv",
-    "category": "Function",
-    "text": "pinv(M[, tol::Real])\n\nComputes the Moore-Penrose pseudoinverse.\n\nFor matrices M with floating point elements, it is convenient to compute the pseudoinverse by inverting only singular values above a given threshold, tol.\n\nThe optimal choice of tol varies both with the value of M and the intended application of the pseudoinverse. The default value of tol is eps(real(float(one(eltype(M)))))*maximum(size(M)), which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, tol = sqrt(eps(real(float(one(eltype(M)))))) is recommended.\n\nFor more information, see [issue8859], [B96], [S84], [KY88].\n\nExamples\n\njulia> M = [1.5 1.3; 1.2 1.9]\n2×2 Array{Float64,2}:\n 1.5  1.3\n 1.2  1.9\n\njulia> N = pinv(M)\n2×2 Array{Float64,2}:\n  1.47287   -1.00775\n -0.930233   1.16279\n\njulia> M * N\n2×2 Array{Float64,2}:\n 1.0          -2.22045e-16\n 4.44089e-16   1.0\n\n[issue8859]: Issue 8859, \"Fix least squares\", https://github.com/JuliaLang/julia/pull/8859\n\n[B96]: Åke Björck, \"Numerical Methods for Least Squares Problems\",  SIAM Press, Philadelphia, 1996, \"Other Titles in Applied Mathematics\", Vol. 51. doi:10.1137/1.9781611971484\n\n[S84]: G. W. Stewart, \"Rank Degeneracy\", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. doi:10.1137/0905030\n\n[KY88]: Konstantinos Konstantinides and Kung Yao, \"Statistical analysis of effective singular values in matrix rank determination\", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. doi:10.1109/29.1585\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.nullspace",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.nullspace",
-    "category": "Function",
-    "text": "nullspace(M)\n\nBasis for nullspace of M.\n\nExamples\n\njulia> M = [1 0 0; 0 1 0; 0 0 0]\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  0\n\njulia> nullspace(M)\n3×1 Array{Float64,2}:\n 0.0\n 0.0\n 1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.repmat",
-    "page": "Linear Algebra",
-    "title": "Base.repmat",
-    "category": "Function",
-    "text": "repmat(A, m::Integer, n::Integer=1)\n\nConstruct a matrix by repeating the given matrix (or vector) m times in dimension 1 and n times in dimension 2.\n\nExamples\n\njulia> repmat([1, 2, 3], 2)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 1\n 2\n 3\n\njulia> repmat([1, 2, 3], 2, 3)\n6×3 Array{Int64,2}:\n 1  1  1\n 2  2  2\n 3  3  3\n 1  1  1\n 2  2  2\n 3  3  3\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.kron",
-    "page": "Linear Algebra",
-    "title": "Base.kron",
-    "category": "Function",
-    "text": "kron(A, B)\n\nKronecker tensor product of two vectors or two matrices.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> B = [im 1; 1 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  1+0im\n 1+0im  0-1im\n\njulia> kron(A, B)\n4×4 Array{Complex{Int64},2}:\n 0+1im  1+0im  0+2im  2+0im\n 1+0im  0-1im  2+0im  0-2im\n 0+3im  3+0im  0+4im  4+0im\n 3+0im  0-3im  4+0im  0-4im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.linreg",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.linreg",
-    "category": "Function",
-    "text": "linreg(x, y)\n\nPerform simple linear regression using Ordinary Least Squares. Returns a and b such that a + b*x is the closest straight line to the given points (x, y), i.e., such that the squared error between y and a + b*x is minimized.\n\nExamples\n\nusing PyPlot\nx = 1.0:12.0\ny = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]\na, b = linreg(x, y)          # Linear regression\nplot(x, y, \"o\")              # Plot (x, y) points\nplot(x, a + b*x)             # Plot line determined by linear regression\n\nSee also:\n\n\\, cov, std, mean.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.exp-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Union{Complex{Float32}, Complex{Float64}, Float32, Float64}}",
-    "page": "Linear Algebra",
-    "title": "Base.exp",
-    "category": "Method",
-    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = Matrix(1.0I, 2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.log-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.log",
-    "category": "Method",
-    "text": "log(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = Matrix(2.7182818*I, 2, 2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.sqrt-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
-    "page": "Linear Algebra",
-    "title": "Base.sqrt",
-    "category": "Method",
-    "text": "sqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.cos-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
-    "page": "Linear Algebra",
-    "title": "Base.cos",
-    "category": "Method",
-    "text": "cos(A::AbstractMatrix)\n\nCompute the matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the cosine. Otherwise, the cosine is determined by calling exp.\n\nExamples\n\njulia> cos(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.sin-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
-    "page": "Linear Algebra",
-    "title": "Base.sin",
-    "category": "Method",
-    "text": "sin(A::AbstractMatrix)\n\nCompute the matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the sine. Otherwise, the sine is determined by calling exp.\n\nExamples\n\njulia> sin(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.sincos-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.sincos",
-    "category": "Method",
-    "text": "sincos(A::AbstractMatrix)\n\nCompute the matrix sine and cosine of a square matrix A.\n\nExamples\n\njulia> S, C = sincos(fill(1.0, (2,2)));\n\njulia> S\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\njulia> C\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.tan-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
-    "page": "Linear Algebra",
-    "title": "Base.tan",
-    "category": "Method",
-    "text": "tan(A::AbstractMatrix)\n\nCompute the matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the tangent. Otherwise, the tangent is determined by calling exp.\n\nExamples\n\njulia> tan(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n -1.09252  -1.09252\n -1.09252  -1.09252\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.sec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.sec",
-    "category": "Method",
-    "text": "sec(A::AbstractMatrix)\n\nCompute the matrix secant of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.csc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.csc",
-    "category": "Method",
-    "text": "csc(A::AbstractMatrix)\n\nCompute the matrix cosecant of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.cot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.cot",
-    "category": "Method",
-    "text": "cot(A::AbstractMatrix)\n\nCompute the matrix cotangent of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.cosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.cosh",
-    "category": "Method",
-    "text": "cosh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosine of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.sinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.sinh",
-    "category": "Method",
-    "text": "sinh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic sine of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.tanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.tanh",
-    "category": "Method",
-    "text": "tanh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic tangent of a square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.sech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.sech",
-    "category": "Method",
-    "text": "sech(A::AbstractMatrix)\n\nCompute the matrix hyperbolic secant of square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.csch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.csch",
-    "category": "Method",
-    "text": "csch(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosecant of square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.coth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.coth",
-    "category": "Method",
-    "text": "coth(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cotangent of square matrix A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.acos-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.acos",
-    "category": "Method",
-    "text": "acos(A::AbstractMatrix)\n\nCompute the inverse matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse cosine. Otherwise, the inverse cosine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_1].\n\n[AH16_1]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> acos(cos([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-8.32667e-17im  0.1-2.77556e-17im\n -0.2+2.77556e-16im  0.3-3.46945e-16im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.asin-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.asin",
-    "category": "Method",
-    "text": "asin(A::AbstractMatrix)\n\nCompute the inverse matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse sine. Otherwise, the inverse sine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_2].\n\n[AH16_2]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> asin(sin([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-4.16334e-17im  0.1-5.55112e-17im\n -0.2+9.71445e-17im  0.3-1.249e-16im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.atan-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.atan",
-    "category": "Method",
-    "text": "atan(A::AbstractMatrix)\n\nCompute the inverse matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse tangent. Otherwise, the inverse tangent is determined by using log.  For the theory and logarithmic formulas used to compute this function, see [AH16_3].\n\n[AH16_3]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> atan(tan([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5+1.38778e-17im  0.1-2.77556e-17im\n -0.2+6.93889e-17im  0.3-4.16334e-17im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.asec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.asec",
-    "category": "Method",
-    "text": "asec(A::AbstractMatrix)\n\nCompute the inverse matrix secant of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.acsc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.acsc",
-    "category": "Method",
-    "text": "acsc(A::AbstractMatrix)\n\nCompute the inverse matrix cosecant of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.acot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.acot",
-    "category": "Method",
-    "text": "acot(A::AbstractMatrix)\n\nCompute the inverse matrix cotangent of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.acosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.acosh",
-    "category": "Method",
-    "text": "acosh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix cosine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_4].\n\n[AH16_4]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.asinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.asinh",
-    "category": "Method",
-    "text": "asinh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix sine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_5].\n\n[AH16_5]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.atanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.atanh",
-    "category": "Method",
-    "text": "atanh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix tangent of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_6].\n\n[AH16_6]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.asech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.asech",
-    "category": "Method",
-    "text": "asech(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic secant of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.acsch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.acsch",
-    "category": "Method",
-    "text": "acsch(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cosecant of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.Math.acoth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
-    "page": "Linear Algebra",
-    "title": "Base.Math.acoth",
-    "category": "Method",
-    "text": "acoth(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cotangent of A. \n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.lyap",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.lyap",
-    "category": "Function",
-    "text": "lyap(A, C)\n\nComputes the solution X to the continuous Lyapunov equation AX + XA' + C = 0, where no eigenvalue of A has a zero real part and no two eigenvalues are negative complex conjugates of each other.\n\nExamples\n\njulia> A = [3. 4.; 5. 6]\n2×2 Array{Float64,2}:\n 3.0  4.0\n 5.0  6.0\n\njulia> B = [1. 1.; 1. 2.]\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  2.0\n\njulia> X = lyap(A, B)\n2×2 Array{Float64,2}:\n  0.5  -0.5\n -0.5   0.25\n\njulia> A*X + X*A' + B\n2×2 Array{Float64,2}:\n 0.0          6.66134e-16\n 6.66134e-16  8.88178e-16\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.sylvester",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.sylvester",
-    "category": "Function",
-    "text": "sylvester(A, B, C)\n\nComputes the solution X to the Sylvester equation AX + XB + C = 0, where A, B and C have compatible dimensions and A and -B have no eigenvalues with equal real part.\n\nExamples\n\njulia> A = [3. 4.; 5. 6]\n2×2 Array{Float64,2}:\n 3.0  4.0\n 5.0  6.0\n\njulia> B = [1. 1.; 1. 2.]\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  2.0\n\njulia> C = [1. 2.; -2. 1]\n2×2 Array{Float64,2}:\n  1.0  2.0\n -2.0  1.0\n\njulia> X = sylvester(A, B, C)\n2×2 Array{Float64,2}:\n -4.46667   1.93333\n  3.73333  -1.8\n\njulia> A*X + X*B + C\n2×2 Array{Float64,2}:\n  2.66454e-15  1.77636e-15\n -3.77476e-15  4.44089e-16\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.issuccess",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.issuccess",
-    "category": "Function",
-    "text": "issuccess(F::Factorization)\n\nTest that a factorization of a matrix succeeded.\n\njulia> F = cholfact([1 0; 0 1]);\n\njulia> LinAlg.issuccess(F)\ntrue\n\njulia> F = lufact([1 0; 0 0]);\n\njulia> LinAlg.issuccess(F)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.issymmetric",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.issymmetric",
-    "category": "Function",
-    "text": "issymmetric(A) -> Bool\n\nTest whether a matrix is symmetric.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> issymmetric(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> issymmetric(b)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.isposdef",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.isposdef",
-    "category": "Function",
-    "text": "isposdef(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A. See also isposdef!\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> isposdef(A)\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.isposdef!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.isposdef!",
-    "category": "Function",
-    "text": "isposdef!(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A, overwriting A in the process. See also isposdef.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.];\n\njulia> isposdef!(A)\ntrue\n\njulia> A\n2×2 Array{Float64,2}:\n 1.0  2.0\n 2.0  6.78233\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.istril",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.istril",
-    "category": "Function",
-    "text": "istril(A::AbstractMatrix, k::Integer = 0) -> Bool\n\nTest whether A is lower triangular starting from the kth superdiagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istril(a)\nfalse\n\njulia> istril(a, 1)\ntrue\n\njulia> b = [1 0; -im -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+0im\n 0-1im  -1+0im\n\njulia> istril(b)\ntrue\n\njulia> istril(b, -1)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.istriu",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.istriu",
-    "category": "Function",
-    "text": "istriu(A::AbstractMatrix, k::Integer = 0) -> Bool\n\nTest whether A is upper triangular starting from the kth superdiagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istriu(a)\nfalse\n\njulia> istriu(a, -1)\ntrue\n\njulia> b = [1 im; 0 -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+1im\n 0+0im  -1+0im\n\njulia> istriu(b)\ntrue\n\njulia> istriu(b, 1)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.isdiag",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.isdiag",
-    "category": "Function",
-    "text": "isdiag(A) -> Bool\n\nTest whether a matrix is diagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> isdiag(a)\nfalse\n\njulia> b = [im 0; 0 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  0+0im\n 0+0im  0-1im\n\njulia> isdiag(b)\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ishermitian",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ishermitian",
-    "category": "Function",
-    "text": "ishermitian(A) -> Bool\n\nTest whether a matrix is Hermitian.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> ishermitian(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> ishermitian(b)\ntrue\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.RowVector",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.RowVector",
-    "category": "Type",
-    "text": "RowVector(vector)\n\nA lazy-view wrapper of an AbstractVector, which turns a length-n vector into a 1×n shaped row vector and represents the transpose of a vector (the elements are also transposed recursively).\n\nBy convention, a vector can be multiplied by a matrix on its left (A * v) whereas a row vector can be multiplied by a matrix on its right (such that RowVector(v) * A = RowVector(transpose(A) * v)). It differs from a 1×n-sized matrix by the facts that its transpose returns a vector and the inner product RowVector(v1) * v2 returns a scalar, but will otherwise behave similarly.\n\nExamples\n\njulia> a = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> RowVector(a)\n1×4 RowVector{Int64,Array{Int64,1}}:\n 1  2  3  4\n\njulia> RowVector(a)[3]\n3\n\njulia> RowVector(a)[1,3]\n3\n\njulia> RowVector(a)[3,1]\nERROR: BoundsError: attempt to access 1×4 RowVector{Int64,Array{Int64,1}} at index [3, 1]\n[...]\n\njulia> RowVector(a)*a\n30\n\njulia> B = [1 2; 3 4; 5 6; 7 8]\n4×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n 7  8\n\njulia> RowVector(a)*B\n1×2 RowVector{Int64,Array{Int64,1}}:\n 50  60\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ConjArray",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ConjArray",
-    "category": "Type",
-    "text": "ConjArray(array)\n\nA lazy-view wrapper of an AbstractArray, taking the elementwise complex conjugate. This type is usually constructed (and unwrapped) via the conj function (or related adjoint), but currently this is the default behavior for RowVector only. For other arrays, the ConjArray constructor can be used directly.\n\nExamples\n\njulia> ConjArray([1+im 0; 0 1-im])\n2×2 ConjArray{Complex{Int64},2,Array{Complex{Int64},2}}:\n 1-1im  0+0im\n 0+0im  1+1im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.transpose",
-    "page": "Linear Algebra",
-    "title": "Base.transpose",
-    "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nLazy matrix transpose. Mutating the returned object should appropriately mutate A. Often, but not always, yields Transpose(A), where Transpose is a lazy transpose wrapper. Note that this operation is recursive.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Transpose{Int64,Array{Int64,2}}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.transpose!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.transpose!",
-    "category": "Function",
-    "text": "transpose!(dest,src)\n\nTranspose array src and store the result in the preallocated array dest, which should have a size corresponding to (size(src,2),size(src,1)). No in-place transposition is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> B = zeros(Complex{Int64}, 2, 2)\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+0im\n 0+0im  0+0im\n\njulia> transpose!(B, A);\n\njulia> B\n2×2 Array{Complex{Int64},2}:\n 3+2im  8+7im\n 9+2im  4+6im\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.adjoint",
-    "page": "Linear Algebra",
-    "title": "Base.adjoint",
-    "category": "Function",
-    "text": "adjoint(A)\n\nLazy adjoint (conjugate transposition) (also postfix '). Note that adjoint is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> adjoint(A)\n2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.adjoint!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.adjoint!",
-    "category": "Function",
-    "text": "adjoint!(dest,src)\n\nConjugate transpose array src and store the result in the preallocated array dest, which should have a size corresponding to (size(src,2),size(src,1)). No in-place transposition is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> B = zeros(Complex{Int64}, 2, 2)\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+0im\n 0+0im  0+0im\n\njulia> adjoint!(B, A);\n\njulia> B\n2×2 Array{Complex{Int64},2}:\n 3-2im  8-7im\n 9-2im  4-6im\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.peakflops",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.peakflops",
-    "category": "Function",
-    "text": "peakflops(n::Integer=2000; parallel::Bool=false)\n\npeakflops computes the peak flop rate of the computer by using double precision gemm!. By default, if no arguments are specified, it multiplies a matrix of size n x n, where n = 2000. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with BLAS.set_num_threads(n).\n\nIf the keyword argument parallel is set to true, peakflops is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument n still refers to the size of the problem that is solved on each processor.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.stride1",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.stride1",
-    "category": "Function",
-    "text": "stride1(A) -> Int\n\nReturn the distance between successive array elements in dimension 1 in units of element size.\n\nExamples\n\njulia> A = [1,2,3,4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> Base.LinAlg.stride1(A)\n1\n\njulia> B = view(A, 2:2:4)\n2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:\n 2\n 4\n\njulia> Base.LinAlg.stride1(B)\n2\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Standard-Functions-1",
-    "page": "Linear Algebra",
-    "title": "Standard Functions",
-    "category": "section",
-    "text": "Linear algebra functions in Julia are largely implemented by calling functions from LAPACK.  Sparse factorizations call functions from SuiteSparse.Base.:*(::AbstractMatrix, ::AbstractMatrix)\nBase.:\\(::AbstractMatrix, ::AbstractVecOrMat)\nBase.LinAlg.dot\nBase.LinAlg.vecdot\nBase.LinAlg.cross\nBase.LinAlg.factorize\nBase.LinAlg.Diagonal\nBase.LinAlg.Bidiagonal\nBase.LinAlg.SymTridiagonal\nBase.LinAlg.Tridiagonal\nBase.LinAlg.Symmetric\nBase.LinAlg.Hermitian\nBase.LinAlg.LowerTriangular\nBase.LinAlg.UpperTriangular\nBase.LinAlg.UniformScaling\nBase.LinAlg.lu\nBase.LinAlg.lufact\nBase.LinAlg.lufact!\nBase.LinAlg.chol\nBase.LinAlg.cholfact\nBase.LinAlg.cholfact!\nBase.LinAlg.lowrankupdate\nBase.LinAlg.lowrankdowndate\nBase.LinAlg.lowrankupdate!\nBase.LinAlg.lowrankdowndate!\nBase.LinAlg.ldltfact\nBase.LinAlg.ldltfact!\nBase.LinAlg.qr\nBase.LinAlg.qr!\nBase.LinAlg.qrfact\nBase.LinAlg.qrfact!\nBase.LinAlg.QR\nBase.LinAlg.QRCompactWY\nBase.LinAlg.QRPivoted\nBase.LinAlg.lqfact!\nBase.LinAlg.lqfact\nBase.LinAlg.lq\nBase.LinAlg.bkfact\nBase.LinAlg.bkfact!\nBase.LinAlg.eig\nBase.LinAlg.eigvals\nBase.LinAlg.eigvals!\nBase.LinAlg.eigmax\nBase.LinAlg.eigmin\nBase.LinAlg.eigvecs\nBase.LinAlg.eigfact\nBase.LinAlg.eigfact!\nBase.LinAlg.hessfact\nBase.LinAlg.hessfact!\nBase.LinAlg.schurfact\nBase.LinAlg.schurfact!\nBase.LinAlg.schur\nBase.LinAlg.ordschur\nBase.LinAlg.ordschur!\nBase.LinAlg.svdfact\nBase.LinAlg.svdfact!\nBase.LinAlg.svd\nBase.LinAlg.svdvals\nBase.LinAlg.svdvals!\nBase.LinAlg.Givens\nBase.LinAlg.givens\nBase.LinAlg.triu\nBase.LinAlg.triu!\nBase.LinAlg.tril\nBase.LinAlg.tril!\nBase.LinAlg.diagind\nBase.LinAlg.diag\nBase.LinAlg.diagm\nBase.LinAlg.scale!\nBase.LinAlg.rank\nBase.LinAlg.norm\nBase.LinAlg.vecnorm\nBase.LinAlg.normalize!\nBase.LinAlg.normalize\nBase.LinAlg.cond\nBase.LinAlg.condskeel\nBase.LinAlg.trace\nBase.LinAlg.det\nBase.LinAlg.logdet\nBase.LinAlg.logabsdet\nBase.inv(::AbstractMatrix)\nBase.LinAlg.pinv\nBase.LinAlg.nullspace\nBase.repmat\nBase.kron\nBase.LinAlg.linreg\nBase.LinAlg.exp(::StridedMatrix{<:Base.LinAlg.BlasFloat})\nBase.LinAlg.log(::StridedMatrix)\nBase.LinAlg.sqrt(::StridedMatrix{<:Real})\nBase.LinAlg.cos(::StridedMatrix{<:Real})\nBase.LinAlg.sin(::StridedMatrix{<:Real})\nBase.LinAlg.sincos(::StridedMatrix{<:Real})\nBase.LinAlg.tan(::StridedMatrix{<:Real})\nBase.LinAlg.sec(::StridedMatrix)\nBase.LinAlg.csc(::StridedMatrix)\nBase.LinAlg.cot(::StridedMatrix)\nBase.LinAlg.cosh(::StridedMatrix)\nBase.LinAlg.sinh(::StridedMatrix)\nBase.LinAlg.tanh(::StridedMatrix)\nBase.LinAlg.sech(::StridedMatrix)\nBase.LinAlg.csch(::StridedMatrix)\nBase.LinAlg.coth(::StridedMatrix)\nBase.LinAlg.acos(::StridedMatrix)\nBase.LinAlg.asin(::StridedMatrix)\nBase.LinAlg.atan(::StridedMatrix)\nBase.LinAlg.asec(::StridedMatrix)\nBase.LinAlg.acsc(::StridedMatrix)\nBase.LinAlg.acot(::StridedMatrix)\nBase.LinAlg.acosh(::StridedMatrix)\nBase.LinAlg.asinh(::StridedMatrix)\nBase.LinAlg.atanh(::StridedMatrix)\nBase.LinAlg.asech(::StridedMatrix)\nBase.LinAlg.acsch(::StridedMatrix)\nBase.LinAlg.acoth(::StridedMatrix)\nBase.LinAlg.lyap\nBase.LinAlg.sylvester\nBase.LinAlg.issuccess\nBase.LinAlg.issymmetric\nBase.LinAlg.isposdef\nBase.LinAlg.isposdef!\nBase.LinAlg.istril\nBase.LinAlg.istriu\nBase.LinAlg.isdiag\nBase.LinAlg.ishermitian\nBase.LinAlg.RowVector\nBase.LinAlg.ConjArray\nBase.transpose\nBase.transpose!\nBase.adjoint\nBase.adjoint!\nBase.LinAlg.peakflops\nBase.LinAlg.stride1"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.mul!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.mul!",
-    "category": "Function",
-    "text": "mul!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\nmul!(A, B)\n\nCalculate the matrix-matrix product AB, overwriting one of A or B (but not both), and return the result (the overwritten argument).\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.ldiv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.ldiv!",
-    "category": "Function",
-    "text": "ldiv!([Y,] A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result. If only two arguments are passed, then ldiv!(A, B) overwrites B with the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.rdiv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.rdiv!",
-    "category": "Function",
-    "text": "rdiv!([Y,] A, B) -> Y\n\nCompute A / B in-place and store the result in Y, returning the result. If only two arguments are passed, then rdiv!(A, B) overwrites A with the result.\n\nThe argument B should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring rdiv! usually also require fine-grained control over the factorization of B.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Low-level-matrix-operations-1",
-    "page": "Linear Algebra",
-    "title": "Low-level matrix operations",
-    "category": "section",
-    "text": "In many cases there are in-place versions of matrix operations that allow you to supply a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order to avoid the overhead of repeated allocations. These in-place operations are suffixed with ! below (e.g. mul!) according to the usual Julia convention.Base.LinAlg.mul!\nBase.LinAlg.ldiv!\nBase.LinAlg.rdiv!"
-},
-
-{
-    "location": "base/linalg/#BLAS-Functions-1",
-    "page": "Linear Algebra",
-    "title": "BLAS Functions",
-    "category": "section",
-    "text": "In Julia (as in much of scientific computation), dense linear-algebra operations are based on the LAPACK library, which in turn is built on top of basic linear-algebra building-blocks known as the BLAS. There are highly optimized implementations of BLAS available for every computer architecture, and sometimes in high-performance linear algebra routines it is useful to call the BLAS functions directly.Base.LinAlg.BLAS provides wrappers for some of the BLAS functions. Those BLAS functions that overwrite one of the input arrays have names ending in '!'.  Usually, a BLAS function has four methods defined, for Float64, Float32, ComplexF64, and ComplexF32 arrays."
-},
-
-{
-    "location": "base/linalg/#stdlib-blas-chars-1",
-    "page": "Linear Algebra",
-    "title": "BLAS Character Arguments",
-    "category": "section",
-    "text": "Many BLAS functions accept arguments that determine whether to transpose an argument (trans), which triangle of a matrix to reference (uplo or ul), whether the diagonal of a triangular matrix can be assumed to be all ones (dA) or which side of a matrix multiplication the input argument belongs on (side). The possiblities are:"
-},
-
-{
-    "location": "base/linalg/#stdlib-blas-side-1",
-    "page": "Linear Algebra",
-    "title": "Multplication Order",
-    "category": "section",
-    "text": "side Meaning\n'L' The argument goes on the left side of a matrix-matrix operation.\n'R' The argument goes on the right side of a matrix-matrix operation."
-},
-
-{
-    "location": "base/linalg/#stdlib-blas-uplo-1",
-    "page": "Linear Algebra",
-    "title": "Triangle Referencing",
-    "category": "section",
-    "text": "uplo/ul Meaning\n'U' Only the upper triangle of the matrix will be used.\n'L' Only the lower triangle of the matrix will be used."
-},
-
-{
-    "location": "base/linalg/#stdlib-blas-trans-1",
-    "page": "Linear Algebra",
-    "title": "Transposition Operation",
-    "category": "section",
-    "text": "trans/tX Meaning\n'N' The input matrix X is not transposed or conjugated.\n'T' The input matrix X will be transposed.\n'C' The input matrix X will be conjugated and transposed."
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.dotu",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.dotu",
-    "category": "Function",
-    "text": "dotu(n, X, incx, Y, incy)\n\nDot function for two complex vectors consisting of n elements of array X with stride incx and n elements of array Y with stride incy.\n\nExamples\n\njulia> Base.BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)\n-10.0 + 10.0im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.dotc",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.dotc",
-    "category": "Function",
-    "text": "dotc(n, X, incx, U, incy)\n\nDot function for two complex vectors, consisting of n elements of array X with stride incx and n elements of array U with stride incy, conjugating the first vector.\n\nExamples\n\njulia> Base.BLAS.dotc(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)\n10.0 - 10.0im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.blascopy!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.blascopy!",
-    "category": "Function",
-    "text": "blascopy!(n, X, incx, Y, incy)\n\nCopy n elements of array X with stride incx to array Y with stride incy. Returns Y.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.nrm2",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.nrm2",
-    "category": "Function",
-    "text": "nrm2(n, X, incx)\n\n2-norm of a vector consisting of n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.nrm2(4, fill(1.0, 8), 2)\n2.0\n\njulia> Base.BLAS.nrm2(1, fill(1.0, 8), 2)\n1.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.asum",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.asum",
-    "category": "Function",
-    "text": "asum(n, X, incx)\n\nSum of the absolute values of the first n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.asum(5, fill(1.0im, 10), 2)\n5.0\n\njulia> Base.BLAS.asum(2, fill(1.0im, 10), 5)\n2.0\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.axpy!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.axpy!",
-    "category": "Function",
-    "text": "axpy!(a, X, Y)\n\nOverwrite Y with a*X + Y, where a is a scalar. Return Y.\n\nExamples\n\njulia> x = [1; 2; 3];\n\njulia> y = [4; 5; 6];\n\njulia> Base.BLAS.axpy!(2, x, y)\n3-element Array{Int64,1}:\n  6\n  9\n 12\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.scal!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.scal!",
-    "category": "Function",
-    "text": "scal!(n, a, X, incx)\n\nOverwrite X with a*X for the first n elements of array X with stride incx. Returns X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.scal",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.scal",
-    "category": "Function",
-    "text": "scal(n, a, X, incx)\n\nReturn X scaled by a for the first n elements of array X with stride incx.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.ger!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.ger!",
-    "category": "Function",
-    "text": "ger!(alpha, x, y, A)\n\nRank-1 update of the matrix A with vectors x and y as alpha*x*y' + A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.syr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.syr!",
-    "category": "Function",
-    "text": "syr!(uplo, alpha, x, A)\n\nRank-1 update of the symmetric matrix A with vector x as alpha*x*transpose(x) + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.syrk!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.syrk!",
-    "category": "Function",
-    "text": "syrk!(uplo, trans, alpha, A, beta, C)\n\nRank-k update of the symmetric matrix C as alpha*A*transpose(A) + beta*C or alpha*transpose(A)*A + beta*C according to trans. Only the uplo triangle of C is used. Returns C.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.syrk",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.syrk",
-    "category": "Function",
-    "text": "syrk(uplo, trans, alpha, A)\n\nReturns either the upper triangle or the lower triangle of A, according to uplo, of alpha*A*transpose(A) or alpha*transpose(A)*A, according to trans.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.her!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.her!",
-    "category": "Function",
-    "text": "her!(uplo, alpha, x, A)\n\nMethods for complex arrays only. Rank-1 update of the Hermitian matrix A with vector x as alpha*x*x' + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.herk!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.herk!",
-    "category": "Function",
-    "text": "herk!(uplo, trans, alpha, A, beta, C)\n\nMethods for complex arrays only. Rank-k update of the Hermitian matrix C as alpha*A*A' + beta*C or alpha*A'*A + beta*C according to trans. Only the uplo triangle of C is updated. Returns C.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.herk",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.herk",
-    "category": "Function",
-    "text": "herk(uplo, trans, alpha, A)\n\nMethods for complex arrays only. Returns the uplo triangle of alpha*A*A' or alpha*A'*A, according to trans.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gbmv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gbmv!",
-    "category": "Function",
-    "text": "gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y or alpha*A'*x + beta*y according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals. alpha and beta are scalars. Return the updated y.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gbmv",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gbmv",
-    "category": "Function",
-    "text": "gbmv(trans, m, kl, ku, alpha, A, x)\n\nReturn alpha*A*x or alpha*A'*x according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals, and alpha is a scalar.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.sbmv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.sbmv!",
-    "category": "Function",
-    "text": "sbmv!(uplo, k, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y where A is a a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. The storage layout for A is described the reference BLAS module, level-2 BLAS at http://www.netlib.org/lapack/explore-html/. Only the uplo triangle of A is used.\n\nReturn the updated y.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.sbmv-NTuple{5,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.sbmv",
-    "category": "Method",
-    "text": "sbmv(uplo, k, alpha, A, x)\n\nReturn alpha*A*x where A is a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. Only the uplo triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.sbmv-NTuple{4,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.sbmv",
-    "category": "Method",
-    "text": "sbmv(uplo, k, A, x)\n\nReturn A*x where A is a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. Only the uplo triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemm!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemm!",
-    "category": "Function",
-    "text": "gemm!(tA, tB, alpha, A, B, beta, C)\n\nUpdate C as alpha*A*B + beta*C or the other three variants according to tA and tB. Return the updated C.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemm-NTuple{5,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemm",
-    "category": "Method",
-    "text": "gemm(tA, tB, alpha, A, B)\n\nReturn alpha*A*B or the other three variants according to tA and tB.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemm-NTuple{4,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemm",
-    "category": "Method",
-    "text": "gemm(tA, tB, A, B)\n\nReturn A*B or the other three variants according to tA and tB.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemv!",
-    "category": "Function",
-    "text": "gemv!(tA, alpha, A, x, beta, y)\n\nUpdate the vector y as alpha*A*x + beta*y or alpha*A'x + beta*y according to tA. alpha and beta are scalars. Return the updated y.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemv-NTuple{4,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemv",
-    "category": "Method",
-    "text": "gemv(tA, alpha, A, x)\n\nReturn alpha*A*x or alpha*A'x according to tA. alpha is a scalar.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.gemv-Tuple{Any,Any,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.gemv",
-    "category": "Method",
-    "text": "gemv(tA, A, x)\n\nReturn A*x or A'x according to tA.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symm!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symm!",
-    "category": "Function",
-    "text": "symm!(side, ul, alpha, A, B, beta, C)\n\nUpdate C as alpha*A*B + beta*C or alpha*B*A + beta*C according to side. A is assumed to be symmetric. Only the ul triangle of A is used. Return the updated C.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symm-NTuple{5,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symm",
-    "category": "Method",
-    "text": "symm(side, ul, alpha, A, B)\n\nReturn alpha*A*B or alpha*B*A according to side. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symm-NTuple{4,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symm",
-    "category": "Method",
-    "text": "symm(side, ul, A, B)\n\nReturn A*B or B*A according to side. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symv!",
-    "category": "Function",
-    "text": "symv!(ul, alpha, A, x, beta, y)\n\nUpdate the vector y as alpha*A*x + beta*y. A is assumed to be symmetric. Only the ul triangle of A is used. alpha and beta are scalars. Return the updated y.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symv-NTuple{4,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symv",
-    "category": "Method",
-    "text": "symv(ul, alpha, A, x)\n\nReturn alpha*A*x. A is assumed to be symmetric. Only the ul triangle of A is used. alpha is a scalar.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.symv-Tuple{Any,Any,Any}",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.symv",
-    "category": "Method",
-    "text": "symv(ul, A, x)\n\nReturn A*x. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trmm!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trmm!",
-    "category": "Function",
-    "text": "trmm!(side, ul, tA, dA, alpha, A, B)\n\nUpdate B as alpha*A*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. Returns the updated B.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trmm",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trmm",
-    "category": "Function",
-    "text": "trmm(side, ul, tA, dA, alpha, A, B)\n\nReturns alpha*A*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trsm!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trsm!",
-    "category": "Function",
-    "text": "trsm!(side, ul, tA, dA, alpha, A, B)\n\nOverwrite B with the solution to A*X = alpha*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. Returns the updated B.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trsm",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trsm",
-    "category": "Function",
-    "text": "trsm(side, ul, tA, dA, alpha, A, B)\n\nReturn the solution to A*X = alpha*B or one of the other three variants determined by determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trmv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trmv!",
-    "category": "Function",
-    "text": "trmv!(ul, tA, dA, A, b)\n\nReturn op(A)*b, where op is determined by tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. The multiplication occurs in-place on b.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trmv",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trmv",
-    "category": "Function",
-    "text": "trmv(ul, tA, dA, A, b)\n\nReturn op(A)*b, where op is determined by tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trsv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trsv!",
-    "category": "Function",
-    "text": "trsv!(ul, tA, dA, A, b)\n\nOverwrite b with the solution to A*x = b or one of the other two variants determined by tA and ul. dA determines if the diagonal values are read or are assumed to be all ones. Return the updated b.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.trsv",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.trsv",
-    "category": "Function",
-    "text": "trsv(ul, tA, dA, A, b)\n\nReturn the solution to A*x = b or one of the other two variants determined by tA and ul. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.BLAS.set_num_threads",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.BLAS.set_num_threads",
-    "category": "Function",
-    "text": "set_num_threads(n)\n\nSet the number of threads the BLAS library should use.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.I",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.I",
-    "category": "Constant",
-    "text": "I\n\nAn object of type UniformScaling, representing an identity matrix of any size.\n\nExamples\n\njulia> fill(1, (5,6)) * I == fill(1, (5,6))\ntrue\n\njulia> [1 2im 3; 1im 2 3] * I\n2×3 Array{Complex{Int64},2}:\n 1+0im  0+2im  3+0im\n 0+1im  2+0im  3+0im\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#stdlib-blas-diag-1",
-    "page": "Linear Algebra",
-    "title": "Unit Diagonal",
-    "category": "section",
-    "text": "diag/dX Meaning\n'N' The diagonal values of the matrix X will be read.\n'U' The diagonal of the matrix X is assumed to be all ones.Base.LinAlg.BLAS.dotu\nBase.LinAlg.BLAS.dotc\nBase.LinAlg.BLAS.blascopy!\nBase.LinAlg.BLAS.nrm2\nBase.LinAlg.BLAS.asum\nBase.LinAlg.axpy!\nBase.LinAlg.BLAS.scal!\nBase.LinAlg.BLAS.scal\nBase.LinAlg.BLAS.ger!\nBase.LinAlg.BLAS.syr!\nBase.LinAlg.BLAS.syrk!\nBase.LinAlg.BLAS.syrk\nBase.LinAlg.BLAS.her!\nBase.LinAlg.BLAS.herk!\nBase.LinAlg.BLAS.herk\nBase.LinAlg.BLAS.gbmv!\nBase.LinAlg.BLAS.gbmv\nBase.LinAlg.BLAS.sbmv!\nBase.LinAlg.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.gemm!\nBase.LinAlg.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.gemm(::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.gemv!\nBase.LinAlg.BLAS.gemv(::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.gemv(::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.symm!\nBase.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.symv!\nBase.LinAlg.BLAS.symv(::Any, ::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.symv(::Any, ::Any, ::Any)\nBase.LinAlg.BLAS.trmm!\nBase.LinAlg.BLAS.trmm\nBase.LinAlg.BLAS.trsm!\nBase.LinAlg.BLAS.trsm\nBase.LinAlg.BLAS.trmv!\nBase.LinAlg.BLAS.trmv\nBase.LinAlg.BLAS.trsv!\nBase.LinAlg.BLAS.trsv\nBase.LinAlg.BLAS.set_num_threads\nBase.LinAlg.I"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gbtrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gbtrf!",
-    "category": "Function",
-    "text": "gbtrf!(kl, ku, m, AB) -> (AB, ipiv)\n\nCompute the LU factorization of a banded matrix AB. kl is the first subdiagonal containing a nonzero band, ku is the last superdiagonal containing one, and m is the first dimension of the matrix AB. Returns the LU factorization in-place and ipiv, the vector of pivots used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gbtrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gbtrs!",
-    "category": "Function",
-    "text": "gbtrs!(trans, kl, ku, m, AB, ipiv, B)\n\nSolve the equation AB * X = B. trans determines the orientation of AB. It may be N (no transpose), T (transpose), or C (conjugate transpose). kl is the first subdiagonal containing a nonzero band, ku is the last superdiagonal containing one, and m is the first dimension of the matrix AB. ipiv is the vector of pivots returned from gbtrf!. Returns the vector or matrix X, overwriting B in-place.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gebal!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gebal!",
-    "category": "Function",
-    "text": "gebal!(job, A) -> (ilo, ihi, scale)\n\nBalance the matrix A before computing its eigensystem or Schur factorization. job can be one of N (A will not be permuted or scaled), P (A will only be permuted), S (A will only be scaled), or B (A will be both permuted and scaled). Modifies A in-place and returns ilo, ihi, and scale. If permuting was turned on, A[i,j] = 0 if j > i and 1 < j < ilo or j > ihi. scale contains information about the scaling/permutations performed.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gebak!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gebak!",
-    "category": "Function",
-    "text": "gebak!(job, side, ilo, ihi, scale, V)\n\nTransform the eigenvectors V of a matrix balanced using gebal! to the unscaled/unpermuted eigenvectors of the original matrix. Modifies V in-place. side can be L (left eigenvectors are transformed) or R (right eigenvectors are transformed).\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gebrd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gebrd!",
-    "category": "Function",
-    "text": "gebrd!(A) -> (A, d, e, tauq, taup)\n\nReduce A in-place to bidiagonal form A = QBP'. Returns A, containing the bidiagonal matrix B; d, containing the diagonal elements of B; e, containing the off-diagonal elements of B; tauq, containing the elementary reflectors representing Q; and taup, containing the elementary reflectors representing P.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gelqf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gelqf!",
-    "category": "Function",
-    "text": "gelqf!(A, tau)\n\nCompute the LQ factorization of A, A = LQ. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngelqf!(A) -> (A, tau)\n\nCompute the LQ factorization of A, A = LQ.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geqlf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geqlf!",
-    "category": "Function",
-    "text": "geqlf!(A, tau)\n\nCompute the QL factorization of A, A = QL. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngeqlf!(A) -> (A, tau)\n\nCompute the QL factorization of A, A = QL.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geqrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geqrf!",
-    "category": "Function",
-    "text": "geqrf!(A, tau)\n\nCompute the QR factorization of A, A = QR. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngeqrf!(A) -> (A, tau)\n\nCompute the QR factorization of A, A = QR.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geqp3!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geqp3!",
-    "category": "Function",
-    "text": "geqp3!(A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3. P is a pivoting matrix, represented by jpvt. tau stores the elementary reflectors. jpvt must have length length greater than or equal to n if A is an (m x n) matrix. tau must have length greater than or equal to the smallest dimension of A.\n\nA, jpvt, and tau are modified in-place.\n\n\n\ngeqp3!(A, jpvt) -> (A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3. P is a pivoting matrix, represented by jpvt. jpvt must have length greater than or equal to n if A is an (m x n) matrix.\n\nReturns A and jpvt, modified in-place, and tau, which stores the elementary reflectors.\n\n\n\ngeqp3!(A) -> (A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3.\n\nReturns A, modified in-place, jpvt, which represents the pivoting matrix P, and tau, which stores the elementary reflectors.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gerqf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gerqf!",
-    "category": "Function",
-    "text": "gerqf!(A, tau)\n\nCompute the RQ factorization of A, A = RQ. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngerqf!(A) -> (A, tau)\n\nCompute the RQ factorization of A, A = RQ.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geqrt!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geqrt!",
-    "category": "Function",
-    "text": "geqrt!(A, T)\n\nCompute the blocked QR factorization of A, A = QR. T contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization. The first dimension of T sets the block size and it must be between 1 and n. The second dimension of T must equal the smallest dimension of A.\n\nReturns A and T modified in-place.\n\n\n\ngeqrt!(A, nb) -> (A, T)\n\nCompute the blocked QR factorization of A, A = QR. nb sets the block size and it must be between 1 and n, the second dimension of A.\n\nReturns A, modified in-place, and T, which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geqrt3!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geqrt3!",
-    "category": "Function",
-    "text": "geqrt3!(A, T)\n\nRecursively computes the blocked QR factorization of A, A = QR. T contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.  The first dimension of T sets the block size and it must be between 1 and n. The second dimension of T must equal the smallest dimension of A.\n\nReturns A and T modified in-place.\n\n\n\ngeqrt3!(A) -> (A, T)\n\nRecursively computes the blocked QR factorization of A, A = QR.\n\nReturns A, modified in-place, and T, which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.getrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.getrf!",
-    "category": "Function",
-    "text": "getrf!(A) -> (A, ipiv, info)\n\nCompute the pivoted LU factorization of A, A = LU.\n\nReturns A, modified in-place, ipiv, the pivoting information, and an info code which indicates success (info = 0), a singular value in U (info = i, in which case U[i,i] is singular), or an error code (info < 0).\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.tzrzf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.tzrzf!",
-    "category": "Function",
-    "text": "tzrzf!(A) -> (A, tau)\n\nTransforms the upper trapezoidal matrix A to upper triangular form in-place. Returns A and tau, the scalar parameters for the elementary reflectors of the transformation.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ormrz!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ormrz!",
-    "category": "Function",
-    "text": "ormrz!(side, trans, A, tau, C)\n\nMultiplies the matrix C by Q from the transformation supplied by tzrzf!. Depending on side or trans the multiplication can be left-sided (side = L, Q*C) or right-sided (side = R, C*Q) and Q can be unmodified (trans = N), transposed (trans = T), or conjugate transposed (trans = C). Returns matrix C which is modified in-place with the result of the multiplication.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gels!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gels!",
-    "category": "Function",
-    "text": "gels!(trans, A, B) -> (F, B, ssr)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B using a QR or LQ factorization. Modifies the matrix/vector B in place with the solution. A is overwritten with its QR or LQ factorization. trans may be one of N (no modification), T (transpose), or C (conjugate transpose). gels! searches for the minimum norm/least squares solution. A may be under or over determined. The solution is returned in B.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gesv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gesv!",
-    "category": "Function",
-    "text": "gesv!(A, B) -> (B, A, ipiv)\n\nSolves the linear equation A * X = B where A is a square matrix using the LU factorization of A. A is overwritten with its LU factorization and B is overwritten with the solution X. ipiv contains the pivoting information for the LU factorization of A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.getrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.getrs!",
-    "category": "Function",
-    "text": "getrs!(trans, A, ipiv, B)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B for square A. Modifies the matrix/vector B in place with the solution. A is the LU factorization from getrf!, with ipiv the pivoting information. trans may be one of N (no modification), T (transpose), or C (conjugate transpose).\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.getri!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.getri!",
-    "category": "Function",
-    "text": "getri!(A, ipiv)\n\nComputes the inverse of A, using its LU factorization found by getrf!. ipiv is the pivot information output and A contains the LU factorization of getrf!. A is overwritten with its inverse.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gesvx!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gesvx!",
-    "category": "Function",
-    "text": "gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)\n\nSolves the linear equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization of A. fact may be E, in which case A will be equilibrated and copied to AF; F, in which case AF and ipiv from a previous LU factorization are inputs; or N, in which case A will be copied to AF and then factored. If fact = F, equed may be N, meaning A has not been equilibrated; R, meaning A was multiplied by Diagonal(R) from the left; C, meaning A was multiplied by Diagonal(C) from the right; or B, meaning A was multiplied by Diagonal(R) from the left and Diagonal(C) from the right. If fact = F and equed = R or B the elements of R must all be positive. If fact = F and equed = C or B the elements of C must all be positive.\n\nReturns the solution X; equed, which is an output if fact is not N, and describes the equilibration that was performed; R, the row equilibration diagonal; C, the column equilibration diagonal; B, which may be overwritten with its equilibrated form Diagonal(R)*B (if trans = N and equed = R,B) or Diagonal(C)*B (if trans = T,C and equed = C,B); rcond, the reciprocal condition number of A after equilbrating; ferr, the forward error bound for each solution vector in X; berr, the forward error bound for each solution vector in X; and work, the reciprocal pivot growth factor.\n\n\n\ngesvx!(A, B)\n\nThe no-equilibration, no-transpose simplification of gesvx!.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gelsd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gelsd!",
-    "category": "Function",
-    "text": "gelsd!(A, B, rcond) -> (B, rnk)\n\nComputes the least norm solution of A * X = B by finding the SVD factorization of A, then dividing-and-conquering the problem. B is overwritten with the solution X. Singular values below rcond will be treated as zero. Returns the solution in B and the effective rank of A in rnk.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gelsy!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gelsy!",
-    "category": "Function",
-    "text": "gelsy!(A, B, rcond) -> (B, rnk)\n\nComputes the least norm solution of A * X = B by finding the full QR factorization of A, then dividing-and-conquering the problem. B is overwritten with the solution X. Singular values below rcond will be treated as zero. Returns the solution in B and the effective rank of A in rnk.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gglse!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gglse!",
-    "category": "Function",
-    "text": "gglse!(A, c, B, d) -> (X,res)\n\nSolves the equation A * x = c where x is subject to the equality constraint B * x = d. Uses the formula ||c - A*x||^2 = 0 to solve. Returns X and the residual sum-of-squares.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geev!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geev!",
-    "category": "Function",
-    "text": "geev!(jobvl, jobvr, A) -> (W, VL, VR)\n\nFinds the eigensystem of A. If jobvl = N, the left eigenvectors of A aren't computed. If jobvr = N, the right eigenvectors of A aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed. Returns the eigenvalues in W, the right eigenvectors in VR, and the left eigenvectors in VL.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gesdd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gesdd!",
-    "category": "Function",
-    "text": "gesdd!(job, A) -> (U, S, VT)\n\nFinds the singular value decomposition of A, A = U * S * V', using a divide and conquer approach. If job = A, all the columns of U and the rows of V' are computed. If job = N, no columns of U or rows of V' are computed. If job = O, A is overwritten with the columns of (thin) U and the rows of (thin) V'. If job = S, the columns of (thin) U and the rows of (thin) V' are computed and returned separately.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gesvd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gesvd!",
-    "category": "Function",
-    "text": "gesvd!(jobu, jobvt, A) -> (U, S, VT)\n\nFinds the singular value decomposition of A, A = U * S * V'. If jobu = A, all the columns of U are computed. If jobvt = A all the rows of V' are computed. If jobu = N, no columns of U are computed. If jobvt = N no rows of V' are computed. If jobu = O, A is overwritten with the columns of (thin) U. If jobvt = O, A is overwritten with the rows of (thin) V'. If jobu = S, the columns of (thin) U are computed and returned separately. If jobvt = S the rows of (thin) V' are computed and returned separately. jobu and jobvt can't both be O.\n\nReturns U, S, and Vt, where S are the singular values of A.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ggsvd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ggsvd!",
-    "category": "Function",
-    "text": "ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)\n\nFinds the generalized singular value decomposition of A and B, U'*A*Q = D1*R and V'*B*Q = D2*R. D1 has alpha on its diagonal and D2 has beta on its diagonal. If jobu = U, the orthogonal/unitary matrix U is computed. If jobv = V the orthogonal/unitary matrix V is computed. If jobq = Q, the orthogonal/unitary matrix Q is computed. If jobu, jobv or jobq is N, that matrix is not computed. This function is only available in LAPACK versions prior to 3.6.0.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ggsvd3!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ggsvd3!",
-    "category": "Function",
-    "text": "ggsvd3!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)\n\nFinds the generalized singular value decomposition of A and B, U'*A*Q = D1*R and V'*B*Q = D2*R. D1 has alpha on its diagonal and D2 has beta on its diagonal. If jobu = U, the orthogonal/unitary matrix U is computed. If jobv = V the orthogonal/unitary matrix V is computed. If jobq = Q, the orthogonal/unitary matrix Q is computed. If jobu, jobv, or jobq is N, that matrix is not computed. This function requires LAPACK 3.6.0.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.geevx!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.geevx!",
-    "category": "Function",
-    "text": "geevx!(balanc, jobvl, jobvr, sense, A) -> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)\n\nFinds the eigensystem of A with matrix balancing. If jobvl = N, the left eigenvectors of A aren't computed. If jobvr = N, the right eigenvectors of A aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed. If balanc = N, no balancing is performed. If balanc = P, A is permuted but not scaled. If balanc = S, A is scaled but not permuted. If balanc = B, A is permuted and scaled. If sense = N, no reciprocal condition numbers are computed. If sense = E, reciprocal condition numbers are computed for the eigenvalues only. If sense = V, reciprocal condition numbers are computed for the right eigenvectors only. If sense = B, reciprocal condition numbers are computed for the right eigenvectors and the eigenvectors. If sense = E,B, the right and left eigenvectors must be computed.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ggev!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ggev!",
-    "category": "Function",
-    "text": "ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)\n\nFinds the generalized eigendecomposition of A and B. If jobvl = N, the left eigenvectors aren't computed. If jobvr = N, the right eigenvectors aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gtsv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gtsv!",
-    "category": "Function",
-    "text": "gtsv!(dl, d, du, B)\n\nSolves the equation A * X = B where A is a tridiagonal matrix with dl on the subdiagonal, d on the diagonal, and du on the superdiagonal.\n\nOverwrites B with the solution X and returns it.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gttrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gttrf!",
-    "category": "Function",
-    "text": "gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)\n\nFinds the LU factorization of a tridiagonal matrix with dl on the subdiagonal, d on the diagonal, and du on the superdiagonal.\n\nModifies dl, d, and du in-place and returns them and the second superdiagonal du2 and the pivoting vector ipiv.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gttrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gttrs!",
-    "category": "Function",
-    "text": "gttrs!(trans, dl, d, du, du2, ipiv, B)\n\nSolves the equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization computed by gttrf!. B is overwritten with the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.orglq!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.orglq!",
-    "category": "Function",
-    "text": "orglq!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a LQ factorization after calling gelqf! on A. Uses the output of gelqf!. A is overwritten by Q.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.orgqr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.orgqr!",
-    "category": "Function",
-    "text": "orgqr!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a QR factorization after calling geqrf! on A. Uses the output of geqrf!. A is overwritten by Q.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.orgql!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.orgql!",
-    "category": "Function",
-    "text": "orgql!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a QL factorization after calling geqlf! on A. Uses the output of geqlf!. A is overwritten by Q.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.orgrq!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.orgrq!",
-    "category": "Function",
-    "text": "orgrq!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a RQ factorization after calling gerqf! on A. Uses the output of gerqf!. A is overwritten by Q.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ormlq!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ormlq!",
-    "category": "Function",
-    "text": "ormlq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a LQ factorization of A computed using gelqf!. C is overwritten.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ormqr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ormqr!",
-    "category": "Function",
-    "text": "ormqr!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrf!. C is overwritten.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ormql!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ormql!",
-    "category": "Function",
-    "text": "ormql!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QL factorization of A computed using geqlf!. C is overwritten.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ormrq!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ormrq!",
-    "category": "Function",
-    "text": "ormrq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a RQ factorization of A computed using gerqf!. C is overwritten.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gemqrt!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gemqrt!",
-    "category": "Function",
-    "text": "gemqrt!(side, trans, V, T, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrt!. C is overwritten.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.posv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.posv!",
-    "category": "Function",
-    "text": "posv!(uplo, A, B) -> (A, B)\n\nFinds the solution to A * X = B where A is a symmetric or Hermitian positive definite matrix. If uplo = U the upper Cholesky decomposition of A is computed. If uplo = L the lower Cholesky decomposition of A is computed. A is overwritten by its Cholesky decomposition. B is overwritten with the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.potrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.potrf!",
-    "category": "Function",
-    "text": "potrf!(uplo, A)\n\nComputes the Cholesky (upper if uplo = U, lower if uplo = L) decomposition of positive-definite matrix A. A is overwritten and returned with an info code.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.potri!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.potri!",
-    "category": "Function",
-    "text": "potri!(uplo, A)\n\nComputes the inverse of positive-definite matrix A after calling potrf! to find its (upper if uplo = U, lower if uplo = L) Cholesky decomposition.\n\nA is overwritten by its inverse and returned.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.potrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.potrs!",
-    "category": "Function",
-    "text": "potrs!(uplo, A, B)\n\nFinds the solution to A * X = B where A is a symmetric or Hermitian positive definite matrix whose Cholesky decomposition was computed by potrf!. If uplo = U the upper Cholesky decomposition of A was computed. If uplo = L the lower Cholesky decomposition of A was computed. B is overwritten with the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.pstrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.pstrf!",
-    "category": "Function",
-    "text": "pstrf!(uplo, A, tol) -> (A, piv, rank, info)\n\nComputes the (upper if uplo = U, lower if uplo = L) pivoted Cholesky decomposition of positive-definite matrix A with a user-set tolerance tol. A is overwritten by its Cholesky decomposition.\n\nReturns A, the pivots piv, the rank of A, and an info code. If info = 0, the factorization succeeded. If info = i > 0, then A is indefinite or rank-deficient.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.ptsv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.ptsv!",
-    "category": "Function",
-    "text": "ptsv!(D, E, B)\n\nSolves A * X = B for positive-definite tridiagonal A. D is the diagonal of A and E is the off-diagonal. B is overwritten with the solution X and returned.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.pttrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.pttrf!",
-    "category": "Function",
-    "text": "pttrf!(D, E)\n\nComputes the LDLt factorization of a positive-definite tridiagonal matrix with D as diagonal and E as off-diagonal. D and E are overwritten and returned.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.pttrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.pttrs!",
-    "category": "Function",
-    "text": "pttrs!(D, E, B)\n\nSolves A * X = B for positive-definite tridiagonal A with diagonal D and off-diagonal E after computing A's LDLt factorization using pttrf!. B is overwritten with the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trtri!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trtri!",
-    "category": "Function",
-    "text": "trtri!(uplo, diag, A)\n\nFinds the inverse of (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. A is overwritten with its inverse.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trtrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trtrs!",
-    "category": "Function",
-    "text": "trtrs!(uplo, trans, diag, A, B)\n\nSolves A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) for (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. B is overwritten with the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trcon!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trcon!",
-    "category": "Function",
-    "text": "trcon!(norm, uplo, diag, A)\n\nFinds the reciprocal condition number of (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. If norm = I, the condition number is found in the infinity norm. If norm = O or 1, the condition number is found in the one norm.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trevc!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trevc!",
-    "category": "Function",
-    "text": "trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))\n\nFinds the eigensystem of an upper triangular matrix T. If side = R, the right eigenvectors are computed. If side = L, the left eigenvectors are computed. If side = B, both sets are computed. If howmny = A, all eigenvectors are found. If howmny = B, all eigenvectors are found and backtransformed using VL and VR. If howmny = S, only the eigenvectors corresponding to the values in select are computed.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trrfs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trrfs!",
-    "category": "Function",
-    "text": "trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)\n\nEstimates the error in the solution to A * X = B (trans = N), transpose(A) * X = B (trans = T), adjoint(A) * X = B (trans = C) for side = L, or the equivalent equations a right-handed side = R X * A after computing X using trtrs!. If uplo = U, A is upper triangular. If uplo = L, A is lower triangular. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. Ferr and Berr are optional inputs. Ferr is the forward error and Berr is the backward error, each component-wise.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.stev!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.stev!",
-    "category": "Function",
-    "text": "stev!(job, dv, ev) -> (dv, Zmat)\n\nComputes the eigensystem for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If job = N only the eigenvalues are found and returned in dv. If job = V then the eigenvectors are also found and returned in Zmat.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.stebz!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.stebz!",
-    "category": "Function",
-    "text": "stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)\n\nComputes the eigenvalues for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. If order = B, eigvalues are ordered within a block. If order = E, they are ordered across all the blocks. abstol can be set as a tolerance for convergence.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.stegr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.stegr!",
-    "category": "Function",
-    "text": "stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)\n\nComputes the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. The eigenvalues are returned in w and the eigenvectors in Z.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.stein!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.stein!",
-    "category": "Function",
-    "text": "stein!(dv, ev_in, w_in, iblock_in, isplit_in)\n\nComputes the eigenvectors for a symmetric tridiagonal matrix with dv as diagonal and ev_in as off-diagonal. w_in specifies the input eigenvalues for which to find corresponding eigenvectors. iblock_in specifies the submatrices corresponding to the eigenvalues in w_in. isplit_in specifies the splitting points between the submatrix blocks.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.syconv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.syconv!",
-    "category": "Function",
-    "text": "syconv!(uplo, A, ipiv) -> (A, work)\n\nConverts a symmetric matrix A (which has been factorized into a triangular matrix) into two matrices L and D. If uplo = U, A is upper triangular. If uplo = L, it is lower triangular. ipiv is the pivot vector from the triangular factorization. A is overwritten by L and D.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.sysv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.sysv!",
-    "category": "Function",
-    "text": "sysv!(uplo, A, B) -> (B, A, ipiv)\n\nFinds the solution to A * X = B for symmetric matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X. A is overwritten by its Bunch-Kaufman factorization. ipiv contains pivoting information about the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.sytrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.sytrf!",
-    "category": "Function",
-    "text": "sytrf!(uplo, A) -> (A, ipiv, info)\n\nComputes the Bunch-Kaufman factorization of a symmetric matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored.\n\nReturns A, overwritten by the factorization, a pivot vector ipiv, and the error code info which is a non-negative integer. If info is positive the matrix is singular and the diagonal part of the factorization is exactly zero at position info.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.sytri!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.sytri!",
-    "category": "Function",
-    "text": "sytri!(uplo, A, ipiv)\n\nComputes the inverse of a symmetric matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. A is overwritten by its inverse.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.sytrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.sytrs!",
-    "category": "Function",
-    "text": "sytrs!(uplo, A, ipiv, B)\n\nSolves the equation A * X = B for a symmetric matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.hesv!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.hesv!",
-    "category": "Function",
-    "text": "hesv!(uplo, A, B) -> (B, A, ipiv)\n\nFinds the solution to A * X = B for Hermitian matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X. A is overwritten by its Bunch-Kaufman factorization. ipiv contains pivoting information about the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.hetrf!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.hetrf!",
-    "category": "Function",
-    "text": "hetrf!(uplo, A) -> (A, ipiv, info)\n\nComputes the Bunch-Kaufman factorization of a Hermitian matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored.\n\nReturns A, overwritten by the factorization, a pivot vector ipiv, and the error code info which is a non-negative integer. If info is positive the matrix is singular and the diagonal part of the factorization is exactly zero at position info.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.hetri!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.hetri!",
-    "category": "Function",
-    "text": "hetri!(uplo, A, ipiv)\n\nComputes the inverse of a Hermitian matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. A is overwritten by its inverse.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.hetrs!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.hetrs!",
-    "category": "Function",
-    "text": "hetrs!(uplo, A, ipiv, B)\n\nSolves the equation A * X = B for a Hermitian matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.syev!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.syev!",
-    "category": "Function",
-    "text": "syev!(jobz, uplo, A)\n\nFinds the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A. If uplo = U, the upper triangle of A is used. If uplo = L, the lower triangle of A is used.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.syevr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.syevr!",
-    "category": "Function",
-    "text": "syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)\n\nFinds the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A. If uplo = U, the upper triangle of A is used. If uplo = L, the lower triangle of A is used. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. abstol can be set as a tolerance for convergence.\n\nThe eigenvalues are returned in W and the eigenvectors in Z.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.sygvd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.sygvd!",
-    "category": "Function",
-    "text": "sygvd!(itype, jobz, uplo, A, B) -> (w, A, B)\n\nFinds the generalized eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A and symmetric positive-definite matrix B. If uplo = U, the upper triangles of A and B are used. If uplo = L, the lower triangles of A and B are used. If itype = 1, the problem to solve is A * x = lambda * B * x. If itype = 2, the problem to solve is A * B * x = lambda * x. If itype = 3, the problem to solve is B * A * x = lambda * x.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.bdsqr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.bdsqr!",
-    "category": "Function",
-    "text": "bdsqr!(uplo, d, e_, Vt, U, C) -> (d, Vt, U, C)\n\nComputes the singular value decomposition of a bidiagonal matrix with d on the diagonal and e_ on the off-diagonal. If uplo = U, e_ is the superdiagonal. If uplo = L, e_ is the subdiagonal. Can optionally also compute the product Q' * C.\n\nReturns the singular values in d, and the matrix C overwritten with Q' * C.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.bdsdc!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.bdsdc!",
-    "category": "Function",
-    "text": "bdsdc!(uplo, compq, d, e_) -> (d, e, u, vt, q, iq)\n\nComputes the singular value decomposition of a bidiagonal matrix with d on the diagonal and e_ on the off-diagonal using a divide and conqueq method. If uplo = U, e_ is the superdiagonal. If uplo = L, e_ is the subdiagonal. If compq = N, only the singular values are found. If compq = I, the singular values and vectors are found. If compq = P, the singular values and vectors are found in compact form. Only works for real types.\n\nReturns the singular values in d, and if compq = P, the compact singular vectors in iq.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gecon!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gecon!",
-    "category": "Function",
-    "text": "gecon!(normtype, A, anorm)\n\nFinds the reciprocal condition number of matrix A. If normtype = I, the condition number is found in the infinity norm. If normtype = O or 1, the condition number is found in the one norm. A must be the result of getrf! and anorm is the norm of A in the relevant norm.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gehrd!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gehrd!",
-    "category": "Function",
-    "text": "gehrd!(ilo, ihi, A) -> (A, tau)\n\nConverts a matrix A to Hessenberg form. If A is balanced with gebal! then ilo and ihi are the outputs of gebal!. Otherwise they should be ilo = 1 and ihi = size(A,2). tau contains the elementary reflectors of the factorization.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.orghr!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.orghr!",
-    "category": "Function",
-    "text": "orghr!(ilo, ihi, A, tau)\n\nExplicitly finds Q, the orthogonal/unitary matrix from gehrd!. ilo, ihi, A, and tau must correspond to the input/output to gehrd!.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gees!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gees!",
-    "category": "Function",
-    "text": "gees!(jobvs, A) -> (A, vs, w)\n\nComputes the eigenvalues (jobvs = N) or the eigenvalues and Schur vectors (jobvs = V) of matrix A. A is overwritten by its Schur form.\n\nReturns A, vs containing the Schur vectors, and w, containing the eigenvalues.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.gges!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.gges!",
-    "category": "Function",
-    "text": "gges!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)\n\nComputes the generalized eigenvalues, generalized Schur form, left Schur vectors (jobsvl = V), or right Schur vectors (jobvsr = V) of A and B.\n\nThe generalized eigenvalues are returned in alpha and beta. The left Schur vectors are returned in vsl and the right Schur vectors are returned in vsr.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trexc!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trexc!",
-    "category": "Function",
-    "text": "trexc!(compq, ifst, ilst, T, Q) -> (T, Q)\n\nReorder the Schur factorization of a matrix. If compq = V, the Schur vectors Q are reordered. If compq = N they are not modified. ifst and ilst specify the reordering of the vectors.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trsen!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trsen!",
-    "category": "Function",
-    "text": "trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)\n\nReorder the Schur factorization of a matrix and optionally finds reciprocal condition numbers. If job = N, no condition numbers are found. If job = E, only the condition number for this cluster of eigenvalues is found. If job = V, only the condition number for the invariant subspace is found. If job = B then the condition numbers for the cluster and subspace are found. If compq = V the Schur vectors Q are updated. If compq = N the Schur vectors are not modified. select determines which eigenvalues are in the cluster.\n\nReturns T, Q, reordered eigenvalues in w, the condition number of the cluster of eigenvalues s, and the condition number of the invariant subspace sep.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.tgsen!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.tgsen!",
-    "category": "Function",
-    "text": "tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)\n\nReorders the vectors of a generalized Schur decomposition. select specifices the eigenvalues in each cluster.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#Base.LinAlg.LAPACK.trsyl!",
-    "page": "Linear Algebra",
-    "title": "Base.LinAlg.LAPACK.trsyl!",
-    "category": "Function",
-    "text": "trsyl!(transa, transb, A, B, C, isgn=1) -> (C, scale)\n\nSolves the Sylvester matrix equation A * X +/- X * B = scale*C where A and B are both quasi-upper triangular. If transa = N, A is not modified. If transa = T, A is transposed. If transa = C, A is conjugate transposed. Similarly for transb and B. If isgn = 1, the equation A * X + X * B = scale * C is solved. If isgn = -1, the equation A * X - X * B = scale * C is solved.\n\nReturns X (overwriting C) and scale.\n\n\n\n"
-},
-
-{
-    "location": "base/linalg/#LAPACK-Functions-1",
-    "page": "Linear Algebra",
-    "title": "LAPACK Functions",
-    "category": "section",
-    "text": "Base.LinAlg.LAPACK provides wrappers for some of the LAPACK functions for linear algebra.  Those functions that overwrite one of the input arrays have names ending in '!'.Usually a function has 4 methods defined, one each for Float64, Float32, ComplexF64 and ComplexF32 arrays.Note that the LAPACK API provided by Julia can and will change in the future. Since this API is not user-facing, there is no commitment to support/deprecate this specific set of functions in future releases.Base.LinAlg.LAPACK.gbtrf!\nBase.LinAlg.LAPACK.gbtrs!\nBase.LinAlg.LAPACK.gebal!\nBase.LinAlg.LAPACK.gebak!\nBase.LinAlg.LAPACK.gebrd!\nBase.LinAlg.LAPACK.gelqf!\nBase.LinAlg.LAPACK.geqlf!\nBase.LinAlg.LAPACK.geqrf!\nBase.LinAlg.LAPACK.geqp3!\nBase.LinAlg.LAPACK.gerqf!\nBase.LinAlg.LAPACK.geqrt!\nBase.LinAlg.LAPACK.geqrt3!\nBase.LinAlg.LAPACK.getrf!\nBase.LinAlg.LAPACK.tzrzf!\nBase.LinAlg.LAPACK.ormrz!\nBase.LinAlg.LAPACK.gels!\nBase.LinAlg.LAPACK.gesv!\nBase.LinAlg.LAPACK.getrs!\nBase.LinAlg.LAPACK.getri!\nBase.LinAlg.LAPACK.gesvx!\nBase.LinAlg.LAPACK.gelsd!\nBase.LinAlg.LAPACK.gelsy!\nBase.LinAlg.LAPACK.gglse!\nBase.LinAlg.LAPACK.geev!\nBase.LinAlg.LAPACK.gesdd!\nBase.LinAlg.LAPACK.gesvd!\nBase.LinAlg.LAPACK.ggsvd!\nBase.LinAlg.LAPACK.ggsvd3!\nBase.LinAlg.LAPACK.geevx!\nBase.LinAlg.LAPACK.ggev!\nBase.LinAlg.LAPACK.gtsv!\nBase.LinAlg.LAPACK.gttrf!\nBase.LinAlg.LAPACK.gttrs!\nBase.LinAlg.LAPACK.orglq!\nBase.LinAlg.LAPACK.orgqr!\nBase.LinAlg.LAPACK.orgql!\nBase.LinAlg.LAPACK.orgrq!\nBase.LinAlg.LAPACK.ormlq!\nBase.LinAlg.LAPACK.ormqr!\nBase.LinAlg.LAPACK.ormql!\nBase.LinAlg.LAPACK.ormrq!\nBase.LinAlg.LAPACK.gemqrt!\nBase.LinAlg.LAPACK.posv!\nBase.LinAlg.LAPACK.potrf!\nBase.LinAlg.LAPACK.potri!\nBase.LinAlg.LAPACK.potrs!\nBase.LinAlg.LAPACK.pstrf!\nBase.LinAlg.LAPACK.ptsv!\nBase.LinAlg.LAPACK.pttrf!\nBase.LinAlg.LAPACK.pttrs!\nBase.LinAlg.LAPACK.trtri!\nBase.LinAlg.LAPACK.trtrs!\nBase.LinAlg.LAPACK.trcon!\nBase.LinAlg.LAPACK.trevc!\nBase.LinAlg.LAPACK.trrfs!\nBase.LinAlg.LAPACK.stev!\nBase.LinAlg.LAPACK.stebz!\nBase.LinAlg.LAPACK.stegr!\nBase.LinAlg.LAPACK.stein!\nBase.LinAlg.LAPACK.syconv!\nBase.LinAlg.LAPACK.sysv!\nBase.LinAlg.LAPACK.sytrf!\nBase.LinAlg.LAPACK.sytri!\nBase.LinAlg.LAPACK.sytrs!\nBase.LinAlg.LAPACK.hesv!\nBase.LinAlg.LAPACK.hetrf!\nBase.LinAlg.LAPACK.hetri!\nBase.LinAlg.LAPACK.hetrs!\nBase.LinAlg.LAPACK.syev!\nBase.LinAlg.LAPACK.syevr!\nBase.LinAlg.LAPACK.sygvd!\nBase.LinAlg.LAPACK.bdsqr!\nBase.LinAlg.LAPACK.bdsdc!\nBase.LinAlg.LAPACK.gecon!\nBase.LinAlg.LAPACK.gehrd!\nBase.LinAlg.LAPACK.orghr!\nBase.LinAlg.LAPACK.gees!\nBase.LinAlg.LAPACK.gges!\nBase.LinAlg.LAPACK.trexc!\nBase.LinAlg.LAPACK.trsen!\nBase.LinAlg.LAPACK.tgsen!\nBase.LinAlg.LAPACK.trsyl!"
 },
 
 {
@@ -18173,7 +15925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n"
 },
 
 {
@@ -18686,6 +16438,2230 @@ var documenterSearchIndex = {"docs": [
     "title": "Dynamic Linker",
     "category": "section",
     "text": "Libdl.dlopen\nLibdl.dlopen_e\nLibdl.RTLD_NOW\nLibdl.dlsym\nLibdl.dlsym_e\nLibdl.dlclose\nLibdl.dlext\nLibdl.find_library\nLibdl.DL_LOAD_PATH"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#",
+    "page": "Linear Algebra",
+    "title": "Linear Algebra",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Linear-Algebra-1",
+    "page": "Linear Algebra",
+    "title": "Linear Algebra",
+    "category": "section",
+    "text": "In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations of many common and useful linear algebra operations. Basic operations, such as trace, det, and inv are all supported:julia> A = [1 2 3; 4 1 6; 7 8 1]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  1  6\n 7  8  1\n\njulia> trace(A)\n3\n\njulia> det(A)\n104.0\n\njulia> inv(A)\n3×3 Array{Float64,2}:\n -0.451923   0.211538    0.0865385\n  0.365385  -0.192308    0.0576923\n  0.240385   0.0576923  -0.0673077As well as other useful operations, such as finding eigenvalues or eigenvectors:julia> A = [-4. -17.; 2. 2.]\n2×2 Array{Float64,2}:\n -4.0  -17.0\n  2.0    2.0\n\njulia> eigvals(A)\n2-element Array{Complex{Float64},1}:\n -1.0 + 5.0im\n -1.0 - 5.0im\n\njulia> eigvecs(A)\n2×2 Array{Complex{Float64},2}:\n  0.945905+0.0im        0.945905-0.0im\n -0.166924-0.278207im  -0.166924+0.278207imIn addition, Julia provides many factorizations which can be used to speed up problems such as linear solve or matrix exponentiation by pre-factorizing a matrix into a form more amenable (for performance or memory reasons) to the problem. See the documentation on factorize for more information. As an example:julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]\n3×3 Array{Float64,2}:\n   1.5   2.0  -4.0\n   3.0  -1.0  -6.0\n -10.0   2.3   4.0\n\njulia> factorize(A)\nLinearAlgebra.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]\n[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]Since A is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the best we can do. Compare with:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> factorize(B)\nLinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n3×3 Tridiagonal{Float64,Array{Float64,1}}:\n -1.64286   0.0   ⋅\n  0.0      -2.8  0.0\n   ⋅        0.0  5.0\nU factor:\n3×3 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.142857  -0.8\n 0.0  1.0       -0.6\n 0.0  0.0        1.0\npermutation:\n3-element Array{Int64,1}:\n 1\n 2\n 3Here, Julia was able to detect that B is in fact symmetric, and used a more appropriate factorization. Often it's possible to write more efficient code for a matrix that is known to have certain properties e.g. it is symmetric, or tridiagonal. Julia provides some special types so that you can \"tag\" matrices as having these properties. For instance:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0sB has been tagged as a matrix that's (real) symmetric, so for later operations we might perform on it, such as eigenfactorization or computing matrix-vector products, efficiencies can be found by only referencing half of it. For example:julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]\n3×3 Array{Float64,2}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> sB = Symmetric(B)\n3×3 Symmetric{Float64,Array{Float64,2}}:\n  1.5   2.0  -4.0\n  2.0  -1.0  -3.0\n -4.0  -3.0   5.0\n\njulia> x = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> sB\\x\n3-element Array{Float64,1}:\n -1.7391304347826084\n -1.1086956521739126\n -1.4565217391304346The \\ operation here performs the linear solution. The left-division operator is pretty powerful and it's easy to write compact, readable code that is flexible enough to solve all sorts of systems of linear equations."
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Special-matrices-1",
+    "page": "Linear Algebra",
+    "title": "Special matrices",
+    "category": "section",
+    "text": "Matrices with special symmetries and structures arise often in linear algebra and are frequently associated with various matrix factorizations. Julia features a rich collection of special matrix types, which allow for fast computation with specialized routines that are specially developed for particular matrix types.The following tables summarize the types of special matrices that have been implemented in Julia, as well as whether hooks to various optimized methods for them in LAPACK are available.Type Description\nSymmetric Symmetric matrix\nHermitian Hermitian matrix\nUpperTriangular Upper triangular matrix\nLowerTriangular Lower triangular matrix\nTridiagonal Tridiagonal matrix\nSymTridiagonal Symmetric tridiagonal matrix\nBidiagonal Upper/lower bidiagonal matrix\nDiagonal Diagonal matrix\nUniformScaling Uniform scaling operator"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Elementary-operations-1",
+    "page": "Linear Algebra",
+    "title": "Elementary operations",
+    "category": "section",
+    "text": "Matrix type + - * \\ Other functions with optimized methods\nSymmetric    MV inv, sqrt, exp\nHermitian    MV inv, sqrt, exp\nUpperTriangular   MV MV inv, det\nLowerTriangular   MV MV inv, det\nSymTridiagonal M M MS MV eigmax, eigmin\nTridiagonal M M MS MV \nBidiagonal M M MS MV \nDiagonal M M MV MV inv, det, logdet, /\nUniformScaling M M MVS MVS /Legend:Key Description\nM (matrix) An optimized method for matrix-matrix operations is available\nV (vector) An optimized method for matrix-vector operations is available\nS (scalar) An optimized method for matrix-scalar operations is available"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Matrix-factorizations-1",
+    "page": "Linear Algebra",
+    "title": "Matrix factorizations",
+    "category": "section",
+    "text": "Matrix type LAPACK eig eigvals eigvecs svd svdvals\nSymmetric SY  ARI   \nHermitian HE  ARI   \nUpperTriangular TR A A A  \nLowerTriangular TR A A A  \nSymTridiagonal ST A ARI AV  \nTridiagonal GT     \nBidiagonal BD    A A\nDiagonal DI  A   Legend:Key Description Example\nA (all) An optimized method to find all the characteristic values and/or vectors is available e.g. eigvals(M)\nR (range) An optimized method to find the ilth through the ihth characteristic values are available eigvals(M, il, ih)\nI (interval) An optimized method to find the characteristic values in the interval [vl, vh] is available eigvals(M, vl, vh)\nV (vectors) An optimized method to find the characteristic vectors corresponding to the characteristic values x=[x1, x2,...] is available eigvecs(M, x)"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#The-uniform-scaling-operator-1",
+    "page": "Linear Algebra",
+    "title": "The uniform scaling operator",
+    "category": "section",
+    "text": "A UniformScaling operator represents a scalar times the identity operator, λ*I. The identity operator I is defined as a constant and is an instance of UniformScaling. The size of these operators are generic and match the other matrix in the binary operations +, -, * and \\. For A+I and A-I this means that A must be square. Multiplication with the identity operator I is a noop (except for checking that the scaling factor is one) and therefore almost without overhead.To see the UniformScaling operator in action:julia> U = UniformScaling(2);\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> a + U\n2×2 Array{Int64,2}:\n 3  2\n 3  6\n\njulia> a * U\n2×2 Array{Int64,2}:\n 2  4\n 6  8\n\njulia> [a U]\n2×4 Array{Int64,2}:\n 1  2  2  0\n 3  4  0  2\n\njulia> b = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> b - U\nERROR: DimensionMismatch(\"matrix is not square: dimensions are (2, 3)\")\nStacktrace:\n [1] checksquare at ./linalg/linalg.jl:220 [inlined]\n [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156\n [3] top-level scope"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#man-linalg-factorizations-1",
+    "page": "Linear Algebra",
+    "title": "Matrix factorizations",
+    "category": "section",
+    "text": "Matrix factorizations (a.k.a. matrix decompositions) compute the factorization of a matrix into a product of matrices, and are one of the central concepts in linear algebra.The following table summarizes the types of matrix factorizations that have been implemented in Julia. Details of their associated methods can be found in the Standard Functions section of the Linear Algebra documentation.Type Description\nCholesky Cholesky factorization\nCholeskyPivoted Pivoted Cholesky factorization\nLU LU factorization\nLUTridiagonal LU factorization for Tridiagonal matrices\nQR QR factorization\nQRCompactWY Compact WY form of the QR factorization\nQRPivoted Pivoted QR factorization\nHessenberg Hessenberg decomposition\nEigen Spectral decomposition\nSVD Singular value decomposition\nGeneralizedSVD Generalized SVD"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.:*-Tuple{AbstractArray{T,2} where T,AbstractArray{T,2} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.:*",
+    "category": "Method",
+    "text": "*(A::AbstractMatrix, B::AbstractMatrix)\n\nMatrix multiplication.\n\nExamples\n\njulia> [1 1; 0 1] * [1 0; 1 1]\n2×2 Array{Int64,2}:\n 2  1\n 1  1\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.:\\-Tuple{AbstractArray{T,2} where T,Union{AbstractArray{T,1}, AbstractArray{T,2}} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.:\\",
+    "category": "Method",
+    "text": "\\(A, B)\n\nMatrix division using a polyalgorithm. For input matrices A and B, the result X is such that A*X == B when A is square. The solver that is used depends upon the structure of A.  If A is upper or lower triangular (or diagonal), no factorization of A is required and the system is solved with either forward or backward substitution. For non-triangular square matrices, an LU factorization is used.\n\nFor rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor.\n\nWhen A is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.\n\nExamples\n\njulia> A = [1 0; 1 -2]; B = [32; -4];\n\njulia> X = A \\ B\n2-element Array{Float64,1}:\n 32.0\n 18.0\n\njulia> A * X == B\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.dot",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.dot",
+    "category": "Function",
+    "text": "dot(x, y)\n⋅(x,y)\n\nCompute the dot product between two vectors. For complex vectors, the first vector is conjugated. When the vectors have equal lengths, calling dot is semantically equivalent to sum(vx'vy for (vx,vy) in zip(x, y)).\n\nExamples\n\njulia> dot([1; 1], [2; 3])\n5\n\njulia> dot([im; im], [1; 1])\n0 - 2im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.vecdot",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.vecdot",
+    "category": "Function",
+    "text": "vecdot(x, y)\n\nFor any iterable containers x and y (including arrays of any dimension) of numbers (or any element type for which dot is defined), compute the Euclidean dot product (the sum of dot(x[i],y[i])) as if they were vectors.\n\nExamples\n\njulia> vecdot(1:5, 2:6)\n70\n\njulia> x = fill(2., (5,5));\n\njulia> y = fill(3., (5,5));\n\njulia> vecdot(x, y)\n150.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cross",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.cross",
+    "category": "Function",
+    "text": "cross(x, y)\n×(x,y)\n\nCompute the cross product of two 3-vectors.\n\nExamples\n\njulia> a = [0;1;0]\n3-element Array{Int64,1}:\n 0\n 1\n 0\n\njulia> b = [0;0;1]\n3-element Array{Int64,1}:\n 0\n 0\n 1\n\njulia> cross(a,b)\n3-element Array{Int64,1}:\n 1\n 0\n 0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.factorize",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.factorize",
+    "category": "Function",
+    "text": "factorize(A)\n\nCompute a convenient factorization of A, based upon the type of the input matrix. factorize checks A to see if it is symmetric/triangular/etc. if A is passed as a generic matrix. factorize checks every element of A to verify/rule out each property. It will short-circuit as soon as it can rule out symmetry/triangular structure. The return value can be reused for efficient solving of multiple systems. For example: A=factorize(A); x=A\\b; y=A\\C.\n\nProperties of A type of factorization\nPositive-definite Cholesky (see cholfact)\nDense Symmetric/Hermitian Bunch-Kaufman (see bkfact)\nSparse Symmetric/Hermitian LDLt (see ldltfact)\nTriangular Triangular\nDiagonal Diagonal\nBidiagonal Bidiagonal\nTridiagonal LU (see lufact)\nSymmetric real tridiagonal LDLt (see ldltfact)\nGeneral square LU (see lufact)\nGeneral non-square QR (see qrfact)\n\nIf factorize is called on a Hermitian positive-definite matrix, for instance, then factorize will return a Cholesky factorization.\n\nExamples\n\njulia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))\n5×5 Array{Float64,2}:\n 1.0  1.0  0.0  0.0  0.0\n 0.0  1.0  1.0  0.0  0.0\n 0.0  0.0  1.0  1.0  0.0\n 0.0  0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  0.0  1.0\n\njulia> factorize(A) # factorize will check to see that A is already factorized\n5×5 Bidiagonal{Float64,Array{Float64,1}}:\n 1.0  1.0   ⋅    ⋅    ⋅\n  ⋅   1.0  1.0   ⋅    ⋅\n  ⋅    ⋅   1.0  1.0   ⋅\n  ⋅    ⋅    ⋅   1.0  1.0\n  ⋅    ⋅    ⋅    ⋅   1.0\n\nThis returns a 5×5 Bidiagonal{Float64}, which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for Bidiagonal types.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Diagonal",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Diagonal",
+    "category": "Type",
+    "text": "Diagonal(A::AbstractMatrix)\n\nConstruct a matrix from the diagonal of A.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> Diagonal(A)\n3×3 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅\n ⋅  5  ⋅\n ⋅  ⋅  9\n\n\n\nDiagonal(V::AbstractVector)\n\nConstruct a matrix with V as its diagonal.\n\nExamples\n\njulia> V = [1, 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> Diagonal(V)\n2×2 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅\n ⋅  2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Bidiagonal",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Bidiagonal",
+    "category": "Type",
+    "text": "Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector\n\nConstructs an upper (uplo=:U) or lower (uplo=:L) bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors. The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The length of ev must be one less than the length of dv.\n\nExamples\n\njulia> dv = [1, 2, 3, 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7, 8, 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(A, uplo::Symbol)\n\nConstruct a Bidiagonal matrix from the main diagonal of A and its first super- (if uplo=:U) or sub-diagonal (if uplo=:L).\n\nExamples\n\njulia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]\n4×4 Array{Int64,2}:\n 1  1  1  1\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4\n\njulia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  1  ⋅  ⋅\n ⋅  2  2  ⋅\n ⋅  ⋅  3  3\n ⋅  ⋅  ⋅  4\n\njulia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A\n4×4 Bidiagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅  ⋅\n 2  2  ⋅  ⋅\n ⋅  3  3  ⋅\n ⋅  ⋅  4  4\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.SymTridiagonal",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.SymTridiagonal",
+    "category": "Type",
+    "text": "SymTridiagonal(dv::V, ev::V) where V <: AbstractVector\n\nConstruct a symmetric tridiagonal matrix from the diagonal (dv) and first sub/super-diagonal (ev), respectively. The result is of type SymTridiagonal and provides efficient specialized eigensolvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short).\n\nExamples\n\njulia> dv = [1, 2, 3, 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7, 8, 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> SymTridiagonal(dv, ev)\n4×4 SymTridiagonal{Int64,Array{Int64,1}}:\n 1  7  ⋅  ⋅\n 7  2  8  ⋅\n ⋅  8  3  9\n ⋅  ⋅  9  4\n\n\n\nSymTridiagonal(A::AbstractMatrix)\n\nConstruct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, of the symmetric matrix A.\n\nExamples\n\njulia> A = [1 2 3; 2 4 5; 3 5 6]\n3×3 Array{Int64,2}:\n 1  2  3\n 2  4  5\n 3  5  6\n\njulia> SymTridiagonal(A)\n3×3 SymTridiagonal{Int64,Array{Int64,1}}:\n 1  2  ⋅\n 2  4  5\n ⋅  5  6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Tridiagonal",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Tridiagonal",
+    "category": "Type",
+    "text": "Tridiagonal(dl::V, d::V, du::V) where V <: AbstractVector\n\nConstruct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively. The result is of type Tridiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The lengths of dl and du must be one less than the length of d.\n\nExamples\n\njulia> dl = [1, 2, 3];\n\njulia> du = [4, 5, 6];\n\njulia> d = [7, 8, 9, 0];\n\njulia> Tridiagonal(dl, d, du)\n4×4 Tridiagonal{Int64,Array{Int64,1}}:\n 7  4  ⋅  ⋅\n 1  8  5  ⋅\n ⋅  2  9  6\n ⋅  ⋅  3  0\n\n\n\nTridiagonal(A)\n\nConstruct a tridiagonal matrix from the first sub-diagonal, diagonal and first super-diagonal of the matrix A.\n\nExamples\n\njulia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]\n4×4 Array{Int64,2}:\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n\njulia> Tridiagonal(A)\n4×4 Tridiagonal{Int64,Array{Int64,1}}:\n 1  2  ⋅  ⋅\n 1  2  3  ⋅\n ⋅  2  3  4\n ⋅  ⋅  3  4\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Symmetric",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Symmetric",
+    "category": "Type",
+    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == transpose(A)).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Hermitian",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Hermitian",
+    "category": "Type",
+    "text": "Hermitian(A, uplo=:U)\n\nConstruct a Hermitian view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];\n\njulia> Hupper = Hermitian(A)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  2+2im  0+0im  3-3im\n 0+0im  4+0im  0+0im  5+0im  0+0im\n 2-2im  0+0im  7+0im  0+0im  8+8im\n 0+0im  5+0im  0+0im  1+0im  0+0im\n 3+3im  0+0im  8-8im  0+0im  4+0im\n\njulia> Hlower = Hermitian(A, :L)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  6+6im  0+0im  2-2im\n 0+0im  4+0im  0+0im  9+0im  0+0im\n 6-6im  0+0im  7+0im  0+0im  3+3im\n 0+0im  9+0im  0+0im  1+0im  0+0im\n 2+2im  0+0im  3-3im  0+0im  4+0im\n\nNote that Hupper will not be equal to Hlower unless A is itself Hermitian (e.g. if A == adjoint(A)).\n\nAll non-real parts of the diagonal will be ignored.\n\nHermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LowerTriangular",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LowerTriangular",
+    "category": "Type",
+    "text": "LowerTriangular(A::AbstractMatrix)\n\nConstruct a LowerTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> LowerTriangular(A)\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n 1.0   ⋅    ⋅\n 4.0  5.0   ⋅\n 7.0  8.0  9.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.UpperTriangular",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.UpperTriangular",
+    "category": "Type",
+    "text": "UpperTriangular(A::AbstractMatrix)\n\nConstruct an UpperTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> UpperTriangular(A)\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0  3.0\n  ⋅   5.0  6.0\n  ⋅    ⋅   9.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.UniformScaling",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.UniformScaling",
+    "category": "Type",
+    "text": "UniformScaling{T<:Number}\n\nGenerically sized uniform scaling operator defined as a scalar times the identity operator, λ*I. See also I.\n\nExamples\n\njulia> J = UniformScaling(2.)\nUniformScaling{Float64}\n2.0*I\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> J*A\n2×2 Array{Float64,2}:\n 2.0  4.0\n 6.0  8.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lu",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lu",
+    "category": "Function",
+    "text": "lu(A, pivot=Val(true)) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val(false) for the second argument.\n\nSee also lufact.\n\nExamples\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lufact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lufact",
+    "category": "Function",
+    "text": "lufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF.L L (lower triangular) part of LU\nF.U U (upper triangular) part of LU\nF.p (right) permutation Vector\nF.P (right) permutation Matrix\n\nThe relationship between F and A is\n\nF.L*F.U == A[F.p, :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nLinearAlgebra.LU{Float64,Array{Float64,2}}\nL factor:\n2×2 Array{Float64,2}:\n 1.0  0.0\n 1.5  1.0\nU factor:\n2×2 Array{Float64,2}:\n 4.0   3.0\n 0.0  -1.5\n\njulia> F.L * F.U == A[F.p, :]\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lufact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lufact!",
+    "category": "Function",
+    "text": "lufact!(A, pivot=Val(true)) -> LU\n\nlufact! is the same as lufact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 6.0  3.0\n 4.0  3.0\n\njulia> F = lufact!(A)\nLinearAlgebra.LU{Float64,Array{Float64,2}}\nL factor:\n2×2 Array{Float64,2}:\n 1.0       0.0\n 0.666667  1.0\nU factor:\n2×2 Array{Float64,2}:\n 6.0  3.0\n 0.0  1.0\n\njulia> iA = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> lufact!(iA)\nERROR: InexactError: convert(Int64, 0.6666666666666666)\nStacktrace:\n[...]\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.chol",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.chol",
+    "category": "Function",
+    "text": "chol(A) -> U\n\nCompute the Cholesky factorization of a positive definite matrix A and return the UpperTriangular matrix U such that A = U'U.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.]\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\njulia> U = chol(A)\n2×2 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0\n  ⋅   6.78233\n\njulia> U'U\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\n\n\nchol(x::Number) -> y\n\nCompute the square root of a non-negative number x.\n\nExamples\n\njulia> chol(16)\n4.0\n\n\n\nchol(J::UniformScaling) -> C\n\nCompute the square root of a non-negative UniformScaling J.\n\nExamples\n\njulia> chol(16I)\nUniformScaling{Float64}\n4.0*I\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cholfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.cholfact",
+    "category": "Function",
+    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F.L and F.U. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nLinearAlgebra.Cholesky{Float64,Array{Float64,2}}\nU factor:\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C.U\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C.L\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C.L * C.U == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F.L and F.U. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cholfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.cholfact!",
+    "category": "Function",
+    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankupdate",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lowrankupdate",
+    "category": "Function",
+    "text": "lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nUpdate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U + v*v') but the computation of CC only uses O(n^2) operations.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankdowndate",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lowrankdowndate",
+    "category": "Function",
+    "text": "lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nDowndate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U - v*v') but the computation of CC only uses O(n^2) operations.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankupdate!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lowrankupdate!",
+    "category": "Function",
+    "text": "lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nUpdate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U + v*v') but the computation of CC only uses O(n^2) operations. The input factorization C is updated in place such that on exit C == CC. The vector v is destroyed during the computation.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankdowndate!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lowrankdowndate!",
+    "category": "Function",
+    "text": "lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky\n\nDowndate a Cholesky factorization C with the vector v. If A = C.U'C.U then CC = cholfact(C.U'C.U - v*v') but the computation of CC only uses O(n^2) operations. The input factorization C is updated in place such that on exit C == CC. The vector v is destroyed during the computation.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldltfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ldltfact",
+    "category": "Function",
+    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of the real symmetric tridiagonal matrix S such that S = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(S) is to solve the linear system of equations Sx = b with F\\b.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact(S);\n\njulia> b = [6., 7., 8.];\n\njulia> ldltS \\ b\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\njulia> S \\ b\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldltfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ldltfact!",
+    "category": "Function",
+    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input S, instead of creating a copy.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact!(S);\n\njulia> ldltS === S\nfalse\n\njulia> S\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0       0.333333   ⋅\n 0.333333  3.66667   0.545455\n  ⋅        0.545455  3.90909\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qr",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.qr",
+    "category": "Function",
+    "text": "qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]\n\nCompute the (pivoted) QR factorization of A such that either A = Q*R or A[:,p] = Q*R. Also see qrfact. The default is to compute a \"thin\" factorization. Note that R is not extended with zeros when a full/square orthogonal factor Q is requested (via full = true).\n\n\n\nqr(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Returns w, a unit vector in the direction of v, and r, the norm of v.\n\nSee also normalize, normalize!, and LinearAlgebra.qr!.\n\nExamples\n\njulia> v = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> w, r = qr(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w*r == v\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.qr!",
+    "category": "Function",
+    "text": "LinearAlgebra.qr!(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Instead of returning a new vector as qr(v::AbstractVector), this function mutates the input vector v in place. Returns w, a unit vector in the direction of v (this is a mutation of v), and r, the norm of v.\n\nSee also normalize, normalize!, and qr.\n\nExamples\n\njulia> v = [1.; 2.]\n2-element Array{Float64,1}:\n 1.0\n 2.0\n\njulia> w, r = LinearAlgebra.qr!(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w === v\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qrfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.qrfact",
+    "category": "Function",
+    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, ComplexF32 or ComplexF64), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF.Q: the orthogonal/unitary matrix Q\nF.R: the upper triangular matrix R\nF.p: the permutation vector of the pivot (QRPivoted only)\nF.P: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either full/square or non-full/square Q is allowed, i.e. both F.Q*F.R and F.Q*A are supported. A Q matrix can be converted into a regular matrix with Matrix.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nLinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F.Q * F.R == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qrfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.qrfact!",
+    "category": "Function",
+    "text": "qrfact!(A, pivot=Val(false))\n\nqrfact! is the same as qrfact when A is a subtype of StridedMatrix, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> a = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> qrfact!(a)\nLinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.316228 -0.948683; -0.948683 0.316228]\n[-3.16228 -4.42719; 0.0 -0.632456]\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> qrfact!(a)\nERROR: InexactError: convert(Int64, -3.1622776601683795)\nStacktrace:\n[...]\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QR",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.QR",
+    "category": "Type",
+    "text": "QR <: Factorization\n\nA QR matrix factorization stored in a packed format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA = Q R\n\nwhere Q is an orthogonal/unitary matrix and R is upper triangular. The matrix Q is stored as a sequence of Householder reflectors v_i and coefficients tau_i where:\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T)\n\nThe object has two fields:\n\nfactors is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format where v_i is the ith column of the matrix V = I + tril(F.factors, -1).\nτ is a vector  of length min(m,n) containing the coefficients au_i.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QRCompactWY",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.QRCompactWY",
+    "category": "Type",
+    "text": "QRCompactWY <: Factorization\n\nA QR matrix factorization stored in a compact blocked format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA = Q R\n\nwhere Q is an orthogonal/unitary matrix and R is upper triangular. It is similar to the QR format except that the orthogonal/unitary matrix Q is stored in Compact WY format [Schreiber1989], as a lower trapezoidal matrix V and an upper triangular matrix T where\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T) = I - V T V^T\n\nsuch that v_i is the ith column of V, and au_i is the ith diagonal element of T.\n\nThe object has two fields:\n\nfactors, as in the QR type, is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format such that V = I + tril(F.factors, -1).\nT is a square matrix with min(m,n) columns, whose upper triangular part gives the matrix T above (the subdiagonal elements are ignored).\n\nnote: Note\nThis format should not to be confused with the older WY representation [Bischof1987].\n\n[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009\n\n[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QRPivoted",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.QRPivoted",
+    "category": "Type",
+    "text": "QRPivoted <: Factorization\n\nA QR matrix factorization with column pivoting in a packed format, typically obtained from qrfact. If A is an m×n matrix, then\n\nA P = Q R\n\nwhere P is a permutation matrix, Q is an orthogonal/unitary matrix and R is upper triangular. The matrix Q is stored as a sequence of Householder reflectors:\n\nQ = prod_i=1^min(mn) (I - tau_i v_i v_i^T)\n\nThe object has three fields:\n\nfactors is an m×n matrix.\nThe upper triangular part contains the elements of R, that is R = triu(F.factors) for a QR object F.\nThe subdiagonal part contains the reflectors v_i stored in a packed format where v_i is the ith column of the matrix V = I + tril(F.factors, -1).\nτ is a vector of length min(m,n) containing the coefficients au_i.\njpvt is an integer vector of length n corresponding to the permutation P.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lqfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lqfact!",
+    "category": "Function",
+    "text": "lqfact!(A) -> LQ\n\nCompute the LQ factorization of A, using the input matrix as a workspace. See also lq.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lqfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lqfact",
+    "category": "Function",
+    "text": "lqfact(A) -> LQ\n\nCompute the LQ factorization of A. See also lq.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lq",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lq",
+    "category": "Function",
+    "text": "lq(A; full = false) -> L, Q\n\nPerform an LQ factorization of A such that A = L*Q. The default (full = false) computes a factorization with possibly-rectangular L and Q, commonly the \"thin\" factorization. The LQ factorization is the QR factorization of transpose(A). If the explicit, full/square form of Q is requested via full = true, L is not extended with zeros.\n\nnote: Note\nWhile in QR factorization the \"thin\" factorization is so named due to yielding either a square or \"tall\"/\"thin\" rectangular factor Q, in LQ factorization the \"thin\" factorization somewhat confusingly produces either a square or \"short\"/\"wide\" rectangular factor Q. \"Thin\" factorizations more broadly are also referred to as \"reduced\" factorizatons.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.bkfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.bkfact",
+    "category": "Function",
+    "text": "bkfact(A, rook::Bool=false) -> BunchKaufman\n\nCompute the Bunch-Kaufman [Bunch1977] factorization of a symmetric or Hermitian matrix A as P*U*D*U*P or P*L*D*L*P, depending on which triangle is stored in A, and return a BunchKaufman object. Note that if A is complex symmetric then U' and L' denote the unconjugated transposes, i.e. transpose(U) and transpose(L).\n\nIf rook is true, rook pivoting is used. If rook is false, rook pivoting is not used.\n\nThe following functions are available for BunchKaufman objects: size, \\, inv, issymmetric, ishermitian, getindex.\n\n[Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. url.\n\nExamples\n\njulia> A = [1 2; 2 3]\n2×2 Array{Int64,2}:\n 1  2\n 2  3\n\njulia> bkfact(A)\nLinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}\nD factor:\n2×2 Tridiagonal{Float64,Array{Float64,1}}:\n -0.333333  0.0\n  0.0       3.0\nU factor:\n2×2 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:\n 1.0  0.666667\n 0.0  1.0\npermutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.bkfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.bkfact!",
+    "category": "Function",
+    "text": "bkfact!(A, rook::Bool=false) -> BunchKaufman\n\nbkfact! is the same as bkfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eig",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eig",
+    "category": "Function",
+    "text": "eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V\neig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V\neig(A, permute::Bool=true, scale::Bool=true) -> D, V\n\nComputes eigenvalues (D) and eigenvectors (V) of A. See eigfact for details on the irange, vl, and vu arguments (for SymTridiagonal, Hermitian, and Symmetric matrices) and the permute and scale keyword arguments. The eigenvectors are returned columnwise.\n\nExamples\n\njulia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\n\n\neig(A, B) -> D, V\n\nComputes generalized eigenvalues (D) and vectors (V) of A with respect to B.\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eig(A, B)\n(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvals",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigvals",
+    "category": "Function",
+    "text": "eigvals(A; permute::Bool=true, scale::Bool=true) -> values\n\nReturn the eigenvalues of A.\n\nFor general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvalue calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExamples\n\njulia> diag_matrix = [1 0; 0 4]\n2×2 Array{Int64,2}:\n 1  0\n 0  4\n\njulia> eigvals(diag_matrix)\n2-element Array{Float64,1}:\n 1.0\n 4.0\n\n\n\neigvals(A, B) -> values\n\nComputes the generalized eigenvalues of A and B.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvals(A,B)\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a UnitRange irange covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, 2:2)\n1-element Array{Float64,1}:\n 0.9999999999999996\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a pair vl and vu for the lower and upper boundaries of the eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, -1, 2)\n1-element Array{Float64,1}:\n 1.0000000000000009\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvals!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigvals!",
+    "category": "Function",
+    "text": "eigvals!(A; permute::Bool=true, scale::Bool=true) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm.\n\nnote: Note\nThe input matrix A will not contain its eigenvalues after eigvals! is called on it - A is used as a workspace.\n\nExamples\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> eigvals!(A)\n2-element Array{Float64,1}:\n -0.3722813232690143\n  5.372281323269014\n\njulia> A\n2×2 Array{Float64,2}:\n -0.372281  -1.0\n  0.0        5.37228\n\n\n\neigvals!(A, B) -> values\n\nSame as eigvals, but saves space by overwriting the input A (and B), instead of creating copies.\n\nnote: Note\nThe input matrices A and B will not contain their eigenvalues after eigvals! is called. They are used as workspaces.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> eigvals!(A, B)\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\njulia> A\n2×2 Array{Float64,2}:\n -0.0  -1.0\n  1.0  -0.0\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\n\n\neigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. irange is a range of eigenvalue indices to search for - for instance, the 2nd to 8th eigenvalues.\n\n\n\neigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nSame as eigvals, but saves space by overwriting the input A, instead of creating a copy. vl is the lower bound of the interval to search for eigenvalues, and vu is the upper bound.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigmax",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigmax",
+    "category": "Function",
+    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturn the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n[...]\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigmin",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigmin",
+    "category": "Function",
+    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturn the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n[...]\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvecs",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigvecs",
+    "category": "Function",
+    "text": "eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix\n\nReturn a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nIf the optional vector of eigenvalues eigvals is specified, eigvecs returns the specific corresponding eigenvectors.\n\nExamples\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.1400549446402604\n  1.0000000000000002\n  5.140054944640259\n\njulia> eigvecs(A)\n3×3 Array{Float64,2}:\n  0.418304  -0.83205      0.364299\n -0.656749  -7.39009e-16  0.754109\n  0.627457   0.5547       0.546448\n\njulia> eigvecs(A, [1.])\n3×1 Array{Float64,2}:\n  0.8320502943378438\n  4.263514128092366e-17\n -0.5547001962252291\n\n\n\neigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix\n\nReturn a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].) The permute and scale keywords are the same as for eigfact.\n\nExamples\n\njulia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigvecs(A, B) -> Matrix\n\nReturn a matrix M whose columns are the generalized eigenvectors of A and B. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvecs(A, B)\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigfact",
+    "category": "Function",
+    "text": "eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F.values and the eigenvectors in the columns of the matrix F.vectors. (The kth eigenvector can be obtained from the slice F.vectors[:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nFor general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExamples\n\njulia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\nLinearAlgebra.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\njulia> F.values\n3-element Array{Float64,1}:\n  1.0\n  3.0\n 18.0\n\njulia> F.vectors\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigfact(A, B) -> GeneralizedEigen\n\nComputes the generalized eigenvalue decomposition of A and B, returning a GeneralizedEigen factorization object F which contains the generalized eigenvalues in F.values and the generalized eigenvectors in the columns of the matrix F.vectors. (The kth generalized eigenvector can be obtained from the slice F.vectors[:, k].)\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> F = eigfact(A, B);\n\njulia> F.values\n2-element Array{Complex{Float64},1}:\n 0.0 + 1.0im\n 0.0 - 1.0im\n\njulia> F.vectors\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nThe UnitRange irange specifies indices of the sorted eigenvalues to search for.\n\nnote: Note\nIf irange is not 1:n, where n is the dimension of A, then the returned factorization will be a truncated factorization.\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nvl is the lower bound of the window of eigenvalues to search for, and vu is the upper bound.\n\nnote: Note\nIf [vl, vu] does not contain all eigenvalues of A, then the returned factorization will be a truncated factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.eigfact!",
+    "category": "Function",
+    "text": "eigfact!(A, [B])\n\nSame as eigfact, but saves space by overwriting the input A (and B), instead of creating a copy.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.hessfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.hessfact",
+    "category": "Function",
+    "text": "hessfact(A) -> Hessenberg\n\nCompute the Hessenberg decomposition of A and return a Hessenberg object. If F is the factorization object, the unitary matrix can be accessed with F.Q and the Hessenberg matrix with F.H. When Q is extracted, the resulting type is the HessenbergQ object, and may be converted to a regular matrix with convert(Array, _)  (or Array(_) for short).\n\nExamples\n\njulia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\njulia> F = hessfact(A);\n\njulia> F.Q * F.H * F.Q'\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.hessfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.hessfact!",
+    "category": "Function",
+    "text": "hessfact!(A) -> Hessenberg\n\nhessfact! is the same as hessfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.schurfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.schurfact",
+    "category": "Function",
+    "text": "schurfact(A::StridedMatrix) -> F::Schur\n\nComputes the Schur factorization of the matrix A. The (quasi) triangular Schur factor can be obtained from the Schur object F with either F.Schur or F.T and the orthogonal/unitary Schur vectors can be obtained with F.vectors or F.Z such that A = F.vectors * F.Schur * F.vectors'. The eigenvalues of A can be obtained with F.values.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> F = schurfact(A)\nLinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[3.0 9.0; 0.0 -2.0]\n[0.961524 0.274721; -0.274721 0.961524]\nand values:\n[3.0, -2.0]\n\njulia> F.vectors * F.Schur * F.vectors'\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\n\n\nschurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nComputes the Generalized Schur (or QZ) factorization of the matrices A and B. The (quasi) triangular Schur factors can be obtained from the Schur object F with F.S and F.T, the left unitary/orthogonal Schur vectors can be obtained with F.left or F.Q and the right unitary/orthogonal Schur vectors can be obtained with F.right or F.Z such that A=F.left*F.S*F.right' and B=F.left*F.T*F.right'. The generalized eigenvalues of A and B can be obtained with F.alpha./F.beta.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.schurfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.schurfact!",
+    "category": "Function",
+    "text": "schurfact!(A::StridedMatrix) -> F::Schur\n\nSame as schurfact but uses the input argument A as workspace.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> F = schurfact!(A)\nLinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[3.0 9.0; 0.0 -2.0]\n[0.961524 0.274721; -0.274721 0.961524]\nand values:\n[3.0, -2.0]\n\njulia> A\n2×2 Array{Float64,2}:\n 3.0   9.0\n 0.0  -2.0\n\n\n\nschurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nSame as schurfact but uses the input matrices A and B as workspace.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.schur",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.schur",
+    "category": "Function",
+    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z * T * Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExamples\n\njulia> A = [5. 7.; -2. -4.]\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\njulia> T, Z, lambda = schur(A)\n([3.0 9.0; 0.0 -2.0], [0.961524 0.274721; -0.274721 0.961524], [3.0, -2.0])\n\njulia> Z * Z'\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> Z * T * Z'\n2×2 Array{Float64,2}:\n  5.0   7.0\n -2.0  -4.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ordschur",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ordschur",
+    "category": "Function",
+    "text": "ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur\n\nReorders the Schur factorization F of a matrix A = Z*T*Z' according to the logical array select returning the reordered factorization F object. The selected eigenvalues appear in the leading diagonal of F.Schur and the corresponding leading columns of F.vectors form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via select.\n\n\n\nordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector\n\nReorders the Schur factorization of a real matrix A = Z*T*Z' according to the logical array select returning the reordered matrices T and Z as well as the vector of eigenvalues λ. The selected eigenvalues appear in the leading diagonal of T and the corresponding leading columns of Z form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via select.\n\n\n\nordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur\n\nReorders the Generalized Schur factorization F of a matrix pair (A, B) = (Q*S*Z', Q*T*Z') according to the logical array select and returns a GeneralizedSchur object F. The selected eigenvalues appear in the leading diagonal of both F.S and F.T, and the left and right orthogonal/unitary Schur vectors are also reordered such that (A, B) = F.Q*(F.S, F.T)*F.Z' still holds and the generalized eigenvalues of A and B can still be obtained with F.alpha./F.beta.\n\n\n\nordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nReorders the Generalized Schur factorization of a matrix pair (A, B) = (Q*S*Z', Q*T*Z') according to the logical array select and returns the matrices S, T, Q, Z and vectors α and β.  The selected eigenvalues appear in the leading diagonal of both S and T, and the left and right unitary/orthogonal Schur vectors are also reordered such that (A, B) = Q*(S, T)*Z' still holds and the generalized eigenvalues of A and B can still be obtained with α./β.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ordschur!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ordschur!",
+    "category": "Function",
+    "text": "ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur\n\nSame as ordschur but overwrites the factorization F.\n\n\n\nordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector\n\nSame as ordschur but overwrites the input arguments.\n\n\n\nordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur\n\nSame as ordschur but overwrites the factorization F.\n\n\n\nordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSame as ordschur but overwrites the factorization the input arguments.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdfact",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.svdfact",
+    "category": "Function",
+    "text": "svdfact(A; full::Bool = false) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F.U, F.S, F.V and F.Vt, such that A = U * Diagonal(S) * Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V. The singular values in S are sorted in descending order.\n\nIf full = false (default), a \"thin\" SVD is returned. For a M times N matrix A, U is M times M for a \"full\" SVD (full = true) and M times min(M N) for a \"thin\" SVD.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A);\n\njulia> F.U * Diagonal(F.S) * F.Vt\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F.U*F.D1*F.R0*F.Q' and B = F.V*F.D2*F.R0*F.Q'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nU is a M-by-M orthogonal matrix,\nV is a P-by-P orthogonal matrix,\nQ is a N-by-N orthogonal matrix,\nR0 is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nD1 is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nD2 is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F.D1 and F.D2 are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> F = svdfact(A, B);\n\njulia> F.U*F.D1*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> F.V*F.D2*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdfact!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.svdfact!",
+    "category": "Function",
+    "text": "svdfact!(A; full::Bool = false) -> SVD\n\nsvdfact! is the same as svdfact, but saves space by overwriting the input A, instead of creating a copy.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact!(A);\n\njulia> F.U * Diagonal(F.S) * F.Vt\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> A\n4×5 Array{Float64,2}:\n -2.23607   0.0   0.0  0.0  0.618034\n  0.0      -3.0   1.0  0.0  0.0\n  0.0       0.0   0.0  0.0  0.0\n  0.0       0.0  -2.0  0.0  0.0\n\n\n\nsvdfact!(A, B) -> GeneralizedSVD\n\nsvdfact! is the same as svdfact, but modifies the arguments A and B in-place, instead of making copies.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> F = svdfact!(A, B);\n\njulia> F.U*F.D1*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> F.V*F.D2*F.R0*F.Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> A\n2×2 Array{Float64,2}:\n 1.41421   0.0\n 0.0      -1.41421\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  -0.0\n 0.0  -1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svd",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.svd",
+    "category": "Function",
+    "text": "svd(A; full::Bool = false) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U * Diagonal(S) * V'. The singular values in S are sorted in descending order.\n\nIf full = false (default), a \"thin\" SVD is returned. For a M times N matrix A, U is M times M for a \"full\" SVD (full = true) and M times min(M N) for a \"thin\" SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A);\n\njulia> U * Diagonal(S) * V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> U, V, Q, D1, D2, R0 = svd(A, B);\n\njulia> U*D1*R0*Q'\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> V*D2*R0*Q'\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdvals",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.svdvals",
+    "category": "Function",
+    "text": "svdvals(A)\n\nReturn the singular values of A in descending order.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23606797749979\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B. See also svdfact.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> svdvals(A, B)\n2-element Array{Float64,1}:\n 1.0\n 1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdvals!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.svdvals!",
+    "category": "Function",
+    "text": "svdvals!(A)\n\nReturn the singular values of A, saving space by overwriting the input. See also svdvals and svdfact.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals!(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23606797749979\n 2.0\n 0.0\n\njulia> A\n4×5 Array{Float64,2}:\n -2.23607   0.0   0.0  0.0  0.618034\n  0.0      -3.0   1.0  0.0  0.0\n  0.0       0.0   0.0  0.0  0.0\n  0.0       0.0  -2.0  0.0  0.0\n\n\n\nsvdvals!(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B, saving space by overwriting A and B. See also svdfact and svdvals.\n\nExamples\n\njulia> A = [1. 0.; 0. -1.]\n2×2 Array{Float64,2}:\n 1.0   0.0\n 0.0  -1.0\n\njulia> B = [0. 1.; 1. 0.]\n2×2 Array{Float64,2}:\n 0.0  1.0\n 1.0  0.0\n\njulia> svdvals!(A, B)\n2-element Array{Float64,1}:\n 1.0\n 1.0\n\njulia> A\n2×2 Array{Float64,2}:\n 1.41421   0.0\n 0.0      -1.41421\n\njulia> B\n2×2 Array{Float64,2}:\n 1.0  -0.0\n 0.0  -1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Givens",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.Givens",
+    "category": "Type",
+    "text": "LinearAlgebra.Givens(i1,i2,c,s) -> G\n\nA Givens rotation linear operator. The fields c and s represent the cosine and sine of the rotation angle, respectively. The Givens type supports left multiplication G*A and conjugated transpose right multiplication A*G'. The type doesn't have a size and can therefore be multiplied with matrices of arbitrary size as long as i2<=size(A,2) for G*A or i2<=size(A,1) for A*G'.\n\nSee also: givens\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.givens",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.givens",
+    "category": "Function",
+    "text": "givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)\n\nComputes the Givens rotation G and scalar r such that for any vector x where\n\nx[i1] = f\nx[i2] = g\n\nthe result of the multiplication\n\ny = G*x\n\nhas the property that\n\ny[i1] = r\ny[i2] = 0\n\nSee also: LinearAlgebra.Givens\n\n\n\ngivens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)\n\nComputes the Givens rotation G and scalar r such that the result of the multiplication\n\nB = G*A\n\nhas the property that\n\nB[i1,j] = r\nB[i2,j] = 0\n\nSee also: LinearAlgebra.Givens\n\n\n\ngivens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)\n\nComputes the Givens rotation G and scalar r such that the result of the multiplication\n\nB = G*x\n\nhas the property that\n\nB[i1] = r\nB[i2] = 0\n\nSee also: LinearAlgebra.Givens\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.triu",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.triu",
+    "category": "Function",
+    "text": "triu(M)\n\nUpper triangle of a matrix.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 0.0  1.0  1.0  1.0\n 0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  1.0\n\n\n\ntriu(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a,3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  1.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n\njulia> triu(a,-3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.triu!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.triu!",
+    "category": "Function",
+    "text": "triu!(M)\n\nUpper triangle of a matrix, overwriting M in the process. See also triu.\n\n\n\ntriu!(M, k::Integer)\n\nReturn the upper triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> triu!(M, 1)\n5×5 Array{Int64,2}:\n 0  2  3  4  5\n 0  0  3  4  5\n 0  0  0  4  5\n 0  0  0  0  5\n 0  0  0  0  0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.tril",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.tril",
+    "category": "Function",
+    "text": "tril(M)\n\nLower triangle of a matrix.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a)\n4×4 Array{Float64,2}:\n 1.0  0.0  0.0  0.0\n 1.0  1.0  0.0  0.0\n 1.0  1.0  1.0  0.0\n 1.0  1.0  1.0  1.0\n\n\n\ntril(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = fill(1.0, (4,4))\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,-3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 1.0  0.0  0.0  0.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.tril!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.tril!",
+    "category": "Function",
+    "text": "tril!(M)\n\nLower triangle of a matrix, overwriting M in the process. See also tril.\n\n\n\ntril!(M, k::Integer)\n\nReturn the lower triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> tril!(M, 2)\n5×5 Array{Int64,2}:\n 1  2  3  0  0\n 1  2  3  4  0\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diagind",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.diagind",
+    "category": "Function",
+    "text": "diagind(M, k::Integer=0)\n\nAn AbstractRange giving the indices of the kth diagonal of the matrix M.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diagind(A,-1)\n2:4:6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diag",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.diag",
+    "category": "Function",
+    "text": "diag(M, k::Integer=0)\n\nThe kth diagonal of a matrix, as a vector.\n\nSee also: diagm\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diag(A,1)\n2-element Array{Int64,1}:\n 2\n 6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diagm",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.diagm",
+    "category": "Function",
+    "text": "diagm(kv::Pair{<:Integer,<:AbstractVector}...)\n\nConstruct a square matrix from Pairs of diagonals and vectors. Vector kv.second will be placed on the kv.first diagonal. diagm constructs a full matrix; if you want storage-efficient versions with fast arithmetic, see Diagonal, Bidiagonal Tridiagonal and SymTridiagonal.\n\nExamples\n\njulia> diagm(1 => [1,2,3])\n4×4 Array{Int64,2}:\n 0  1  0  0\n 0  0  2  0\n 0  0  0  3\n 0  0  0  0\n\njulia> diagm(1 => [1,2,3], -1 => [4,5])\n4×4 Array{Int64,2}:\n 0  1  0  0\n 4  0  2  0\n 0  5  0  3\n 0  0  0  0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.scale!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.scale!",
+    "category": "Function",
+    "text": "scale!(A, b)\nscale!(b, A)\n\nScale an array A by a scalar b overwriting A in-place.\n\nIf A is a matrix and b is a vector, then scale!(A,b) scales each column i of A by b[i] (similar to A*Diagonal(b)), while scale!(b,A) scales each row i of A by b[i] (similar to Diagonal(b)*A), again operating in-place on A. An InexactError exception is thrown if the scaling produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> scale!(a,b)\n2×2 Array{Int64,2}:\n 1  4\n 3  8\n\njulia> a = [1 2; 3 4];\n\njulia> b = [1; 2];\n\njulia> scale!(b,a)\n2×2 Array{Int64,2}:\n 1  2\n 6  8\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.rank",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.rank",
+    "category": "Function",
+    "text": "rank(A[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of A have magnitude greater than tol*σ₁ where σ₁ is A's largest singular values. By default, the value of tol is the smallest dimension of A multiplied by the eps of the eltype of A.\n\nExamples\n\njulia> rank(Matrix(I, 3, 3))\n3\n\njulia> rank(diagm(0 => [1, 0, 2]))\n2\n\njulia> rank(diagm(0 => [1, 0.001, 2]), 0.1)\n2\n\njulia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)\n3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.norm",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.norm",
+    "category": "Function",
+    "text": "norm(A::AbstractArray, p::Real=2)\n\nCompute the p-norm of a vector or the operator norm of a matrix A, defaulting to the 2-norm.\n\nnorm(A::AbstractVector, p::Real=2)\n\nFor vectors, this is equivalent to vecnorm and equal to:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, norm(A, Inf) returns the largest value in abs(A), whereas norm(A, -Inf) returns the smallest.\n\nExamples\n\njulia> v = [3, -2, 6]\n3-element Array{Int64,1}:\n  3\n -2\n  6\n\njulia> norm(v)\n7.0\n\njulia> norm(v, Inf)\n6.0\n\n\n\nnorm(A::AbstractMatrix, p::Real=2)\n\nFor matrices, the matrix norm induced by the vector p-norm is used, where valid values of p are 1, 2, or Inf. (Note that for sparse matrices, p=2 is currently not implemented.) Use vecnorm to compute the Frobenius norm.\n\nWhen p=1, the matrix norm is the maximum absolute column sum of A:\n\nA_1 = max_1  j  n sum_i=1^m  a_ij \n\nwith a_ij the entries of A, and m and n its dimensions.\n\nWhen p=2, the matrix norm is the spectral norm, equal to the largest singular value of A.\n\nWhen p=Inf, the matrix norm is the maximum absolute row sum of A:\n\nA_infty = max_1  i  m sum _j=1^n  a_ij \n\nExamples\n\njulia> A = [1 -2 -3; 2 3 -1]\n2×3 Array{Int64,2}:\n 1  -2  -3\n 2   3  -1\n\njulia> norm(A, Inf)\n6.0\n\n\n\nnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right)^1p. This is equivalent to vecnorm.\n\n\n\nnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)\nnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)\n\nFor Adjoint/Transpose-wrapped vectors, return the q-norm of A, which is equivalent to the p-norm with value p = q/(q-1). They coincide at p = q = 2.\n\nThe difference in norm between a vector space and its dual arises to preserve the relationship between duality and the inner product, and the result is consistent with the p-norm of 1 × n matrix.\n\nExamples\n\njulia> v = [1; im];\n\njulia> vc = v';\n\njulia> norm(vc, 1)\n1.0\n\njulia> norm(v, 1)\n2.0\n\njulia> norm(vc, 2)\n1.4142135623730951\n\njulia> norm(v, 2)\n1.4142135623730951\n\njulia> norm(vc, Inf)\n2.0\n\njulia> norm(v, Inf)\n1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.vecnorm",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.vecnorm",
+    "category": "Function",
+    "text": "vecnorm(A, p::Real=2)\n\nFor any iterable container A (including arrays of any dimension) of numbers (or any element type for which norm is defined), compute the p-norm (defaulting to p=2) as if A were a vector of the corresponding length.\n\nThe p-norm is defined as:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, vecnorm(A, Inf) returns the largest value in abs(A), whereas vecnorm(A, -Inf) returns the smallest. If A is a matrix and p=2, then this is equivalent to the Frobenius norm.\n\nExamples\n\njulia> vecnorm([1 2 3; 4 5 6; 7 8 9])\n16.881943016134134\n\njulia> vecnorm([1 2 3 4 5 6 7 8 9])\n16.881943016134134\n\n\n\nvecnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right) ^1p.\n\nExamples\n\njulia> vecnorm(2, 1)\n2\n\njulia> vecnorm(-2, 1)\n2\n\njulia> vecnorm(2, 2)\n2\n\njulia> vecnorm(-2, 2)\n2\n\njulia> vecnorm(2, Inf)\n2\n\njulia> vecnorm(-2, Inf)\n2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.normalize!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.normalize!",
+    "category": "Function",
+    "text": "normalize!(v::AbstractVector, p::Real=2)\n\nNormalize the vector v in-place so that its p-norm equals unity, i.e. norm(v, p) == 1. See also normalize and vecnorm.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.normalize",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.normalize",
+    "category": "Function",
+    "text": "normalize(v::AbstractVector, p::Real=2)\n\nNormalize the vector v so that its p-norm equals unity, i.e. norm(v, p) == vecnorm(v, p) == 1. See also normalize! and vecnorm.\n\nExamples\n\njulia> a = [1,2,4];\n\njulia> b = normalize(a)\n3-element Array{Float64,1}:\n 0.2182178902359924\n 0.4364357804719848\n 0.8728715609439696\n\njulia> norm(b)\n1.0\n\njulia> c = normalize(a, 1)\n3-element Array{Float64,1}:\n 0.14285714285714285\n 0.2857142857142857\n 0.5714285714285714\n\njulia> norm(c, 1)\n1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cond",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.cond",
+    "category": "Function",
+    "text": "cond(M, p::Real=2)\n\nCondition number of the matrix M, computed using the operator p-norm. Valid values for p are 1, 2 (default), or Inf.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.condskeel",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.condskeel",
+    "category": "Function",
+    "text": "condskeel(M, [x, p::Real=Inf])\n\nkappa_S(M p) = leftVert leftvert M rightvert leftvert M^-1 rightvert rightVert_p \nkappa_S(M x p) = leftVert leftvert M rightvert leftvert M^-1 rightvert leftvert x rightvert rightVert_p\n\nSkeel condition number kappa_S of the matrix M, optionally with respect to the vector x, as computed using the operator p-norm. leftvert M rightvert denotes the matrix of (entry wise) absolute values of M; leftvert M rightvert_ij = leftvert M_ij rightvert. Valid values for p are 1, 2 and Inf (default).\n\nThis quantity is also known in the literature as the Bauer condition number, relative condition number, or componentwise relative condition number.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.trace",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.trace",
+    "category": "Function",
+    "text": "trace(M)\n\nMatrix trace. Sums the diagonal elements of M.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trace(A)\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.det",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.det",
+    "category": "Function",
+    "text": "det(M)\n\nMatrix determinant.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> det(M)\n2.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.logdet",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.logdet",
+    "category": "Function",
+    "text": "logdet(M)\n\nLog of matrix determinant. Equivalent to log(det(M)), but may provide increased accuracy and/or speed.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> logdet(M)\n0.6931471805599453\n\njulia> logdet(Matrix(I, 3, 3))\n0.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.logabsdet",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.logabsdet",
+    "category": "Function",
+    "text": "logabsdet(M)\n\nLog of absolute value of matrix determinant. Equivalent to (log(abs(det(M))), sign(det(M))), but may provide increased accuracy and/or speed.\n\nExamples\n\njulia> A = [-1. 0.; 0. 1.]\n2×2 Array{Float64,2}:\n -1.0  0.0\n  0.0  1.0\n\njulia> det(A)\n-1.0\n\njulia> logabsdet(A)\n(0.0, -1.0)\n\njulia> B = [2. 0.; 0. 1.]\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  1.0\n\njulia> det(B)\n2.0\n\njulia> logabsdet(B)\n(0.6931471805599453, 1.0)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.inv-Tuple{AbstractArray{T,2} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.inv",
+    "category": "Method",
+    "text": "inv(M)\n\nMatrix inverse. Computes matrix N such that M * N = I, where I is the identity matrix. Computed by solving the left-division N = M \\ I.\n\nExamples\n\njulia> M = [2 5; 1 3]\n2×2 Array{Int64,2}:\n 2  5\n 1  3\n\njulia> N = inv(M)\n2×2 Array{Float64,2}:\n  3.0  -5.0\n -1.0   2.0\n\njulia> M*N == N*M == Matrix(I, 2, 2)\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.pinv",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.pinv",
+    "category": "Function",
+    "text": "pinv(M[, tol::Real])\n\nComputes the Moore-Penrose pseudoinverse.\n\nFor matrices M with floating point elements, it is convenient to compute the pseudoinverse by inverting only singular values above a given threshold, tol.\n\nThe optimal choice of tol varies both with the value of M and the intended application of the pseudoinverse. The default value of tol is eps(real(float(one(eltype(M)))))*maximum(size(M)), which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, tol = sqrt(eps(real(float(one(eltype(M)))))) is recommended.\n\nFor more information, see [issue8859], [B96], [S84], [KY88].\n\nExamples\n\njulia> M = [1.5 1.3; 1.2 1.9]\n2×2 Array{Float64,2}:\n 1.5  1.3\n 1.2  1.9\n\njulia> N = pinv(M)\n2×2 Array{Float64,2}:\n  1.47287   -1.00775\n -0.930233   1.16279\n\njulia> M * N\n2×2 Array{Float64,2}:\n 1.0          -2.22045e-16\n 4.44089e-16   1.0\n\n[issue8859]: Issue 8859, \"Fix least squares\", https://github.com/JuliaLang/julia/pull/8859\n\n[B96]: Åke Björck, \"Numerical Methods for Least Squares Problems\",  SIAM Press, Philadelphia, 1996, \"Other Titles in Applied Mathematics\", Vol. 51. doi:10.1137/1.9781611971484\n\n[S84]: G. W. Stewart, \"Rank Degeneracy\", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. doi:10.1137/0905030\n\n[KY88]: Konstantinos Konstantinides and Kung Yao, \"Statistical analysis of effective singular values in matrix rank determination\", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. doi:10.1109/29.1585\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.nullspace",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.nullspace",
+    "category": "Function",
+    "text": "nullspace(M)\n\nBasis for nullspace of M.\n\nExamples\n\njulia> M = [1 0 0; 0 1 0; 0 0 0]\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  0\n\njulia> nullspace(M)\n3×1 Array{Float64,2}:\n 0.0\n 0.0\n 1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.repmat",
+    "page": "Linear Algebra",
+    "title": "Base.repmat",
+    "category": "Function",
+    "text": "repmat(A, m::Integer, n::Integer=1)\n\nConstruct a matrix by repeating the given matrix (or vector) m times in dimension 1 and n times in dimension 2.\n\nExamples\n\njulia> repmat([1, 2, 3], 2)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 1\n 2\n 3\n\njulia> repmat([1, 2, 3], 2, 3)\n6×3 Array{Int64,2}:\n 1  1  1\n 2  2  2\n 3  3  3\n 1  1  1\n 2  2  2\n 3  3  3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.kron",
+    "page": "Linear Algebra",
+    "title": "Base.kron",
+    "category": "Function",
+    "text": "kron(A, B)\n\nKronecker tensor product of two vectors or two matrices.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> B = [im 1; 1 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  1+0im\n 1+0im  0-1im\n\njulia> kron(A, B)\n4×4 Array{Complex{Int64},2}:\n 0+1im  1+0im  0+2im  2+0im\n 1+0im  0-1im  2+0im  0-2im\n 0+3im  3+0im  0+4im  4+0im\n 3+0im  0-3im  4+0im  0-4im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.linreg",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.linreg",
+    "category": "Function",
+    "text": "linreg(x, y)\n\nPerform simple linear regression using Ordinary Least Squares. Returns a and b such that a + b*x is the closest straight line to the given points (x, y), i.e., such that the squared error between y and a + b*x is minimized.\n\nExamples\n\nusing PyPlot\nx = 1.0:12.0\ny = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]\na, b = linreg(x, y)          # Linear regression\nplot(x, y, \"o\")              # Plot (x, y) points\nplot(x, a + b*x)             # Plot line determined by linear regression\n\nSee also:\n\n\\, cov, std, mean.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.exp-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Union{Complex{Float32}, Complex{Float64}, Float32, Float64}}",
+    "page": "Linear Algebra",
+    "title": "Base.exp",
+    "category": "Method",
+    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = Matrix(1.0I, 2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.log-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.log",
+    "category": "Method",
+    "text": "log(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = Matrix(2.7182818*I, 2, 2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.sqrt-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.sqrt",
+    "category": "Method",
+    "text": "sqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.cos-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.cos",
+    "category": "Method",
+    "text": "cos(A::AbstractMatrix)\n\nCompute the matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the cosine. Otherwise, the cosine is determined by calling exp.\n\nExamples\n\njulia> cos(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.sin-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.sin",
+    "category": "Method",
+    "text": "sin(A::AbstractMatrix)\n\nCompute the matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the sine. Otherwise, the sine is determined by calling exp.\n\nExamples\n\njulia> sin(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.sincos-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sincos",
+    "category": "Method",
+    "text": "sincos(A::AbstractMatrix)\n\nCompute the matrix sine and cosine of a square matrix A.\n\nExamples\n\njulia> S, C = sincos(fill(1.0, (2,2)));\n\njulia> S\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\njulia> C\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.tan-Tuple{Union{DenseArray{#s59,2}, Base.ReinterpretArray{#s59,2,S,A} where S, Base.ReshapedArray{#s59,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s59,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s59<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.tan",
+    "category": "Method",
+    "text": "tan(A::AbstractMatrix)\n\nCompute the matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the tangent. Otherwise, the tangent is determined by calling exp.\n\nExamples\n\njulia> tan(fill(1.0, (2,2)))\n2×2 Array{Float64,2}:\n -1.09252  -1.09252\n -1.09252  -1.09252\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.sec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sec",
+    "category": "Method",
+    "text": "sec(A::AbstractMatrix)\n\nCompute the matrix secant of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.csc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.csc",
+    "category": "Method",
+    "text": "csc(A::AbstractMatrix)\n\nCompute the matrix cosecant of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.cot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.cot",
+    "category": "Method",
+    "text": "cot(A::AbstractMatrix)\n\nCompute the matrix cotangent of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.cosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.cosh",
+    "category": "Method",
+    "text": "cosh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosine of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.sinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.sinh",
+    "category": "Method",
+    "text": "sinh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic sine of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.tanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.tanh",
+    "category": "Method",
+    "text": "tanh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic tangent of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.sech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sech",
+    "category": "Method",
+    "text": "sech(A::AbstractMatrix)\n\nCompute the matrix hyperbolic secant of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.csch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.csch",
+    "category": "Method",
+    "text": "csch(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosecant of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.coth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.coth",
+    "category": "Method",
+    "text": "coth(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cotangent of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.acos-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.acos",
+    "category": "Method",
+    "text": "acos(A::AbstractMatrix)\n\nCompute the inverse matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse cosine. Otherwise, the inverse cosine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_1].\n\n[AH16_1]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> acos(cos([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-8.32667e-17im  0.1-2.77556e-17im\n -0.2+2.77556e-16im  0.3-3.46945e-16im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.asin-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.asin",
+    "category": "Method",
+    "text": "asin(A::AbstractMatrix)\n\nCompute the inverse matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse sine. Otherwise, the inverse sine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_2].\n\n[AH16_2]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> asin(sin([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-4.16334e-17im  0.1-5.55112e-17im\n -0.2+9.71445e-17im  0.3-1.249e-16im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.atan-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.atan",
+    "category": "Method",
+    "text": "atan(A::AbstractMatrix)\n\nCompute the inverse matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse tangent. Otherwise, the inverse tangent is determined by using log.  For the theory and logarithmic formulas used to compute this function, see [AH16_3].\n\n[AH16_3]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> atan(tan([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5+1.38778e-17im  0.1-2.77556e-17im\n -0.2+6.93889e-17im  0.3-4.16334e-17im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.asec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.asec",
+    "category": "Method",
+    "text": "asec(A::AbstractMatrix)\n\nCompute the inverse matrix secant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.acsc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acsc",
+    "category": "Method",
+    "text": "acsc(A::AbstractMatrix)\n\nCompute the inverse matrix cosecant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.acot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acot",
+    "category": "Method",
+    "text": "acot(A::AbstractMatrix)\n\nCompute the inverse matrix cotangent of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.acosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.acosh",
+    "category": "Method",
+    "text": "acosh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix cosine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_4].\n\n[AH16_4]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.asinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.asinh",
+    "category": "Method",
+    "text": "asinh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix sine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_5].\n\n[AH16_5]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.atanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.atanh",
+    "category": "Method",
+    "text": "atanh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix tangent of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_6].\n\n[AH16_6]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.asech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.asech",
+    "category": "Method",
+    "text": "asech(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic secant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.acsch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acsch",
+    "category": "Method",
+    "text": "acsch(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cosecant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.Math.acoth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acoth",
+    "category": "Method",
+    "text": "acoth(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cotangent of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lyap",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.lyap",
+    "category": "Function",
+    "text": "lyap(A, C)\n\nComputes the solution X to the continuous Lyapunov equation AX + XA' + C = 0, where no eigenvalue of A has a zero real part and no two eigenvalues are negative complex conjugates of each other.\n\nExamples\n\njulia> A = [3. 4.; 5. 6]\n2×2 Array{Float64,2}:\n 3.0  4.0\n 5.0  6.0\n\njulia> B = [1. 1.; 1. 2.]\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  2.0\n\njulia> X = lyap(A, B)\n2×2 Array{Float64,2}:\n  0.5  -0.5\n -0.5   0.25\n\njulia> A*X + X*A' + B\n2×2 Array{Float64,2}:\n 0.0          6.66134e-16\n 6.66134e-16  8.88178e-16\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.sylvester",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.sylvester",
+    "category": "Function",
+    "text": "sylvester(A, B, C)\n\nComputes the solution X to the Sylvester equation AX + XB + C = 0, where A, B and C have compatible dimensions and A and -B have no eigenvalues with equal real part.\n\nExamples\n\njulia> A = [3. 4.; 5. 6]\n2×2 Array{Float64,2}:\n 3.0  4.0\n 5.0  6.0\n\njulia> B = [1. 1.; 1. 2.]\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  2.0\n\njulia> C = [1. 2.; -2. 1]\n2×2 Array{Float64,2}:\n  1.0  2.0\n -2.0  1.0\n\njulia> X = sylvester(A, B, C)\n2×2 Array{Float64,2}:\n -4.46667   1.93333\n  3.73333  -1.8\n\njulia> A*X + X*B + C\n2×2 Array{Float64,2}:\n  2.66454e-15  1.77636e-15\n -3.77476e-15  4.44089e-16\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.issuccess",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.issuccess",
+    "category": "Function",
+    "text": "issuccess(F::Factorization)\n\nTest that a factorization of a matrix succeeded.\n\njulia> F = cholfact([1 0; 0 1]);\n\njulia> LinearAlgebra.issuccess(F)\ntrue\n\njulia> F = lufact([1 0; 0 0]);\n\njulia> LinearAlgebra.issuccess(F)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.issymmetric",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.issymmetric",
+    "category": "Function",
+    "text": "issymmetric(A) -> Bool\n\nTest whether a matrix is symmetric.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> issymmetric(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> issymmetric(b)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isposdef",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.isposdef",
+    "category": "Function",
+    "text": "isposdef(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A. See also isposdef!\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> isposdef(A)\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isposdef!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.isposdef!",
+    "category": "Function",
+    "text": "isposdef!(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A, overwriting A in the process. See also isposdef.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.];\n\njulia> isposdef!(A)\ntrue\n\njulia> A\n2×2 Array{Float64,2}:\n 1.0  2.0\n 2.0  6.78233\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.istril",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.istril",
+    "category": "Function",
+    "text": "istril(A::AbstractMatrix, k::Integer = 0) -> Bool\n\nTest whether A is lower triangular starting from the kth superdiagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istril(a)\nfalse\n\njulia> istril(a, 1)\ntrue\n\njulia> b = [1 0; -im -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+0im\n 0-1im  -1+0im\n\njulia> istril(b)\ntrue\n\njulia> istril(b, -1)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.istriu",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.istriu",
+    "category": "Function",
+    "text": "istriu(A::AbstractMatrix, k::Integer = 0) -> Bool\n\nTest whether A is upper triangular starting from the kth superdiagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istriu(a)\nfalse\n\njulia> istriu(a, -1)\ntrue\n\njulia> b = [1 im; 0 -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+1im\n 0+0im  -1+0im\n\njulia> istriu(b)\ntrue\n\njulia> istriu(b, 1)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isdiag",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.isdiag",
+    "category": "Function",
+    "text": "isdiag(A) -> Bool\n\nTest whether a matrix is diagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> isdiag(a)\nfalse\n\njulia> b = [im 0; 0 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  0+0im\n 0+0im  0-1im\n\njulia> isdiag(b)\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ishermitian",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ishermitian",
+    "category": "Function",
+    "text": "ishermitian(A) -> Bool\n\nTest whether a matrix is Hermitian.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> ishermitian(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> ishermitian(b)\ntrue\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.RowVector",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.RowVector",
+    "category": "Type",
+    "text": "RowVector(vector)\n\nA lazy-view wrapper of an AbstractVector, which turns a length-n vector into a 1×n shaped row vector and represents the transpose of a vector (the elements are also transposed recursively).\n\nBy convention, a vector can be multiplied by a matrix on its left (A * v) whereas a row vector can be multiplied by a matrix on its right (such that RowVector(v) * A = RowVector(transpose(A) * v)). It differs from a 1×n-sized matrix by the facts that its transpose returns a vector and the inner product RowVector(v1) * v2 returns a scalar, but will otherwise behave similarly.\n\nExamples\n\njulia> a = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> RowVector(a)\n1×4 RowVector{Int64,Array{Int64,1}}:\n 1  2  3  4\n\njulia> RowVector(a)[3]\n3\n\njulia> RowVector(a)[1,3]\n3\n\njulia> RowVector(a)[3,1]\nERROR: BoundsError: attempt to access 1×4 RowVector{Int64,Array{Int64,1}} at index [3, 1]\n[...]\n\njulia> RowVector(a)*a\n30\n\njulia> B = [1 2; 3 4; 5 6; 7 8]\n4×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n 7  8\n\njulia> RowVector(a)*B\n1×2 RowVector{Int64,Array{Int64,1}}:\n 50  60\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ConjArray",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ConjArray",
+    "category": "Type",
+    "text": "ConjArray(array)\n\nA lazy-view wrapper of an AbstractArray, taking the elementwise complex conjugate. This type is usually constructed (and unwrapped) via the conj function (or related adjoint), but currently this is the default behavior for RowVector only. For other arrays, the ConjArray constructor can be used directly.\n\nExamples\n\njulia> ConjArray([1+im 0; 0 1-im])\n2×2 ConjArray{Complex{Int64},2,Array{Complex{Int64},2}}:\n 1-1im  0+0im\n 0+0im  1+1im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.transpose",
+    "page": "Linear Algebra",
+    "title": "Base.transpose",
+    "category": "Function",
+    "text": "transpose(A::AbstractMatrix)\n\nLazy matrix transpose. Mutating the returned object should appropriately mutate A. Often, but not always, yields Transpose(A), where Transpose is a lazy transpose wrapper. Note that this operation is recursive.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Transpose{Int64,Array{Int64,2}}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.transpose!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.transpose!",
+    "category": "Function",
+    "text": "transpose!(dest,src)\n\nTranspose array src and store the result in the preallocated array dest, which should have a size corresponding to (size(src,2),size(src,1)). No in-place transposition is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> B = zeros(Complex{Int64}, 2, 2)\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+0im\n 0+0im  0+0im\n\njulia> transpose!(B, A);\n\njulia> B\n2×2 Array{Complex{Int64},2}:\n 3+2im  8+7im\n 9+2im  4+6im\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Base.adjoint",
+    "page": "Linear Algebra",
+    "title": "Base.adjoint",
+    "category": "Function",
+    "text": "adjoint(A)\n\nLazy adjoint (conjugate transposition) (also postfix '). Note that adjoint is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> adjoint(A)\n2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.adjoint!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.adjoint!",
+    "category": "Function",
+    "text": "adjoint!(dest,src)\n\nConjugate transpose array src and store the result in the preallocated array dest, which should have a size corresponding to (size(src,2),size(src,1)). No in-place transposition is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nExamples\n\njulia> A = [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> B = zeros(Complex{Int64}, 2, 2)\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+0im\n 0+0im  0+0im\n\njulia> adjoint!(B, A);\n\njulia> B\n2×2 Array{Complex{Int64},2}:\n 3-2im  8-7im\n 9-2im  4-6im\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.peakflops",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.peakflops",
+    "category": "Function",
+    "text": "peakflops(n::Integer=2000; parallel::Bool=false)\n\npeakflops computes the peak flop rate of the computer by using double precision gemm!. By default, if no arguments are specified, it multiplies a matrix of size n x n, where n = 2000. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with BLAS.set_num_threads(n).\n\nIf the keyword argument parallel is set to true, peakflops is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument n still refers to the size of the problem that is solved on each processor.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.stride1",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.stride1",
+    "category": "Function",
+    "text": "stride1(A) -> Int\n\nReturn the distance between successive array elements in dimension 1 in units of element size.\n\nExamples\n\njulia> A = [1,2,3,4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> LinearAlgebra.stride1(A)\n1\n\njulia> B = view(A, 2:2:4)\n2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:\n 2\n 4\n\njulia> LinearAlgebra.stride1(B)\n2\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.checksquare",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.checksquare",
+    "category": "Function",
+    "text": "LinearAlgebra.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExamples\n\njulia> A = fill(1, (4,4)); B = fill(1, (5,5));\n\njulia> LinearAlgebra.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Standard-Functions-1",
+    "page": "Linear Algebra",
+    "title": "Standard Functions",
+    "category": "section",
+    "text": "Linear algebra functions in Julia are largely implemented by calling functions from LAPACK.  Sparse factorizations call functions from SuiteSparse.Base.:*(::AbstractMatrix, ::AbstractMatrix)\nBase.:\\(::AbstractMatrix, ::AbstractVecOrMat)\nLinearAlgebra.dot\nLinearAlgebra.vecdot\nLinearAlgebra.cross\nLinearAlgebra.factorize\nLinearAlgebra.Diagonal\nLinearAlgebra.Bidiagonal\nLinearAlgebra.SymTridiagonal\nLinearAlgebra.Tridiagonal\nLinearAlgebra.Symmetric\nLinearAlgebra.Hermitian\nLinearAlgebra.LowerTriangular\nLinearAlgebra.UpperTriangular\nLinearAlgebra.UniformScaling\nLinearAlgebra.lu\nLinearAlgebra.lufact\nLinearAlgebra.lufact!\nLinearAlgebra.chol\nLinearAlgebra.cholfact\nLinearAlgebra.cholfact!\nLinearAlgebra.lowrankupdate\nLinearAlgebra.lowrankdowndate\nLinearAlgebra.lowrankupdate!\nLinearAlgebra.lowrankdowndate!\nLinearAlgebra.ldltfact\nLinearAlgebra.ldltfact!\nLinearAlgebra.qr\nLinearAlgebra.qr!\nLinearAlgebra.qrfact\nLinearAlgebra.qrfact!\nLinearAlgebra.QR\nLinearAlgebra.QRCompactWY\nLinearAlgebra.QRPivoted\nLinearAlgebra.lqfact!\nLinearAlgebra.lqfact\nLinearAlgebra.lq\nLinearAlgebra.bkfact\nLinearAlgebra.bkfact!\nLinearAlgebra.eig\nLinearAlgebra.eigvals\nLinearAlgebra.eigvals!\nLinearAlgebra.eigmax\nLinearAlgebra.eigmin\nLinearAlgebra.eigvecs\nLinearAlgebra.eigfact\nLinearAlgebra.eigfact!\nLinearAlgebra.hessfact\nLinearAlgebra.hessfact!\nLinearAlgebra.schurfact\nLinearAlgebra.schurfact!\nLinearAlgebra.schur\nLinearAlgebra.ordschur\nLinearAlgebra.ordschur!\nLinearAlgebra.svdfact\nLinearAlgebra.svdfact!\nLinearAlgebra.svd\nLinearAlgebra.svdvals\nLinearAlgebra.svdvals!\nLinearAlgebra.Givens\nLinearAlgebra.givens\nLinearAlgebra.triu\nLinearAlgebra.triu!\nLinearAlgebra.tril\nLinearAlgebra.tril!\nLinearAlgebra.diagind\nLinearAlgebra.diag\nLinearAlgebra.diagm\nLinearAlgebra.scale!\nLinearAlgebra.rank\nLinearAlgebra.norm\nLinearAlgebra.vecnorm\nLinearAlgebra.normalize!\nLinearAlgebra.normalize\nLinearAlgebra.cond\nLinearAlgebra.condskeel\nLinearAlgebra.trace\nLinearAlgebra.det\nLinearAlgebra.logdet\nLinearAlgebra.logabsdet\nBase.inv(::AbstractMatrix)\nLinearAlgebra.pinv\nLinearAlgebra.nullspace\nBase.repmat\nBase.kron\nLinearAlgebra.linreg\nLinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})\nLinearAlgebra.log(::StridedMatrix)\nLinearAlgebra.sqrt(::StridedMatrix{<:Real})\nLinearAlgebra.cos(::StridedMatrix{<:Real})\nLinearAlgebra.sin(::StridedMatrix{<:Real})\nLinearAlgebra.sincos(::StridedMatrix{<:Real})\nLinearAlgebra.tan(::StridedMatrix{<:Real})\nLinearAlgebra.sec(::StridedMatrix)\nLinearAlgebra.csc(::StridedMatrix)\nLinearAlgebra.cot(::StridedMatrix)\nLinearAlgebra.cosh(::StridedMatrix)\nLinearAlgebra.sinh(::StridedMatrix)\nLinearAlgebra.tanh(::StridedMatrix)\nLinearAlgebra.sech(::StridedMatrix)\nLinearAlgebra.csch(::StridedMatrix)\nLinearAlgebra.coth(::StridedMatrix)\nLinearAlgebra.acos(::StridedMatrix)\nLinearAlgebra.asin(::StridedMatrix)\nLinearAlgebra.atan(::StridedMatrix)\nLinearAlgebra.asec(::StridedMatrix)\nLinearAlgebra.acsc(::StridedMatrix)\nLinearAlgebra.acot(::StridedMatrix)\nLinearAlgebra.acosh(::StridedMatrix)\nLinearAlgebra.asinh(::StridedMatrix)\nLinearAlgebra.atanh(::StridedMatrix)\nLinearAlgebra.asech(::StridedMatrix)\nLinearAlgebra.acsch(::StridedMatrix)\nLinearAlgebra.acoth(::StridedMatrix)\nLinearAlgebra.lyap\nLinearAlgebra.sylvester\nLinearAlgebra.issuccess\nLinearAlgebra.issymmetric\nLinearAlgebra.isposdef\nLinearAlgebra.isposdef!\nLinearAlgebra.istril\nLinearAlgebra.istriu\nLinearAlgebra.isdiag\nLinearAlgebra.ishermitian\nLinearAlgebra.RowVector\nLinearAlgebra.ConjArray\nBase.transpose\nLinearAlgebra.transpose!\nBase.adjoint\nLinearAlgebra.adjoint!\nLinearAlgebra.peakflops\nLinearAlgebra.stride1\nLinearAlgebra.checksquare"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.mul!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.mul!",
+    "category": "Function",
+    "text": "mul!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\nmul!(A, B)\n\nCalculate the matrix-matrix product AB, overwriting one of A or B (but not both), and return the result (the overwritten argument).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldiv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.ldiv!",
+    "category": "Function",
+    "text": "ldiv!([Y,] A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result. If only two arguments are passed, then ldiv!(A, B) overwrites B with the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.rdiv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.rdiv!",
+    "category": "Function",
+    "text": "rdiv!([Y,] A, B) -> Y\n\nCompute A / B in-place and store the result in Y, returning the result. If only two arguments are passed, then rdiv!(A, B) overwrites A with the result.\n\nThe argument B should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring rdiv! usually also require fine-grained control over the factorization of B.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#Low-level-matrix-operations-1",
+    "page": "Linear Algebra",
+    "title": "Low-level matrix operations",
+    "category": "section",
+    "text": "In many cases there are in-place versions of matrix operations that allow you to supply a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order to avoid the overhead of repeated allocations. These in-place operations are suffixed with ! below (e.g. mul!) according to the usual Julia convention.LinearAlgebra.mul!\nLinearAlgebra.ldiv!\nLinearAlgebra.rdiv!"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#BLAS-Functions-1",
+    "page": "Linear Algebra",
+    "title": "BLAS Functions",
+    "category": "section",
+    "text": "In Julia (as in much of scientific computation), dense linear-algebra operations are based on the LAPACK library, which in turn is built on top of basic linear-algebra building-blocks known as the BLAS. There are highly optimized implementations of BLAS available for every computer architecture, and sometimes in high-performance linear algebra routines it is useful to call the BLAS functions directly.LinearAlgebra.BLAS provides wrappers for some of the BLAS functions. Those BLAS functions that overwrite one of the input arrays have names ending in '!'.  Usually, a BLAS function has four methods defined, for Float64, Float32, ComplexF64, and ComplexF32 arrays."
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-chars-1",
+    "page": "Linear Algebra",
+    "title": "BLAS Character Arguments",
+    "category": "section",
+    "text": "Many BLAS functions accept arguments that determine whether to transpose an argument (trans), which triangle of a matrix to reference (uplo or ul), whether the diagonal of a triangular matrix can be assumed to be all ones (dA) or which side of a matrix multiplication the input argument belongs on (side). The possiblities are:"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-side-1",
+    "page": "Linear Algebra",
+    "title": "Multplication Order",
+    "category": "section",
+    "text": "side Meaning\n'L' The argument goes on the left side of a matrix-matrix operation.\n'R' The argument goes on the right side of a matrix-matrix operation."
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-uplo-1",
+    "page": "Linear Algebra",
+    "title": "Triangle Referencing",
+    "category": "section",
+    "text": "uplo/ul Meaning\n'U' Only the upper triangle of the matrix will be used.\n'L' Only the lower triangle of the matrix will be used."
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-trans-1",
+    "page": "Linear Algebra",
+    "title": "Transposition Operation",
+    "category": "section",
+    "text": "trans/tX Meaning\n'N' The input matrix X is not transposed or conjugated.\n'T' The input matrix X will be transposed.\n'C' The input matrix X will be conjugated and transposed."
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS",
+    "category": "Module",
+    "text": "Interface to BLAS subroutines.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.dotu",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.dotu",
+    "category": "Function",
+    "text": "dotu(n, X, incx, Y, incy)\n\nDot function for two complex vectors consisting of n elements of array X with stride incx and n elements of array Y with stride incy.\n\nExamples\n\njulia> Base.BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)\n-10.0 + 10.0im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.dotc",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.dotc",
+    "category": "Function",
+    "text": "dotc(n, X, incx, U, incy)\n\nDot function for two complex vectors, consisting of n elements of array X with stride incx and n elements of array U with stride incy, conjugating the first vector.\n\nExamples\n\njulia> Base.BLAS.dotc(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)\n10.0 - 10.0im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.blascopy!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.blascopy!",
+    "category": "Function",
+    "text": "blascopy!(n, X, incx, Y, incy)\n\nCopy n elements of array X with stride incx to array Y with stride incy. Returns Y.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.nrm2",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.nrm2",
+    "category": "Function",
+    "text": "nrm2(n, X, incx)\n\n2-norm of a vector consisting of n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.nrm2(4, fill(1.0, 8), 2)\n2.0\n\njulia> Base.BLAS.nrm2(1, fill(1.0, 8), 2)\n1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.asum",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.asum",
+    "category": "Function",
+    "text": "asum(n, X, incx)\n\nSum of the absolute values of the first n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.asum(5, fill(1.0im, 10), 2)\n5.0\n\njulia> Base.BLAS.asum(2, fill(1.0im, 10), 5)\n2.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.axpy!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.axpy!",
+    "category": "Function",
+    "text": "axpy!(a, X, Y)\n\nOverwrite Y with a*X + Y, where a is a scalar. Return Y.\n\nExamples\n\njulia> x = [1; 2; 3];\n\njulia> y = [4; 5; 6];\n\njulia> Base.BLAS.axpy!(2, x, y)\n3-element Array{Int64,1}:\n  6\n  9\n 12\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.scal!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.scal!",
+    "category": "Function",
+    "text": "scal!(n, a, X, incx)\n\nOverwrite X with a*X for the first n elements of array X with stride incx. Returns X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.scal",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.scal",
+    "category": "Function",
+    "text": "scal(n, a, X, incx)\n\nReturn X scaled by a for the first n elements of array X with stride incx.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.ger!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.ger!",
+    "category": "Function",
+    "text": "ger!(alpha, x, y, A)\n\nRank-1 update of the matrix A with vectors x and y as alpha*x*y' + A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.syr!",
+    "category": "Function",
+    "text": "syr!(uplo, alpha, x, A)\n\nRank-1 update of the symmetric matrix A with vector x as alpha*x*transpose(x) + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syrk!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.syrk!",
+    "category": "Function",
+    "text": "syrk!(uplo, trans, alpha, A, beta, C)\n\nRank-k update of the symmetric matrix C as alpha*A*transpose(A) + beta*C or alpha*transpose(A)*A + beta*C according to trans. Only the uplo triangle of C is used. Returns C.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syrk",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.syrk",
+    "category": "Function",
+    "text": "syrk(uplo, trans, alpha, A)\n\nReturns either the upper triangle or the lower triangle of A, according to uplo, of alpha*A*transpose(A) or alpha*transpose(A)*A, according to trans.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.her!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.her!",
+    "category": "Function",
+    "text": "her!(uplo, alpha, x, A)\n\nMethods for complex arrays only. Rank-1 update of the Hermitian matrix A with vector x as alpha*x*x' + A. uplo controls which triangle of A is updated. Returns A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.herk!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.herk!",
+    "category": "Function",
+    "text": "herk!(uplo, trans, alpha, A, beta, C)\n\nMethods for complex arrays only. Rank-k update of the Hermitian matrix C as alpha*A*A' + beta*C or alpha*A'*A + beta*C according to trans. Only the uplo triangle of C is updated. Returns C.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.herk",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.herk",
+    "category": "Function",
+    "text": "herk(uplo, trans, alpha, A)\n\nMethods for complex arrays only. Returns the uplo triangle of alpha*A*A' or alpha*A'*A, according to trans.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gbmv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gbmv!",
+    "category": "Function",
+    "text": "gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y or alpha*A'*x + beta*y according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals. alpha and beta are scalars. Return the updated y.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gbmv",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gbmv",
+    "category": "Function",
+    "text": "gbmv(trans, m, kl, ku, alpha, A, x)\n\nReturn alpha*A*x or alpha*A'*x according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals, and alpha is a scalar.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.sbmv!",
+    "category": "Function",
+    "text": "sbmv!(uplo, k, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y where A is a a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. The storage layout for A is described the reference BLAS module, level-2 BLAS at http://www.netlib.org/lapack/explore-html/. Only the uplo triangle of A is used.\n\nReturn the updated y.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv-NTuple{5,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.sbmv",
+    "category": "Method",
+    "text": "sbmv(uplo, k, alpha, A, x)\n\nReturn alpha*A*x where A is a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. Only the uplo triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv-NTuple{4,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.sbmv",
+    "category": "Method",
+    "text": "sbmv(uplo, k, A, x)\n\nReturn A*x where A is a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. Only the uplo triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemm!",
+    "category": "Function",
+    "text": "gemm!(tA, tB, alpha, A, B, beta, C)\n\nUpdate C as alpha*A*B + beta*C or the other three variants according to tA and tB. Return the updated C.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm-NTuple{5,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemm",
+    "category": "Method",
+    "text": "gemm(tA, tB, alpha, A, B)\n\nReturn alpha*A*B or the other three variants according to tA and tB.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm-NTuple{4,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemm",
+    "category": "Method",
+    "text": "gemm(tA, tB, A, B)\n\nReturn A*B or the other three variants according to tA and tB.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemv!",
+    "category": "Function",
+    "text": "gemv!(tA, alpha, A, x, beta, y)\n\nUpdate the vector y as alpha*A*x + beta*y or alpha*A'x + beta*y according to tA. alpha and beta are scalars. Return the updated y.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv-NTuple{4,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemv",
+    "category": "Method",
+    "text": "gemv(tA, alpha, A, x)\n\nReturn alpha*A*x or alpha*A'x according to tA. alpha is a scalar.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv-Tuple{Any,Any,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.gemv",
+    "category": "Method",
+    "text": "gemv(tA, A, x)\n\nReturn A*x or A'x according to tA.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symm!",
+    "category": "Function",
+    "text": "symm!(side, ul, alpha, A, B, beta, C)\n\nUpdate C as alpha*A*B + beta*C or alpha*B*A + beta*C according to side. A is assumed to be symmetric. Only the ul triangle of A is used. Return the updated C.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm-NTuple{5,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symm",
+    "category": "Method",
+    "text": "symm(side, ul, alpha, A, B)\n\nReturn alpha*A*B or alpha*B*A according to side. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm-NTuple{4,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symm",
+    "category": "Method",
+    "text": "symm(side, ul, A, B)\n\nReturn A*B or B*A according to side. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symv!",
+    "category": "Function",
+    "text": "symv!(ul, alpha, A, x, beta, y)\n\nUpdate the vector y as alpha*A*x + beta*y. A is assumed to be symmetric. Only the ul triangle of A is used. alpha and beta are scalars. Return the updated y.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv-NTuple{4,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symv",
+    "category": "Method",
+    "text": "symv(ul, alpha, A, x)\n\nReturn alpha*A*x. A is assumed to be symmetric. Only the ul triangle of A is used. alpha is a scalar.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv-Tuple{Any,Any,Any}",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.symv",
+    "category": "Method",
+    "text": "symv(ul, A, x)\n\nReturn A*x. A is assumed to be symmetric. Only the ul triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmm!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trmm!",
+    "category": "Function",
+    "text": "trmm!(side, ul, tA, dA, alpha, A, B)\n\nUpdate B as alpha*A*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. Returns the updated B.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmm",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trmm",
+    "category": "Function",
+    "text": "trmm(side, ul, tA, dA, alpha, A, B)\n\nReturns alpha*A*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsm!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trsm!",
+    "category": "Function",
+    "text": "trsm!(side, ul, tA, dA, alpha, A, B)\n\nOverwrite B with the solution to A*X = alpha*B or one of the other three variants determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. Returns the updated B.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsm",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trsm",
+    "category": "Function",
+    "text": "trsm(side, ul, tA, dA, alpha, A, B)\n\nReturn the solution to A*X = alpha*B or one of the other three variants determined by determined by side and tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trmv!",
+    "category": "Function",
+    "text": "trmv!(ul, tA, dA, A, b)\n\nReturn op(A)*b, where op is determined by tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones. The multiplication occurs in-place on b.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmv",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trmv",
+    "category": "Function",
+    "text": "trmv(ul, tA, dA, A, b)\n\nReturn op(A)*b, where op is determined by tA. Only the ul triangle of A is used. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trsv!",
+    "category": "Function",
+    "text": "trsv!(ul, tA, dA, A, b)\n\nOverwrite b with the solution to A*x = b or one of the other two variants determined by tA and ul. dA determines if the diagonal values are read or are assumed to be all ones. Return the updated b.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsv",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.trsv",
+    "category": "Function",
+    "text": "trsv(ul, tA, dA, A, b)\n\nReturn the solution to A*x = b or one of the other two variants determined by tA and ul. dA determines if the diagonal values are read or are assumed to be all ones.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.set_num_threads",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.BLAS.set_num_threads",
+    "category": "Function",
+    "text": "set_num_threads(n)\n\nSet the number of threads the BLAS library should use.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.I",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.I",
+    "category": "Constant",
+    "text": "I\n\nAn object of type UniformScaling, representing an identity matrix of any size.\n\nExamples\n\njulia> fill(1, (5,6)) * I == fill(1, (5,6))\ntrue\n\njulia> [1 2im 3; 1im 2 3] * I\n2×3 Array{Complex{Int64},2}:\n 1+0im  0+2im  3+0im\n 0+1im  2+0im  3+0im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-diag-1",
+    "page": "Linear Algebra",
+    "title": "Unit Diagonal",
+    "category": "section",
+    "text": "diag/dX Meaning\n'N' The diagonal values of the matrix X will be read.\n'U' The diagonal of the matrix X is assumed to be all ones.LinearAlgebra.BLAS\nLinearAlgebra.BLAS.dotu\nLinearAlgebra.BLAS.dotc\nLinearAlgebra.BLAS.blascopy!\nLinearAlgebra.BLAS.nrm2\nLinearAlgebra.BLAS.asum\nLinearAlgebra.axpy!\nLinearAlgebra.BLAS.scal!\nLinearAlgebra.BLAS.scal\nLinearAlgebra.BLAS.ger!\nLinearAlgebra.BLAS.syr!\nLinearAlgebra.BLAS.syrk!\nLinearAlgebra.BLAS.syrk\nLinearAlgebra.BLAS.her!\nLinearAlgebra.BLAS.herk!\nLinearAlgebra.BLAS.herk\nLinearAlgebra.BLAS.gbmv!\nLinearAlgebra.BLAS.gbmv\nLinearAlgebra.BLAS.sbmv!\nLinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.gemm!\nLinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.gemv!\nLinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.symm!\nLinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.symv!\nLinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)\nLinearAlgebra.BLAS.trmm!\nLinearAlgebra.BLAS.trmm\nLinearAlgebra.BLAS.trsm!\nLinearAlgebra.BLAS.trsm\nLinearAlgebra.BLAS.trmv!\nLinearAlgebra.BLAS.trmv\nLinearAlgebra.BLAS.trsv!\nLinearAlgebra.BLAS.trsv\nLinearAlgebra.BLAS.set_num_threads\nLinearAlgebra.I"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK",
+    "category": "Module",
+    "text": "Interfaces to LAPACK subroutines.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gbtrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gbtrf!",
+    "category": "Function",
+    "text": "gbtrf!(kl, ku, m, AB) -> (AB, ipiv)\n\nCompute the LU factorization of a banded matrix AB. kl is the first subdiagonal containing a nonzero band, ku is the last superdiagonal containing one, and m is the first dimension of the matrix AB. Returns the LU factorization in-place and ipiv, the vector of pivots used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gbtrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gbtrs!",
+    "category": "Function",
+    "text": "gbtrs!(trans, kl, ku, m, AB, ipiv, B)\n\nSolve the equation AB * X = B. trans determines the orientation of AB. It may be N (no transpose), T (transpose), or C (conjugate transpose). kl is the first subdiagonal containing a nonzero band, ku is the last superdiagonal containing one, and m is the first dimension of the matrix AB. ipiv is the vector of pivots returned from gbtrf!. Returns the vector or matrix X, overwriting B in-place.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebal!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gebal!",
+    "category": "Function",
+    "text": "gebal!(job, A) -> (ilo, ihi, scale)\n\nBalance the matrix A before computing its eigensystem or Schur factorization. job can be one of N (A will not be permuted or scaled), P (A will only be permuted), S (A will only be scaled), or B (A will be both permuted and scaled). Modifies A in-place and returns ilo, ihi, and scale. If permuting was turned on, A[i,j] = 0 if j > i and 1 < j < ilo or j > ihi. scale contains information about the scaling/permutations performed.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebak!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gebak!",
+    "category": "Function",
+    "text": "gebak!(job, side, ilo, ihi, scale, V)\n\nTransform the eigenvectors V of a matrix balanced using gebal! to the unscaled/unpermuted eigenvectors of the original matrix. Modifies V in-place. side can be L (left eigenvectors are transformed) or R (right eigenvectors are transformed).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebrd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gebrd!",
+    "category": "Function",
+    "text": "gebrd!(A) -> (A, d, e, tauq, taup)\n\nReduce A in-place to bidiagonal form A = QBP'. Returns A, containing the bidiagonal matrix B; d, containing the diagonal elements of B; e, containing the off-diagonal elements of B; tauq, containing the elementary reflectors representing Q; and taup, containing the elementary reflectors representing P.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelqf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gelqf!",
+    "category": "Function",
+    "text": "gelqf!(A, tau)\n\nCompute the LQ factorization of A, A = LQ. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngelqf!(A) -> (A, tau)\n\nCompute the LQ factorization of A, A = LQ.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqlf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geqlf!",
+    "category": "Function",
+    "text": "geqlf!(A, tau)\n\nCompute the QL factorization of A, A = QL. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngeqlf!(A) -> (A, tau)\n\nCompute the QL factorization of A, A = QL.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geqrf!",
+    "category": "Function",
+    "text": "geqrf!(A, tau)\n\nCompute the QR factorization of A, A = QR. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngeqrf!(A) -> (A, tau)\n\nCompute the QR factorization of A, A = QR.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqp3!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geqp3!",
+    "category": "Function",
+    "text": "geqp3!(A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3. P is a pivoting matrix, represented by jpvt. tau stores the elementary reflectors. jpvt must have length length greater than or equal to n if A is an (m x n) matrix. tau must have length greater than or equal to the smallest dimension of A.\n\nA, jpvt, and tau are modified in-place.\n\n\n\ngeqp3!(A, jpvt) -> (A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3. P is a pivoting matrix, represented by jpvt. jpvt must have length greater than or equal to n if A is an (m x n) matrix.\n\nReturns A and jpvt, modified in-place, and tau, which stores the elementary reflectors.\n\n\n\ngeqp3!(A) -> (A, jpvt, tau)\n\nCompute the pivoted QR factorization of A, AP = QR using BLAS level 3.\n\nReturns A, modified in-place, jpvt, which represents the pivoting matrix P, and tau, which stores the elementary reflectors.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gerqf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gerqf!",
+    "category": "Function",
+    "text": "gerqf!(A, tau)\n\nCompute the RQ factorization of A, A = RQ. tau contains scalars which parameterize the elementary reflectors of the factorization. tau must have length greater than or equal to the smallest dimension of A.\n\nReturns A and tau modified in-place.\n\n\n\ngerqf!(A) -> (A, tau)\n\nCompute the RQ factorization of A, A = RQ.\n\nReturns A, modified in-place, and tau, which contains scalars which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrt!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geqrt!",
+    "category": "Function",
+    "text": "geqrt!(A, T)\n\nCompute the blocked QR factorization of A, A = QR. T contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization. The first dimension of T sets the block size and it must be between 1 and n. The second dimension of T must equal the smallest dimension of A.\n\nReturns A and T modified in-place.\n\n\n\ngeqrt!(A, nb) -> (A, T)\n\nCompute the blocked QR factorization of A, A = QR. nb sets the block size and it must be between 1 and n, the second dimension of A.\n\nReturns A, modified in-place, and T, which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrt3!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geqrt3!",
+    "category": "Function",
+    "text": "geqrt3!(A, T)\n\nRecursively computes the blocked QR factorization of A, A = QR. T contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.  The first dimension of T sets the block size and it must be between 1 and n. The second dimension of T must equal the smallest dimension of A.\n\nReturns A and T modified in-place.\n\n\n\ngeqrt3!(A) -> (A, T)\n\nRecursively computes the blocked QR factorization of A, A = QR.\n\nReturns A, modified in-place, and T, which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.getrf!",
+    "category": "Function",
+    "text": "getrf!(A) -> (A, ipiv, info)\n\nCompute the pivoted LU factorization of A, A = LU.\n\nReturns A, modified in-place, ipiv, the pivoting information, and an info code which indicates success (info = 0), a singular value in U (info = i, in which case U[i,i] is singular), or an error code (info < 0).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.tzrzf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.tzrzf!",
+    "category": "Function",
+    "text": "tzrzf!(A) -> (A, tau)\n\nTransforms the upper trapezoidal matrix A to upper triangular form in-place. Returns A and tau, the scalar parameters for the elementary reflectors of the transformation.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormrz!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ormrz!",
+    "category": "Function",
+    "text": "ormrz!(side, trans, A, tau, C)\n\nMultiplies the matrix C by Q from the transformation supplied by tzrzf!. Depending on side or trans the multiplication can be left-sided (side = L, Q*C) or right-sided (side = R, C*Q) and Q can be unmodified (trans = N), transposed (trans = T), or conjugate transposed (trans = C). Returns matrix C which is modified in-place with the result of the multiplication.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gels!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gels!",
+    "category": "Function",
+    "text": "gels!(trans, A, B) -> (F, B, ssr)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B using a QR or LQ factorization. Modifies the matrix/vector B in place with the solution. A is overwritten with its QR or LQ factorization. trans may be one of N (no modification), T (transpose), or C (conjugate transpose). gels! searches for the minimum norm/least squares solution. A may be under or over determined. The solution is returned in B.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gesv!",
+    "category": "Function",
+    "text": "gesv!(A, B) -> (B, A, ipiv)\n\nSolves the linear equation A * X = B where A is a square matrix using the LU factorization of A. A is overwritten with its LU factorization and B is overwritten with the solution X. ipiv contains the pivoting information for the LU factorization of A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.getrs!",
+    "category": "Function",
+    "text": "getrs!(trans, A, ipiv, B)\n\nSolves the linear equation A * X = B, transpose(A) * X = B, or adjoint(A) * X = B for square A. Modifies the matrix/vector B in place with the solution. A is the LU factorization from getrf!, with ipiv the pivoting information. trans may be one of N (no modification), T (transpose), or C (conjugate transpose).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getri!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.getri!",
+    "category": "Function",
+    "text": "getri!(A, ipiv)\n\nComputes the inverse of A, using its LU factorization found by getrf!. ipiv is the pivot information output and A contains the LU factorization of getrf!. A is overwritten with its inverse.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesvx!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gesvx!",
+    "category": "Function",
+    "text": "gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)\n\nSolves the linear equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization of A. fact may be E, in which case A will be equilibrated and copied to AF; F, in which case AF and ipiv from a previous LU factorization are inputs; or N, in which case A will be copied to AF and then factored. If fact = F, equed may be N, meaning A has not been equilibrated; R, meaning A was multiplied by Diagonal(R) from the left; C, meaning A was multiplied by Diagonal(C) from the right; or B, meaning A was multiplied by Diagonal(R) from the left and Diagonal(C) from the right. If fact = F and equed = R or B the elements of R must all be positive. If fact = F and equed = C or B the elements of C must all be positive.\n\nReturns the solution X; equed, which is an output if fact is not N, and describes the equilibration that was performed; R, the row equilibration diagonal; C, the column equilibration diagonal; B, which may be overwritten with its equilibrated form Diagonal(R)*B (if trans = N and equed = R,B) or Diagonal(C)*B (if trans = T,C and equed = C,B); rcond, the reciprocal condition number of A after equilbrating; ferr, the forward error bound for each solution vector in X; berr, the forward error bound for each solution vector in X; and work, the reciprocal pivot growth factor.\n\n\n\ngesvx!(A, B)\n\nThe no-equilibration, no-transpose simplification of gesvx!.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelsd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gelsd!",
+    "category": "Function",
+    "text": "gelsd!(A, B, rcond) -> (B, rnk)\n\nComputes the least norm solution of A * X = B by finding the SVD factorization of A, then dividing-and-conquering the problem. B is overwritten with the solution X. Singular values below rcond will be treated as zero. Returns the solution in B and the effective rank of A in rnk.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelsy!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gelsy!",
+    "category": "Function",
+    "text": "gelsy!(A, B, rcond) -> (B, rnk)\n\nComputes the least norm solution of A * X = B by finding the full QR factorization of A, then dividing-and-conquering the problem. B is overwritten with the solution X. Singular values below rcond will be treated as zero. Returns the solution in B and the effective rank of A in rnk.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gglse!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gglse!",
+    "category": "Function",
+    "text": "gglse!(A, c, B, d) -> (X,res)\n\nSolves the equation A * x = c where x is subject to the equality constraint B * x = d. Uses the formula ||c - A*x||^2 = 0 to solve. Returns X and the residual sum-of-squares.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geev!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geev!",
+    "category": "Function",
+    "text": "geev!(jobvl, jobvr, A) -> (W, VL, VR)\n\nFinds the eigensystem of A. If jobvl = N, the left eigenvectors of A aren't computed. If jobvr = N, the right eigenvectors of A aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed. Returns the eigenvalues in W, the right eigenvectors in VR, and the left eigenvectors in VL.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesdd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gesdd!",
+    "category": "Function",
+    "text": "gesdd!(job, A) -> (U, S, VT)\n\nFinds the singular value decomposition of A, A = U * S * V', using a divide and conquer approach. If job = A, all the columns of U and the rows of V' are computed. If job = N, no columns of U or rows of V' are computed. If job = O, A is overwritten with the columns of (thin) U and the rows of (thin) V'. If job = S, the columns of (thin) U and the rows of (thin) V' are computed and returned separately.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesvd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gesvd!",
+    "category": "Function",
+    "text": "gesvd!(jobu, jobvt, A) -> (U, S, VT)\n\nFinds the singular value decomposition of A, A = U * S * V'. If jobu = A, all the columns of U are computed. If jobvt = A all the rows of V' are computed. If jobu = N, no columns of U are computed. If jobvt = N no rows of V' are computed. If jobu = O, A is overwritten with the columns of (thin) U. If jobvt = O, A is overwritten with the rows of (thin) V'. If jobu = S, the columns of (thin) U are computed and returned separately. If jobvt = S the rows of (thin) V' are computed and returned separately. jobu and jobvt can't both be O.\n\nReturns U, S, and Vt, where S are the singular values of A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggsvd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ggsvd!",
+    "category": "Function",
+    "text": "ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)\n\nFinds the generalized singular value decomposition of A and B, U'*A*Q = D1*R and V'*B*Q = D2*R. D1 has alpha on its diagonal and D2 has beta on its diagonal. If jobu = U, the orthogonal/unitary matrix U is computed. If jobv = V the orthogonal/unitary matrix V is computed. If jobq = Q, the orthogonal/unitary matrix Q is computed. If jobu, jobv or jobq is N, that matrix is not computed. This function is only available in LAPACK versions prior to 3.6.0.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggsvd3!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ggsvd3!",
+    "category": "Function",
+    "text": "ggsvd3!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)\n\nFinds the generalized singular value decomposition of A and B, U'*A*Q = D1*R and V'*B*Q = D2*R. D1 has alpha on its diagonal and D2 has beta on its diagonal. If jobu = U, the orthogonal/unitary matrix U is computed. If jobv = V the orthogonal/unitary matrix V is computed. If jobq = Q, the orthogonal/unitary matrix Q is computed. If jobu, jobv, or jobq is N, that matrix is not computed. This function requires LAPACK 3.6.0.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geevx!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.geevx!",
+    "category": "Function",
+    "text": "geevx!(balanc, jobvl, jobvr, sense, A) -> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)\n\nFinds the eigensystem of A with matrix balancing. If jobvl = N, the left eigenvectors of A aren't computed. If jobvr = N, the right eigenvectors of A aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed. If balanc = N, no balancing is performed. If balanc = P, A is permuted but not scaled. If balanc = S, A is scaled but not permuted. If balanc = B, A is permuted and scaled. If sense = N, no reciprocal condition numbers are computed. If sense = E, reciprocal condition numbers are computed for the eigenvalues only. If sense = V, reciprocal condition numbers are computed for the right eigenvectors only. If sense = B, reciprocal condition numbers are computed for the right eigenvectors and the eigenvectors. If sense = E,B, the right and left eigenvectors must be computed.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggev!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ggev!",
+    "category": "Function",
+    "text": "ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)\n\nFinds the generalized eigendecomposition of A and B. If jobvl = N, the left eigenvectors aren't computed. If jobvr = N, the right eigenvectors aren't computed. If jobvl = V or jobvr = V, the corresponding eigenvectors are computed.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gtsv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gtsv!",
+    "category": "Function",
+    "text": "gtsv!(dl, d, du, B)\n\nSolves the equation A * X = B where A is a tridiagonal matrix with dl on the subdiagonal, d on the diagonal, and du on the superdiagonal.\n\nOverwrites B with the solution X and returns it.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gttrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gttrf!",
+    "category": "Function",
+    "text": "gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)\n\nFinds the LU factorization of a tridiagonal matrix with dl on the subdiagonal, d on the diagonal, and du on the superdiagonal.\n\nModifies dl, d, and du in-place and returns them and the second superdiagonal du2 and the pivoting vector ipiv.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gttrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gttrs!",
+    "category": "Function",
+    "text": "gttrs!(trans, dl, d, du, du2, ipiv, B)\n\nSolves the equation A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) using the LU factorization computed by gttrf!. B is overwritten with the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orglq!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.orglq!",
+    "category": "Function",
+    "text": "orglq!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a LQ factorization after calling gelqf! on A. Uses the output of gelqf!. A is overwritten by Q.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgqr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.orgqr!",
+    "category": "Function",
+    "text": "orgqr!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a QR factorization after calling geqrf! on A. Uses the output of geqrf!. A is overwritten by Q.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgql!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.orgql!",
+    "category": "Function",
+    "text": "orgql!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a QL factorization after calling geqlf! on A. Uses the output of geqlf!. A is overwritten by Q.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgrq!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.orgrq!",
+    "category": "Function",
+    "text": "orgrq!(A, tau, k = length(tau))\n\nExplicitly finds the matrix Q of a RQ factorization after calling gerqf! on A. Uses the output of gerqf!. A is overwritten by Q.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormlq!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ormlq!",
+    "category": "Function",
+    "text": "ormlq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a LQ factorization of A computed using gelqf!. C is overwritten.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormqr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ormqr!",
+    "category": "Function",
+    "text": "ormqr!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrf!. C is overwritten.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormql!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ormql!",
+    "category": "Function",
+    "text": "ormql!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QL factorization of A computed using geqlf!. C is overwritten.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormrq!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ormrq!",
+    "category": "Function",
+    "text": "ormrq!(side, trans, A, tau, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a RQ factorization of A computed using gerqf!. C is overwritten.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gemqrt!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gemqrt!",
+    "category": "Function",
+    "text": "gemqrt!(side, trans, V, T, C)\n\nComputes Q * C (trans = N), transpose(Q) * C (trans = T), adjoint(Q) * C (trans = C) for side = L or the equivalent right-sided multiplication for side = R using Q from a QR factorization of A computed using geqrt!. C is overwritten.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.posv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.posv!",
+    "category": "Function",
+    "text": "posv!(uplo, A, B) -> (A, B)\n\nFinds the solution to A * X = B where A is a symmetric or Hermitian positive definite matrix. If uplo = U the upper Cholesky decomposition of A is computed. If uplo = L the lower Cholesky decomposition of A is computed. A is overwritten by its Cholesky decomposition. B is overwritten with the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.potrf!",
+    "category": "Function",
+    "text": "potrf!(uplo, A)\n\nComputes the Cholesky (upper if uplo = U, lower if uplo = L) decomposition of positive-definite matrix A. A is overwritten and returned with an info code.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potri!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.potri!",
+    "category": "Function",
+    "text": "potri!(uplo, A)\n\nComputes the inverse of positive-definite matrix A after calling potrf! to find its (upper if uplo = U, lower if uplo = L) Cholesky decomposition.\n\nA is overwritten by its inverse and returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.potrs!",
+    "category": "Function",
+    "text": "potrs!(uplo, A, B)\n\nFinds the solution to A * X = B where A is a symmetric or Hermitian positive definite matrix whose Cholesky decomposition was computed by potrf!. If uplo = U the upper Cholesky decomposition of A was computed. If uplo = L the lower Cholesky decomposition of A was computed. B is overwritten with the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pstrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.pstrf!",
+    "category": "Function",
+    "text": "pstrf!(uplo, A, tol) -> (A, piv, rank, info)\n\nComputes the (upper if uplo = U, lower if uplo = L) pivoted Cholesky decomposition of positive-definite matrix A with a user-set tolerance tol. A is overwritten by its Cholesky decomposition.\n\nReturns A, the pivots piv, the rank of A, and an info code. If info = 0, the factorization succeeded. If info = i > 0, then A is indefinite or rank-deficient.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ptsv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.ptsv!",
+    "category": "Function",
+    "text": "ptsv!(D, E, B)\n\nSolves A * X = B for positive-definite tridiagonal A. D is the diagonal of A and E is the off-diagonal. B is overwritten with the solution X and returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pttrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.pttrf!",
+    "category": "Function",
+    "text": "pttrf!(D, E)\n\nComputes the LDLt factorization of a positive-definite tridiagonal matrix with D as diagonal and E as off-diagonal. D and E are overwritten and returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pttrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.pttrs!",
+    "category": "Function",
+    "text": "pttrs!(D, E, B)\n\nSolves A * X = B for positive-definite tridiagonal A with diagonal D and off-diagonal E after computing A's LDLt factorization using pttrf!. B is overwritten with the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trtri!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trtri!",
+    "category": "Function",
+    "text": "trtri!(uplo, diag, A)\n\nFinds the inverse of (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. A is overwritten with its inverse.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trtrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trtrs!",
+    "category": "Function",
+    "text": "trtrs!(uplo, trans, diag, A, B)\n\nSolves A * X = B (trans = N), transpose(A) * X = B (trans = T), or adjoint(A) * X = B (trans = C) for (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. B is overwritten with the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trcon!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trcon!",
+    "category": "Function",
+    "text": "trcon!(norm, uplo, diag, A)\n\nFinds the reciprocal condition number of (upper if uplo = U, lower if uplo = L) triangular matrix A. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. If norm = I, the condition number is found in the infinity norm. If norm = O or 1, the condition number is found in the one norm.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trevc!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trevc!",
+    "category": "Function",
+    "text": "trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))\n\nFinds the eigensystem of an upper triangular matrix T. If side = R, the right eigenvectors are computed. If side = L, the left eigenvectors are computed. If side = B, both sets are computed. If howmny = A, all eigenvectors are found. If howmny = B, all eigenvectors are found and backtransformed using VL and VR. If howmny = S, only the eigenvectors corresponding to the values in select are computed.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trrfs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trrfs!",
+    "category": "Function",
+    "text": "trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)\n\nEstimates the error in the solution to A * X = B (trans = N), transpose(A) * X = B (trans = T), adjoint(A) * X = B (trans = C) for side = L, or the equivalent equations a right-handed side = R X * A after computing X using trtrs!. If uplo = U, A is upper triangular. If uplo = L, A is lower triangular. If diag = N, A has non-unit diagonal elements. If diag = U, all diagonal elements of A are one. Ferr and Berr are optional inputs. Ferr is the forward error and Berr is the backward error, each component-wise.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stev!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.stev!",
+    "category": "Function",
+    "text": "stev!(job, dv, ev) -> (dv, Zmat)\n\nComputes the eigensystem for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If job = N only the eigenvalues are found and returned in dv. If job = V then the eigenvectors are also found and returned in Zmat.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stebz!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.stebz!",
+    "category": "Function",
+    "text": "stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)\n\nComputes the eigenvalues for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. If order = B, eigvalues are ordered within a block. If order = E, they are ordered across all the blocks. abstol can be set as a tolerance for convergence.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stegr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.stegr!",
+    "category": "Function",
+    "text": "stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)\n\nComputes the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) for a symmetric tridiagonal matrix with dv as diagonal and ev as off-diagonal. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. The eigenvalues are returned in w and the eigenvectors in Z.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stein!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.stein!",
+    "category": "Function",
+    "text": "stein!(dv, ev_in, w_in, iblock_in, isplit_in)\n\nComputes the eigenvectors for a symmetric tridiagonal matrix with dv as diagonal and ev_in as off-diagonal. w_in specifies the input eigenvalues for which to find corresponding eigenvectors. iblock_in specifies the submatrices corresponding to the eigenvalues in w_in. isplit_in specifies the splitting points between the submatrix blocks.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syconv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.syconv!",
+    "category": "Function",
+    "text": "syconv!(uplo, A, ipiv) -> (A, work)\n\nConverts a symmetric matrix A (which has been factorized into a triangular matrix) into two matrices L and D. If uplo = U, A is upper triangular. If uplo = L, it is lower triangular. ipiv is the pivot vector from the triangular factorization. A is overwritten by L and D.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sysv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.sysv!",
+    "category": "Function",
+    "text": "sysv!(uplo, A, B) -> (B, A, ipiv)\n\nFinds the solution to A * X = B for symmetric matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X. A is overwritten by its Bunch-Kaufman factorization. ipiv contains pivoting information about the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.sytrf!",
+    "category": "Function",
+    "text": "sytrf!(uplo, A) -> (A, ipiv, info)\n\nComputes the Bunch-Kaufman factorization of a symmetric matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored.\n\nReturns A, overwritten by the factorization, a pivot vector ipiv, and the error code info which is a non-negative integer. If info is positive the matrix is singular and the diagonal part of the factorization is exactly zero at position info.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytri!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.sytri!",
+    "category": "Function",
+    "text": "sytri!(uplo, A, ipiv)\n\nComputes the inverse of a symmetric matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. A is overwritten by its inverse.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.sytrs!",
+    "category": "Function",
+    "text": "sytrs!(uplo, A, ipiv, B)\n\nSolves the equation A * X = B for a symmetric matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hesv!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.hesv!",
+    "category": "Function",
+    "text": "hesv!(uplo, A, B) -> (B, A, ipiv)\n\nFinds the solution to A * X = B for Hermitian matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X. A is overwritten by its Bunch-Kaufman factorization. ipiv contains pivoting information about the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetrf!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.hetrf!",
+    "category": "Function",
+    "text": "hetrf!(uplo, A) -> (A, ipiv, info)\n\nComputes the Bunch-Kaufman factorization of a Hermitian matrix A. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored.\n\nReturns A, overwritten by the factorization, a pivot vector ipiv, and the error code info which is a non-negative integer. If info is positive the matrix is singular and the diagonal part of the factorization is exactly zero at position info.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetri!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.hetri!",
+    "category": "Function",
+    "text": "hetri!(uplo, A, ipiv)\n\nComputes the inverse of a Hermitian matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. A is overwritten by its inverse.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetrs!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.hetrs!",
+    "category": "Function",
+    "text": "hetrs!(uplo, A, ipiv, B)\n\nSolves the equation A * X = B for a Hermitian matrix A using the results of sytrf!. If uplo = U, the upper half of A is stored. If uplo = L, the lower half is stored. B is overwritten by the solution X.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syev!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.syev!",
+    "category": "Function",
+    "text": "syev!(jobz, uplo, A)\n\nFinds the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A. If uplo = U, the upper triangle of A is used. If uplo = L, the lower triangle of A is used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syevr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.syevr!",
+    "category": "Function",
+    "text": "syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)\n\nFinds the eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A. If uplo = U, the upper triangle of A is used. If uplo = L, the lower triangle of A is used. If range = A, all the eigenvalues are found. If range = V, the eigenvalues in the half-open interval (vl, vu] are found. If range = I, the eigenvalues with indices between il and iu are found. abstol can be set as a tolerance for convergence.\n\nThe eigenvalues are returned in W and the eigenvectors in Z.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sygvd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.sygvd!",
+    "category": "Function",
+    "text": "sygvd!(itype, jobz, uplo, A, B) -> (w, A, B)\n\nFinds the generalized eigenvalues (jobz = N) or eigenvalues and eigenvectors (jobz = V) of a symmetric matrix A and symmetric positive-definite matrix B. If uplo = U, the upper triangles of A and B are used. If uplo = L, the lower triangles of A and B are used. If itype = 1, the problem to solve is A * x = lambda * B * x. If itype = 2, the problem to solve is A * B * x = lambda * x. If itype = 3, the problem to solve is B * A * x = lambda * x.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.bdsqr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.bdsqr!",
+    "category": "Function",
+    "text": "bdsqr!(uplo, d, e_, Vt, U, C) -> (d, Vt, U, C)\n\nComputes the singular value decomposition of a bidiagonal matrix with d on the diagonal and e_ on the off-diagonal. If uplo = U, e_ is the superdiagonal. If uplo = L, e_ is the subdiagonal. Can optionally also compute the product Q' * C.\n\nReturns the singular values in d, and the matrix C overwritten with Q' * C.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.bdsdc!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.bdsdc!",
+    "category": "Function",
+    "text": "bdsdc!(uplo, compq, d, e_) -> (d, e, u, vt, q, iq)\n\nComputes the singular value decomposition of a bidiagonal matrix with d on the diagonal and e_ on the off-diagonal using a divide and conqueq method. If uplo = U, e_ is the superdiagonal. If uplo = L, e_ is the subdiagonal. If compq = N, only the singular values are found. If compq = I, the singular values and vectors are found. If compq = P, the singular values and vectors are found in compact form. Only works for real types.\n\nReturns the singular values in d, and if compq = P, the compact singular vectors in iq.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gecon!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gecon!",
+    "category": "Function",
+    "text": "gecon!(normtype, A, anorm)\n\nFinds the reciprocal condition number of matrix A. If normtype = I, the condition number is found in the infinity norm. If normtype = O or 1, the condition number is found in the one norm. A must be the result of getrf! and anorm is the norm of A in the relevant norm.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gehrd!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gehrd!",
+    "category": "Function",
+    "text": "gehrd!(ilo, ihi, A) -> (A, tau)\n\nConverts a matrix A to Hessenberg form. If A is balanced with gebal! then ilo and ihi are the outputs of gebal!. Otherwise they should be ilo = 1 and ihi = size(A,2). tau contains the elementary reflectors of the factorization.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orghr!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.orghr!",
+    "category": "Function",
+    "text": "orghr!(ilo, ihi, A, tau)\n\nExplicitly finds Q, the orthogonal/unitary matrix from gehrd!. ilo, ihi, A, and tau must correspond to the input/output to gehrd!.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gees!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gees!",
+    "category": "Function",
+    "text": "gees!(jobvs, A) -> (A, vs, w)\n\nComputes the eigenvalues (jobvs = N) or the eigenvalues and Schur vectors (jobvs = V) of matrix A. A is overwritten by its Schur form.\n\nReturns A, vs containing the Schur vectors, and w, containing the eigenvalues.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gges!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.gges!",
+    "category": "Function",
+    "text": "gges!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)\n\nComputes the generalized eigenvalues, generalized Schur form, left Schur vectors (jobsvl = V), or right Schur vectors (jobvsr = V) of A and B.\n\nThe generalized eigenvalues are returned in alpha and beta. The left Schur vectors are returned in vsl and the right Schur vectors are returned in vsr.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trexc!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trexc!",
+    "category": "Function",
+    "text": "trexc!(compq, ifst, ilst, T, Q) -> (T, Q)\n\nReorder the Schur factorization of a matrix. If compq = V, the Schur vectors Q are reordered. If compq = N they are not modified. ifst and ilst specify the reordering of the vectors.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trsen!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trsen!",
+    "category": "Function",
+    "text": "trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)\n\nReorder the Schur factorization of a matrix and optionally finds reciprocal condition numbers. If job = N, no condition numbers are found. If job = E, only the condition number for this cluster of eigenvalues is found. If job = V, only the condition number for the invariant subspace is found. If job = B then the condition numbers for the cluster and subspace are found. If compq = V the Schur vectors Q are updated. If compq = N the Schur vectors are not modified. select determines which eigenvalues are in the cluster.\n\nReturns T, Q, reordered eigenvalues in w, the condition number of the cluster of eigenvalues s, and the condition number of the invariant subspace sep.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.tgsen!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.tgsen!",
+    "category": "Function",
+    "text": "tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)\n\nReorders the vectors of a generalized Schur decomposition. select specifices the eigenvalues in each cluster.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trsyl!",
+    "page": "Linear Algebra",
+    "title": "LinearAlgebra.LAPACK.trsyl!",
+    "category": "Function",
+    "text": "trsyl!(transa, transb, A, B, C, isgn=1) -> (C, scale)\n\nSolves the Sylvester matrix equation A * X +/- X * B = scale*C where A and B are both quasi-upper triangular. If transa = N, A is not modified. If transa = T, A is transposed. If transa = C, A is conjugate transposed. Similarly for transb and B. If isgn = 1, the equation A * X + X * B = scale * C is solved. If isgn = -1, the equation A * X - X * B = scale * C is solved.\n\nReturns X (overwriting C) and scale.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LinearAlgebra/#LAPACK-Functions-1",
+    "page": "Linear Algebra",
+    "title": "LAPACK Functions",
+    "category": "section",
+    "text": "LinearAlgebra.LAPACK provides wrappers for some of the LAPACK functions for linear algebra.  Those functions that overwrite one of the input arrays have names ending in '!'.Usually a function has 4 methods defined, one each for Float64, Float32, ComplexF64 and ComplexF32 arrays.Note that the LAPACK API provided by Julia can and will change in the future. Since this API is not user-facing, there is no commitment to support/deprecate this specific set of functions in future releases.LinearAlgebra.LAPACK\nLinearAlgebra.LAPACK.gbtrf!\nLinearAlgebra.LAPACK.gbtrs!\nLinearAlgebra.LAPACK.gebal!\nLinearAlgebra.LAPACK.gebak!\nLinearAlgebra.LAPACK.gebrd!\nLinearAlgebra.LAPACK.gelqf!\nLinearAlgebra.LAPACK.geqlf!\nLinearAlgebra.LAPACK.geqrf!\nLinearAlgebra.LAPACK.geqp3!\nLinearAlgebra.LAPACK.gerqf!\nLinearAlgebra.LAPACK.geqrt!\nLinearAlgebra.LAPACK.geqrt3!\nLinearAlgebra.LAPACK.getrf!\nLinearAlgebra.LAPACK.tzrzf!\nLinearAlgebra.LAPACK.ormrz!\nLinearAlgebra.LAPACK.gels!\nLinearAlgebra.LAPACK.gesv!\nLinearAlgebra.LAPACK.getrs!\nLinearAlgebra.LAPACK.getri!\nLinearAlgebra.LAPACK.gesvx!\nLinearAlgebra.LAPACK.gelsd!\nLinearAlgebra.LAPACK.gelsy!\nLinearAlgebra.LAPACK.gglse!\nLinearAlgebra.LAPACK.geev!\nLinearAlgebra.LAPACK.gesdd!\nLinearAlgebra.LAPACK.gesvd!\nLinearAlgebra.LAPACK.ggsvd!\nLinearAlgebra.LAPACK.ggsvd3!\nLinearAlgebra.LAPACK.geevx!\nLinearAlgebra.LAPACK.ggev!\nLinearAlgebra.LAPACK.gtsv!\nLinearAlgebra.LAPACK.gttrf!\nLinearAlgebra.LAPACK.gttrs!\nLinearAlgebra.LAPACK.orglq!\nLinearAlgebra.LAPACK.orgqr!\nLinearAlgebra.LAPACK.orgql!\nLinearAlgebra.LAPACK.orgrq!\nLinearAlgebra.LAPACK.ormlq!\nLinearAlgebra.LAPACK.ormqr!\nLinearAlgebra.LAPACK.ormql!\nLinearAlgebra.LAPACK.ormrq!\nLinearAlgebra.LAPACK.gemqrt!\nLinearAlgebra.LAPACK.posv!\nLinearAlgebra.LAPACK.potrf!\nLinearAlgebra.LAPACK.potri!\nLinearAlgebra.LAPACK.potrs!\nLinearAlgebra.LAPACK.pstrf!\nLinearAlgebra.LAPACK.ptsv!\nLinearAlgebra.LAPACK.pttrf!\nLinearAlgebra.LAPACK.pttrs!\nLinearAlgebra.LAPACK.trtri!\nLinearAlgebra.LAPACK.trtrs!\nLinearAlgebra.LAPACK.trcon!\nLinearAlgebra.LAPACK.trevc!\nLinearAlgebra.LAPACK.trrfs!\nLinearAlgebra.LAPACK.stev!\nLinearAlgebra.LAPACK.stebz!\nLinearAlgebra.LAPACK.stegr!\nLinearAlgebra.LAPACK.stein!\nLinearAlgebra.LAPACK.syconv!\nLinearAlgebra.LAPACK.sysv!\nLinearAlgebra.LAPACK.sytrf!\nLinearAlgebra.LAPACK.sytri!\nLinearAlgebra.LAPACK.sytrs!\nLinearAlgebra.LAPACK.hesv!\nLinearAlgebra.LAPACK.hetrf!\nLinearAlgebra.LAPACK.hetri!\nLinearAlgebra.LAPACK.hetrs!\nLinearAlgebra.LAPACK.syev!\nLinearAlgebra.LAPACK.syevr!\nLinearAlgebra.LAPACK.sygvd!\nLinearAlgebra.LAPACK.bdsqr!\nLinearAlgebra.LAPACK.bdsdc!\nLinearAlgebra.LAPACK.gecon!\nLinearAlgebra.LAPACK.gehrd!\nLinearAlgebra.LAPACK.orghr!\nLinearAlgebra.LAPACK.gees!\nLinearAlgebra.LAPACK.gges!\nLinearAlgebra.LAPACK.trexc!\nLinearAlgebra.LAPACK.trsen!\nLinearAlgebra.LAPACK.tgsen!\nLinearAlgebra.LAPACK.trsyl!"
 },
 
 {
