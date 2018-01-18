@@ -237,7 +237,7 @@ module TestModSub9475
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
         @test Base.module_name(@__MODULE__) == :TestModSub9475
         @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
-        @test Base.module_parent(@__MODULE__) == TestMod7648
+        @test Base.parentmodule(@__MODULE__) == TestMod7648
     end
 end # module TestModSub9475
 
@@ -247,7 +247,7 @@ let
     @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
     @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
     @test Base.module_name(@__MODULE__) == :TestMod7648
-    @test Base.module_parent(@__MODULE__) == curmod
+    @test Base.parentmodule(@__MODULE__) == curmod
 end
 end # module TestMod7648
 
@@ -580,10 +580,10 @@ function f15280(x) end
 
 # bug found in #16850, Base.url with backslashes on Windows
 function module_depth(from::Module, to::Module)
-    if from === to || module_parent(to) === to
+    if from === to || parentmodule(to) === to
         return 0
     else
-        return 1 + module_depth(from, module_parent(to))
+        return 1 + module_depth(from, parentmodule(to))
     end
 end
 function has_backslashes(mod::Module)

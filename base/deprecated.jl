@@ -2816,6 +2816,8 @@ function readandwrite(cmds::AbstractCmd)
 end
 export readandwrite
 
+@deprecate module_parent parentmodule
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 

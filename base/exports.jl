@@ -889,7 +889,7 @@ export
     methods,
     methodswith,
     module_name,
-    module_parent,
+    parentmodule,
     names,
     varinfo,
     versioninfo,

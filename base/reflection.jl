@@ -16,20 +16,20 @@ julia> module_name(Base.LinAlg)
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
-    module_parent(m::Module) -> Module
+    parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
 # Examples
 ```jldoctest
-julia> module_parent(Main)
+julia> parentmodule(Main)
 Main
 
-julia> module_parent(Base.LinAlg.BLAS)
+julia> parentmodule(Base.LinAlg.BLAS)
 Base.LinAlg
 ```
 """
-module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
     @__MODULE__ -> Module
@@ -60,7 +60,7 @@ function fullname(m::Module)
     if m === Main || m === Base || m === Core
         return (mn,)
     end
-    mp = module_parent(m)
+    mp = parentmodule(m)
     if mp === m
         return (mn,)
     end
