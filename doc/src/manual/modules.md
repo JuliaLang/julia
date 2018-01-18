@@ -301,7 +301,7 @@ precompile.  However, for a few other key types, such as `Function` or `DataType
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
 on the memory address of the object (via its `object_id`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the `ObjectIdDict`
+dictionary from within your `__init__` function. Alternatively, you can use the `IdDict`
 dictionary type, which is specially handled by precompilation so that it is safe to initialize
 at compile-time.
 

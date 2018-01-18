@@ -1358,25 +1358,6 @@ catch ex
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
-@test let
-    # creates a new worker in the same folder and tries to include file
-    tmp_file, temp_file_stream = mktemp()
-    close(temp_file_stream)
-    tmp_file = relpath(tmp_file, @__DIR__)
-    try
-        proc = addprocs_with_testenv(1)
-        include(tmp_file)
-        remotecall_fetch(include, proc[1], tmp_file)
-        rmprocs(proc)
-        rm(tmp_file)
-        return true
-    catch e
-        println(e)
-        rm(tmp_file, force=true)
-        return false
-    end
-end == true
-
 let
     # creates a new worker in a different folder and tries to include file
     tmp_dir = mktempdir()

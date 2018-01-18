@@ -38,7 +38,8 @@ New language features
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
   * Field access via dot-syntax can now be overloaded by adding methods to
-    `Base.getproperty` and `Base.setproperty!` ([#1974]).
+    `Base.getproperty` and `Base.setproperty!` ([#1974]), optionally along with
+    a corresponding `Base.propertynames` method for reflection ([#25311]).
 
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
@@ -551,6 +552,10 @@ Library improvements
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
 
+  * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
+    like other `AbstractDict` subtypes and its constructors mirror the
+    ones of `Dict`. ([#25210])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -941,6 +946,8 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
+  * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
+
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).
@@ -948,6 +955,7 @@ Deprecated or removed
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
 
 Command-line option changes
 ---------------------------

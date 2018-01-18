@@ -339,7 +339,7 @@ mutable struct TLayout
     z::Int32
 end
 tlayout = TLayout(5,7,11)
-@test fieldnames(TLayout) == [:x, :y, :z]
+@test fieldnames(TLayout) == [:x, :y, :z] == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)

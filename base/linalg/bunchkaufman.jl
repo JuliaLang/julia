@@ -205,6 +205,8 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     end
 end
 
+Base.propertynames(B::BunchKaufman, private::Bool=false) = append!([:p,:P,:L,:U,:D], private ? fieldnames(typeof(B)) : Symbol[])
+
 issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)

@@ -4,9 +4,9 @@ __precompile__(true)
 
 module Random
 
-include("dSFMT.jl")
+include("DSFMT.jl")
 
-using .dSFMT
+using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 

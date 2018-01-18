@@ -2816,6 +2816,9 @@ function readandwrite(cmds::AbstractCmd)
 end
 export readandwrite
 
+# PR #25196
+@deprecate_binding ObjectIdDict IdDict{Any,Any}
+
 #25395 keywords unlocked
 @deprecate method_exists(f, t, world) method_exists(f, t, world = world)
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)

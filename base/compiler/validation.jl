@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = ObjectIdDict(
+const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
