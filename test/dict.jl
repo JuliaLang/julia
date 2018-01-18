@@ -854,9 +854,14 @@ end
     @test map(string, keys(d)) == Set(["1","3"])
 end
 
-@testset "findall" begin
-    @test @inferred findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test @inferred sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test @inferred isempty(findall(equalto(1), Dict()))
-    @test @inferred isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+@testset "find" begin
+    @test findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test isempty(findall(equalto(1), Dict()))
+    @test isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+
+    @test findfirst(equalto(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(equalto(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
+    @test findfirst(equalto(1), Dict()) === nothing
+    @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
 end

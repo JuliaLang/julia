@@ -376,12 +376,12 @@ This section lists changes that do not have deprecation warnings.
   * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
 
-  * `find` has been renamed to `findall`, and now returns the same type of indices
-    as `keys`/`pairs` for `AbstractArray`, `AbstractDict`, `AbstractString`, `Tuple`
-    and `NamedTuple` objects ([#24774], [#25545]).
-    In particular, this means that it returns `CartesianIndex` objects for matrices
-    and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `LinearIndices(a)[findall(f, a)]` to compute linear indices.
+  * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
+    now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
+    In particular, this means that they use `CartesianIndex` objects for matrices
+    and higher-dimensional arrays insted of linear indices as was previously the case.
+    Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm

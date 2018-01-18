@@ -817,9 +817,11 @@ for A in (rand(2), rand(2,3))
     @test Array(values(A)) == A
 end
 
-# nextind
+# nextind and prevind
 @test nextind(zeros(4), 2) == 3
 @test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
+@test prevind(zeros(4), 2) == 1
+@test prevind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 1)
 
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a

@@ -233,6 +233,9 @@ end
     @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
+    @test first(eachindex("foobar")) === 1
+    @test first(eachindex("")) === 1
+    @test last(eachindex("foobar")) === endof("foobar")
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(uppercase, "foó") == "FOÓ"

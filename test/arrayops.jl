@@ -460,18 +460,49 @@ end
     @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
-@testset "findall with Matrix" begin
+@testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
     @test findall(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
     @test findall(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
                                CartesianIndex(1, 2), CartesianIndex(2, 2)]
+    @test findfirst(isodd, A) == CartesianIndex(1, 1)
+    @test findlast(isodd, A) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 1)) == CartesianIndex(1, 1)
+    @test findprev(isodd, A, CartesianIndex(2, 1)) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 2)) === nothing
+    @test findprev(iseven, A, CartesianIndex(2, 1)) === nothing
 end
-@testset "findall with general iterables" begin
+@testset "find with general iterables" begin
     s = "julia"
     @test findall(c -> c == 'l', s) == [3]
+    @test findfirst(c -> c == 'l', s) == 3
+    @test findlast(c -> c == 'l', s) == 3
+    @test findnext(c -> c == 'l', s, 1) == 3
+    @test findprev(c -> c == 'l', s, 5) == 3
+    @test findnext(c -> c == 'l', s, 4) === nothing
+    @test findprev(c -> c == 'l', s, 2) === nothing
+
     g = Base.Unicode.graphemes("日本語")
-    @test findall(isascii, g) == Int[]
-    @test findall(!iszero, (i % 2 for i in 1:10)) == 1:2:9
+    @test findall(!isempty, g) == 1:3
+    @test isempty(findall(isascii, g))
+    @test findfirst(!isempty, g) == 1
+    @test findfirst(isascii, g) === nothing
+    # Check that the last index isn't assumed to be typemax(Int)
+    @test_throws MethodError findlast(!iszero, g)
+
+    g2 = (i % 2 for i in 1:10)
+    @test findall(!iszero, g2) == 1:2:9
+    @test findfirst(!iszero, g2) == 1
+    @test findlast(!iszero, g2) == 9
+    @test findfirst(equalto(2), g2) === nothing
+    @test findlast(equalto(2), g2) === nothing
+
+    g3 = (i % 2 for i in 1:10, j in 1:2)
+    @test findall(!iszero, g3) == 1:2:19
+    @test findfirst(!iszero, g3) == 1
+    @test findlast(!iszero, g3) == 19
+    @test findfirst(equalto(2), g3) === nothing
+    @test findlast(equalto(2), g3) === nothing
 end
 
 @testset "findmin findmax indmin indmax" begin
