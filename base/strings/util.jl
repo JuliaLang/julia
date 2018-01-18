@@ -93,7 +93,7 @@ julia> chop(a, head = 5, tail = 5)
 ```
 """
 chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
-chop(s::AbstractString; head::Integer, tail::Integer) =
+chop(s::AbstractString; head::Integer = 0, tail::Integer = 1) =
     SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
 
 """
