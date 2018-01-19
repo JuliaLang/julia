@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random
+using Test, Distributed, Random, Serialization
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -1149,6 +1149,7 @@ v6 = FooModEverywhere
 # b) hash value has not changed.
 
 @everywhere begin
+    using Serialization
     global testsercnt_d = Dict()
     mutable struct TestSerCnt
         v
@@ -1157,15 +1158,15 @@ v6 = FooModEverywhere
     hash(x::TestSerCnt, h::UInt) = hash(hash(x.v), h)
     ==(x1::TestSerCnt, x2::TestSerCnt) = (x1.v == x2.v)
 
-    function Base.serialize(s::AbstractSerializer, t::TestSerCnt)
-        Base.Serializer.serialize_type(s, TestSerCnt)
+    function Serialization.serialize(s::AbstractSerializer, t::TestSerCnt)
+        Serialization.serialize_type(s, TestSerCnt)
         serialize(s, t.v)
         global testsercnt_d
         cnt = get!(testsercnt_d, objectid(t), 0)
         testsercnt_d[objectid(t)] = cnt+1
     end
 
-    Base.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
+    Serialization.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
 end
 
 # hash value of tsc is not changed

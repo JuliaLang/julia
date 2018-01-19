@@ -182,7 +182,7 @@ function show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref(x)
-        @gc_preserve r begin
+        GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
                 print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
@@ -296,8 +296,8 @@ function show_type_name(io::IO, tn::TypeName)
     if globname !== nothing
         globname_str = string(globname)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-            isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-            isa(getfield(tn.module, globname), tn.wrapper) && _isleaftype(tn.wrapper))
+                isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
+                isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
@@ -736,9 +736,9 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!_isleaftype(ty) || ty == Core.Box)
+        if emph && (!isdispatchtuple(Tuple{ty}) || ty == Core.Box)
             if ty isa Union && is_expected_union(ty)
-                emphasize(io, "::$ty", Base.warn_color())
+                emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
             else
                 emphasize(io, "::$ty")
             end

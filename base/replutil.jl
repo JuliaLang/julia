@@ -475,7 +475,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
-    for (func,arg_types_param) in funcs
+    for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
             iob = IOContext(buf, io)
@@ -491,9 +491,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(iob, "  ")
-            if !isa(func, s1)
+            if !isa(func, rewrap_unionall(s1, method.sig))
                 # function itself doesn't match
-                return
+                continue
             else
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
@@ -536,7 +536,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     print(iob, "::$sigstr")
                 end
             end
-            special && right_matches==0 && return # continue the do-block
+            special && right_matches == 0 && continue
 
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct

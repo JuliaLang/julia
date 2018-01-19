@@ -573,9 +573,9 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
-    return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !_isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
+    # TODO: handle UnionAll properly
+    return (isa(x, DataType) && isa(t, DataType) && x.name === t.name && x <: t) ||
+           (isa(x, Union) && isa(t, DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given

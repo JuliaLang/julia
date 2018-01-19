@@ -4,113 +4,54 @@ const _TYPE_NAME = Type.body.name
 
 isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _TYPE_NAME
 
-# true if Type is inlineable as constant (is a singleton)
-function isconstType(@nospecialize t)
-    isType(t) || return false
-    p1 = t.parameters[1]
-    # typeof(Bottom) is special since even though it is as leaftype,
+# true if Type{T} is inlineable as constant T
+# requires that T is a singleton, s.t. T == S implies T === S
+isconstType(@nospecialize t) = isType(t) && issingletontype(t.parameters[1])
+
+# test whether T is a singleton type, s.t. T == S implies T === S
+function issingletontype(@nospecialize t)
+    # typeof(Bottom) is special since even though it is a leaftype,
     # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
-    p1 === typeof(Union{}) && return false
-    p1 === Union{} && return true
-    isleaftype(p1) && return true
+    t === typeof(Union{}) && return false
+    t === Union{} && return true
+    isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
+    iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
+    isconcretetype(t) && return true # these are also interned and pointer comparable
+    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
+        return all(p -> issingletontype(p), t.parameters)
+    end
     return false
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 
+# equivalent to isdispatchtuple(Tuple{v}) || v == Union{}
+# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+function isdispatchelem(@nospecialize v)
+    return (v === Bottom) || (v === typeof(Bottom)) ||
+        (isconcretetype(v) && !iskindtype(v)) ||
+        (isType(v) && !has_free_typevars(v))
+end
+
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
-isknownlength(t::DataType) = !isvatuple(t) || (length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2],Int))
-
-function type_depth(@nospecialize(t))
-    if t === Bottom
-        return 0
-    elseif isa(t, Union)
-        return max(type_depth(t.a), type_depth(t.b)) + 1
-    elseif isa(t, DataType)
-        return (t::DataType).depth
-    elseif isa(t, UnionAll)
-        if t.var.ub === Any && t.var.lb === Bottom
-            return type_depth(t.body)
-        end
-        return max(type_depth(t.var.ub) + 1, type_depth(t.var.lb) + 1, type_depth(t.body))
-    end
-    return 0
+function isknownlength(t::DataType)
+    isvatuple(t) || return true
+    return length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2], Int)
 end
 
-# try to find `type` somewhere in `comparison` type
-# at a minimum nesting depth of `mindepth`
-function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
-    if mindepth > 0
-        mindepth -= 1
-    end
-    if t === c
-        return mindepth == 0
-    end
-    if isa(c, TypeVar)
-        # see if it is replacing a TypeVar upper bound with something simpler
-        return is_derived_type(t, c.ub, mindepth)
-    elseif isa(c, Union)
-        # see if it is one of the elements of the union
-        return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
-    elseif isa(c, UnionAll)
-        # see if it is derived from the body
-        return is_derived_type(t, c.body, mindepth)
-    elseif isa(c, DataType)
-        if isa(t, DataType)
-            # see if it is one of the supertypes of a parameter
-            super = supertype(c)
-            while super !== Any
-                t === super && return true
-                super = supertype(super)
-            end
-        end
-        # see if it was extracted from a type parameter
-        cP = c.parameters
-        for p in cP
-            is_derived_type(t, p, mindepth) && return true
-        end
-        if isleaftype(c) && isbits(c)
-            # see if it was extracted from a fieldtype
-            # however, only look through types that can be inlined
-            # to ensure monotonicity of derivation
-            # since we know that for immutable types,
-            # the field types must have been constructed prior to the type,
-            # it cannot have a reference cycle in the type graph
-            cF = c.types
-            for f in cF
-                is_derived_type(t, f, mindepth) && return true
-            end
-        end
-    end
-    return false
-end
-
-function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)
-    for s in sources
-        is_derived_type(t, s, mindepth) && return true
-    end
-    return false
-end
-
+# test if non-Type, non-TypeVar `x` can be used to parameterize a type
 function valid_tparam(@nospecialize(x))
-    if isa(x,Tuple)
+    if isa(x, Tuple)
         for t in x
-            !valid_tparam(t) && return false
+            isa(t, Symbol) || isbits(typeof(t)) || return false
         end
         return true
     end
-    return isa(x,Int) || isa(x,Symbol) || isa(x,Bool) || (!isa(x,Type) && isbits(x))
+    return isa(x, Symbol) || isbits(typeof(x))
 end
 
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t)!=0
-
-@pure function type_typeof(@nospecialize(v))
-    if isa(v, Type)
-        return Type{v}
-    end
-    return typeof(v)
-end
+has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`

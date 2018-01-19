@@ -1,32 +1,34 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Provide serialization of Julia code via the functions
+Provide serialization of Julia objects via the functions
 * [`serialize`](@ref)
 * [`deserialize`](@ref)
 """
-module Serializer
+module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec
 using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
 
-export serialize, deserialize, SerializationState
+export serialize, deserialize, AbstractSerializer, Serializer
 
-mutable struct SerializationState{I<:IO} <: AbstractSerializer
+abstract type AbstractSerializer end
+
+mutable struct Serializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::IdDict
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    SerializationState{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
 end
 
-SerializationState(io::IO) = SerializationState{typeof(io)}(io)
+Serializer(io::IO) = Serializer{typeof(io)}(io)
+
+@deprecate SerializationState Serializer
 
 ## serializing values ##
-
-# types AbstractSerializer and Serializer  # defined in dict.jl
 
 const n_int_literals = 33
 const n_reserved_slots = 25
@@ -386,11 +388,11 @@ lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
 
 remember_object(s::AbstractSerializer, @nospecialize(o), n::UInt64) = nothing
 
-function lookup_object_number(s::SerializationState, n::UInt64)
+function lookup_object_number(s::Serializer, n::UInt64)
     return get(s.known_object_data, n, nothing)
 end
 
-function remember_object(s::SerializationState, @nospecialize(o), n::UInt64)
+function remember_object(s::Serializer, @nospecialize(o), n::UInt64)
     s.known_object_data[n] = o
     return nothing
 end
@@ -648,7 +650,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
 end
 
 """
-    Serializer.writeheader(s::AbstractSerializer)
+    Serialization.writeheader(s::AbstractSerializer)
 
 Write an identifying header to the specified serializer. The header consists of
 8 bytes as follows:
@@ -688,11 +690,11 @@ versions of Julia, or an instance of Julia with a different system image. `Ptr` 
 serialized as all-zero bit patterns (`NULL`).
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
-construct a `SerializationState` and use it as the first argument to `serialize` instead.
-See also [`Serializer.writeheader`](@ref).
+construct a `Serializer` and use it as the first argument to `serialize` instead.
+See also [`Serialization.writeheader`](@ref).
 """
 function serialize(s::IO, x)
-    ss = SerializationState(s)
+    ss = Serializer(s)
     writeheader(ss)
     serialize(ss, x)
 end
@@ -708,7 +710,7 @@ It has been designed with simplicity and performance as a goal and does not vali
 the data read. Malformed data can result in process termination. The caller has to ensure
 the integrity and correctness of data read from `stream`.
 """
-deserialize(s::IO) = deserialize(SerializationState(s))
+deserialize(s::IO) = deserialize(Serializer(s))
 
 function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
@@ -1194,5 +1196,32 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     match_options = deserialize(s)
     Regex(pattern, compile_options, match_options)
 end
+
+## StackTraces
+
+# provide a custom serializer that skips attempting to serialize the `outer_linfo`
+# which is likely to contain complex references, types, and module references
+# that may not exist on the receiver end
+function serialize(s::AbstractSerializer, frame::Base.StackTraces.StackFrame)
+    serialize_type(s, typeof(frame))
+    serialize(s, frame.func)
+    serialize(s, frame.file)
+    write(s.io, frame.line)
+    write(s.io, frame.from_c)
+    write(s.io, frame.inlined)
+    write(s.io, frame.pointer)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
+    func = deserialize(s)
+    file = deserialize(s)
+    line = read(s.io, Int)
+    from_c = read(s.io, Bool)
+    inlined = read(s.io, Bool)
+    pointer = read(s.io, UInt64)
+    return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
+end
+
+include("precompile.jl")
 
 end

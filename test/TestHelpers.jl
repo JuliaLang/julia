@@ -2,6 +2,8 @@
 
 module TestHelpers
 
+using Serialization
+
 include("dimensionful.jl")
 export Furlong
 
@@ -56,6 +58,7 @@ end
 function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
     wrapped_code = quote
+        using Serialization
         result = let
             $code
         end

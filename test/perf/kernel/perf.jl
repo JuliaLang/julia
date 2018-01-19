@@ -21,7 +21,7 @@ function listn1n2(n1::Int,n2::Int)
 end
 
 @timeit listn1n2(1,10^6) "cons" "List concatenation"
-gc()
+GC.gc()
 
 # issue #1211
 include("ziggurat.jl")

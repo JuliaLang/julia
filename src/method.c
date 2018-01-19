@@ -693,10 +693,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
     if (ftype == NULL ||
-        !(jl_is_type_type((jl_value_t*)ftype) ||
-          (jl_is_datatype(ftype) &&
-           (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
-           ftype->name->mt != NULL)))
+        ((!jl_is_type_type((jl_value_t*)ftype)) &&
+         (!jl_is_datatype(ftype) || ftype->abstract || ftype->name->mt == NULL)))
         jl_error("cannot add methods to an abstract type");
     if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
         jl_error("cannot add methods to a builtin function");

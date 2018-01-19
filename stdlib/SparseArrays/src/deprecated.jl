@@ -222,7 +222,6 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
-
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

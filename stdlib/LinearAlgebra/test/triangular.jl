@@ -6,7 +6,7 @@ debug = false
 using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
-    mul!, rdiv!
+    mul!, rdiv!, mul1!, mul2!
 
 debug && println("Triangular matrices")
 
@@ -322,7 +322,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test mul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                @test mul2!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -360,12 +360,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             end
             #error handling
             Ann, Bmm, bm = A1, Matrix{eltyB}(uninitialized, n+1, n+1), Vector{eltyB}(uninitialized, n+1)
-            @test_throws DimensionMismatch mul!(Ann, bm)
-            @test_throws DimensionMismatch mul!(Bmm, Ann)
-            @test_throws DimensionMismatch mul!(transpose(Ann), bm)
-            @test_throws DimensionMismatch mul!(adjoint(Ann), bm)
-            @test_throws DimensionMismatch mul!(Bmm, adjoint(Ann))
-            @test_throws DimensionMismatch mul!(Bmm, transpose(Ann))
+            @test_throws DimensionMismatch mul2!(Ann, bm)
+            @test_throws DimensionMismatch mul1!(Bmm, Ann)
+            @test_throws DimensionMismatch mul2!(transpose(Ann), bm)
+            @test_throws DimensionMismatch mul2!(adjoint(Ann), bm)
+            @test_throws DimensionMismatch mul1!(Bmm, adjoint(Ann))
+            @test_throws DimensionMismatch mul1!(Bmm, transpose(Ann))
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]

@@ -827,10 +827,10 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
 
-  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
-    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
-    this is not true. If you are certain you need the old behavior, it is temporarily available
-    as `Base._isleaftype` ([#17086]).
+  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
+    Concrete types are those that might equal `typeof(x)` for some `x`;
+    `isleaftype` included some types for which this is not true. Those are now categorized more precisely
+    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
@@ -965,6 +965,10 @@ Deprecated or removed
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
+
+  * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
+
+  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
 Command-line option changes
 ---------------------------
@@ -1217,3 +1221,4 @@ Command-line option changes
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25616]: https://github.com/JuliaLang/julia/issues/25616

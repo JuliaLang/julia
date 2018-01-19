@@ -32,7 +32,7 @@ function Base.getindex(rb::GitRebase, i::Integer)
     if !(1 <= i <= count(rb))
         throw(BoundsError(rb, (i,)))
     end
-    Base.@gc_preserve rb begin
+    GC.@preserve rb begin
         rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
                           Ptr{RebaseOperation},
                           (Ptr{Cvoid}, Csize_t), rb.ptr, i-1)
@@ -43,7 +43,7 @@ end
 
 function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
-    Base.@gc_preserve rb begin
+    GC.@preserve rb begin
         try
             @check ccall((:git_rebase_next, :libgit2), Cint,
                           (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),

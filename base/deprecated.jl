@@ -651,7 +651,8 @@ import .Iterators.enumerate
 @deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
 
 # issue #17086
-@deprecate isleaftype isconcrete
+@deprecate isleaftype isconcretetype
+@deprecate isabstract isabstracttype
 
 # PR #22932
 @deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)
@@ -977,6 +978,11 @@ end
 @deprecate_moved bitrand "Random" true true
 @deprecate_moved randjump "Random" true true
 @deprecate_moved GLOBAL_RNG "Random" false true
+
+@deprecate_moved serialize "Serialization" true true
+@deprecate_moved deserialize "Serialization" true true
+@deprecate_moved AbstractSerializer "Serialization" true true
+@deprecate_moved SerializationState "Serialization" true true
 
 # 24595
 @deprecate falses(A::AbstractArray) falses(size(A))
@@ -1572,6 +1578,10 @@ end
 @deprecate method_exists hasmethod
 
 @deprecate object_id objectid
+
+@deprecate gc GC.gc
+@deprecate gc_enable GC.enable
+@eval @deprecate $(Symbol("@gc_preserve")) GC.$(Symbol("@preserve")) false
 
 # issue #9053
 if Sys.iswindows()

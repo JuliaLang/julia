@@ -106,7 +106,7 @@ Get the identifier (`GitHash`) of the object referred to by the direct reference
 function GitHash(ref::GitReference)
     isempty(ref) && return GitHash()
     reftype(ref) != Consts.REF_OID && return GitHash()
-    Base.@gc_preserve ref begin
+    GC.@preserve ref begin
         oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), ref.ptr)
         oid_ptr == C_NULL && return GitHash()
         oid = GitHash(oid_ptr)

@@ -145,9 +145,9 @@ finalize(S)
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere gc()
-@everywhere gc()
-@everywhere gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -288,7 +288,7 @@ let
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    gc(); gc()
+    GC.gc(); GC.gc()
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test haskey(SharedArrays.sa_refs, id)
     finalize(a1)

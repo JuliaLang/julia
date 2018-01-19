@@ -53,7 +53,7 @@ elseif Sys.isapple()
                         (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
-            filename_length = @gc_preserve buf unsafe_load(
+            filename_length = GC.@preserve buf unsafe_load(
               convert(Ptr{UInt32}, pointer(buf) + 8))
             if (filename_length + header_size) > length(buf)
                 resize!(buf, filename_length + header_size)
@@ -561,7 +561,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
-            eval(Main, deserialize(STDIN))
+            eval(Main, Meta.parse(chop(readuntil(STDIN, '\\0'))))
         end
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0
@@ -572,26 +572,28 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
               "w", STDOUT)
     in = io.in
     try
-        serialize(in, quote
+        write(in, """
+                  begin
                   empty!(Base.LOAD_PATH)
-                  append!(Base.LOAD_PATH, $LOAD_PATH)
+                  append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
                   empty!(Base.LOAD_CACHE_PATH)
-                  append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+                  append!(Base.LOAD_CACHE_PATH, $(repr(LOAD_CACHE_PATH)))
                   empty!(Base.DL_LOAD_PATH)
-                  append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+                  append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
                   empty!(Base._concrete_dependencies)
-                  append!(Base._concrete_dependencies, $concrete_deps)
+                  append!(Base._concrete_dependencies, $(repr(concrete_deps)))
                   Base._track_dependencies[] = true
-                  end)
+                  end\0
+                  """)
         source = source_path(nothing)
         if source !== nothing
-            serialize(in, quote
-                      task_local_storage()[:SOURCE_PATH] = $(source)
-                      end)
+            write(in, """
+                      task_local_storage()[:SOURCE_PATH] = $(repr(source))\0
+                      """)
         end
-        serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
+        write(in, "Base.include(Base.__toplevel__, $(repr(abspath(input))))\0")
         if source !== nothing
-            serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
+            write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
         end
         close(in)
     catch ex

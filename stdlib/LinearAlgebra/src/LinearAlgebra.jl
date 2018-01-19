@@ -288,11 +288,9 @@ function char_uplo(uplo::Symbol)
 end
 
 """
-    ldiv!([Y,] A, B) -> Y
+    ldiv!(Y, A, B) -> Y
 
 Compute `A \\ B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `ldiv!(A, B)` overwrites `B` with
-the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
 factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
@@ -304,11 +302,24 @@ control over the factorization of `A`.
 ldiv!(Y, A, B)
 
 """
-    rdiv!([Y,] A, B) -> Y
+    ldiv!(A, B)
 
-Compute `A / B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `rdiv!(A, B)` overwrites `A` with
-the result.
+Compute `A \\ B` in-place and overwriting `B` to store the result.
+
+The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+The reason for this is that factorization itself is both expensive and typically allocates memory
+(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+and performance-critical situations requiring `ldiv!` usually also require fine-grained
+control over the factorization of `A`.
+"""
+ldiv!(A, B)
+
+
+"""
+    rdiv!(A, B)
+
+Compute `A / B` in-place and overwriting `A` to store the result.
 
 The argument `B` should *not* be a matrix.  Rather, instead of matrices it should be a
 factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
@@ -317,7 +328,7 @@ The reason for this is that factorization itself is both expensive and typically
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
 """
-rdiv!(Y, A, B)
+rdiv!(A, B)
 
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)

@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: serialize_cycle, deserialize_cycle, writetag,
-                      __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, reset_state, serialize_type
+using Serialization: serialize_cycle, deserialize_cycle, writetag,
+                     __deserialized_types__, serialize_typename, deserialize_typename,
+                     TYPENAME_TAG, reset_state, serialize_type
 
-import Base.Serializer: object_number, lookup_object_number, remember_object
+import Serialization: object_number, lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I

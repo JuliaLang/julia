@@ -32,7 +32,7 @@ function Base.getindex(blame::GitBlame, i::Integer)
     if !(1 <= i <= counthunks(blame))
         throw(BoundsError(blame, (i,)))
     end
-    Base.@gc_preserve blame begin
+    GC.@preserve blame begin
         hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
                           Ptr{BlameHunk},
                           (Ptr{Cvoid}, Csize_t), blame.ptr, i-1)

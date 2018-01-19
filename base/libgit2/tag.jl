@@ -57,7 +57,7 @@ end
 The name of `tag` (e.g. `"v0.5"`).
 """
 function name(tag::GitTag)
-    Base.@gc_preserve tag begin
+    GC.@preserve tag begin
         str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Cvoid},), tag.ptr)
         str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
         str = unsafe_string(str_ptr)
@@ -72,7 +72,7 @@ end
 The `GitHash` of the target object of `tag`.
 """
 function target(tag::GitTag)
-    Base.@gc_preserve tag begin
+    GC.@preserve tag begin
         oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{GitHash}, (Ptr{Cvoid},), tag.ptr)
         oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
         str = unsafe_load(oid_ptr)

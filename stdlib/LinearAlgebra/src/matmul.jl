@@ -51,7 +51,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    Base.@gc_preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    GC.@preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
@@ -64,7 +64,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    Base.@gc_preserve x y BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    GC.@preserve x y BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
 *(transx::Transpose{<:Any,<:StridedVector{T}}, y::StridedVector{T}) where {T<:BlasComplex} =
@@ -161,13 +161,22 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 
-"""
-    mul!(A, B)
 
-Calculate the matrix-matrix product ``AB``, overwriting one of `A` or `B` (but not both),
-and return the result (the overwritten argument).
 """
-mul!(A, B) = _mul!(A, B, MemoryLayout(A), MemoryLayout(B))
+    mul1!(A, B)
+
+Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
+"""
+mul1!(A, B) = _mul1!(A, B, MemoryLayout(A), MemoryLayout(B))
+
+
+"""
+    mul2!(A, B)
+
+Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
+"""
+mul2!(A, B) = _mul2!(A, B, MemoryLayout(A), MemoryLayout(B))
+
 
 _mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, _1, _2, _3) = generic_matmatmul!(C, 'N', 'N', A, B)
 
@@ -191,6 +200,7 @@ _mul!(C::AbstractMatrix, transA::AbstractMatrix, B::AbstractMatrix, _, ::Transpo
 
 _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::StridedLayout, ::StridedLayout, ::TransposeLayout) where {T<:BlasFloat} =
     (B = transpose(transB); A === B ? syrk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'T', A, B))
+
 for elty in (Float32,Float64)
     @eval begin
         function _mul!(C::AbstractMatrix{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, transB::AbstractMatrix{$elty}, ::StridedLayout, ::StridedLayout, ::TransposeLayout)

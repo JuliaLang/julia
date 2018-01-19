@@ -337,7 +337,7 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    Base.@gc_preserve m @static if Sys.isunix()
+    GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
                     ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
     else
