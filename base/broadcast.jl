@@ -818,7 +818,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,
 function copy(bc::Broadcasted{Style, ElType}) where {Style, ElType}
     # Special handling for types that should be treated incrementally
     is_broadcast_incremental(bc) && return broadcast_incremental(bc)
-    if Style<:NonleafHandlingStyles && !Base._isleaftype(ElType)
+    if Style<:NonleafHandlingStyles && !Base.isconcretetype(ElType)
         return copy_nonleaf(bc)
     end
     dest = broadcast_similar(Style(), ElType, axes(bc), bc)

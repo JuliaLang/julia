@@ -66,8 +66,8 @@ PromoteToSparse(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
 Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
 
 # FIXME: switch to DefaultArrayStyle once we can delete VectorStyle and MatrixStyle
-BroadcastStyle(::Type{<:Base.Adjoint{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
-BroadcastStyle(::Type{<:Base.Transpose{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
+BroadcastStyle(::Type{<:LinearAlgebra.Adjoint{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
+BroadcastStyle(::Type{<:LinearAlgebra.Transpose{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.VectorStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.MatrixStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.DefaultArrayStyle{N}) where N =
