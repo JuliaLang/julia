@@ -151,9 +151,9 @@ function method_for_specialization_heuristics(cinfo, default)
         if isa(sig, SimpleVector) && length(sig) == 3
             methods = _methods(sig[1], sig[2], -1, sig[3])
             if length(methods) == 1
-                _, _, m = methods[]
-                if isa(m, Method)
-                    return m
+                spoofed_sig, _, spoofed_method = methods[]
+                if isa(spoofed_method, Method)
+                    return spoofed_sig, spoofed_method
                 end
             end
         end
@@ -165,10 +165,10 @@ function method_for_specialization_heuristics(method::Method, @nospecialize(sig)
     if isdefined(method, :generator) && method.generator.expand_early
         method_instance = code_for_method(method, sig, sparams, world, false)
         if isa(method_instance, MethodInstance)
-            return method_for_specialization_heuristics(get_staged(method_instance), method)
+            return method_for_specialization_heuristics(get_staged(method_instance), (sig, method))
         end
     end
-    return method
+    return (sig, method)
 end
 
 function exprtype(@nospecialize(x), src::CodeInfo, mod::Module)
