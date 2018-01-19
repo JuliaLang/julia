@@ -208,7 +208,10 @@ function sincos(v::Real)
     end
 end
 
-sincos(x) = (sin(x), cos(x))
+_sincos(x::AbstractFloat) = sincos(x)
+_sincos(x) = (sin(x), cos(x))
+
+sincos(x) = _sincos(float(x))
 
 
 
