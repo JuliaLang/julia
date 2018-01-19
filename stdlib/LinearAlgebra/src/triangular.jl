@@ -488,7 +488,6 @@ mul2!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
 mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
-<<<<<<< HEAD
 
 for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, 'L', 'N'),
                                     (:UnitLowerTriangular, :UnitLowerTriangularLayout, 'L', 'U'),
