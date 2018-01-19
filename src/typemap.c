@@ -1011,19 +1011,15 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     size_t i, l;
     for (i = 0, l = jl_field_count(ttype); i < l && newrec->issimplesig; i++) {
         jl_value_t *decl = jl_field_type(ttype, i);
-        if (decl == (jl_value_t*)jl_datatype_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
-        else if (decl == (jl_value_t*)jl_unionall_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than UnionAll
-        else if (decl == (jl_value_t*)jl_uniontype_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than Union
+        if (jl_is_kind(decl))
+            newrec->isleafsig = 0; // Type{} may have a higher priority than a kind
         else if (jl_is_type_type(decl))
             newrec->isleafsig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg_type(decl))
             newrec->isleafsig = 0; // makes iteration easier when the endpoints are the same
         else if (decl == (jl_value_t*)jl_any_type)
             newrec->isleafsig = 0; // Any needs to go in the general cache
-        else if (!jl_is_leaf_type(decl)) // anything else can go through the general subtyping test
+        else if (!jl_is_concrete_type(decl)) // anything else needs to go through the general subtyping test
             newrec->isleafsig = newrec->issimplesig = 0;
     }
     // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isleafsig and optimize with that knowledge?

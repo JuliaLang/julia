@@ -651,7 +651,8 @@ import .Iterators.enumerate
 @deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
 
 # issue #17086
-@deprecate isleaftype isconcrete
+@deprecate isleaftype isconcretetype
+@deprecate isabstract isabstracttype
 
 # PR #22932
 @deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)

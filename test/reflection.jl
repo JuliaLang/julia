@@ -154,35 +154,30 @@ end # module WarnType
 @test isbits(Tuple{Vararg{Any, 0}})
 
 # issue #16670
-@test Base._isleaftype(Tuple{Int, Vararg{Int, 2}})
-@test !Base._isleaftype(Tuple{Integer, Vararg{Int, 2}})
-@test !Base._isleaftype(Tuple{Int, Vararg{Int}})
-@test Base._isleaftype(Type{Tuple{Integer, Vararg{Int}}})
-@test Base._isleaftype(Type{Vector})
-@test isconcrete(Int)
-@test isconcrete(Vector{Int})
-@test isconcrete(Tuple{Int, Vararg{Int, 2}})
-@test !isconcrete(Tuple{Any})
-@test !isconcrete(Tuple{Integer, Vararg{Int, 2}})
-@test !isconcrete(Tuple{Int, Vararg{Int}})
-@test !isconcrete(Type{Tuple{Integer, Vararg{Int}}})
-@test !isconcrete(Type{Vector})
-@test !isconcrete(Type{Int})
-@test !isconcrete(Tuple{Type{Int}})
-@test isconcrete(DataType)
-@test isconcrete(Union)
-@test !isconcrete(Union{})
-@test !isconcrete(Tuple{Union{}})
-@test !isconcrete(Complex)
-@test !isconcrete(Complex.body)
-@test !isconcrete(AbstractArray{Int,1})
+@test isconcretetype(Int)
+@test isconcretetype(Vector{Int})
+@test isconcretetype(Tuple{Int, Vararg{Int, 2}})
+@test !isconcretetype(Tuple{Any})
+@test !isconcretetype(Tuple{Integer, Vararg{Int, 2}})
+@test !isconcretetype(Tuple{Int, Vararg{Int}})
+@test !isconcretetype(Type{Tuple{Integer, Vararg{Int}}})
+@test !isconcretetype(Type{Vector})
+@test !isconcretetype(Type{Int})
+@test !isconcretetype(Tuple{Type{Int}})
+@test isconcretetype(DataType)
+@test isconcretetype(Union)
+@test !isconcretetype(Union{})
+@test isconcretetype(Tuple{Union{}})
+@test !isconcretetype(Complex)
+@test !isconcretetype(Complex.body)
+@test !isconcretetype(AbstractArray{Int,1})
 struct AlwaysHasLayout{T}
     x
 end
-@test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
-@test isconcrete(AlwaysHasLayout{Any})
-@test isconcrete(Ptr{Cvoid})
-@test !isconcrete(Ptr) && !isconcrete(Ptr.body)
+@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.body)
+@test isconcretetype(AlwaysHasLayout{Any})
+@test isconcretetype(Ptr{Cvoid})
+@test !isconcretetype(Ptr) && !isconcretetype(Ptr.body)
 
 # issue #10165
 i10165(::Type) = 0
@@ -357,11 +352,7 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
-import Base: isstructtype, datatype_alignment, return_types
-@test !isstructtype(Union{})
-@test !isstructtype(Union{Int,Float64})
-@test !isstructtype(Int)
-@test isstructtype(TLayout)
+import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
 @test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
@@ -693,9 +684,29 @@ struct ReflectionExample{T<:AbstractFloat, N}
     x::Tuple{T, N}
 end
 
-@test Base.isabstract(AbstractArray)
-@test !Base.isabstract(ReflectionExample)
-@test !Base.isabstract(Int)
+@test !isabstracttype(Union{})
+@test !isabstracttype(Union{Int,Float64})
+@test isabstracttype(AbstractArray)
+@test isabstracttype(AbstractSet{Int})
+@test !isabstracttype(ReflectionExample)
+@test !isabstracttype(Int)
+@test !isabstracttype(TLayout)
+
+@test !isprimitivetype(Union{})
+@test !isprimitivetype(Union{Int,Float64})
+@test !isprimitivetype(AbstractArray)
+@test !isprimitivetype(AbstractSet{Int})
+@test !isprimitivetype(ReflectionExample)
+@test isprimitivetype(Int)
+@test !isprimitivetype(TLayout)
+
+@test !isstructtype(Union{})
+@test !isstructtype(Union{Int,Float64})
+@test !isstructtype(AbstractArray)
+@test !isstructtype(AbstractSet{Int})
+@test isstructtype(ReflectionExample)
+@test !isstructtype(Int)
+@test isstructtype(TLayout)
 
 @test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
 @test Base.parameter_upper_bound(ReflectionExample, 2) === Any

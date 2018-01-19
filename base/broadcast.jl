@@ -622,7 +622,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 const NonleafHandlingTypes = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,MatrixStyle}
 
 @inline function broadcast(f, s::NonleafHandlingTypes, ::Type{ElType}, inds::Indices, As...) where ElType
-    if !Base._isleaftype(ElType)
+    if !Base.isconcretetype(ElType)
         return broadcast_nonleaf(f, s, ElType, inds, As...)
     end
     dest = broadcast_similar(f, s, ElType, inds, As...)
