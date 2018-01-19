@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia v0.7.0 Release Notes",
     "title": "Deprecated or removed",
     "category": "section",
-    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nwhos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, ','; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, ','[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default juliarc.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler's number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of a simpler predicate isconcrete. Concrete types are those that might equal typeof(x) for some x; isleaftype includes some types for which this is not true. If you are certain you need the old behavior, it is temporarily available as Base._isleaftype (#17086).\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nlinspace and logspace now require an explicit number of elements to be supplied rather than defaulting to 50(#24794, #24805).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616)."
+    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nwhos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, ','; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, ','[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default juliarc.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler's number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of the simpler predicates isconcretetype and isdispatchtuple. Concrete types are those that might equal typeof(x) for some x; isleaftype included some types for which this is not true. Those are now categorized more precisely as \"dispatch tuple types\" and \"!hasfreetypevars\" (not exported). (#17086, #25496)\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nlinspace and logspace now require an explicit number of elements to be supplied rather than defaulting to 50(#24794, #24805).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616)."
 },
 
 {
@@ -5265,6 +5265,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/base/#Base.propertynames",
+    "page": "Essentials",
+    "title": "Base.propertynames",
+    "category": "Function",
+    "text": "propertynames(x, private=false)\n\nGet an array of the properties (x.property) of an object x.   This is typically the same as fieldnames(typeof(x)), but types that overload getproperty should generally overload propertynames as well to get the properties of an instance of the type.\n\npropertynames(x) may return only \"public\" property names that are part of the documented interface of x.   If you want it to also return \"private\" fieldnames intended for internal use, pass true for the optional second argument. REPL tab completion on x. shows only the private=false properties.\n\n\n\n"
+},
+
+{
     "location": "base/base/#Core.getfield",
     "page": "Essentials",
     "title": "Core.getfield",
@@ -5341,7 +5349,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "All Objects",
     "category": "section",
-    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nCore.typeassert\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.objectid\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nBase.getproperty\nBase.setproperty!\nCore.getfield\nCore.setfield!\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
+    "text": "Core.:(===)\nCore.isa\nBase.isequal\nBase.isless\nBase.ifelse\nCore.typeassert\nCore.typeof\nCore.tuple\nBase.ntuple\nBase.objectid\nBase.hash\nBase.finalizer\nBase.finalize\nBase.copy\nBase.deepcopy\nBase.getproperty\nBase.setproperty!\nBase.propertynames\nCore.getfield\nCore.setfield!\nCore.isdefined\nBase.@isdefined\nBase.convert\nBase.promote\nBase.oftype\nBase.widen\nBase.identity"
+},
+
+{
+    "location": "base/base/#Properties-of-Types-1",
+    "page": "Essentials",
+    "title": "Properties of Types",
+    "category": "section",
+    "text": ""
 },
 
 {
@@ -5374,6 +5390,198 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.subtypes",
     "category": "Function",
     "text": "subtypes(T::DataType)\n\nReturn a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.\n\nExamples\n\njulia> subtypes(Integer)\n3-element Array{Union{DataType, UnionAll},1}:\n Bool\n Signed\n Unsigned\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.typejoin",
+    "page": "Essentials",
+    "title": "Base.typejoin",
+    "category": "Function",
+    "text": "typejoin(T, S)\n\nCompute a type that contains both T and S.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.typeintersect",
+    "page": "Essentials",
+    "title": "Base.typeintersect",
+    "category": "Function",
+    "text": "typeintersect(T, S)\n\nCompute a type that contains the intersection of T and S. Usually this will be the smallest such type or one close to it.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.promote_type",
+    "page": "Essentials",
+    "title": "Base.promote_type",
+    "category": "Function",
+    "text": "promote_type(type1, type2)\n\nPromotion refers to converting values of mixed types to a single common type. promote_type represents the default promotion behavior in Julia when operators (usually mathematical) are given arguments of differing types. promote_type generally tries to return a type which can at least approximate most values of either input type without excessively widening.  Some loss is tolerated; for example, promote_type(Int64, Float64) returns Float64 even though strictly, not all Int64 values can be represented exactly as Float64 values.\n\njulia> promote_type(Int64, Float64)\nFloat64\n\njulia> promote_type(Int32, Int64)\nInt64\n\njulia> promote_type(Float32, BigInt)\nBigFloat\n\njulia> promote_type(Int16, Float16)\nFloat16\n\njulia> promote_type(Int64, Float16)\nFloat16\n\njulia> promote_type(Int8, UInt16)\nUInt16\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.promote_rule",
+    "page": "Essentials",
+    "title": "Base.promote_rule",
+    "category": "Function",
+    "text": "promote_rule(type1, type2)\n\nSpecifies what type should be used by promote when given values of types type1 and type2. This function should not be called directly, but should have definitions added to it for new types as appropriate.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isdispatchtuple",
+    "page": "Essentials",
+    "title": "Base.isdispatchtuple",
+    "category": "Function",
+    "text": "isdispatchtuple(T)\n\nDetermine whether type T is a tuple \"leaf type\", meaning it could appear as a type signature in dispatch and has no subtypes (or supertypes) which could appear in a call.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Type-relations-1",
+    "page": "Essentials",
+    "title": "Type relations",
+    "category": "section",
+    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typejoin\nBase.typeintersect\nBase.promote_type\nBase.promote_rule\nBase.isdispatchtuple"
+},
+
+{
+    "location": "base/base/#Base.isimmutable",
+    "page": "Essentials",
+    "title": "Base.isimmutable",
+    "category": "Function",
+    "text": "isimmutable(v) -> Bool\n\nReturn true iff value v is immutable.  See Mutable Composite Types for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of DataType is mutable.\n\nExamples\n\njulia> isimmutable(1)\ntrue\n\njulia> isimmutable([1,2])\nfalse\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isabstracttype",
+    "page": "Essentials",
+    "title": "Base.isabstracttype",
+    "category": "Function",
+    "text": "Base.isabstracttype(T)\n\nDetermine whether type T was declared as an abstract type (i.e. using the abstract keyword).\n\nExamples\n\njulia> Base.isabstracttype(AbstractArray)\ntrue\n\njulia> Base.isabstracttype(Vector)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isprimitivetype",
+    "page": "Essentials",
+    "title": "Base.isprimitivetype",
+    "category": "Function",
+    "text": "Base.isprimitivetype(T) -> Bool\n\nDetermine whether type T was declared as a primitive type (i.e. using the primitive keyword).\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isstructtype",
+    "page": "Essentials",
+    "title": "Base.isstructtype",
+    "category": "Function",
+    "text": "Base.isstructtype(T) -> Bool\n\nDetermine whether type T was declared as a struct type (i.e. using the struct or mutable struct keyword).\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.datatype_name",
+    "page": "Essentials",
+    "title": "Base.datatype_name",
+    "category": "Function",
+    "text": "Base.datatype_name(t) -> Symbol\n\nGet the name of a (potentially UnionAll-wrapped) DataType (without its parent module) as a symbol.\n\nExamples\n\njulia> module Foo\n           struct S{T}\n           end\n       end\nFoo\n\njulia> Base.datatype_name(Foo.S{T} where T)\n:S\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.fieldnames",
+    "page": "Essentials",
+    "title": "Base.fieldnames",
+    "category": "Function",
+    "text": "fieldnames(x::DataType)\n\nGet an array of the fields of a DataType.\n\nExamples\n\njulia> fieldnames(Hermitian)\n2-element Array{Symbol,1}:\n :data\n :uplo\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.fieldname",
+    "page": "Essentials",
+    "title": "Base.fieldname",
+    "category": "Function",
+    "text": "fieldname(x::DataType, i::Integer)\n\nGet the name of field i of a DataType.\n\nExamples\n\njulia> fieldname(SparseMatrixCSC, 1)\n:m\n\njulia> fieldname(SparseMatrixCSC, 5)\n:nzval\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Declared-structure-1",
+    "page": "Essentials",
+    "title": "Declared structure",
+    "category": "section",
+    "text": "Base.isimmutable\nBase.isabstracttype\nBase.isprimitivetype\nBase.isstructtype\nBase.datatype_name\nBase.fieldnames\nBase.fieldname"
+},
+
+{
+    "location": "base/base/#Base.sizeof-Tuple{Type}",
+    "page": "Essentials",
+    "title": "Base.sizeof",
+    "category": "Method",
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(AbstractArray)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isconcretetype",
+    "page": "Essentials",
+    "title": "Base.isconcretetype",
+    "category": "Function",
+    "text": "isconcretetype(T)\n\nDetermine whether type T is a concrete type, meaning it could have direct instances (values x such that typeof(x) === T).\n\nExamples\n\njulia> isconcretetype(Complex)\nfalse\n\njulia> isconcretetype(Complex{Float32})\ntrue\n\njulia> isconcretetype(Vector{Complex})\ntrue\n\njulia> isconcretetype(Vector{Complex{Float32}})\ntrue\n\njulia> isconcretetype(Union{})\nfalse\n\njulia> isconcretetype(Union{Int,String})\nfalse\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.isbits",
+    "page": "Essentials",
+    "title": "Base.isbits",
+    "category": "Function",
+    "text": "isbits(T)\n\nReturn true if type T is a \"plain data\" type, meaning it is immutable and contains no references to other values, only primitive types and other isbits types. Typical examples are numeric types such as UInt8, Float64, and Complex{Float64}. This category of types is significant since they are valid as type parameters, may not track isdefined / isassigned status, and have a defined layout that is compatible with C.\n\nExamples\n\njulia> isbits(Complex{Float64})\ntrue\n\njulia> isbits(Complex)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Core.fieldtype",
+    "page": "Essentials",
+    "title": "Core.fieldtype",
+    "category": "Function",
+    "text": "fieldtype(T, name::Symbol | index::Int)\n\nDetermine the declared type of a field (specified by name or index) in a composite DataType T.\n\nExamples\n\njulia> struct Foo\n           x::Int64\n           y::String\n       end\n\njulia> fieldtype(Foo, :x)\nInt64\n\njulia> fieldtype(Foo, 2)\nString\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.fieldcount",
+    "page": "Essentials",
+    "title": "Base.fieldcount",
+    "category": "Function",
+    "text": "fieldcount(t::Type)\n\nGet the number of fields that an instance of the given type would have. An error is thrown if the type is too abstract to determine this.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.fieldoffset",
+    "page": "Essentials",
+    "title": "Base.fieldoffset",
+    "category": "Function",
+    "text": "fieldoffset(type, i)\n\nThe byte offset of field i of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct:\n\njulia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];\n\njulia> structinfo(Base.Filesystem.StatStruct)\n12-element Array{Tuple{UInt64,Symbol,DataType},1}:\n (0x0000000000000000, :device, UInt64)\n (0x0000000000000008, :inode, UInt64)\n (0x0000000000000010, :mode, UInt64)\n (0x0000000000000018, :nlink, Int64)\n (0x0000000000000020, :uid, UInt64)\n (0x0000000000000028, :gid, UInt64)\n (0x0000000000000030, :rdev, UInt64)\n (0x0000000000000038, :size, Int64)\n (0x0000000000000040, :blksize, Int64)\n (0x0000000000000048, :blocks, Int64)\n (0x0000000000000050, :mtime, Float64)\n (0x0000000000000058, :ctime, Float64)\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.datatype_alignment",
+    "page": "Essentials",
+    "title": "Base.datatype_alignment",
+    "category": "Function",
+    "text": "Base.datatype_alignment(dt::DataType) -> Int\n\nMemory allocation minimum alignment for instances of this type. Can be called on any isconcretetype.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.datatype_haspadding",
+    "page": "Essentials",
+    "title": "Base.datatype_haspadding",
+    "category": "Function",
+    "text": "Base.datatype_haspadding(dt::DataType) -> Bool\n\nReturn whether the fields of instances of this type are packed in memory, with no intervening padding bytes. Can be called on any isconcretetype.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.datatype_pointerfree",
+    "page": "Essentials",
+    "title": "Base.datatype_pointerfree",
+    "category": "Function",
+    "text": "Base.datatype_pointerfree(dt::DataType) -> Bool\n\nReturn whether instances of this type can contain references to gc-managed memory. Can be called on any isconcretetype.\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Memory-layout-1",
+    "page": "Essentials",
+    "title": "Memory layout",
+    "category": "section",
+    "text": "Base.sizeof(::Type)\nBase.isconcretetype\nBase.isbits\nCore.fieldtype\nBase.fieldcount\nBase.fieldoffset\nBase.datatype_alignment\nBase.datatype_haspadding\nBase.datatype_pointerfree"
 },
 
 {
@@ -5417,14 +5625,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.sizeof-Tuple{Type}",
-    "page": "Essentials",
-    "title": "Base.sizeof",
-    "category": "Method",
-    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(AbstractArray)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.eps-Tuple{Type{#s59} where #s59<:AbstractFloat}",
     "page": "Essentials",
     "title": "Base.eps",
@@ -5441,78 +5641,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.promote_type",
-    "page": "Essentials",
-    "title": "Base.promote_type",
-    "category": "Function",
-    "text": "promote_type(type1, type2)\n\nPromotion refers to converting values of mixed types to a single common type. promote_type represents the default promotion behavior in Julia when operators (usually mathematical) are given arguments of differing types. promote_type generally tries to return a type which can at least approximate most values of either input type without excessively widening.  Some loss is tolerated; for example, promote_type(Int64, Float64) returns Float64 even though strictly, not all Int64 values can be represented exactly as Float64 values.\n\njulia> promote_type(Int64, Float64)\nFloat64\n\njulia> promote_type(Int32, Int64)\nInt64\n\njulia> promote_type(Float32, BigInt)\nBigFloat\n\njulia> promote_type(Int16, Float16)\nFloat16\n\njulia> promote_type(Int64, Float16)\nFloat16\n\njulia> promote_type(Int8, UInt16)\nUInt16\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.promote_rule",
-    "page": "Essentials",
-    "title": "Base.promote_rule",
-    "category": "Function",
-    "text": "promote_rule(type1, type2)\n\nSpecifies what type should be used by promote when given values of types type1 and type2. This function should not be called directly, but should have definitions added to it for new types as appropriate.\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.fieldoffset",
-    "page": "Essentials",
-    "title": "Base.fieldoffset",
-    "category": "Function",
-    "text": "fieldoffset(type, i)\n\nThe byte offset of field i of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct:\n\njulia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];\n\njulia> structinfo(Base.Filesystem.StatStruct)\n12-element Array{Tuple{UInt64,Symbol,DataType},1}:\n (0x0000000000000000, :device, UInt64)\n (0x0000000000000008, :inode, UInt64)\n (0x0000000000000010, :mode, UInt64)\n (0x0000000000000018, :nlink, Int64)\n (0x0000000000000020, :uid, UInt64)\n (0x0000000000000028, :gid, UInt64)\n (0x0000000000000030, :rdev, UInt64)\n (0x0000000000000038, :size, Int64)\n (0x0000000000000040, :blksize, Int64)\n (0x0000000000000048, :blocks, Int64)\n (0x0000000000000050, :mtime, Float64)\n (0x0000000000000058, :ctime, Float64)\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Core.fieldtype",
-    "page": "Essentials",
-    "title": "Core.fieldtype",
-    "category": "Function",
-    "text": "fieldtype(T, name::Symbol | index::Int)\n\nDetermine the declared type of a field (specified by name or index) in a composite DataType T.\n\nExamples\n\njulia> struct Foo\n           x::Int64\n           y::String\n       end\n\njulia> fieldtype(Foo, :x)\nInt64\n\njulia> fieldtype(Foo, 2)\nString\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.isimmutable",
-    "page": "Essentials",
-    "title": "Base.isimmutable",
-    "category": "Function",
-    "text": "isimmutable(v)\n\nReturn true iff value v is immutable.  See Mutable Composite Types for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of DataType is mutable.\n\nExamples\n\njulia> isimmutable(1)\ntrue\n\njulia> isimmutable([1,2])\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.isbits",
-    "page": "Essentials",
-    "title": "Base.isbits",
-    "category": "Function",
-    "text": "isbits(T)\n\nReturn true if T is a \"plain data\" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as UInt8, Float64, and Complex{Float64}.\n\nExamples\n\njulia> isbits(Complex{Float64})\ntrue\n\njulia> isbits(Complex)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.isconcrete",
-    "page": "Essentials",
-    "title": "Base.isconcrete",
-    "category": "Function",
-    "text": "isconcrete(T)\n\nDetermine whether T is a concrete type, meaning it can have direct instances (values x such that typeof(x) === T).\n\nExamples\n\njulia> isconcrete(Complex)\nfalse\n\njulia> isconcrete(Complex{Float32})\ntrue\n\njulia> isconcrete(Vector{Complex})\ntrue\n\njulia> isconcrete(Vector{Complex{Float32}})\ntrue\n\njulia> isconcrete(Union{})\nfalse\n\njulia> isconcrete(Union{Int,String})\nfalse\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.typejoin",
-    "page": "Essentials",
-    "title": "Base.typejoin",
-    "category": "Function",
-    "text": "typejoin(T, S)\n\nCompute a type that contains both T and S.\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.typeintersect",
-    "page": "Essentials",
-    "title": "Base.typeintersect",
-    "category": "Function",
-    "text": "typeintersect(T, S)\n\nCompute a type that contains the intersection of T and S. Usually this will be the smallest such type or one close to it.\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.instances",
     "page": "Essentials",
     "title": "Base.instances",
@@ -5521,11 +5649,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Properties-of-Types-1",
+    "location": "base/base/#Special-values-1",
     "page": "Essentials",
-    "title": "Properties of Types",
+    "title": "Special values",
     "category": "section",
-    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.sizeof(::Type)\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.promote_type\nBase.promote_rule\nBase.fieldoffset\nCore.fieldtype\nBase.isimmutable\nBase.isbits\nBase.isconcrete\nBase.typejoin\nBase.typeintersect\nBase.instances"
+    "text": "Base.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.instances"
 },
 
 {
@@ -6521,46 +6649,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.fieldnames",
-    "page": "Essentials",
-    "title": "Base.fieldnames",
-    "category": "Function",
-    "text": "fieldnames(x::DataType)\n\nGet an array of the fields of a DataType.\n\nExamples\n\njulia> fieldnames(Hermitian)\n2-element Array{Symbol,1}:\n :data\n :uplo\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.fieldname",
-    "page": "Essentials",
-    "title": "Base.fieldname",
-    "category": "Function",
-    "text": "fieldname(x::DataType, i::Integer)\n\nGet the name of field i of a DataType.\n\nExamples\n\njulia> fieldname(SparseMatrixCSC, 1)\n:m\n\njulia> fieldname(SparseMatrixCSC, 5)\n:nzval\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.fieldcount",
-    "page": "Essentials",
-    "title": "Base.fieldcount",
-    "category": "Function",
-    "text": "fieldcount(t::Type)\n\nGet the number of fields that an instance of the given type would have. An error is thrown if the type is too abstract to determine this.\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.propertynames",
-    "page": "Essentials",
-    "title": "Base.propertynames",
-    "category": "Function",
-    "text": "propertynames(x, private=false)\n\nGet an array of the properties (x.property) of an object x.   This is typically the same as fieldnames(typeof(x)), but types that overload getproperty should generally overload propertynames as well to get the properties of an instance of the type.\n\npropertynames(x) may return only \"public\" property names that are part of the documented interface of x.   If you want it to also return \"private\" fieldnames intended for internal use, pass true for the optional second argument. REPL tab completion on x. shows only the private=false properties.\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.datatype_name",
-    "page": "Essentials",
-    "title": "Base.datatype_name",
-    "category": "Function",
-    "text": "Base.datatype_name(t) -> Symbol\n\nGet the name of a (potentially UnionAll-wrapped) DataType (without its parent module) as a symbol.\n\nExamples\n\njulia> module Foo\n           struct S{T}\n           end\n       end\nFoo\n\njulia> Base.datatype_name(Foo.S{T} where T)\n:S\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.isconst",
     "page": "Essentials",
     "title": "Base.isconst",
@@ -6605,7 +6693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Reflection",
     "category": "section",
-    "text": "Base.module_name\nBase.parentmodule\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.fieldnames\nBase.fieldname\nBase.fieldcount\nBase.propertynames\nBase.datatype_name\nBase.isconst\nBase.function_name\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)\nBase.@functionloc"
+    "text": "Base.module_name\nBase.parentmodule\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.isconst\nBase.function_name\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)\nBase.@functionloc"
 },
 
 {
@@ -7181,7 +7269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7213,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n"
 },
 
 {
@@ -7525,7 +7613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -7821,7 +7909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
