@@ -426,6 +426,35 @@ checks and is only meant to improve readability of the call.
     ```
 
 !!! note
+    For Fortran functions taking variable length strings of type `character(len=*)` the string lengths
+    are provided as *hidden arguments*. Type and position of these arguments in the list are compiler
+    specific, where compiler vendors usually default to using `Csize_t` as type and append the hidden
+    arguments at the end of the argument list. While this behaviour is fixed for some compilers (GNU),
+    others *optionally* permit placing hidden arguments directly after the character argument (Intel,PGI). 
+    For example, Fortran subroutines of the form
+
+    ```fortran
+    subroutine test(str1, str2)
+    character(len=*) :: str1,str2
+    ```
+
+    can be called via the following Julia code, where the lengths are appended
+
+    ```julia
+    str1 = "example1"
+    str2 = "example2"
+    ccall(:test, Void, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t), 
+                        str1, str2, length(str1), length(str2))
+    ```
+    
+!!! warning    
+    Fortran compilers *may* also add other hidden arguments for pointers, assumed-shape (`:`)
+    and assumed-size (`*`) arrays. Such behaviour can be avoided by using `ISO_C_BINDING` and
+    including `bind(c)` in the defintion of the subroutine, which is strongly recommended for
+    interoperable code. In this case there will be no hidden arguments, at the cost of some
+    language features (e.g. only `character(len=1)` will be permitted to pass strings).
+
+!!! note
     A C function declared to return `Cvoid` will return the value `nothing` in Julia.
 
 ### Struct Type correspondences
