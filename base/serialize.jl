@@ -16,10 +16,10 @@ export serialize, deserialize, SerializationState
 mutable struct SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::ObjectIdDict
+    table::IdDict
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict(), Int[], Dict{UInt64,Any}())
+    SerializationState{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
 end
 
 SerializationState(io::IO) = SerializationState{typeof(io)}(io)
@@ -357,7 +357,7 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     if Base.is_root_module(m)
         serialize(s, Base.root_module_key(m))
     else
-        serialize_mod_names(s, module_parent(m))
+        serialize_mod_names(s, parentmodule(m))
         serialize(s, module_name(m))
     end
 end

@@ -602,7 +602,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                 @error \"""
                     ------------------------------------------------------------
                     # Build failed for \$pkg
-                    \""" exception=err
+                    \""" exception=err,catch_backtrace()
                 serialize(f, pkg)
                 serialize(f, err)
             end
@@ -633,19 +633,13 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
-    errfile = tempname()
-    touch(errfile)  # create empty file
-    try
+    mktemp() do errfile, f
         build!(pkgs, seen, errfile)
-        open(errfile, "r") do f
-            while !eof(f)
-                pkg = deserialize(f)
-                err = deserialize(f)
-                errs[pkg] = err
-            end
+        while !eof(f)
+            pkg = deserialize(f)
+            err = deserialize(f)
+            errs[pkg] = err
         end
-    finally
-        isfile(errfile) && Base.rm(errfile)
     end
 end
 
@@ -679,7 +673,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
                 @error """
                     ------------------------------------------------------------
                     # Update hook failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 errs[pkg] = err
             end
         end
@@ -739,7 +733,7 @@ function test!(pkg::AbstractString,
                 @error """
                     ------------------------------------------------------------
                     # Testing failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 push!(errs,pkg)
             end
         end

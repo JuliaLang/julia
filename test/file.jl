@@ -218,10 +218,10 @@ close(s)
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
-path = tempname()
-# Issue #9053.
-@test ispath(path) == Sys.iswindows()
-ispath(path) && rm(path)
+let path = tempname()
+    # issue #9053
+    @test !ispath(path)
+end
 
 (p, f) = mktemp()
 print(f, "Here is some text")

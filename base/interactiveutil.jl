@@ -322,13 +322,6 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "  BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "  BLAS: ",libblas_name)
-    end
-    println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
     println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
@@ -367,6 +360,8 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
+In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
+these are often intentional.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))

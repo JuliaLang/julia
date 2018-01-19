@@ -5,7 +5,7 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using Main.TestHelpers.OAs
 using SparseArrays
 
-using Random
+using Random, LinearAlgebra
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -269,30 +269,30 @@ end
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = find(occursin(b), a)
+    ind = findall(occursin(b), a)
     @test ind == [3,4]
-    @test find(occursin(Int[]), a) == Int[]
-    @test find(occursin(a), Int[]) == Int[]
+    @test findall(occursin(Int[]), a) == Int[]
+    @test findall(occursin(a), Int[]) == Int[]
 
     a = [1,2,3,4,5]
     b = [2,3,4,6]
-    @test find(occursin(b), a) == [2,3,4]
-    @test find(occursin(a), b) == [1,2,3]
-    @test find(occursin(Int[]), a) == Int[]
-    @test find(occursin(a), Int[]) == Int[]
+    @test findall(occursin(b), a) == [2,3,4]
+    @test findall(occursin(a), b) == [1,2,3]
+    @test findall(occursin(Int[]), a) == Int[]
+    @test findall(occursin(a), Int[]) == Int[]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
-    @test find(occursin(b), a) == [4]
-    @test find(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
+    @test findall(occursin(b), a) == [4]
+    @test findall(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
 
-    @test find(occursin(NaN), [1.0, NaN, 2.0]) == [2]
-    @test find(occursin(NaN), [1.0, 2.0, NaN]) == [3]
+    @test findall(occursin(NaN), [1.0, NaN, 2.0]) == [2]
+    @test findall(occursin(NaN), [1.0, 2.0, NaN]) == [3]
 
-    @testset "find(::OccursIn, b) for uncomparable element types" begin
+    @testset "findall(::OccursIn, b) for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
-        @test find(occursin(1 + 1im), a) == [1]
-        @test find(occursin(a), a)       == [1,2]
+        @test findall(occursin(1 + 1im), a) == [1]
+        @test findall(occursin(a), a)       == [1,2]
     end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
@@ -425,11 +425,11 @@ end
     @test X[end,Y[end]] == 11
 end
 
-@testset "find, findfirst, findnext, findlast, findprev" begin
+@testset "findall, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
-    @test find(!iszero, a) == [2,3,4,6,7,8]
-    @test find(a.==2) == [3,7]
-    @test find(isodd,a) == [2,4,6,8]
+    @test findall(!iszero, a) == [2,3,4,6,7,8]
+    @test findall(a.==2) == [3,7]
+    @test findall(isodd,a) == [2,4,6,8]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
@@ -462,16 +462,47 @@ end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
-    @test find(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
-    @test find(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
+    @test findall(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
+    @test findall(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
                                CartesianIndex(1, 2), CartesianIndex(2, 2)]
+    @test findfirst(isodd, A) == CartesianIndex(1, 1)
+    @test findlast(isodd, A) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 1)) == CartesianIndex(1, 1)
+    @test findprev(isodd, A, CartesianIndex(2, 1)) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 2)) === nothing
+    @test findprev(iseven, A, CartesianIndex(2, 1)) === nothing
 end
 @testset "find with general iterables" begin
     s = "julia"
-    @test find(c -> c == 'l', s) == [3]
+    @test findall(c -> c == 'l', s) == [3]
+    @test findfirst(c -> c == 'l', s) == 3
+    @test findlast(c -> c == 'l', s) == 3
+    @test findnext(c -> c == 'l', s, 1) == 3
+    @test findprev(c -> c == 'l', s, 5) == 3
+    @test findnext(c -> c == 'l', s, 4) === nothing
+    @test findprev(c -> c == 'l', s, 2) === nothing
+
     g = Base.Unicode.graphemes("日本語")
-    @test find(isascii, g) == Int[]
-    @test find(!iszero, (i % 2 for i in 1:10)) == 1:2:9
+    @test findall(!isempty, g) == 1:3
+    @test isempty(findall(isascii, g))
+    @test findfirst(!isempty, g) == 1
+    @test findfirst(isascii, g) === nothing
+    # Check that the last index isn't assumed to be typemax(Int)
+    @test_throws MethodError findlast(!iszero, g)
+
+    g2 = (i % 2 for i in 1:10)
+    @test findall(!iszero, g2) == 1:2:9
+    @test findfirst(!iszero, g2) == 1
+    @test findlast(!iszero, g2) == 9
+    @test findfirst(equalto(2), g2) === nothing
+    @test findlast(equalto(2), g2) === nothing
+
+    g3 = (i % 2 for i in 1:10, j in 1:2)
+    @test findall(!iszero, g3) == 1:2:19
+    @test findfirst(!iszero, g3) == 1
+    @test findlast(!iszero, g3) == 19
+    @test findfirst(equalto(2), g3) === nothing
+    @test findlast(equalto(2), g3) === nothing
 end
 
 @testset "findmin findmax indmin indmax" begin
@@ -1723,7 +1754,7 @@ end
     b = rand(6,7)
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
-    @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+    @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
 module RetTypeDecl

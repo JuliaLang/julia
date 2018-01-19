@@ -78,7 +78,7 @@ copyto!(s, d)
 s = SharedArrays.shmem_rand(dims)
 copyto!(s, sdata(d))
 @test s == d
-a = rand(dims)
+a = rand(Float64, dims)
 @test sdata(a) == a
 
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
@@ -242,7 +242,7 @@ end
 
 # Issue #14664
 d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     d[i] = i
 end
 
@@ -253,7 +253,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
 end
@@ -284,7 +284,7 @@ finalize(d)
 let
     aorig = a1 = SharedArray{Float64}((3, 3))
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    @test object_id(aorig) == object_id(a1)
+    @test objectid(aorig) == objectid(a1)
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)

@@ -37,7 +37,7 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
-    # this can be removed when @parallel or its equivalent supports looping on
+    # this can be removed when @distributed or its equivalent supports looping on
     # a subset of workers.
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
@@ -357,7 +357,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
+function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
     copyto!(sdata(R), sdata(S))

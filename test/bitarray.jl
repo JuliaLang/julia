@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
-using Random
+using Random, LinearAlgebra
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
@@ -234,7 +234,7 @@ timesofar("constructors")
             @check_bit_operation getindex(b1, m1) BitVector
         end
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         @check_bit_operation getindex(b1, t1)        BitVector
 
         for j = 1:l
@@ -272,7 +272,7 @@ timesofar("constructors")
         y = rand(0.0:1.0)
         @check_bit_operation setindex!(b1, y, 1:100) T
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         x = rand(Bool)
         @check_bit_operation setindex!(b1, x, t1) T
         b2 = bitrand(length(t1))
@@ -1090,7 +1090,7 @@ timesofar("datamove")
         @check_bit_operation findfirst(x->true, b1)  Union{Int,Nothing}
         @check_bit_operation findfirst(x->false, b1) Union{Int,Nothing}
 
-        @check_bit_operation find(b1) Vector{Int}
+        @check_bit_operation findall(b1) Vector{Int}
     end
 
     b1 = trues(v1)
@@ -1106,8 +1106,8 @@ timesofar("datamove")
     end
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation find(b1) Vector{CartesianIndex{2}}
-    @check_bit_operation find(!iszero, b1) Vector{CartesianIndex{2}}
+    @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
+    @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
     @check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
 end
 

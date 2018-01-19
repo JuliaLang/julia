@@ -14,6 +14,12 @@ function asterisk_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
+@trigger '_' ->
+function underscore_italic(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "_")
+    return result === nothing ? nothing : Italic(parseinline(result, md))
+end
+
 mutable struct Bold
     text
 end
@@ -21,6 +27,12 @@ end
 @trigger '*' ->
 function asterisk_bold(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "**")
+    return result === nothing ? nothing : Bold(parseinline(result, md))
+end
+
+@trigger '_' ->
+function underscore_bold(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "__")
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 

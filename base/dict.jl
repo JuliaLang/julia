@@ -63,8 +63,6 @@ abstract type AbstractSerializer end
 const global maxallowedprobe = 16
 const global maxprobeshift   = 6
 
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
-
 """
     Dict([itr])
 

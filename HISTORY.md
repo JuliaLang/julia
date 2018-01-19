@@ -584,7 +584,7 @@ Deprecated or removed
   * `Base.promote_type(op::Type, Ts::Type...)` has been removed as part of an overhaul
     of `broadcast`'s promotion mechanism. If you need the functionality of that
     `Base.promote_type` method, consider defining it locally via
-    `Core.Inference.return_type(op, Tuple{Ts...})` ([#18642]).
+    `Core.Compiler.return_type(op, Tuple{Ts...})` ([#18642]).
 
   * `bitbroadcast` has been deprecated in favor of `broadcast`, which now produces a
     `BitArray` instead of `Array{Bool}` for functions yielding a boolean result ([#19771]).

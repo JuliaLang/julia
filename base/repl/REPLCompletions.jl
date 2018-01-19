@@ -5,7 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions
 
 using Base.Meta
-using Base: coalesce
+using Base: propertynames, coalesce
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -41,6 +41,7 @@ function complete_symbol(sym, ffunc)
 
     lookup_module = true
     t = Union{}
+    val = nothing
     if coalesce(findlast(occursin(non_identifier_chars), sym), 0) < coalesce(findlast(equalto('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
@@ -49,6 +50,7 @@ function complete_symbol(sym, ffunc)
 
         b, found = get_value(ex, context_module)
         if found
+            val = b
             if isa(b, Module)
                 mod = b
                 lookup_module = true
@@ -81,6 +83,13 @@ function complete_symbol(sym, ffunc)
             append!(suggestions, filtered_mod_names(p, mod, name, true, true))
         else
             append!(suggestions, filtered_mod_names(p, mod, name, true, false))
+        end
+    elseif val !== nothing # looking for a property of an instance
+        for property in propertynames(val, false)
+            s = string(property)
+            if startswith(s, name)
+                push!(suggestions, s)
+            end
         end
     else
         # Looking for a member of a type
@@ -311,8 +320,8 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    params = Core.Inference.InferenceParams(world)
-    return_type = Core.Inference.typeinf_type(m[3], m[1], m[2], true, params)
+    params = Core.Compiler.Params(world)
+    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], true, params)
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end

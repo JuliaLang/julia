@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using IterativeEigensolvers
-using Test, SparseArrays, Random
+using Test, LinearAlgebra, SparseArrays, Random
 
 @testset "eigs" begin
     srand(1234)
@@ -33,7 +33,7 @@ using Test, SparseArrays, Random
         (d,v) = eigs(a, nev=3)
         @test a*v[:,2] ≈ d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-        (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
+        (d,v) = eigs(a, LinearAlgebra.I, nev=3) # test eigs(A, B; kwargs...)
         @test a*v[:,2] ≈ d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
         @test_logs (:warn,"Use symbols instead of strings for specifying which eigenvalues to compute") eigs(a, which="LM")
@@ -42,7 +42,7 @@ using Test, SparseArrays, Random
         # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
         # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
         # @test norm(v) > testtol # eigenvectors cannot be null vectors
-        if elty <: Base.LinAlg.BlasComplex
+        if elty <: LinearAlgebra.BlasComplex
             sr_ind = indmin(real.(a_evs))
             (d, v) = eigs(a, nev=1, which=:SR)
             @test d[1] ≈ a_evs[sr_ind]
@@ -130,15 +130,15 @@ let A6965 = [
 end
 
 # Example from Quantum Information Theory
-import Base: size, issymmetric, ishermitian
+import Base: size
 
-mutable struct CPM{T<:Base.LinAlg.BlasFloat} <: AbstractMatrix{T} # completely positive map
+mutable struct CPM{T<:LinearAlgebra.BlasFloat} <: AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
-issymmetric(Phi::CPM) = false
-ishermitian(Phi::CPM) = false
-function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
+LinearAlgebra.issymmetric(Phi::CPM) = false
+LinearAlgebra.ishermitian(Phi::CPM) = false
+function LinearAlgebra.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:LinearAlgebra.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
@@ -147,7 +147,7 @@ function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{
     end
     return copyto!(rho2,rho1)
 end
-Base.LinAlg.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat} = Base.LinAlg.mul!(rho2, Phi, rho)
+LinearAlgebra.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:LinearAlgebra.BlasFloat} = LinearAlgebra.mul!(rho2, Phi, rho)
 # after the A_mul_B! deprecation, remove this A_mul_B! def
 
 let

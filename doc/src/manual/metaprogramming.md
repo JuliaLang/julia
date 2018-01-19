@@ -1073,7 +1073,7 @@ When defining generated functions, there are four main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
-   for example, IO, locks, non-local dictionaries, or using `method_exists`).
+   for example, IO, locks, non-local dictionaries, or using `hasmethod`).
    This means they can only read global constants, and cannot have any side effects.
    In other words, they must be completely pure.
    Due to an implementation limitation, this also means that they currently cannot define a closure
@@ -1248,7 +1248,7 @@ run during inference, it must respect all of the limitations of that code.
 Some operations that should not be attempted include:
 
 1. Caching of native pointers.
-2. Interacting with the contents or methods of Core.Inference in any way.
+2. Interacting with the contents or methods of Core.Compiler in any way.
 3. Observing any mutable state.
 
      * Inference on the generated function may be run at *any* time, including while your code is attempting

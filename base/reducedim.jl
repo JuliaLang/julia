@@ -85,7 +85,7 @@ function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
         if prod(map(length, reduced_indices(A, region))) != 0
             reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
         else
-            R = f == identity ? T : Core.Inference.return_type(f, (T,))
+            R = f == identity ? T : Core.Compiler.return_type(f, (T,))
             similar(A, R, ri)
         end
     else

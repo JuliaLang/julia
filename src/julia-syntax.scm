@@ -3435,6 +3435,7 @@ f(x) = yt(x)
         (current-loc #f)
         (rett #f)
         (deprecated-loop-vars (table))
+        (deprecated-global-const-locs '())
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
@@ -3833,7 +3834,11 @@ f(x) = yt(x)
                  (begin
                    (syntax-deprecation "`const` declaration on local variable" "" current-loc)
                    '(null))
-                 (emit e)))
+                 (if (pair? (cadr lam))
+                     ;; delay these deprecation warnings to allow "misplaced struct" errors to happen first
+                     (set! deprecated-global-const-locs
+                           (cons current-loc deprecated-global-const-locs))
+                     (emit e))))
             ((isdefined) (if tail (emit-return e) e))
             ((warn-loop-var)
              (if (or *warn-all-loop-vars*
@@ -3964,6 +3969,12 @@ f(x) = yt(x)
                           (else
                            (set-car! (cdr point) `(leave ,(- hl target-level))))))))
               handler-goto-fixups)
+    (for-each (lambda (loc)
+                (deprecation-message
+                 (string "`global const` declarations may no longer appear inside functions." #\newline
+                         "Instead, use a non-constant global, or a global `const var = Ref{T}()`.")
+                 loc))
+              (reverse! deprecated-global-const-locs))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'body (filter (lambda (e)

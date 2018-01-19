@@ -33,7 +33,7 @@ in the `choices` argument:
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "subarray", "core", "inference", "worlds",
+        "subarray", "core", "compiler", "worlds",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
@@ -53,7 +53,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream", "specificity", "codegen", "codevalidation",
+        "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -111,21 +111,14 @@ function choosetests(choices = [])
         prepend!(tests, ["subarray"])
     end
 
-    linalgtests = ["linalg/triangular", "linalg/qr", "linalg/dense",
-                   "linalg/matmul", "linalg/schur", "linalg/special",
-                   "linalg/eigen", "linalg/bunchkaufman", "linalg/svd",
-                   "linalg/lapack", "linalg/tridiag", "linalg/bidiag",
-                   "linalg/diagonal", "linalg/pinv", "linalg/givens",
-                   "linalg/cholesky", "linalg/lu", "linalg/symmetric",
-                   "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/blas", "linalg/adjtrans"]
+    compilertests = ["compiler/compiler", "compiler/validation"]
 
-    if "linalg" in skip_tests
-        filter!(x -> (x != "linalg" && !(x in linalgtests)), tests)
-    elseif "linalg" in tests
+    if "compiler" in skip_tests
+        filter!(x -> (x != "compiler" && !(x in compilertests)), tests)
+    elseif "compiler" in tests
         # specifically selected case
-        filter!(x -> x != "linalg", tests)
-        prepend!(tests, linalgtests)
+        filter!(x -> x != "compiler", tests)
+        prepend!(tests, compilertests)
     end
 
     net_required_for = ["socket", "stdlib", "libgit2"]

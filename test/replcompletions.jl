@@ -776,6 +776,7 @@ end
 
 if Sys.iswindows()
     tmp = tempname()
+    touch(tmp)
     path = dirname(tmp)
     file = basename(tmp)
     temp_name = basename(path)

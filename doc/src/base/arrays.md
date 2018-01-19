@@ -50,7 +50,6 @@ Base.IndexStyle
 Base.conj!
 Base.stride
 Base.strides
-Base.LinAlg.checksquare
 ```
 
 ## Broadcast and vectorization
@@ -122,8 +121,8 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.find(::Any)
-Base.find(::Function, ::Any)
+Base.findall(::Any)
+Base.findall(::Function, ::Any)
 Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)
@@ -148,7 +147,7 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-Base.LinAlg.diff
+LinearAlgebra.diff
 Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90

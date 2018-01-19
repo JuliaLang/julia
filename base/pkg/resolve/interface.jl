@@ -354,7 +354,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
         staged = staged_next
     end
 
-    for p0 in find(uninst)
+    for p0 in findall(uninst)
         sol[p0] = spp[p0]
     end
 

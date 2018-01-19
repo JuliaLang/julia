@@ -4,9 +4,9 @@ __precompile__(true)
 
 module Random
 
-include("dSFMT.jl")
+include("DSFMT.jl")
 
-using .dSFMT
+using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
@@ -220,10 +220,8 @@ function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
     A
 end
 
-rand(r::AbstractRNG, dims::Dims)       = rand(r, Float64, dims)
-rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
-rand(                dims::Integer...) = rand(Dims(dims))
+rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
+rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
 rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
@@ -273,7 +271,8 @@ Pick a random element or array of random elements from the set of values specifi
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
-`S` defaults to [`Float64`](@ref).
+`S` defaults to [`Float64`](@ref)
+(except when `dims` is a tuple of integers, in which case `S` must be specified).
 
 # Examples
 ```julia-repl

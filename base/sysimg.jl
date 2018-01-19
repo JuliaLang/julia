@@ -42,7 +42,7 @@ function include(path::AbstractString)
 end
 const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
-    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
 end
 let SOURCE_PATH = ""
@@ -75,8 +75,8 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str, WrappedException
-if isdefined(Core, :Inference)
-    import Core.Inference.CoreDocs
+if isdefined(Core, :Compiler)
+    import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
 end
 
@@ -195,7 +195,7 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 
-if !isdefined(Core, :Inference)
+if !isdefined(Core, :Compiler)
     include("docs/core.jl")
     Core.atdoc!(CoreDocs.docm)
 end
@@ -460,12 +460,6 @@ import Base64
 
 INCLUDE_STATE = 2
 
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
 include("asyncmap.jl")
 
 include("multimedia.jl")
@@ -487,7 +481,7 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
 function __init__()
     # for the few uses of Crand in Base:
@@ -520,6 +514,7 @@ Base.require(:FileWatching)
 Base.require(:Future)
 Base.require(:IterativeEigensolvers)
 Base.require(:Libdl)
+Base.require(:LinearAlgebra)
 Base.require(:Logging)
 Base.require(:Mmap)
 Base.require(:Printf)
@@ -551,6 +546,9 @@ Base.require(:Unicode)
         ", run `using SparseArrays` to load sparse array functionality")
     @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
+
+    # PR #25571
+    @deprecate_binding LinAlg root_module(:LinearAlgebra) true ", run `using LinearAlgebra` instead"
 end
 
 empty!(LOAD_PATH)

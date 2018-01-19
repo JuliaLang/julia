@@ -5,7 +5,8 @@ module UMFPACK
 export UmfpackLU
 
 import Base: (\), findnz, getproperty, show, size
-import Base.LinAlg: Factorization, det, lufact, ldiv!
+using LinearAlgebra
+import LinearAlgebra: Factorization, det, lufact, ldiv!
 
 using SparseArrays
 import SparseArrays: nnz
@@ -21,7 +22,7 @@ function umferror(status::Integer)
     if status==UMFPACK_OK
         return
     elseif status==UMFPACK_WARNING_singular_matrix
-        throw(LinAlg.SingularException(0))
+        throw(LinearAlgebra.SingularException(0))
     elseif status==UMFPACK_WARNING_determinant_underflow
         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
     elseif status==UMFPACK_WARNING_determinant_overflow
@@ -103,8 +104,8 @@ mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     nzval::Vector{Tv}
 end
 
-Base.LinAlg.adjoint(F::UmfpackLU) = Adjoint(F)
-Base.LinAlg.transpose(F::UmfpackLU) = Transpose(F)
+Base.adjoint(F::UmfpackLU) = Adjoint(F)
+Base.transpose(F::UmfpackLU) = Transpose(F)
 
 """
     lufact(A::SparseMatrixCSC) -> F::UmfpackLU

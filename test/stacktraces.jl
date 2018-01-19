@@ -65,7 +65,7 @@ let ct = current_task()
         try
             bad_function()
         catch
-            return catch_stacktrace()
+            return stacktrace(catch_backtrace())
         end
     end
     line_numbers = @__LINE__() .- [15, 10, 5]
@@ -73,7 +73,7 @@ let ct = current_task()
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
 
-    # Test try...catch with catch_stacktrace
+    # Test try...catch with catch_backtrace
     @test try_catch()[1:2] == [
         StackFrame(:bad_function, @__FILE__, line_numbers[1]),
         StackFrame(:try_catch, @__FILE__, line_numbers[3])
@@ -85,7 +85,7 @@ using Test
 @inline g(x) = (y = throw("a"); y) # the inliner does not insert the proper markers when inlining a single expression
 @inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
 f(x) = (y = h(x); y)
-trace = (try; f(3); catch; catch_stacktrace(); end)[1:3]
+trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name

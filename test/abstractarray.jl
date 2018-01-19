@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, SparseArrays
+using Random, LinearAlgebra, SparseArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -436,13 +436,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
-            @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == LinearIndices(mask)[find(mask)]
-            @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[find(mask)]
+            @test B[mask] == A[mask] == B[findall(mask)] == A[findall(mask)] == LinearIndices(mask)[findall(mask)]
+            @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[findall(mask)]
             mask1 = bitrand(size(A, 1))
             mask2 = bitrand(size(A, 2))
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
-                B[LinearIndices(mask1)[find(mask1)], LinearIndices(mask2)[find(mask2)], trailing2]
-            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[find(mask1)]
+                B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
+            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
         end
     end
 end
@@ -682,9 +682,9 @@ end
 
 # checksquare
 function test_checksquare()
-    @test LinAlg.checksquare(zeros(2,2)) == 2
-    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
-    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
+    @test LinearAlgebra.checksquare(zeros(2,2)) == 2
+    @test LinearAlgebra.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
+    @test_throws DimensionMismatch LinearAlgebra.checksquare(zeros(2,3))
 end
 
 #----- run tests -------------------------------------------------------------#
@@ -817,9 +817,11 @@ for A in (rand(2), rand(2,3))
     @test Array(values(A)) == A
 end
 
-# nextind
+# nextind and prevind
 @test nextind(zeros(4), 2) == 3
 @test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
+@test prevind(zeros(4), 2) == 1
+@test prevind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 1)
 
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a

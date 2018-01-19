@@ -2,6 +2,7 @@
 
 using Base.MathConstants
 using Random
+using LinearAlgebra
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -2548,7 +2549,7 @@ function allsubtypes!(m::Module, x::DataType, sts::Set)
             t = getfield(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
-            elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
+            elseif isa(t, Module) && t !== m && module_name(t) === s && parentmodule(t) === m
                 allsubtypes!(t, x, sts)
             end
         end

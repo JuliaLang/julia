@@ -73,3 +73,11 @@ for (k, v) in ENV
         @test v[end] != '\0'
     end
 end
+
+@testset "push" begin
+    @test !haskey(ENV, "testing_envdict")
+    push!(ENV, "testing_envdict" => "tested")
+    @test haskey(ENV, "testing_envdict")
+    @test ENV["testing_envdict"] == "tested"
+    delete!(ENV, "testing_envdict")
+end
