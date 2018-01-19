@@ -1791,7 +1791,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     # increase. The slice itself must be mutable and the result cannot contain
     # any mutable containers. The following errs on the side of being overly
     # strict (#18570 & #21123).
-    safe_for_reuse = LinAlg.MemoryLayout(Aslice) isa LinAlg.StridedLayout &&
+    safe_for_reuse = isa(Aslice, StridedArray) &&
                      (isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number))
 
     # determine result size and allocate
