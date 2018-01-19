@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # Test various constructors
 let c = Channel(1)
     @test eltype(c) == Any

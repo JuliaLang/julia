@@ -235,11 +235,11 @@ end
     end
 end
 # pr #18396, kwargs before Base is defined
-@eval Core.Inference begin
+@eval Core.Compiler begin
     f18396(;kwargs...) = g18396(;kwargs...)
     g18396(;x=1,y=2) = x+y
 end
-@test Core.Inference.f18396() == 3
+@test Core.Compiler.f18396() == 3
 @testset "issue #7045, `invoke` with keyword args" begin
     f7045(x::Float64; y=true) = y ? 1 : invoke(f7045,Tuple{Real},x,y=y)
     f7045(x::Real; y=true) = y ? 2 : 3

@@ -265,13 +265,13 @@ function tempdir()
     resize!(temppath,lentemppath)
     return transcode(String, temppath)
 end
-tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
+
 const temp_prefix = cwstring("jl_")
-function tempname(temppath::AbstractString,uunique::UInt32)
+function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
     tname = Vector{UInt16}(uninitialized, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
-    lentname = findfirst(iszero,tname)-1
+    lentname = coalesce(findfirst(iszero,tname), 0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
@@ -280,22 +280,37 @@ function tempname(temppath::AbstractString,uunique::UInt32)
 end
 
 function mktemp(parent=tempdir())
-    filename = tempname(parent, UInt32(0))
+    filename = _win_tempname(parent, UInt32(0))
     return (filename, Base.open(filename, "r+"))
 end
 
 function mktempdir(parent=tempdir())
-    seed::UInt32 = rand(UInt32)
+    seed::UInt32 = Base.Crand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
         end
-        filename = tempname(parent, seed)
+        filename = _win_tempname(parent, seed)
         ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
         if ret == 0
             return filename
         end
         systemerror(:mktempdir, Libc.errno()!=Libc.EEXIST)
+        seed += 1
+    end
+end
+
+function tempname()
+    parent = tempdir()
+    seed::UInt32 = rand(UInt32)
+    while true
+        if (seed & typemax(UInt16)) == 0
+            seed += 1
+        end
+        filename = _win_tempname(parent, seed)
+        if !ispath(filename)
+            return filename
+        end
         seed += 1
     end
 end
@@ -343,7 +358,14 @@ tempdir()
 """
     tempname()
 
-Generate a unique temporary file path.
+Generate a temporary file path. This function only returns a path; no file is
+created. The path is likely to be unique, but this cannot be guaranteed.
+
+!!! warning
+
+    This can lead to race conditions if another process obtains the same
+    file name and creates the file before you are able to.
+    Using [`mktemp()`](@ref) is recommended instead.
 """
 tempname()
 
@@ -514,8 +536,8 @@ function rename(src::AbstractString, dst::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    local src_open = false
-    local dst_open = false
+    src_open = false
+    dst_open = false
     local src_file, dst_file
     try
         src_file = open(src, JL_O_RDONLY)

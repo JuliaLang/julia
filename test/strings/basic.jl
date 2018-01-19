@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "constructors" begin
     @test String([0x61,0x62,0x63,0x21]) == "abc!"
     @test String("abc!") == "abc!"
@@ -16,7 +18,7 @@
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
         for x in strs, y in strs
-            @test (x === y) == (object_id(x) == object_id(y))
+            @test (x === y) == (objectid(x) == objectid(y))
         end
     end
 end
@@ -231,9 +233,12 @@ end
     @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
+    @test first(eachindex("foobar")) === 1
+    @test first(eachindex("")) === 1
+    @test last(eachindex("foobar")) === endof("foobar")
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
-    @test map(Base.Unicode.uppercase, "foó") == "FOÓ"
+    @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
     @test Symbol(gstr) == Symbol("12")
@@ -293,6 +298,8 @@ end
     @test tryparse(Float32, "32o") === nothing
 end
 
+import Unicode
+
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         @test_throws ArgumentError parse(T, "1\0")
@@ -300,7 +307,7 @@ end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
         @test tryparse(T, "1\0") === nothing
     end
-    let s = Base.Unicode.normalize("tést",:NFKC)
+    let s = Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
         @test unsafe_string(Base.unsafe_convert(Cstring, Symbol(s))) == s
     end
@@ -817,4 +824,9 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
     @test s == "abc"
+end
+
+# PR #25535
+let v = [0x40,0x41,0x42]
+    @test String(view(v, 2:3)) == "AB"
 end

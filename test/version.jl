@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # parsing tests
 @test v"2" == VersionNumber(2)
 @test v"3.2" == VersionNumber(3, 2)

@@ -152,7 +152,7 @@ function Base.copy(a::VWPreBuild)
     VWPreBuild(a.nonempty, copy(a.w))
 end
 
-function Base.deepcopy_internal(a::VWPreBuild, dict::ObjectIdDict)
+function Base.deepcopy_internal(a::VWPreBuild, dict::IdDict)
     haskey(dict, a) && return dict[a]
     b = (a === _vwprebuild_zero) ? _vwprebuild_zero : VWPreBuild(a.nonempty, Base.deepcopy_internal(a.w, dict))
     dict[a] = b

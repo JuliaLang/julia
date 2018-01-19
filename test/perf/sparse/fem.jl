@@ -14,7 +14,7 @@ end
 function get_free(N)
     L = zeros(Int, N, N)
     L[2:N-1, 2:N-1] = 1
-    return find(L)
+    return findall(L)
 end
 
 # timing of assembly, slice and solve

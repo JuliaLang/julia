@@ -18,6 +18,7 @@ module Test
 export @test, @test_throws, @test_broken, @test_skip,
     @test_warn, @test_nowarn,
     @test_logs, @test_deprecated
+
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
@@ -26,6 +27,8 @@ export GenericString, GenericSet, GenericDict, GenericArray
 export guardsrand, TestSetException
 
 import Distributed: myid
+
+using Random: srand, AbstractRNG, GLOBAL_RNG
 
 #-----------------------------------------------------------------------
 
@@ -36,11 +39,11 @@ end
 
 function scrub_backtrace(bt)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
-    if do_test_ind != 0 && length(bt) > do_test_ind
+    if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
     name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind != 0 && length(bt) != 0
+    if name_ind !== nothing && length(bt) != 0
         bt = bt[1:name_ind]
     end
     return bt
@@ -997,17 +1000,17 @@ function testset_beginend(args, tests, source)
         # we reproduce the logic of guardsrand, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        oldrng = copy(Base.GLOBAL_RNG)
+        oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(Base.GLOBAL_RNG.seed)
+            srand(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
         finally
-            copy!(Base.GLOBAL_RNG, oldrng)
+            copy!(GLOBAL_RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1066,7 +1069,7 @@ function testset_forloop(args, testloop, source)
             pop_testset()
             push!(arr, finish(ts))
             # it's 1000 times faster to copy from tmprng rather than calling srand
-            copy!(Base.GLOBAL_RNG, tmprng)
+            copy!(GLOBAL_RNG, tmprng)
 
         end
         ts = $(testsettype)($desc; $options...)
@@ -1084,9 +1087,9 @@ function testset_forloop(args, testloop, source)
         arr = Vector{Any}()
         local first_iteration = true
         local ts
-        local oldrng = copy(Base.GLOBAL_RNG)
-        srand(Base.GLOBAL_RNG.seed)
-        local tmprng = copy(Base.GLOBAL_RNG)
+        local oldrng = copy(GLOBAL_RNG)
+        srand(GLOBAL_RNG.seed)
+        local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1095,7 +1098,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(Base.GLOBAL_RNG, oldrng)
+            copy!(GLOBAL_RNG, oldrng)
         end
         arr
     end
@@ -1252,32 +1255,6 @@ macro inferred(ex)
     end)
 end
 
-# Test approximate equality of vectors or columns of matrices modulo floating
-# point roundoff and phase (sign) differences.
-#
-# This function is designed to test for equality between vectors of floating point
-# numbers when the vectors are defined only up to a global phase or sign, such as
-# normalized eigenvectors or singular vectors. The global phase is usually
-# defined consistently, but may occasionally change due to small differences in
-# floating point rounding noise or rounding modes, or through the use of
-# different conventions in different algorithms. As a result, most tests checking
-# such vectors have to detect and discard such overall phase differences.
-#
-# Inputs:
-#     a, b:: StridedVecOrMat to be compared
-#     err :: Default: m^3*(eps(S)+eps(T)), where m is the number of rows
-#
-# Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
-# nothing.
-function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-                                 err = length(axes(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
-    @test axes(a,1) == axes(b,1) && axes(a,2) == axes(b,2)
-    for i in axes(a,2)
-        v1, v2 = a[:, i], b[:, i]
-        @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
-    end
-end
-
 """
     detect_ambiguities(mod1, mod2...; imported=false, recursive=false, ambiguous_bottom=false)
 
@@ -1311,7 +1288,7 @@ function detect_ambiguities(mods...;
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && module_parent(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && module_name(f) === n
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
@@ -1352,7 +1329,7 @@ function detect_unbound_args(mods...;
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && module_parent(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && parentmodule(f) === mod && module_name(f) === n
                 subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
                 union!(ambs, subambs)
             elseif isa(f, DataType) && isdefined(f.name, :mt)
@@ -1506,7 +1483,7 @@ Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 "`guardsrand(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=Base.GLOBAL_RNG)
+function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     old = copy(r)
     try
         f()

@@ -16,20 +16,20 @@ julia> module_name(Base.LinAlg)
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
-    module_parent(m::Module) -> Module
+    parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
 # Examples
 ```jldoctest
-julia> module_parent(Main)
+julia> parentmodule(Main)
 Main
 
-julia> module_parent(Base.LinAlg.BLAS)
+julia> parentmodule(Base.LinAlg.BLAS)
 Base.LinAlg
 ```
 """
-module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
     @__MODULE__ -> Module
@@ -60,25 +60,11 @@ function fullname(m::Module)
     if m === Main || m === Base || m === Core
         return (mn,)
     end
-    mp = module_parent(m)
+    mp = parentmodule(m)
     if mp === m
-        if mn !== :Main
-            return (mn,)
-        end
-        # top-level module, not Main, called :Main => prior Main module
-        n = (:Main,)
-        this = Main
-        while this !== m
-            if isdefined(this, :LastMain)
-                n = tuple(n..., :LastMain)
-                this = this.LastMain
-            else
-                error("no reference to module ", mn)
-            end
-        end
-        return n
+        return (mn,)
     end
-    return tuple(fullname(mp)..., mn)
+    return (fullname(mp)..., mn)
 end
 
 """
@@ -177,9 +163,9 @@ datatype_name(t::DataType) = t.name.name
 datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
-    Base.datatype_module(t::DataType) -> Module
+    parentmodule(t::DataType) -> Module
 
-Determine the module containing the definition of a (potentially UnionAll-wrapped) `DataType`.
+Determine the module containing the definition of a (potentially `UnionAll`-wrapped) `DataType`.
 
 # Examples
 ```jldoctest
@@ -188,15 +174,15 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_module(Int)
+julia> parentmodule(Int)
 Core
 
-julia> Base.datatype_module(Foo.Int)
+julia> parentmodule(Foo.Int)
 Foo
 ```
 """
-datatype_module(t::DataType) = t.name.module
-datatype_module(t::UnionAll) = datatype_module(unwrap_unionall(t))
+parentmodule(t::DataType) = t.name.module
+parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
@@ -230,11 +216,11 @@ macro isdefined(s::Symbol)
 end
 
 """
-    object_id(x)
+    objectid(x)
 
-Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
+Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
 """
-object_id(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
+objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
@@ -625,7 +611,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generat
     return map(method_instances(f, t)) do m
         if expand_generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
-                return Core.Inference.get_staged(m)
+                return Core.Compiler.get_staged(m)
             else # isa(m, Method)
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -763,7 +749,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     results = Vector{Union{Method,Core.MethodInstance}}()
     for method_data in _methods_by_ftype(tt, -1, world)
         mtypes, msp, m = method_data
-        instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+        instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
         push!(results, ifelse(isa(instance, Core.MethodInstance), instance, m))
     end
     return results
@@ -889,11 +875,11 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     types = to_tuple_type(types)
     asts = []
     world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Inference.InferenceParams(world)
+    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
-        code === nothing && error("inference not successful") # Inference disabled?
+        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        code === nothing && error("inference not successful") # inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
     return asts
@@ -907,11 +893,11 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     types = to_tuple_type(types)
     rt = []
     world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Inference.InferenceParams(world)
+    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Inference.typeinf_type(meth, x[1], x[2], true, params)
-        ty === nothing && error("inference not successful") # Inference disabled?
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
     return rt
@@ -997,19 +983,19 @@ function functionloc(@nospecialize(f))
 end
 
 """
-    Base.function_module(f::Function) -> Module
+    parentmodule(f::Function) -> Module
 
 Determine the module containing the (first) definition of a generic
 function.
 """
-function_module(f::Function) = datatype_module(typeof(f))
+parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    Base.function_module(f::Function, types) -> Module
+    parentmodule(f::Function, types) -> Module
 
 Determine the module containing a given definition of a generic function.
 """
-function function_module(@nospecialize(f), @nospecialize(types))
+function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
@@ -1018,18 +1004,18 @@ function function_module(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
+    hasmethod(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
 
 # Examples
 ```jldoctest
-julia> method_exists(length, Tuple{Array})
+julia> hasmethod(length, Tuple{Array})
 true
 ```
 """
-function method_exists(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
@@ -1119,3 +1105,20 @@ min_world(m::Method) = reinterpret(UInt, m.min_world)
 max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
+
+"""
+    propertynames(x, private=false)
+
+Get an array of the properties (`x.property`) of an object `x`.   This
+is typically the same as [`fieldnames(typeof(x))`](@ref), but types
+that overload [`getproperty`](@ref) should generally overload `propertynames`
+as well to get the properties of an instance of the type.
+
+`propertynames(x)` may return only "public" property names that are part
+of the documented interface of `x`.   If you want it to also return "private"
+fieldnames intended for internal use, pass `true` for the optional second argument.
+REPL tab completion on `x.` shows only the `private=false` properties.
+"""
+propertynames(x) = fieldnames(typeof(x))
+propertynames(m::Module) = names(m)
+propertynames(x, private) = propertynames(x) # ignore private flag by default

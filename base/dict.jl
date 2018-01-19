@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = Unicode.textwidth(truncmark)
+    truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
@@ -9,7 +9,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     while !done(str, idx)
         lastidx = idx
         c, idx = next(str, idx)
-        wid += Unicode.textwidth(c)
+        wid += textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
     end
@@ -62,8 +62,6 @@ abstract type AbstractSerializer end
 # These can be changed, to trade off better performance for space
 const global maxallowedprobe = 16
 const global maxprobeshift   = 6
-
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
 """
     Dict([itr])

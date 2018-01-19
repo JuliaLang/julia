@@ -1,4 +1,8 @@
-# Julia Documentation
+# Julia 0.7 Documentation
+
+Welcome to the documentation for Julia 0.7.
+
+Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
 * [Manual](#Manual-1)
 * [Base](#Base-1)
@@ -26,7 +30,6 @@
   * [Documentation](@ref)
   * [Metaprogramming](@ref)
   * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
-  * [Linear Algebra](@ref)
   * [Missing Values](@ref missing)
   * [Networking and Streams](@ref)
   * [Parallel Computing](@ref)
@@ -59,7 +62,6 @@
   * [Distributed Computing](@ref)
   * [Multi-Threading](@ref)
   * [Shared Arrays](@ref)
-  * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
   * [I/O and Network](@ref)
@@ -85,9 +87,12 @@
   * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
   * [Profiling](@ref lib-profiling)
+  * [Random Numbers](@ref)
   * [Shared Arrays](@ref)
-  * [Unit Testing](@ref)
+  * [Linear Algebra](@ref)
+  * [Sparse Arrays](@ref)
   * [Unicode](@ref)
+  * [Unit Testing](@ref)
 
 ## Developer Documentation
 

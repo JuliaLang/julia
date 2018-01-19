@@ -386,13 +386,13 @@ function showerror(io::IO, ex::MethodError)
     # Check for local functions that shadow methods in Base
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
-        if basef !== ex.f && method_exists(basef, arg_types)
+        if basef !== ex.f && hasmethod(basef, arg_types)
             println(io)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
-        !method_exists(ex.f, arg_types, ex.world))
+    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
+        !hasmethod(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
@@ -415,7 +415,7 @@ function showerror(io::IO, ex::MethodError)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
-        @error "Error showing method candidates, aborted" exception=ex
+        @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
 end
 
@@ -470,7 +470,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Inference.has_free_typevars(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Compiler.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end

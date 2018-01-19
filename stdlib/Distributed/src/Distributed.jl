@@ -17,7 +17,6 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
             AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, coalesce, notnothing
-using Base.Unicode: isdigit, isnumeric
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 
@@ -27,7 +26,7 @@ export
     @fetch,
     @fetchfrom,
     @everywhere,
-    @parallel,
+    @distributed,
 
     AbstractWorkerPool,
     addprocs,
@@ -78,6 +77,8 @@ include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
+
+@eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
 
 function _require_callback(mod::Symbol)
     if Base.toplevel_load[] && myid() == 1 && nprocs() > 1

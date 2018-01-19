@@ -480,6 +480,8 @@ end
 keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
+first(::EachStringIndex) = 1
+last(e::EachStringIndex) = endof(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
@@ -512,7 +514,7 @@ isascii(s::AbstractString) = all(isascii, s)
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(sizeof(s)), true, true)
     truncate(out, 0)
     for c in s
         c′ = f(c)
@@ -525,7 +527,7 @@ function map(f, s::AbstractString)
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(sizeof(s)), true, true)
     truncate(out, 0)
     for c in s
         f(c) && write(out, c)

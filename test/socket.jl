@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)

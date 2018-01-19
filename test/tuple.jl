@@ -366,8 +366,24 @@ end
 end
 
 @testset "find" begin
-    @test @inferred find(equalto(1), (1, 2)) == [1]
-    @test @inferred find(equalto(1), (1, 1)) == [1, 2]
-    @test @inferred isempty(find(equalto(1), ()))
-    @test @inferred isempty(find(equalto(1), (2, 3)))
+    @test findall(equalto(1), (1, 2)) == [1]
+    @test findall(equalto(1), (1, 1)) == [1, 2]
+    @test isempty(findall(equalto(1), ()))
+    @test isempty(findall(equalto(1), (2, 3)))
+
+    @test findfirst(equalto(1), (1, 2)) == 1
+    @test findlast(equalto(1), (1, 2)) == 1
+    @test findfirst(equalto(1), (1, 1)) == 1
+    @test findlast(equalto(1), (1, 1)) == 2
+    @test findfirst(equalto(1), ()) === nothing
+    @test findlast(equalto(1), ()) === nothing
+    @test findfirst(equalto(1), (2, 3)) === nothing
+    @test findlast(equalto(1), (2, 3)) === nothing
+
+    @test findnext(equalto(1), (1, 2), 1) == 1
+    @test findprev(equalto(1), (1, 2), 2) == 1
+    @test findnext(equalto(1), (1, 1), 2) == 2
+    @test findprev(equalto(1), (1, 1), 1) == 1
+    @test findnext(equalto(1), (2, 3), 1) === nothing
+    @test findprev(equalto(1), (2, 3), 2) === nothing
 end

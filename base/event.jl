@@ -231,7 +231,7 @@ function ensure_rescheduled(othertask::Task)
         # also need to return it to the runnable state
         # before throwing an error
         i = findfirst(t->t===ct, Workqueue)
-        i == 0 || deleteat!(Workqueue, i)
+        i === nothing || deleteat!(Workqueue, i)
         ct.state = :runnable
     end
     nothing

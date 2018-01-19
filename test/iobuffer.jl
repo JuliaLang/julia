@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
@@ -258,7 +260,6 @@ let io = IOBuffer()
 end
 
 # skipchars
-using Base.Unicode: isspace
 let
     io = IOBuffer("")
     @test eof(skipchars(io, isspace))
@@ -279,7 +280,7 @@ let
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, Base.Unicode.isalpha))
+        @test !eof(skipchars(io, isalpha))
         @test read(io, Char) == char
     end
 end

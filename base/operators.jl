@@ -391,16 +391,6 @@ julia> minmax('c','b')
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
-scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
-
-scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
-
 ## definitions providing basic traits of arithmetic operators ##
 
 """
@@ -763,8 +753,6 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> map(uppercase∘hex, 250:255)
 6-element Array{String,1}:
  "FA"

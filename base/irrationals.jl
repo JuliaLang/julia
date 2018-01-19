@@ -114,7 +114,7 @@ isinteger(::AbstractIrrational) = false
 iszero(::AbstractIrrational) = false
 isone(::AbstractIrrational) = false
 
-hash(x::Irrational, h::UInt) = 3*object_id(x) - h
+hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
 widen(::Type{T}) where {T<:Irrational} = T
 

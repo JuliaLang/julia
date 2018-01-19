@@ -4,6 +4,8 @@
 which will replace the current version in a future release of Julia."
 module Future
 
+using Random
+
 ## copy!
 
 """
@@ -37,6 +39,6 @@ For each different value of `steps`, a large polynomial has to be generated inte
 One is already pre-computed for `steps=big(10)^20`.
 """
 randjump(r::MersenneTwister, steps::Integer) =
-    Base.Random._randjump(r, Base.Random.dSFMT.calc_jump(steps))
+    Random._randjump(r, Random.DSFMT.calc_jump(steps))
 
 end # module Future

@@ -7,6 +7,7 @@ include("testenv.jl")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers
 import Base: REPL, LineEdit
+using Random
 
 function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
@@ -668,9 +669,9 @@ let exename = Base.julia_cmd()
     end
 
     # Test stream mode
-    outs, ins, p = readandwrite(`$exename --startup-file=no -q`)
-    write(ins, "1\nquit()\n")
-    @test read(outs, String) == "1\n"
+    p = open(`$exename --startup-file=no -q`, "r+")
+    write(p, "1\nquit()\n")
+    @test read(p, String) == "1\n"
 end # let exename
 
 # issue #19864:

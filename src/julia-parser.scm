@@ -8,7 +8,9 @@
 ;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= => ~ $=)))
+           '(:= ~ $=)))
+;; comma - higher than assignment outside parentheses, lower when inside
+(define prec-pair '(=>))
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
@@ -34,7 +36,7 @@
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
-                     prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
+                     prec-pair prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
                      prec-pipe< prec-pipe> prec-colon prec-plus prec-bitshift prec-times prec-rational
                      prec-power prec-decl prec-dot))
 
@@ -714,8 +716,8 @@
                  (if (or (eqv? nxt #\,) (eqv? nxt #\) ) (eqv? nxt #\}) (eqv? nxt #\]))
                      t
                      (begin (ts:put-back! s t spc)
-                            (parse-assignment s parse-cond)))))
-        (parse-assignment s parse-cond))))
+                            (parse-assignment s parse-pair)))))
+        (parse-assignment s parse-pair))))
 
 (define (eventually-call? ex)
   (and (pair? ex)
@@ -735,14 +737,12 @@
         ex
         (begin
           (take-token s)
-          (cond ((eq? t '~)
+          (cond ((eq? t '~) ;; ~ is the only non-syntactic assignment-precedence operators
                  (if (and space-sensitive (ts:space? s)
                           (not (eqv? (peek-char (ts:port s)) #\ )))
                      (begin (ts:put-back! s t (ts:space? s))
                             ex)
                      (list 'call t ex (parse-assignment s down))))
-                ((eq? t '=>)  ;; ~ and => are the only non-syntactic assignment-precedence operators
-                 (list 'call t ex (parse-assignment s down)))
                 ((eq? t '=)
                  ;; insert line/file for short-form function defs, otherwise leave alone
                  (let ((lno (input-port-line (ts:port s))))
@@ -753,7 +753,7 @@
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
-  (let loop ((ex     (list (parse-cond s)))
+  (let loop ((ex     (list (parse-pair s)))
              (first? #t)
              (t      (peek-token s)))
     (if (not (eqv? t #\,))
@@ -767,7 +767,9 @@
         (begin (take-token s)
                (if (or (eof-object? (peek-token s)) (eq? (peek-token s) '=))
                    (loop ex #f (peek-token s))
-                   (loop (cons (parse-cond s) ex) #f (peek-token s)))))))
+                   (loop (cons (parse-pair s) ex) #f (peek-token s)))))))
+
+(define (parse-pair s) (parse-RtoL s parse-cond is-prec-pair? #f parse-pair))
 
 (define (parse-cond s)
   (let ((ex (parse-arrow s)))
@@ -1316,6 +1318,8 @@
 
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
+  (if (and (eq? word 'begin) end-symbol)
+      (parser-depwarn s "\"begin\" inside indexing expression" ""))
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
    (with-normal-context

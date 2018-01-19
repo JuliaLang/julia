@@ -142,9 +142,13 @@ module IteratorsMD
         return h
     end
 
-    # nextind with CartesianIndex
+    # nextind and prevind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         _, ni = next(CartesianIndices(axes(a)), i)
+        return ni
+    end
+    function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(Iterators.reverse(CartesianIndices(axes(a))), i)
         return ni
     end
 
@@ -418,6 +422,7 @@ module IteratorsMD
     # AbstractArray implementation
     Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
     Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
+    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
     @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         dims = length.(iter.indices)
         #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
@@ -686,51 +691,6 @@ end
 
 ##
 
-# small helper function since we cannot use a closure in a generated function
-_countnz(x) = x != 0
-
-"""
-    findn(A)
-
-Return one vector for each dimension containing indices giving the
-locations of the non-zeros in `A` (determined by `A[i] != 0`).
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findn(A)
-([1, 1, 3, 2], [1, 2, 2, 3])
-
-julia> A = [0 0; 0 0]
-2×2 Array{Int64,2}:
- 0  0
- 0  0
-
-julia> findn(A)
-(Int64[], Int64[])
-```
-"""
-@generated function findn(A::AbstractArray{T,N}) where {T,N}
-    quote
-        nnzA = count(_countnz, A)
-        @nexprs $N d->(I_d = Vector{Int}(uninitialized, nnzA))
-        k = 1
-        @nloops $N i A begin
-            @inbounds if (@nref $N A i) != 0
-                @nexprs $N d->(I_d[k] = i_d)
-                k += 1
-            end
-        end
-        @ntuple $N I
-    end
-end
-
-
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
 rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
@@ -780,7 +740,7 @@ end
 
 function cumsum!(out, v::AbstractVector, dim::Integer)
     # we dispatch on the possibility of numerical stability issues
-    _cumsum!(out, v, dim, TypeArithmetic(eltype(out)))
+    _cumsum!(out, v, dim, ArithmeticStyle(eltype(out)))
 end
 
 function _cumsum!(out, v, dim, ::ArithmeticRounds)
@@ -789,7 +749,7 @@ end
 function _cumsum!(out, v, dim, ::ArithmeticUnknown)
     _cumsum!(out, v, dim, ArithmeticRounds())
 end
-function _cumsum!(out, v, dim, ::TypeArithmetic)
+function _cumsum!(out, v, dim, ::ArithmeticStyle)
     dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
 end
 
@@ -1593,25 +1553,6 @@ end
                 )
 
         return B
-    end
-end
-
-## findn
-
-@generated function findn(B::BitArray{N}) where N
-    quote
-        nnzB = count(B)
-        I = ntuple(x->Vector{Int}(uninitialized, nnzB), Val($N))
-        if nnzB > 0
-            count = 1
-            @nloops $N i B begin
-                if (@nref $N B i) # TODO: should avoid bounds checking
-                    @nexprs $N d->(I[d][count] = i_d)
-                    count += 1
-                end
-            end
-        end
-        return I
     end
 end
 

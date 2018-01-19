@@ -131,8 +131,8 @@ frame is missing entirely. This is understandable, given that [`stacktrace`](@re
 from the context of the *catch*. While in this example it's fairly easy to find the actual source
 of the error, in complex cases tracking down the source of the error becomes nontrivial.
 
-This can be remedied by calling [`catch_stacktrace`](@ref) instead of [`stacktrace`](@ref).
-Instead of returning callstack information for the current context, [`catch_stacktrace`](@ref)
+This can be remedied by passing the result of [`catch_backtrace`](@ref) to [`stacktrace`](@ref).
+Instead of returning callstack information for the current context, [`catch_backtrace`](@ref)
 returns stack information for the context of the most recent exception:
 
 ```julia-repl
@@ -142,7 +142,7 @@ bad_function (generic function with 1 method)
 julia> @noinline example() = try
            bad_function()
        catch
-           catch_stacktrace()
+           stacktrace(catch_backtrace())
        end
 example (generic function with 1 method)
 
@@ -167,7 +167,7 @@ julia> @noinline function grandparent()
                parent()
            catch err
                println("ERROR: ", err.msg)
-               catch_stacktrace()
+               stacktrace(catch_backtrace())
            end
        end
 grandparent (generic function with 1 method)

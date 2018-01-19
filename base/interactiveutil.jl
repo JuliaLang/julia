@@ -51,7 +51,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (Sys.iswindows() && Unicode.uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
@@ -322,13 +322,6 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "  BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "  BLAS: ",libblas_name)
-    end
-    println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
     println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
@@ -367,6 +360,8 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
+In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
+these are often intentional.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))
@@ -639,12 +634,14 @@ end
 
 downloadcmd = nothing
 if Sys.iswindows()
+    downloadcmd = :powershell
     function download(url::AbstractString, filename::AbstractString)
-        res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                    (Ptr{Cvoid},Cwstring,Cwstring,Cuint,Ptr{Cvoid}),C_NULL,url,filename,0,C_NULL)
-        if res != 0
-            error("automatic download failed (error: $res): $url")
-        end
+        ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+        tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
+        client = "New-Object System.Net.Webclient"
+        # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
+        downloadfile = "($client).DownloadFile('$(replace(url, "'" => "''"))', '$(replace(filename, "'" => "''"))')"
+        run(`$ps -NoProfile -Command "$tls12; $downloadfile"`)
         filename
     end
 else
@@ -740,7 +737,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
-                     (value ∈ (Base, Main, Core) ? "" : format_bytes(summarysize(value))),
+                     (any(x -> x === value, (Base, Main, Core)) ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
              for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]

@@ -86,19 +86,14 @@ primitive type
 
 ## Base Modules
 ```@docs
-Base.BLAS
 Base.Docs
 Base.Iterators
-Base.LAPACK
 Base.LibGit2
 Base.Libc
-Base.Libdl
-Base.LinAlg
 Base.Markdown
 Base.Meta
 Base.Pkg
 Base.Serializer
-Base.SparseArrays
 Base.StackTraces
 Base.Sys
 Base.Threads
@@ -116,7 +111,7 @@ Core.typeassert
 Core.typeof
 Core.tuple
 Base.ntuple
-Base.object_id
+Base.objectid
 Base.hash
 Base.finalizer
 Base.finalize
@@ -181,7 +176,7 @@ Base.Enums.@enum
 
 ```@docs
 Core.Function
-Base.method_exists
+Base.hasmethod
 Core.applicable
 Core.invoke
 Base.invokelatest
@@ -311,7 +306,7 @@ Base.AsyncCondition(::Function)
 
 ```@docs
 Base.module_name
-Base.module_parent
+Base.parentmodule
 Base.@__MODULE__
 Base.fullname
 Base.names
@@ -319,12 +314,10 @@ Core.nfields
 Base.fieldnames
 Base.fieldname
 Base.fieldcount
-Base.datatype_module
+Base.propertynames
 Base.datatype_name
 Base.isconst
 Base.function_name
-Base.function_module(::Function)
-Base.function_module(::Any, ::Any)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@functionloc
