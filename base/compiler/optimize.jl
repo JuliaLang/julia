@@ -3091,7 +3091,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
     #     Requires all conditions for `getfield`.
     #     Additionally require all defs to be mutable.
     #
-    # * preserved objects (`@gc_preserve` and `ccall` roots)
+    # * preserved objects (`GC.@preserve` and `ccall` roots)
     #
     #     No `setfield!` should be called for mutable defs on the NULL sites.
     #     This is because it's currently unclear how conditional undefined root slots

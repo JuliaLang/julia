@@ -62,4 +62,27 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 """
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
+"""
+    GC.@preserve x1 x2 ... xn expr
+
+Temporarily protect the given objects from being garbage collected, even if they would
+otherwise be unreferenced.
+
+The last argument is the expression during which the object(s) will be preserved.
+The previous arguments are the objects to preserve.
+"""
+macro preserve(args...)
+    syms = args[1:end-1]
+    for x in syms
+        isa(x, Symbol) || error("Preserved variable must be a symbol")
+    end
+    s, r = gensym(), gensym()
+    esc(quote
+        $s = $(Expr(:gc_preserve_begin, syms...))
+        $r = $(args[end])
+        $(Expr(:gc_preserve_end, s))
+        $r
+    end)
+end
+
 end # module GC

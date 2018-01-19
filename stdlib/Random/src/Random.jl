@@ -10,7 +10,7 @@ using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
+using Base: BitInteger, BitInteger_types, BitUnsigned
 
 import Base: copymutable, copy, copy!, ==, hash, serialize, deserialize, convert
 import Base: rand, randn

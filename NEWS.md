@@ -968,6 +968,8 @@ Deprecated or removed
 
   * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
 
+  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
+
 Command-line option changes
 ---------------------------
 

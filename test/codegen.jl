@@ -197,7 +197,7 @@ end
 
 function load_dummy_ref(x::Int)
     r = Ref{Int}(x)
-    Base.@gc_preserve r begin
+    GC.@preserve r begin
         unsafe_load(Ptr{Int}(pointer_from_objref(r)))
     end
 end

@@ -176,7 +176,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
 
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
-    @gc_preserve sbuff begin
+    GC.@preserve sbuff begin
         (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
                                   p, "true", 4)) && (return true)
         (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),

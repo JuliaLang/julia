@@ -53,7 +53,7 @@ elseif Sys.isapple()
                         (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
-            filename_length = @gc_preserve buf unsafe_load(
+            filename_length = GC.@preserve buf unsafe_load(
               convert(Ptr{UInt32}, pointer(buf) + 8))
             if (filename_length + header_size) > length(buf)
                 resize!(buf, filename_length + header_size)

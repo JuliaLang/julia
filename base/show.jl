@@ -182,7 +182,7 @@ function show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref(x)
-        @gc_preserve r begin
+        GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
                 print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))

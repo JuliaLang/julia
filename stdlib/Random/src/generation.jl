@@ -66,7 +66,7 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    Base.@gc_preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
+    GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
     (z, randbool)
 end
 
@@ -319,7 +319,7 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerBigInt)
     x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
-    @gc_preserve x begin
+    GC.@preserve x begin
         limbs = UnsafeView(x.d, sp.nlimbs)
         while true
             rand!(rng, limbs)
@@ -418,7 +418,7 @@ Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, colle
 Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
     SamplerSimple(str, Sampler(rng, 1:_endof(str), Val(Inf)))
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
+isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(GC.@preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)

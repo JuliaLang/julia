@@ -173,7 +173,7 @@ mt_setempty!(r::MersenneTwister) = r.idxF = MT_CACHE_F
 mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idxF+=1]
 
 function gen_rand(r::MersenneTwister)
-    @gc_preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
+    GC.@preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
     mt_setfull!(r)
 end
 
@@ -382,12 +382,12 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
     mt_avail(r) == 0 && gen_rand(r)
     # from now on, at most one call to gen_rand(r) will be necessary
     m = min(n, mt_avail(r))
-    @gc_preserve r unsafe_copyto!(A.ptr, pointer(r.vals, r.idxF+1), m)
+    GC.@preserve r unsafe_copyto!(A.ptr, pointer(r.vals, r.idxF+1), m)
     if m == n
         r.idxF += m
     else # m < n
         gen_rand(r)
-        @gc_preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
+        GC.@preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
         r.idxF = n-m
     end
     if I isa CloseOpen01
@@ -437,7 +437,7 @@ end
 function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
     @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbits(T)
-    @gc_preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
+    GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
     A
 end
 
@@ -457,7 +457,7 @@ for T in (Float16, Float32)
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
         _rand!(r, A, 2*n128, CloseOpen12())
-        @gc_preserve A begin
+        GC.@preserve A begin
             A128 = UnsafeView{UInt128}(pointer(A), n128)
             for i in 1:n128
                 u = A128[i]
@@ -520,7 +520,7 @@ end
 
 for T in BitInteger_types
     @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
-        (@gc_preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+        (GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
 
     T == UInt128 && continue
 

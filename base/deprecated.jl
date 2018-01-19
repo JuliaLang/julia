@@ -1575,6 +1575,7 @@ end
 
 @deprecate gc GC.gc
 @deprecate gc_enable GC.enable
+@eval @deprecate $(Symbol("@gc_preserve")) GC.$(Symbol("@preserve")) false
 
 # issue #9053
 if Sys.iswindows()
