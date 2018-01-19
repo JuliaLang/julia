@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, mul1!, mul2!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 srand(1)
@@ -147,9 +147,9 @@ srand(1)
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test mul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test mul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test mul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                @test mul2!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test mul2!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test mul2!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -178,13 +178,13 @@ srand(1)
         VV = Array(D)
         DD = copy(D)
         r  = VV * Matrix(D)
-        @test Array(mul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
+        @test Array(mul1!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * transpose(Array(D))
-        @test Array(mul!(VV, transpose(DD))) ≈ r
+        @test Array(mul1!(VV, transpose(DD))) ≈ r
         DD = copy(D)
         r  = VV * Array(D)'
-        @test Array(mul!(VV, adjoint(DD))) ≈ r
+        @test Array(mul1!(VV, adjoint(DD))) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -348,9 +348,12 @@ end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
-    @test_throws MethodError mul!(D1,D2)
-    @test_throws MethodError mul!(transpose(D1),D2)
-    @test_throws MethodError mul!(adjoint(D1),D2)
+    @test LinearAlgebra.mul1!(copy(D1),D2) == D1*D2
+    @test LinearAlgebra.mul2!(D1,copy(D2)) == D1*D2
+    @test LinearAlgebra.mul1!(copy(D1),transpose(D2)) == D1*transpose(D2)
+    @test LinearAlgebra.mul2!(transpose(D1),copy(D2)) == transpose(D1)*D2
+    @test LinearAlgebra.mul1!(copy(D1),adjoint(D2)) == D1*adjoint(D2)
+    @test LinearAlgebra.mul2!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -358,7 +361,7 @@ end
     Q = qrfact(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
     Q = qrfact(randn(5, 5), Val(true)).Q
-    @test_throws MethodError mul!(Q, D)
+    @test_throws ArgumentError mul2!(Q, D)
 end
 
 @testset "block diagonal matrices" begin
