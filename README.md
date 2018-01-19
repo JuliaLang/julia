@@ -110,6 +110,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.SparseArrays` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#25249]).
 
+* `using Compat.LinearAlgebra` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#25571]).
+
 * `using Compat.Random` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#24874]).
 

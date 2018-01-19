@@ -796,6 +796,12 @@ else
     import IterativeEigensolvers
 end
 
+@static if VERSION < v"0.7.0-DEV.3449"
+    const LinearAlgebra = Base.LinAlg
+else
+    import LinearAlgebra
+end
+
 if VERSION < v"0.7.0-DEV.3389"
     const SparseArrays = Base.SparseArrays
 else

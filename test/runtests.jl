@@ -1,5 +1,6 @@
 using Compat
 using Compat.Test
+using Compat.LinearAlgebra
 using Compat.SparseArrays
 
 @test isempty(detect_ambiguities(Base, Core, Compat))
@@ -712,7 +713,7 @@ end
 for T in (Float64, ComplexF32, BigFloat, Int)
     λ = T(4)
     @test chol(λ*I).λ ≈ √λ
-    @test_throws Union{ArgumentError,LinAlg.PosDefException} chol(-λ*I)
+    @test_throws Union{ArgumentError,Compat.LinearAlgebra.PosDefException} chol(-λ*I)
 end
 
 let
@@ -1090,6 +1091,11 @@ using Compat.Random
 
 # 0.7
 @test contains("Hello, World!", r"World")
+
+# 0.7.0-DEV.3449
+let A = [2.0 1.0; 1.0 3.0], b = [1.0, 2.0], x = [0.2, 0.6]
+    @test cholfact(A) \ b ≈ x
+end
 
 # 0.7.0-DEV.3173
 @test invpermute!(permute!([1, 2], 2:-1:1), 2:-1:1) == [1, 2]

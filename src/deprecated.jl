@@ -175,7 +175,7 @@ end
     Base.@deprecate_binding AsyncCondition Base.AsyncCondition
     Base.@deprecate_binding promote_eltype_op Base.promote_eltype_op
     @eval Base.@deprecate_binding $(Symbol("@irrational")) Base.$(Symbol("@irrational"))
-    @eval Base.@deprecate_binding $(Symbol("@blasfunc")) Base.LinAlg.BLAS.$(Symbol("@blasfunc"))
+    @eval Base.@deprecate_binding $(Symbol("@blasfunc")) Compat.LinearAlgebra.BLAS.$(Symbol("@blasfunc"))
 else
     const KERNEL = Sys.KERNEL
     const UTF8String = Core.String
