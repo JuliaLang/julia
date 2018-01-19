@@ -5421,7 +5421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(AbstractArray)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -6477,7 +6477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.module_name",
     "category": "Function",
-    "text": "module_name(m::Module) -> Symbol\n\nGet the name of a Module as a Symbol.\n\nExamples\n\njulia> module_name(Base.LinAlg)\n:LinAlg\n\n\n\n"
+    "text": "module_name(m::Module) -> Symbol\n\nGet the name of a Module as a Symbol.\n\nExamples\n\njulia> module_name(Base)\n:Base\n\n\n\n"
 },
 
 {
@@ -6485,7 +6485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.parentmodule",
     "category": "Function",
-    "text": "parentmodule(m::Module) -> Module\n\nGet a module's enclosing Module. Main is its own parent.\n\nExamples\n\njulia> parentmodule(Main)\nMain\n\njulia> parentmodule(Base.LinAlg.BLAS)\nBase.LinAlg\n\n\n\nparentmodule(t::DataType) -> Module\n\nDetermine the module containing the definition of a (potentially UnionAll-wrapped) DataType.\n\nExamples\n\njulia> module Foo\n           struct Int end\n       end\nFoo\n\njulia> parentmodule(Int)\nCore\n\njulia> parentmodule(Foo.Int)\nFoo\n\n\n\nparentmodule(f::Function) -> Module\n\nDetermine the module containing the (first) definition of a generic function.\n\n\n\nparentmodule(f::Function, types) -> Module\n\nDetermine the module containing a given definition of a generic function.\n\n\n\n"
+    "text": "parentmodule(m::Module) -> Module\n\nGet a module's enclosing Module. Main is its own parent.\n\nExamples\n\njulia> parentmodule(Main)\nMain\n\njulia> parentmodule(Base.Sys)\nBase\n\n\n\nparentmodule(t::DataType) -> Module\n\nDetermine the module containing the definition of a (potentially UnionAll-wrapped) DataType.\n\nExamples\n\njulia> module Foo\n           struct Int end\n       end\nFoo\n\njulia> parentmodule(Int)\nCore\n\njulia> parentmodule(Foo.Int)\nFoo\n\n\n\nparentmodule(f::Function) -> Module\n\nDetermine the module containing the (first) definition of a generic function.\n\n\n\nparentmodule(f::Function, types) -> Module\n\nDetermine the module containing a given definition of a generic function.\n\n\n\n"
 },
 
 {
@@ -10197,7 +10197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(ComplexF64)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(AbstractArray)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -17541,7 +17541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "LinearAlgebra.mul!",
     "category": "Function",
-    "text": "mul!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\nmul!(A, B)\n\nCalculate the matrix-matrix product AB, overwriting one of A or B (but not both), and return the result (the overwritten argument).\n\n\n\n"
+    "text": "mul!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\n"
 },
 
 {
@@ -17549,7 +17549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ldiv!",
     "category": "Function",
-    "text": "ldiv!([Y,] A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result. If only two arguments are passed, then ldiv!(A, B) overwrites B with the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\n"
+    "text": "ldiv!(Y, A, B) -> Y\n\nCompute A \\ B in-place and store the result in Y, returning the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\nldiv!(A, B)\n\nCompute A \\ B in-place and overwriting B to store the result.\n\nThe argument A should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring ldiv! usually also require fine-grained control over the factorization of A.\n\n\n\n"
 },
 
 {
@@ -17557,7 +17557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "LinearAlgebra.rdiv!",
     "category": "Function",
-    "text": "rdiv!([Y,] A, B) -> Y\n\nCompute A / B in-place and store the result in Y, returning the result. If only two arguments are passed, then rdiv!(A, B) overwrites A with the result.\n\nThe argument B should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring rdiv! usually also require fine-grained control over the factorization of B.\n\n\n\n"
+    "text": "rdiv!(A, B)\n\nCompute A / B in-place and overwriting A to store the result.\n\nThe argument B should not be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by factorize or cholfact). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., lufact!), and performance-critical situations requiring rdiv! usually also require fine-grained control over the factorization of B.\n\n\n\n"
 },
 
 {
