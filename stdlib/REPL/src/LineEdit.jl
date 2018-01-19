@@ -381,7 +381,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
     while moreinput
-        l = readline(buf, chomp=false)
+        l = readline(buf, keep=true)
         moreinput = endswith(l, "\n")
         # We need to deal with on-screen characters, so use textwidth to compute occupied columns
         llength = textwidth(l)

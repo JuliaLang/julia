@@ -273,16 +273,16 @@ for (name, f) in l
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io(), chomp=false) == readline(IOBuffer(text), chomp=false)
-        @test readline(io(), chomp=false) == readline(filename, chomp=false)
+        @test readline(io(), keep=true) == readline(IOBuffer(text), keep=true)
+        @test readline(io(), keep=true) == readline(filename, keep=true)
 
         verbose && println("$name readlines...")
-        @test readlines(io(), chomp=false) == readlines(IOBuffer(text), chomp=false)
-        @test readlines(io(), chomp=false) == readlines(filename, chomp=false)
+        @test readlines(io(), keep=true) == readlines(IOBuffer(text), keep=true)
+        @test readlines(io(), keep=true) == readlines(filename, keep=true)
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
-        @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
-        @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
+        @test collect(eachline(io(), keep=true)) == collect(eachline(IOBuffer(text), keep=true))
+        @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
 

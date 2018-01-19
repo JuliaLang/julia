@@ -366,8 +366,12 @@ function readuntil_string(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
 end
 
-function readline(s::IOStream; chomp::Bool=true)
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
+function readline(s::IOStream; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, !keep)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)

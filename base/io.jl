@@ -322,14 +322,14 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(io::IO=STDIN; chomp::Bool=true)
-    readline(filename::AbstractString; chomp::Bool=true)
+    readline(io::IO=STDIN; keep::Bool=false)
+    readline(filename::AbstractString; keep::Bool=false)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
 When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
-input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp` is
-true (as it is by default), these trailing newline characters are removed from the
-line before it is returned. When `chomp` is false, they are returned as part of the
+input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` is
+false (as it is by default), these trailing newline characters are removed from the
+line before it is returned. When `keep` is true, they are returned as part of the
 line.
 
 # Examples
@@ -342,22 +342,30 @@ julia> open("my_file.txt", "w") do io
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
 
-julia> readline("my_file.txt", chomp=false)
+julia> readline("my_file.txt", keep=true)
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp::Bool=true)
+function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
     open(filename) do f
-        readline(f, chomp=chomp)
+        readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=STDIN; chomp::Bool=true)
+function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
     line = readuntil(s, 0x0a)
     i = length(line)
-    if !chomp || i == 0 || line[i] != 0x0a
+    if keep || i == 0 || line[i] != 0x0a
         return String(line)
     elseif i < 2 || line[i-1] != 0x0d
         return String(resize!(line,i-1))
@@ -367,8 +375,8 @@ function readline(s::IO=STDIN; chomp::Bool=true)
 end
 
 """
-    readlines(io::IO=STDIN; chomp::Bool=true)
-    readlines(filename::AbstractString; chomp::Bool=true)
+    readlines(io::IO=STDIN; keep::Bool=false)
+    readlines(filename::AbstractString; keep::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
 equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
@@ -386,7 +394,7 @@ julia> readlines("my_file.txt")
  "JuliaLang is a GitHub organization."
  "It has many members."
 
-julia> readlines("my_file.txt", chomp=false)
+julia> readlines("my_file.txt", keep=true)
 2-element Array{String,1}:
  "JuliaLang is a GitHub organization.\\n"
  "It has many members.\\n"
@@ -394,12 +402,12 @@ julia> readlines("my_file.txt", chomp=false)
 julia> rm("my_file.txt")
 ```
 """
-function readlines(filename::AbstractString; chomp::Bool=true)
+function readlines(filename::AbstractString; kw...)
     open(filename) do f
-        readlines(f, chomp=chomp)
+        readlines(f; kw...)
     end
 end
-readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
+readlines(s=STDIN; kw...) = collect(eachline(s; kw...))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -797,20 +805,20 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 mutable struct EachLine
     stream::IO
     ondone::Function
-    chomp::Bool
+    keep::Bool
 
-    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, chomp::Bool=true) =
-        new(stream, ondone, chomp)
+    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, keep::Bool=false) =
+        new(stream, ondone, keep)
 end
 
 """
-    eachline(io::IO=STDIN; chomp::Bool=true)
-    eachline(filename::AbstractString; chomp::Bool=true)
+    eachline(io::IO=STDIN; keep::Bool=false)
+    eachline(filename::AbstractString; keep::Bool=false)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
 or a file. Iteration calls [`readline`](@ref) on the stream argument repeatedly with
-`chomp` passed through, determining whether trailing end-of-line characters are
-removed. When called with a file name, the file is opened once at the beginning of
+`keep` passed through, determining whether trailing end-of-line characters are
+retained. When called with a file name, the file is opened once at the beginning of
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 
@@ -828,11 +836,21 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
+function eachline(stream::IO=STDIN; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
+    EachLine(stream, keep=keep)::EachLine
+end
 
-function eachline(filename::AbstractString; chomp::Bool=true)
+function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
     s = open(filename)
-    EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
+    EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end
 
 start(itr::EachLine) = nothing
@@ -841,7 +859,7 @@ function done(itr::EachLine, ::Nothing)
     itr.ondone()
     true
 end
-next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing)
+next(itr::EachLine, ::Nothing) = (readline(itr.stream, keep=itr.keep), nothing)
 
 eltype(::Type{EachLine}) = String
 
