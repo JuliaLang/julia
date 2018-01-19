@@ -690,6 +690,8 @@ Deprecated or removed
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
+  * `nb_available` is now `bytesavailable` ([#25634]).
+
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
@@ -1222,3 +1224,4 @@ Command-line option changes
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
+[#25634]: https://github.com/JuliaLang/julia/issues/25634
