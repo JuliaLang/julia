@@ -65,7 +65,7 @@ end
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, +, -]
+    for f in [!, ~, +, -]
         @test ismissing(f(missing))
     end
 
@@ -95,7 +95,6 @@ end
     for f in bit_operators
         @test ismissing(f(missing, missing))
     end
-    @test ismissing(~missing)
 end
 
 @testset "boolean operators" begin
