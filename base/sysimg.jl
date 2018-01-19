@@ -410,9 +410,6 @@ include("Enums.jl")
 using .Enums
 
 # concurrency and parallelism
-include("serialize.jl")
-using .Serializer
-import .Serializer: serialize, deserialize
 include("channels.jl")
 
 # utilities - timing, help, edit
@@ -509,6 +506,7 @@ Base.require(:Base64)
 Base.require(:CRC32c)
 Base.require(:Dates)
 Base.require(:DelimitedFiles)
+Base.require(:Serialization)
 Base.require(:Distributed)
 Base.require(:FileWatching)
 Base.require(:Future)
@@ -533,6 +531,7 @@ Base.require(:Unicode)
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(:Random) true ", run `using Random` instead"
+    @deprecate_binding Serializer root_module(:Serialization) true ", run `using Serialization` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"

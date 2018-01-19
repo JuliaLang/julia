@@ -581,8 +581,7 @@ end
 
 function build(pkg::AbstractString, build_file::AbstractString, errfile::AbstractString)
     # To isolate the build from the running Julia process, we execute each build.jl file in
-    # a separate process. Errors are serialized to errfile for later reporting.
-    # TODO: serialize the same way the load cache does, not with strings
+    # a separate process. Errors are written to errfile for later reporting.
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
         empty!(Base.LOAD_PATH)
@@ -603,8 +602,8 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                     ------------------------------------------------------------
                     # Build failed for \$pkg
                     \""" exception=err,catch_backtrace()
-                serialize(f, pkg)
-                serialize(f, err)
+                write(f, pkg); write(f, 0x00)
+                write(f, sprint(showerror, err)); write(f, 0x00)
             end
         end
         """
@@ -636,8 +635,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     mktemp() do errfile, f
         build!(pkgs, seen, errfile)
         while !eof(f)
-            pkg = deserialize(f)
-            err = deserialize(f)
+            pkg = chop(readuntil(f, '\0'))
+            err = chop(readuntil(f, '\0'))
             errs[pkg] = err
         end
     end

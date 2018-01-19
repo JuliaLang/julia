@@ -9,10 +9,12 @@ module SharedArrays
 
 using Mmap, Distributed, Random
 
-import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
+import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
              show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
 import Random
-import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
+using Serialization
+using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
+import Serialization: serialize, deserialize
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 using Base.Printf.@sprintf

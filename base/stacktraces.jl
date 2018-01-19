@@ -7,7 +7,6 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Base.Serializer: serialize, deserialize
 using Base.Printf: @printf
 using Base: coalesce
 
@@ -94,29 +93,6 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.func, h)
     h = hash(frame.from_c, h)
     h = hash(frame.inlined, h)
-end
-
-# provide a custom serializer that skips attempting to serialize the `outer_linfo`
-# which is likely to contain complex references, types, and module references
-# that may not exist on the receiver end
-function serialize(s::AbstractSerializer, frame::StackFrame)
-    Serializer.serialize_type(s, typeof(frame))
-    serialize(s, frame.func)
-    serialize(s, frame.file)
-    write(s.io, frame.line)
-    write(s.io, frame.from_c)
-    write(s.io, frame.inlined)
-    write(s.io, frame.pointer)
-end
-
-function deserialize(s::AbstractSerializer, ::Type{StackFrame})
-    func = deserialize(s)
-    file = deserialize(s)
-    line = read(s.io, Int)
-    from_c = read(s.io, Bool)
-    inlined = read(s.io, Bool)
-    pointer = read(s.io, UInt64)
-    return StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
 

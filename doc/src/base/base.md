@@ -93,7 +93,6 @@ Base.Libc
 Base.Markdown
 Base.Meta
 Base.Pkg
-Base.Serializer
 Base.StackTraces
 Base.Sys
 Base.Threads
