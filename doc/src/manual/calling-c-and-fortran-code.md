@@ -430,7 +430,7 @@ checks and is only meant to improve readability of the call.
     are provided as *hidden arguments*. Type and position of these arguments in the list are compiler
     specific, where compiler vendors usually default to using `Csize_t` as type and append the hidden
     arguments at the end of the argument list. While this behaviour is fixed for some compilers (GNU),
-    others *optionally* permit placing hidden arguments directly after the character argument (Intel,PGI). 
+    others *optionally* permit placing hidden arguments directly after the character argument (Intel,PGI).
     For example, Fortran subroutines of the form
 
     ```fortran
@@ -443,11 +443,11 @@ checks and is only meant to improve readability of the call.
     ```julia
     str1 = "foo"
     str2 = "bar"
-    ccall(:test, Void, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t), 
+    ccall(:test, Void, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t),
                         str1, str2, sizeof(str1), sizeof(str2))
     ```
-    
-!!! warning    
+
+!!! warning
     Fortran compilers *may* also add other hidden arguments for pointers, assumed-shape (`:`)
     and assumed-size (`*`) arrays. Such behaviour can be avoided by using `ISO_C_BINDING` and
     including `bind(c)` in the defintion of the subroutine, which is strongly recommended for
