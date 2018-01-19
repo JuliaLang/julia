@@ -189,7 +189,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
-    checked_method = method_for_inference_heuristics(method, sig, sparams, sv.params.world)
+    checked_method = method_for_specialization_heuristics(method, sig, sparams, sv.params.world)
     while !(infstate === nothing)
         infstate = infstate::InferenceState
         if infstate.linfo.specTypes == sig
@@ -199,7 +199,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             edgecycle = true
             break
         end
-        working_method = method_for_inference_heuristics(infstate.src, infstate.linfo.def)
+        working_method = method_for_specialization_heuristics(infstate.src, infstate.linfo.def)
         if checked_method === working_method
             if topmost === nothing
                 # inspect the parent of this edge,
@@ -209,7 +209,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 for parent in infstate.callers_in_cycle
                     # check in the cycle list first
                     # all items in here are mutual parents of all others
-                    parent_method = method_for_inference_heuristics(parent.src, parent.linfo.def)
+                    parent_method = method_for_specialization_heuristics(parent.src, parent.linfo.def)
                     if parent_method === checked_method
                         topmost = infstate
                         edgecycle = true
@@ -220,7 +220,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        parent_method = method_for_inference_heuristics(parent.src, parent.linfo.def)
+                        parent_method = method_for_specialization_heuristics(parent.src, parent.linfo.def)
                         if parent.cached && parent_method === checked_method
                             topmost = infstate
                             edgecycle = true

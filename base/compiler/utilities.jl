@@ -144,10 +144,10 @@ end
 
 # TODO: Use these functions instead of directly manipulating
 # the "actual" method for appropriate places in inference (see #24676)
-function method_for_inference_heuristics(cinfo, default)
+function method_for_specialization_heuristics(cinfo, default)
     if isa(cinfo, CodeInfo)
         # appropriate format for `sig` is svec(ftype, argtypes, world)
-        sig = cinfo.signature_for_inference_heuristics
+        sig = cinfo.signature_for_specialization_heuristics
         if isa(sig, SimpleVector) && length(sig) == 3
             methods = _methods(sig[1], sig[2], -1, sig[3])
             if length(methods) == 1
@@ -161,11 +161,11 @@ function method_for_inference_heuristics(cinfo, default)
     return default
 end
 
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
+function method_for_specialization_heuristics(method::Method, @nospecialize(sig), sparams, world)
     if isdefined(method, :generator) && method.generator.expand_early
         method_instance = code_for_method(method, sig, sparams, world, false)
         if isa(method_instance, MethodInstance)
-            return method_for_inference_heuristics(get_staged(method_instance), method)
+            return method_for_specialization_heuristics(get_staged(method_instance), method)
         end
     end
     return method
