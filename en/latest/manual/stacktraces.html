@@ -77,13 +77,13 @@ julia&gt; example()
 5-element Array{StackFrame,1}:
  example() at REPL[2]:4
  eval(::Module, ::Any) at boot.jl:236
-[...]</code></pre><p>You may notice that in the example above the first stack frame points points at line 4, where <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> is called, rather than line 2, where <em>bad_function</em> is called, and <code>bad_function</code>&#39;s frame is missing entirely. This is understandable, given that <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> is called from the context of the <em>catch</em>. While in this example it&#39;s fairly easy to find the actual source of the error, in complex cases tracking down the source of the error becomes nontrivial.</p><p>This can be remedied by passing the result of <a href="../base/base.html#Base.catch_backtrace"><code>catch_backtrace</code></a> to <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a>. Instead of returning callstack information for the current context, <a href="../base/base.html#Base.catch_backtrace"><code>catch_backtrace</code></a> returns stack information for the context of the most recent exception:</p><pre><code class="language-julia-repl">julia&gt; @noinline bad_function() = undeclared_variable
+[...]</code></pre><p>You may notice that in the example above the first stack frame points points at line 4, where <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> is called, rather than line 2, where <em>bad_function</em> is called, and <code>bad_function</code>&#39;s frame is missing entirely. This is understandable, given that <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a> is called from the context of the <em>catch</em>. While in this example it&#39;s fairly easy to find the actual source of the error, in complex cases tracking down the source of the error becomes nontrivial.</p><p>This can be remedied by calling <a href="../base/stacktraces.html#Base.StackTraces.catch_stacktrace"><code>catch_stacktrace</code></a> instead of <a href="../base/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace</code></a>. Instead of returning callstack information for the current context, <a href="../base/stacktraces.html#Base.StackTraces.catch_stacktrace"><code>catch_stacktrace</code></a> returns stack information for the context of the most recent exception:</p><pre><code class="language-julia-repl">julia&gt; @noinline bad_function() = undeclared_variable
 bad_function (generic function with 1 method)
 
 julia&gt; @noinline example() = try
            bad_function()
        catch
-           stacktrace(catch_backtrace())
+           catch_stacktrace()
        end
 example (generic function with 1 method)
 
@@ -102,7 +102,7 @@ julia&gt; @noinline function grandparent()
                parent()
            catch err
                println(&quot;ERROR: &quot;, err.msg)
-               stacktrace(catch_backtrace())
+               catch_stacktrace()
            end
        end
 grandparent (generic function with 1 method)
