@@ -1249,6 +1249,7 @@ end
 @deprecate_moved rowvals    "SparseArrays" true true
 @deprecate_moved nzrange    "SparseArrays" true true
 @deprecate_moved nnz        "SparseArrays" true true
+@deprecate_moved findnz     "SparseArrays" true true
 ## functions that were exported from Base.SparseArrays but not from Base
 @deprecate_moved droptol!   "SparseArrays" false true
 ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl

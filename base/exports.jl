@@ -470,7 +470,6 @@ export
     findmax!,
     findnext,
     findprev,
-    findnz,
     occursin,
     match,
     matchall,

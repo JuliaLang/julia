@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, findall, findnz
+import Base: sort, findall
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
