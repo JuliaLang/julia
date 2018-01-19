@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random: randstring
+
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 
@@ -99,12 +101,12 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
 # pr #17155
 @testset "function composition" begin
-    @test (Base.Unicode.uppercase∘hex)(239487) == "3A77F"
+    @test (uppercase∘hex)(239487) == "3A77F"
 end
 @testset "function negation" begin
     str = randstring(20)
-    @test filter(!Base.Unicode.isupper, str) == replace(str, r"[A-Z]" => "")
-    @test filter(!Base.Unicode.islower, str) == replace(str, r"[a-z]" => "")
+    @test filter(!isupper, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!islower, str) == replace(str, r"[a-z]" => "")
 end
 
 # issue #19891

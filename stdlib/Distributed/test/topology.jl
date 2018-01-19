@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 pids = addprocs_with_testenv(4; topology="master_worker")
 
 let p1 = pids[1], p2 = pids[2]

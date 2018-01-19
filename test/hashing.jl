@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using SparseArrays
+using Random, LinearAlgebra, SparseArrays
 
 types = Any[
     Bool,
@@ -207,7 +207,7 @@ end
 # issue #20744
 @test hash(:c, hash(:b, hash(:a))) != hash(:a, hash(:b, hash(:c)))
 
-# issue #5849, object_id of types
+# issue #5849, objectid of types
 @test Vector === (Array{T,1} where T)
 @test (Pair{A,B} where A where B) !== (Pair{A,B} where B where A)
 let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Union{String, Int},
@@ -219,6 +219,6 @@ let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Un
     vals_b = eval(vals_expr)
     for (i, a) in enumerate(vals_a), (j, b) in enumerate(vals_b)
         @test i != j || (a === b)
-        @test (a === b) == (object_id(a) == object_id(b))
+        @test (a === b) == (objectid(a) == objectid(b))
     end
 end

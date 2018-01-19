@@ -2,6 +2,8 @@
 
 # tests for codegen and optimizations
 
+using Random
+
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
@@ -195,7 +197,7 @@ end
 
 function load_dummy_ref(x::Int)
     r = Ref{Int}(x)
-    Base.@gc_preserve r begin
+    GC.@preserve r begin
         unsafe_load(Ptr{Int}(pointer_from_objref(r)))
     end
 end
@@ -232,13 +234,13 @@ let was_gced = false
         a = Ref(1)
         use(x); use(a); use(y)
         c = Ref(3)
-        gc()
+        GC.gc()
         assert_not_gced()
         use(x)
         use(c)
     end
     foo22770()
-    gc()
+    GC.gc()
     @test was_gced
 end
 

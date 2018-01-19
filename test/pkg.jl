@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Pkg.PkgError
+using Random: randstring
 
 function capture_stdout(f::Function)
     let fname = tempname()

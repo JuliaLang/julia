@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Serialization
+
 import Base.MPFR
 @testset "constructors" begin
     setprecision(53) do
@@ -880,8 +882,10 @@ end
 end
 
 # issue #22758
-setprecision(2_000_000) do
-    @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
+if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
+    setprecision(2_000_000) do
+        @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
+    end
 end
 
 @testset "show BigFloat" begin

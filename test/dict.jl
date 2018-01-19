@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "Pair" begin
     p = Pair(10,20)
     @test p == (10=>20)
@@ -282,7 +284,7 @@ end
             Base.show(io, MIME("text/plain"), d)
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
-                @test Base.Unicode.textwidth(line) <= cols
+                @test textwidth(line) <= cols
             end
             @test length(out) <= rows
 
@@ -292,7 +294,7 @@ end
                 Base.show(io, MIME("text/plain"), f(d))
                 out = split(String(take!(s)),'\n')
                 for line in out[2:end]
-                    @test Base.Unicode.textwidth(line) <= cols
+                    @test textwidth(line) <= cols
                 end
                 @test length(out) <= rows
             end
@@ -373,7 +375,7 @@ end
 
 mutable struct T10647{T}; x::T; end
 @testset "issue #10647" begin
-    a = ObjectIdDict()
+    a = IdDict()
     a[1] = a
     a[a] = 2
     a[3] = T10647(a)
@@ -384,14 +386,14 @@ mutable struct T10647{T}; x::T; end
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "ObjectIdDict" begin
-    a = ObjectIdDict()
+@testset "IdDict{Any,Any}" begin
+    a = IdDict{Any,Any}()
     a[1] = a
     a[a] = 2
 
     sa = empty(a)
     @test isempty(sa)
-    @test isa(sa, ObjectIdDict)
+    @test isa(sa, IdDict{Any,Any})
 
     @test length(a) == 2
     @test 1 in keys(a)
@@ -411,18 +413,112 @@ end
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
 
-    @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
+    @test length(IdDict{Any,Any}(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
 
-    d = @inferred ObjectIdDict(i=>i for i=1:3)
-    @test isa(d, ObjectIdDict)
-    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred IdDict{Any,Any}(i=>i for i=1:3)
+    @test isa(d, IdDict{Any,Any})
+    @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
 
-    d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
-    @test isa(d, ObjectIdDict)
-    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    d = @inferred IdDict{Any,Any}(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, IdDict{Any,Any})
+    @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
 end
+
+@testset "IdDict" begin
+    a = IdDict()
+    a[1] = a
+    a[a] = 2
+
+    sa = empty(a)
+    @test isempty(sa)
+    @test isa(sa, IdDict)
+
+    @test length(a) == 2
+    @test 1 in keys(a)
+    @test a in keys(a)
+    @test a[1] === a
+    @test a[a] === 2
+
+    ca = copy(a)
+    @test length(ca) == length(a)
+    @test ca == a
+    @test ca !== a # make sure they are different objects
+
+    ca = empty!(ca)
+    @test length(ca) == 0
+    @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
+
+    @test length(IdDict(1=>2, 1.0=>3)) == 2
+    @test length(Dict(1=>2, 1.0=>3)) == 1
+
+    d = @inferred IdDict(i=>i for i=1:3)
+    @test isa(d, IdDict)
+    @test d == IdDict(1=>1, 2=>2, 3=>3)
+
+    d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, IdDict)
+    @test d == IdDict(1=>1, 2=>2, 3=>3)
+    @test eltype(d) == Pair{Int,Int}
+    @test_throws KeyError d[:a]
+    @test_throws ArgumentError d[:a] = 1
+    @test_throws MethodError d[1] = :a
+
+    # copy constructor
+    d = IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test collect(values(IdDict{Int,Float64}(d))) == collect(values(d))
+    @test_throws ArgumentError IdDict{Float64,Int}(d)
+
+    # misc constructors
+    @test typeof(IdDict(1=>1, :a=>2)) == IdDict{Any,Int}
+    @test typeof(IdDict(1=>1, 1=>:a)) == IdDict{Int,Any}
+    @test typeof(IdDict(:a=>1, 1=>:a)) == IdDict{Any,Any}
+    @test typeof(IdDict(())) == IdDict{Any,Any}
+
+    # check that returned values are inferred
+    d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test 1 == @inferred d[1]
+    @inferred setindex!(d, -1, 10)
+    @test d[10] == -1
+    @test 1 == @inferred d[1]
+    @test get(d, -111, nothing) == nothing
+    @test 1 == @inferred get(d, 1, 1)
+    @test pop!(d, -111, nothing) == nothing
+    @test 1 == @inferred pop!(d, 1)
+    i = @inferred start(d)
+    @inferred next(d, i)
+    @inferred done(d, i)
+
+    # get! and delete!
+    d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
+    @test get!(d, "a", -1) == -1
+    @test d["a"] == -1
+    @test get!(d, "a", "b") == -1
+    @test_throws MethodError get!(d, "b", "b")
+    @test delete!(d, "a") === d
+    @test !haskey(d, "a")
+    @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
+
+
+    # sizehint! & rehash!
+    d = IdDict()
+    @test sizehint!(d, 10^4) === d
+    @test length(d.ht) >= 10^4
+    d = IdDict()
+    for jj=1:30, i=1:10^4
+        d[i] = i
+    end
+    for i=1:10^4
+        @test d[i] == i
+    end
+    @test length(d.ht) >= 10^4
+    @test d === Base.rehash!(d, 123452) # number needs to be even
+end
+
 
 @testset "Issue #7944" begin
     d = Dict{Int,Int}()
@@ -759,8 +855,13 @@ end
 end
 
 @testset "find" begin
-    @test @inferred find(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test @inferred sort(find(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test @inferred isempty(find(equalto(1), Dict()))
-    @test @inferred isempty(find(equalto(1), Dict(:a=>2, :b=>3)))
+    @test findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test isempty(findall(equalto(1), Dict()))
+    @test isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+
+    @test findfirst(equalto(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(equalto(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
+    @test findfirst(equalto(1), Dict()) === nothing
+    @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
 end

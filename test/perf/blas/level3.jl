@@ -6,7 +6,7 @@ function matmultest(n, iter)
     a = rand(n,n)
     b = similar(a)
     for i=1:iter
-        Base.LinAlg.mul!(b, a, a)
+        LinearAlgebra.mul!(b, a, a)
     end
     b
 end

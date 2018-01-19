@@ -9,7 +9,7 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-using SparseArrays
+using LinearAlgebra, SparseArrays
 
 # For curmod_*
 include("testenv.jl")
@@ -269,10 +269,10 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
         @test_broken need_to_handle_undef_sparam == Set()
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Inference.same_names)))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.cat, Tuple{Any, AbstractArray}))
+        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -283,9 +283,6 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base.cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T}, 1}, Tuple{Vararg{Pair{T}}}} where T<:AbstractString,)))
-        pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes, (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:Number,)))
-        pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes,
-                                                (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:(AbstractArray{<:Number}),)))
         pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))

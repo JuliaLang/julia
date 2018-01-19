@@ -22,7 +22,7 @@ function locale_dict(names::Vector{<:AbstractString})
     for i in 1:length(names)
         name = names[i]
         result[name] = i
-        result[Base.Unicode.lowercase(name)] = i
+        result[lowercase(name)] = i
     end
     return result
 end
@@ -72,7 +72,7 @@ for (fn, field) in zip(
         # a case-sensitive lookup first
         value = get(locale.$field, word, 0)
         if value == 0
-            value = get(locale.$field, Base.Unicode.lowercase(word), 0)
+            value = get(locale.$field, lowercase(word), 0)
         end
         value
     end

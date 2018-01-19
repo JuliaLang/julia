@@ -154,24 +154,3 @@ isless(x::Ptr, y::Ptr) = isless(UInt(x), UInt(y))
 +(x::Ptr, y::Integer) = oftype(x, Intrinsics.add_ptr(UInt(x), (y % UInt) % UInt))
 -(x::Ptr, y::Integer) = oftype(x, Intrinsics.sub_ptr(UInt(x), (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x
-
-"""
-Temporarily protects an object from being garbage collected, even
-if it would otherwise be unreferenced.
-
-The last argument is the expression to preserve objects during.
-The previous arguments are the objects to preserve.
-"""
-macro gc_preserve(args...)
-    syms = args[1:end-1]
-    for x in syms
-        isa(x, Symbol) || error("Preserved variable must be a symbol")
-    end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
-end

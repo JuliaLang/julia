@@ -23,4 +23,3 @@ for t in [Float32,Float64]
     bits = 8*sizeof(t)
     @timeit(flog_sum_reduce(100,x), "sum_reduction_$bits", "SIMD sum reduction over array of type $t", "SIMD")
 end
-

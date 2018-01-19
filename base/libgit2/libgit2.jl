@@ -525,7 +525,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    @Base.gc_preserve lbranch begin
+    GC.@preserve lbranch begin
         p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
         fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p))
         clone_opts = CloneOptions(

@@ -10,6 +10,7 @@ using Base: TupleLL, TupleLLEnd, front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
 using Base.Broadcast: BroadcastStyle, Broadcasted, PromoteToSparse, Args1, Args2, flatten
+using LinearAlgebra
 
 # This module is organized as follows:
 # (0) Define BroadcastStyle rules and convenience types for dispatch

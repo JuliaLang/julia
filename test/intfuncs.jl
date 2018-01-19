@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "gcd/lcm" begin
     # Int32 and Int64 take different code paths -- test both
     for T in (Int32, Int64)

@@ -43,6 +43,7 @@ import Base:
     nb_available, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
+using Base: coalesce
 
 if Sys.iswindows()
     import Base: cwstring

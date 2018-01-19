@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Iterators
+using Random
 
 # zip and filter iterators
 # issue #4718

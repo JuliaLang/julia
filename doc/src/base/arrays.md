@@ -34,8 +34,6 @@ Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
 Base.linspace
 Base.logspace
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Basic functions
@@ -52,7 +50,6 @@ Base.IndexStyle
 Base.conj!
 Base.stride
 Base.strides
-Base.LinAlg.checksquare
 ```
 
 ## Broadcast and vectorization
@@ -124,9 +121,8 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.find(::Any)
-Base.find(::Function, ::Any)
-Base.findn
+Base.findall(::Any)
+Base.findall(::Function, ::Any)
 Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)
@@ -151,7 +147,7 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-Base.LinAlg.diff
+LinearAlgebra.diff
 Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
@@ -164,16 +160,10 @@ Base.mapslices
 ## Combinatorics
 
 ```@docs
-Base.Random.randperm
-Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
-Base.Random.randcycle
-Base.Random.randcycle!
-Base.Random.shuffle
-Base.Random.shuffle!
 Base.reverse
 Base.reverseind
 Base.reverse!

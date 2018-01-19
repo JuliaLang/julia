@@ -182,7 +182,7 @@ function show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref(x)
-        @gc_preserve r begin
+        GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
                 print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
@@ -197,7 +197,7 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     !isdefined(mod, name) && return false
     orig = getfield(mod, name)
     while !(mod === Base || mod === Core)
-        parent = module_parent(mod)
+        parent = parentmodule(mod)
         if mod === Main || mod === parent || parent === Main
             return false
         end
@@ -296,8 +296,8 @@ function show_type_name(io::IO, tn::TypeName)
     if globname !== nothing
         globname_str = string(globname)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-            isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-            isa(getfield(tn.module, globname), tn.wrapper) && _isleaftype(tn.wrapper))
+                isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
+                isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
@@ -737,17 +737,23 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!_isleaftype(ty) || ty == Core.Box)
-            emphasize(io, "::$ty")
+        if emph && (!isdispatchtuple(Tuple{ty}) || ty == Core.Box)
+            if ty isa Union && is_expected_union(ty)
+                emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
+            else
+                emphasize(io, "::$ty")
+            end
         else
             print(io, "::$ty")
         end
     end
 end
 
-emphasize(io, str::AbstractString) = get(io, :color, false) ?
-    print_with_color(Base.error_color(), io, str; bold = true) :
-    print(io, Unicode.uppercase(str))
+is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
+
+emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
+    print_with_color(col, io, str; bold = true) :
+    print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
@@ -1359,7 +1365,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
             print(io, uw.name.mt.name)
-        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Inference.has_free_typevars(ft)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Compiler.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
         else
@@ -1569,7 +1575,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             t = getfield(m, s)
             if t === x || t === m
                 continue
-            elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
+            elseif isa(t, Module) && module_name(t) === s && parentmodule(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)

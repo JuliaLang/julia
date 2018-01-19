@@ -68,14 +68,16 @@ function _bits_findnext(b::Bits, start::Int)
     # start is 0-based
     # @assert start >= 0
     _div64(start) + 1 > length(b) && return -1
-    unsafe_bitfindnext(b, start+1) - 1
+    ind = unsafe_bitfindnext(b, start+1)
+    ind === nothing ? -1 : ind - 1
 end
 
 function _bits_findprev(b::Bits, start::Int)
     # start is 0-based
     # @assert start <= 64 * length(b) - 1
     start >= 0 || return -1
-    unsafe_bitfindprev(b, start+1) - 1
+    ind = unsafe_bitfindprev(b, start+1)
+    ind === nothing ? -1 : ind - 1
 end
 
 # An internal function for setting the inclusion bit for a given integer

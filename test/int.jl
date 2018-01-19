@@ -2,6 +2,7 @@
 
 # Test integer conversion routines from int.jl
 
+using Random
 
 for y in (-4, Float32(-4), -4.0, big(-4.0))
     @test flipsign(3, y)  == -3

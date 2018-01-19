@@ -27,12 +27,12 @@ false
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
 
-issparse(S::Symmetric{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::Hermitian{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinAlg.UnitLowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
-issparse(S::LinAlg.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.LowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.UnitLowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinearAlgebra.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype(S::AbstractSparseArray{<:Any,Ti}) where {Ti} = Ti
 
@@ -44,13 +44,13 @@ function Base.reinterpret(::Type, A::AbstractSparseArray)
 end
 
 # The following two methods should be overloaded by concrete types to avoid
-# allocating the I = find(...)
-_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : zero(indtype(v)))
-_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = find(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : zero(indtype(v)))
+# allocating the I = findall(...)
+_sparse_findnextnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedfirst(I, i); n<=length(I) ? I[n] : nothing)
+_sparse_findprevnz(v::AbstractSparseArray, i::Integer) = (I = findall(!iszero, v); n = searchsortedlast(I, i);  !iszero(n)   ? I[n] : nothing)
 
 function findnext(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
     j = _sparse_findnextnz(v, i)
-    while !iszero(j) && !f(v[j])
+    while j !== nothing && !f(v[j])
         j = _sparse_findnextnz(v, j+1)
     end
     return j
@@ -58,7 +58,7 @@ end
 
 function findprev(f::typeof(!iszero), v::AbstractSparseArray, i::Integer)
     j = _sparse_findprevnz(v, i)
-    while !iszero(j) && !f(v[j])
+    while j !== nothing && !f(v[j])
         j = _sparse_findprevnz(v, j-1)
     end
     return j

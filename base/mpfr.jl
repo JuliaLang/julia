@@ -132,7 +132,7 @@ BigFloat(x::Union{Float16,Float32}) = BigFloat(Float64(x))
 BigFloat(x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
-    !isempty(s) && Base.Unicode.isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
+    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, Int32), z, s, base, ROUNDING_MODE[])
     err == 0 ? z : nothing
@@ -974,7 +974,7 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
 
-function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
+function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]
     prec = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)

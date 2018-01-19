@@ -92,7 +92,7 @@ function available()
     for (pkg, vers) in all_avail
         any(x->Types.satisfies("julia", VERSION, x[2].requires), vers) && push!(avail, pkg)
     end
-    sort!(avail, by=Base.Unicode.lowercase)
+    sort!(avail, by=lowercase)
 end
 
 function available(pkg::AbstractString)
@@ -581,8 +581,7 @@ end
 
 function build(pkg::AbstractString, build_file::AbstractString, errfile::AbstractString)
     # To isolate the build from the running Julia process, we execute each build.jl file in
-    # a separate process. Errors are serialized to errfile for later reporting.
-    # TODO: serialize the same way the load cache does, not with strings
+    # a separate process. Errors are written to errfile for later reporting.
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
         empty!(Base.LOAD_PATH)
@@ -602,9 +601,9 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                 @error \"""
                     ------------------------------------------------------------
                     # Build failed for \$pkg
-                    \""" exception=err
-                serialize(f, pkg)
-                serialize(f, err)
+                    \""" exception=err,catch_backtrace()
+                write(f, pkg); write(f, 0x00)
+                write(f, sprint(showerror, err)); write(f, 0x00)
             end
         end
         """
@@ -633,19 +632,13 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
-    errfile = tempname()
-    touch(errfile)  # create empty file
-    try
+    mktemp() do errfile, f
         build!(pkgs, seen, errfile)
-        open(errfile, "r") do f
-            while !eof(f)
-                pkg = deserialize(f)
-                err = deserialize(f)
-                errs[pkg] = err
-            end
+        while !eof(f)
+            pkg = chop(readuntil(f, '\0'))
+            err = chop(readuntil(f, '\0'))
+            errs[pkg] = err
         end
-    finally
-        isfile(errfile) && Base.rm(errfile)
     end
 end
 
@@ -679,7 +672,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
                 @error """
                     ------------------------------------------------------------
                     # Update hook failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 errs[pkg] = err
             end
         end
@@ -739,7 +732,7 @@ function test!(pkg::AbstractString,
                 @error """
                     ------------------------------------------------------------
                     # Testing failed for $pkg
-                    """ exception=err
+                    """ exception=err,catch_backtrace()
                 push!(errs,pkg)
             end
         end

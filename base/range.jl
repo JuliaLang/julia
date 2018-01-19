@@ -26,12 +26,12 @@ julia> colon(1, 2, 5)
 ```
 """
 colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 colon(start::T, step::T, stop::T) where {T<:Real} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-_colon(::HasOrder, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
+_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
-_colon(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
+_colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
@@ -57,8 +57,8 @@ end
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range(a::T, step, len::Integer) where {T} = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
-_range(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) where {T,S} =
+range(a::T, step, len::Integer) where {T} = _range(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+_range(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 _range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
@@ -79,8 +79,8 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
-TypeRangeStep(::Type{<:AbstractRange}) = RangeStepIrregular()
-TypeRangeStep(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
+RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
+RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 ## ordinal ranges
 

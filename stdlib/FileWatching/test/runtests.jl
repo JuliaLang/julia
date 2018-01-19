@@ -144,7 +144,7 @@ end
 end
 let a = Ref(0)
     make_unrooted_timer(a)
-    gc()
+    GC.gc()
     @test a[] == 1
 end
 
@@ -161,8 +161,8 @@ function test_12992()
     close(pfw)
     pfw = PollingFileWatcher(@__FILE__, 0.01)
     close(pfw)
-    gc()
-    gc()
+    GC.gc()
+    GC.gc()
 end
 
 # Make sure multiple close is fine
@@ -176,8 +176,8 @@ function test2_12992()
     pfw = PollingFileWatcher(@__FILE__, 0.01)
     close(pfw)
     close(pfw)
-    gc()
-    gc()
+    GC.gc()
+    GC.gc()
 end
 
 test_12992()

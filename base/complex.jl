@@ -976,7 +976,7 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
-    if !isconcrete(T)
+    if !isconcretetype(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

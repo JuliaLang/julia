@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using LinearAlgebra
+
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end

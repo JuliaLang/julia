@@ -148,7 +148,7 @@ function lbm3d(n)
     BOUND[:,:,1] = 1
     BOUND[:,1,:] = 1
 
-    ON = find(BOUND); # matrix offset of each Occupied Node
+    ON = findall(BOUND); # matrix offset of each Occupied Node
 
     TO_REFLECT = [ON+CI[2] ON+CI[3] ON+CI[4] ON+CI[5] ON+CI[6] ON+CI[7] ON+CI[8] ON+CI[9] ON+CI[10] ON+CI[11] ON+CI[12] ON+CI[13] ON+CI[14] ON+CI[15] ON+CI[16] ON+CI[17] ON+CI[18] ON+CI[19]]
     REFLECTED = [ON+CI[3] ON+CI[2] ON+CI[5] ON+CI[4] ON+CI[7] ON+CI[6] ON+CI[11] ON+CI[10] ON+CI[9] ON+CI[8] ON+CI[15] ON+CI[14] ON+CI[13] ON+CI[12] ON+CI[19] ON+CI[18] ON+CI[17] ON+CI[16]]

@@ -2,29 +2,29 @@
 
 ## numeric/object traits
 # trait for objects that have an ordering
-abstract type TypeOrder end
-struct HasOrder <: TypeOrder end
-struct Unordered <: TypeOrder end
+abstract type OrderStyle end
+struct Ordered <: OrderStyle end
+struct Unordered <: OrderStyle end
 
-TypeOrder(instance) = TypeOrder(typeof(instance))
-TypeOrder(::Type{<:Real}) = HasOrder()
-TypeOrder(::Type{<:Any}) = Unordered()
+OrderStyle(instance) = OrderStyle(typeof(instance))
+OrderStyle(::Type{<:Real}) = Ordered()
+OrderStyle(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic
-abstract type TypeArithmetic end
-struct ArithmeticRounds <: TypeArithmetic end     # least significant bits can be lost
-struct ArithmeticOverflows <: TypeArithmetic end  #  most significant bits can be lost
-struct ArithmeticUnknown <: TypeArithmetic end
+abstract type ArithmeticStyle end
+struct ArithmeticRounds <: ArithmeticStyle end     # least significant bits can be lost
+struct ArithmeticWraps <: ArithmeticStyle end      #  most significant bits can be lost
+struct ArithmeticUnknown <: ArithmeticStyle end
 
-TypeArithmetic(instance) = TypeArithmetic(typeof(instance))
-TypeArithmetic(::Type{<:AbstractFloat}) = ArithmeticRounds()
-TypeArithmetic(::Type{<:Integer}) = ArithmeticOverflows()
-TypeArithmetic(::Type{<:Any}) = ArithmeticUnknown()
+ArithmeticStyle(instance) = ArithmeticStyle(typeof(instance))
+ArithmeticStyle(::Type{<:AbstractFloat}) = ArithmeticRounds()
+ArithmeticStyle(::Type{<:Integer}) = ArithmeticWraps()
+ArithmeticStyle(::Type{<:Any}) = ArithmeticUnknown()
 
 # trait for objects that support ranges with regular step
 """
-    TypeRangeStep(instance)
-    TypeRangeStep(T::Type)
+    RangeStepStyle(instance)
+    RangeStepStyle(T::Type)
 
 Indicate whether an instance or a type supports constructing a range with
 a perfectly regular step or not. A regular step means that
@@ -37,7 +37,7 @@ all(diff(r) .== step(r))
 When a type `T` always leads to ranges with regular steps, it should
 define the following method:
 ```julia
-Base.TypeRangeStep(::Type{<:AbstractRange{<:T}}) = Base.RangeStepRegular()
+Base.RangeStepStyle(::Type{<:AbstractRange{<:T}}) = Base.RangeStepRegular()
 ```
 This will allow [`hash`](@ref) to use an O(1) algorithm for `AbstractRange{T}`
 objects instead of the default O(N) algorithm (with N the length of the range).
@@ -46,14 +46,14 @@ In some cases, whether the step will be regular depends not only on the
 element type `T`, but also on the type of the step `S`. In that case, more
 specific methods should be defined:
 ```julia
-Base.TypeRangeStep(::Type{<:OrdinalRange{<:T, <:S}}) = Base.RangeStepRegular()
+Base.RangeStepStyle(::Type{<:OrdinalRange{<:T, <:S}}) = Base.RangeStepRegular()
 ```
 
 By default, all range types are assumed to be `RangeStepIrregular`, except
 ranges with an element type which is a subtype of `Integer`.
 """
-abstract type TypeRangeStep end
-struct RangeStepRegular   <: TypeRangeStep end # range with regular step
-struct RangeStepIrregular <: TypeRangeStep end # range with rounding error
+abstract type RangeStepStyle end
+struct RangeStepRegular   <: RangeStepStyle end # range with regular step
+struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
 
-TypeRangeStep(instance) = TypeRangeStep(typeof(instance))
+RangeStepStyle(instance) = RangeStepStyle(typeof(instance))

@@ -259,8 +259,6 @@ Give the number of columns needed to print a character.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> textwidth('α')
 1
 
@@ -280,8 +278,6 @@ Give the number of columns needed to print a string.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> textwidth("March")
 5
 ```
@@ -342,8 +338,6 @@ Letter: Lowercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> islower('α')
 true
 
@@ -367,8 +361,6 @@ Letter: Uppercase, or Lt, Letter: Titlecase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isupper('γ')
 false
 
@@ -404,8 +396,6 @@ Tests whether a character is a decimal digit (0-9).
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isdigit('❤')
 false
 
@@ -427,8 +417,6 @@ category Letter, i.e. a character whose category code begins with 'L'.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isalpha('❤')
 false
 
@@ -453,8 +441,6 @@ Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isnumeric('௰')
 true
 
@@ -470,33 +456,6 @@ false
 """
 isnumeric(c::Char) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
 
-"""
-    isalnum(c::Char) -> Bool
-
-Tests whether a character is alphanumeric.
-A character is classified as alphabetic if it belongs to the Unicode general
-category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
-
-# Examples
-```jldoctest
-julia> using Unicode
-
-julia> isalnum('❤')
-false
-
-julia> isalnum('9')
-true
-
-julia> isalnum('α')
-true
-```
-"""
-function isalnum(c::Char)
-    cat = category_code(c)
-    UTF8PROC_CATEGORY_LU <= cat <= UTF8PROC_CATEGORY_LO ||
-    UTF8PROC_CATEGORY_ND <= cat <= UTF8PROC_CATEGORY_NO
-end
-
 # following C++ only control characters from the Latin-1 subset return true
 
 """
@@ -507,8 +466,6 @@ Control characters are the non-printing characters of the Latin-1 subset of Unic
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> iscntrl('\\x01')
 true
 
@@ -526,8 +483,6 @@ character whose category code begins with 'P'.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> ispunct('α')
 false
 
@@ -551,8 +506,6 @@ category Zs.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isspace('\\n')
 true
 
@@ -577,8 +530,6 @@ Tests whether a character is printable, including spaces, but not a control char
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isprint('\\x01')
 false
 
@@ -591,26 +542,6 @@ isprint(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY
 # true in principal if a printer would use ink
 
 """
-    isgraph(c::Char) -> Bool
-
-Tests whether a character is printable, and not a space.
-Any character that would cause a printer to use ink should be
-classified with `isgraph(c)==true`.
-
-# Examples
-```jldoctest
-julia> using Unicode
-
-julia> isgraph('\\x01')
-false
-
-julia> isgraph('A')
-true
-```
-"""
-isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO
-
-"""
     isxdigit(c::Char) -> Bool
 
 Test whether a character is a valid hexadecimal digit. Note that this does not
@@ -618,8 +549,6 @@ include `x` (as in the standard `0x` prefix).
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isxdigit('a')
 true
 
@@ -638,8 +567,6 @@ Return `s` with all characters converted to uppercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> uppercase("Julia")
 "JULIA"
 ```
@@ -653,8 +580,6 @@ Return `s` with all characters converted to lowercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> lowercase("STRINGS AND THINGS")
 "strings and things"
 ```

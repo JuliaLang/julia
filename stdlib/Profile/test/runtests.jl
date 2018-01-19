@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Profile
+using Test, Profile, Serialization
 
 function busywait(t, n_tries)
     iter = 0

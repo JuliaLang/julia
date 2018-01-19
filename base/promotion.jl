@@ -346,8 +346,8 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_inline_meta; T)
 
-if isdefined(Core, :Inference)
-    const _return_type = Core.Inference.return_type
+if isdefined(Core, :Compiler)
+    const _return_type = Core.Compiler.return_type
 else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
@@ -355,14 +355,16 @@ end
 promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(S)})
-    _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    _isleaftype(R) && _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(R), _default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(R, S, T)
 end
 

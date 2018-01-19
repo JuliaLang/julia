@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using SparseArrays
+using Random, LinearAlgebra, SparseArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -119,6 +119,8 @@ end
         @test LinearIndices()[1] == 1
         @test_throws BoundsError LinearIndices()[2]
         @test LinearIndices()[1,1] == 1
+        @test LinearIndices()[] == 1
+        @test size(LinearIndices()) == ()
         @test CartesianIndices()[1] == CartesianIndex()
         @test_throws BoundsError CartesianIndices()[2]
     end
@@ -129,6 +131,8 @@ end
             @test CartesianIndices((3,))[i] == CartesianIndex(i,)
         end
         @test LinearIndices((3,))[2,1] == 2
+        @test LinearIndices((3,))[[1]] == [1]
+        @test size(LinearIndices((3,))) == (3,)
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -140,22 +144,39 @@ end
         k = 0
         cartesian = CartesianIndices((4,3))
         linear = LinearIndices(cartesian)
+        @test size(cartesian) == size(linear) == (4, 3)
         for j = 1:3, i = 1:4
-            @test linear[i,j] == (k+=1)
+            k += 1
+            @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
             @test LinearIndices(0:3,3:5)[i-1,j+2] == k
             @test CartesianIndices(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
         end
+        @test linear[linear] == linear
+        @test linear[vec(linear)] == vec(linear)
+        @test linear[cartesian] == linear
+        @test linear[vec(cartesian)] == vec(linear)
+        @test cartesian[linear] == cartesian
+        @test cartesian[vec(linear)] == vec(cartesian)
+        @test cartesian[cartesian] == cartesian
+        @test cartesian[vec(cartesian)] == vec(cartesian)
     end
 
     @testset "3-dimensional" begin
         l = 0
         for k = 1:2, j = 1:3, i = 1:4
-            @test LinearIndices((4,3,2))[i,j,k] == (l+=1)
+            l += 1
+            @test LinearIndices((4,3,2))[i,j,k] == l
+            @test LinearIndices((4,3,2))[l] == l
+            @test CartesianIndices((4,3,2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((4,3,2))[l] == CartesianIndex(i,j,k)
             @test LinearIndices(1:4,1:3,1:2)[i,j,k] == l
+            @test LinearIndices(1:4,1:3,1:2)[l] == l
+            @test CartesianIndices(1:4,1:3,1:2)[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
             @test LinearIndices(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
+            @test LinearIndices(0:3,3:5,-101:-100)[l] == l
+            @test CartesianIndices(0:3,3:5,-101:-100)[i,j,k] == CartesianIndex(i-1, j+2, k-102)
             @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
         end
 
@@ -415,12 +436,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
-            @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
-            @test B[vec(mask)] == A[vec(mask)] == find(mask)
+            @test B[mask] == A[mask] == B[findall(mask)] == A[findall(mask)] == LinearIndices(mask)[findall(mask)]
+            @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[findall(mask)]
             mask1 = bitrand(size(A, 1))
             mask2 = bitrand(size(A, 2))
-            @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] == B[find(mask1), find(mask2), trailing2]
-            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == find(mask1)
+            @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
+                B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
+            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
         end
     end
 end
@@ -660,9 +682,9 @@ end
 
 # checksquare
 function test_checksquare()
-    @test LinAlg.checksquare(zeros(2,2)) == 2
-    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
-    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
+    @test LinearAlgebra.checksquare(zeros(2,2)) == 2
+    @test LinearAlgebra.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
+    @test_throws DimensionMismatch LinearAlgebra.checksquare(zeros(2,3))
 end
 
 #----- run tests -------------------------------------------------------------#
@@ -795,9 +817,11 @@ for A in (rand(2), rand(2,3))
     @test Array(values(A)) == A
 end
 
-# nextind
+# nextind and prevind
 @test nextind(zeros(4), 2) == 3
 @test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
+@test prevind(zeros(4), 2) == 1
+@test prevind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 1)
 
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a

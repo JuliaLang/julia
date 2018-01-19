@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = Unicode.textwidth(truncmark)
+    truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
@@ -9,7 +9,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     while !done(str, idx)
         lastidx = idx
         c, idx = next(str, idx)
-        wid += Unicode.textwidth(c)
+        wid += textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
     end
@@ -34,7 +34,7 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     if isempty(t)
         print(io, typeof(t), "()")
     else
-        if _isleaftype(K) && _isleaftype(V)
+        if isconcretetype(K) && isconcretetype(V)
             print(io, typeof(t).name)
         else
             print(io, typeof(t))
@@ -55,15 +55,11 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     end
 end
 
-abstract type AbstractSerializer end
-
 # Dict
 
 # These can be changed, to trade off better performance for space
 const global maxallowedprobe = 16
 const global maxprobeshift   = 6
-
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
 """
     Dict([itr])
@@ -160,7 +156,7 @@ dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
 function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = @default_eltype(kv)
-    if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
+    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
         return dict_with_eltype(DT_apply, kv, T)
     end
     return grow_to!(dict_with_eltype(DT_apply, T), kv)

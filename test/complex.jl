@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
+
 @test reim(2 + 3im) == (2, 3)
 
 for T in (Int64, Float64)

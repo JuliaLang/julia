@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays
+using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
@@ -78,7 +78,7 @@ copyto!(s, d)
 s = SharedArrays.shmem_rand(dims)
 copyto!(s, sdata(d))
 @test s == d
-a = rand(dims)
+a = rand(Float64, dims)
 @test sdata(a) == a
 
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
@@ -145,9 +145,9 @@ finalize(S)
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere gc()
-@everywhere gc()
-@everywhere gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -190,7 +190,7 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
+remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)
@@ -242,7 +242,7 @@ end
 
 # Issue #14664
 d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     d[i] = i
 end
 
@@ -253,7 +253,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
 end
@@ -284,11 +284,11 @@ finalize(d)
 let
     aorig = a1 = SharedArray{Float64}((3, 3))
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    @test object_id(aorig) == object_id(a1)
+    @test objectid(aorig) == objectid(a1)
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    gc(); gc()
+    GC.gc(); GC.gc()
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test haskey(SharedArrays.sa_refs, id)
     finalize(a1)

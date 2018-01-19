@@ -494,13 +494,13 @@ julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
 Often referred to as logical indexing or indexing with a logical mask, indexing
 by a boolean array selects elements at the indices where its values are `true`.
 Indexing by a boolean vector `B` is effectively the same as indexing by the
-vector of integers that is returned by [`find(B)`](@ref). Similarly, indexing
+vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
 must be a vector of the same length as the dimension it indexes into, or it
 must be the only index provided and match the size and dimensionality of the
 array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`find`](@ref).
+indices directly instead of first calling [`findall`](@ref).
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)
@@ -694,15 +694,18 @@ functions may be unexpectedly slow. Concrete types should also typically provide
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
-the length of the tuple returned by [`size`](@ref).
+the length of the tuple returned by [`size`](@ref). For more details on defining custom
+`AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
 laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout. Subtypes should provide a method [`stride(A,k)`](@ref)
-that returns the "stride" of dimension `k`: increasing the index of dimension `k` by `1` should
+functions expecting this memory layout. Subtypes should provide a [`strides(A)`](@ref) method
+that returns a tuple of "strides" for each dimension; a provided [`stride(A,k)`](@ref) method accesses
+the `k`th element within this tuple. Increasing the index of dimension `k` by `1` should
 increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
 method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
-in the same way to these strides.
+in the same way to these strides. More concrete examples can be found within the [interface guide
+for strided arrays](@ref man-interface-strided-arrays).
 
 The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
 order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for

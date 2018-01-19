@@ -64,6 +64,8 @@ unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{V
 
 (::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(uninitialized, length(s)), s)
 
+String(a::AbstractVector{UInt8}) = String(copyto!(StringVector(length(a)), a))
+
 String(s::CodeUnits{UInt8,String}) = s.s
 
 ## low-level functions ##
@@ -76,11 +78,11 @@ codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
     @boundscheck checkbounds(s, i)
-    @gc_preserve s unsafe_load(pointer(s, i))
+    GC.@preserve s unsafe_load(pointer(s, i))
 end
 
 write(io::IO, s::String) =
-    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 

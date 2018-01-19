@@ -42,7 +42,7 @@ function include(path::AbstractString)
 end
 const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
-    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
 end
 let SOURCE_PATH = ""
@@ -75,8 +75,8 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str, WrappedException
-if isdefined(Core, :Inference)
-    import Core.Inference.CoreDocs
+if isdefined(Core, :Compiler)
+    import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
 end
 
@@ -195,7 +195,7 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 
-if !isdefined(Core, :Inference)
+if !isdefined(Core, :Compiler)
     include("docs/core.jl")
     Core.atdoc!(CoreDocs.docm)
 end
@@ -311,6 +311,31 @@ include("lock.jl")
 include("threads.jl")
 include("weakkeydict.jl")
 
+# To limit dependency on rand functionality (implemented in the Random
+# module), Crand is used in file.jl, and could be used in error.jl
+# (but it breaks a test)
+"""
+    Crand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
+"""
+Crand() = ccall(:rand, Cuint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
+Crand(::Type{Float64}) = Crand(UInt32) / 2^32
+
+"""
+    Csrand([seed])
+
+Interface the the C `srand(seed)` function.
+"""
+Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+# functions defined in Random
+function rand end
+function randn end
+
 # I/O
 include("stream.jl")
 include("socket.jl")
@@ -373,12 +398,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# random number generation
-include("random/dSFMT.jl")
-include("random/random.jl")
-using .Random
-import .Random: rand, rand!
-
 # (s)printf macros
 include("printf.jl")
 # import .Printf
@@ -391,9 +410,6 @@ include("Enums.jl")
 using .Enums
 
 # concurrency and parallelism
-include("serialize.jl")
-using .Serializer
-import .Serializer: serialize, deserialize
 include("channels.jl")
 
 # utilities - timing, help, edit
@@ -441,12 +457,6 @@ import Base64
 
 INCLUDE_STATE = 2
 
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
 include("asyncmap.jl")
 
 include("multimedia.jl")
@@ -468,9 +478,11 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
 function __init__()
+    # for the few uses of Crand in Base:
+    Csrand()
     # Base library init
     reinit_stdio()
     global_logger(root_module(:Logging).ConsoleLogger(STDERR))
@@ -494,20 +506,23 @@ Base.require(:Base64)
 Base.require(:CRC32c)
 Base.require(:Dates)
 Base.require(:DelimitedFiles)
+Base.require(:Serialization)
+Base.require(:Distributed)
 Base.require(:FileWatching)
-Base.require(:Logging)
+Base.require(:Future)
 Base.require(:IterativeEigensolvers)
+Base.require(:Libdl)
+Base.require(:LinearAlgebra)
+Base.require(:Logging)
 Base.require(:Mmap)
+Base.require(:Printf)
 Base.require(:Profile)
+Base.require(:Random)
 Base.require(:SharedArrays)
 Base.require(:SparseArrays)
 Base.require(:SuiteSparse)
 Base.require(:Test)
 Base.require(:Unicode)
-Base.require(:Distributed)
-Base.require(:Printf)
-Base.require(:Future)
-Base.require(:Libdl)
 
 @eval Base begin
     @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
@@ -515,6 +530,8 @@ Base.require(:Libdl)
     @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+    @deprecate_binding Random root_module(:Random) true ", run `using Random` instead"
+    @deprecate_binding Serializer root_module(:Serialization) true ", run `using Serialization` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"
@@ -528,6 +545,9 @@ Base.require(:Libdl)
         ", run `using SparseArrays` to load sparse array functionality")
     @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
+
+    # PR #25571
+    @deprecate_binding LinAlg root_module(:LinearAlgebra) true ", run `using LinearAlgebra` instead"
 end
 
 empty!(LOAD_PATH)

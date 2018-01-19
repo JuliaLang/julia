@@ -1482,6 +1482,11 @@ effects of type instability.  This is particularly relevant in cases where fixin
 is difficult or impossible: for example, currently it's not possible to infer the return type
 of an anonymous function.  In such cases, the tips above (e.g., adding type annotations and/or
 breaking up functions) are your best tools to contain the "damage" from type instability.
+Also, note that even Julia Base has functions that are type unstable.
+For example, the function [`findfirst`](@ref) returns the index into an array where a key is found,
+or `nothing` if it is not found, a clear type instability. In order to make it easier to find the
+type instabilities that are likely to be important, `Union`s containing either `missing` or `nothing`
+are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 

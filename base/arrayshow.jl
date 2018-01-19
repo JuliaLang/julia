@@ -166,7 +166,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     screenwidth -= length(pre) + length(post)
     presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
-    @assert Unicode.textwidth(hdots) == Unicode.textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
     rowsA, colsA = axes(X,1), axes(X,2)
     m, n = length(rowsA), length(colsA)

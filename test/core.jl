@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # test core language features
+
+using Random
+using SparseArrays
+
 const Bottom = Union{}
 
-using SparseArrays
 
 # For curmod_*
 include("testenv.jl")
@@ -172,7 +175,7 @@ let elT = T22624.body.body.body.types[1].parameters[1]
     elT2 = elT.body.types[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
     @test elT2.body.types[1].parameters[1] === elT2
-    @test Base._isleaftype(elT2.body.types[1])
+    @test Base.isconcretetype(elT2.body.types[1])
 end
 
 # issue #3890
@@ -902,7 +905,7 @@ let A = [1]
     finalize(A)
     @test x == 1
     A = 0
-    gc(); gc()
+    GC.gc(); GC.gc()
     @test x == 1
 end
 
@@ -1472,7 +1475,7 @@ end
 
 function foo4075(f::Foo4075, s::Symbol)
     x = getfield(f,s)
-    gc()
+    GC.gc()
     x
 end
 
@@ -1952,6 +1955,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 
 # issue #6142
 import Base: +
+import LinearAlgebra: UniformScaling, I
 mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::UniformScaling) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
@@ -2469,10 +2473,10 @@ mutable struct Obj; x; end
         wref = []
         mk_wr(ref, wref)
         test_wr(ref, wref)
-        gc()
+        GC.gc()
         test_wr(ref, wref)
         pop!(ref)
-        gc()
+        GC.gc()
         @test wref[1].value === nothing
     end
     test_wr()
@@ -2549,7 +2553,7 @@ try
         val::Bar{T}
     end
 end
-gc()
+GC.gc()
 redirect_stdout(OLD_STDOUT)
 close(file)
 rm(fname)
@@ -3093,7 +3097,7 @@ struct Array_512_Uint8
     d511::UInt8
     d512::UInt8
 end
-gc()
+GC.gc()
 
 # issue #10867
 @test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
@@ -3474,7 +3478,7 @@ const const_array_int2 = Array{Int}
 test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
-# object_id of haspadding field
+# objectid of haspadding field
 struct HasPadding
     x::Bool
     y::Int
@@ -3486,7 +3490,7 @@ let hashaspadding = Ref(HasHasPadding(HasPadding(true,1))),
     hashaspadding2 = Ref(HasHasPadding(HasPadding(true,1)))
     unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
     unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
-    @test object_id(hashaspadding[]) == object_id(hashaspadding2[])
+    @test objectid(hashaspadding[]) == objectid(hashaspadding2[])
 end
 
 # issue #12517
@@ -3649,11 +3653,11 @@ let
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
-    gc(false)
+    GC.gc(false)
     # GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_MARKED; age = 1
     finalize(obj)
     @test finalized == 1
@@ -3662,14 +3666,14 @@ end
 # check if finalizers for the old gen can be triggered manually
 # PR #14181
 let
-    # The following three `gc(false)` clears the `finalizer_list`. It is
+    # The following three `GC.gc(false)` clears the `finalizer_list`. It is
     # not strictly necessary to make the test pass but should make the failure
     # more repeatable if something breaks.
-    gc(false)
+    GC.gc(false)
     # At least: GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # At least: GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
 
     obj1 = Ref(1)
@@ -3715,9 +3719,9 @@ let i = 9.0
 end
 
 # Make sure the old f() method is GC'd if it was not rooted properly
-gc()
-gc()
-gc()
+GC.gc()
+GC.gc()
+GC.gc()
 
 # Run again.
 g()
@@ -3797,7 +3801,7 @@ let
 end
 
 # issue #14564
-@test isa(object_id(Tuple.name.cache), Integer)
+@test isa(objectid(Tuple.name.cache), Integer)
 
 # issue #14691
 mutable struct T14691; a::UInt; end
@@ -3856,7 +3860,7 @@ end
 # issue #14610
 let sometypes = (Int,Int8)
     f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
-    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+    @test hasmethod(f, (Union{Type{Int},Type{Int8}},))
 end
 
 let
@@ -3978,9 +3982,9 @@ let ary = Vector{Any}(uninitialized, 10)
         ary = Vector{Any}(uninitialized, n)
         # Try to free the previous buffer that was filled with random content
         # and to increase the chance of getting a non-zero'd buffer next time
-        gc()
-        gc()
-        gc()
+        GC.gc()
+        GC.gc()
+        GC.gc()
         ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
         ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
         ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
@@ -4023,16 +4027,16 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
-let gc_enabled13995 = gc_enable(false)
+let gc_enabled13995 = GC.enable(false)
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
-    gc_enable(true)
+    GC.enable(true)
     # obj is unreachable and young, a single young gc should collect it
     # and trigger all the finalizers.
-    gc(false)
-    gc_enable(false)
+    GC.gc(false)
+    GC.enable(false)
     @test finalized13995 == [true, true, true, true]
-    gc_enable(gc_enabled13995)
+    GC.enable(gc_enabled13995)
 end
 
 # issue #15283
@@ -4192,7 +4196,7 @@ end
 
 # issue #14113
 module A14113
-    using Test
+    using Test, Random
     # show that making several thousand methods (and lots of AST constants)
     # doesn't cause any serious issues (for example, for the serializer)
     # although to keep runtime on the order of several seconds for this test,
@@ -4507,7 +4511,7 @@ let a = Val{Val{TypeVar(:_, Int)}},
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
-    @test Base._isleaftype(b)
+    @test Base.isconcretetype(b)
 end
 
 # A return type widened to Type{Union{T,Nothing}} should not confuse
@@ -4827,7 +4831,7 @@ end
 # issue #17255, take `deferred_alloc` into account
 # when calculating total allocation size.
 @noinline function f17255(n)
-    gc_enable(false)
+    GC.enable(false)
     b0 = Base.gc_bytes()
     local a
     for i in 1:n
@@ -4841,7 +4845,7 @@ end
     return true, a
 end
 @test f17255(10000)[1]
-gc_enable(true)
+GC.enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
@@ -5019,7 +5023,7 @@ if Sys.WORD_SIZE == 64
         try
             # Do no touch the string to avoid triggering OOM
             slot[] = Base._string_n(2^32)
-            gc(false)
+            GC.gc(false)
         catch ex
             # This can happen if there's a virtual address size limit
             @test isa(ex, OutOfMemoryError)
@@ -5028,13 +5032,13 @@ if Sys.WORD_SIZE == 64
         return
     end
     @noinline function tester20360()
-        gc()
-        # Makes sure the string is rooted during the `gc(false)`
+        GC.gc()
+        # Makes sure the string is rooted during the `GC.gc(false)`
         # but is not before the last gc in this function.
         slot = Ref{Any}()
         test_large_string20360(slot)
         slot[] = nothing
-        gc()
+        GC.gc()
         return
     end
     @test_nowarn tester20360()
@@ -5536,6 +5540,7 @@ module UnionOptimizations
 
 using Test
 using Dates
+using Random
 
 const boxedunions = [Union{}, Union{String, Nothing}]
 const unboxedunions = [Union{Int8, Nothing},
@@ -5571,16 +5576,20 @@ initvalue2(::Type{T}) where {T <: Number} = T(1)
 
 U = unboxedunions[1]
 
+@noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+
 mutable struct UnionField
     u::U
 end
 
-x = UnionField(initvalue(Base.uniontypes(U)[1]))
-@test x.u === initvalue(Base.uniontypes(U)[1])
-x.u = initvalue2(Base.uniontypes(U)[1])
-@test x.u === initvalue2(Base.uniontypes(U)[1])
-x.u = initvalue(Base.uniontypes(U)[2])
-@test x.u === initvalue(Base.uniontypes(U)[2])
+let x = UnionField(initvalue(Base.uniontypes(U)[1]))
+    @test x.u === initvalue(Base.uniontypes(U)[1])
+    x.u = initvalue2(Base.uniontypes(U)[1])
+    @test x.u === initvalue2(Base.uniontypes(U)[1])
+    x.u = initvalue(Base.uniontypes(U)[2])
+    @test x.u === initvalue(Base.uniontypes(U)[2])
+end
 
 mutable struct UnionField2
     x::Union{Nothing, Int}
@@ -5608,10 +5617,12 @@ let x4 = UnionField4(nothing, Int8(3))
     @test x4.x === nothing
     @test x4.y === Int8(3)
     @test x4.z[1] === 0x11
-    @test x4 === x4
+    @test compare(x4, x4)
     @test x4 == x4
+    @test egal(x4, x4)
     @test !(x4 === x4copy)
     @test !(x4 == x4copy)
+    @test !egal(x4, x4copy)
 end
 
 struct UnionField5
@@ -5628,11 +5639,12 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5.x === nothing
     @test x5.y === Int8(3)
     @test x5.z[1] === 0x11
-    @test x5 === x5
+    @test compare(x5, x5)
     @test x5 == x5
-    @test x5 === x5copy
+    @test compare(x5, x5copy)
     @test x5 == x5copy
-    @test object_id(x5) === object_id(x5copy)
+    @test egal(x5, x5copy)
+    @test objectid(x5) === objectid(x5copy)
     @test hash(x5) === hash(x5copy)
 end
 
@@ -5646,7 +5658,6 @@ struct B23367
     y::A23367
     z::Int8
 end
-@noinline compare(a, b) = (a === b) # test code-generation of `is`
 @noinline get_x(a::A23367) = a.x
 function constant23367 end
 let
@@ -5656,18 +5667,18 @@ let
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)
-    @test addr(b)  != addr(b2)
-    @test addr(b)  != addr(b3)
-    @test addr(b2) != addr(b3)
+    @test addr(b)  == addr(b2)
+    @test addr(b)  == addr(b3)
+    @test addr(b2) == addr(b3)
 
-    @test b === b2 === b3
-    @test compare(b, b2)
-    @test compare(b, b3)
-    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b === b2 === b3 === b
+    @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
+    @test compare(b, b2) && compare(b, b3) && compare(b2, b3)
+    @test objectid(b) === objectid(b2) == objectid(b3)
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == 12
+    @test sizeof(b) == sizeof(Int) * 3
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -5719,6 +5730,8 @@ t4 = vcat(A23567, t2, t3)
 @test t4[1:5] == A23567
 @test t4[6:10] == A23567
 @test t4[11:15] == A23567
+
+using Serialization
 
 for U in unboxedunions
     local U

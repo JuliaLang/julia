@@ -380,8 +380,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:findlast(x -> !isempty(x), path_arr)], path_separator)
-    prefix_num = findlast(x -> !isempty(x), start_arr) - i - 1
+    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

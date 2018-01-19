@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Printf
+using Printf, Random
 
 const mintrials = 5
 const mintime = 2000.0
@@ -65,7 +65,7 @@ macro output_timings(t,name,desc,group)
         elseif print_output
             @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
-        gc()
+        GC.gc()
     end
 end
 

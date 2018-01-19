@@ -191,7 +191,7 @@ to provide more efficient implementations:
 `unsafe_write(s::T, p::Ptr{UInt8}, n::UInt)`
 """
 function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
-    local written::Int = 0
+    written::Int = 0
     for i = 1:n
         written += write(s, unsafe_load(p, i))
     end
@@ -404,7 +404,7 @@ readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 ## byte-order mark, ntoh & hton ##
 
 let a = UInt32[0x01020304]
-    endian_bom = @gc_preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
+    endian_bom = GC.@preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
     global ntoh, hton, ltoh, htol
     if endian_bom == 0x01
         ntoh(x) = x
@@ -485,8 +485,7 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
 function write(io::IO, x1, xs...)
-    local written::Int = 0
-    written += write(io, x1)
+    written::Int = write(io, x1)
     for x in xs
         written += write(io, x)
     end
@@ -518,7 +517,7 @@ end
 
 function write(s::IO, a::Array)
     if isbits(eltype(a))
-        return @gc_preserve a unsafe_write(s, pointer(a), sizeof(a))
+        return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
         depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
         nb = 0
@@ -535,7 +534,7 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     end
     elsz = sizeof(T)
     colsz = size(a,1) * elsz
-    @gc_preserve a if stride(a,1) != 1
+    GC.@preserve a if stride(a,1) != 1
         for idxs in CartesianIndices(size(a))
             unsafe_write(s, pointer(a, idxs.I), elsz)
         end
@@ -586,13 +585,13 @@ read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
 function read!(s::IO, a::Array{UInt8})
-    @gc_preserve a unsafe_read(s, pointer(a), sizeof(a))
+    GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     return a
 end
 
 function read!(s::IO, a::Array{T}) where T
     if isbits(T)
-        @gc_preserve a unsafe_read(s, pointer(a), sizeof(a))
+        GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)
             a[i] = read(s, T)
@@ -923,8 +922,6 @@ characters from that character until the start of the next line are ignored.
 ```jldoctest
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
-
-julia> using Unicode
 
 julia> skipchars(buf, isspace)
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)

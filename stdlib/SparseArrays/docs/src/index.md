@@ -115,19 +115,24 @@ julia> R = sparsevec(I,V)
 
 The inverse of the [`sparse`](@ref) and [`sparsevec`](@ref) functions is
 [`findnz`](@ref), which retrieves the inputs used to create the sparse array.
-There is also a [`findn`](@ref) function which only returns the index vectors.
+[`findall(!iszero, x)`](@ref) returns the cartesian indices of non-zero entries in `x`
+(including stored entries equal to zero).
 
 ```jldoctest sparse_function
 julia> findnz(S)
 ([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 
-julia> findn(S)
-([1, 4, 5, 3], [4, 7, 9, 18])
+julia> findall(!iszero, S)
+4-element Array{CartesianIndex{2},1}:
+ CartesianIndex(1, 4)
+ CartesianIndex(4, 7)
+ CartesianIndex(5, 9)
+ CartesianIndex(3, 18)
 
 julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
-julia> find(!iszero, R)
+julia> findall(!iszero, R)
 4-element Array{Int64,1}:
  1
  3

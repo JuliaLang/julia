@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed
+using Test, Distributed, Random, Serialization
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -11,14 +11,14 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
 @test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
+@test 100 == @distributed (+) for i in 1:100
         1
     end
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-@everywhere using Test
+@everywhere using Test, Random, LinearAlgebra
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
@@ -272,14 +272,14 @@ end
 test_regular_io_ser(Future())
 test_regular_io_ser(RemoteChannel())
 
-# Test @parallel load balancing - all processors should get either M or M+1
+# Test @distributed load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-ids = @parallel((a,b)->[a;b], for i=1:7; myid(); end)
+ids = @distributed((a,b)->[a;b], for i=1:7; myid(); end)
 workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test maximum(workloads) - minimum(workloads) <= 1
 
-# @parallel reduction should work even with very short ranges
-@test @parallel(+, for i=1:2; i; end) == 3
+# @distributed reduction should work even with very short ranges
+@test @distributed(+, for i=1:2; i; end) == 3
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
@@ -532,7 +532,6 @@ generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
 run_map_equivalence_tests(pmap)
-using Base.Unicode: uppercase
 @test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 
 
@@ -699,7 +698,7 @@ end
 
 # issue #8207
 let A = Any[]
-    @parallel (+) for i in (push!(A,1); 1:2)
+    @distributed (+) for i in (push!(A,1); 1:2)
         i
     end
     @test length(A) == 1
@@ -818,13 +817,13 @@ end
 
 # issue #16451
 rng=RandomDevice()
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
 
 rand(rng)
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
@@ -917,7 +916,7 @@ end
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = BLAS.vendor()
+    blas = LinearAlgebra.BLAS.vendor()
     # Wrap in a try to catch unsupported blas versions
     try
         if blas == :openblas
@@ -1150,6 +1149,7 @@ v6 = FooModEverywhere
 # b) hash value has not changed.
 
 @everywhere begin
+    using Serialization
     global testsercnt_d = Dict()
     mutable struct TestSerCnt
         v
@@ -1158,15 +1158,15 @@ v6 = FooModEverywhere
     hash(x::TestSerCnt, h::UInt) = hash(hash(x.v), h)
     ==(x1::TestSerCnt, x2::TestSerCnt) = (x1.v == x2.v)
 
-    function Base.serialize(s::AbstractSerializer, t::TestSerCnt)
-        Base.Serializer.serialize_type(s, TestSerCnt)
+    function Serialization.serialize(s::AbstractSerializer, t::TestSerCnt)
+        Serialization.serialize_type(s, TestSerCnt)
         serialize(s, t.v)
         global testsercnt_d
-        cnt = get!(testsercnt_d, object_id(t), 0)
-        testsercnt_d[object_id(t)] = cnt+1
+        cnt = get!(testsercnt_d, objectid(t), 0)
+        testsercnt_d[objectid(t)] = cnt+1
     end
 
-    Base.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
+    Serialization.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
 end
 
 # hash value of tsc is not changed
@@ -1175,22 +1175,22 @@ for i in 1:5
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized only once
-@test testsercnt_d[object_id(tsc)] == 1
+@test testsercnt_d[objectid(tsc)] == 1
 
 # hash values are changed
 n=5
-testsercnt_d[object_id(tsc)] = 0
+testsercnt_d[objectid(tsc)] = 0
 for i in 1:n
     tsc.v[i] = i
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized as many times as the loop
-@test testsercnt_d[object_id(tsc)] == n
+@test testsercnt_d[objectid(tsc)] == n
 
 # Multiple references in a closure should be serialized only once.
 global mrefs = TestSerCnt(fill(1.,10))
 @test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (fill(1.,10), fill(2.,10), fill(3.,10))
-@test testsercnt_d[object_id(mrefs)] == 1
+@test testsercnt_d[objectid(mrefs)] == 1
 
 
 # nested anon functions
@@ -1240,9 +1240,9 @@ global ids_func = ()->ids_cleanup
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 
@@ -1268,7 +1268,7 @@ foreach(wait, refs)
 #6760
 if true
     a = 2
-    x = @parallel (vcat) for k=1:2
+    x = @distributed (vcat) for k=1:2
         sin(a)
     end
 end
@@ -1358,25 +1358,6 @@ catch ex
     @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
-
-@test let
-    # creates a new worker in the same folder and tries to include file
-    tmp_file, temp_file_stream = mktemp()
-    close(temp_file_stream)
-    tmp_file = relpath(tmp_file, @__DIR__)
-    try
-        proc = addprocs_with_testenv(1)
-        include(tmp_file)
-        remotecall_fetch(include, proc[1], tmp_file)
-        rmprocs(proc)
-        rm(tmp_file)
-        return true
-    catch e
-        println(e)
-        rm(tmp_file, force=true)
-        return false
-    end
-end == true
 
 let
     # creates a new worker in a different folder and tries to include file
@@ -1499,4 +1480,3 @@ end
 # cluster at any time only supports a single topology.
 rmprocs(workers())
 include("topology.jl")
-

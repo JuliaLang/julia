@@ -3,6 +3,7 @@
 using SuiteSparse.CHOLMOD
 using DelimitedFiles
 using Test
+using Serialization
 
 # CHOLMOD tests
 srand(123)
@@ -377,14 +378,14 @@ end
     C = A1 + copy(adjoint(A1))
     λmaxC = eigmax(Array(C))
     b = fill(1., size(A1, 1))
-    @test_throws LinAlg.PosDefException cholfact(C - 2λmaxC*I)\b
-    @test_throws LinAlg.PosDefException cholfact(C, shift=-2λmaxC)\b
+    @test_throws LinearAlgebra.PosDefException cholfact(C - 2λmaxC*I)\b
+    @test_throws LinearAlgebra.PosDefException cholfact(C, shift=-2λmaxC)\b
     @test_throws ArgumentError ldltfact(C - C[1,1]*I)\b
     @test_throws ArgumentError ldltfact(C, shift=-real(C[1,1]))\b
     @test !isposdef(cholfact(C - 2λmaxC*I))
     @test !isposdef(cholfact(C, shift=-2λmaxC))
-    @test !LinAlg.issuccess(ldltfact(C - C[1,1]*I))
-    @test !LinAlg.issuccess(ldltfact(C, shift=-real(C[1,1])))
+    @test !LinearAlgebra.issuccess(ldltfact(C - C[1,1]*I))
+    @test !LinearAlgebra.issuccess(ldltfact(C, shift=-real(C[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -625,7 +626,7 @@ end
     A = Float64[10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]
     @test sparse(cholfact(sparse(A))) ≈ A
 end
-gc()
+GC.gc()
 
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
     v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
@@ -699,9 +700,9 @@ end
     @test s.is_super == 0
     @test F\b ≈ fill(1., m+n)
     F2 = cholfact(M)
-    @test !LinAlg.issuccess(F2)
+    @test !LinearAlgebra.issuccess(F2)
     ldltfact!(F2, M)
-    @test LinAlg.issuccess(F2)
+    @test LinearAlgebra.issuccess(F2)
     @test F2\b ≈ fill(1., m+n)
 end
 
@@ -735,7 +736,7 @@ end
     B = CHOLMOD.Sparse(A)
     C = B'B
     # Change internal representation to symmetric (upper/lower)
-    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
+    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, findall(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
         unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
         @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
@@ -804,11 +805,11 @@ end
 @testset "Issue #22335" begin
     local A, F
     A = sparse(1.0I, 3, 3)
-    @test LinAlg.issuccess(cholfact(A))
+    @test LinearAlgebra.issuccess(cholfact(A))
     A[3, 3] = -1
     F = cholfact(A)
-    @test !LinAlg.issuccess(F)
-    @test LinAlg.issuccess(ldltfact!(F, A))
+    @test !LinearAlgebra.issuccess(F)
+    @test LinearAlgebra.issuccess(ldltfact!(F, A))
     A[3, 3] = 1
     @test A[:, 3:-1:1]\fill(1., 3) == [1, 1, 1]
 end

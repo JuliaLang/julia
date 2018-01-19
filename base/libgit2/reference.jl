@@ -62,7 +62,7 @@ julia> LibGit2.shortname(branch_ref)
 """
 function shortname(ref::GitReference)
     isempty(ref) && return ""
-    Base.@gc_preserve ref begin
+    GC.@preserve ref begin
         name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Cvoid},), ref.ptr)
         name_ptr == C_NULL && return ""
         name = unsafe_string(name_ptr)
@@ -92,7 +92,7 @@ reference, return an empty string.
 function fullname(ref::GitReference)
     isempty(ref) && return ""
     reftype(ref) == Consts.REF_OID && return ""
-    Base.@gc_preserve ref begin
+    GC.@preserve ref begin
         rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Cvoid},), ref.ptr)
         rname == C_NULL && return ""
         name = unsafe_string(rname)
@@ -107,7 +107,7 @@ Return the full name of `ref`.
 """
 function name(ref::GitReference)
     isempty(ref) && return ""
-    Base.@gc_preserve ref begin
+    GC.@preserve ref begin
         name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Cvoid},), ref.ptr)
         name_ptr == C_NULL && return ""
         name = unsafe_string(name_ptr)
@@ -118,7 +118,7 @@ end
 function branch(ref::GitReference)
     isempty(ref) && return ""
     str_ptr_ptr = Ref{Cstring}()
-    Base.@gc_preserve ref begin
+    GC.@preserve ref begin
         @check ccall((:git_branch_name, :libgit2), Cint,
                       (Ptr{Cstring}, Ptr{Cvoid},), str_ptr_ptr, ref.ptr)
         str = unsafe_string(str_ptr_ptr[])

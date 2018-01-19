@@ -1263,42 +1263,33 @@ dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
 ## Find methods
 
-function find(S::SparseMatrixCSC)
+function findall(S::SparseMatrixCSC)
     if !(eltype(S) <: Bool)
-        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        Base.depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :findall)
     end
-    return find(x->x!=0, S)
+    return findall(x->x!=0, S)
 end
 
-function find(p::Function, S::SparseMatrixCSC)
+function findall(p::Function, S::SparseMatrixCSC)
     if p(zero(eltype(S)))
-        return invoke(find, Tuple{Function, Any}, p, S)
+        return invoke(findall, Tuple{Function, Any}, p, S)
     end
-    sz = size(S)
-    I, J = _findn(p, S)
-    return CartesianIndex.(I, J)
-end
-find(p::Base.OccursIn, x::SparseMatrixCSC) =
-    invoke(find, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
-findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->true, S)
-
-function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
-    I = Vector{Ti}(uninitialized, numnz)
-    J = Vector{Ti}(uninitialized, numnz)
+    inds = Vector{CartesianIndex{2}}(uninitialized, numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if p(S.nzval[k])
-            I[count] = S.rowval[k]
-            J[count] = col
+            inds[count] = CartesianIndex(S.rowval[k], col)
             count += 1
         end
     end
 
-    return (I, J)
+    return inds
 end
+findall(p::Base.OccursIn, x::SparseMatrixCSC) =
+    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
@@ -1319,7 +1310,7 @@ end
 
 function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
     if i > length(m)
-        return zero(indtype(m))
+        return nothing
     end
     row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1328,16 +1319,14 @@ function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
         return LinearIndices(m)[m.rowval[n], col]
     end
     nextcol = findnext(c->(c>hi), m.colptr, col+1)
-    if iszero(nextcol)
-        return zero(indtype(m))
-    end
+    nextcol === nothing && return nothing
     nextlo = m.colptr[nextcol-1]
     return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
 end
 
 function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
     if iszero(i)
-        return zero(indtype(m))
+        return nothing
     end
     row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
@@ -1346,14 +1335,11 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
         return LinearIndices(m)[m.rowval[n], col]
     end
     prevcol = findprev(c->(c<lo), m.colptr, col-1)
-    if iszero(prevcol)
-        return zero(indtype(m))
-    end
+    prevcol === nothing && return nothing
     prevhi = m.colptr[prevcol+1]
     return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end
 
-import Base.Random.GLOBAL_RNG
 function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
@@ -1431,18 +1417,18 @@ function sprand(m::Integer, n::Integer, density::AbstractFloat,
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
 
-    I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
+    I,J = sprand_IJ(defaultRNG(), m, n, density)
     sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
 end
 
 truebools(r::AbstractRNG, n::Integer) = fill(true, n)
 
-sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
+sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(defaultRNG(),m,n,density)
 
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
 sprand(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(r,m,n,density,(r, i) -> rand(r, T, i), T)
 sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density, truebools, Bool)
-sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
+sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(defaultRNG(), T, m, n, density)
 
 """
     sprandn([rng], m[,n],p::AbstractFloat)
@@ -1464,9 +1450,9 @@ julia> sprandn(rng, 2, 2, 0.75)
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
-sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
+sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(defaultRNG(),m,n,density)
 
-LinAlg.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
+LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
 
 """
     spzeros([type,]m[,n])
@@ -2306,12 +2292,12 @@ end
 getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{Bool}) = error("Cannot index with AbstractRange{Bool}")
 getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with AbstractRange{Bool}")
 
-getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[find(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[findall(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[findall(I),findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = A[I,findall(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[findall(I),J]
 
 ## setindex!
 function setindex!(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer) where Tv where Ti
@@ -2650,17 +2636,17 @@ end
 
 # Logical setindex!
 
-setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), find(I), J)
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), find(I), find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, sparse(x), find(I),J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), findall(I), J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), findall(I), findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, findall(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, sparse(x), findall(I),J)
 
-setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, Array(x), find(I), J)
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, Array(x), find(I), find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, Array(x), findall(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, Array(x), findall(I), findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), findall(I), J)
 
 setindex!(A::SparseMatrixCSC, x, I::AbstractVector{Bool}) = throw(BoundsError())
 function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})

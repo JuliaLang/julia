@@ -89,7 +89,7 @@ function deliver_result(sock::IO, msg, oid, value)
     catch e
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
-        @error "Fatal error on process $(myid())" exception=e
+        @error "Fatal error on process $(myid())" exception=e,catch_backtrace()
         wid = worker_id_from_socket(sock)
         close(sock)
         if myid()==1
@@ -210,7 +210,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             # If unhandleable error occurred talking to pid 1, exit
             if wpid == 1
                 if isopen(w_stream)
-                    @error "Fatal error on process $(myid())" exception=e
+                    @error "Fatal error on process $(myid())" exception=e,catch_backtrace()
                 end
                 exit(1)
             end
@@ -341,7 +341,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
     catch e
-        @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e
+        @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e,catch_backtrace()
         exit(1)
     end
 end

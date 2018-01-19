@@ -26,27 +26,38 @@ end
 function term(io::IO, md::BlockQuote, columns)
     s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^margin, "│", line)
     end
 end
 
 function term(io::IO, md::Admonition, columns)
-    print(io, " "^margin, "| ")
-    print_with_color(:bold, io, isempty(md.title) ? md.category : md.title)
-    println(io, "\n", " "^margin, "|")
+    col = :default
+    if lowercase(md.title) == "danger"
+        col = Base.error_color()
+    elseif lowercase(md.title) == "warning"
+        col = Base.warn_color()
+    elseif lowercase(md.title) in ("info", "note")
+        col = Base.info_color()
+    elseif lowercase(md.title) == "tip"
+        col = :green
+    end
+    print_with_color(col, io, " "^margin, "│ "; bold = true)
+    print_with_color(col, io, isempty(md.title) ? md.category : md.title; bold = true)
+    print_with_color(col, io, "\n", " "^margin, "│", "\n"; bold = true)
     s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        print_with_color(col, io, " "^margin, "│"; bold = true)
+        println(io, line)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
-    print(io, " "^margin, "| ")
+    print(io, " "^margin, "│ ")
     print_with_color(:bold, io, "[^$(f.id)]")
-    println(io, "\n", " "^margin, "|")
+    println(io, "\n", " "^margin, "│")
     s = sprint(term, f.text, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^margin, "│", line)
     end
 end
 
