@@ -95,6 +95,7 @@ end
     for f in bit_operators
         @test ismissing(f(missing, missing))
     end
+    @test ismissing(~missing)
 end
 
 @testset "boolean operators" begin
