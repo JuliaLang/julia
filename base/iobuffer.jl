@@ -149,7 +149,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
     adv = min(avail, nb)
-    @gc_preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
+    GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
@@ -164,7 +164,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     end
     if isbits(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
-        @gc_preserve a unsafe_read(from, pointer(a, offs), nb)
+        GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
         for i = offs:offs+nel-1
             a[i] = read(to, T)
@@ -395,7 +395,7 @@ function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    @gc_preserve a unsafe_write(to, pointer(a, offs), UInt(nel))
+    GC.@preserve a unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::GenericIOBuffer, a::UInt8)
@@ -428,7 +428,7 @@ read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_availa
 
 function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nb_available(buf))
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nb_available(buf))
     q == C_NULL && return nothing
     return Int(q-p+1)
 end
@@ -474,7 +474,7 @@ function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, nb_available(io))
     n == 0 && return crc
-    crc = @gc_preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
+    crc = GC.@preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
     io.ptr += n
     return crc
 end

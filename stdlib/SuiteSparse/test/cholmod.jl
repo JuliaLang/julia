@@ -625,7 +625,7 @@ end
     A = Float64[10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]
     @test sparse(cholfact(sparse(A))) ≈ A
 end
-gc()
+GC.gc()
 
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
     v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L

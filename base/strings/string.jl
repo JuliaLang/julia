@@ -78,11 +78,11 @@ codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
     @boundscheck checkbounds(s, i)
-    @gc_preserve s unsafe_load(pointer(s, i))
+    GC.@preserve s unsafe_load(pointer(s, i))
 end
 
 write(io::IO, s::String) =
-    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 

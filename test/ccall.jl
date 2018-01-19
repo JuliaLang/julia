@@ -1295,7 +1295,7 @@ struct Bits22734 <: Abstract22734
     y::Float64
 end
 function cb22734(ptr::Ptr{Cvoid})
-    gc()
+    GC.gc()
     obj = unsafe_pointer_to_objref(ptr)::Bits22734
     obj.x + obj.y
 end

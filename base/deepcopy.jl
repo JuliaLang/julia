@@ -46,7 +46,7 @@ function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
-    y = @gc_preserve x unsafe_string(pointer(x), sizeof(x))
+    y = GC.@preserve x unsafe_string(pointer(x), sizeof(x))
     stackdict[x] = y
     return y
 end
