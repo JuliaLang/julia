@@ -123,6 +123,13 @@ method_c8(a, b; y=1, w=1) = a
 Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), pairs((x = 1, y = 2, z = 1, w = 1)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\""
 
+let no_kwsorter_match, e
+    no_kwsorter_match() = 0
+    no_kwsorter_match(a;y=1) = y
+    e = try no_kwsorter_match(y=1) catch ex; ex; end
+    @test contains(sprint(showerror, e), r"no method matching.+\(; y=1\)")
+end
+
 ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)

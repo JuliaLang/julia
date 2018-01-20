@@ -328,7 +328,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
-        kwargs = ex.args[1]
+        kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end])
     end
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
