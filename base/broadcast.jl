@@ -898,6 +898,7 @@ end
 # in a "small" Vector{Bool}, and then copy in chunks into the output
 function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     tmp = Vector{Bool}(uninitialized, bitcache_size)
     destc = dest.chunks
     ind = cind = 1
@@ -916,6 +917,42 @@ function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     end
     dest
 end
+
+# For some BitArray operations, we can work at the level of chunks. The trivial
+# implementation just walks over the UInt64 chunks in a linear fashion.
+# This requires three things:
+#   1. The function must be known to work at the level of chunks
+#   2. The only arrays involved must be BitArrays or scalars
+#   3. There must not be any broadcasting beyond scalar — all array sizes must match
+# We could eventually allow for all broadcasting and other array types, but that
+# requires very careful consideration of all the edge effects.
+const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(!)}
+const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, ElType, Axes, Indexing<:Union{Nothing,TupleLL}, F<:ChunkableOp, Args<:TupleLL} = Broadcasted{Style,ElType,Axes,Indexing,F,Args}
+ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
+ischunkedbroadcast(R, args) = false
+ischunkedbroadcast(R, args::TupleLL{<:BitArray}) = size(R) == size(args.head) && ischunkedbroadcast(R, args.rest)
+ischunkedbroadcast(R, args::TupleLL{<:Bool}) = ischunkedbroadcast(R, args.rest)
+ischunkedbroadcast(R, args::TupleLL{<:BroadcastedChunkableOp}) = ischunkedbroadcast(R, args.head) && ischunkedbroadcast(R, args.rest)
+ischunkedbroadcast(R, args::TupleLLEnd) = true
+
+liftchunks(::TupleLLEnd) = ()
+liftchunks(args::TupleLL{<:BitArray}) = (args.head.chunks, liftchunks(args.rest)...)
+# Transform scalars to repeated scalars the size of a chunk
+liftchunks(args::TupleLL{<:Bool}) = (ifelse(args.head, typemax(UInt64), UInt64(0)), liftchunks(args.rest)...)
+ithchunk(i) = ()
+Base.@propagate_inbounds ithchunk(i, c::Vector{UInt64}, args...) = (c[i], ithchunk(i, args...)...)
+Base.@propagate_inbounds ithchunk(i, b::UInt64, args...) = (b, ithchunk(i, args...)...)
+function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
+    f = flatten(bc)
+    args = liftchunks(f.args)
+    dc = dest.chunks
+    @simd for i in eachindex(dc)
+        @inbounds dc[i] = f.f(ithchunk(i, args...)...)
+    end
+    @inbounds dc[end] &= Base._msk_end(dest)
+    dest
+end
+
 
 @noinline throwdm(axdest, axsrc) =
     throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
