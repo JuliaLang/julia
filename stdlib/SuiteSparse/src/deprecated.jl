@@ -17,32 +17,32 @@ end
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from src/umfpack.jl, to deprecate
 @eval SuiteSparse.UMFPACK begin
-    using Base.LinAlg: Adjoint, Transpose
-    Base.A_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-        Base.LinAlg.ldiv!(X, lu, B)
-    Base.At_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-        Base.LinAlg.ldiv!(X, transpose(lu), B)
-    Base.Ac_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-        Base.LinAlg.ldiv!(X, adjoint(lu), B)
-    Base.A_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-        Base.LinAlg.ldiv!(X, lu, B)
-    Base.At_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-        Base.LinAlg.ldiv!(X, transpose(lu), B)
-    Base.Ac_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-        Base.LinAlg.ldiv!(X, adjoint(lu), B)
-    Base.A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Base.LinAlg.ldiv!(lu, B)
-    Base.At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Base.LinAlg.ldiv!(transpose(lu), B)
-    Base.Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Base.LinAlg.ldiv!(adjoint(lu), B)
-    Base.A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Base.LinAlg.ldiv!(lu, B)
-    Base.At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Base.LinAlg.ldiv!(transpose(lu), B)
-    Base.Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Base.LinAlg.ldiv!(adjoint(lu), B)
+    using LinearAlgebra: Adjoint, Transpose
+    LinearAlgebra.A_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+        LinearAlgebra.ldiv!(X, lu, B)
+    LinearAlgebra.At_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+        LinearAlgebra.ldiv!(X, transpose(lu), B)
+    LinearAlgebra.Ac_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+        LinearAlgebra.ldiv!(X, adjoint(lu), B)
+    LinearAlgebra.A_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+        LinearAlgebra.ldiv!(X, lu, B)
+    LinearAlgebra.At_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+        LinearAlgebra.ldiv!(X, transpose(lu), B)
+    LinearAlgebra.Ac_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+        LinearAlgebra.ldiv!(X, adjoint(lu), B)
+    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, lu, copy(B))
+    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, transpose(lu), copy(B))
+    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = LinearAlgebra.ldiv!(B, adjoint(lu), copy(B))
+    LinearAlgebra.A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, lu, copy(B))
+    LinearAlgebra.At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, transpose(lu), copy(B))
+    LinearAlgebra.Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = LinearAlgebra.ldiv!(B, adjoint(lu), copy(B))
 end
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from src/spqr.jl, to deprecate
 @eval SuiteSparse.SPQR begin
-    using Base.LinAlg: Adjoint, Transpose
-    Base.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ) = Base.LinAlg.mul!(A, adjoint(Q))
-    Base.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = Base.LinAlg.mul!(adjoint(Q), A)
-    Base.A_mul_B!(A::StridedMatrix, Q::QRSparseQ) = Base.LinAlg.mul!(A, Q)
-    Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = Base.LinAlg.mul!(Q, A)
+    using LinearAlgebra: Adjoint, Transpose
+    LinearAlgebra.A_mul_Bc!(A::StridedMatrix, Q::QRSparseQ) = LinearAlgebra.mul!(A, adjoint(Q))
+    LinearAlgebra.Ac_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = LinearAlgebra.mul!(adjoint(Q), A)
+    LinearAlgebra.A_mul_B!(A::StridedMatrix, Q::QRSparseQ) = LinearAlgebra.mul!(A, Q)
+    LinearAlgebra.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = LinearAlgebra.mul!(Q, A)
 end

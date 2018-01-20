@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct SummarySize
-    seen::ObjectIdDict
+    seen::IdDict
     frontier_x::Vector{Any}
     frontier_i::Vector{Int}
     exclude::Any
@@ -24,7 +24,7 @@ function summarysize(obj;
                      exclude = Union{DataType, TypeName, Method},
                      chargeall = Union{TypeMapEntry, Core.MethodInstance})
     @nospecialize obj exclude chargeall
-    ss = SummarySize(ObjectIdDict(), Any[], Int[], exclude, chargeall)
+    ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall)
     size::Int = ss(obj)
     while !isempty(ss.frontier_x)
         # DFS heap traversal of everything without a specialization
@@ -133,7 +133,7 @@ function (ss::SummarySize)(obj::Module)
     for binding in names(obj, true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
+            if !isa(value, Module) || parentmodule(value) === obj
                 size += ss(value)::Int
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)

@@ -2,7 +2,7 @@
 
 module ARPACK
 
-import ..LinAlg: BlasInt, ARPACKException
+import LinearAlgebra: BlasInt, ARPACKException
 
 ## aupd and eupd wrappers
 

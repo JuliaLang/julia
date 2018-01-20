@@ -219,8 +219,8 @@ try
             # plus modules included in the system image
             Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching,
-                 :Future, :IterativeEigensolvers,  :Libdl, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :SharedArrays, :SparseArrays, :SuiteSparse, :Test, :Unicode]))
+                 :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
+                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test, :Unicode]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -668,6 +668,43 @@ let
         l0 = length(Base.package_callbacks)
         @eval using $ModuleA
         @test length(Base.package_callbacks) == l0 + 1
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
+
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        write(joinpath(load_path, "A25604.jl"),
+            """
+            __precompile__(true)
+            module A25604
+            using B25604
+            using C25604
+            end
+            """)
+        write(joinpath(load_path, "B25604.jl"),
+            """
+            __precompile__()
+            module B25604
+            end
+            """)
+        write(joinpath(load_path, "C25604.jl"),
+            """
+            __precompile__()
+            module C25604
+            using B25604
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(Base.LOAD_CACHE_PATH, load_cache_path)
+
+        Base.compilecache(:A25604)
+        @test_nowarn @eval using A25604
     finally
         rm(load_path, recursive=true)
         rm(load_cache_path, recursive=true)

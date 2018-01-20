@@ -176,15 +176,15 @@ end
 struct AllocOptContext
     infomap::ValueInfoMap
     sv::OptimizationState
-    todo::ObjectIdDict
-    changes::ObjectIdDict
-    sym_count::ObjectIdDict
-    all_fld::ObjectIdDict
-    setfield_typ::ObjectIdDict
-    undef_fld::ObjectIdDict
+    todo::IdDict
+    changes::IdDict
+    sym_count::IdDict
+    all_fld::IdDict
+    setfield_typ::IdDict
+    undef_fld::IdDict
     structinfos::Vector{StructInfo}
     function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
-        todo = ObjectIdDict()
+        todo = IdDict()
         for i in 1:length(infomap.ssas)
             isassigned(infomap.ssas, i) || continue
             todo[i=>true] = nothing
@@ -194,11 +194,10 @@ struct AllocOptContext
             i > sv.nargs || continue
             todo[i=>false] = nothing
         end
-        return new(infomap, sv, todo, ObjectIdDict(), ObjectIdDict(),
-                   ObjectIdDict(), ObjectIdDict(), ObjectIdDict(), StructInfo[])
+        return new(infomap, sv, todo, IdDict(), IdDict(),
+                   IdDict(), IdDict(), IdDict(), StructInfo[])
     end
 end
-
 
 #############
 # constants #
@@ -473,9 +472,21 @@ function finish(me::InferenceState)
     nothing
 end
 
+function maybe_widen_conditional(vt)
+    if isa(vt, Conditional)
+        if vt.vtype === Bottom
+            vt = Const(false)
+        elseif vt.elsetype === Bottom
+            vt = Const(true)
+        end
+    end
+    vt
+end
+
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     head = e.head
     i0 = 1
+    e.typ = maybe_widen_conditional(e.typ)
     if is_meta_expr_head(head) || head === :const
         return
     end
@@ -489,7 +500,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = s.typ
+            vt = maybe_widen_conditional(s.typ)
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
@@ -816,8 +827,8 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             return true
         end
         if head === :static_parameter
-            # if we aren't certain about the type, it might be an UndefVarError at runtime
-            return (isa(e.typ, DataType) && isleaftype(e.typ)) || isa(e.typ, Const)
+            # if we aren't certain enough about the type, it might be an UndefVarError at runtime
+            return isa(e.typ, Const) || issingletontype(widenconst(e.typ))
         end
         if e.typ === Bottom
             return false
@@ -830,17 +841,17 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         nargs = length(ea)
-                        (2 < nargs < 5) || return false
+                        (3 < nargs < 4) || return false
                         et = exprtype(e, src, mod)
-                        if !isa(et, Const) && !(isType(et) && isleaftype(et))
+                        # TODO: check ninitialized
+                        if !isa(et, Const) && !isconstType(et)
                             # first argument must be immutable to ensure e is affect_free
                             a = ea[2]
-                            typ = widenconst(exprtype(a, src, mod))
-                            if isconstType(typ)
-                                if Const(:uid) ⊑ exprtype(ea[3], src, mod)
-                                    return false    # DataType uid field can change
-                                end
-                            elseif typ !== SimpleVector && (!isa(typ, DataType) || typ.mutable || typ.abstract)
+                            typ = unwrap_unionall(widenconst(exprtype(a, src, mod)))
+                            if isType(typ)
+                                # all fields of subtypes of Type are effect-free
+                                # (including the non-inferrable uid field)
+                            elseif !isa(typ, DataType) || typ.abstract || (typ.mutable && length(typ.types) > 0)
                                 return false
                             end
                         end
@@ -863,7 +874,8 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            (isleaftype(typ) && !iskindtype(typ)) || return false
+            isconcretetype(typ) || return false
+            !iskindtype(typ) || return false
             typ = typ::DataType
             if !allow_volatile && typ.mutable
                 return false
@@ -1075,11 +1087,11 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     sv::OptimizationState)
     argexprs = e.args
 
-    if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes)==3
+    if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes) == 3
         # typeassert(x::S, T) => x, when S<:T
         a3 = atypes[3]
-        if (isType(a3) && isleaftype(a3) && atypes[2] ⊑ a3.parameters[1]) ||
-            (isa(a3,Const) && isa(a3.val,Type) && atypes[2] ⊑ a3.val)
+        if (isType(a3) && !has_free_typevars(a3) && atypes[2] ⊑ a3.parameters[1]) ||
+            (isa(a3, Const) && isa(a3.val, Type) && atypes[2] ⊑ a3.val)
             return (argexprs[2], ())
         end
     end
@@ -1108,7 +1120,9 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     if f === Core.invoke && length(atypes) >= 3
         ft = widenconst(atypes[2])
         invoke_tt = widenconst(atypes[3])
-        if !isleaftype(ft) || !isleaftype(invoke_tt) || !isType(invoke_tt)
+        if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
+                has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
+            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
             return NOT_FOUND
         end
         if !(isa(invoke_tt.parameters[1], Type) &&
@@ -1271,12 +1285,10 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     haveconst = false
     for i in 1:length(atypes)
         a = atypes[i]
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance)
-            if !isleaftype(a.val) # alternately: !isa(a.val, DataType) || !isconstType(Type{a.val})
-                # have new information from argtypes that wasn't available from the signature
-                haveconst = true
-                break
-            end
+        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+            # have new information from argtypes that wasn't available from the signature
+            haveconst = true
+            break
         end
     end
     if haveconst
@@ -1538,8 +1550,9 @@ end
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
 plus_saturate(x, y) = max(x, y, x+y)
+
 # known return type
-isknowntype(T) = (T == Union{}) || isleaftype(T)
+isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params::Params)
     head = ex.head
@@ -1770,7 +1783,8 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
         ft = Bool
     else
         f = nothing
-        if !( isleaftype(ft) || ft<:Type )
+        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
+            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
             return e
         end
     end
@@ -1927,7 +1941,8 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                 ft = Bool
             else
                 f = nothing
-                if !( isleaftype(ft) || ft<:Type )
+                if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
+                    # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
                     return e
                 end
             end
@@ -2335,7 +2350,7 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new use(s) if any.
-function check_valid(use::ValueUse, changes::ObjectIdDict)
+function check_valid(use::ValueUse, changes::IdDict)
     haskey(changes, use.stmts=>use.stmtidx) && return false
     isdefined(use, :expr) && haskey(changes, use.expr) && return false
     return true
@@ -2344,10 +2359,10 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::ObjectIdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
 
 
-function remove_invalid!(info::ValueInfo, changes::ObjectIdDict)
+function remove_invalid!(info::ValueInfo, changes::IdDict)
     if isempty(changes)
         return
     end
@@ -2523,8 +2538,6 @@ function collect_value_infos(body::Vector{Any}, src::CodeInfo, nargs::Int)
 
     return infomap
 end
-
-
 
 function delete_valueinfo!(ctx::AllocOptContext, key)
     # Slot
@@ -2745,15 +2758,15 @@ end
 
 function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     key.second && return false
-    isleaftype(ctx.sv.src.slottypes[key.first]) && return false
-    alltypes = ObjectIdDict()
+    isdispatchelem(widenconst(ctx.sv.src.slottypes[key.first])) && return false # no splitting can be necessary
+    alltypes = IdDict()
     ndefs = length(info.defs)
     deftypes = Vector{Any}(uninitialized, ndefs)
     for i in 1:ndefs
         def = info.defs[i]
         defex = (def.assign::Expr).args[2]
         rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
-        isleaftype(rhstyp) || return false
+        isdispatchelem(rhstyp) || return false
         alltypes[rhstyp] = nothing
         deftypes[i] = rhstyp
     end
@@ -2763,7 +2776,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         slot = usex.args[use.exidx]
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
-            if isleaftype(usetyp)
+            if isdispatchelem(usetyp)
                 alltypes[usetyp] = nothing
                 continue
             end
@@ -2818,7 +2831,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         slot = usex.args[use.exidx]
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
-            if isleaftype(usetyp)
+            if isdispatchelem(usetyp)
                 usetyp = widenconst(slot.typ)
                 new_slot = alltypes[usetyp]
                 if !isa(new_slot, SlotNumber)
@@ -2988,7 +3001,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
             elseif defex.head === :new
                 typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
                 # typ <: Tuple shouldn't happen but just in case someone generated invalid AST
-                if !isa(typ, DataType) || !isleaftype(typ) || typ <: Tuple
+                if !isa(typ, DataType) || !isdispatchelem(typ) || typ <: Tuple
                     return false
                 end
                 si = structinfo_new(ctx, defex, typ)
@@ -3082,7 +3095,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
     #     Requires all conditions for `getfield`.
     #     Additionally require all defs to be mutable.
     #
-    # * preserved objects (`@gc_preserve` and `ccall` roots)
+    # * preserved objects (`GC.@preserve` and `ccall` roots)
     #
     #     No `setfield!` should be called for mutable defs on the NULL sites.
     #     This is because it's currently unclear how conditional undefined root slots
@@ -3200,7 +3213,7 @@ function split_struct_alloc_multi!(ctx::AllocOptContext, info, key)
     # First, assign a slot to each variable.
     # The slot types at this point is determined only by the setfield that are applied.
     # We'll include the initialization type as we go through the defs
-    vars = ObjectIdDict()
+    vars = IdDict()
     create_struct_field_slots!(ctx, key, vars)
 
     # Now, for each def. Assign all the slots.
@@ -3721,10 +3734,10 @@ macro check_ast(ctx, ex)
 end
 
 function verify_value_infomap(ctx::AllocOptContext)
-    seen = ObjectIdDict()
-    in_methods = ObjectIdDict()
+    seen = IdDict()
+    in_methods = IdDict()
     infomap = ctx.infomap
-    all_stmts = ObjectIdDict()
+    all_stmts = IdDict()
     for i in 1:length(infomap.ssas)
         isassigned(infomap.ssas, i) || continue
         info = infomap.ssas[i]
@@ -4079,7 +4092,7 @@ end
 
 # Clone expressions that appears multiple times in the code
 function copy_duplicated_expr_pass!(sv::OptimizationState)
-    copy_expr_in_array!(sv.src.code, ObjectIdDict())
+    copy_expr_in_array!(sv.src.code, IdDict())
 end
 
 # fix label numbers to always equal the statement index of the label

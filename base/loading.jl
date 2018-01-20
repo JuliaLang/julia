@@ -53,7 +53,7 @@ elseif Sys.isapple()
                         (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
-            filename_length = @gc_preserve buf unsafe_load(
+            filename_length = GC.@preserve buf unsafe_load(
               convert(Ptr{UInt32}, pointer(buf) + 8))
             if (filename_length + header_size) > length(buf)
                 resize!(buf, filename_length + header_size)
@@ -126,7 +126,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             if isdefined(M, Base.Docs.META)
                 push!(Base.Docs.modules, M)
             end
-            if module_parent(M) === M
+            if parentmodule(M) === M
                 register_root_module(module_name(M), M)
             end
         end
@@ -134,6 +134,31 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
+function _tryrequire_from_serialized(modname::Symbol, uuid::UInt64, modpath::Union{Nothing, String})
+    if root_module_exists(modname)
+        M = root_module(modname)
+        if module_name(M) === modname && module_uuid(M) === uuid
+            return M
+        end
+    else
+        if modpath === nothing
+            modpath = find_package(string(modname))
+            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
+        end
+        mod = _require_search_from_serialized(modname, String(modpath))
+        if !isa(mod, Bool)
+            for callback in package_callbacks
+                invokelatest(callback, modname)
+            end
+            for M in mod::Vector{Any}
+                if module_name(M) === modname && module_uuid(M) === uuid
+                    return M
+                end
+            end
+        end
+    end
+    return nothing
+end
 
 function _require_from_serialized(path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
@@ -151,28 +176,9 @@ function _require_from_serialized(path::String)
     depmods = Vector{Any}(uninitialized, ndeps)
     for i in 1:ndeps
         modname, uuid = depmodnames[i]
-        if root_module_exists(modname)
-            M = root_module(modname)
-            if module_name(M) === modname && module_uuid(M) === uuid
-                depmods[i] = M
-            end
-        else
-            modpath = find_package(string(modname))
-            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
-            mod = _require_search_from_serialized(modname, String(modpath))
-            if !isa(mod, Bool)
-                for M in mod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        depmods[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-        end
-        isassigned(depmods, i) || return ErrorException("Required dependency $modname failed to load from a cache file.")
+        dep = _tryrequire_from_serialized(modname, uuid, nothing)
+        dep === nothing && return ErrorException("Required dependency $modname failed to load from a cache file.")
+        depmods[i] = dep::Module
     end
     # then load the file
     return _include_from_serialized(path, depmods)
@@ -184,33 +190,27 @@ end
 function _require_search_from_serialized(mod::Symbol, sourcepath::String)
     paths = find_all_in_cache_path(String(mod)) # cache files for sourcepath are stored keyed by the `mod` symbol name
     for path_to_try in paths::Vector{String}
-        deps = stale_cachefile(sourcepath, path_to_try)
-        if deps === true
+        staledeps = stale_cachefile(sourcepath, path_to_try)
+        if staledeps === true
             continue
         end
-        # finish loading module graph into deps
-        for i in 1:length(deps)
-            dep = deps[i]
+        # finish loading module graph into staledeps
+        for i in 1:length(staledeps)
+            dep = staledeps[i]
             dep isa Module && continue
             modpath, modname, uuid = dep::Tuple{String, Symbol, UInt64}
-            reqmod = _require_search_from_serialized(modname, modpath)
-            if !isa(reqmod, Bool)
-                for M in reqmod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
-                        deps[i] = M
-                        break
-                    end
-                end
-                for callback in package_callbacks
-                    invokelatest(callback, modname)
-                end
-            end
-            if !isa(deps[i], Module)
+            dep = _tryrequire_from_serialized(modname, uuid, modpath)
+            if dep === nothing
                 @debug "Required dependency $modname failed to load from cache file for $modpath."
-                continue
+                staledeps = true
+                break
             end
+            staledeps[i] = dep::Module
         end
-        restored = _include_from_serialized(path_to_try, deps)
+        if staledeps === true
+            continue
+        end
+        restored = _include_from_serialized(path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -339,8 +339,8 @@ function require(mod::Symbol)
     return root_module(mod)
 end
 
-const loaded_modules = ObjectIdDict()
-const module_keys = ObjectIdDict()
+const loaded_modules = IdDict()
+const module_keys = IdDict()
 
 function register_root_module(key, m::Module)
     if haskey(loaded_modules, key)
@@ -561,7 +561,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
-            eval(Main, deserialize(STDIN))
+            eval(Main, Meta.parse(chop(readuntil(STDIN, '\\0'))))
         end
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0
@@ -572,26 +572,28 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
               "w", STDOUT)
     in = io.in
     try
-        serialize(in, quote
+        write(in, """
+                  begin
                   empty!(Base.LOAD_PATH)
-                  append!(Base.LOAD_PATH, $LOAD_PATH)
+                  append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
                   empty!(Base.LOAD_CACHE_PATH)
-                  append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+                  append!(Base.LOAD_CACHE_PATH, $(repr(LOAD_CACHE_PATH)))
                   empty!(Base.DL_LOAD_PATH)
-                  append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+                  append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
                   empty!(Base._concrete_dependencies)
-                  append!(Base._concrete_dependencies, $concrete_deps)
+                  append!(Base._concrete_dependencies, $(repr(concrete_deps)))
                   Base._track_dependencies[] = true
-                  end)
+                  end\0
+                  """)
         source = source_path(nothing)
         if source !== nothing
-            serialize(in, quote
-                      task_local_storage()[:SOURCE_PATH] = $(source)
-                      end)
+            write(in, """
+                      task_local_storage()[:SOURCE_PATH] = $(repr(source))\0
+                      """)
         end
-        serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
+        write(in, "Base.include(Base.__toplevel__, $(repr(abspath(input))))\0")
         if source !== nothing
-            serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
+            write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
         end
         close(in)
     catch ex

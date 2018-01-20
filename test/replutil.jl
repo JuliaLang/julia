@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random
+using Random, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -170,7 +170,7 @@ macro except_stackframe(expr, err_type)
            try
                $(esc(expr))
            catch err
-               st = catch_stacktrace()
+               st = stacktrace(catch_backtrace())
            end
            err === nothing && error("expected failure, but no exception thrown")
            @test typeof(err) === $(esc(err_type))

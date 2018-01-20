@@ -410,9 +410,6 @@ include("Enums.jl")
 using .Enums
 
 # concurrency and parallelism
-include("serialize.jl")
-using .Serializer
-import .Serializer: serialize, deserialize
 include("channels.jl")
 
 # utilities - timing, help, edit
@@ -459,12 +456,6 @@ INCLUDE_STATE = 3 # include = include_relative
 import Base64
 
 INCLUDE_STATE = 2
-
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
 
 include("asyncmap.jl")
 
@@ -515,11 +506,13 @@ Base.require(:Base64)
 Base.require(:CRC32c)
 Base.require(:Dates)
 Base.require(:DelimitedFiles)
+Base.require(:Serialization)
 Base.require(:Distributed)
 Base.require(:FileWatching)
 Base.require(:Future)
 Base.require(:IterativeEigensolvers)
 Base.require(:Libdl)
+Base.require(:LinearAlgebra)
 Base.require(:Logging)
 Base.require(:Mmap)
 Base.require(:Printf)
@@ -538,6 +531,7 @@ Base.require(:Unicode)
     @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(:Random) true ", run `using Random` instead"
+    @deprecate_binding Serializer root_module(:Serialization) true ", run `using Serialization` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"
@@ -551,6 +545,9 @@ Base.require(:Unicode)
         ", run `using SparseArrays` to load sparse array functionality")
     @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
+
+    # PR #25571
+    @deprecate_binding LinAlg root_module(:LinearAlgebra) true ", run `using LinearAlgebra` instead"
 end
 
 empty!(LOAD_PATH)

@@ -386,13 +386,13 @@ function showerror(io::IO, ex::MethodError)
     # Check for local functions that shadow methods in Base
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
-        if basef !== ex.f && method_exists(basef, arg_types)
+        if basef !== ex.f && hasmethod(basef, arg_types)
             println(io)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
-        !method_exists(ex.f, arg_types, ex.world))
+    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
+        !hasmethod(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
@@ -475,7 +475,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
-    for (func,arg_types_param) in funcs
+    for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
             iob = IOContext(buf, io)
@@ -491,9 +491,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(iob, "  ")
-            if !isa(func, s1)
+            if !isa(func, rewrap_unionall(s1, method.sig))
                 # function itself doesn't match
-                return
+                continue
             else
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
@@ -536,7 +536,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     print(iob, "::$sigstr")
                 end
             end
-            special && right_matches==0 && return # continue the do-block
+            special && right_matches == 0 && continue
 
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct

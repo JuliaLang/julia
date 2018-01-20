@@ -9,7 +9,7 @@ leading newlines removed). If `raw` is `true`, the message is not stripped
 of any such newlines.
 """
 function message(c::GitCommit, raw::Bool=false)
-    Base.@gc_preserve c begin
+    GC.@preserve c begin
         local msg_ptr::Cstring
         msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
                         ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
@@ -28,7 +28,7 @@ Return the `Signature` of the author of the commit `c`. The author is
 the person who made changes to the relevant file(s). See also [`committer`](@ref).
 """
 function author(c::GitCommit)
-    Base.@gc_preserve c begin
+    GC.@preserve c begin
         ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         @assert ptr != C_NULL
         sig = Signature(ptr)
@@ -45,7 +45,7 @@ need not be the same as the `author`, for example, if the `author` emailed a pat
 a `committer` who committed it.
 """
 function committer(c::GitCommit)
-    Base.@gc_preserve c begin
+    GC.@preserve c begin
         ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         sig = Signature(ptr)
     end

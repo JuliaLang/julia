@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# PR #25567
+Base.@deprecate_binding dSFMT DSFMT
+
 # PR #21359
 
 @deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Vector{UInt32}(uninitialized, Int(n))))
@@ -8,7 +11,7 @@
 
 function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     depwarn("`randjump(rng, jumps, jumppoly::AbstractString)` is deprecated; use `randjump(rng, steps, jumps)` instead", :randjump)
-    Base.Random._randjump(mt, dSFMT.GF2X(jumppoly), jumps)
+    Base.Random._randjump(mt, DSFMT.GF2X(jumppoly), jumps)
 end
 
 @deprecate randjump(mt::MersenneTwister, jumps::Integer)  randjump(mt, big(10)^20, jumps)

@@ -371,7 +371,7 @@ julia> sizeof(ComplexF64)
 If `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
-julia> sizeof(Base.LinAlg.LU)
+julia> sizeof(AbstractArray)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
 [...]

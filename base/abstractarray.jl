@@ -1985,7 +1985,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
             # range since they can always be considered as such (in a wider type)
-            if isconcrete(T)
+            if isconcretetype(T)
                 try
                     step = x2 - x1
                 catch err

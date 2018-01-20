@@ -18,7 +18,7 @@ using Random
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
         for x in strs, y in strs
-            @test (x === y) == (object_id(x) == object_id(y))
+            @test (x === y) == (objectid(x) == objectid(y))
         end
     end
 end
@@ -233,6 +233,9 @@ end
     @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
+    @test first(eachindex("foobar")) === 1
+    @test first(eachindex("")) === 1
+    @test last(eachindex("foobar")) === endof("foobar")
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(uppercase, "foó") == "FOÓ"

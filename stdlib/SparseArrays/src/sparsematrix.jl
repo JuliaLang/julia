@@ -1452,7 +1452,7 @@ julia> sprandn(rng, 2, 2, 0.75)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(defaultRNG(),m,n,density)
 
-LinAlg.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
+LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
 
 """
     spzeros([type,]m[,n])

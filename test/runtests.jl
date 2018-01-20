@@ -47,12 +47,13 @@ move_to_node1("SharedArrays")
 # since it starts a lot of workers and can easily exceed the maximum memory
 max_worker_rss != typemax(Csize_t) && move_to_node1("Distributed")
 
+import LinearAlgebra
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
         n = min(Sys.CPU_CORES, length(tests))
         n > 1 && addprocs_with_testenv(n)
-        BLAS.set_num_threads(1)
+        LinearAlgebra.BLAS.set_num_threads(1)
     end
     skipped = 0
 

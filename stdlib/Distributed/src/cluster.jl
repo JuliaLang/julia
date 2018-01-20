@@ -163,8 +163,9 @@ mutable struct LocalProcess
 end
 
 
+import LinearAlgebra
 function disable_threaded_libs()
-    BLAS.set_num_threads(1)
+    LinearAlgebra.BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
@@ -711,7 +712,7 @@ const LPROC = LocalProcess()
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
-const map_sock_wrkr = ObjectIdDict()
+const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
 
 # cluster management related API

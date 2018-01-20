@@ -48,7 +48,7 @@ function runpath!(n, Wiener, CorrWiener, SA, SB, T, UpperTriangle, k11, k12, k21
     #for i = 1:n
         randn!(rngs[threadid()], Wiener)
         #randn!(rngs[1], Wiener)
-        Base.LinAlg.mul!(CorrWiener, Wiener, UpperTriangle)
+        LinearAlgebra.mul!(CorrWiener, Wiener, UpperTriangle)
         @simd for j = 2:T
             @inbounds SA[j, i] = SA[j-1, i] * exp(k11 + k12*CorrWiener[j-1, 1])
             @inbounds SB[j, i] = SB[j-1, i] * exp(k21 + k22*CorrWiener[j-1, 2])

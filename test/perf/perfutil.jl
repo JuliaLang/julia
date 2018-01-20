@@ -65,7 +65,7 @@ macro output_timings(t,name,desc,group)
         elseif print_output
             @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
-        gc()
+        GC.gc()
     end
 end
 

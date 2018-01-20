@@ -124,11 +124,10 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     if world < min_world(method)
         return nothing
     end
-    if isdefined(method, :generator) && !isleaftype(atypes)
+    if isdefined(method, :generator) && !isdispatchtuple(atypes)
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
-        # XXX: this test is wrong if Types (such as DataType or Bottom) are present
         return nothing
     end
     if preexisting

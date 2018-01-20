@@ -322,13 +322,6 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "  BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "  BLAS: ",libblas_name)
-    end
-    println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
     println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
@@ -580,9 +573,9 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
-    return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !_isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
+    # TODO: handle UnionAll properly
+    return (isa(x, DataType) && isa(t, DataType) && x.name === t.name && x <: t) ||
+           (isa(x, Union) && isa(t, DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given

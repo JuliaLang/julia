@@ -9,24 +9,26 @@ module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail
 using Base.Sort: Forward
-using Base.LinAlg: AbstractTriangular, PosDefException, fillstored!
+using LinearAlgebra
 
 import Base: +, -, *, \, /, &, |, xor, ==
-import Base.LinAlg: mul!, ldiv!, rdiv!
+import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, diff, dot, eig,
+    issymmetric, istril, istriu, lu, trace, transpose!, tril!, triu!,
+    vecnorm, cond, diagm, factorize, ishermitian, norm, scale!, tril, triu
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
-    atan, atand, atanh, broadcast!, chol, conj!, cos, cosc, cosd, cosh, cospi, cot,
-    cotd, coth, count, csc, cscd, csch, adjoint!, diag, diff, done, dot, eig,
+    atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,
+    cotd, coth, count, csc, cscd, csch, done,
     exp10, exp2, findprev, findnext, floor, hash, indmin, inv,
-    issymmetric, istril, istriu, log10, log2, lu, next, sec, secd, sech, show,
+    log10, log2, next, sec, secd, sech, show,
     sin, sinc, sind, sinh, sinpi, squeeze, start, sum, summary, tan,
-    tand, tanh, trace, transpose!, tril!, triu!, trunc, vecnorm, abs, abs2,
-    broadcast, ceil, complex, cond, conj, convert, copy, copyto!, adjoint, diagm,
-    exp, expm1, factorize, findall, findmax, findmin, findnz, float, getindex,
-    vcat, hcat, hvcat, cat, imag, indmax, ishermitian, kron, length, log, log1p, max, min,
-    maximum, minimum, norm, one, promote_eltype, real, reshape, rot180,
-    rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
-    triu, vec, permute!, map, map!, Array
+    tand, tanh, trunc, abs, abs2,
+    broadcast, ceil, complex, conj, convert, copy, copyto!, adjoint,
+    exp, expm1, findall, findmax, findmin, findnz, float, getindex,
+    vcat, hcat, hvcat, cat, imag, indmax, kron, length, log, log1p, max, min,
+    maximum, minimum, one, promote_eltype, real, reshape, rot180,
+    rotl90, rotr90, round, setindex!, similar, size, transpose,
+    vec, permute!, map, map!, Array
 
 using Random: defaultRNG, AbstractRNG, randsubseq, randsubseq!
 

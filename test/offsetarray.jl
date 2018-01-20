@@ -4,6 +4,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using Main.TestHelpers.OAs
 using DelimitedFiles
 using Random
+using LinearAlgebra
 
 const OAs_name = join(fullname(OAs), ".")
 

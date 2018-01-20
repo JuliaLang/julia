@@ -299,9 +299,9 @@ are a trickier case.  In the common case where the keys are numbers, strings, sy
 `Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
 precompile.  However, for a few other key types, such as `Function` or `DataType` and generic
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
-on the memory address of the object (via its `object_id`) and hence may change from run to run.
+on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the `ObjectIdDict`
+dictionary from within your `__init__` function. Alternatively, you can use the `IdDict`
 dictionary type, which is specially handled by precompilation so that it is safe to initialize
 at compile-time.
 
@@ -328,7 +328,7 @@ Other known potential failure scenarios include:
    at the end of compilation. All subsequent usages of this incrementally compiled module will start
    from that same counter value.
 
-   Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
+   Note that `objectid` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
    One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,

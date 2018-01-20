@@ -174,7 +174,7 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(DSYMUTIL) $@
 
 CORE_SRCS := $(addprefix $(JULIAHOME)/, \
-		base/boot.jl base/compiler/compiler.jl \
+		base/boot.jl \
 		base/docs/core.jl \
 		base/abstractarray.jl \
 		base/array.jl \
@@ -196,10 +196,11 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/tuple.jl)
+COMPILER_SRCS = $(sort $(shell find $(JULIAHOME)/base/compiler -name \*.jl))
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
 STDLIB_SRCS := $(sort $(shell find $(JULIAHOME)/stdlib/*/src -name \*.jl))
 
-$(build_private_libdir)/basecompiler.ji: $(CORE_SRCS) | $(build_private_libdir)
+$(build_private_libdir)/basecompiler.ji: $(CORE_SRCS) $(COMPILER_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@) \
 		--startup-file=no -g0 -O0 compiler/compiler.jl)

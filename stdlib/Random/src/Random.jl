@@ -4,15 +4,17 @@ __precompile__(true)
 
 module Random
 
-include("dSFMT.jl")
+include("DSFMT.jl")
 
-using .dSFMT
+using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, @gc_preserve
+using Base: BitInteger, BitInteger_types, BitUnsigned
 
-import Base: copymutable, copy, copy!, ==, hash, serialize, deserialize, convert
+import Base: copymutable, copy, copy!, ==, hash, convert
+using Serialization
+import Serialization: serialize, deserialize
 import Base: rand, randn
 
 export srand,

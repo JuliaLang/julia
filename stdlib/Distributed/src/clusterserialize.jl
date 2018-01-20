@@ -1,26 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: serialize_cycle, deserialize_cycle, writetag,
-                      __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, reset_state, serialize_type
+using Serialization: serialize_cycle, deserialize_cycle, writetag,
+                     __deserialized_types__, serialize_typename, deserialize_typename,
+                     TYPENAME_TAG, reset_state, serialize_type
 
-import Base.Serializer: object_number, lookup_object_number, remember_object
+import Serialization: object_number, lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::ObjectIdDict
+    table::IdDict
     pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
     tn_obj_sent::Set{UInt64}                     # TypeName objects sent
-    glbs_sent::Dict{UInt64, UInt64}              # (key,value) -> (object_id, hash_value)
+    glbs_sent::Dict{UInt64, UInt64}              # (key,value) -> (objectid, hash_value)
     glbs_in_tnobj::Dict{UInt64, Vector{Symbol}}  # Track globals referenced in
                                                  # anonymous functions.
     anonfunc_id::UInt64
 
     function ClusterSerializer{I}(io::I) where I<:IO
-        new(io, 0, ObjectIdDict(), Int[], worker_id_from_socket(io),
+        new(io, 0, IdDict(), Int[], worker_id_from_socket(io),
             Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
     end
 end
@@ -116,7 +116,7 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
 end
 
 # Send/resend a global object if
-# a) has not been sent previously, i.e., we are seeing this object_id for the first time, or,
+# a) has not been sent previously, i.e., we are seeing this objectid for the first time, or,
 # b) hash value has changed or
 # c) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
@@ -128,7 +128,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
         if isbits(v)
             push!(lst, sym)
         else
-            oid = object_id(v)
+            oid = objectid(v)
             if haskey(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
                 s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
@@ -143,7 +143,7 @@ end
 function serialize_global_from_main(s::ClusterSerializer, sym)
     v = getfield(Main, sym)
 
-    oid = object_id(v)
+    oid = objectid(v)
     record_v = true
     if isbits(v)
         record_v = false
@@ -179,7 +179,7 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
 end
 
 function delete_global_tracker(s::ClusterSerializer, v)
-    oid = object_id(v)
+    oid = objectid(v)
     if haskey(s.glbs_sent, oid)
         delete!(s.glbs_sent, oid)
     end
@@ -265,4 +265,3 @@ clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
 
 clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
 clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && @eval(mod, global $sym = nothing)
-
