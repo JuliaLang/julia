@@ -2115,7 +2115,7 @@ function findmin(a)
 end
 
 """
-    indmax(itr) -> Integer
+    argmax(itr) -> Integer
 
 Return the index of the maximum element in a collection. If there are multiple maximal
 elements, then the first one will be returned.
@@ -2124,20 +2124,20 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmax([8,0.1,-9,pi])
+julia> argmax([8,0.1,-9,pi])
 1
 
-julia> indmax([1,7,7,6])
+julia> argmax([1,7,7,6])
 2
 
-julia> indmax([1,7,7,NaN])
+julia> argmax([1,7,7,NaN])
 4
 ```
 """
-indmax(a) = findmax(a)[2]
+argmax(a) = findmax(a)[2]
 
 """
-    indmin(itr) -> Integer
+    argmin(itr) -> Integer
 
 Return the index of the minimum element in a collection. If there are multiple minimal
 elements, then the first one will be returned.
@@ -2146,17 +2146,17 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmin([8,0.1,-9,pi])
+julia> argmin([8,0.1,-9,pi])
 3
 
-julia> indmin([7,1,1,6])
+julia> argmin([7,1,1,6])
 2
 
-julia> indmin([7,1,1,NaN])
+julia> argmin([7,1,1,NaN])
 4
 ```
 """
-indmin(a) = findmin(a)[2]
+argmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
 """

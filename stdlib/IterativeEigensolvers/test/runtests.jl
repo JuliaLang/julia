@@ -43,16 +43,16 @@ using Test, LinearAlgebra, SparseArrays, Random
         # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
         # @test norm(v) > testtol # eigenvectors cannot be null vectors
         if elty <: LinearAlgebra.BlasComplex
-            sr_ind = indmin(real.(a_evs))
+            sr_ind = argmin(real.(a_evs))
             (d, v) = eigs(a, nev=1, which=:SR)
             @test d[1] ≈ a_evs[sr_ind]
-            si_ind = indmin(imag.(a_evs))
+            si_ind = argmin(imag.(a_evs))
             (d, v) = eigs(a, nev=1, which=:SI)
             @test d[1] ≈ a_evs[si_ind]
-            lr_ind = indmax(real.(a_evs))
+            lr_ind = argmax(real.(a_evs))
             (d, v) = eigs(a, nev=1, which=:LR)
             @test d[1] ≈ a_evs[lr_ind]
-            li_ind = indmax(imag.(a_evs))
+            li_ind = argmax(imag.(a_evs))
             (d, v) = eigs(a, nev=1, which=:LI)
             @test d[1] ≈ a_evs[li_ind]
         end

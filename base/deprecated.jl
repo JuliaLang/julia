@@ -686,8 +686,8 @@ import .Iterators.enumerate
     return p
 end
 
-# ease transition for return type change of e.g. indmax due to PR #22907 when used in the
-# common pattern `ind2sub(size(a), indmax(a))`
+# ease transition for return type change of e.g. argmax due to PR #22907 when used in the
+# common pattern `ind2sub(size(a), argmax(a))`
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
@@ -1615,6 +1615,10 @@ export readandwrite
 
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
+
+# PR #25654
+@deprecate indmin argmin
+@deprecate indmax argmax
 
 # END 0.7 deprecations
 

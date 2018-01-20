@@ -1023,11 +1023,11 @@ end
     @test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
 end
 
-@testset "indmax, indmin, findmax, findmin" begin
+@testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test indmax(S) == indmax(A)
-    @test indmin(S) == indmin(A)
+    @test argmax(S) == argmax(A)
+    @test argmin(S) == argmin(A)
     @test findmin(S) == findmin(A)
     @test findmax(S) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
@@ -1036,16 +1036,16 @@ end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
-    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
+    @test argmax(S) == argmax(A) == CartesianIndex(1,1)
+    @test argmin(S) == argmin(A) == CartesianIndex(1,1)
 
     A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
-    iA = try indmax(A) end
-    iS = try indmax(S) end
+    iA = try argmax(A) end
+    iS = try argmax(S) end
     @test iA === iS === nothing
-    iA = try indmin(A) end
-    iS = try indmin(S) end
+    iA = try argmin(A) end
+    iS = try argmin(S) end
     @test iA === iS === nothing
 end
 

@@ -35,8 +35,8 @@ function main()
     end
     println()
 
-    minname = names[indmin(change)]
-    maxname = names[indmax(change)]
+    minname = names[argmin(change)]
+    maxname = names[argmax(change)]
 
     minstd = baseline[minname][4]/baseline[minname][3]
     maxstd = baseline[maxname][4]/baseline[maxname][3]
