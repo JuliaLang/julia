@@ -233,7 +233,7 @@ Broadcasted{Style,ElType}(f::F, args::Args) where {Style<:BroadcastStyle, ElType
     Broadcasted{Style, ElType, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
 Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple) where {Style<:BroadcastStyle, ElType, F, Args<:TupleLL} =
     Broadcasted{Style, ElType, typeof(axes), Nothing, Core.Typeof(f), Args}(f, args, axes, nothing)
-Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple, indexing) where {Style<:BroadcastStyle, ElType, F, Args<:TupleLL} =
+Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple, indexing) where {Style<:Union{Nothing,BroadcastStyle}, ElType, F, Args<:TupleLL} =
     Broadcasted{Style, ElType, typeof(axes), typeof(indexing), Core.Typeof(f), Args}(f, args, axes, indexing)
 
 Base.convert(::Type{Broadcasted{Nothing}}, bc::Broadcasted{Style,ElType,Axes,Indexing,F,Args}
