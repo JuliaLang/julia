@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!
+using LinearAlgebra
 using Random
 
 ### Data
@@ -124,7 +124,7 @@ end
     end
     @testset "fillstored!" begin
         x = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
-        y = LinAlg.fillstored!(copy(x), 1)
+        y = LinearAlgebra.fillstored!(copy(x), 1)
         @test (x .!= 0) == (y .!= 0)
         @test y == SparseVector(8, [2, 3, 6], [1.0, 1.0, 1.0])
     end
@@ -760,7 +760,7 @@ end
         @testset "axpy!" begin
             for c in [1.0, -1.0, 2.0, -2.0]
                 y = Array(x)
-                @test Base.axpy!(c, x2, y) === y
+                @test LinearAlgebra.axpy!(c, x2, y) === y
                 @test y == Array(x2 * c + x)
             end
         end
@@ -945,8 +945,8 @@ end
             sparsemat = convert(SparseMatrixCSC{eltypemat}, sparsemat)
             trimats = (LowerTriangular(densemat), UpperTriangular(densemat),
                        LowerTriangular(sparsemat), UpperTriangular(sparsemat) )
-            unittrimats = (Base.LinAlg.UnitLowerTriangular(densemat), Base.LinAlg.UnitUpperTriangular(densemat),
-                           Base.LinAlg.UnitLowerTriangular(sparsemat), Base.LinAlg.UnitUpperTriangular(sparsemat) )
+            unittrimats = (LinearAlgebra.UnitLowerTriangular(densemat), LinearAlgebra.UnitUpperTriangular(densemat),
+                           LinearAlgebra.UnitLowerTriangular(sparsemat), LinearAlgebra.UnitUpperTriangular(sparsemat) )
 
             for eltypevec in eltypes
                 spvecs = eltypevec in inttypes ? sparseintvecs :
@@ -988,8 +988,8 @@ end
         transmat = copy(origmat')
         utmat = UpperTriangular(origmat)
         ltmat = LowerTriangular(transmat)
-        uutmat = Base.LinAlg.UnitUpperTriangular(origmat)
-        ultmat = Base.LinAlg.UnitLowerTriangular(transmat)
+        uutmat = LinearAlgebra.UnitUpperTriangular(origmat)
+        ultmat = LinearAlgebra.UnitLowerTriangular(transmat)
 
         zerospvec = spzeros(Float64, 2)
         zerodvec = zeros(Float64, 2)
@@ -1258,9 +1258,9 @@ end
         @test Aj*0.1            == Ajview*0.1
         @test 0.1*Aj            == 0.1*Ajview
         @test Aj/0.1            == Ajview/0.1
-        @test LinAlg.axpy!(1.0, Aj,     sparse(fill(1., n))) ==
-              LinAlg.axpy!(1.0, Ajview, sparse(fill(1., n)))
-        @test LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
-              LinAlg.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
+        @test LinearAlgebra.axpy!(1.0, Aj,     sparse(fill(1., n))) ==
+              LinearAlgebra.axpy!(1.0, Ajview, sparse(fill(1., n)))
+        @test LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
+              LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
     end
 end

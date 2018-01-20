@@ -84,7 +84,7 @@ mutable struct InferenceState
             at = (i > nargs) ? Bottom : argtypes[i]
             if !toplevel && linfo.def.isva && i == nargs
                 if !(at == Tuple) # would just be a no-op
-                    vararg_type_container = limit_tuple_depth(params, unwrap_unionall(at)) # TODO: should be limiting tuple depth much earlier than here
+                    vararg_type_container = unwrap_unionall(at)
                     vararg_type = tuple_tfunc(vararg_type_container) # returns a Const object, if applicable
                     at = rewrap(vararg_type, linfo.specTypes)
                 end

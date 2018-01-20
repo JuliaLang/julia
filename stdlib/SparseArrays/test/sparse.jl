@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LinAlg: mul!, ldiv!, rdiv!
+using LinearAlgebra: mul!, ldiv!, rdiv!
 using Base.Printf: @printf
 using Random
 
@@ -348,7 +348,7 @@ dA = Array(sA)
         @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
         @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
-        @test_throws LinAlg.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+        @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
 end
 
@@ -1214,7 +1214,7 @@ end
             times = Float64[0,0,0]
             best = [typemax(Float64), 0]
             for searchtype in [0, 1, 2]
-                gc()
+                GC.gc()
                 tres = @timed test_getindex_algs(S, I, J, searchtype)
                 res[searchtype+1] = tres[1]
                 times[searchtype+1] = tres[2]
@@ -1270,9 +1270,9 @@ end
     for I in IA
         Isorted = sort(I)
         for S in SA
-            gc()
+            GC.gc()
             ru = @timed S[I, J]
-            gc()
+            GC.gc()
             rs = @timed S[Isorted, Jsorted]
             if debug
                 @printf(" %7d | %7d | %7d | %4.2e | %4.2e | %4.2e | %4.2e |\n", round(Int,nnz(S)/S.n), length(I), length(J), rs[2], ru[2], rs[3], ru[3])
@@ -1736,7 +1736,7 @@ end
 end
 
 @testset "fillstored!" begin
-    @test LinAlg.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
+    @test LinearAlgebra.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
 end
 
 @testset "factorization" begin
@@ -1774,8 +1774,8 @@ end
     @test UpperTriangular(A)\(UpperTriangular(A)*b) ≈ b
     A[2,2] = 0
     dropzeros!(A)
-    @test_throws LinAlg.SingularException LowerTriangular(A)\b
-    @test_throws LinAlg.SingularException UpperTriangular(A)\b
+    @test_throws LinearAlgebra.SingularException LowerTriangular(A)\b
+    @test_throws LinearAlgebra.SingularException UpperTriangular(A)\b
 end
 
 @testset "issue described in https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
@@ -1788,15 +1788,15 @@ end
     @test issparse(Symmetric(m))
     @test issparse(Hermitian(m))
     @test issparse(LowerTriangular(m))
-    @test issparse(LinAlg.UnitLowerTriangular(m))
+    @test issparse(LinearAlgebra.UnitLowerTriangular(m))
     @test issparse(UpperTriangular(m))
-    @test issparse(LinAlg.UnitUpperTriangular(m))
+    @test issparse(LinearAlgebra.UnitUpperTriangular(m))
     @test issparse(Symmetric(Array(m))) == false
     @test issparse(Hermitian(Array(m))) == false
     @test issparse(LowerTriangular(Array(m))) == false
-    @test issparse(LinAlg.UnitLowerTriangular(Array(m))) == false
+    @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
-    @test issparse(LinAlg.UnitUpperTriangular(Array(m))) == false
+    @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
 end
 
 @testset "test created type of sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat)" begin
@@ -2010,7 +2010,7 @@ end
         sprand(5, 5, 1/5)
     end
     A = max.(A, copy(A'))
-    LinAlg.fillstored!(A, 1)
+    LinearAlgebra.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end
@@ -2183,7 +2183,7 @@ end
          1 0 1 1 0]
     y_sp = sparse(y)
 
-    for i=1:length(y)
+    for i in keys(y)
         @test findnext(!iszero, y,i) == findnext(!iszero, y_sp,i)
         @test findprev(!iszero, y,i) == findprev(!iszero, y_sp,i)
     end
@@ -2191,7 +2191,7 @@ end
     z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
     z = collect(z_sp)
 
-    for i=1:length(z)
+    for i in keys(z)
         @test findnext(!iszero, z,i) == findnext(!iszero, z_sp,i)
         @test findprev(!iszero, z,i) == findprev(!iszero, z_sp,i)
     end

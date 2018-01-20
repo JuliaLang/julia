@@ -103,7 +103,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
             if (!ft->layout->haspadding) {
-                if (!bits_equal(ao, bo, jl_field_size(dt, f)))
+                if (!bits_equal(ao, bo, ft->size))
                     return 0;
             }
             else {
@@ -337,7 +337,7 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
             if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
             else
-                u = bits_hash(vo, jl_field_size(dt, f));
+                u = bits_hash(vo, fieldtype->size);
         }
         h = bitmix(h, u);
     }

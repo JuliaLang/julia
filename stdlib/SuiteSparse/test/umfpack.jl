@@ -8,7 +8,7 @@
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
     using SuiteSparse: increment!
-    using Base.LinAlg: Adjoint, Transpose
+    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -32,11 +32,11 @@
 
             @test A*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.ldiv!(lua, z)
+            x = LinearAlgebra.ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            Base.LinAlg.ldiv!(y, lua, complex.(b))
+            LinearAlgebra.ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -47,11 +47,11 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.ldiv!(adjoint(lua), z)
+            x = LinearAlgebra.ldiv!(adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            SuiteSparse.ldiv!(y, adjoint(lua), complex.(b))
+            LinearAlgebra.ldiv!(y, adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -59,10 +59,10 @@
             @test x ≈ float([1:5;])
 
             @test transpose(A) * x ≈ b
-            x = SuiteSparse.ldiv!(transpose(lua), complex.(b))
+            x = LinearAlgebra.ldiv!(transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            SuiteSparse.ldiv!(y, transpose(lua), complex.(b))
+            LinearAlgebra.ldiv!(y, transpose(lua), complex.(b))
             @test y ≈ x
 
             @test transpose(A) * x ≈ b
@@ -162,9 +162,9 @@
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
-        @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)
-        @test Base.LinAlg.ldiv!(copy(X), adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), adjoint(lufA), B)
-        @test Base.LinAlg.ldiv!(copy(X), transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), transpose(lufA), B)
+        @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
+        @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
+        @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
     end
 
 end

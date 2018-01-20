@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using SuiteSparse, SparseArrays
+using SuiteSparse, LinearAlgebra, SparseArrays
 
 if Base.USE_GPL_LIBS
    include("umfpack.jl")

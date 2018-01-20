@@ -39,6 +39,6 @@ For each different value of `steps`, a large polynomial has to be generated inte
 One is already pre-computed for `steps=big(10)^20`.
 """
 randjump(r::MersenneTwister, steps::Integer) =
-    Random._randjump(r, Random.dSFMT.calc_jump(steps))
+    Random._randjump(r, Random.DSFMT.calc_jump(steps))
 
 end # module Future

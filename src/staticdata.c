@@ -90,6 +90,7 @@ typedef struct {
 } jl_serializer_state;
 
 static jl_value_t *jl_idtable_type = NULL;
+static jl_typename_t *jl_idtable_typename = NULL;
 static arraylist_t builtin_typenames;
 
 enum RefTags {
@@ -735,7 +736,7 @@ static void jl_write_values(jl_serializer_state *s)
                     ios_write(s->const_data, flddesc, fldsize);
                 }
             }
-            else if (jl_typeof(v) == jl_idtable_type) {
+            else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
                 // will need to rehash this, later (after types are fully constructed)
                 arraylist_push(&reinit_list, (void*)item);
                 arraylist_push(&reinit_list, (void*)1);
@@ -1037,7 +1038,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
-            case 1: { // rehash ObjectIdDict
+            case 1: { // rehash IdDict
                 jl_array_t **a = (jl_array_t**)v;
                 assert(jl_is_array(*a));
                 // Assume *a don't need a write barrier
@@ -1205,7 +1206,8 @@ static void jl_save_system_image_to_stream(ios_t *f)
         }
     }
 
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
+    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
+    jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         jl_serialize_value(&s, jl_core_module);

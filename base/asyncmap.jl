@@ -23,11 +23,11 @@ then be a function that must accept a `Vector` of argument tuples and must
 return a vector of results. The input vector will have a length of `batch_size` or less.
 
 The following examples highlight execution in different tasks by returning
-the `object_id` of the tasks in which the mapping function is executed.
+the `objectid` of the tasks in which the mapping function is executed.
 
 First, with `ntasks` undefined, each element is processed in a different task.
 ```
-julia> tskoid() = object_id(current_task());
+julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
 5-element Array{UInt64,1}:

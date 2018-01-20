@@ -32,9 +32,6 @@ Base.isreadonly
 Base.iswritable
 Base.isreadable
 Base.isopen
-Base.Serializer.serialize
-Base.Serializer.deserialize
-Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
@@ -140,7 +137,7 @@ Base.getsockname
 Base.getpeername
 Base.IPv4
 Base.IPv6
-Base.nb_available
+Base.bytesavailable
 Base.accept
 Base.listenany
 Base.bind

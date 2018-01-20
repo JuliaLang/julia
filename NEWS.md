@@ -38,7 +38,8 @@ New language features
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
   * Field access via dot-syntax can now be overloaded by adding methods to
-    `Base.getproperty` and `Base.setproperty!` ([#1974]).
+    `Base.getproperty` and `Base.setproperty!` ([#1974]), optionally along with
+    a corresponding `Base.propertynames` method for reflection ([#25311]).
 
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
@@ -183,6 +184,9 @@ Language changes
 
   * `=>` now has its own precedence level, giving it strictly higher precedence than
     `=` and `,` ([#25391]).
+
+  * `begin` is disallowed inside indexing expressions, in order to enable the syntax
+    `a[begin]` (for selecting the first element) in the future ([#23354]).
 
   * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
     parser. ([#25564])
@@ -372,12 +376,12 @@ This section lists changes that do not have deprecation warnings.
   * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
 
-  * `find` has been renamed to `findall`, and now returns the same type of indices
-    as `keys`/`pairs` for `AbstractArray`, `AbstractDict`, `AbstractString`, `Tuple`
-    and `NamedTuple` objects ([#24774], [#25545]).
-    In particular, this means that it returns `CartesianIndex` objects for matrices
-    and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `LinearIndices(a)[findall(f, a)]` to compute linear indices.
+  * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
+    now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
+    In particular, this means that they use `CartesianIndex` objects for matrices
+    and higher-dimensional arrays insted of linear indices as was previously the case.
+    Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
@@ -551,6 +555,10 @@ Library improvements
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
 
+  * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
+    like other `AbstractDict` subtypes and its constructors mirror the
+    ones of `Dict`. ([#25210])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -681,6 +689,8 @@ Deprecated or removed
   * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
+
+  * `nb_available` is now `bytesavailable` ([#25634]).
 
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
@@ -819,10 +829,10 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
 
-  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
-    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
-    this is not true. If you are certain you need the old behavior, it is temporarily available
-    as `Base._isleaftype` ([#17086]).
+  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
+    Concrete types are those that might equal `typeof(x)` for some `x`;
+    `isleaftype` included some types for which this is not true. Those are now categorized more precisely
+    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
@@ -894,6 +904,9 @@ Deprecated or removed
 
   * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
 
+  * Linear algebra functionality, and specifically the `LinAlg` module has moved to the
+    `LinearAlgebra` standard library module ([#25571]).
+
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
@@ -941,13 +954,23 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
+  * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
+
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).
 
+  * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
+    in favor of `parentmodule` ([#TODO]).
+
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
+
+  * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
+
+  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
 Command-line option changes
 ---------------------------
@@ -1200,3 +1223,5 @@ Command-line option changes
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25616]: https://github.com/JuliaLang/julia/issues/25616
+[#25634]: https://github.com/JuliaLang/julia/issues/25634

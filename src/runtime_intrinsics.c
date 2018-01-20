@@ -18,7 +18,7 @@ const unsigned int host_char_bit = 8;
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
-    if (!jl_is_leaf_type(ty) || !jl_is_primitivetype(ty))
+    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
         jl_error("bitcast: target type not a leaf primitive type");
     if (!jl_is_primitivetype(jl_typeof(v)))
         jl_error("bitcast: value not a primitive type");
@@ -82,8 +82,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
 
-    if (!jl_is_leaf_type(rt))
-        jl_error("cglobal: type argument not a leaftype");
+    if (!jl_is_concrete_type(rt))
+        jl_error("cglobal: type argument not concrete");
 
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);

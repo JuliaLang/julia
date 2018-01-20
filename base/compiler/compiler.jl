@@ -76,8 +76,6 @@ include("docs/core.jl")
 inlining_enabled() = (JLOptions().can_inline == 1)
 coverage_enabled() = (JLOptions().code_coverage != 0)
 
-const isleaftype = _isleaftype
-
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 

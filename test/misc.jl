@@ -83,12 +83,12 @@ let # test the process title functions, issue #9957
     @test Sys.get_process_title() == oldtitle
 end
 
-# test gc_enable/disable
-@test gc_enable(true)
-@test gc_enable(false)
-@test gc_enable(false) == false
-@test gc_enable(true) == false
-@test gc_enable(true)
+# test GC.enable/disable
+@test GC.enable(true)
+@test GC.enable(false)
+@test GC.enable(false) == false
+@test GC.enable(true) == false
+@test GC.enable(true)
 
 # test methodswith
 # `methodswith` relies on exported symbols
@@ -146,7 +146,7 @@ let c = Ref(0),
     t2 = @schedule (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
-    gc() # this should run the finalizer for t
+    GC.gc() # this should run the finalizer for t
     @test c[] == 1
     yield()
     @test c[] == 1

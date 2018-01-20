@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Test, Random, LinearAlgebra
 
 @testset "middle" begin
     @test middle(3) === 3.0
@@ -422,7 +422,7 @@ end
 
 # dimensional correctness
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers: Furlong
+using .Main.TestHelpers: Furlong
 @testset "Unitful elements" begin
     r = Furlong(1):Furlong(1):Furlong(2)
     a = Vector(r)

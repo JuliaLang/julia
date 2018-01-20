@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Serialization
+
 import Base.MPFR
 @testset "constructors" begin
     setprecision(53) do

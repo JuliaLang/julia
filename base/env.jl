@@ -97,7 +97,7 @@ if Sys.iswindows()
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
         buf = Vector{UInt16}(uninitialized, len)
-        @gc_preserve buf unsafe_copyto!(pointer(buf), pos, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
         if m === nothing

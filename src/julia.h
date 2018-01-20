@@ -397,11 +397,14 @@ typedef struct _jl_datatype_t {
     uint8_t abstract;
     uint8_t mutabl;
     // memoized properties
+    uint8_t hasfreetypevars; // majority part of isconcrete computation
+    uint8_t isconcretetype; // whether this type can have instances
+    uint8_t isdispatchtuple; // aka isleaftupletype
+    uint8_t isbitstype; // relevant query for C-api and type-parameters
+    uint8_t zeroinit; // if one or more fields requires zero-initialization
+    uint8_t isinlinealloc; // if this is allocated inline
     void *struct_decl;  //llvm::Type*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
-    int32_t depth;
-    int8_t hasfreetypevars;
-    int8_t isleaftype;
 } jl_datatype_t;
 
 typedef struct {
@@ -421,13 +424,19 @@ typedef struct {
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
+typedef struct {
+    uint64_t hi;
+    uint64_t lo;
+} jl_uuid_t;
+
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint64_t uuid;
+    uint64_t build_id;
+    jl_uuid_t uuid;
     size_t primary_world;
     uint32_t counter;
     uint8_t istopmod;
@@ -940,9 +949,7 @@ STATIC_INLINE int jl_is_structtype(void *v)
 
 STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
-    return (jl_is_datatype(t) && ((jl_datatype_t*)t)->layout &&
-            !((jl_datatype_t*)t)->mutabl &&
-            ((jl_datatype_t*)t)->layout->npointers == 0);
+    return (jl_is_datatype(t) && ((jl_datatype_t*)t)->isbitstype);
 }
 
 STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
@@ -1008,7 +1015,6 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v);
 
 // type predicates and basic operations
-JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v);
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v);
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
@@ -1026,13 +1032,15 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_unwrap_unionall(jl_value_t *v);
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
-#if defined(JL_NDEBUG)
-STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
+STATIC_INLINE int jl_is_dispatch_tupletype(jl_value_t *v)
 {
-    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;
+    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isdispatchtuple;
 }
-#define jl_is_leaf_type(v) jl_is_leaf_type_(v)
-#endif
+
+STATIC_INLINE int jl_is_concrete_type(jl_value_t *v)
+{
+    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcretetype;
+}
 
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule);

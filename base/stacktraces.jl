@@ -7,11 +7,10 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Base.Serializer: serialize, deserialize
 using Base.Printf: @printf
 using Base: coalesce
 
-export StackTrace, StackFrame, stacktrace, catch_stacktrace
+export StackTrace, StackFrame, stacktrace
 
 """
     StackFrame
@@ -71,7 +70,7 @@ StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
     StackTrace
 
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
-`stacktrace` and `catch_stacktrace`.
+`stacktrace`.
 """
 const StackTrace = Vector{StackFrame}
 
@@ -94,29 +93,6 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.func, h)
     h = hash(frame.from_c, h)
     h = hash(frame.inlined, h)
-end
-
-# provide a custom serializer that skips attempting to serialize the `outer_linfo`
-# which is likely to contain complex references, types, and module references
-# that may not exist on the receiver end
-function serialize(s::AbstractSerializer, frame::StackFrame)
-    Serializer.serialize_type(s, typeof(frame))
-    serialize(s, frame.func)
-    serialize(s, frame.file)
-    write(s.io, frame.line)
-    write(s.io, frame.from_c)
-    write(s.io, frame.inlined)
-    write(s.io, frame.pointer)
-end
-
-function deserialize(s::AbstractSerializer, ::Type{StackFrame})
-    func = deserialize(s)
-    file = deserialize(s)
-    line = read(s.io, Int)
-    from_c = read(s.io, Bool)
-    inlined = read(s.io, Bool)
-    pointer = read(s.io, UInt64)
-    return StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
 
@@ -260,14 +236,6 @@ function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_fun
 end
 
 stacktrace(c_funcs::Bool=false) = stacktrace(backtrace(), c_funcs)
-
-"""
-    catch_stacktrace([c_funcs::Bool=false]) -> StackTrace
-
-Returns the stack trace for the most recent error thrown, rather than the current execution
-context.
-"""
-catch_stacktrace(c_funcs::Bool=false) = stacktrace(catch_backtrace(), c_funcs)
 
 """
     remove_frames!(stack::StackTrace, name::Symbol)

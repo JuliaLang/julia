@@ -76,7 +76,7 @@ struct JoinCompleteMsg <: AbstractMsg
 end
 
 # Avoiding serializing AbstractMsg containers results in a speedup
-# of approximately 10%. Can be removed once module Serializer
+# of approximately 10%. Can be removed once module Serialization
 # has been suitably improved.
 
 const msgtypes = Any[CallWaitMsg, IdentifySocketAckMsg, IdentifySocketMsg,

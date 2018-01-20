@@ -168,7 +168,7 @@ function Base.count(idx::GitIndex)
 end
 
 function Base.getindex(idx::GitIndex, i::Integer)
-    Base.@gc_preserve idx begin
+    GC.@preserve idx begin
         ie_ptr = ccall((:git_index_get_byindex, :libgit2),
                        Ptr{IndexEntry},
                        (Ptr{Cvoid}, Csize_t), idx.ptr, i-1)

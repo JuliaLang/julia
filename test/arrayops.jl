@@ -2,10 +2,10 @@
 
 # Array test
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 using SparseArrays
 
-using Random
+using Random, LinearAlgebra
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -460,18 +460,49 @@ end
     @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
-@testset "findall with Matrix" begin
+@testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
     @test findall(isodd, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1)]
     @test findall(!iszero, A) == [CartesianIndex(1, 1), CartesianIndex(2, 1),
                                CartesianIndex(1, 2), CartesianIndex(2, 2)]
+    @test findfirst(isodd, A) == CartesianIndex(1, 1)
+    @test findlast(isodd, A) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 1)) == CartesianIndex(1, 1)
+    @test findprev(isodd, A, CartesianIndex(2, 1)) == CartesianIndex(2, 1)
+    @test findnext(isodd, A, CartesianIndex(1, 2)) === nothing
+    @test findprev(iseven, A, CartesianIndex(2, 1)) === nothing
 end
-@testset "findall with general iterables" begin
+@testset "find with general iterables" begin
     s = "julia"
     @test findall(c -> c == 'l', s) == [3]
+    @test findfirst(c -> c == 'l', s) == 3
+    @test findlast(c -> c == 'l', s) == 3
+    @test findnext(c -> c == 'l', s, 1) == 3
+    @test findprev(c -> c == 'l', s, 5) == 3
+    @test findnext(c -> c == 'l', s, 4) === nothing
+    @test findprev(c -> c == 'l', s, 2) === nothing
+
     g = Base.Unicode.graphemes("日本語")
-    @test findall(isascii, g) == Int[]
-    @test findall(!iszero, (i % 2 for i in 1:10)) == 1:2:9
+    @test findall(!isempty, g) == 1:3
+    @test isempty(findall(isascii, g))
+    @test findfirst(!isempty, g) == 1
+    @test findfirst(isascii, g) === nothing
+    # Check that the last index isn't assumed to be typemax(Int)
+    @test_throws MethodError findlast(!iszero, g)
+
+    g2 = (i % 2 for i in 1:10)
+    @test findall(!iszero, g2) == 1:2:9
+    @test findfirst(!iszero, g2) == 1
+    @test findlast(!iszero, g2) == 9
+    @test findfirst(equalto(2), g2) === nothing
+    @test findlast(equalto(2), g2) === nothing
+
+    g3 = (i % 2 for i in 1:10, j in 1:2)
+    @test findall(!iszero, g3) == 1:2:19
+    @test findfirst(!iszero, g3) == 1
+    @test findlast(!iszero, g3) == 19
+    @test findfirst(equalto(2), g3) === nothing
+    @test findlast(equalto(2), g3) === nothing
 end
 
 @testset "findmin findmax indmin indmax" begin
@@ -1723,7 +1754,7 @@ end
     b = rand(6,7)
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
-    @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+    @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
 module RetTypeDecl
@@ -1921,7 +1952,7 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
               f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
               f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
-        @test Base._isleaftype(Base.return_types(f, ())[1])
+        @test isconcretetype(Base.return_types(f, ())[1])
     end
 end
 

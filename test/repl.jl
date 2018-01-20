@@ -5,7 +5,7 @@ include("testenv.jl")
 
 # REPL tests
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers
+using .Main.TestHelpers
 import Base: REPL, LineEdit
 using Random
 
@@ -664,7 +664,7 @@ let exename = Base.julia_cmd()
             wait(p)
             output = readuntil(master,' ')
             @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-            @test nb_available(master) == 0
+            @test bytesavailable(master) == 0
         end
     end
 

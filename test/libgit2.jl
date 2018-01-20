@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
-import Main.TestHelpers: challenge_prompt
+import .Main.TestHelpers: challenge_prompt
 
-using Random
+using Random, Serialization
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
@@ -2598,6 +2598,7 @@ mktempdir() do dir
                 repo_url = "https://$common_name:$port/Example.jl"
                 repo_dir = joinpath(root, "dest")
                 code = """
+                    using Serialization
                     dest_dir = "$repo_dir"
                     open("$errfile", "w+") do f
                         try

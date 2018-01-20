@@ -2,7 +2,7 @@
 
 # Set tests
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 
 @testset "Construction, collect" begin
     @test ===(typeof(Set([1,2,3])), Set{Int})

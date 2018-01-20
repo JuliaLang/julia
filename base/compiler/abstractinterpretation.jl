@@ -118,12 +118,10 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     haveconst = false
     for i in 1:nargs
         a = argtypes[i]
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance)
-            if !isleaftype(a.val) # alternately: !isa(a.val, DataType) || !isconstType(Type{a.val})
-                # have new information from argtypes that wasn't available from the signature
-                haveconst = true
-                break
-            end
+        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+            # have new information from argtypes that wasn't available from the signature
+            haveconst = true
+            break
         end
     end
     haveconst || return Any
@@ -378,11 +376,13 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
-    if !isa(aft, Const) && !isconstType(aft)
-        if !(isleaftype(aft) || aft <: Type) || (aft <: Builtin) || (aft <: IntrinsicFunction)
+    if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
+        if !isconcretetype(aft) || (aft <: Builtin)
+            # non-constant function of unknown type: bail now,
+            # since it seems unlikely that abstract_call will be able to do any better after splitting
+            # this also ensures we don't call abstract_call_gf_by_type below on an IntrinsicFunction or Builtin
             return Any
         end
-        # non-constant function, but type is known
     end
     res = Union{}
     nargs = length(fargs)
@@ -394,7 +394,7 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             cti = precise_container_type(fargs[i], ti, vtypes, sv)
             for ct in ctypes
-                if !isempty(ct) && isvarargtype(ct[end])
+                if isvarargtype(ct[end])
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
@@ -672,23 +672,22 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     ft = argtypes[1]
     if isa(ft, Const)
         f = ft.val
+    elseif isconstType(ft)
+        f = ft.parameters[1]
+    elseif isa(ft, DataType) && isdefined(ft, :instance)
+        f = ft.instance
     else
-        if isType(ft) && isleaftype(ft.parameters[1])
-            f = ft.parameters[1]
-        elseif isleaftype(ft) && isdefined(ft, :instance)
-            f = ft.instance
-        else
-            for i = 2:(length(argtypes)-1)
-                if isvarargtype(argtypes[i])
-                    return Any
-                end
+        for i = 2:(length(argtypes) - 1)
+            if isvarargtype(argtypes[i])
+                return Any
             end
-            # non-constant function, but type is known
-            if (isleaftype(ft) || ft <: Type) && !(ft <: Builtin) && !(ft <: IntrinsicFunction)
-                return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_type(argtypes), sv)
-            end
+        end
+        # non-constant function, but the number of arguments is known
+        # and the ft is not a Builtin or IntrinsicFunction
+        if typeintersect(widenconst(ft), Builtin) != Union{}
             return Any
         end
+        return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_type(argtypes), sv)
     end
     return abstract_call(f, e.args, argtypes, vtypes, sv)
 end

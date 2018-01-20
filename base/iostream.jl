@@ -326,9 +326,9 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
 end
 
 # num bytes available without blocking
-nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+bytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, nb_available(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, bytesavailable(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
@@ -373,7 +373,7 @@ end
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    @gc_preserve b while nr < nb
+    GC.@preserve b while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
@@ -393,7 +393,7 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     if nb > lb
         resize!(b, nb)
     end
-    nr = @gc_preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+    nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
                                   s.ios, pointer(b), nb))
     if lb > olb && lb > nr
         resize!(b, nr)

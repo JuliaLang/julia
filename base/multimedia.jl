@@ -42,7 +42,7 @@ false
 ```
 """
 mimewritable(::MIME{mime}, x) where {mime} =
-    method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
+    hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
 
 """
     show(io, mime, x)
@@ -313,7 +313,7 @@ function display(m::MIME, x)
 end
 
 displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
-    method_exists(display, Tuple{D,MIME{mime},Any})
+    hasmethod(display, Tuple{D,MIME{mime},Any})
 
 function displayable(m::MIME)
     for d in displays
