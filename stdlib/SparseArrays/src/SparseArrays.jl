@@ -30,7 +30,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     rotl90, rotr90, round, setindex!, similar, size, transpose,
     vec, permute!, map, map!, Array
 
-using Random: defaultRNG, AbstractRNG, randsubseq, randsubseq!
+using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
