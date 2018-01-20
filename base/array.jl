@@ -2168,11 +2168,11 @@ array contains 0 wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
 
-julia> b = ['a','b','c'];
+julia> b = ['a', 'b', 'c']
 
-julia> indexin(a,b)
+julia> indexin(a, b)
 6-element Array{Int64,1}:
  1
  2
@@ -2181,7 +2181,7 @@ julia> indexin(a,b)
  0
  1
 
-julia> indexin(b,a)
+julia> indexin(b, a)
 3-element Array{Int64,1}:
  6
  4
