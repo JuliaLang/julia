@@ -53,7 +53,7 @@ end
 abstract type IteratorSize end
 struct SizeUnknown <: IteratorSize end
 struct HasLength <: IteratorSize end
-struct HasShape <: IteratorSize end
+struct HasShape{N} <: IteratorSize end
 struct IsInfinite <: IteratorSize end
 
 """
@@ -63,8 +63,9 @@ Given the type of an iterator, return one of the following values:
 
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
-* `HasShape()` if there is a known length plus a notion of multidimensional shape (as for an array).
-   In this case the [`size`](@ref) function is valid for the iterator.
+* `HasShape{N}()` if there is a known length plus a notion of multidimensional shape (as for an array).
+   In this case `N` should give the number of dimensions, and the [`size`](@ref) function is valid
+   for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 
 The default value (for iterators that do not define this function) is `HasLength()`.
@@ -75,7 +76,7 @@ result, and algorithms that resize their result incrementally.
 
 ```jldoctest
 julia> Base.IteratorSize(1:5)
-Base.HasShape()
+Base.HasShape{1}()
 
 julia> Base.IteratorSize((2,3))
 Base.HasLength()
@@ -110,7 +111,7 @@ Base.HasEltype()
 IteratorEltype(x) = IteratorEltype(typeof(x))
 IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 
-IteratorSize(::Type{<:AbstractArray}) = HasShape()
+IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
