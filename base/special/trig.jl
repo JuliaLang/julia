@@ -198,16 +198,6 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     end
 end
 
-function sincos(v::Real)
-    vf = float(v)
-
-    if isa(vf, AbstractFloat)
-        sincos(vf)  # any subtype of AbstractFloat must implement sincos
-    else
-        return (sin(vf), cos(vf))
-    end
-end
-
 _sincos(x::AbstractFloat) = sincos(x)
 _sincos(x) = (sin(x), cos(x))
 
