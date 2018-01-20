@@ -444,26 +444,30 @@ function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
     return nothing
 end
 
-function readuntil(io::GenericIOBuffer, delim::UInt8)
+function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     lb = 70
     A = StringVector(lb)
-    n = 0
+    nread = 0
+    nout = 0
     data = io.data
     for i = io.ptr : io.size
-        n += 1
-        if n > lb
-            lb = n*2
-            resize!(A, lb)
-        end
         @inbounds b = data[i]
-        @inbounds A[n] = b
+        nread += 1
+        if keep || b != delim
+            nout += 1
+            if nout > lb
+                lb = nout*2
+                resize!(A, lb)
+            end
+            @inbounds A[nout] = b
+        end
         if b == delim
             break
         end
     end
-    io.ptr += n
-    if lb != n
-        resize!(A, n)
+    io.ptr += nread
+    if lb != nout
+        resize!(A, nout)
     end
     A
 end

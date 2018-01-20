@@ -635,8 +635,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     mktemp() do errfile, f
         build!(pkgs, seen, errfile)
         while !eof(f)
-            pkg = chop(readuntil(f, '\0'))
-            err = chop(readuntil(f, '\0'))
+            pkg = readuntil(f, '\0')
+            err = readuntil(f, '\0')
             errs[pkg] = err
         end
     end

@@ -147,27 +147,32 @@ for (name, f) in l
     end
 
     verbose && println("$name readuntil...")
-    for (t, s, m) in [
-            ("a", "ab", "a"),
-            ("b", "ab", "b"),
-            ("α", "αγ", "α"),
-            ("ab", "abc", "ab"),
-            ("bc", "abc", "bc"),
-            ("αβ", "αβγ", "αβ"),
-            ("aaabc", "ab", "aaab"),
-            ("aaabc", "ac", "aaabc"),
-            ("aaabc", "aab", "aaab"),
-            ("aaabc", "aac", "aaabc"),
-            ("αααβγ", "αβ", "αααβ"),
-            ("αααβγ", "ααβ", "αααβ"),
-            ("αααβγ", "αγ", "αααβγ"),
-            ("barbarbarians", "barbarian", "barbarbarian")]
-        local t, s, m
+    for (t, s, m, kept) in [
+            ("a", "ab", "a", "a"),
+            ("b", "ab", "b", "b"),
+            ("α", "αγ", "α", "α"),
+            ("ab", "abc", "ab", "ab"),
+            ("bc", "abc", "bc", "bc"),
+            ("αβ", "αβγ", "αβ", "αβ"),
+            ("aaabc", "ab", "aa", "aaab"),
+            ("aaabc", "ac", "aaabc", "aaabc"),
+            ("aaabc", "aab", "a", "aaab"),
+            ("aaabc", "aac", "aaabc", "aaabc"),
+            ("αααβγ", "αβ", "αα", "αααβ"),
+            ("αααβγ", "ααβ", "α", "αααβ"),
+            ("αααβγ", "αγ", "αααβγ", "αααβγ"),
+            ("barbarbarians", "barbarian", "bar", "barbarbarian")]
+        local t, s, m, kept
         @test readuntil(io(t), s) == m
+        @test readuntil(io(t), s, keep=true) == kept
         @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
+        @test readuntil(io(t), SubString(s, start(s), endof(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
+        @test readuntil(io(t), GenericString(s), keep=true) == kept
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
+        @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s), keep=true) == unsafe_wrap(Vector{UInt8},kept)
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
+        @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
     end
     cleanup()
 
@@ -263,12 +268,14 @@ for (name, f) in l
 
 
         verbose && println("$name readuntil...")
-        @test readuntil(io(), '\n') == readuntil(IOBuffer(text),'\n')
-        @test readuntil(io(), '\n') == readuntil(filename,'\n')
-        @test readuntil(io(), "\n") == readuntil(IOBuffer(text),"\n")
-        @test readuntil(io(), "\n") == readuntil(filename,"\n")
-        @test readuntil(io(), ',')  == readuntil(IOBuffer(text),',')
-        @test readuntil(io(), ',')  == readuntil(filename,',')
+        for keep in [false, true]
+            @test readuntil(io(), '\n', keep=keep) == readuntil(IOBuffer(text),'\n', keep=keep)
+            @test readuntil(io(), '\n', keep=keep) == readuntil(filename,'\n', keep=keep)
+            @test readuntil(io(), "\n", keep=keep) == readuntil(IOBuffer(text),"\n", keep=keep)
+            @test readuntil(io(), "\n", keep=keep) == readuntil(filename,"\n", keep=keep)
+            @test readuntil(io(), ',', keep=keep)  == readuntil(IOBuffer(text),',', keep=keep)
+            @test readuntil(io(), ',', keep=keep)  == readuntil(filename,',', keep=keep)
+        end
 
         cleanup()
 

@@ -338,7 +338,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     end
     wait(ready) # wait for writer task to be ready before using `out`
     @test bytesavailable(out) == 0
-    @test endswith(readuntil(out, '1'), '1')
+    @test endswith(readuntil(out, '1', keep=true), '1')
     @test Char(read(out, UInt8)) == '\t'
     c = UInt8[0]
     @test c == read!(out, c)

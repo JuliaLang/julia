@@ -840,11 +840,11 @@ function readavailable(this::LibuvStream)
     return take!(buf)
 end
 
-function readuntil(this::LibuvStream, c::UInt8)
+function readuntil(this::LibuvStream, c::UInt8; keep::Bool=false)
     wait_readbyte(this, c)
     buf = this.buffer
     @assert buf.seekable == false
-    return readuntil(buf, c)
+    return readuntil(buf, c, keep=keep)
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))

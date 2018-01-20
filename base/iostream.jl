@@ -357,13 +357,13 @@ end
 take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
-function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
+function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
 # like readuntil, above, but returns a String without requiring a copy
-function readuntil_string(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 
 function readline(s::IOStream; chomp=nothing, keep::Bool=false)
@@ -371,7 +371,7 @@ function readline(s::IOStream; chomp=nothing, keep::Bool=false)
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
     end
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, !keep)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)

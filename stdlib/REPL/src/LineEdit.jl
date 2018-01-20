@@ -1816,8 +1816,7 @@ function setup_search_keymap(hp)
         # Bracketed paste mode
         "\e[200~" => (s,data,c)-> begin
             ps = state(s, mode(s))
-            str = readuntil(ps.terminal, "\e[201~")
-            input = str[1:prevind(str, end-5)]
+            input = readuntil(ps.terminal, "\e[201~", keep=true)
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
@@ -1881,8 +1880,7 @@ end
 
 function bracketed_paste(s; tabwidth=options(s).tabwidth)
     ps = state(s, mode(s))
-    str = readuntil(ps.terminal, "\e[201~")
-    input = str[1:prevind(str, end-5)]
+    input = readuntil(ps.terminal, "\e[201~")
     input = replace(input, '\r' => '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]

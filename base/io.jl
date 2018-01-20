@@ -228,8 +228,10 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8) = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::Char) = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::Char; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_indexable(io::AbstractPipe, target#=::Indexable{T}=#, out) = readuntil_indexable(pipe_reader(io), target, out)
 
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
@@ -297,10 +299,12 @@ function read! end
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 """
-    readuntil(stream::IO, delim)
-    readuntil(filename::AbstractString, delim)
+    readuntil(stream::IO, delim; keep::Bool = false)
+    readuntil(filename::AbstractString, delim; keep::Bool = false)
 
-Read a string from an I/O stream or a file, up to and including the given delimiter byte.
+Read a string from an I/O stream or a file, up to the given delimiter.
+The delimiter can be a `UInt8`, `Char`, string, or vector.
+Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
 # Examples
@@ -319,7 +323,7 @@ julia> readuntil("my_file.txt", '.')
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
 
 """
     readline(io::IO=STDIN; keep::Bool=false)
@@ -363,7 +367,7 @@ function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
     end
-    line = readuntil(s, 0x0a)
+    line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
@@ -626,41 +630,44 @@ end
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
 
-function readuntil(s::IO, delim::Char)
+function readuntil(s::IO, delim::Char; keep::Bool=false)
     if delim ≤ '\x7f'
-        return readuntil_string(s, delim % UInt8)
+        return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
     while !eof(s)
         c = read(s, Char)
-        write(out, c)
         if c == delim
+            keep && write(out, c)
             break
         end
+        write(out, c)
     end
     return String(take!(out))
 end
 
-function readuntil(s::IO, delim::T) where T
+function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
     while !eof(s)
         c = read(s, T)
-        push!(out, c)
         if c == delim
+            keep && push!(out, c)
             break
         end
+        push!(out, c)
     end
     return out
 end
 
 # requires that indices for target are small ordered integers bounded by start and endof
+# returns whether the delimiter was matched
 function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
     T = eltype(target)
     first = start(target)
     if done(target, first)
-        return
+        return true
     end
     len = endof(target)
     local cache # will be lazy initialized when needed
@@ -701,39 +708,45 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
                 pos = cache[pos] + first
             end
         end
-        done(target, pos) && break
+        done(target, pos) && return true
     end
+    return false
 end
 
-function readuntil(io::IO, target::AbstractString)
+function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
     i = start(target)
     done(target, i) && return ""
     c, i = next(target, start(target))
     if done(target, i) && c <= '\x7f'
-        return readuntil_string(io, c % UInt8)
+        return readuntil_string(io, c % UInt8, keep)
     end
-    # decide how we can index target
-    if target isa String
-        # convert String to a utf8-byte-iterator
+    # convert String to a utf8-byte-iterator
+    if target isa String || target isa SubString{String}
         target = codeunits(target)
-    #elseif applicable(codeunit, target)
-    #   TODO: a more general version of above optimization
-    #         would be to permit accessing any string via codeunit
-    #   target = CodeUnitVector(target)
-    elseif !(target isa SubString{String})
-        # type with unknown indexing behavior: convert to array
-        target = collect(target)
+    else
+        target = codeunits(String(target))
     end
-    out = (eltype(target) === UInt8 ? StringVector(0) : IOBuffer())
-    readuntil_indexable(io, target, out)
-    out = isa(out, IO) ? take!(out) : out
+    out = StringVector(0)
+    found = readuntil_indexable(io, target, out)
+    if !keep && found
+        lo, lt = length(out), length(target)
+        if lt <= lo
+            resize!(out, lo - lt)
+        end
+    end
     return String(out)
 end
 
-function readuntil(io::IO, target::AbstractVector{T}) where T
+function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    readuntil_indexable(io, target, out)
+    found = readuntil_indexable(io, target, out)
+    if !keep && found
+        lo, lt = length(out), length(target)
+        if lt <= lo
+            resize!(out, lo - lt)
+        end
+    end
     return out
 end
 
