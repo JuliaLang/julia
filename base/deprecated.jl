@@ -598,9 +598,14 @@ end
 @deprecate_binding golden     MathConstants.golden
 
 # PR #23271
+# TODO: rename Base._IOContext to IOContext when this deprecation is deleted
 function IOContext(io::IO; kws...)
-    depwarn("`IOContext(io, k=v, ...)` is deprecated, use `IOContext(io, :k => v, ...)` instead.", :IOContext)
-    IOContext(io, (k=>v for (k, v) in pairs(kws))...)
+    if isempty(kws) # Issue #25638
+        _IOContext(io)
+    else
+        depwarn("`IOContext(io, k=v, ...)` is deprecated, use `IOContext(io, :k => v, ...)` instead.", :IOContext)
+        IOContext(io, (k=>v for (k, v) in pairs(kws))...)
+    end
 end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)

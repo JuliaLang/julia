@@ -8,6 +8,19 @@ include("testenv.jl")
 replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
 
+@testset "IOContext" begin
+    io = IOBuffer()
+    ioc = IOContext(io)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict{Symbol, Any}()
+    ioc = IOContext(io, :x => 1)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict{Symbol, Any}(:x, 1)
+    ioc = IOContext(io, :x => 1, :y => 2)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict(Base.ImmutableDict{Symbol, Any}(:x, 1),
+                                         :y => 2)
+end
 
 @test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
