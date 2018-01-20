@@ -200,12 +200,12 @@ hash(x::I1438T, h::UInt) = hash(x.id, h)
     end
 end
 
-@testset "isequal" begin
-    @test  isequal(Dict(), Dict())
-    @test  isequal(Dict(1 => 1), Dict(1 => 1))
-    @test !isequal(Dict(1 => 1), Dict())
-    @test !isequal(Dict(1 => 1), Dict(1 => 2))
-    @test !isequal(Dict(1 => 1), Dict(2 => 1))
+@testset "equality" for eq in (isequal, ==)
+    @test  eq(Dict(), Dict())
+    @test  eq(Dict(1 => 1), Dict(1 => 1))
+    @test !eq(Dict(1 => 1), Dict())
+    @test !eq(Dict(1 => 1), Dict(1 => 2))
+    @test !eq(Dict(1 => 1), Dict(2 => 1))
 
     # Generate some data to populate dicts to be compared
     data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
@@ -228,26 +228,44 @@ end
         d2[k] = v
     end
 
-    @test  isequal(d1, d2)
+    @test eq(d1, d2)
     d3 = copy(d2)
     d4 = copy(d2)
     # Removing an item gives different dict
     delete!(d1, data_in[rand(1:length(data_in))][1])
-    @test !isequal(d1, d2)
+    @test !eq(d1, d2)
     # Changing a value gives different dict
     d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
-    !isequal(d1, d3)
+    !eq(d1, d3)
     # Adding a pair gives different dict
     d4[1001] = randstring(3)
-    @test !isequal(d1, d4)
+    @test !eq(d1, d4)
 
-    @test isequal(Dict(), sizehint!(Dict(),96))
+    @test eq(Dict(), sizehint!(Dict(),96))
 
-    # Here is what currently happens when dictionaries of different types
-    # are compared. This is not necessarily desirable. These tests are
-    # descriptive rather than proscriptive.
-    @test !isequal(Dict(1 => 2), Dict("dog" => "bone"))
-    @test isequal(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
+    # Dictionaries of different types
+    @test !eq(Dict(1 => 2), Dict("dog" => "bone"))
+    @test eq(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
+end
+
+@testset "equality special cases" begin
+    @test Dict(1=>0.0) == Dict(1=>-0.0)
+    @test !isequal(Dict(1=>0.0), Dict(1=>-0.0))
+
+    @test Dict(0.0=>1) != Dict(-0.0=>1)
+    @test !isequal(Dict(0.0=>1), Dict(-0.0=>1))
+
+    @test Dict(1=>NaN) != Dict(1=>NaN)
+    @test isequal(Dict(1=>NaN), Dict(1=>NaN))
+
+    @test Dict(NaN=>1) == Dict(NaN=>1)
+    @test isequal(Dict(NaN=>1), Dict(NaN=>1))
+
+    @test ismissing(Dict(1=>missing) == Dict(1=>missing))
+    @test isequal(Dict(1=>missing), Dict(1=>missing))
+
+    @test Dict(missing=>1) == Dict(missing=>1)
+    @test isequal(Dict(missing=>1), Dict(missing=>1))
 end
 
 @testset "get!" begin # (get with default values assigned to the given location)
