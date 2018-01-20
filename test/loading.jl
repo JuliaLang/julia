@@ -206,7 +206,7 @@ function gen_implicit(dir::String, pkg::PkgId, proj::Bool, deps::Pair{String,UUI
 end
 
 function gen_depot_ver(depot::String, pkg::PkgId, deps::Pair{String,UUID}...)
-    pkg.uuid === nothing && error("package UUID required in explicit env")
+    pkg.uuid === nothing && return nothing, nothing
     tree = SHA1(rand(UInt8, 20)) # fake tree hash
     dir = joinpath(depot, "packages", version_slug(pkg.uuid, tree))
     entry = joinpath(dir, "src", "$(pkg.name).jl")
@@ -244,14 +244,14 @@ end
 const name = "Flarp"
 const uuidA = UUID("b2cb3794-8625-4058-bcde-7eeb13ac1c8b")
 const uuidB = UUID("1513c021-3639-4616-a37b-ee45c9d2f773")
-const uuids = [uuidA, uuidB]
+const uuids = [nothing, uuidA, uuidB]
 
 ft(::UUID)    =  true:true
 ft(::Nothing) = false:true
 
 @testset "direct dependency loading: implict + implicit" begin
-    for uuid1 in [nothing; uuids], proj1 in ft(uuid1),
-        uuid2 in [nothing; uuids], proj2 in ft(uuid2)
+    for uuid1 in uuids, proj1 in ft(uuid1),
+        uuid2 in uuids, proj2 in ft(uuid2)
         pkg1 = uuid1 === nothing ? PkgId(name) : PkgId(uuid1, name)
         pkg2 = uuid2 === nothing ? PkgId(name) : PkgId(uuid2, name)
         empty!(LOAD_PATH)
@@ -283,6 +283,7 @@ end
         paths = last.(pairs)
         for i = 1:length(uuids), k = 1:2,
             j = 1:length(uuids), l = 1:2
+            uuids[i] !== nothing && uuids[j] !== nothing || continue
             empty!(LOAD_PATH)
             mktempdir() do dir1
                 push!(LOAD_PATH, dir1)
@@ -315,6 +316,7 @@ end
         paths = last.(pairs)
         for i = 1:length(uuids), k = 1:2,
             j = 1:length(uuids), l = 1:2, proj in ft(uuids[j])
+            uuids[i] !== nothing || continue
             empty!(LOAD_PATH)
             mktempdir() do dir1
                 push!(LOAD_PATH, dir1)
@@ -322,14 +324,14 @@ end
                 gen_manifest(dir1, name, uuids[i], trees[i,k])
                 @test identify_package(name) == pkgs[i]
                 @test locate_package(pkgs[i]) == paths[i,k]
-                path = uuids[i] == uuids[j] ? paths[i,k] : nothing
+                path = uuids[i] == coalesce(uuids[j], uuids[i]) ? paths[i,k] : nothing
                 @test locate_package(pkgs[j]) == path
                 mktempdir() do dir2
                     push!(LOAD_PATH, dir2)
                     path2 = gen_implicit(dir2, pkgs[j], proj)
                     @test identify_package(name) == pkgs[i]
                     @test locate_package(pkgs[i]) == paths[i,k]
-                    path = uuids[i] == uuids[j] ? paths[i,k] : path2
+                    path = uuids[i] == coalesce(uuids[j], uuids[i]) ? paths[i,k] : path2
                     @test locate_package(pkgs[j]) == path
                 end
             end
@@ -352,6 +354,7 @@ const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
         paths = last.(pairs)
         for i = 1:length(uuids), k = 1:2, s = false:true,
             j = 1:length(uuids), l = 1:2, t = false:true
+            uuids[i] !== nothing && uuids[j] !== nothing || continue
             empty!(LOAD_PATH)
             mktempdir() do dir1
                 push!(LOAD_PATH, dir1)
