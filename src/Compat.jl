@@ -770,6 +770,12 @@ else
     import Dates
 end
 
+if VERSION < v"0.7.0-DEV.3382"
+    const Libdl = Base.Libdl
+else
+    import Libdl
+end
+
 if VERSION < v"0.7.0-DEV.3216"
     const AbstractDateTime = Compat.Dates.TimeType
 else
