@@ -57,7 +57,7 @@ isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
 
 # Unary operators/functions
-for f in (:(!), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(abs), :(abs2), :(sign),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
