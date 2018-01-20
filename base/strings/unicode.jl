@@ -299,6 +299,7 @@ function category_code(c::Char)
     c ≤ '\U10ffff' || return Cint(30)
     ccall(:utf8proc_category, Cint, (UInt32,), c)
 end
+category_code(x::Integer) = category_code(Char(x))
 
 # more human-readable representations of the category code
 function category_abbrev(c::Char)
@@ -318,10 +319,10 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 ```jldoctest
 julia> using Unicode
 
-julia> isassigned(101)
+julia> Unicode.isassigned(101)
 true
 
-julia> isassigned('\\x01')
+julia> Unicode.isassigned('\\x01')
 true
 ```
 """
