@@ -306,6 +306,37 @@ end
     end
 end
 
+@testset "direct dependency loading: explicit + implicit" begin
+    mktempdir() do depot
+        push!(empty!(DEPOT_PATH), depot)
+        pkgs  = [PkgId(uuid, name) for uuid in uuids]
+        pairs = [gen_depot_ver(depot, pkg) for pkg in pkgs, _ in 1:2]
+        trees = first.(pairs)
+        paths = last.(pairs)
+        for i = 1:length(uuids), k = 1:2,
+            j = 1:length(uuids), l = 1:2, proj in ft(uuids[j])
+            empty!(LOAD_PATH)
+            mktempdir() do dir1
+                push!(LOAD_PATH, dir1)
+                gen_explicit(dir1)
+                gen_manifest(dir1, name, uuids[i], trees[i,k])
+                @test identify_package(name) == pkgs[i]
+                @test locate_package(pkgs[i]) == paths[i,k]
+                path = uuids[i] == uuids[j] ? paths[i,k] : nothing
+                @test locate_package(pkgs[j]) == path
+                mktempdir() do dir2
+                    push!(LOAD_PATH, dir2)
+                    path2 = gen_implicit(dir2, pkgs[j], proj)
+                    @test identify_package(name) == pkgs[i]
+                    @test locate_package(pkgs[i]) == paths[i,k]
+                    path = uuids[i] == uuids[j] ? paths[i,k] : path2
+                    @test locate_package(pkgs[j]) == path
+                end
+            end
+        end
+    end
+end
+
 const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
 
 @testset "indirect dependency loading: explicit + explicit" begin
