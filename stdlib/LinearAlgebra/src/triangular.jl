@@ -496,7 +496,7 @@ for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, '
     @eval begin
         # Vector multiplication
         _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
-            mul!(A, copyto!(y, b))
+            mul2!(A, copyto!(y, b))
 
         _mul2!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
@@ -508,7 +508,7 @@ for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, '
         # Matrix multiplication
         _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
             mul2!(A, copyto!(C, B))
-        _mul2!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::StridedLayout, ::$memlay) where {T<:BlasFloat}  =
+        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::StridedLayout, ::$memlay) where {T<:BlasFloat}  =
             mul1!(copyto!(C, A), B)
 
         _mul2!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
