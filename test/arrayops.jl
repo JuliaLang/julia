@@ -2,7 +2,7 @@
 
 # Array test
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 using SparseArrays
 
 using Random, LinearAlgebra

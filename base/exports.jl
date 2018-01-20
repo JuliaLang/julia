@@ -137,6 +137,7 @@ export
 # Global constants and variables
     ARGS,
     C_NULL,
+    DEPOT_PATH,
     ENDIAN_BOM,
     ENV,
     LOAD_PATH,
@@ -855,7 +856,7 @@ export
     listenany,
     ltoh,
     mark,
-    nb_available,
+    bytesavailable,
     ntoh,
     open,
     pipeline,

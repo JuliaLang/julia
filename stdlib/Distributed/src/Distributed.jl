@@ -70,6 +70,19 @@ export
 # Used only by shared arrays.
     check_same_host
 
+function _require_callback(mod::Base.PkgId)
+    if Base.toplevel_load[] && myid() == 1 && nprocs() > 1
+        # broadcast top-level (e.g. from Main) import/using from node 1 (only)
+        @sync for p in procs()
+            p == 1 && continue
+            @async remotecall_wait(p) do
+                Base._require(mod)
+                nothing
+            end
+        end
+    end
+end
+
 include("clusterserialize.jl")
 include("cluster.jl")   # cluster setup and management, addprocs
 include("messages.jl")
@@ -82,16 +95,6 @@ include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
 
 @eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
-
-function _require_callback(mod::Symbol)
-    if Base.toplevel_load[] && myid() == 1 && nprocs() > 1
-        # broadcast top-level import/using from node 1 (only)
-        @sync for p in procs()
-            p == 1 && continue
-            @async remotecall_wait(()->(Base.require(mod); nothing), p)
-        end
-    end
-end
 
 function __init__()
     push!(Base.package_callbacks, _require_callback)

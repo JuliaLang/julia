@@ -4,7 +4,7 @@ using Base.LineEdit
 using Base.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers
+using .Main.TestHelpers
 
 # no need to have animation in tests
 Base.REPL.GlobalOptions.region_animation_duration=0.001
@@ -332,7 +332,7 @@ let buf = IOBuffer()
     LineEdit.edit_move_left(buf)
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
-    @test nb_available(buf) == 0
+    @test bytesavailable(buf) == 0
     LineEdit.edit_backspace(buf, false, false)
     @test content(buf) == "a"
 end

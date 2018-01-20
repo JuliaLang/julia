@@ -186,7 +186,7 @@ let s = "Base.return_types(getin"
 end
 
 # issue #23193: after `using`, identifiers can be prefixed by module names
-let s = "using Test, Base.Random"
+let s = "using Test, Random"
     c, r = test_complete(s)
     @test !("RandomDevice" in c)
 end
