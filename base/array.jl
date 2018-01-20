@@ -2164,7 +2164,7 @@ indmin(a) = findmin(a)[2]
 
 Return an array containing the highest index in `b` for
 each value in `a` that is a member of `b`. The output
-array contains 0 wherever `a` is not a member of `b`.
+array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
@@ -2173,24 +2173,27 @@ julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
 julia> b = ['a', 'b', 'c']
 
 julia> indexin(a, b)
-6-element Array{Int64,1}:
+6-element Array{Union{Nothing, Int64},1}:
  1
  2
  3
  2
- 0
+  nothing
  1
 
 julia> indexin(b, a)
-3-element Array{Int64,1}:
+3-element Array{Union{Nothing, Int64},1}:
  6
  4
  3
 ```
 """
 function indexin(a, b::AbstractArray)
-    bdict = Dict(zip(b, 1:length(b)))
-    map(i -> get(bdict, i, 0), a)
+    indexes = keys(b)
+    bdict = Dict(zip(b, indexes))
+    return Union{eltype(indexes), Nothing}[
+        get(bdict, i, nothing) for i in a
+    ]
 end
 
 function _findin(a, b)
