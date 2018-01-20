@@ -1589,7 +1589,7 @@ end
 @deprecate gc_enable GC.enable
 @eval @deprecate $(Symbol("@gc_preserve")) GC.$(Symbol("@preserve")) false
 
-@deprecate nb_available bytesavailable
+@deprecate nb_available nbytesavailable
 
 @deprecate skipchars(io::IO, predicate; linecomment=nothing) skipchars(predicate, io, linecomment=linecomment)
 # this method is to avoid ambiguity, delete at the same time as deprecation of skipchars above:

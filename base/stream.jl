@@ -43,16 +43,16 @@ function stream_wait(x, c...) # for x::LibuvObject
     end
 end
 
-bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
+nbytesavailable(s::LibuvStream) = nbytesavailable(s.buffer)
 
 function eof(s::LibuvStream)
     if isopen(s) # fast path
-        bytesavailable(s) > 0 && return false
+        nbytesavailable(s) > 0 && return false
     else
-        return bytesavailable(s) <= 0
+        return nbytesavailable(s) <= 0
     end
     wait_readnb(s,1)
-    return !isopen(s) && bytesavailable(s) <= 0
+    return !isopen(s) && nbytesavailable(s) <= 0
 end
 
 # Limit our default maximum read and buffer size,
@@ -205,12 +205,12 @@ show(io::IO, stream::LibuvServer) = print(io, typeof(stream), "(",
 show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
     _fd(stream), " ",
     uv_status_string(stream), ", ",
-    bytesavailable(stream.buffer)," bytes waiting)")
+    nbytesavailable(stream.buffer)," bytes waiting)")
 
 # Shared LibuvStream object interface
 
 function isreadable(io::LibuvStream)
-    bytesavailable(io) > 0 && return true
+    nbytesavailable(io) > 0 && return true
     isopen(io) || return false
     return ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), io.handle) != 0
 end
@@ -292,14 +292,14 @@ end
 
 function wait_readnb(x::LibuvStream, nb::Int)
     if isopen(x) # fast path
-        bytesavailable(x.buffer) >= nb && return
+        nbytesavailable(x.buffer) >= nb && return
     else
         return
     end
     oldthrottle = x.throttle
     preserve_handle(x)
     try
-        while isopen(x) && bytesavailable(x.buffer) < nb
+        while isopen(x) && nbytesavailable(x.buffer) < nb
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             wait(x.readnotify)
@@ -536,8 +536,8 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         # 3) we have an alternate buffer that has reached its limit.
         if stream.status == StatusPaused ||
            (stream.status == StatusActive &&
-            ((bytesavailable(stream.buffer) >= stream.throttle) ||
-             (bytesavailable(stream.buffer) >= stream.buffer.maxsize)))
+            ((nbytesavailable(stream.buffer) >= stream.throttle) ||
+             (nbytesavailable(stream.buffer) >= stream.buffer.maxsize)))
             # save cycles by stopping kernel notifications from arriving
             ccall(:uv_read_stop, Cint, (Ptr{Cvoid},), stream)
             stream.status = StatusOpen
@@ -606,7 +606,7 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.in), " => ",
     _fd(stream.out), " ",
     uv_status_string(stream.out), ", ",
-    bytesavailable(stream), " bytes waiting)")
+    nbytesavailable(stream), " bytes waiting)")
 
 
 ## Functions for PipeEndpoint and PipeServer ##
@@ -763,7 +763,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
 
-    if bytesavailable(sbuf) >= nb
+    if nbytesavailable(sbuf) >= nb
         return readbytes!(sbuf, a, nb)
     end
 
@@ -779,7 +779,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
             write(newbuf, sbuf)
             wait_readnb(s, Int(nb))
             compact(newbuf)
-            return bytesavailable(newbuf)
+            return nbytesavailable(newbuf)
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -800,7 +800,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
 
-    if bytesavailable(sbuf) >= nb
+    if nbytesavailable(sbuf) >= nb
         return unsafe_read(sbuf, p, nb)
     end
 
@@ -815,7 +815,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_readnb(s, Int(nb))
-            nb == bytesavailable(newbuf) || throw(EOFError())
+            nb == nbytesavailable(newbuf) || throw(EOFError())
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -910,7 +910,7 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     end
 
     buf = s.sendbuf
-    totb = bytesavailable(buf) + n
+    totb = nbytesavailable(buf) + n
     if totb < buf.maxsize
         nb = unsafe_write(buf, p, n)
     else
@@ -927,7 +927,7 @@ end
 function flush(s::LibuvStream)
     if s.sendbuf !== nothing
         buf = s.sendbuf
-        if bytesavailable(buf) > 0
+        if nbytesavailable(buf) > 0
             arr = take!(buf)        # Array of UInt8s
             uv_write(s, arr)
             return
@@ -944,7 +944,7 @@ buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 function write(s::LibuvStream, b::UInt8)
     if s.sendbuf !== nothing
         buf = s.sendbuf
-        if bytesavailable(buf) + 1 < buf.maxsize
+        if nbytesavailable(buf) + 1 < buf.maxsize
             return write(buf, b)
         end
     end
@@ -1239,18 +1239,18 @@ uvfinalize(s::BufferStream) = nothing
 
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
 unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
-bytesavailable(s::BufferStream) = bytesavailable(s.buffer)
+nbytesavailable(s::BufferStream) = nbytesavailable(s.buffer)
 
 isreadable(s::BufferStream) = s.buffer.readable
 iswritable(s::BufferStream) = s.buffer.writable
 
 function wait_readnb(s::BufferStream, nb::Int)
-    while isopen(s) && bytesavailable(s.buffer) < nb
+    while isopen(s) && nbytesavailable(s.buffer) < nb
         wait(s.r_c)
     end
 end
 
-show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",bytesavailable(s.buffer),", isopen:", s.is_open)
+show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nbytesavailable(s.buffer),", isopen:", s.is_open)
 
 function wait_readbyte(s::BufferStream, c::UInt8)
     while isopen(s) && findfirst(equalto(c), s.buffer) === nothing
@@ -1271,7 +1271,7 @@ end
 
 function eof(s::BufferStream)
     wait_readnb(s, 1)
-    return !isopen(s) && bytesavailable(s)<=0
+    return !isopen(s) && nbytesavailable(s)<=0
 end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.

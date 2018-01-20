@@ -30,7 +30,7 @@ function read_to_buffer(io::IO, buffer::Buffer)
     copyto!(buffer.data, 1, buffer.data, offset, buffer.size)
     buffer.ptr = pointer(buffer.data) + buffer.size
     if !eof(io)
-        n = min(bytesavailable(io), capacity(buffer) - buffer.size)
+        n = min(nbytesavailable(io), capacity(buffer) - buffer.size)
         unsafe_read(io, buffer.ptr + buffer.size, n)
         buffer.size += n
     end

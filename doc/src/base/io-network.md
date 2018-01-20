@@ -137,7 +137,7 @@ Base.getsockname
 Base.getpeername
 Base.IPv4
 Base.IPv6
-Base.bytesavailable
+Base.nbytesavailable
 Base.accept
 Base.listenany
 Base.bind

@@ -65,7 +65,7 @@ function wait_connected end
 function wait_readnb end
 function wait_readbyte end
 function wait_close end
-function bytesavailable end
+function nbytesavailable end
 
 """
     readavailable(stream)
@@ -243,7 +243,7 @@ wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), by
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
-    bytesavailable(io)
+    nbytesavailable(io)
 
 Return the number of bytes available for reading before a read from this stream or buffer will block.
 
@@ -251,11 +251,11 @@ Return the number of bytes available for reading before a read from this stream 
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
-julia> bytesavailable(io)
+julia> nbytesavailable(io)
 34
 ```
 """
-bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
+nbytesavailable(io::AbstractPipe) = nbytesavailable(pipe_reader(io))
 
 """
     eof(stream) -> Bool

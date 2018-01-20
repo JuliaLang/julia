@@ -2,7 +2,7 @@
 
 using Random
 
-ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
+ioslength(io::IOBuffer) = (io.seekable ? io.size : nbytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
@@ -232,8 +232,8 @@ let bstream = BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
-    @test bytesavailable(bstream) == 0
-    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(bytesavailable(bstream.buffer)), isopen:true"
+    @test nbytesavailable(bstream) == 0
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nbytesavailable(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
@@ -243,13 +243,13 @@ let bstream = BufferStream()
     b = read(bstream,UInt8)
     @test a[2] == b
     c = zeros(UInt8,8)
-    @test bytesavailable(bstream) == 8
+    @test nbytesavailable(bstream) == 8
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
     @test close(bstream) === nothing
     @test eof(bstream)
-    @test bytesavailable(bstream) == 0
+    @test nbytesavailable(bstream) == 0
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op

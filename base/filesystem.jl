@@ -40,7 +40,7 @@ export File,
 
 import Base:
     UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
-    bytesavailable, position, read, read!, readavailable, seek, seekend, show,
+    nbytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
 using Base: coalesce
@@ -179,12 +179,12 @@ function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     nothing
 end
 
-bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
+nbytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
 
-eof(f::File) = bytesavailable(f) == 0
+eof(f::File) = nbytesavailable(f) == 0
 
 function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
-    nr = min(nb, bytesavailable(f))
+    nr = min(nb, nbytesavailable(f))
     if length(b) < nr
         resize!(b, nr)
     end
@@ -193,9 +193,9 @@ function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     uv_error("read",ret)
     return ret
 end
-read(io::File) = read!(io, Base.StringVector(bytesavailable(io)))
+read(io::File) = read!(io, Base.StringVector(nbytesavailable(io)))
 readavailable(io::File) = read(io)
-read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, bytesavailable(io))))
+read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, nbytesavailable(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)

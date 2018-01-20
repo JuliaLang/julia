@@ -670,7 +670,7 @@ let exename = Base.julia_cmd()
             wait(p)
             output = readuntil(master,' ')
             @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-            @test bytesavailable(master) == 0
+            @test nbytesavailable(master) == 0
         end
     end
 

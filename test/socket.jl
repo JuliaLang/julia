@@ -348,7 +348,7 @@ end
     P = Pipe()
     Base.link_pipe(P)
     write(P, "hello")
-    @test bytesavailable(P) == 0
+    @test nbytesavailable(P) == 0
     @test !eof(P)
     @test read(P, Char) === 'h'
     @test !eof(P)

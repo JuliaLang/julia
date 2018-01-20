@@ -326,7 +326,7 @@ function TCPServer(; delay=true)
     return tcp
 end
 
-isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
+isreadable(io::TCPSocket) = isopen(io) || nbytesavailable(io) > 0
 iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
