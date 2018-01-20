@@ -538,4 +538,25 @@ end
     end
 end
 
+@testset "triangular MemoryLayout" begin
+    A = [1.0 2; 3 4]
+    B = [1.0+im 2; 3 4]
+    for (TriType, TriLayout, TriLayoutTrans) in ((UpperTriangular, LinearAlgebra.UpperTriangularLayout, LinearAlgebra.LowerTriangularLayout),
+                                 (UnitUpperTriangular, LinearAlgebra.UnitUpperTriangularLayout, LinearAlgebra.UnitLowerTriangularLayout),
+                                 (LowerTriangular, LinearAlgebra.LowerTriangularLayout, LinearAlgebra.UpperTriangularLayout),
+                                 (UnitLowerTriangular, LinearAlgebra.UnitLowerTriangularLayout, LinearAlgebra.UnitUpperTriangularLayout))
+        @test LinearAlgebra.MemoryLayout(TriType(A)) == TriLayout{'N',Float64}()
+        @test LinearAlgebra.MemoryLayout(TriType(transpose(A))) == TriLayoutTrans{'T',Float64}()
+        @test LinearAlgebra.MemoryLayout(TriType(A')) == TriLayoutTrans{'T',Float64}()
+        @test LinearAlgebra.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans{'T',Float64}()
+        @test LinearAlgebra.MemoryLayout(TriType(A)') == TriLayoutTrans{'T',Float64}()
+
+        @test LinearAlgebra.MemoryLayout(TriType(B)) == TriLayout{'N',ComplexF64}()
+        @test LinearAlgebra.MemoryLayout(TriType(transpose(B))) == TriLayoutTrans{'T',ComplexF64}()
+        @test LinearAlgebra.MemoryLayout(TriType(B')) == TriLayoutTrans{'C',ComplexF64}()
+        @test LinearAlgebra.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans{'T',ComplexF64}()
+        @test LinearAlgebra.MemoryLayout(TriType(B)') == TriLayoutTrans{'C',ComplexF64}()
+    end
+end
+
 end # module TestTriangular

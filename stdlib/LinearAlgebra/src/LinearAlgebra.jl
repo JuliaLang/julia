@@ -16,9 +16,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     getproperty, imag, inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
-    StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
+    StridedReshapedArray, ReshapedArray, ReinterpretArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex, RangeIndex
+    @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex, RangeIndex, Slice
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -164,7 +164,11 @@ end
 
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
-struct StridedLayout{T} <: MemoryLayout{T} end
+
+abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
+struct DenseLayout{T} <: AbstractStridedLayout{T} end
+struct StridedLayout{T} <: AbstractStridedLayout{T} end
+
 struct TransposeLayout{T} <: MemoryLayout{T} end
 struct CTransposeLayout{T} <: MemoryLayout{T} end
 struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
@@ -199,14 +203,38 @@ the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
 In this case, one must implement the strided array interface, which requires
 overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`
 """
-MemoryLayout(A::AbstractArray{T,N}) where {T,N} = UnknownLayout{T}()
-MemoryLayout(A::Vector{T}) where {T} = StridedLayout{T}()
-MemoryLayout(A::Matrix{T}) where {T} = StridedLayout{T}()
-MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
+MemoryLayout(A::AbstractArray{T}) where {T} = UnknownLayout{T}()
+MemoryLayout(A::Vector{T}) where {T} = DenseLayout{T}()
+MemoryLayout(A::Matrix{T}) where {T} = DenseLayout{T}()
 
+
+MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
 submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-submemorylayout(S::StridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex, AbstractCartesianIndex}} = S
-submemorylayout(S::StridedLayout{T}, ::NTuple{2,I}) where {T,I<:Union{RangeIndex, AbstractCartesianIndex}} = S
+submemorylayout(::DenseLayout{T}, ::Tuple{I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseLayout{T}()
+submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex,AbstractCartesianIndex}} =
+    StridedLayout{T}()
+submemorylayout(::DenseLayout{T}, ::Tuple{I1,Int}) where {T,I1<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseLayout{T}()
+submemorylayout(::DenseLayout{T}, ::Tuple{I1,Int}) where {T,I1<:Slice} =
+    DenseLayout{T}()
+submemorylayout(::DenseLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Slice,I2<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseLayout{T}()
+submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
+    StridedLayout{T}()
+
+MemoryLayout(A::ReshapedArray) = reshapedmemorylayout(MemoryLayout(parent(A)))
+reshapedmemorylayout(::MemoryLayout{T}) where T = UnknownLayout{T}()
+reshapedmemorylayout(::DenseLayout{T}) where T = DenseLayout{T}()
+
+MemoryLayout(A::ReinterpretArray{V}) where V = reinterpretedmemorylayout(MemoryLayout(parent(A)), V)
+reinterpretedmemorylayout(::MemoryLayout{T}, ::Type{V}) where {T,V} = UnknownLayout{V}()
+reinterpretedmemorylayout(::DenseLayout{T}, ::Type{V}) where {T,V} = DenseLayout{V}()
+
+
+
+
+# MemoryLayout(A::ReinterpretArray{T}) where T =
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,

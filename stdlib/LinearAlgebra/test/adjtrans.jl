@@ -447,4 +447,29 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "adjoint and transpose MemoryLayout" begin
+    A = [1.0 2; 3 4]
+    @test LinearAlgebra.MemoryLayout(A') == LinearAlgebra.TransposeLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(transpose(A)) == LinearAlgebra.TransposeLayout{Float64}()
+    B = [1.0+im 2; 3 4]
+    @test LinearAlgebra.MemoryLayout(B') == LinearAlgebra.CTransposeLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(transpose(B)) == LinearAlgebra.TransposeLayout{ComplexF64}()
+    VA = view(A, 1:1, 1:1)
+    @test LinearAlgebra.MemoryLayout(VA') == LinearAlgebra.TransposeLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(transpose(VA)) == LinearAlgebra.TransposeLayout{Float64}()
+    VB = view(B, 1:1, 1:1)
+    @test LinearAlgebra.MemoryLayout(VB') == LinearAlgebra.CTransposeLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(transpose(VB)) == LinearAlgebra.TransposeLayout{ComplexF64}()
+    VA2 = view(A, [1,2], :)
+    @test LinearAlgebra.MemoryLayout(VA2') == LinearAlgebra.UnknownLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(transpose(VA2)) == LinearAlgebra.UnknownLayout{Float64}()
+    VB2 = view(B, [1,2], :)
+    @test LinearAlgebra.MemoryLayout(VB2') == LinearAlgebra.UnknownLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(transpose(VB2)) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    VBc = view(B', 1:1, 1:1)
+    @test LinearAlgebra.MemoryLayout(VBc) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    VBt = view(transpose(B), 1:1, 1:1)
+    @test LinearAlgebra.MemoryLayout(VBt) == LinearAlgebra.UnknownLayout{ComplexF64}()
+end
+
 end # module TestAdjointTranspose

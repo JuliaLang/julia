@@ -508,7 +508,7 @@ function exp!(A::AbstractMatrix{T}, _) where T<:BlasFloat
     A .= exp!(Matrix{T}(A))
     A
 end
-function _exp!(A::AbstractMatrix{T}, ::StridedLayout{T}) where T<:BlasFloat
+function _exp!(A::AbstractMatrix{T}, ::AbstractStridedLayout{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
