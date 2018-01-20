@@ -1583,6 +1583,8 @@ end
 @deprecate gc_enable GC.enable
 @eval @deprecate $(Symbol("@gc_preserve")) GC.$(Symbol("@preserve")) false
 
+@deprecate nb_available bytesavailable
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)
