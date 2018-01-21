@@ -912,6 +912,8 @@ Deprecated or removed
 
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
+  * The `Libdl` module has moved to the `Libdl` standard library module ([#25459]).
+
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
     `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
