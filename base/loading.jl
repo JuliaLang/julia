@@ -1047,12 +1047,6 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
-function reprfull(x)
-    s = IOBuffer()
-    show(IOContext(s, :module => nothing), x)
-    String(take!(s))
-end
-
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
@@ -1072,7 +1066,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         write(in, """
         begin
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(reprfull(LOAD_PATH)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.LOAD_CACHE_PATH)

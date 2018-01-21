@@ -151,8 +151,11 @@ end
 
 """
     repr(x)
+    repr(x, context::Pair{Symbol,<:Any}...)
 
 Create a string from any value using the [`show`](@ref) function.
+If context pairs are given, the IO buffer used to capture `show` output
+is wrapped in an `IOContext` object with those context pairs.
 
 # Examples
 ```jldoctest
@@ -167,6 +170,12 @@ julia> repr(zeros(3))
 function repr(x)
     s = IOBuffer()
     show(s, x)
+    String(take!(s))
+end
+
+function repr(x, context::Pair{Symbol}...)
+    s = IOBuffer()
+    show(IOContext(s, context...), x)
     String(take!(s))
 end
 
