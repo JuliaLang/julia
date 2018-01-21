@@ -624,7 +624,9 @@ norm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj
 norm(v::AdjointAbsVec) = norm(conj(v.parent))
 norm(v::TransposeAbsVec) = norm(v.parent)
 
-function vecdot(x::AbstractArray, y::AbstractArray)
+vecdot(x::AbstractArray, y::AbstractArray) = _vecdot(x, y, MemoryLayout(x), MemoryLayout(y))
+
+function _vecdot(x::AbstractArray, y::AbstractArray, _1, _2)
     lx = _length(x)
     if lx != _length(y)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
@@ -731,6 +733,12 @@ end
 # Call optimized BLAS methods for vectors of numbers
 dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
 
+dotu(x::AbstractVector, y::AbstractVector) = _dotu(x, y, MemoryLayout(x), MemoryLayout(y))
+_dotu(x::AbstractVector{<:Real}, y::AbstractVector{<:Real}, _1, _2) = dot(x, y)
+function _dotu(x::AbstractVector, y::AbstractVector, _1, _2)
+    @boundscheck length(x) == length(y) || throw(DimensionMismatch())
+    return sum(@inbounds(return x[k]*y[k]) for k in 1:length(x))
+end
 
 ###########################################################################################
 

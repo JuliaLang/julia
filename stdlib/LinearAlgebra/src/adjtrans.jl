@@ -182,10 +182,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 # Adjoint/Transpose-vector * vector
 *(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
-    @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(return u[k]*v[k]) for k in 1:length(u))
-end
+*(u::TransposeAbsVec, v::AbstractVector) = dotu(u.parent, v)
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
 # Adjoint/Transpose-vector * Adjoint/Transpose-vector
