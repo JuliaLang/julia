@@ -2970,7 +2970,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     p = 2
     @test x^p == 1
     @test x^2 == 2
-    @test_broken [x, x, x].^2 == [2, 2, 2] # literal_pow violates referential transparency
+    @test [x, x, x].^2 == [2, 2, 2] # literal_pow violates referential transparency
     for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
         for p in -4:4
             v = eval(:($T(2)^$p))
@@ -2985,6 +2985,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     end
     @test PR20889(2)^3 == 5
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
+    @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
 end
 module M20889 # do we get the expected behavior without importing Base.^?

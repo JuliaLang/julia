@@ -1658,11 +1658,18 @@
           (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
-                 (make-fuse f (cdr x)))
+                 (if (and (eq? f '^) (length= x 3) (integer? (caddr x)))
+                  (make-fuse (expand-forms '(top literal_pow))
+                    (list '^ (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
+                  (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax " (deparse e))))))
         (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
-            (make-fuse (undotop (cadr e)) (cddr e))
+            (let ((f (undotop (cadr e))) (x (cddr e)))
+                (if (and (eq? f '^) (length= x 2) (integer? (cadr x)))
+                 (make-fuse (expand-forms '(top literal_pow))
+                   (list '^ (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                 (make-fuse f x)))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
