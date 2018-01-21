@@ -3,9 +3,6 @@
 module REPL
 
 using Base.Meta
-using ..Terminals
-using ..LineEdit
-using ..REPLCompletions
 
 export
     AbstractREPL,
@@ -20,6 +17,12 @@ import Base:
     AnyDict,
     ==
 
+
+include("Terminals.jl")
+using .Terminals
+
+include("LineEdit.jl")
+using .LineEdit
 import ..LineEdit:
     CompletionProvider,
     HistoryProvider,
@@ -35,6 +38,13 @@ import ..LineEdit:
     accept_result,
     terminal,
     MIState
+
+include("REPLCompletions.jl")
+using .REPLCompletions
+
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+end
 
 abstract type AbstractREPL end
 
@@ -103,17 +113,6 @@ function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     end
     backend
 end
-
-function ip_matches_func(ip, func::Symbol)
-    for fr in StackTraces.lookup(ip)
-        if fr === StackTraces.UNKNOWN || fr.from_c
-            return false
-        end
-        fr.func === func && return true
-    end
-    return false
-end
-
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
     repl::R
 end
@@ -1137,5 +1136,8 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
+
+include("precompile.jl")
+_precompile_()
 
 end # module

@@ -1110,3 +1110,33 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 end
+
+@testset "#14684: `display` should print associative types in full" begin
+    d = Dict(1 => 2, 3 => 45)
+    buf = IOBuffer()
+    td = TextDisplay(buf)
+
+    display(td, d)
+    result = String(take!(td.io))
+    @test contains(result, summary(d))
+
+    # Is every pair in the string?
+    for el in d
+        @test contains(result, string(el))
+    end
+end
+
+@testset "#20111 show for function" begin
+    K20111(x) = y -> x
+    buf = IOBuffer()
+    show(buf, methods(K20111(1)))
+    @test contains(String(take!(buf)), " 1 method for generic function")
+end
+
+@generated f22798(x::Integer, y) = :x
+@testset "#22798" begin
+    buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.REPLCompletions
+using REPL.REPLCompletions
+using Test
 using Random
 
 let ex = quote

@@ -1,4 +1,4 @@
-# Interacting With Julia
+# The Julia REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
 the `julia` executable. In addition to allowing quick and easy evaluation of Julia statements,
@@ -196,16 +196,17 @@ to do so).
 ### Customizing keybindings
 
 Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary
-to `REPL.setup_interface()`. The keys of this dictionary may be characters or strings. The key
+to `REPL.setup_interface`. The keys of this dictionary may be characters or strings. The key
 `'*'` refers to the default action. Control plus character `x` bindings are indicated with `"^x"`.
 Meta plus `x` can be written `"\\Mx"`. The values of the custom keymap must be `nothing` (indicating
 that the input should be ignored) or functions that accept the signature `(PromptState, AbstractREPL, Char)`.
-The `REPL.setup_interface()` function must be called before the REPL is initialized, by registering
-the operation with `atreplinit()`. For example, to bind the up and down arrow keys to move through
+The `REPL.setup_interface` function must be called before the REPL is initialized, by registering
+the operation with [`atreplinit`](@ref) . For example, to bind the up and down arrow keys to move through
 history without prefix search, one could put the following code in `.juliarc.jl`:
 
 ```julia
-import Base: LineEdit, REPL
+import REPL
+import REPL.LineEdit
 
 const mykeys = Dict{Any,Any}(
     # Up Arrow
@@ -255,7 +256,7 @@ julia> e¹ = [1 0]
 1×2 Array{Int64,2}:
  1  0
 
-julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function
+julia> \sqrt[TAB]2     # √ is equivalent to the sqrt function
 julia> √2
 1.4142135623730951
 
@@ -374,4 +375,10 @@ messages respectively in magenta, yellow, and cyan you can add the following to 
 ENV["JULIA_ERROR_COLOR"] = :magenta
 ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
+```
+
+## References
+
+```@docs
+Base.atreplinit
 ```

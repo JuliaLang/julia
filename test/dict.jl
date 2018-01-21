@@ -865,3 +865,44 @@ end
     @test findfirst(equalto(1), Dict()) === nothing
     @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
 end
+
+@testset "Dict printing with limited rows" begin
+    local buf
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize => (4, 80), :limit => true)
+    d = Base.ImmutableDict(1=>2)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+
+    io = IOContext(io, :displaysize => (5, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+    d = Base.ImmutableDict(d, 3=>4)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+
+    io = IOContext(io, :displaysize => (6, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+    d = Base.ImmutableDict(d, 5=>6)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+end
+
