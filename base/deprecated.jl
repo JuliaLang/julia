@@ -1368,7 +1368,6 @@ end
 @deprecate_moved copy_transpose! "LinearAlgebra" false true
 @deprecate_moved issuccess       "LinearAlgebra" false true
 @deprecate_moved transpose_type  "LinearAlgebra" false true
-@deprecate_moved I               "LinearAlgebra" false true
 @deprecate_moved A_mul_B!        "LinearAlgebra" false true
 @deprecate_moved A_mul_Bt!       "LinearAlgebra" false true
 @deprecate_moved At_mul_B!       "LinearAlgebra" false true
