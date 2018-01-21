@@ -556,7 +556,7 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) (call (top pairs) ,kw) ,@(map arg-name pargl)
+                            (call (top kwerr) ,kw ,@(map arg-name pargl)
                                   ,@(if (null? vararg) '()
                                         (list `(... ,(arg-name (car vararg))))))))
                       '())
