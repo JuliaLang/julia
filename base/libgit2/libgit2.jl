@@ -206,7 +206,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
             delta = diff[i]
             delta === nothing && break
             if Consts.DELTA_STATUS(delta.status) in filter
-                push!(files, unsafe_string(delta.new_file.path))
+                Base.push!(files, unsafe_string(delta.new_file.path))
             end
         end
         close(diff)

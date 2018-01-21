@@ -350,7 +350,7 @@ function Base.map(f::Function, bi::GitBranchIter)
         if res === nothing
             res = Vector{typeof(val)}()
         end
-        push!(res, val)
+        Base.push!(res, val)
         val, s = next(bi, s)
     end
     return res
