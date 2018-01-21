@@ -173,6 +173,7 @@ mul_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
 
 @fastmath begin
     cmp_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(x==y, 0, ifelse(x<y, -1, +1))
+    log_fast(b::T, x::T) where {T<:FloatTypes} = log_fast(x)/log_fast(b)
 end
 
 eq_fast(x::T, y::T) where {T<:FloatTypes} = eq_float_fast(x, y)
@@ -366,6 +367,7 @@ sincos_fast(v) = (sin_fast(v), cos_fast(v))
     log1p_fast(x::ComplexTypes) = log(1+x)
     log2_fast(x::T) where {T<:ComplexTypes} = log(x) / log(convert(T,2))
     log_fast(x::T) where {T<:ComplexTypes} = T(log(abs2(x))/2, angle(x))
+    log_fast(b::T, x::T) where {T<:ComplexTypes} = T(log(x)/log(b))
     sin_fast(x::ComplexTypes) = -im*sinh(im*x)
     sinh_fast(x::T) where {T<:ComplexTypes} = convert(T,1)/2*(exp(x) - exp(-x))
     sqrt_fast(x::ComplexTypes) = sqrt(abs(x)) * cis(angle(x)/2)
@@ -385,7 +387,7 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     end
 end
 
-for f in (:^, :atan2, :hypot, :max, :min, :minmax)
+for f in (:^, :atan2, :hypot, :max, :min, :minmax, :log)
     f_fast = fast_op[f]
     @eval begin
         # fall-back implementation for non-numeric types
