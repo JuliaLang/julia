@@ -293,8 +293,9 @@ Building Julia requires that the following software be installed:
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 
 On e.g. Ubuntu you can easily install them with `apt-get`:
-
-`sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config`
+```
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+```
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
