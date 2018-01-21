@@ -553,6 +553,8 @@ Base.require(Base, :Unicode)
 
     # PR #25571
     @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
+    @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
+        ", run `using LinearAlgebra` to load linear algebra functionality."
 end
 
 empty!(DEPOT_PATH)
