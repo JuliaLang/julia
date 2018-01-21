@@ -1037,7 +1037,7 @@ end
 
 function edit_replace_word_right(buf::IOBuffer, replace::Function)
     # put the cursor at the beginning of the next word
-    skipchars(buf, is_non_word_char)
+    skipchars(is_non_word_char, buf)
     b = position(buf)
     char_move_word_right(buf)
     e = position(buf)

@@ -262,25 +262,25 @@ end
 # skipchars
 let
     io = IOBuffer("")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("   ")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("#    \n     ")
-    @test eof(skipchars(io, isspace, linecomment='#'))
+    @test eof(skipchars(isspace, io, linecomment='#'))
 
     io = IOBuffer("      text")
-    skipchars(io, isspace)
+    skipchars(isspace, io)
     @test String(readavailable(io)) == "text"
 
     io = IOBuffer("   # comment \n    text")
-    skipchars(io, isspace, linecomment='#')
+    skipchars(isspace, io, linecomment='#')
     @test String(readavailable(io)) == "text"
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, isalpha))
+        @test !eof(skipchars(isalpha, io))
         @test read(io, Char) == char
     end
 end
