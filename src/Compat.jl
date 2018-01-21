@@ -1296,6 +1296,11 @@ else
     @eval const $(Symbol("@error")) = Base.$(Symbol("@error"))
 end
 
+if !isdefined(Base, :findall)
+    const findall = find
+    export findall
+end
+
 include("deprecated.jl")
 
 end # module Compat
