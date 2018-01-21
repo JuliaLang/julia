@@ -180,6 +180,30 @@ Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
 Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
 
+# MemoryLayout of Symmetric/Hermitian
+struct SymmetricLayout{T} <: MemoryLayout{T}
+    uplo::Char
+end
+struct HermitianLayout{T} <: MemoryLayout{T}
+    uplo::Char
+end
+MemoryLayout(A::Hermitian) = hermitianmemorylayout(MemoryLayout(parent(A)), A.uplo)
+MemoryLayout(A::Symmetric) = symmetricmemorylayout(MemoryLayout(parent(A)), A.uplo)
+hermitianmemorylayout(::MemoryLayout{T}, _2) where T = UnknownLayout{T}()
+hermitianmemorylayout(::AbstractStridedLayout{T}, uplo) where T<:Complex = HermitianLayout{T}(uplo)
+hermitianmemorylayout(::AbstractStridedLayout{T}, uplo) where T<:Real = SymmetricLayout{T}(uplo)
+hermitianmemorylayout(::TransposeLayout{T}, uplo) where T<:Complex = HermitianLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+hermitianmemorylayout(::TransposeLayout{T}, uplo) where T<:Real = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+symmetricmemorylayout(::MemoryLayout{T}, _2) where T = UnknownLayout{T}()
+symmetricmemorylayout(::AbstractStridedLayout{T}, uplo) where T = SymmetricLayout{T}(uplo)
+symmetricmemorylayout(::TransposeLayout{T}, uplo) where T = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+
+adjoint(H::HermitianLayout) = H
+adjoint(H::SymmetricLayout{<:Real}) = H
+transpose(H::SymmetricLayout) = H
+
+
+
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 
@@ -316,52 +340,29 @@ end
 (-)(A::Symmetric{Tv,S}) where {Tv,S} = Symmetric{Tv,S}(-A.data, A.uplo)
 (-)(A::Hermitian{Tv,S}) where {Tv,S} = Hermitian{Tv,S}(-A.data, A.uplo)
 
-## Matvec
-mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
-    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasReal} =
-    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasComplex} =
+## Matrix-vector product
+_mul!(y::AbstractVector{T},    A::AbstractMatrix{T}, x::AbstractVector{T},
+      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
+    BLAS.symv!(AL.uplo, one(T), parent(A), x, zero(T), y)
+_mul!(y::AbstractVector{T},     A::AbstractMatrix{T}, x::AbstractVector{T},
+      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
-## Matmat
-mul!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} =
-    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal} =
-    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasReal} =
-    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} =
-    BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} =
-    BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+## Matrix-matrix product
+_mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
+      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
+    BLAS.symm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
+_mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::SymmetricLayout) where {T<:BlasFloat} =
+    BLAS.symm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
+_mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
+      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
+    BLAS.hemm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
+_mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout) where {T<:BlasComplex} =
+    BLAS.hemm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
-# Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
-## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractVector) = transA.parent * B
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractMatrix) = transA.parent * B
-*(A::AbstractMatrix, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
-## Hermitian{<:Number} and Symmetric{<:Real} are invariant to adjoint; peel off the c
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractVector) = adjA.parent * B
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractMatrix) = adjA.parent * B
-*(A::AbstractMatrix, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
-
-# ambiguities with transposed AbstractMatrix methods in linalg/matmul.jl
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA.parent * transB.parent
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexHerm}) = transA.parent * transB
-*(transA::Transpose{<:Any,<:RealHermSymComplexHerm}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA.parent * adjB.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexSym}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA * adjB.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexSym}) = adjA.parent * adjB
-
-# ambiguities with AbstractTriangular
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::AbstractTriangular) = transA.parent * B
-*(A::AbstractTriangular, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractTriangular) = adjA.parent * B
-*(A::AbstractTriangular, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
 for T in (:Symmetric, :Hermitian), op in (:*, :/)
     # Deal with an ambiguous case

@@ -362,6 +362,11 @@ diag(A::UnitLowerTriangular) = fill(one(eltype(A)), size(A,1))
 diag(A::UpperTriangular) = diag(A.data)
 diag(A::UnitUpperTriangular) = fill(one(eltype(A)), size(A,1))
 
+# MemoryLayout of triangular matrices
+struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UnitLowerTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UpperTriangularLayout{trans,T} <: MemoryLayout{T} end
+struct UnitUpperTriangularLayout{trans,T} <: MemoryLayout{T} end
 MemoryLayout(A::UpperTriangular) = trilayout(UpperTriangularLayout, LowerTriangularLayout, MemoryLayout(parent(A)))
 MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, UnitLowerTriangularLayout, MemoryLayout(parent(A)))
 MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, UpperTriangularLayout, MemoryLayout(parent(A)))

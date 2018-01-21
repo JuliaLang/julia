@@ -105,6 +105,11 @@ axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 
+# MemoryLayout of transposed and adjoint matrices
+struct TransposeLayout{T} <: MemoryLayout{T} end
+struct CTransposeLayout{T} <: MemoryLayout{T} end
+MemoryLayout(A::Adjoint) = adjoint(MemoryLayout(parent(A)))
+MemoryLayout(A::Transpose) = transpose(MemoryLayout(parent(A)))
 transpose(::MemoryLayout{T}) where {T} = UnknownLayout{T}()
 transpose(::AbstractStridedLayout{T}) where {T} = TransposeLayout{T}()
 transpose(::TransposeLayout{T}) where {T} = StridedLayout{T}()
@@ -112,8 +117,7 @@ adjoint(::MemoryLayout{T}) where {T} = UnknownLayout{T}()
 adjoint(M::MemoryLayout{T}) where {T<:Real} = transpose(M)
 adjoint(::AbstractStridedLayout{T}) where {T<:Complex} = CTransposeLayout{T}()
 adjoint(::CTransposeLayout{T}) where {T<:Complex} = StridedLayout{T}()
-MemoryLayout(A::Adjoint) = adjoint(MemoryLayout(parent(A)))
-MemoryLayout(A::Transpose) = transpose(MemoryLayout(parent(A)))
+
 
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i])
 @propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])

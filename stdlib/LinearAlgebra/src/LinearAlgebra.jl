@@ -164,23 +164,34 @@ end
 
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
-
 abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
 struct DenseLayout{T} <: AbstractStridedLayout{T} end
 struct StridedLayout{T} <: AbstractStridedLayout{T} end
 
-struct TransposeLayout{T} <: MemoryLayout{T} end
-struct CTransposeLayout{T} <: MemoryLayout{T} end
-struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UnitLowerTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UpperTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UnitUpperTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct SymmetricLayout{T} <: MemoryLayout{T}
-    uplo::Char
-end
-struct HermitianLayout{T} <: MemoryLayout{T}
-    uplo::Char
-end
+"""
+    UnknownLayout{T}()
+
+is returned by `MemoryLayout(A)` is unknown if or how the entries of an array `A`
+are stored in memory.
+"""
+UnknownLayout
+
+"""
+    DenseLayout{T}()
+
+is returned by `MemoryLayout(A)` if a matrix or vector `A` have the same storage as an
+`Array`. In other words, the entries are stored consecutively in memory, ordered by column.
+"""
+DenseLayout
+
+"""
+    StridedLayout{T}()
+
+is returned by `MemoryLayout(A)` if a matrix or vector `A` have the same storage as a
+strided array. 
+"""
+StridedLayout
+
 
 """
     MemoryLayout(A)

@@ -487,4 +487,29 @@ end
     end
 end
 
+@testset "Symmetric/Hermitian MemoryLayout" begin
+    A = [1.0 2; 3 4]
+    @test LinearAlgebra.MemoryLayout(Symmetric(A)) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Hermitian(A)) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Transpose(Symmetric(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Transpose(Hermitian(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Adjoint(Symmetric(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Adjoint(Hermitian(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
+    @test LinearAlgebra.MemoryLayout(Symmetric(A')) == LinearAlgebra.SymmetricLayout{Float64}('L')
+    @test LinearAlgebra.MemoryLayout(Hermitian(A')) == LinearAlgebra.SymmetricLayout{Float64}('L')
+    @test LinearAlgebra.MemoryLayout(Symmetric(transpose(A))) == LinearAlgebra.SymmetricLayout{Float64}('L')
+    @test LinearAlgebra.MemoryLayout(Hermitian(transpose(A))) == LinearAlgebra.SymmetricLayout{Float64}('L')
+    B = [1.0+im 2; 3 4]
+    @test LinearAlgebra.MemoryLayout(Symmetric(B)) == LinearAlgebra.SymmetricLayout{ComplexF64}('U')
+    @test LinearAlgebra.MemoryLayout(Hermitian(B)) == LinearAlgebra.HermitianLayout{ComplexF64}('U')
+    @test LinearAlgebra.MemoryLayout(Transpose(Symmetric(B))) == LinearAlgebra.SymmetricLayout{ComplexF64}('U')
+    @test LinearAlgebra.MemoryLayout(Transpose(Hermitian(B))) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(Adjoint(Symmetric(B))) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(Adjoint(Hermitian(B))) == LinearAlgebra.HermitianLayout{ComplexF64}('U')
+    @test LinearAlgebra.MemoryLayout(Symmetric(B')) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(Hermitian(B')) == LinearAlgebra.UnknownLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(Symmetric(transpose(B))) == LinearAlgebra.SymmetricLayout{ComplexF64}('L')
+    @test LinearAlgebra.MemoryLayout(Hermitian(transpose(B))) == LinearAlgebra.HermitianLayout{ComplexF64}('L')
+end
+
 end # module TestSymmetric

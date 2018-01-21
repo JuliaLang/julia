@@ -397,6 +397,7 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
+| `LinearAlgebra.MemoryLayout(A)`                 |                                        | Return `LinearAlgebra.DenseLayout{T}()` if memory is storage is dense or `LinearAlgebra.StridedLayout{T}()` otherwise.
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 
