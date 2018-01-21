@@ -113,7 +113,7 @@ julia [switches] -- [programfile] [args...]
 
  -p, --procs {N|auto}      Integer value N launches N additional local worker processes
                            "auto" launches as many workers as the number of local cores
- --machine-file <file>      Run processes on hosts listed in <file>
+ --machine-file <file>     Run processes on hosts listed in <file>
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
  -q, --quiet               Quiet startup: no banner, suppress REPL warnings
