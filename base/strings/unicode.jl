@@ -295,11 +295,12 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
-    ismalformed(c) && return Cint(31)
-    c ≤ '\U10ffff' || return Cint(30)
-    ccall(:utf8proc_category, Cint, (UInt32,), c)
+    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
 end
-category_code(x::Integer) = category_code(Char(x))
+
+function category_code(x::Integer)
+    x ≤ 0x10ffff ? ccall(:utf8proc_category, Cint, (UInt32,), x) : Cint(30)
+end
 
 # more human-readable representations of the category code
 function category_abbrev(c::Char)

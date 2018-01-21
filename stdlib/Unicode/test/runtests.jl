@@ -298,6 +298,7 @@ end
     @test !isassigned('\uffff')
     @test !isassigned(0xfffe)
     @test !isassigned(Int(0xffff))
+    @test !isassigned(typemax(Int64))
     @test !isassigned("\xf4\x90\x80\x80"[1])
     @test !isassigned("\xf7\xbf\xbf\xbf"[1])
     @test !isassigned("\xff"[1])
