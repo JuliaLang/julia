@@ -93,7 +93,7 @@ static const char opts[]  =
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local cores\n"
-    " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
+    " --machine-file <file>      Run processes on hosts listed in <file>\n\n"
 
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
@@ -191,7 +191,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
-        { "machinefile",     required_argument, 0, opt_machinefile },
+        { "machine-file",     required_argument, 0, opt_machinefile },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
