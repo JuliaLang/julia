@@ -35,7 +35,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
-                            NULL, // machinefile
+                            NULL, // machine_file
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -93,7 +93,7 @@ static const char opts[]  =
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local cores\n"
-    " --machine-file <file>      Run processes on hosts listed in <file>\n\n"
+    " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
@@ -144,6 +144,7 @@ static const char opts[]  =
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 {
     enum { opt_machinefile = 300,
+           opt_machine_file,
            opt_color,
            opt_history_file,
            opt_startup_file,
@@ -191,7 +192,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
-        { "machine-file",     required_argument, 0, opt_machinefile },
+        { "machinefile",     required_argument, 0, opt_machinefile },   // deprecated
+        { "machine-file",    required_argument, 0, opt_machine_file },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -388,6 +390,9 @@ restart_switch:
             }
             break;
         case opt_machinefile:
+            jl_printf(JL_STDOUT, "WARNING: julia --machinefile option is deprecated, use --machine-file instead.\n");
+            // fall through
+        case opt_machine_file:
             jl_options.machinefile = strdup(optarg);
             if (!jl_options.machinefile)
                 jl_error("julia: failed to allocate memory");

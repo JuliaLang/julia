@@ -1507,7 +1507,7 @@ Library improvements
 
     * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
 
-    * The `machinefile` now supports a host count ([#7616]).
+    * The `machine-file` now supports a host count ([#7616]).
 
     * `code_native` now outputs branch labels ([#8897]).
 
