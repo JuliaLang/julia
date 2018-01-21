@@ -137,6 +137,8 @@ Base.getsockname
 Base.getpeername
 Base.IPv4
 Base.IPv6
+Base.TCPSocket
+Base.UDPSocket
 Base.bytesavailable
 Base.accept
 Base.listenany
