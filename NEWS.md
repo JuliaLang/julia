@@ -692,6 +692,9 @@ Deprecated or removed
 
   * `nb_available` is now `bytesavailable` ([#25634]).
 
+  * `skipchars(io::IO, predicate; linecomment=nothing)` is deprecated in favor of
+    `skipchars(predicate, io::IO; linecomment=nothing)` ([#25667]).
+
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 

@@ -1592,6 +1592,10 @@ end
 
 @deprecate nb_available bytesavailable
 
+@deprecate skipchars(io::IO, predicate; linecomment=nothing) skipchars(predicate, io, linecomment=linecomment)
+# this method is to avoid ambiguity, delete at the same time as deprecation of skipchars above:
+skipchars(::IO, ::IO; linecomment=nothing) = throw(ArgumentError("the first argument of `skipchars` must be callable"))
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)
