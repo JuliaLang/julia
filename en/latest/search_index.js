@@ -5229,7 +5229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n"
 },
 
 {
@@ -7901,7 +7901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n"
 },
 
 {
@@ -9101,7 +9101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturn a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = RowVector([1+im, 1-im])\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -10325,7 +10325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.repr",
     "category": "Function",
-    "text": "repr(x)\n\nCreate a string from any value using the show function.\n\nExamples\n\njulia> repr(1)\n\"1\"\n\njulia> repr(zeros(3))\n\"[0.0, 0.0, 0.0]\"\n\n\n\n\n"
+    "text": "repr(x)\nrepr(x, context::Pair{Symbol,<:Any}...)\n\nCreate a string from any value using the show function. If context pairs are given, the IO buffer used to capture show output is wrapped in an IOContext object with those context pairs.\n\nExamples\n\njulia> repr(1)\n\"1\"\n\njulia> repr(zeros(3))\n\"[0.0, 0.0, 0.0]\"\n\n\n\n\n"
 },
 
 {
