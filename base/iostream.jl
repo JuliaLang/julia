@@ -213,23 +213,23 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 
 """
-    open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
+    open(filename::AbstractString; write::Bool = true, read::Bool = !write, create::Bool = true, truncate::Bool = true, append::Bool = true) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
 reading only. Return a stream for accessing the file.
 """
-function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
+function open(fname::AbstractString; write::Bool = false, read::Bool = !write, create::Bool = false, truncate::Bool = false, append::Bool = false)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, rd, wr, cr, tr) == C_NULL)
-    if ff
+                      s.ios, fname, read, write, create, truncate) == C_NULL)
+    if append
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
     end
     return s
 end
-open(fname::AbstractString) = open(fname, true, false, false, false, false)
+open(fname::AbstractString) = open(fname; read = true, write = false, create = false, truncate = false, append = false)
 
 """
     open(filename::AbstractString, [mode::AbstractString]) -> IOStream
@@ -277,19 +277,19 @@ julia> rm("myfile.txt")
 ```
 """
 function open(fname::AbstractString, mode::AbstractString)
-    mode == "r"  ? open(fname, true , false, false, false, false) :
-    mode == "r+" ? open(fname, true , true , false, false, false) :
-    mode == "w"  ? open(fname, false, true , true , true , false) :
-    mode == "w+" ? open(fname, true , true , true , true , false) :
-    mode == "a"  ? open(fname, false, true , true , false, true ) :
-    mode == "a+" ? open(fname, true , true , true , false, true ) :
+    mode == "r"  ? open(fname; read = true , write = false, create = false, truncate = false, append = false) :
+    mode == "r+" ? open(fname, read = true , write = true , create = false, truncate = false, append = false) :
+    mode == "w"  ? open(fname, read = false, write = true , create = true , truncate = true , append = false) :
+    mode == "w+" ? open(fname, read = true , write = true , create = true , truncate = true , append = false) :
+    mode == "a"  ? open(fname, read = false, write = true , create = true , truncate = false, append = true ) :
+    mode == "a+" ? open(fname, read = true , write = true , create = true , truncate = false, append = true ) :
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
 """
-    open(f::Function, args...)
+    open(f::Function, args...; kwargs....)
 
-Apply the function `f` to the result of `open(args...)` and close the resulting file
+Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
 descriptor upon completion.
 
 # Examples
@@ -304,8 +304,8 @@ julia> open(f->read(f, String), "myfile.txt")
 julia> rm("myfile.txt")
 ```
 """
-function open(f::Function, args...)
-    io = open(args...)
+function open(f::Function, args...; kwargs...)
+    io = open(args...; kwargs...)
     try
         f(io)
     finally
