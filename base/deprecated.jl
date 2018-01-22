@@ -1627,6 +1627,8 @@ export readandwrite
 # PR #25622
 @deprecate module_name(m::Module) nameof(m)
 @deprecate function_name(f::Function) nameof(f) false
+@deprecate datatype_name(t::DataType) nameof(t) false
+@deprecate datatype_name(t::UnionAll) nameof(t) false
 
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}

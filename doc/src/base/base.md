@@ -152,7 +152,7 @@ Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
 Base.isstructtype
-Base.datatype_name
+Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
 ```

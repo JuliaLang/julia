@@ -273,7 +273,7 @@ let
     @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
     @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
-    @test Base.datatype_name(Foo7648) == :Foo7648
+    @test nameof(Foo7648) == :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
     @test TestMod7648 == @which foo7648

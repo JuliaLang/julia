@@ -16,7 +16,7 @@ function character_codes(directives::SimpleVector)
     return letters
 end
 
-genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
+genvar(t::DataType) = Symbol(lowercase(string(nameof(t))))
 
 """
     tryparsenext_core(str::AbstractString, pos::Int, len::Int, df::DateFormat, raise=false)

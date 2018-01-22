@@ -143,9 +143,10 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
 
 """
-    Base.datatype_name(t) -> Symbol
+    nameof(t::DataType) -> Symbol
 
-Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
+as a symbol.
 
 # Examples
 ```jldoctest
@@ -155,12 +156,12 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_name(Foo.S{T} where T)
+julia> nameof(Foo.S{T} where T)
 :S
 ```
 """
-datatype_name(t::DataType) = t.name.name
-datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
+nameof(t::DataType) = t.name.name
+nameof(t::UnionAll) = nameof(unwrap_unionall(t))
 
 """
     parentmodule(t::DataType) -> Module
