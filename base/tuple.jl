@@ -18,7 +18,7 @@ NTuple
 length(t::Tuple) = nfields(t)
 endof(t::Tuple) = length(t)
 size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-@eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
+@eval getindex(t::Tuple, i::Int) = (@_inline_meta; getfield(t, i, $(Expr(:boundscheck))))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
@@ -55,7 +55,7 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
+indexed_next(t::Tuple, i::Int, state) = (@_inline_meta; (t[i], i+1))
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
 

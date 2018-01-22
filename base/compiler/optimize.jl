@@ -294,6 +294,9 @@ function optimize(me::InferenceState)
         gotoifnot_elim_pass!(opt)
         basic_dce_pass!(opt)
         void_use_elim_pass!(opt)
+        # Split builtins of union arguments to make them more amenable
+        # to code generation
+        late_builtin_splitting_pass!(opt)
         # Pop metadata before label reindexing
         let code = opt.src.code::Array{Any,1}
             meta_elim_pass!(code, coverage_enabled())
@@ -306,7 +309,7 @@ function optimize(me::InferenceState)
     end
 
     # convert all type information into the form consumed by the code-generator
-    widen_all_consts!(me.src)
+    widen_all_consts!(me, me.src)
 
     # compute inlining and other related properties
     me.const_ret = (isa(me.bestguess, Const) || isconstType(me.bestguess))
@@ -632,14 +635,16 @@ function type_annotate!(sv::InferenceState)
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
-    e.typ = widenconst(e.typ)
+function _widen_all_consts!(me, e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
+    e.typ = canonicalize_tuple_union(widenconst(e.typ),
+        me.params.MAX_UNION_CODGEN_EXPAND)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload, slottypes)
+            _widen_all_consts!(me, x, untypedload, slottypes)
         elseif isa(x, TypedSlot)
-            vt = widenconst(x.typ)
+            vt = canonicalize_tuple_union(widenconst(x.typ),
+                me.params.MAX_UNION_CODGEN_EXPAND)
             if !(vt === x.typ)
                 if slottypes[x.id] ⊑ vt
                     x = SlotNumber(x.id)
@@ -656,19 +661,21 @@ function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vecto
     nothing
 end
 
-function widen_all_consts!(src::CodeInfo)
+function widen_all_consts!(me, src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
-        src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
+        src.ssavaluetypes[i] = canonicalize_tuple_union(widenconst(src.ssavaluetypes[i]),
+            me.params.MAX_UNION_CODGEN_EXPAND)
     end
     for i = 1:length(src.slottypes)
-        src.slottypes[i] = widenconst(src.slottypes[i])
+        src.slottypes[i] = canonicalize_tuple_union(widenconst(src.slottypes[i]),
+            me.params.MAX_UNION_CODGEN_EXPAND)
     end
 
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
     e = Expr(:body)
     e.args = src.code
-    _widen_all_consts!(e, untypedload, src.slottypes)
+    _widen_all_consts!(me, e, untypedload, src.slottypes)
     for i = 1:nslots
         src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
     end
@@ -951,6 +958,144 @@ function get_spec_lambda(@nospecialize(atypes), sv::OptimizationState, @nospecia
     end
 end
 
+mutable struct isaNestState
+    error_label::Union{LabelNode, Nothing}
+    spec_miss::Union{LabelNode, Nothing}
+    isaNestState() = new(nothing, nothing)
+end
+
+function generate_isa_nest(basecase, sv, exargs, atypes, i = length(atypes), state = isaNestState())
+    i == 0 && return (basecase(atypes), state)
+    local ti = atypes[i]
+    if isa(ti, Union)
+        local all = true
+        local stmts = []
+        local aei = exargs[i]
+        for ty in uniontypes(ti::Union)
+            local ty
+            atypes[i] = ty
+            local match = generate_isa_nest(basecase, sv, exargs, atypes, i - 1, state)[1]
+            if match !== false
+                after = genlabel(sv)
+                isa_var = newvar!(sv, Bool)
+                isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
+                isa_ty.typ = Bool
+                pushfirst!(match, Expr(:gotoifnot, isa_var, after.label))
+                pushfirst!(match, Expr(:(=), isa_var, isa_ty))
+                append!(stmts, match)
+                push!(stmts, after)
+            else
+                all = false
+            end
+        end
+        if all
+            state.error_label === nothing && (state.error_label = genlabel(sv))
+            push!(stmts, GotoNode(state.error_label.label))
+        else
+            state.spec_miss === nothing && (state.spec_miss = genlabel(sv))
+            push!(stmts, GotoNode(state.spec_miss.label))
+        end
+        atypes[i] = ti
+        return (isempty(stmts) ? false : stmts, state)
+    else
+        return generate_isa_nest(basecase, sv, exargs, atypes, i - 1, state)
+    end
+end
+
+function split_builtin_call(e::Expr, sv::OptimizationState, stmtbuf)
+    ft = exprtype(e.args[1], sv.src, sv.mod)
+    isa(ft, Const) || return e
+    f = ft.val
+    isa(f, Builtin) || return e
+    splittable = (f === Main.Core.tuple || f === Main.Core.getfield)
+    splittable || return e
+    ata = Vector{Any}(uninitialized, length(e.args))
+    ata[1] = ft
+    anyunion = false
+    for i = 2:length(e.args)
+        a = exprtype(e.args[i], sv.src, sv.mod)
+        (a === Bottom || isvarargtype(a)) && return e
+        ata[i] = canonicalize_tuple_union(a,
+            sv.params.MAX_UNION_CODGEN_EXPAND)
+        if isa(ata[i], Union)
+            # Only do this optimization if everything is isbits,
+            # because those are the cases that are likely to be
+            # beneficial to codegen
+            for T in uniontypes(ata[i])
+                !isbits(T) && return e
+            end
+        elseif !isbits(ata[i])
+            return e
+        end
+        anyunion |= isa(ata[i], Union)
+    end
+    anyunion || return e
+    etype = e.typ
+    (countunionsplit(ata) > sv.params.MAX_UNION_CODGEN_EXPAND) && return e
+    ret_var = add_slot!(sv.src, widenconst(etype), false)
+    merge = genlabel(sv)
+    spec_hit = false
+    match, state = generate_isa_nest(sv, e.args, ata) do atypes
+        local stmts = []
+        spec_hit = true
+        ex = copy(e)
+        for i = 2:length(ex.args)
+            orig_type = exprtype(e.args[i], sv.src, sv.mod)
+            if atypes[i] !== orig_type && atypes[i] ⊑ orig_type
+                ssavar = newvar!(sv, atypes[i])
+                push!(stmts, Expr(:(=), ssavar, ex.args[i]))
+                ex.args[i] = ssavar
+            end
+            # Refine the type of the resulting expression - codegen uses it
+            ex.typ = builtin_tfunction(f, atypes[2:end], nothing, sv.params)
+        end
+        push!(stmts, Expr(:(=), ret_var, ex))
+        push!(stmts, GotoNode(merge.label))
+        stmts
+    end
+    (match === false || spec_hit === false) && return e
+    append!(stmtbuf, match)
+    if state.error_label !== nothing
+        push!(stmtbuf, state.error_label)
+        push!(stmtbuf, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)"))
+    end
+    if state.spec_miss !== nothing
+        push!(stmtbuf, state.spec_miss)
+        push!(stmtbuf, Expr(:(=), ret_var, e))
+        push!(stmtbuf, GotoNode(merge.label))
+    end
+    push!(stmtbuf, merge)
+    ret_var
+end
+
+function split_builtin_expr(e::Expr, sv::OptimizationState, stmtbuf)
+    if e.head === :call
+        return split_builtin_call(e, sv, stmtbuf)
+    elseif e.head === :(=) && isa(e.args[2], Expr)
+        e.args[2] = split_builtin_expr(e.args[2], sv, stmtbuf)
+    end
+    return e
+end
+
+function late_builtin_splitting_pass!(sv::OptimizationState)
+    eargs = sv.src.code
+    i = 0
+    stmtbuf = []
+    while i < length(eargs)
+        i += 1
+        ei = eargs[i]
+        if isa(ei, Expr)
+            (ei.head == :call || ei.head == :(=)) || continue
+            eargs[i] = split_builtin_expr(ei, sv, stmtbuf)
+            if !isempty(stmtbuf)
+                splice!(eargs, i:(i - 1), stmtbuf)
+                i += length(stmtbuf)
+                empty!(stmtbuf)
+            end
+        end
+    end
+end
+
 function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
                    @nospecialize(atype_unlimited), @nospecialize(invoke_data))
     # converts a :call to :invoke
@@ -968,8 +1113,6 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
     if nu > 1
         stmts = []
 
-        spec_miss = nothing
-        error_label = nothing
         ex = Expr(:call)
         ex.typ = etype
         ex.args = copy(argexprs)
@@ -983,66 +1126,28 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
         invoke_ex.head = :invoke
         pushfirst!(invoke_ex.args, nothing)
         spec_hit = false
-
-        function splitunion(atypes::Vector{Any}, i::Int)
-            if i == 0
-                local sig = argtypes_to_type(atypes)
-                local li = get_spec_lambda(sig, sv, invoke_data)
-                li === nothing && return false
-                add_backedge!(li, sv)
-                local stmt = []
-                invoke_ex = copy(invoke_ex)
-                invoke_ex.args[1] = li
-                push!(stmt, Expr(:(=), ret_var, invoke_ex))
-                push!(stmt, GotoNode(merge.label))
-                spec_hit = true
-                return stmt
-            else
-                local ti = atypes[i]
-                if isa(ti, Union)
-                    local all = true
-                    local stmts = []
-                    local aei = ex.args[i]
-                    for ty in uniontypes(ti::Union)
-                        local ty
-                        atypes[i] = ty
-                        local match = splitunion(atypes, i - 1)
-                        if match !== false
-                            after = genlabel(sv)
-                            isa_var = newvar!(sv, Bool)
-                            isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
-                            isa_ty.typ = Bool
-                            pushfirst!(match, Expr(:gotoifnot, isa_var, after.label))
-                            pushfirst!(match, Expr(:(=), isa_var, isa_ty))
-                            append!(stmts, match)
-                            push!(stmts, after)
-                        else
-                            all = false
-                        end
-                    end
-                    if all
-                        error_label === nothing && (error_label = genlabel(sv))
-                        push!(stmts, GotoNode(error_label.label))
-                    else
-                        spec_miss === nothing && (spec_miss = genlabel(sv))
-                        push!(stmts, GotoNode(spec_miss.label))
-                    end
-                    atypes[i] = ti
-                    return isempty(stmts) ? false : stmts
-                else
-                    return splitunion(atypes, i - 1)
-                end
-            end
+        local match, state
+        match, state = generate_isa_nest(sv, ex.args, atypes) do ats
+            local sig = argtypes_to_type(ats)
+            local li = get_spec_lambda(sig, sv, invoke_data)
+            li === nothing && return false
+            add_backedge!(li, sv)
+            local stmt = []
+            invoke_ex = copy(invoke_ex)
+            invoke_ex.args[1] = li
+            push!(stmt, Expr(:(=), ret_var, invoke_ex))
+            push!(stmt, GotoNode(merge.label))
+            spec_hit = true
+            return stmt
         end
-        local match = splitunion(atypes, length(atypes))
         if match !== false && spec_hit
             append!(stmts, match)
-            if error_label !== nothing
-                push!(stmts, error_label)
+            if state.error_label !== nothing
+                push!(stmts, state.error_label)
                 push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)"))
             end
-            if spec_miss !== nothing
-                push!(stmts, spec_miss)
+            if state.spec_miss !== nothing
+                push!(stmts, state.spec_miss)
                 push!(stmts, Expr(:(=), ret_var, ex))
                 push!(stmts, GotoNode(merge.label))
             end
@@ -2611,6 +2716,14 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
         # No NewvarNode def for variables that aren't used undefined
         defex = (def.assign::Expr).args[2]
         if isa(defex, SSAValue)
+            # Make sure that replacing the SSA value does not
+            # end up pessimizing the type information
+            if key[2]
+                if abstract_eval_ssavalue(SSAValue(key.first-1), ctx.sv.src) !=
+                    abstract_eval_ssavalue(defex, ctx.sv.src)
+                    return true
+                end
+            end
             new_key = (defex.id + 1)=>true
             if @isdefined(defkey) && defkey != new_key
                 return true
