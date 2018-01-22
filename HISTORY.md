@@ -873,7 +873,7 @@ Library improvements
        4     files in /Users/me/.julia/v0.5/Plots/src/deprecated
       ```
 
-    * A new function `chown()` changes the ownership of files ([#15007]).
+    * A new function `(chown)` changes the ownership of files ([#15007]).
 
     * Display properties can now be passed among output functions (e.g. `show`)
       using an `IOContext` object ([#13825]).
