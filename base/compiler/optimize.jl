@@ -3241,6 +3241,32 @@ function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     end
     return si
 end
+function structinfo_assign(ctx::AllocOptContext, rhs::Union{SSAValue,Slot}, vt::DataType)
+    nf = fieldcount(vt)
+    names = (vt <: Tuple ? Symbol[] : fieldnames(vt))
+    si = StructInfo(Vector{Any}(uninitialized, nf), names, vt, vt.mutable, false)
+    ninit = vt.ninitialized
+    for i in 1:nf
+        ft = fieldtype(vt, i)
+        if i <= ninit || isbits(ft)
+            fldval = Expr(:call, GlobalRef(Core, :getfield), rhs, i, true)
+        else
+            @assert false "unimplemented"
+            #fldval = Any[
+            #    Expr(:new, .lhs)
+            #    .defined = Expr(:call, GlobalRef(Core, :isdefined), rhs, i)
+            #    Expr(:gotoifnot, .defined, 5)
+            #    .lhs = Expr(:call, GlobalRef(Core, :getfield), rhs, i)
+            #    5:
+            #    ]
+            #ctx.undef_fld[i] = nothing
+            #ctx.undef_fld[si.names[i]] = nothing
+        end
+        fldval.typ = ft
+        si.defs[i] = fldval
+    end
+    return si
+end
 
 function split_struct_alloc!(ctx::AllocOptContext, info, key)
     # Collect information about each struct/tuple allocation
@@ -3261,13 +3287,19 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
             elseif defex.head === :new
                 typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
                 # typ <: Tuple shouldn't happen but just in case someone generated invalid AST
-                if !isa(typ, DataType) || !isdispatchelem(typ) || typ <: Tuple
+                if !isa(typ, DataType) || !isconcretetype(typ) || iskindtype(typ) || typ <: Tuple
                     return false
                 end
                 si = structinfo_new(ctx, defex, typ)
             else
                 return false
             end
+        elseif isa(defex, Slot) || isa(defex, SSAValue)
+            typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+            if !isa(typ, DataType) || typ.mutable || typ.abstract || isvatuple(typ) || typ.ninitialized != fieldcount(typ)
+                return false
+            end
+            si = structinfo_assign(ctx, defex, typ)
         else
             v = exprtype(defex, ctx.sv.src, ctx.sv.mod)
             isa(v, Const) || return false
@@ -3363,6 +3395,8 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
     #     for preserved objects.
     #     Currently also require single assignment.
     #     Lifting this requirement is certainly possible but harder to implement....
+    #
+    # * future work: add support for `isa` and `typeof`
 
     has_preserve = false
     has_setfield_undef = false
@@ -3462,6 +3496,9 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
         split_struct_alloc_multi!(ctx, info, key)
     end
     delete_valueinfo!(ctx, key)
+    for def in info.defs
+        maybe_add_allocopt_todo(ctx, (def.assign::Expr).args[2])
+    end
     return true
 end
 
