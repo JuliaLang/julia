@@ -144,7 +144,6 @@ static const char opts[]  =
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 {
     enum { opt_machinefile = 300,
-           opt_machine_file,
            opt_color,
            opt_history_file,
            opt_startup_file,
@@ -170,7 +169,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_incremental,
            opt_banner,
            opt_sysimage_native_code,
-           opt_compiled_modules
+           opt_compiled_modules,
+           opt_machine_file,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
