@@ -352,6 +352,22 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+"""
+    promote_op(f, argtypes...)
+
+Guess what an appropriate container eltype would be for storing results of
+`f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
+
+!!! warning
+    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
+    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
+    should _not_ be used e.g. in the preallocation of an output array.
+
+!!! warning
+    Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
+    the container eltype on the type of the actual elements. Only in the absence of any
+    elements (for an empty result container), it may be unavoidable to call `promote_op`.
+"""
 promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
