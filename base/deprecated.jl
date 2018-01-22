@@ -1648,6 +1648,7 @@ export readandwrite
 @deprecate indmax argmax
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
+@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
