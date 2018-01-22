@@ -179,7 +179,7 @@ function formatdoc(d::DocStr)
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.parse(seekstart(buffer))
+    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
