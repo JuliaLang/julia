@@ -115,15 +115,6 @@ factorize(D::Diagonal) = D
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
-function copyto!(dest::Diagonal, bc::Broadcasted{PromoteToSparse})
-    axs = axes(dest)
-    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    for i in axs[1]
-        dest.diag[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
-    end
-    dest
-end
-
 istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)

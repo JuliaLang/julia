@@ -119,9 +119,6 @@ BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
 # 3 or more arguments still return an `ArrayConflict`.
 struct ArrayConflict <: AbstractArrayStyle{Any} end
 
-# This will be used for Diagonal, Bidiagonal, Tridiagonal, and SymTridiagonal
-struct PromoteToSparse <: Broadcast.AbstractArrayStyle{2} end
-
 ### Binary BroadcastStyle rules
 """
     BroadcastStyle(::Style1, ::Style2) = Style3()

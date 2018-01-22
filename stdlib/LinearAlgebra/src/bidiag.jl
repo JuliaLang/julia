@@ -172,24 +172,6 @@ Bidiagonal{T}(A::Bidiagonal) where {T} =
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-function copyto!(dest::Bidiagonal, bc::Broadcasted{PromoteToSparse})
-    axs = axes(dest)
-    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    for i in axs[1]
-        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
-    end
-    if dest.uplo == 'U'
-        for i = 1:size(dest, 1)-1
-            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        end
-    else
-        for i = 1:size(dest, 1)-1
-            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
-        end
-    end
-    dest
-end
-
 # For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.

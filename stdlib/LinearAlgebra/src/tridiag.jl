@@ -114,18 +114,6 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # The method below is moved to SparseArrays for now
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
-function copyto!(dest::SymTridiagonal, bc::Broadcasted{PromoteToSparse})
-    axs = axes(dest)
-    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    for i in axs[1]
-        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
-    end
-    for i = 1:size(dest, 1)-1
-        dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-    end
-    dest
-end
-
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
@@ -575,18 +563,6 @@ function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::Ab
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
-function copyto!(dest::Tridiagonal, bc::Broadcasted{PromoteToSparse})
-    axs = axes(dest)
-    axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    for i in axs[1]
-        dest.d[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
-    end
-    for i = 1:size(dest, 1)-1
-        dest.du[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        dest.dl[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
-    end
-    dest
-end
 
 #tril and triu
 
