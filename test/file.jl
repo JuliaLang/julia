@@ -166,7 +166,7 @@ rm(c_tmpdir, recursive=true)
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
-        chown(file, owner = nothing)  # Change the file owner to nobody
+        chown(file, owner = missing)  # Change the file owner to nobody
         @test stat(file).uid !=0
         chown(file, owner = 0, group = missing)  # Change the file group to nogroup (and owner back to root)
         @test stat(file).gid !=0
