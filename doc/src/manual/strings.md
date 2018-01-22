@@ -168,9 +168,6 @@ julia> """Contains "quote" characters"""
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
-julia> str[begin]
-'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
-
 julia> str[1]
 'H': ASCII/Unicode U+0048 (category Lu: Letter, uppercase)
 
@@ -183,8 +180,8 @@ julia> str[end]
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
 element is returned by [`firstindex(str)`](@ref), and the index of the last element
-with [`lastindex(str)`](@ref). The keywords `begin` and `end` can be used inside an indexing
-operation as shorthand for the first and last index along the given dimension.
+with [`lastindex(str)`](@ref). The keyword`end` can be used inside an indexing
+operation as shorthand for the last index along the given dimension.
 Most indexing in Julia is 1-based: the first element of many integer-indexed objects is found at
 index 1. (As we will see below, this does not necessarily mean that the last element is found
 at index `n`, where `n` is the length of the string.)
@@ -203,7 +200,7 @@ julia> str[end÷2]
 Using an index less than 1 or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
-julia> str[begin-1]
+julia> str[0]
 ERROR: BoundsError: attempt to access "Hello, world.\n"
   at index [0]
 [...]

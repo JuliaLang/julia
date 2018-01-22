@@ -44,9 +44,6 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
-  * `a[begin]` can now be used to address the first element of an integer-indexed collection `a`.
-    The index is computed by `firstindex(a)` ([#23554]).
-
 Language changes
 ----------------
 
