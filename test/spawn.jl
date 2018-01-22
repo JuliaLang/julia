@@ -337,13 +337,13 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
-    @test bytesavailable(out) == 0
+    @test nbytesavailable(out) == 0
     @test endswith(readuntil(out, '1'), '1')
     @test Char(read(out, UInt8)) == '\t'
     c = UInt8[0]
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
-    @test bytesavailable(out) > 0
+    @test nbytesavailable(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
     desc = read(out, String)
@@ -352,7 +352,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test !isopen(out)
     @test infd != Base._fd(out.in) == Base.INVALID_OS_HANDLE
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
-    @test bytesavailable(out) == 0
+    @test nbytesavailable(out) == 0
     @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello"
     @test ln1 == "orld"

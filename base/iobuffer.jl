@@ -147,7 +147,7 @@ show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
 
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
-    avail = bytesavailable(from)
+    avail = nbytesavailable(from)
     adv = min(avail, nb)
     GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
     from.ptr += adv
@@ -200,8 +200,8 @@ iswritable(io::GenericIOBuffer) = io.writable
 
 # TODO: GenericIOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
-#length(io::GenericIOBuffer) = (io.seekable ? io.size : bytesavailable(io))
-bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
+#length(io::GenericIOBuffer) = (io.seekable ? io.size : nbytesavailable(io))
+nbytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 position(io::GenericIOBuffer) = io.ptr-1
 
 function skip(io::GenericIOBuffer, n::Integer)
@@ -251,10 +251,10 @@ function compact(io::GenericIOBuffer)
     if ismarked(io) && io.mark < io.ptr
         if io.mark == 0 return end
         ptr = io.mark
-        bytes_to_move = bytesavailable(io) + (io.ptr-io.mark)
+        bytes_to_move = nbytesavailable(io) + (io.ptr-io.mark)
     else
         ptr = io.ptr
-        bytes_to_move = bytesavailable(io)
+        bytes_to_move = nbytesavailable(io)
     end
     copyto!(io.data, 1, io.data, ptr, bytes_to_move)
     io.size -= ptr - 1
@@ -305,7 +305,7 @@ eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
     nothing
 end
 
-isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || bytesavailable(io) > 0
+isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || nbytesavailable(io) > 0
 
 """
     take!(b::IOBuffer)
@@ -330,7 +330,7 @@ function take!(io::GenericIOBuffer)
         nbytes = io.size
         data = copyto!(StringVector(nbytes), 1, io.data, 1, nbytes)
     else
-        nbytes = bytesavailable(io)
+        nbytes = nbytesavailable(io)
         data = read!(io,StringVector(nbytes))
     end
     if io.writable
@@ -351,7 +351,7 @@ function take!(io::IOBuffer)
         end
         resize!(data,io.size)
     else
-        nbytes = bytesavailable(io)
+        nbytes = nbytesavailable(io)
         a = StringVector(nbytes)
         data = read!(io, a)
     end
@@ -367,7 +367,7 @@ function write(to::GenericIOBuffer, from::GenericIOBuffer)
         from.ptr = from.size + 1
         return 0
     end
-    written::Int = write_sub(to, from.data, from.ptr, bytesavailable(from))
+    written::Int = write_sub(to, from.data, from.ptr, nbytesavailable(from))
     from.ptr += written
     return written
 end
@@ -415,20 +415,20 @@ end
 
 readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
 function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
-    nr = min(nb, bytesavailable(io))
+    nr = min(nb, nbytesavailable(io))
     if length(b) < nr
         resize!(b, nr)
     end
     read_sub(io, b, 1, nr)
     return nr
 end
-read(io::GenericIOBuffer) = read!(io,StringVector(bytesavailable(io)))
+read(io::GenericIOBuffer) = read!(io,StringVector(nbytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
-read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
+read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nbytesavailable(io))))
 
 function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,bytesavailable(buf))
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,nbytesavailable(buf))
     q == C_NULL && return nothing
     return Int(q-p+1)
 end
@@ -472,10 +472,10 @@ end
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
-    n = min(nb, bytesavailable(io))
+    n = min(nb, nbytesavailable(io))
     n == 0 && return crc
     crc = GC.@preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
     io.ptr += n
     return crc
 end
-_crc32c(io::IOBuffer, crc::UInt32=0x00000000) = _crc32c(io, bytesavailable(io), crc)
+_crc32c(io::IOBuffer, crc::UInt32=0x00000000) = _crc32c(io, nbytesavailable(io), crc)

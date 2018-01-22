@@ -338,7 +338,7 @@ let buf = IOBuffer()
     LineEdit.edit_move_left(buf)
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
-    @test bytesavailable(buf) == 0
+    @test nbytesavailable(buf) == 0
     LineEdit.edit_backspace(buf, false, false)
     @test content(buf) == "a"
 end

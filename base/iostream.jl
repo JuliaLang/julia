@@ -326,9 +326,9 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
 end
 
 # num bytes available without blocking
-bytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+nbytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, bytesavailable(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, nbytesavailable(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
