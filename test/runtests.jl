@@ -1157,6 +1157,14 @@ end
 @test parentmodule(Int) == Core
 @test parentmodule(Array) == Core
 
+# 0.7.0-DEV.3382
+module TestLibdl
+    using Compat
+    using Compat.Libdl
+    using Compat.Test
+    @test isdefined(@__MODULE__, :Libdl)
+end
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
