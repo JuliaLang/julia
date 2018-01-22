@@ -459,7 +459,7 @@ end
 
 @deprecate read(cmd::AbstractCmd, stdin::Redirectable) read(pipeline(stdin, cmd))
 @deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
-@deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
+@deprecate eachline(cmd::AbstractCmd, stdin; kw...) eachline(pipeline(stdin, cmd), kw...)
 
 @deprecate showall(x)     show(x)
 @deprecate showall(io, x) show(IOContext(io, :limit => false), x)

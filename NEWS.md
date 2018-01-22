@@ -196,6 +196,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `readuntil` now does *not* include the delimiter in its result, matching the
+    behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 

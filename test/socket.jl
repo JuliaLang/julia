@@ -371,7 +371,7 @@ end
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
-    @test readuntil(P, 'w') == "llow"
+    @test readuntil(P, 'w') == "llo"
     Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
