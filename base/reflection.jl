@@ -3,17 +3,17 @@
 # name and module reflection
 
 """
-    module_name(m::Module) -> Symbol
+    nameof(m::Module) -> Symbol
 
 Get the name of a `Module` as a `Symbol`.
 
 # Examples
 ```jldoctest
-julia> module_name(Base)
+julia> nameof(Base)
 :Base
 ```
 """
-module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
     parentmodule(m::Module) -> Module
@@ -56,7 +56,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
-    mn = module_name(m)
+    mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
     end

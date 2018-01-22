@@ -230,7 +230,7 @@ module TestModSub9475
     let
         @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-        @test Base.module_name(@__MODULE__) == :TestModSub9475
+        @test Base.nameof(@__MODULE__) == :TestModSub9475
         @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
         @test Base.parentmodule(@__MODULE__) == TestMod7648
     end
@@ -241,7 +241,7 @@ using .TestModSub9475
 let
     @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
     @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
-    @test Base.module_name(@__MODULE__) == :TestMod7648
+    @test Base.nameof(@__MODULE__) == :TestMod7648
     @test Base.parentmodule(@__MODULE__) == curmod
 end
 end # module TestMod7648

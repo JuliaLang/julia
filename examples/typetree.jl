@@ -79,7 +79,7 @@ function store_all_from(m::Module)
             t = getfield(m, s)
             if isa(t, Type) && t !== Union{}
                 store_type(Binding(m, s), t)
-            elseif isa(t, Module) && module_name(t) === s && parentmodule(t) === m && t !== m
+            elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m && t !== m
                 store_all_from(t)
             end
         end

@@ -1624,6 +1624,9 @@ export readandwrite
 @deprecate function_module(f::Function) parentmodule(f) false
 @deprecate function_module(f, t) parentmodule(f, t) false
 
+# PR #25622
+@deprecate module_name(m::Module) nameof(m)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 

@@ -14,7 +14,7 @@ AbstractArray
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # catch undefined constructors before the deprecation kicks in
 # TODO: remove when deprecation is removed
 function (::Type{T})(arg) where {T<:AbstractArray}

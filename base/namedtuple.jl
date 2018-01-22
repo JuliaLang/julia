@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if module_name(@__MODULE__) === :Base
+if nameof(@__MODULE__) === :Base
 
 """
     NamedTuple{names,T}(args::Tuple)

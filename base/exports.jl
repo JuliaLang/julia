@@ -792,7 +792,7 @@ export
     hasmethod,
     methods,
     methodswith,
-    module_name,
+    nameof,
     parentmodule,
     names,
     varinfo,

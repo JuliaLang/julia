@@ -332,7 +332,7 @@ Base.AsyncCondition(::Function)
 ## Reflection
 
 ```@docs
-Base.module_name
+Base.nameof(::Module)
 Base.parentmodule
 Base.@__MODULE__
 Base.fullname
