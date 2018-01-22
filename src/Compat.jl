@@ -1301,6 +1301,15 @@ if !isdefined(Base, :findall)
     export findall
 end
 
+@static if !isdefined(Base, :parentmodule)
+    parentmodule(m::Module) = Base.module_parent(m)
+    parentmodule(f::Function) = Base.function_module(f)
+    parentmodule(@nospecialize(f), @nospecialize(t)) = Base.function_module(f, t)
+    parentmodule(t::DataType) = Base.datatype_module(t)
+    parentmodule(t::UnionAll) = Base.datatype_module(Base.unwrap_unionall(t))
+    export parentmodule
+end
+
 include("deprecated.jl")
 
 end # module Compat
