@@ -1039,7 +1039,9 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
             append!(stmts, match)
             if error_label !== nothing
                 push!(stmts, error_label)
-                push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)"))
+                error_call = Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)")
+                error_call.typ = Union{}
+                push!(stmts, error_call)
             end
             if spec_miss !== nothing
                 push!(stmts, spec_miss)
@@ -1449,7 +1451,9 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     lastexpr = pop!(body.args)
     if isa(lastexpr, LabelNode)
         push!(body.args, lastexpr)
-        push!(body.args, Expr(:call, GlobalRef(topmod, :error), "fatal error in type inference (lowering)"))
+        error_call = Expr(:call, GlobalRef(topmod, :error), "fatal error in type inference (lowering)")
+        error_call.typ = Union{}
+        push!(body.args, error_call)
         lastexpr = nothing
     elseif !(isa(lastexpr, Expr) && lastexpr.head === :return)
         # code sometimes ends with a meta node, e.g. inbounds pop
