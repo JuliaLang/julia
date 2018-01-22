@@ -286,7 +286,7 @@ function process_options(opts::JLOptions)
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
     # Load Distributed module only if any of the Distributed options have been specified.
-    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machinefile != C_NULL)
+    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         eval(Main, :(using Distributed))
         invokelatest(Main.Distributed.process_opts, opts)

@@ -393,8 +393,8 @@ restart_switch:
             jl_printf(JL_STDOUT, "WARNING: julia --machinefile option is deprecated, use --machine-file instead.\n");
             // fall through
         case opt_machine_file:
-            jl_options.machinefile = strdup(optarg);
-            if (!jl_options.machinefile)
+            jl_options.machine_file = strdup(optarg);
+            if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
         case opt_color:

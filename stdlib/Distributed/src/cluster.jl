@@ -1144,8 +1144,8 @@ function process_opts(opts)
     end
 
     # load processes from machine file
-    if opts.machinefile != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    if opts.machine_file != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
     end
     return nothing
 end
