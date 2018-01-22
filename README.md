@@ -480,4 +480,5 @@ includes this fix. Find the minimum version from there.
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
