@@ -15,6 +15,7 @@
 
 #include "htable.h"
 #include "arraylist.h"
+#include "analyzer_annotations.h"
 
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
