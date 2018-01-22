@@ -219,7 +219,7 @@ const COMMAND_GROUPS =
 
 const COMMAND_GROUP = Dict(command=>group for (group, commands) in COMMAND_GROUPS for command in commands)
 command_group(command::Symbol) = get(COMMAND_GROUP, command, :nogroup)
-command_group(command::Function) = command_group(Base.function_name(command))
+command_group(command::Function) = command_group(Base.nameof(command))
 
 # return true if command should keep active a region
 function preserve_active(command::Symbol)

@@ -964,7 +964,9 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
-  * `module_name` has been deprecated in favor of a new, general `nameof` function ([#25622]).
+  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
+    the unexported `Base.function_name` has been deprecated in favor of a `nameof` method
+    ([#25622]).
 
   * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
 

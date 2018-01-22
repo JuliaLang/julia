@@ -266,7 +266,7 @@ let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-    @test Base.function_name(foo7648) == :foo7648
+    @test nameof(foo7648) == :foo7648
     @test parentmodule(foo7648, (Any,)) == TestMod7648
     @test parentmodule(foo7648) == TestMod7648
     @test parentmodule(foo7648_nomethods) == TestMod7648

@@ -1017,11 +1017,11 @@ end
 
 # function reflection
 """
-    Base.function_name(f::Function) -> Symbol
+    nameof(f::Function) -> Symbol
 
 Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
-function_name(f::Function) = typeof(f).name.mt.name
+nameof(f::Function) = typeof(f).name.mt.name
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
