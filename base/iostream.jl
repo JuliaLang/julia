@@ -213,12 +213,12 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 
 """
-    open(filename::AbstractString; read::Bool = true, write::Bool = true, create::Bool = true, truncate::Bool = true, append::Bool = true) -> IOStream
+    open(filename::AbstractString; write::Bool = true, read::Bool = !write, create::Bool = true, truncate::Bool = true, append::Bool = true) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
 reading only. Return a stream for accessing the file.
 """
-function open(fname::AbstractString; read::Bool = true, write::Bool = false, create::Bool = false, truncate::Bool = false, append::Bool = false)
+function open(fname::AbstractString; write::Bool = false, read::Bool = !write, create::Bool = false, truncate::Bool = false, append::Bool = false)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Cvoid},
