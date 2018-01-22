@@ -1631,8 +1631,8 @@ export readandwrite
 @deprecate indmin argmin
 @deprecate indmax argmax
 
-@deprecate changeownerpath, owner) changeownerpath, owner = owner)
-@deprecate changeownerpath, owner, group) changeownerpath, owner = owner, group = group)
+@deprecate chown(path, owner) chown(path, owner = owner)
+@deprecate chown(path, owner, group) chown(path, owner = owner, group = group)
 
 # END 0.7 deprecations
 
