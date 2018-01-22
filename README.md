@@ -116,6 +116,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Random` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#24874]).
 
+* `using Compat.Libdl` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#25459]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -293,6 +296,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `module_parent`, `Base.function_module`, and `Base.datatype_module` are now methods of
   a new function called `parentmodule` ([#25629]).
+
+* `find` is now `findall` ([#25545]).
 
 ## New macros
 
@@ -473,4 +478,7 @@ includes this fix. Find the minimum version from there.
 [#25227]: https://github.com/JuliaLang/julia/issues/25227
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
+[#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
