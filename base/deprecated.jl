@@ -1626,6 +1626,17 @@ export readandwrite
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
+@deprecate open(filename::AbstractString, read::Bool) open(filename, read = read)
+@deprecate open(filename::AbstractString, read::Bool, write::Bool) open(filename, read = read, write = write)
+@deprecate open(filename::AbstractString, read::Bool, write::Bool, create::Bool) open(filename, read = read, write = write, create = create)
+@deprecate open(filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool) open(filename, read = read, write = write, create = create, truncate = truncate)
+@deprecate open(filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool) open(filename, read = read, write = write, create = craete, truncate = truncate, append = append)
+@deprecate open(f::Function, filename::AbstractString, read::Bool) open(filename, read = read)
+@deprecate open(f::Function, filename::AbstractString, read::Bool, write::Bool) open(filename, read = read, write = write)
+@deprecate open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool) open(filename, read = read, write = write, create = create)
+@deprecate open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool) open(filename, read = read, write = write, create = create, truncate = truncate)
+@deprecate open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool) open(filename, read = read, write = write, create = craete, truncate = truncate, append = append)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
