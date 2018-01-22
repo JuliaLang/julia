@@ -216,6 +216,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * Constructors for `Matrix{T}`, `Array{T}`, and `SparseMatrixCSC{T}` from `UniformScaling` ([#24372], [#24657])
 
+* Constructor for `Matrix` from `UniformScaling` ([#24372], [#24657]).
+
 * `Uninitialized` and `uninitialized` with corresponding `Array` constructors ([#24652]).
 
 * `BitArray` constructors for `uninitialized` ([#24785]).

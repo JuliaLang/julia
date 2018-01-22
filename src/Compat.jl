@@ -922,6 +922,9 @@ end
     (::Type{Array{T}}){T}(s::UniformScaling, dims::Dims{2}) = Matrix{T}(s, dims)
     (::Type{Array{T}}){T}(s::UniformScaling, m::Integer, n::Integer) = Matrix{T}(s, m, n)
 end
+@static if VERSION < v"0.7.0-DEV.2541"
+    (::Type{Matrix})(s::UniformScaling{T}, dims...) where {T} = Matrix{T}(s, dims...)
+end
 
 # https://github.com/JuliaLang/julia/pull/23271
 @static if VERSION < v"0.7.0-DEV.1472"
