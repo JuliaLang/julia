@@ -224,7 +224,7 @@ function open(fname::AbstractString; read::Bool = true, write::Bool = false, cre
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, read, write, create, truncate) == C_NULL)
-    if apend
+    if append
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
     end
     return s
