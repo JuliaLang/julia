@@ -964,6 +964,9 @@ Deprecated or removed
 
   * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
 
+  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
+    `Random.RandomDevice(; unlimited=unlimited)` ([#25668]).
+
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).

@@ -22,3 +22,6 @@ end
 # PR #25429
 @deprecate rand(r::AbstractRNG, dims::Dims) rand(r, Float64, dims)
 @deprecate rand(                dims::Dims) rand(Float64, dims)
+
+# PR #25668
+@deprecate RandomDevice(unlimited::Bool) RandomDevice(; unlimited=unlimited)
