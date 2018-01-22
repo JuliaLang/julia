@@ -4,43 +4,48 @@ function transform!(context::T) where {T<:SHA3_CTX}
     for idx in 1:div(blocklen(T),8)
         context.state[idx] = context.state[idx] ⊻ unsafe_load(pbuf, idx)
     end
-    bc = Vector{UInt64}(uninitialized, 5)
+    bc = context.bc
+    state = context.state
 
     # We always assume 24 rounds
-    for round in 0:23
+    @inbounds for round in 0:23
         # Theta function
         for i in 1:5
-            bc[i] = context.state[i] ⊻ context.state[i + 5] ⊻ context.state[i + 10] ⊻ context.state[i + 15] ⊻ context.state[i + 20]
+            bc[i] = state[i] ⊻ state[i + 5] ⊻ state[i + 10] ⊻ state[i + 15] ⊻ state[i + 20]
         end
 
-        for i in 1:5
-            temp = bc[mod1(i + 4, 5)] ⊻ L64(1, bc[mod1(i + 1, 5)])
-            for j in 0:5:20
-                context.state[i + j] = context.state[i + j] ⊻ temp
+        for i in 0:4
+            temp = bc[rem(i + 4, 5) + 1] ⊻ L64(1, bc[rem(i + 1, 5) + 1])
+            j = 0
+            while j <= 20
+                state[Int(i + j + 1)] = state[i + j + 1] ⊻ temp
+                j += 5
             end
         end
 
         # Rho Pi
-        temp = context.state[2]
+        temp = state[2]
         for i in 1:24
             j = SHA3_PILN[i]
-            bc[1] = context.state[j]
-            context.state[j] = L64(SHA3_ROTC[i], temp)
+            bc[1] = state[j]
+            state[j] = L64(SHA3_ROTC[i], temp)
             temp = bc[1]
         end
 
         # Chi
-        for j in 0:5:20
+        j = 0
+        while j <= 20
             for i in 1:5
-                bc[i] = context.state[i + j]
+                bc[i] = state[i + j]
             end
-            for i in 1:5
-                context.state[j + i] = context.state[j + i] ⊻ (~bc[mod1(i + 1, 5)] & bc[mod1(i + 2, 5)])
+            for i in 0:4
+                state[j + i + 1] = state[j + i + 1] ⊻ (~bc[rem(i + 1, 5) + 1] & bc[rem(i + 2, 5) + 1])
             end
+            j += 5
         end
 
         # Iota
-        context.state[1] = context.state[1] ⊻ SHA3_ROUND_CONSTS[round+1]
+        state[1] = state[1] ⊻ SHA3_ROUND_CONSTS[round+1]
     end
 
     return context.state

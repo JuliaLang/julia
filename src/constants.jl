@@ -123,7 +123,7 @@ const SHA3_ROTC = UInt64[
 ]
 
 # Permutation indices for SHA3 rounds (+1'ed so as to work with julia's 1-based indexing)
-const SHA3_PILN = UInt64[
+const SHA3_PILN = Int[
     11, 8,  12, 18, 19, 4, 6,  17, 9,  22, 25, 5,
     16, 24, 20, 14, 13, 3, 21, 15, 23, 10,  7,  2
 ]

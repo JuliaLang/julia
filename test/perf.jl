@@ -12,7 +12,7 @@ function do_tests(filepath)
     print("read:    ")
     @time begin
         const fh = open(filepath, "r")
-        const bytes = readbytes(fh)
+        const bytes = read(fh)
     end
     gc()
 
