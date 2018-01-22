@@ -646,9 +646,8 @@ sentinel_code(a) = ArgumentError("$a is not an integer, nothing, or missing")
     chown(path::AbstractString; owner = nothing, group = nothing)
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If left as
-`nothing`, then the they won't be changed, it set to `missing`, they will be
-removed. ; if set to If the value entered for `owner` or `group`
-is `-1` the corresponding ID will not change. Otherwise,
+`nothing`, then the they won't be changed. If set to `missing`, they will be
+removed.
 """
 function chown(path::AbstractString; owner = nothing, group = nothing)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint),
