@@ -672,7 +672,7 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types, expand_generated = true)
+    code_lowered(f, types; expand_generated = true)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
@@ -685,7 +685,7 @@ yielded by expanding the generators.
 Note that an error will be thrown if `types` are not leaf types when `expand_generated` is
 `true` and the corresponding method is a `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); expand_generated::Bool = true)
     return map(method_instances(f, t)) do m
         if expand_generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
