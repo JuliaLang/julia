@@ -297,4 +297,8 @@ end
     end
 end
 
+@testset "has_bottom_parameter with Union{} in tvar bound" begin
+    @test Base.has_bottom_parameter(Ref{<:Union{}})
+end
+
 nothing # don't return a module from the remote include
