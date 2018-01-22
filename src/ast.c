@@ -682,7 +682,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        jl_value_t *file = jl_fieldref(v,1); // non-allocating
+        jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
         jl_value_t *line = jl_fieldref(v,0); // allocating
         value_t args = julia_to_list2(fl_ctx, line, file);
         fl_gc_handle(fl_ctx, &args);
