@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, findall, findnz
+import Base: sort, findall
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -716,19 +716,9 @@ function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     nzind = x.nzind
     nzval = x.nzval
 
-    count = 1
     @inbounds for i = 1 : numnz
-        if nzval[i] != 0
-            I[count] = nzind[i]
-            V[count] = nzval[i]
-            count += 1
-        end
-    end
-
-    count -= 1
-    if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(V, (count+1):numnz)
+        I[i] = nzind[i]
+        V[i] = nzval[i]
     end
 
     return (I, V)

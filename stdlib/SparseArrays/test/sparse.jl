@@ -2204,3 +2204,8 @@ end
     v[1] = 2
     @test A[1,1] == 2
 end
+
+@testset "findnz on non-sparse arrays" begin
+    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
+    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
+end
