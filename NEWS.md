@@ -308,7 +308,9 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
-  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+  * `indmin` and `indmax` have been renamed to `argmin` and `argmax`, respectively ([#25654]).
+
+  * `findmin`, `findmax`, `argmin`, and `argmax` used to always return linear indices.
     They now return `CartesianIndex`es for all but 1-d arrays, and in general return
     the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
 
@@ -1238,3 +1240,4 @@ Command-line option changes
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
+[#25654]: https://github.com/JuliaLang/julia/issues/25654

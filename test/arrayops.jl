@@ -505,9 +505,9 @@ end
     @test findlast(equalto(2), g3) === nothing
 end
 
-@testset "findmin findmax indmin indmax" begin
-    @test indmax([10,12,9,11]) == 2
-    @test indmin([10,12,9,11]) == 3
+@testset "findmin findmax argmin argmax" begin
+    @test argmax([10,12,9,11]) == 2
+    @test argmin([10,12,9,11]) == 3
     @test findmin([NaN,3.2,1.8]) === (NaN,1)
     @test findmax([NaN,3.2,1.8]) === (NaN,1)
     @test findmin([NaN,3.2,1.8,NaN]) === (NaN,1)
@@ -517,13 +517,13 @@ end
 
     #14085
     @test findmax(4:9) == (9,6)
-    @test indmax(4:9) == 6
+    @test argmax(4:9) == 6
     @test findmin(4:9) == (4,1)
-    @test indmin(4:9) == 1
+    @test argmin(4:9) == 1
     @test findmax(5:-2:1) == (5,1)
-    @test indmax(5:-2:1) == 1
+    @test argmax(5:-2:1) == 1
     @test findmin(5:-2:1) == (1,3)
-    @test indmin(5:-2:1) == 3
+    @test argmin(5:-2:1) == 3
 
     #23094
     @test_throws MethodError findmax(Set(["abc"]))

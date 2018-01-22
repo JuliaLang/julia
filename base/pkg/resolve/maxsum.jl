@@ -244,7 +244,7 @@ function getsolution(msgs::Messages)
     sol = Vector{Int}(uninitialized, np)
     for p0 = 1:np
         fld0 = fld[p0]
-        s0 = indmax(fld0)
+        s0 = argmax(fld0)
         if !validmax(fld0[s0])
             throw(UnsatError(p0))
         end
@@ -387,12 +387,12 @@ function decimate1(p0::Int, graph::Graph, msgs::Messages)
 
     @assert !decimated[p0]
     fld0 = fld[p0]
-    s0 = indmax(fld0)
+    s0 = argmax(fld0)
     # only do the decimation if it is consistent with
     # the previously decimated nodes
     for p1 in findall(decimated)
         haskey(adjdict[p0], p1) || continue
-        s1 = indmax(fld[p1])
+        s1 = argmax(fld[p1])
         j1 = adjdict[p0][p1]
         gmsk[p1][j1][s0,s1] || return false
     end

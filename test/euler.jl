@@ -227,7 +227,7 @@ function euler14(m)
             d -= 1
         end
     end
-    indmax(c)
+    argmax(c)
 end
 @test euler14(999999) == 837799
 
