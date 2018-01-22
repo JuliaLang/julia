@@ -580,22 +580,22 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function][, showparents::Bool=false])
+    methodswith(typ[, module or function]; parents::Bool=false])
 
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
 (the default is all top-level modules).
 
-If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
+If keyword `parents` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
+function methodswith(t::Type, f::Function, meths = Method[]; parents::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (parents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -607,25 +607,25 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function _methodswith(t::Type, m::Module, showparents::Bool)
+function _methodswith(t::Type, m::Module, parents::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Function)
-                methodswith(t, f, showparents, meths)
+                methodswith(t, f, meths; parents = parents)
             end
         end
     end
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+methodswith(t::Type, m::Module; parents::Bool=false) = _methodswith(t, m, parents)
 
-function methodswith(t::Type, showparents::Bool=false)
+function methodswith(t::Type; parents::Bool=false)
     meths = Method[]
     for mod in loaded_modules_array()
-        append!(meths, _methodswith(t, mod, showparents))
+        append!(meths, _methodswith(t, mod, parents))
     end
     return unique(meths)
 end
