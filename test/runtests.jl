@@ -1165,6 +1165,9 @@ module TestLibdl
     @test isdefined(@__MODULE__, :Libdl)
 end
 
+# 0.7.0-DEV.3415
+@test findall(x -> x==1, [1, 2, 3, 2, 1]) == [1, 5]
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

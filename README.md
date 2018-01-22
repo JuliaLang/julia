@@ -297,6 +297,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `module_parent`, `Base.function_module`, and `Base.datatype_module` are now methods of
   a new function called `parentmodule` ([#25629]).
 
+* `find` is now `findall` ([#25545]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -477,4 +479,5 @@ includes this fix. Find the minimum version from there.
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
