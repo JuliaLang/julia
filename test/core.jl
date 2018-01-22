@@ -5945,3 +5945,15 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue #25663
+@noinline foo25663() = rand(Bool) ? 2 : nothing
+@inline baz25663(x) = x ? (foo(), 1) : nothing
+function bar25663(arg)
+    x = baz25663(arg)
+    x === nothing && return 0
+    a, b = x
+    a === nothing && return 1
+    return a
+end
+@test @allocated(bar(true)) == 0

@@ -26,6 +26,10 @@ struct Params
     # when inferring a call to _apply
     MAX_APPLY_UNION_ENUM::Int
 
+    # the maximum number of union-tuples to swap / expand
+    # for the benefit of codegen
+    MAX_UNION_CODGEN_EXPAND::Int
+
     # parameters limiting large types
     MAX_TUPLETYPE_LEN::Int
 
@@ -43,10 +47,11 @@ struct Params
                     tupletype_len::Int = 15,
                     tuple_splat::Int = 16,
                     union_splitting::Int = 4,
-                    apply_union_enum::Int = 8)
+                    apply_union_enum::Int = 8,
+                    union_codegen_expand::Int = 9)
         return new(Vector{InferenceResult}(),
                    world, inlining, true, false, inline_cost_threshold, inline_nonleaf_penalty,
                    inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum,
-                   tupletype_len, tuple_splat)
+                   union_codegen_expand, tupletype_len, tuple_splat)
     end
 end

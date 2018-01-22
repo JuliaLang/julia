@@ -163,6 +163,26 @@ end
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(@nospecialize(t)) = t
 
+function _canonicalize_tuple_union(@nospecialize(t), limit)
+    isa(t, UnionAll) && return (t, limit)
+    if isa(t, Union)
+        (ty_a, newlimit) = _canonicalize_tuple_union(t.a, limit)
+        (ty_b, newlimit) = _canonicalize_tuple_union(t.b, newlimit)
+        (ty_a === t.a && ty_b === t.b) && return (t, limit)
+        return (Union{ty_a, ty_b}, newlimit)
+    else
+        isa(t, Type) || return (t, limit)
+        t === Bottom && return (t, limit)
+        t <: Tuple || return (t, limit)
+        nsplit = countunionsplit(t.parameters)
+        (1 < nsplit <= limit) || return (t, limit)
+        nt = Union{switchtupleunion(t)...}
+        return (nt, 1+limit-nsplit)
+    end
+end
+canonicalize_tuple_union(@nospecialize(t), limit) =
+    _canonicalize_tuple_union(t, limit)[1]
+
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
