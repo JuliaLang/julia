@@ -637,14 +637,22 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     nothing
 end
 
-"""
-    chown(path::AbstractString, owner::Integer, group::Integer=-1)
+sentinel_code(i::Integer) = i
+sentinel_code(n::Nothing) = -1
+sentinel_code(n::Missing) = -2
+sentinel_code(a) = ArgumentError("$a is not an integer, nothing, or missing")
 
-Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
-is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
 """
-function chown(path::AbstractString, owner::Integer, group::Integer=-1)
-    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
+    chown(path::AbstractString; owner = nothing, group = nothing)
+
+Change the owner and/or group of `path` to `owner` and/or `group`. If left as
+`nothing`, then the they won't be changed, it set to `missing`, they will be
+removed. ; if set to If the value entered for `owner` or `group`
+is `-1` the corresponding ID will not change. Otherwise,
+"""
+function chown(path::AbstractString; owner = nothing, group = nothing)
+    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint),
+        path, sentinel_code(owner), sentinel_code(group))
     uv_error("chown",err)
     nothing
 end
