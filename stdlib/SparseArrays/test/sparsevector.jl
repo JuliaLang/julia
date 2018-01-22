@@ -277,7 +277,7 @@ end
     @test findnz(spv_x1) == (findall(!iszero, x1_full), filter(x->x!=0, x1_full))
     let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = Array(xc)
         @test findall(!iszero, xc) == findall(!iszero, fc)
-        @test findnz(xc) == ([2, 5], [1.25, -0.75])
+        @test findnz(xc) == ([2, 3, 5], [1.25, 0, -0.75])
     end
 end
 ### Array manipulation

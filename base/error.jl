@@ -113,6 +113,13 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`.
 Also available as the macro [`@assert`](@ref).
+
+!!! warning
+    An assert might be disabled at various optimization levels.
+    Assert should therefore only be used as a debugging tool
+    and not used for authentication verification (e.g. verifying passwords),
+    nor should side effects needed for the function to work correctly
+    be used inside of asserts.
 """
 assert(x) = x ? nothing : throw(AssertionError())
 
@@ -121,6 +128,13 @@ assert(x) = x ? nothing : throw(AssertionError())
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
 Message `text` is optionally displayed upon assertion failure.
+
+!!! warning
+    An assert might be disabled at various optimization levels.
+    Assert should therefore only be used as a debugging tool
+    and not used for authentication verification (e.g. verifying passwords),
+    nor should side effects needed for the function to work correctly
+    be used inside of asserts.
 
 # Examples
 ```jldoctest

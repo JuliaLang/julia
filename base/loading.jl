@@ -1051,7 +1051,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
-            code = chop(readuntil(STDIN, '\\0'))
+            code = readuntil(STDIN, '\\0')
             eval(Main, Meta.parse(code))
         end
         """

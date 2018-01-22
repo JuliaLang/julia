@@ -252,6 +252,11 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
+// str: if 1 return a string, otherwise return a Vector{UInt8}
+// chomp:
+//   0 - keep delimiter
+//   1 - remove 1 byte delimiter
+//   2 - remove 2 bytes \r\n if present
 JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
@@ -259,17 +264,17 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
         size_t n = pd - (s->buf + s->bpos) + 1;
+        size_t nchomp = 0;
+        if (chomp) {
+            nchomp = chomp == 2 ? ios_nchomp(s, n) : 1;
+        }
         if (str) {
-            size_t nchomp = 0;
-            if (chomp) {
-                nchomp = ios_nchomp(s, n);
-            }
             jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
         }
-        a = jl_alloc_array_1d(jl_array_uint8_type, n);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n);
+        a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
+        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
@@ -278,9 +283,9 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
-        if (chomp && n > 0 && dest.buf[n - 1] == '\n') {
+        if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
-            if (n > 0 && dest.buf[n - 1] == '\r') {
+            if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
                 n--;
             }
             int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest

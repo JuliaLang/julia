@@ -81,20 +81,20 @@ Base.compact(io)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test readlines(io) == String["pancakes", "waffles", "blueberries"]
 write(io,"\n\r\n\n\r \n") > 0
-@test readlines(io, chomp=false) == String["\n", "\r\n", "\n", "\r \n"]
+@test readlines(io, keep=true) == String["\n", "\r\n", "\n", "\r \n"]
 write(io,"\n\r\n\n\r \n") > 0
-@test readlines(io, chomp=true) == String["", "", "", "\r "]
+@test readlines(io, keep=false) == String["", "", "", "\r "]
 @test write(io,"α\nβ\nγ\nδ") > 0
-@test readlines(io, chomp=false) == String["α\n","β\n","γ\n","δ"]
+@test readlines(io, keep=true) == String["α\n","β\n","γ\n","δ"]
 @test write(io,"α\nβ\nγ\nδ") > 0
-@test readlines(io, chomp=true) == String["α", "β", "γ", "δ"]
-@test readlines(IOBuffer(""), chomp=false) == []
-@test readlines(IOBuffer(""), chomp=true) == []
-@test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
-@test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
+@test readlines(io, keep=false) == String["α", "β", "γ", "δ"]
+@test readlines(IOBuffer(""), keep=true) == []
+@test readlines(IOBuffer(""), keep=false) == []
+@test readlines(IOBuffer("first\nsecond"), keep=true) == String["first\n", "second"]
+@test readlines(IOBuffer("first\nsecond"), keep=false) == String["first", "second"]
 
 let fname = tempname()
-    for dochomp in [true, false],
+    for dokeep in [true, false],
         endline in ["\n", "\r\n"],
         i in -5:5
 
@@ -102,8 +102,8 @@ let fname = tempname()
         open(fname, "w") do io
             write(io, ref)
         end
-        x = readlines(fname, chomp = dochomp)
-        if dochomp
+        x = readlines(fname, keep = dokeep)
+        if !dokeep
             ref = chomp(ref)
         end
         @test ref == x[1]
@@ -170,7 +170,7 @@ let io = IOBuffer("abcdef"),
     @test eof(io)
 end
 
-@test isempty(readlines(IOBuffer(), chomp=false))
+@test isempty(readlines(IOBuffer(), keep=true))
 
 # issue #8193
 let io=IOBuffer("asdf")

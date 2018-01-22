@@ -1995,44 +1995,6 @@ findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
 findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findnz(A)
-([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
-```
-"""
-function findnz(A::AbstractMatrix{T}) where T
-    nnzA = count(t -> t != 0, A)
-    I = zeros(Int, nnzA)
-    J = zeros(Int, nnzA)
-    NZs = Vector{T}(uninitialized, nnzA)
-    cnt = 1
-    if nnzA > 0
-        for j=axes(A,2), i=axes(A,1)
-            Aij = A[i,j]
-            if Aij != 0
-                I[cnt] = i
-                J[cnt] = j
-                NZs[cnt] = Aij
-                cnt += 1
-            end
-        end
-    end
-    return (I, J, NZs)
-end
-
-"""
     findmax(itr) -> (x, index)
 
 Return the maximum element of the collection `itr` and its index. If there are multiple
@@ -2115,7 +2077,7 @@ function findmin(a)
 end
 
 """
-    indmax(itr) -> Integer
+    argmax(itr) -> Integer
 
 Return the index of the maximum element in a collection. If there are multiple maximal
 elements, then the first one will be returned.
@@ -2124,20 +2086,20 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmax([8,0.1,-9,pi])
+julia> argmax([8,0.1,-9,pi])
 1
 
-julia> indmax([1,7,7,6])
+julia> argmax([1,7,7,6])
 2
 
-julia> indmax([1,7,7,NaN])
+julia> argmax([1,7,7,NaN])
 4
 ```
 """
-indmax(a) = findmax(a)[2]
+argmax(a) = findmax(a)[2]
 
 """
-    indmin(itr) -> Integer
+    argmin(itr) -> Integer
 
 Return the index of the minimum element in a collection. If there are multiple minimal
 elements, then the first one will be returned.
@@ -2146,17 +2108,17 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmin([8,0.1,-9,pi])
+julia> argmin([8,0.1,-9,pi])
 3
 
-julia> indmin([7,1,1,6])
+julia> argmin([7,1,1,6])
 2
 
-julia> indmin([7,1,1,NaN])
+julia> argmin([7,1,1,NaN])
 4
 ```
 """
-indmin(a) = findmin(a)[2]
+argmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
 """

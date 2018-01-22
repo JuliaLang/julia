@@ -91,7 +91,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
 
         try
             for (challenge, response) in challenges
-                write(out, readuntil(master, challenge))
+                write(out, readuntil(master, challenge, keep=true))
                 if !isopen(master)
                     error("Could not locate challenge: \"$challenge\". ",
                           format_output(out))

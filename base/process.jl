@@ -561,13 +561,17 @@ Run a command object asynchronously, returning the resulting `Process` object.
 spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd; chomp::Bool=true)
+function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
     stdout = Pipe()
     processes = spawn(cmd, (DevNull,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, chomp=chomp,
+    return EachLine(out, keep=keep,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 

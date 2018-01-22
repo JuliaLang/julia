@@ -196,6 +196,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `readuntil` now does *not* include the delimiter in its result, matching the
+    behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
@@ -305,7 +308,9 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
-  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+  * `indmin` and `indmax` have been renamed to `argmin` and `argmax`, respectively ([#25654]).
+
+  * `findmin`, `findmax`, `argmin`, and `argmax` used to always return linear indices.
     They now return `CartesianIndex`es for all but 1-d arrays, and in general return
     the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
 
@@ -961,6 +966,9 @@ Deprecated or removed
 
   * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
 
+  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
+    `Random.RandomDevice(; unlimited=unlimited)` ([#25668]).
+
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
      array interface should define their own `strides` method ([#25321]).
@@ -970,6 +978,8 @@ Deprecated or removed
 
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+
+  * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
 
@@ -1230,3 +1240,4 @@ Command-line option changes
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
+[#25654]: https://github.com/JuliaLang/julia/issues/25654

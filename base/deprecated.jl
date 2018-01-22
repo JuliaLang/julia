@@ -459,7 +459,7 @@ end
 
 @deprecate read(cmd::AbstractCmd, stdin::Redirectable) read(pipeline(stdin, cmd))
 @deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
-@deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
+@deprecate eachline(cmd::AbstractCmd, stdin; kw...) eachline(pipeline(stdin, cmd), kw...)
 
 @deprecate showall(x)     show(x)
 @deprecate showall(io, x) show(IOContext(io, :limit => false), x)
@@ -691,8 +691,8 @@ import .Iterators.enumerate
     return p
 end
 
-# ease transition for return type change of e.g. indmax due to PR #22907 when used in the
-# common pattern `ind2sub(size(a), indmax(a))`
+# ease transition for return type change of e.g. argmax due to PR #22907 when used in the
+# common pattern `ind2sub(size(a), argmax(a))`
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
@@ -1256,6 +1256,7 @@ end
 @deprecate_moved rowvals    "SparseArrays" true true
 @deprecate_moved nzrange    "SparseArrays" true true
 @deprecate_moved nnz        "SparseArrays" true true
+@deprecate_moved findnz     "SparseArrays" true true
 ## functions that were exported from Base.SparseArrays but not from Base
 @deprecate_moved droptol!   "SparseArrays" false true
 ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
@@ -1626,6 +1627,10 @@ export readandwrite
 
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
+
+# PR #25654
+@deprecate indmin argmin
+@deprecate indmax argmax
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)

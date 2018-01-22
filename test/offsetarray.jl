@@ -363,10 +363,6 @@ pmax, ipmax = findmax(parent(A))
 z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
 I = findall(!iszero, z)
 @test I == [CartesianIndex(-1, 0)]
-I,J,N = findnz(z)
-@test I == [-1]
-@test J == [0]
-@test N == [2]
 @test findall(!iszero,h) == [-2:1;]
 @test findall(x->x>0, h) == [-1,1]
 @test findall(x->x<0, h) == [-2,0]

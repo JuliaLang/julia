@@ -458,7 +458,7 @@ function prompt(message::AbstractString; default::AbstractString="", password::B
         uinput = getpass(msg)
     else
         print(msg)
-        uinput = readline(chomp=false)
+        uinput = readline(keep=true)
         isempty(uinput) && return nothing  # Encountered an EOF
         uinput = chomp(uinput)
     end

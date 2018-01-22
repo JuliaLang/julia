@@ -94,7 +94,11 @@ end
 
 # REPL help
 
-function helpmode(io::IO, line::AbstractString)
+# This is split into helpmode and _helpmode to easier unittest _helpmode
+helpmode(io::IO, line::AbstractString) = :(Base.Docs.insert_hlines($io, $(Base.Docs._helpmode(io, line))))
+helpmode(line::AbstractString) = helpmode(STDOUT, line)
+
+function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
         if haskey(keywords, Symbol(line))
@@ -114,7 +118,21 @@ function helpmode(io::IO, line::AbstractString)
     # so that the resulting expressions are evaluated in the Base.Docs namespace
     :(Base.Docs.@repl $io $expr)
 end
-helpmode(line::AbstractString) = helpmode(STDOUT, line)
+_helpmode(line::AbstractString) = _helpmode(STDOUT, line)
+
+# Print vertical lines along each docstring if there are multiple docs
+function insert_hlines(io::IO, docs)
+    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
+        return docs
+    end
+    v = Any[]
+    for (n, doc) in enumerate(docs.content)
+        push!(v, doc)
+        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
+    end
+    return Markdown.MD(v)
+end
+
 
 function repl_search(io::IO, s)
     pre = "search:"

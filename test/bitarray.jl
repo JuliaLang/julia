@@ -1108,10 +1108,9 @@ timesofar("datamove")
     b1 = bitrand(n1, n2)
     @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
     @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
-    @check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
 end
 
-timesofar("nnz&find")
+timesofar("find")
 
 @testset "Findnext/findprev" begin
     b1 = trues(v1)
