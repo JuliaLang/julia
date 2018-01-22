@@ -598,9 +598,14 @@ end
 @deprecate_binding golden     MathConstants.golden
 
 # PR #23271
+# TODO: rename Base._IOContext to IOContext when this deprecation is deleted
 function IOContext(io::IO; kws...)
-    depwarn("`IOContext(io, k=v, ...)` is deprecated, use `IOContext(io, :k => v, ...)` instead.", :IOContext)
-    IOContext(io, (k=>v for (k, v) in pairs(kws))...)
+    if isempty(kws) # Issue #25638
+        _IOContext(io)
+    else
+        depwarn("`IOContext(io, k=v, ...)` is deprecated, use `IOContext(io, :k => v, ...)` instead.", :IOContext)
+        IOContext(io, (k=>v for (k, v) in pairs(kws))...)
+    end
 end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
@@ -993,6 +998,8 @@ end
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
+@deprecate push!(w::LibGit2.GitRevWalker, arg) LibGit2.push!(w, arg)
+
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
@@ -1249,6 +1256,7 @@ end
 @deprecate_moved rowvals    "SparseArrays" true true
 @deprecate_moved nzrange    "SparseArrays" true true
 @deprecate_moved nnz        "SparseArrays" true true
+@deprecate_moved findnz     "SparseArrays" true true
 ## functions that were exported from Base.SparseArrays but not from Base
 @deprecate_moved droptol!   "SparseArrays" false true
 ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
@@ -1361,7 +1369,6 @@ end
 @deprecate_moved copy_transpose! "LinearAlgebra" false true
 @deprecate_moved issuccess       "LinearAlgebra" false true
 @deprecate_moved transpose_type  "LinearAlgebra" false true
-@deprecate_moved I               "LinearAlgebra" false true
 @deprecate_moved A_mul_B!        "LinearAlgebra" false true
 @deprecate_moved A_mul_Bt!       "LinearAlgebra" false true
 @deprecate_moved At_mul_B!       "LinearAlgebra" false true
@@ -1582,6 +1589,12 @@ end
 @deprecate gc GC.gc
 @deprecate gc_enable GC.enable
 @eval @deprecate $(Symbol("@gc_preserve")) GC.$(Symbol("@preserve")) false
+
+@deprecate nb_available bytesavailable
+
+@deprecate skipchars(io::IO, predicate; linecomment=nothing) skipchars(predicate, io, linecomment=linecomment)
+# this method is to avoid ambiguity, delete at the same time as deprecation of skipchars above:
+skipchars(::IO, ::IO; linecomment=nothing) = throw(ArgumentError("the first argument of `skipchars` must be callable"))
 
 # issue #9053
 if Sys.iswindows()

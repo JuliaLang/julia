@@ -65,7 +65,7 @@ function wait_connected end
 function wait_readnb end
 function wait_readbyte end
 function wait_close end
-function nb_available end
+function bytesavailable end
 
 """
     readavailable(stream)
@@ -243,7 +243,7 @@ wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), by
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
-    nb_available(io)
+    bytesavailable(io)
 
 Return the number of bytes available for reading before a read from this stream or buffer will block.
 
@@ -251,11 +251,11 @@ Return the number of bytes available for reading before a read from this stream 
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
-julia> nb_available(io)
+julia> bytesavailable(io)
 34
 ```
 """
-nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
+bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
 
 """
     eof(stream) -> Bool
@@ -912,7 +912,7 @@ Commit all currently buffered writes to the given stream.
 flush(io::IO) = nothing
 
 """
-    skipchars(io::IO, predicate; linecomment=nothing)
+    skipchars(predicate, io::IO; linecomment=nothing)
 
 Advance the stream `io` such that the next-read character will be the first remaining for
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
@@ -923,19 +923,19 @@ characters from that character until the start of the next line are ignored.
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
 
-julia> skipchars(buf, isspace)
+julia> skipchars(isspace, buf)
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
 
 julia> String(readavailable(buf))
 "text"
 ```
 """
-function skipchars(io::IO, pred; linecomment=nothing)
+function skipchars(predicate, io::IO; linecomment=nothing)
     while !eof(io)
         c = read(io, Char)
         if c === linecomment
             readline(io)
-        elseif !pred(c)
+        elseif !predicate(c)
             skip(io, -codelen(c))
             break
         end

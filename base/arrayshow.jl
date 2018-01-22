@@ -345,6 +345,7 @@ function _display(io::IO, X::AbstractArray)
     print_array(io, X)
 end
 
+show(io::IO, ::MIME"text/plain", X::AbstractArray) = _display(io, X)
 
 ## printing with `show`
 

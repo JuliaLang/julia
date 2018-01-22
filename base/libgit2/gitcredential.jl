@@ -227,7 +227,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
             return GitCredentialHelper[]
         end
 
-        push!(helpers, parse(GitCredentialHelper, value))
+        Base.push!(helpers, parse(GitCredentialHelper, value))
     end
 
     return helpers

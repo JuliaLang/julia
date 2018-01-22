@@ -356,10 +356,13 @@ function serialize(s::AbstractSerializer, d::Dict)
 end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
-    if Base.is_root_module(m)
-        serialize(s, Base.root_module_key(m))
+    p = parentmodule(m)
+    if p === m
+        key = Base.root_module_key(m)
+        serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
+        serialize(s, Symbol(key.name))
     else
-        serialize_mod_names(s, parentmodule(m))
+        serialize_mod_names(s, p)
         serialize(s, module_name(m))
     end
 end
@@ -839,7 +842,9 @@ function deserialize_module(s::AbstractSerializer)
             m = getfield(m, mkey[i])::Module
         end
     else
-        m = Base.root_module(mkey)
+        name = String(deserialize(s)::Symbol)
+        pkg = (mkey === nothing) ? Base.PkgId(name) : Base.PkgId(Base.UUID(mkey), name)
+        m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
             m = getfield(m, mname)::Module

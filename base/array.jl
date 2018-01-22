@@ -1995,44 +1995,6 @@ findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
 findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
 
 """
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findnz(A)
-([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
-```
-"""
-function findnz(A::AbstractMatrix{T}) where T
-    nnzA = count(t -> t != 0, A)
-    I = zeros(Int, nnzA)
-    J = zeros(Int, nnzA)
-    NZs = Vector{T}(uninitialized, nnzA)
-    cnt = 1
-    if nnzA > 0
-        for j=axes(A,2), i=axes(A,1)
-            Aij = A[i,j]
-            if Aij != 0
-                I[cnt] = i
-                J[cnt] = j
-                NZs[cnt] = Aij
-                cnt += 1
-            end
-        end
-    end
-    return (I, J, NZs)
-end
-
-"""
     findmax(itr) -> (x, index)
 
 Return the maximum element of the collection `itr` and its index. If there are multiple

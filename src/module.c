@@ -20,6 +20,7 @@ extern jl_function_t *jl_append_any_func;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    const jl_uuid_t uuid_zero = {0, 0};
     jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
                                                jl_module_type);
     JL_GC_PUSH1(&m);
@@ -27,10 +28,11 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->name = name;
     m->parent = NULL;
     m->istopmod = 0;
+    m->uuid = uuid_zero;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
-    m->uuid = jl_hrtime() + (++mcounter);
-    if (!m->uuid)
-        m->uuid++; // uuid 0 is invalid
+    m->build_id = jl_hrtime() + (++mcounter);
+    if (!m->build_id)
+        m->build_id++; // build id 0 is invalid
     m->primary_world = 0;
     m->counter = 0;
     htable_new(&m->bindings, 0);
@@ -657,7 +659,11 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
-JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
+JL_DLLEXPORT uint64_t jl_module_build_id(jl_module_t *m) { return m->build_id; }
+JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
+
+// TODO: make this part of the module constructor and read-only?
+JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
 {

@@ -274,7 +274,7 @@ end
 
 # Returns the value in a expression if sym is defined in current namespace fn.
 # This method is used to iterate to the value of a expression like:
-# :(Base.REPLCompletions.whitespace_chars) a `dump` of this expression
+# :(REPL.REPLCompletions.whitespace_chars) a `dump` of this expression
 # will show it consist of Expr, QuoteNode's and Symbol's which all needs to
 # be handled differently to iterate down to get the value of whitespace_chars.
 function get_value(sym::Expr, fn)

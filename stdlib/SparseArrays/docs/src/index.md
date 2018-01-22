@@ -204,6 +204,7 @@ SparseArrays.sparse
 SparseArrays.sparsevec
 SparseArrays.issparse
 SparseArrays.nnz
+SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
 SparseArrays.blkdiag

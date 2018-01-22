@@ -139,6 +139,16 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+function ip_matches_func(ip, func::Symbol)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        fr.func === func && return true
+    end
+    return false
+end
+
 function display_error(io::IO, er, bt)
     if !isempty(bt)
         st = stacktrace(bt)
@@ -148,7 +158,7 @@ function display_error(io::IO, er, bt)
     end
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
     if eval_ind !== nothing
         bt = bt[1:eval_ind-1]
     end
@@ -339,9 +349,6 @@ function load_juliarc()
     nothing
 end
 
-import .Terminals
-import .REPL
-
 const repl_hooks = []
 
 """
@@ -366,7 +373,11 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 function _start()
+    repl_stdlib_loaded = isassigned(REPL_MODULE_REF)
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
@@ -383,22 +394,25 @@ function _start()
                 banner |= opts.banner != 0 && is_interactive
                 color_set || (global have_color = false)
             else
+                if !repl_stdlib_loaded
+                    error("REPL standard library not loaded, cannot start a REPL.")
+                end
                 term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-                term = Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
+                term = REPL_MODULE_REF[].Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 banner |= opts.banner != 0
-                color_set || (global have_color = Terminals.hascolor(term))
-                banner && REPL.banner(term,term)
+                color_set || (global have_color = REPL_MODULE_REF[].Terminals.hascolor(term))
+                banner && REPL_MODULE_REF[].banner(term,term)
                 if term.term_type == "dumb"
-                    active_repl = REPL.BasicREPL(term)
+                    active_repl = REPL_MODULE_REF[].BasicREPL(term)
                     quiet || @warn "Terminal not fully functional"
                 else
-                    active_repl = REPL.LineEditREPL(term, have_color, true)
+                    active_repl = REPL_MODULE_REF[].LineEditREPL(term, have_color, true)
                     active_repl.history_file = history_file
                 end
                 # Make sure any displays pushed in .juliarc.jl ends up above the
                 # REPLDisplay
-                pushdisplay(REPL.REPLDisplay(active_repl))
+                pushdisplay(REPL_MODULE_REF[].REPLDisplay(active_repl))
             end
         else
             banner |= opts.banner != 0 && is_interactive
@@ -417,8 +431,11 @@ function _start()
                     end
                 end
             else
+                if !repl_stdlib_loaded
+                    error("REPL standard library not loaded")
+                end
                 _atreplinit(active_repl)
-                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+                REPL_MODULE_REF[].run_repl(active_repl, backend->(global active_repl_backend = backend))
             end
         end
     catch err

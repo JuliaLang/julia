@@ -24,18 +24,18 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     sin, sinc, sind, sinh, sinpi, squeeze, start, sum, summary, tan,
     tand, tanh, trunc, abs, abs2,
     broadcast, ceil, complex, conj, convert, copy, copyto!, adjoint,
-    exp, expm1, findall, findmax, findmin, findnz, float, getindex,
+    exp, expm1, findall, findmax, findmin, float, getindex,
     vcat, hcat, hvcat, cat, imag, indmax, kron, length, log, log1p, max, min,
     maximum, minimum, one, promote_eltype, real, reshape, rot180,
     rotl90, rotr90, round, setindex!, similar, size, transpose,
     vec, permute!, map, map!, Array
 
-using Random: defaultRNG, AbstractRNG, randsubseq, randsubseq!
+using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
-    sprand, sprandn, spzeros, nnz, permute
+    sprand, sprandn, spzeros, nnz, permute, findnz
 
 include("abstractsparse.jl")
 include("sparsematrix.jl")

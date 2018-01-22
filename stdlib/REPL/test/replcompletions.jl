@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.REPLCompletions
+using REPL.REPLCompletions
+using Test
 using Random
 
 let ex = quote
@@ -186,7 +187,7 @@ let s = "Base.return_types(getin"
 end
 
 # issue #23193: after `using`, identifiers can be prefixed by module names
-let s = "using Test, Base.Random"
+let s = "using Test, Random"
     c, r = test_complete(s)
     @test !("RandomDevice" in c)
 end

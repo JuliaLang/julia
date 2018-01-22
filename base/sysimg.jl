@@ -182,6 +182,8 @@ struct MIME{mime} end
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
+# fallback text/plain representation of any type:
+show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 # SIMD loops
 include("simdloop.jl")
@@ -416,7 +418,7 @@ include("channels.jl")
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
-include("replutil.jl")
+include("errorshow.jl")
 include("i18n.jl")
 using .I18n
 
@@ -446,10 +448,14 @@ include("pkg/pkg.jl")
 include("threadcall.jl")
 
 # code loading
+include("uuid.jl")
 include("loading.jl")
 
-# set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_bindir, Any, ()))
+# set up depot & load paths to be able to find stdlib packages
+let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+    init_depot_path(BINDIR)
+    init_load_path(BINDIR)
+end
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -461,12 +467,6 @@ include("asyncmap.jl")
 
 include("multimedia.jl")
 using .Multimedia
-
-# frontend
-include("repl/Terminals.jl")
-include("repl/LineEdit.jl")
-include("repl/REPLCompletions.jl")
-include("repl/REPL.jl")
 
 # deprecated functions
 include("deprecated.jl")
@@ -485,9 +485,10 @@ function __init__()
     Csrand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(:Logging).ConsoleLogger(STDERR))
+    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
+    init_depot_path()
     init_load_path()
     init_threadcall()
 end
@@ -502,54 +503,65 @@ using Base
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(:Base64)
-Base.require(:CRC32c)
-Base.require(:Dates)
-Base.require(:DelimitedFiles)
-Base.require(:Serialization)
-Base.require(:Distributed)
-Base.require(:FileWatching)
-Base.require(:Future)
-Base.require(:IterativeEigensolvers)
-Base.require(:Libdl)
-Base.require(:LinearAlgebra)
-Base.require(:Logging)
-Base.require(:Mmap)
-Base.require(:Printf)
-Base.require(:Profile)
-Base.require(:Random)
-Base.require(:SharedArrays)
-Base.require(:SparseArrays)
-Base.require(:SuiteSparse)
-Base.require(:Test)
-Base.require(:Unicode)
+Base.require(Base, :Base64)
+Base.require(Base, :CRC32c)
+Base.require(Base, :Dates)
+Base.require(Base, :DelimitedFiles)
+Base.require(Base, :Serialization)
+Base.require(Base, :Distributed)
+Base.require(Base, :FileWatching)
+Base.require(Base, :Future)
+Base.require(Base, :IterativeEigensolvers)
+Base.require(Base, :Libdl)
+Base.require(Base, :LinearAlgebra)
+Base.require(Base, :Logging)
+Base.require(Base, :Mmap)
+Base.require(Base, :Printf)
+Base.require(Base, :Profile)
+Base.require(Base, :Random)
+Base.require(Base, :SharedArrays)
+Base.require(Base, :SparseArrays)
+Base.require(Base, :SuiteSparse)
+Base.require(Base, :Test)
+Base.require(Base, :Unicode)
+Base.require(Base, :REPL)
 
 @eval Base begin
-    @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
-    @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
-    @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
-    @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
-    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
-    @deprecate_binding Random root_module(:Random) true ", run `using Random` instead"
-    @deprecate_binding Serializer root_module(:Serialization) true ", run `using Serialization` instead"
+    @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
+    @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
+    @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
+    @deprecate_binding Dates root_module(Base, :Dates) true ", run `using Dates` instead"
+    @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
+    @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
+    @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
+    @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
 
     # PR #25249
-    @deprecate_binding SparseArrays root_module(:SparseArrays) true ", run `using SparseArrays` instead"
-    @deprecate_binding(AbstractSparseArray, root_module(:SparseArrays).AbstractSparseArray, true,
+    @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
+    @deprecate_binding(AbstractSparseArray, root_module(Base, :SparseArrays).AbstractSparseArray, true,
         ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseMatrix, root_module(:SparseArrays).AbstractSparseMatrix, true,
+    @deprecate_binding(AbstractSparseMatrix, root_module(Base, :SparseArrays).AbstractSparseMatrix, true,
         ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseVector, root_module(:SparseArrays).AbstractSparseVector, true,
+    @deprecate_binding(AbstractSparseVector, root_module(Base, :SparseArrays).AbstractSparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseMatrixCSC, root_module(:SparseArrays).SparseMatrixCSC, true,
+    @deprecate_binding(SparseMatrixCSC, root_module(Base, :SparseArrays).SparseMatrixCSC, true,
         ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseVector, root_module(:SparseArrays).SparseVector, true,
+    @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
 
     # PR #25571
-    @deprecate_binding LinAlg root_module(:LinearAlgebra) true ", run `using LinearAlgebra` instead"
+    @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
+    @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
+        ", run `using LinearAlgebra` to load linear algebra functionality.")
+
+    # PR 25544
+    @deprecate_binding REPL            root_module(Base, :REPL)                 true ", run `using REPL` instead"
+    @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
+    @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
+    @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
 end
 
+empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

@@ -27,14 +27,12 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       defaultRNG, randjump
+       randjump
 
 
 ## general definitions
 
 abstract type AbstractRNG end
-
-defaultRNG() = GLOBAL_RNG
 
 
 ### integers

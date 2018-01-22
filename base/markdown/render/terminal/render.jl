@@ -107,7 +107,7 @@ function term(io::IO, br::LineBreak, columns)
 end
 
 function term(io::IO, br::HorizontalRule, columns)
-   println(io, " " ^ margin, "-" ^ (columns - 2margin))
+   println(io, " " ^ margin, "─" ^ (columns - 2margin))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)

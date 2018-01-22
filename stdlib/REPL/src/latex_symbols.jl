@@ -7,6 +7,7 @@
 #         http://www.w3.org/Math/characters/unicode.xml
 # by the following Julia script:
 #=
+import REPL
 using LightXML
 xdoc = parse_file("unicode.xml")
 latexsym = []
@@ -49,7 +50,7 @@ end
 #=
 fname = "unicode-math-table.tex"
 isfile(fname) || download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/$fname", fname)
-const latex_strings = Set(values(Base.REPLCompletions.latex_symbols))
+const latex_strings = Set(values(REPL.REPLCompletions.latex_symbols))
 open(fname) do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),

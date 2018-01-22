@@ -2,7 +2,7 @@
 
 using Random
 
-ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
+ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
@@ -232,8 +232,8 @@ let bstream = BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
-    @test nb_available(bstream) == 0
-    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    @test bytesavailable(bstream) == 0
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(bytesavailable(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
@@ -243,13 +243,13 @@ let bstream = BufferStream()
     b = read(bstream,UInt8)
     @test a[2] == b
     c = zeros(UInt8,8)
-    @test nb_available(bstream) == 8
+    @test bytesavailable(bstream) == 8
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
     @test close(bstream) === nothing
     @test eof(bstream)
-    @test nb_available(bstream) == 0
+    @test bytesavailable(bstream) == 0
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
@@ -262,25 +262,25 @@ end
 # skipchars
 let
     io = IOBuffer("")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("   ")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("#    \n     ")
-    @test eof(skipchars(io, isspace, linecomment='#'))
+    @test eof(skipchars(isspace, io, linecomment='#'))
 
     io = IOBuffer("      text")
-    skipchars(io, isspace)
+    skipchars(isspace, io)
     @test String(readavailable(io)) == "text"
 
     io = IOBuffer("   # comment \n    text")
-    skipchars(io, isspace, linecomment='#')
+    skipchars(isspace, io, linecomment='#')
     @test String(readavailable(io)) == "text"
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, isalpha))
+        @test !eof(skipchars(isalpha, io))
         @test read(io, Char) == char
     end
 end
