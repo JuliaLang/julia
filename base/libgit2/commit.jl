@@ -113,7 +113,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     # Retrieve parents from HEAD
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
-            push!(parent_ids, GitHash(repo, refname))
+            Base.push!(parent_ids, GitHash(repo, refname))
         end
     end
 
@@ -127,7 +127,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     parents = GitCommit[]
     try
         for id in parent_ids
-            push!(parents, GitCommit(repo, id))
+            Base.push!(parents, GitCommit(repo, id))
         end
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     finally

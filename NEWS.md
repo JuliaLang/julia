@@ -694,6 +694,9 @@ Deprecated or removed
 
   * `nb_available` is now `bytesavailable` ([#25634]).
 
+  * `skipchars(io::IO, predicate; linecomment=nothing)` is deprecated in favor of
+    `skipchars(predicate, io::IO; linecomment=nothing)` ([#25667]).
+
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
@@ -911,6 +914,8 @@ Deprecated or removed
 
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
+  * The `Libdl` module has moved to the `Libdl` standard library module ([#25459]).
+
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
     `ComplexF32` and `ComplexF64` respectively ([#24647]).
 
@@ -967,6 +972,8 @@ Deprecated or removed
 
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+
+  * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
 

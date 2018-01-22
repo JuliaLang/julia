@@ -19,7 +19,7 @@ the symbol).
 #
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
-
+import REPL
 const NBSP = '\u00A0'
 
 function tab_completions(symbols...)
@@ -75,8 +75,8 @@ end
 
 table_entries(
     tab_completions(
-        Base.REPLCompletions.latex_symbols,
-        Base.REPLCompletions.emoji_symbols
+        REPL.REPLCompletions.latex_symbols,
+        REPL.REPLCompletions.emoji_symbols
     ),
     unicode_data()
 )

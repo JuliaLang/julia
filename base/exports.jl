@@ -137,6 +137,7 @@ export
 # Global constants and variables
     ARGS,
     C_NULL,
+    DEPOT_PATH,
     ENDIAN_BOM,
     ENV,
     LOAD_PATH,
@@ -470,7 +471,6 @@ export
     findmax!,
     findnext,
     findprev,
-    findnz,
     occursin,
     match,
     matchall,

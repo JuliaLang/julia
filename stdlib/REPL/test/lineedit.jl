@@ -1,19 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LineEdit
-using Base.LineEdit: edit_insert, buffer, content, setmark, getmark, region
+using Test
+using REPL
+import REPL.LineEdit
+import REPL.LineEdit: edit_insert, buffer, content, setmark, getmark, region
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers
+include("FakeTerminals.jl")
+import .FakeTerminals.FakeTerminal
+
+const BASE_TEST_PATH = joinpath(@__DIR__, "..", "..", "..", "test")
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
+import .Main.TestHelpers
 
 # no need to have animation in tests
-Base.REPL.GlobalOptions.region_animation_duration=0.001
+REPL.GlobalOptions.region_animation_duration=0.001
 
 ## helper functions
 
 function new_state()
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
@@ -144,7 +150,7 @@ const test_cycle = Dict(
     "b" => "a"
 )
 
-@test_throws ErrorException keymap([test_cycle])
+@test_throws ErrorException LineEdit.keymap([test_cycle])
 
 # Lazy redirection with Cycles
 
@@ -160,8 +166,8 @@ const level2b = Dict(
     "b" => LineEdit.KeyAlias("a")
 )
 
-@test_throws ErrorException keymap([level2a,level1])
-@test_throws ErrorException keymap([level2b,level1])
+@test_throws ErrorException LineEdit.keymap([level2a,level1])
+@test_throws ErrorException LineEdit.keymap([level2b,level1])
 
 # Lazy redirection functionality test
 
@@ -454,17 +460,17 @@ let buf = IOBuffer(
         "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
     seek(buf, 4)
     outbuf = IOBuffer()
-    termbuf = Base.Terminals.TerminalBuffer(outbuf)
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    termbuf = REPL.Terminals.TerminalBuffer(outbuf)
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
     s = LineEdit.refresh_multi_line(termbuf, term, buf,
-        Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
-    @test s == Base.LineEdit.InputAreaState(3,1)
+        REPL.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
+    @test s == REPL.LineEdit.InputAreaState(3,1)
 end
 
 @testset "function prompt indentation" begin
     local s, term, ps, buf, outbuf, termbuf
     s = new_state()
-    term = Base.LineEdit.terminal(s)
+    term = REPL.LineEdit.terminal(s)
     # default prompt: PromptState.indent should not be set to a final fixed value
     ps::LineEdit.PromptState = s.mode_state[s.current_mode]
     @test ps.indent == -1
@@ -475,7 +481,7 @@ end
     buf = buffer(ps)
     write(buf, "begin\n    julia = :fun\nend")
     outbuf = IOBuffer()
-    termbuf = Base.Terminals.TerminalBuffer(outbuf)
+    termbuf = REPL.Terminals.TerminalBuffer(outbuf)
     LineEdit.refresh_multi_line(termbuf, term, ps)
     @test String(take!(outbuf)) ==
         "\r\e[0K\e[1mJulia is Fun! > \e[0m\r\e[16Cbegin\n" *
@@ -812,7 +818,7 @@ end
     @test transform!(buf->LineEdit.edit_indent(buf, -2, true), buf) == ("1\n22\n 333", 5, 0)
     @test transform!(buf->LineEdit.edit_indent(buf, +2, true), buf) == ("  1\n  22\n   333", 11, 0)
     @test transform!(buf->LineEdit.edit_indent(buf, -1, true), buf) == (" 1\n 22\n  333", 8, 0)
-    Base.LineEdit.edit_exchange_point_and_mark(buf)
+    REPL.LineEdit.edit_exchange_point_and_mark(buf)
     seek(buf, 5)
     @test transform!(buf->LineEdit.edit_indent(buf, -1, true), buf) == (" 1\n22\n 333", 4, 6)
 
@@ -849,7 +855,7 @@ end
     # multiline
     @test transpose_lines_up_reg!(buf) == false
     @test transform!(transpose_lines_down_reg!, buf) == ("l2\nl1\nl3", 5, 0)
-    Base.LineEdit.edit_exchange_point_and_mark(buf)
+    REPL.LineEdit.edit_exchange_point_and_mark(buf)
     seek(buf, 1)
     @test transpose_lines_up_reg!(buf) == false
     @test transform!(transpose_lines_down_reg!, buf) == ("l3\nl2\nl1", 4, 8)

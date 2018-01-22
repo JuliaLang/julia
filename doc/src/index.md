@@ -38,7 +38,6 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)
   * [Environment Variables](@ref)
-  * [Interacting With Julia](@ref)
   * [Embedding Julia](@ref)
   * [Packages](@ref)
   * [Profiling](@ref)
@@ -77,6 +76,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
 
 ## Standard Library
 
+  * [The Julia REPL](@ref)
   * [Base64](@ref)
   * [CRC32c](@ref)
   * [Dates and Time](@ref stdlib-dates)

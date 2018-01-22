@@ -123,7 +123,6 @@ Base.circshift!
 Base.circcopy!
 Base.findall(::Any)
 Base.findall(::Function, ::Any)
-Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)

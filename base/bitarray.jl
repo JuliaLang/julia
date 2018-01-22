@@ -1634,21 +1634,6 @@ end
 # For performance
 findall(::typeof(!iszero), B::BitArray) = findall(B)
 
-function findnz(B::BitMatrix)
-    nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
-    J = Vector{Int}(uninitialized, nnzB)
-    cnt = 1
-    for j = 1:size(B,2), i = 1:size(B,1)
-        if B[i,j]
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return I, J, trues(length(I))
-end
-
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+, A, region)

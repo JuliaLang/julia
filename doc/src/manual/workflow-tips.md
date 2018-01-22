@@ -4,7 +4,7 @@ Here are some tips for working with Julia efficiently.
 
 ## REPL-based workflow
 
-As already elaborated in [Interacting With Julia](@ref), Julia's REPL provides rich functionality
+As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich functionality
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 

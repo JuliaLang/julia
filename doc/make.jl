@@ -72,7 +72,6 @@ const PAGES = [
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
         "manual/dates.md",
-        "manual/interacting-with-julia.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
@@ -150,7 +149,7 @@ end
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, [Base.root_module(stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
+    modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

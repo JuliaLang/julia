@@ -2,6 +2,7 @@
 
 module LineEdit
 
+import ..REPL
 using ..Terminals
 
 import ..Terminals: raw!, width, height, cmove, getX,
@@ -85,7 +86,7 @@ options(s::PromptState) =
         # in the REPL module
         s.p.repl.options
     else
-        Base.REPL.GlobalOptions
+        REPL.GlobalOptions
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
@@ -1037,7 +1038,7 @@ end
 
 function edit_replace_word_right(buf::IOBuffer, replace::Function)
     # put the cursor at the beginning of the next word
-    skipchars(buf, is_non_word_char)
+    skipchars(is_non_word_char, buf)
     b = position(buf)
     char_move_word_right(buf)
     e = position(buf)
