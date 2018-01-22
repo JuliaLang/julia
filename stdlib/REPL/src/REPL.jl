@@ -979,10 +979,10 @@ function setup_interface(
                 @goto writeback
             end
             Base.edit(linfos[n][1], linfos[n][2])
-            Base.LineEdit.refresh_line(s)
+            LineEdit.refresh_line(s)
             return
             @label writeback
-            write(Base.LineEdit.buffer(s), str)
+            write(LineEdit.buffer(s), str)
             return
         end,
     )
