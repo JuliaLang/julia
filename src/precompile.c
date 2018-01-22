@@ -47,7 +47,7 @@ void jl_write_compiler_output(void)
     jl_module_init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_arrayref(worklist, i);
+        jl_value_t *m = jl_ptrarrayref(worklist, i);
         if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
         }
