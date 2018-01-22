@@ -1296,6 +1296,11 @@ else
     @eval const $(Symbol("@error")) = Base.$(Symbol("@error"))
 end
 
+if !isdefined(Base, :findall)
+    const findall = find
+    export findall
+end
+
 @static if !isdefined(Base, :parentmodule)
     parentmodule(m::Module) = Base.module_parent(m)
     parentmodule(f::Function) = Base.function_module(f)
