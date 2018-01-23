@@ -1631,6 +1631,15 @@ export readandwrite
 @deprecate indmin argmin
 @deprecate indmax argmax
 
+@deprecate(
+    open(filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+@deprecate(
+    open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(f, filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
