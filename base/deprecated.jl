@@ -1512,6 +1512,15 @@ end
 
 @deprecate lexless isless
 
+@deprecate(
+    open(filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+@deprecate(
+    open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(f, filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+
 @deprecate_binding iteratorsize IteratorSize
 @deprecate_binding iteratoreltype IteratorEltype
 
