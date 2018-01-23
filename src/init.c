@@ -551,8 +551,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
-    if (jl_options.machinefile)
-        jl_options.machinefile = abspath(jl_options.machinefile, 0);
+    if (jl_options.machine_file)
+        jl_options.machine_file = abspath(jl_options.machine_file, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

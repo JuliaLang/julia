@@ -106,15 +106,15 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
-    # --machinefile
-    # this does not check that machinefile works,
+    # --machine-file
+    # this does not check that machine file works,
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e
-                "println(unsafe_string(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machine-file $fname -e
+                "println(unsafe_string(Base.JLOptions().machine_file))"`) == fname
         finally
             rm(fname)
         end

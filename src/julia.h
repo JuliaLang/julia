@@ -1714,7 +1714,7 @@ typedef struct {
     const char *image_file;
     const char *cpu_target;
     int32_t nprocs;
-    const char *machinefile;
+    const char *machine_file;
     int8_t isinteractive;
     int8_t color;
     int8_t historyfile;
