@@ -4,21 +4,21 @@
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_scale!(X::AbstractArray, s::Number)
+function generic_mul1!(X::AbstractArray, s::Number)
     @simd for I in eachindex(X)
         @inbounds X[I] *= s
     end
     X
 end
 
-function generic_scale!(s::Number, X::AbstractArray)
+function generic_mul2!(s::Number, X::AbstractArray)
     @simd for I in eachindex(X)
         @inbounds X[I] = s*X[I]
     end
     X
 end
 
-function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
     if _length(C) != _length(X)
         throw(DimensionMismatch("first array has length $(_length(C)) which does not match the length of the second, $(_length(X))."))
     end
@@ -28,7 +28,7 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     C
 end
 
-function generic_scale!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
     if _length(C) != _length(X)
         throw(DimensionMismatch("first array has length $(_length(C)) which does not
 match the length of the second, $(_length(X))."))
@@ -39,20 +39,13 @@ match the length of the second, $(_length(X))."))
     C
 end
 
-scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
-scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, s, X)
+mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
+mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
 """
-    scale!(A, b)
-    scale!(b, A)
+    mul1!(A, b)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.
-
-If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i` of `A` by
-`b[i]` (similar to `A*Diagonal(b)`), while `scale!(b,A)` scales each row `i` of `A` by `b[i]`
-(similar to `Diagonal(b)*A`), again operating in-place on `A`. An `InexactError` exception is
-thrown if the scaling produces a number not representable by the element type of `A`,
-e.g. for integer types.
 
 # Examples
 ```jldoctest
@@ -61,28 +54,33 @@ julia> a = [1 2; 3 4]
  1  2
  3  4
 
-julia> b = [1; 2]
-2-element Array{Int64,1}:
- 1
- 2
-
-julia> scale!(a,b)
+julia> mul1!(a, 2)
 2×2 Array{Int64,2}:
- 1  4
- 3  8
-
-julia> a = [1 2; 3 4];
-
-julia> b = [1; 2];
-
-julia> scale!(b,a)
-2×2 Array{Int64,2}:
- 1  2
+ 2  4
  6  8
 ```
 """
-scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
-scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
+mul1!(X::AbstractArray, s::Number) = generic_mul1!(X, s)
+
+"""
+    mul2!(A, b)
+
+Scale an array `A` by a scalar `b` overwriting `A` in-place.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> mul2!(2, a)
+2×2 Array{Int64,2}:
+ 2  4
+ 6  8
+```
+"""
+mul2!(s::Number, X::AbstractArray) = generic_mul2!(s, X)
 
 """
     cross(x, y)
@@ -1185,22 +1183,6 @@ function linreg(x::AbstractVector, y::AbstractVector)
     return (a, b)
 end
 
-# multiply by diagonal matrix as vector
-#diagmm!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
-
-#diagmm!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
-
-scale!(A::AbstractMatrix, b::AbstractVector) = scale!(A,A,b)
-scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
-
-#diagmm(A::AbstractMatrix, b::AbstractVector)
-#diagmm(b::AbstractVector, A::AbstractMatrix)
-
-#^(A::AbstractMatrix, p::Number)
-
-#findmax(a::AbstractArray)
-#findmin(a::AbstractArray)
-
 """
     peakflops(n::Integer=2000; parallel::Bool=false)
 
@@ -1457,12 +1439,12 @@ end
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        scale!(v, invnrm)
+        mul1!(v, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        scale!(v, εδ)
-        scale!(v, inv(nrm*εδ))
+        mul1!(v, εδ)
+        mul1!(v, inv(nrm*εδ))
     end
 
     v

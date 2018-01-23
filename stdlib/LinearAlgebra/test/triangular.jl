@@ -195,25 +195,25 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             ci = cr * im
             if elty1 <: Real
                 A1tmp = copy(A1)
-                scale!(A1tmp,cr)
+                mul1!(A1tmp, cr)
                 @test A1tmp == cr*A1
                 A1tmp = copy(A1)
-                scale!(cr,A1tmp)
+                mul2!(cr, A1tmp)
                 @test A1tmp == cr*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
-                scale!(A1tmp,A2tmp,cr)
+                mul!(A1tmp, A2tmp, cr)
                 @test A1tmp == cr * A2tmp
             else
                 A1tmp = copy(A1)
-                scale!(A1tmp,ci)
+                mul1!(A1tmp, ci)
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
-                scale!(ci,A1tmp)
+                mul2!(ci, A1tmp)
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
-                scale!(A1tmp,A2tmp,ci)
+                mul!(A1tmp, A2tmp, ci)
                 @test A1tmp == ci * A2tmp
             end
         end

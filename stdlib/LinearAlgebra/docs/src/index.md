@@ -354,7 +354,8 @@ LinearAlgebra.tril!
 LinearAlgebra.diagind
 LinearAlgebra.diag
 LinearAlgebra.diagm
-LinearAlgebra.scale!
+LinearAlgebra.mul1!
+LinearAlgebra.mul2!
 LinearAlgebra.rank
 LinearAlgebra.norm
 LinearAlgebra.vecnorm

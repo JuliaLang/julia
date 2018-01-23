@@ -400,7 +400,7 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
-function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}, c::Number)
+function mul!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitUpperTriangular)
@@ -412,7 +412,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular
     end
     return A
 end
-function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}, c::Number)
+function mul!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitLowerTriangular)
@@ -424,8 +424,8 @@ function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular
     end
     return A
 end
-scale!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = scale!(A,A,c)
-scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
+mul1!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
+mul2!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul1!(A', c')'
 
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
@@ -1902,7 +1902,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     end
 
     normA0 = norm(A0, 1)
-    scale!(A0, 1/normA0)
+    mul1!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
     n = checksquare(A0)
@@ -1927,7 +1927,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
             @inbounds S[i, i] = S[i, i] + 1
         end
         copyto!(Stmp, S)
-        scale!(S, A, c)
+        mul!(S, A, c)
         ldiv!(Stmp, S.data)
 
         c = (p - j) / (j4 - 2)
@@ -1935,14 +1935,14 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
             @inbounds S[i, i] = S[i, i] + 1
         end
         copyto!(Stmp, S)
-        scale!(S, A, c)
+        mul!(S, A, c)
         ldiv!(Stmp, S.data)
     end
     for i = 1:n
         S[i, i] = S[i, i] + 1
     end
     copyto!(Stmp, S)
-    scale!(S, A, -p)
+    mul!(S, A, -p)
     ldiv!(Stmp, S.data)
     for i = 1:n
         @inbounds S[i, i] = S[i, i] + 1
@@ -1954,7 +1954,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         copyto!(S, Stmp)
         blockpower!(A0, S, p/(2^(s-m)))
     end
-    scale!(S, normA0^p)
+    mul1!(S, normA0^p)
     return S
 end
 powm(A::LowerTriangular, p::Real) = copy(transpose(powm(copy(transpose(A)), p::Real)))
@@ -2119,7 +2119,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Scale back
-    scale!(2^s, Y)
+    mul2!(2^s, Y)
 
     # Compute accurate diagonal and superdiagonal of log(T)
     for k = 1:n-1

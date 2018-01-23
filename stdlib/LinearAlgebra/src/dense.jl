@@ -14,21 +14,21 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function scale!(X::Array{T}, s::T) where T<:BlasFloat
+function mul1!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
     if length(X) < SCAL_CUTOFF
-        generic_scale!(X, s)
+        generic_mul1!(X, s)
     else
         BLAS.scal!(length(X), s, X, 1)
     end
     X
 end
 
-scale!(s::T, X::Array{T}) where {T<:BlasFloat} = scale!(X, s)
+mul2!(s::T, X::Array{T}) where {T<:BlasFloat} = mul1!(X, s)
 
-scale!(X::Array{T}, s::Number) where {T<:BlasFloat} = scale!(X, convert(T, s))
-function scale!(X::Array{T}, s::Real) where T<:BlasComplex
+mul1!(X::Array{T}, s::Number) where {T<:BlasFloat} = mul1!(X, convert(T, s))
+function mul1!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
     GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
@@ -1402,7 +1402,7 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
 
     D = -(adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*(Y * adjoint(QB)), inv(scale))
+    mul1!(QA*(Y * adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1445,7 +1445,7 @@ function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
 
     D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*(Y * adjoint(Q)), inv(scale))
+    mul1!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)
