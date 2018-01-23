@@ -492,47 +492,43 @@ end
 end
 
 @testset "replace! & replace" begin
-    maybe1(v, p) = if p Some(v) end
-    maybe2(v, p) = if p v end
-
-    for maybe = (maybe1, maybe2)
-        a = [1, 2, 3, 1]
-        @test replace(x->maybe(2x, iseven(x)), a) == [1, 4, 3, 1]
-        @test replace!(x->maybe(2x, iseven(x)), a) === a
-        @test a == [1, 4, 3, 1]
-        @test replace(a, 1=>0) == [0, 4, 3, 0]
-        for count = (1, 0x1, big(1))
-            @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
-        end
-        @test replace!(a, 1=>2) === a
-        @test a == [2, 4, 3, 2]
-        @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
-
-        d = Dict(1=>2, 3=>4)
-        @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
-        @test replace!(x->maybe(x.first=>2*x.second, x.first > 2), d) === d
-        @test d == Dict(1=>2, 3=>8)
-        @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
-        @test replace!(d, (3=>8)=>(2=>2)) === d
-        @test d == Dict(1=>2, 2=>2)
-        for count = (1, 0x1, big(1))
-            @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
-                                                                      Dict(2=>2, 0=>0)]
-        end
-        s = Set([1, 2, 3])
-        @test replace(x->maybe(2x, x>1), s) == Set([1, 4, 6])
-        for count = (1, 0x1, big(1))
-            @test replace(x->maybe(2x, x>1), s, count=count) in [Set([1, 4, 3]), Set([1, 2, 6])]
-        end
-        @test replace(s, 1=>4) == Set([2, 3, 4])
-        @test replace!(s, 1=>2) === s
-        @test s == Set([2, 3])
-        @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
-
-        for count = (0, 0x0, big(0))
-            @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
-        end
+    a = [1, 2, 3, 1]
+    @test replace(x -> iseven(x) ? 2x : x, a) == [1, 4, 3, 1]
+    @test replace!(x -> iseven(x) ? 2x : x, a) === a
+    @test a == [1, 4, 3, 1]
+    @test replace(a, 1=>0) == [0, 4, 3, 0]
+    for count = (1, 0x1, big(1))
+        @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
     end
+    @test replace!(a, 1=>2) === a
+    @test a == [2, 4, 3, 2]
+    @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
+
+    d = Dict(1=>2, 3=>4)
+    @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
+    @test replace!(x -> x.first > 2 ? x.first=>2*x.second : x, d) === d
+    @test d == Dict(1=>2, 3=>8)
+    @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
+    @test replace!(d, (3=>8)=>(2=>2)) === d
+    @test d == Dict(1=>2, 2=>2)
+    for count = (1, 0x1, big(1))
+        @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
+                                                                  Dict(2=>2, 0=>0)]
+    end
+    s = Set([1, 2, 3])
+    @test replace(x -> x > 1 ? 2x : x, s) == Set([1, 4, 6])
+    for count = (1, 0x1, big(1))
+        @test replace(x -> x > 1 ? 2x : x, s, count=count) in [Set([1, 4, 3]), Set([1, 2, 6])]
+    end
+    @test replace(s, 1=>4) == Set([2, 3, 4])
+    @test replace!(s, 1=>2) === s
+    @test s == Set([2, 3])
+    @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
+
+    for count = (0, 0x0, big(0))
+        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    end
+
     # test collisions with AbstractSet/AbstractDict
     @test replace!(x->2x, Set([3, 6])) == Set([6, 12])
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
@@ -541,16 +537,16 @@ end
     # test Some(nothing)
     a = [1, 2, nothing, 4]
     @test replace(x -> x === nothing ? 0 : Some(nothing), a) == [nothing, nothing, 0, nothing]
-    @test replace(x -> x === nothing ? 0 : nothing, a) == [1, 2, 0, 4]
-    @test replace!(x -> x !== nothing ? Some(nothing) : nothing, a) == [nothing, nothing, nothing, nothing]
-    @test replace(iseven, Any[1, 2, 3, 4], nothing) == [1, nothing, 3, nothing]
-    @test replace(Any[1, 2, 3, 4], 1=>nothing, 3=>nothing) == [nothing, 2, nothing, 4]
+    @test replace(x -> x === nothing ? 0 : x, a) == [1, 2, 0, 4]
+    @test replace!(x -> x !== nothing ? Some(nothing) : Some(x), a) == [nothing, nothing, nothing, nothing]
+    @test replace(iseven, Any[1, 2, 3, 4], Some(nothing)) == [1, nothing, 3, nothing]
+    @test replace(Any[1, 2, 3, 4], 1=>Some(nothing), 3=>Some(nothing)) == [nothing, 2, nothing, 4]
     s = Set([1, 2, nothing, 4])
     @test replace(x -> x === nothing ? 0 : Some(nothing), s) == Set([0, nothing])
-    @test replace(x -> x === nothing ? 0 : nothing, s) == Set([1, 2, 0, 4])
-    @test replace(x -> x !== nothing ? Some(nothing) : nothing, s) == Set([nothing])
-    @test replace(iseven, Set(Any[1, 2, 3, 4]), nothing) == Set([1, nothing, 3, nothing])
-    @test replace(Set(Any[1, 2, 3, 4]), 1=>nothing, 3=>nothing) == Set([nothing, 2, nothing, 4])
+    @test replace(x -> x === nothing ? 0 : x, s) == Set([1, 2, 0, 4])
+    @test replace(x -> x !== nothing ? Some(nothing) : x, s) == Set([nothing])
+    @test replace(iseven, Set(Any[1, 2, 3, 4]), Some(nothing)) == Set([1, nothing, 3, nothing])
+    @test replace(Set(Any[1, 2, 3, 4]), 1=>Some(nothing), 3=>Some(nothing)) == Set([nothing, 2, nothing, 4])
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
