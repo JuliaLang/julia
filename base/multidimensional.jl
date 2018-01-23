@@ -275,7 +275,7 @@ module IteratorsMD
     eltype(R::CartesianIndices) = eltype(typeof(R))
     eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
-    IteratorSize(::Type{<:CartesianIndices}) = Base.HasShape()
+    IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)

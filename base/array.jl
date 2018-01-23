@@ -456,8 +456,9 @@ _similar_for(c, T, itr, isz) = similar(c, T)
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
-trait, the result will have the same shape and number of dimensions as the argument.
+`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+and number of dimensions as the argument.
 
 # Examples
 ```jldoctest
@@ -1499,7 +1500,9 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 _pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = _pairs(IteratorSize(iter), iter)
-_pairs(::Union{HasLength, HasShape}, iter) = zip(1:length(iter), iter)
+# includes HasShape{1} for consistency with keys(::AbstractVector)
+_pairs(::Union{HasLength, HasShape{1}}, iter) = zip(1:length(iter), iter)
+_pairs(::HasShape, iter) = zip(CartesianIndices(size(iter)), iter)
 _pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
 
 """
