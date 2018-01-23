@@ -133,7 +133,7 @@ end
     @test hex(12) == "c"
     @test hex(-12, 3) == "-00c"
 
-    @test base(2, 5, 7) == "0000101"
+    @test base(2, 5, pad = 7) == "0000101"
 
     @test bitstring(Int16(3)) == "0000000000000011"
     @test bitstring('3') == "00110011000000000000000000000000"

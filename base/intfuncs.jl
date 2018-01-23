@@ -633,7 +633,7 @@ function base(b::Int, x::Integer, pad::Int, neg::Bool)
 end
 
 """
-    base(base::Integer, n::Integer, pad::Integer=1)
+    base(base::Integer, n::Integer; pad::Integer=1)
 
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
@@ -646,7 +646,7 @@ julia> base(5,13,4)
 "0023"
 ```
 """
-base(b::Integer, n::Integer, pad::Integer=1) =
+base(b::Integer, n::Integer; pad::Integer=1) =
     base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
 
 for sym in (:bin, :oct, :dec, :hex)

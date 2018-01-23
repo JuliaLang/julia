@@ -606,7 +606,7 @@ oct(n::BigInt, pad::Int) = base( 8, n, pad)
 dec(n::BigInt, pad::Int) = base(10, n, pad)
 hex(n::BigInt, pad::Int) = base(16, n, pad)
 
-function base(b::Integer, n::BigInt, pad::Integer=1)
+function base(b::Integer, n::BigInt; pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     iszero(n) && pad < 1 && return ""

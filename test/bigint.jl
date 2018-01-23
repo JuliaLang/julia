@@ -373,7 +373,7 @@ for f in (bin, oct, dec, hex)
     local f
     @test f(big(0), 0) == ""
 end
-@test base(rand(2:62), big(0), 0) == ""
+@test base(rand(2:62), big(0), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

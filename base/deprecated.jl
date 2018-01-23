@@ -1665,6 +1665,8 @@ export readandwrite
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
+@deprecase base(b, n, pad) base(b, n, pad = pad)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
