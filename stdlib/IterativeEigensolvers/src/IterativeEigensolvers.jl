@@ -7,9 +7,9 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigensolvers
 
-using LinearAlgebra: BlasFloat, BlasInt, SVD, checksquare, mul!,
-              UniformScaling, issymmetric, ishermitian,
-              factorize, I, mul1!, qr
+using LinearAlgebra: BlasFloat, BlasInt, Diagonal, I, SVD, UniformScaling,
+                     checksquare, factorize,ishermitian, issymmetric, mul!,
+                     mul1!, qr
 import LinearAlgebra
 
 export eigs, svds
