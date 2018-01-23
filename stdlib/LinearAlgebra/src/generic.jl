@@ -43,44 +43,44 @@ mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
 mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
 """
-    mul1!(A, b)
+    mul1!(A::AbstractArray, b::Number)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.
 
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> mul1!(a, 2)
+julia> mul1!(A, 2)
 2×2 Array{Int64,2}:
  2  4
  6  8
 ```
 """
-mul1!(X::AbstractArray, s::Number) = generic_mul1!(X, s)
+mul1!(A::AbstractArray, b::Number) = generic_mul1!(A, b)
 
 """
-    mul2!(A, b)
+    mul2!(a::Number, B::AbstractArray)
 
-Scale an array `A` by a scalar `b` overwriting `A` in-place.
+Scale an array `B` by a scalar `a` overwriting `B` in-place.
 
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
+julia> B = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> mul2!(2, a)
+julia> mul2!(2, B)
 2×2 Array{Int64,2}:
  2  4
  6  8
 ```
 """
-mul2!(s::Number, X::AbstractArray) = generic_mul2!(s, X)
+mul2!(a::Number, B::AbstractArray) = generic_mul2!(a, B)
 
 """
     cross(x, y)

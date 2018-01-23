@@ -354,8 +354,6 @@ LinearAlgebra.tril!
 LinearAlgebra.diagind
 LinearAlgebra.diag
 LinearAlgebra.diagm
-LinearAlgebra.mul1!
-LinearAlgebra.mul2!
 LinearAlgebra.rank
 LinearAlgebra.norm
 LinearAlgebra.vecnorm
@@ -431,6 +429,8 @@ below (e.g. `mul!`) according to the usual Julia convention.
 
 ```@docs
 LinearAlgebra.mul!
+LinearAlgebra.mul1!
+LinearAlgebra.mul2!
 LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
 ```

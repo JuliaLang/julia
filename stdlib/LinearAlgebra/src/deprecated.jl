@@ -1274,5 +1274,5 @@ end
 @deprecate scale!(a::Number, B::AbstractArray)                             mul2!(a, B)
 @deprecate scale!(A::AbstractMatrix, b::AbstractVector)                    mul1!(A, Diagonal(b))
 @deprecate scale!(a::AbstractVector, B::AbstractMatrix)                    mul2!(Diagonal(a), B)
-@deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(X, A, Diagonal(b))
-@deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(X, Diagonal(a), B)
+@deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(C, A, Diagonal(b))
+@deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
