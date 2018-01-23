@@ -13,7 +13,7 @@ function update!(context::T, data::U) where {T<:SHA_CTX,
     usedspace = context.bytecount % blocklen(T)
     while len - data_idx + usedspace >= blocklen(T)
         # Fill up as much of the buffer as we can with the data given us
-        copy!(context.buffer, usedspace + 1, data, data_idx + 1, blocklen(T) - usedspace)
+        copyto!(context.buffer, usedspace + 1, data, data_idx + 1, blocklen(T) - usedspace)
 
         transform!(context)
         context.bytecount += blocklen(T) - usedspace
@@ -23,7 +23,7 @@ function update!(context::T, data::U) where {T<:SHA_CTX,
 
     # There is less than a complete block left, but we need to save the leftovers into context.buffer:
     if len > data_idx
-        copy!(context.buffer, usedspace + 1, data, data_idx + 1, len - data_idx)
+        copyto!(context.buffer, usedspace + 1, data, data_idx + 1, len - data_idx)
         context.bytecount += len - data_idx
     end
 end

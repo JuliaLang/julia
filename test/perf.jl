@@ -11,34 +11,34 @@ function do_tests(filepath)
     # test performance
     print("read:    ")
     @time begin
-        const fh = open(filepath, "r")
-        const bytes = read(fh)
+        fh = open(filepath, "r")
+        bytes = read(fh)
     end
-    gc()
+    GC.gc()
 
     print("SHA-1:   ")
     sha1(bytes)
-    gc()
+    GC.gc()
     @time sha1(bytes)
 
     print("SHA2-256: ")
     sha256(bytes)
-    gc()
+    GC.gc()
     @time sha256(bytes)
 
     print("SHA2-512: ")
     sha512(bytes)
-    gc()
+    GC.gc()
     @time sha512(bytes)
 
     print("SHA3-256: ")
     sha3_256(bytes)
-    gc()
+    GC.gc()
     @time sha3_256(bytes)
 
     print("SHA3-512: ")
     sha3_512(bytes)
-    gc()
+    GC.gc()
     @time sha3_512(bytes)
 end
 
