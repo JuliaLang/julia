@@ -831,6 +831,12 @@ else
     import SuiteSparse
 end
 
+@static if VERSION < v"0.7.0-DEV.3500"
+    const REPL = Base.REPL
+else
+    import REPL
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"
