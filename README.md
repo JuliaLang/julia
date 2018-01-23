@@ -301,6 +301,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `find` is now `findall` ([#25545]).
 
+* `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -484,3 +486,4 @@ includes this fix. Find the minimum version from there.
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
+[#25654]: https://github.com/JuliaLang/julia/issues/25654

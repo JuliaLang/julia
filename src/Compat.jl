@@ -1304,6 +1304,12 @@ if !isdefined(Base, :findall)
     export findall
 end
 
+@static if !isdefined(Base, :argmin)
+    const argmin = indmin
+    const argmax = indmax
+    export argmin, argmax
+end
+
 @static if !isdefined(Base, :parentmodule)
     parentmodule(m::Module) = Base.module_parent(m)
     parentmodule(f::Function) = Base.function_module(f)
