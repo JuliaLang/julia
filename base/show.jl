@@ -584,7 +584,7 @@ end
 
 function show(io::IO, m::Module)
     if is_root_module(m)
-        print(io, module_name(m))
+        print(io, nameof(m))
     else
         print(io, join(fullname(m),"."))
     end
@@ -1730,7 +1730,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             t = getfield(m, s)
             if t === x || t === m
                 continue
-            elseif isa(t, Module) && module_name(t) === s && parentmodule(t) === m
+            elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)

@@ -202,7 +202,7 @@ end
 
 function PkgId(m::Module)
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(module_name(m))
+    name = String(nameof(m))
     UInt128(uuid) == 0 && return PkgId(name)
     return PkgId(uuid, name)
 end

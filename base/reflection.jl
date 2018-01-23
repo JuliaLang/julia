@@ -3,17 +3,17 @@
 # name and module reflection
 
 """
-    module_name(m::Module) -> Symbol
+    nameof(m::Module) -> Symbol
 
 Get the name of a `Module` as a `Symbol`.
 
 # Examples
 ```jldoctest
-julia> module_name(Base)
+julia> nameof(Base)
 :Base
 ```
 """
-module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
     parentmodule(m::Module) -> Module
@@ -56,7 +56,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
-    mn = module_name(m)
+    mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
     end
@@ -144,9 +144,10 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
 
 """
-    Base.datatype_name(t) -> Symbol
+    nameof(t::DataType) -> Symbol
 
-Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
+as a symbol.
 
 # Examples
 ```jldoctest
@@ -156,12 +157,12 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_name(Foo.S{T} where T)
+julia> nameof(Foo.S{T} where T)
 :S
 ```
 """
-datatype_name(t::DataType) = t.name.name
-datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
+nameof(t::DataType) = t.name.name
+nameof(t::UnionAll) = nameof(unwrap_unionall(t))
 
 """
     parentmodule(t::DataType) -> Module
@@ -1018,11 +1019,11 @@ end
 
 # function reflection
 """
-    Base.function_name(f::Function) -> Symbol
+    nameof(f::Function) -> Symbol
 
 Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
-function_name(f::Function) = typeof(f).name.mt.name
+nameof(f::Function) = typeof(f).name.mt.name
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
