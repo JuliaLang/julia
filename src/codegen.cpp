@@ -650,6 +650,25 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tinde
     return tagval;
 }
 
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex)
+{
+    Value *loc;
+    if (Constant *cv = dyn_cast<Constant>(v)) {
+        loc = get_pointer_to_constant(cv, "", *jl_Module);
+    }
+    else {
+        loc = emit_static_alloca(ctx, v->getType());
+        ctx.builder.CreateStore(v, loc);
+    }
+    return mark_julia_slot(loc, typ, tindex, tbaa_stack);
+}
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v)
+{
+    if (v.ispointer())
+        return v;
+    return value_to_pointer(ctx, v.V, v.typ, v.TIndex);
+}
+
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
     if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
@@ -667,18 +686,10 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
-    if (v && T->isAggregateType() && !isboxed) {
+    if (v && !isboxed && v->getType()->isAggregateType()) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc;
-        if (Constant *cv = dyn_cast<Constant>(v)) {
-            loc = get_pointer_to_constant(cv, "", *jl_Module);
-        }
-        else {
-            loc = emit_static_alloca(ctx, T);
-            ctx.builder.CreateStore(v, loc);
-        }
-        return mark_julia_slot(loc, typ, NULL, tbaa_stack);
+        return value_to_pointer(ctx, v, typ, NULL);
     }
     return jl_cgval_t(v, NULL, isboxed, typ, NULL);
 }
@@ -950,6 +961,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
 }
 
 // given a value marked with type `v.typ`, compute the mapping and/or boxing to return a value of type `typ`
+// TODO: should this set TIndex when trivial (such as 0x80 or concrete types) ?
 static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ)
 {
     if (typ == (jl_value_t*)jl_typeofbottom_type)
@@ -3052,7 +3064,10 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
     jl_cgval_t f = emit_expr(ctx, args[0]);
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
-        return emit_intrinsic(ctx, (intrinsic)*(uint32_t*)jl_data_ptr(f.constant), args, nargs - 1);
+        JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
+        if (fi == JL_I::select_value)
+            return emit_select_value(ctx, args, nargs - 1, rt);
+        return emit_intrinsic(ctx, fi, args, nargs - 1);
     }
 
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
