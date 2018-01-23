@@ -106,11 +106,11 @@ Get the name of field `i` of a `DataType`.
 
 # Examples
 ```jldoctest
-julia> fieldname(SparseMatrixCSC, 1)
-:m
+julia> fieldname(Rational, 1)
+:num
 
-julia> fieldname(SparseMatrixCSC, 5)
-:nzval
+julia> fieldname(Rational, 2)
+:den
 ```
 """
 function fieldname(t::DataType, i::Integer)
