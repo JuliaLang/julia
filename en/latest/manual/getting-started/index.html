@@ -27,7 +27,7 @@ bar</code></pre><p>Or you could put that code into a script and run it:</p><pre>
 $ julia script.jl foo bar
 script.jl
 foo
-bar</code></pre><p>The <code>--</code> delimiter can be used to separate command-line args to the scriptfile from args to Julia:</p><pre><code class="language-none">$ julia --color=yes -O -- foo.jl arg1 arg2..</code></pre><p>Julia can be started in parallel mode with either the <code>-p</code> or the <code>--machinefile</code> options. <code>-p n</code> will launch an additional <code>n</code> worker processes, while <code>--machinefile file</code> will launch a worker for each line in file <code>file</code>. The machines defined in <code>file</code> must be accessible via a passwordless <code>ssh</code> login, with Julia installed at the same location as the current host. Each machine definition takes the form <code>[count*][user@]host[:port] [bind_addr[:port]]</code> . <code>user</code> defaults to current user, <code>port</code> to the standard ssh port. <code>count</code> is the number of workers to spawn on the node, and defaults to 1. The optional <code>bind-to bind_addr[:port]</code> specifies the ip-address and port that other workers should use to connect to this worker.</p><p>If you have code that you want executed whenever Julia is run, you can put it in <code>~/.juliarc.jl</code>:</p><pre><code class="language-none">$ echo &#39;println(&quot;Greetings! 你好! 안녕하세요?&quot;)&#39; &gt; ~/.juliarc.jl
+bar</code></pre><p>The <code>--</code> delimiter can be used to separate command-line args to the scriptfile from args to Julia:</p><pre><code class="language-none">$ julia --color=yes -O -- foo.jl arg1 arg2..</code></pre><p>Julia can be started in parallel mode with either the <code>-p</code> or the <code>--machine-file</code> options. <code>-p n</code> will launch an additional <code>n</code> worker processes, while <code>--machine-file file</code> will launch a worker for each line in file <code>file</code>. The machines defined in <code>file</code> must be accessible via a passwordless <code>ssh</code> login, with Julia installed at the same location as the current host. Each machine definition takes the form <code>[count*][user@]host[:port] [bind_addr[:port]]</code> . <code>user</code> defaults to current user, <code>port</code> to the standard ssh port. <code>count</code> is the number of workers to spawn on the node, and defaults to 1. The optional <code>bind-to bind_addr[:port]</code> specifies the ip-address and port that other workers should use to connect to this worker.</p><p>If you have code that you want executed whenever Julia is run, you can put it in <code>~/.juliarc.jl</code>:</p><pre><code class="language-none">$ echo &#39;println(&quot;Greetings! 你好! 안녕하세요?&quot;)&#39; &gt; ~/.juliarc.jl
 $ julia
 Greetings! 你好! 안녕하세요?
 
@@ -50,7 +50,7 @@ Greetings! 你好! 안녕하세요?
 
  -p, --procs {N|auto}      Integer value N launches N additional local worker processes
                            &quot;auto&quot; launches as many workers as the number of local cores
- --machinefile &lt;file&gt;      Run processes on hosts listed in &lt;file&gt;
+ --machine-file &lt;file&gt;     Run processes on hosts listed in &lt;file&gt;
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
  -q, --quiet               Quiet startup: no banner, suppress REPL warnings
