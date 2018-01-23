@@ -991,6 +991,9 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
+  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
+    and `Time(0)` respectively ([#23724]).
+
 Command-line option changes
 ---------------------------
 
