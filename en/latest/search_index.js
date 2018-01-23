@@ -693,7 +693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Functions",
     "title": "Optional Arguments",
     "category": "section",
-    "text": "In many cases, function arguments have sensible default values and therefore might not need to be passed explicitly in every call. For example, the library function parse(T, num, base) interprets a string as a number in some base. The base argument defaults to 10. This behavior can be expressed concisely as:function parse(T, num, base=10)\n    ###\nendWith this definition, the function can be called with either two or three arguments, and 10 is automatically passed when a third argument is not specified:julia> parse(Int,\"12\",10)\n12\n\njulia> parse(Int,\"12\",3)\n5\n\njulia> parse(Int,\"12\")\n12Optional arguments are actually just a convenient syntax for writing multiple method definitions with different numbers of arguments (see Note on Optional and keyword Arguments)."
+    "text": "In many cases, function arguments have sensible default values and therefore might not need to be passed explicitly in every call. For example, the library function parse(T, num, base = base) interprets a string as a number in some base. The base argument defaults to 10. This behavior can be expressed concisely as:function parse(T, num; base = 10)\n    ###\nendWith this definition, the function can be called with either two or three arguments, and 10 is automatically passed when a third argument is not specified:julia> parse(Int, \"12\", base = 10)\n12\n\njulia> parse(Int, \"12\", base = 3)\n5\n\njulia> parse(Int, \"12\")\n12Optional arguments are actually just a convenient syntax for writing multiple method definitions with different numbers of arguments (see Note on Optional and keyword Arguments)."
 },
 
 {
@@ -2909,7 +2909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Calling C and Fortran Code",
     "title": "Accessing Data through a Pointer",
     "category": "section",
-    "text": "The following methods are described as \"unsafe\" because a bad pointer or type declaration can cause Julia to terminate abruptly.Given a Ptr{T}, the contents of type T can generally be copied from the referenced memory into a Julia object using unsafe_load(ptr, [index]). The index argument is optional (default is 1), and follows the Julia-convention of 1-based indexing. This function is intentionally similar to the behavior of getindex and setindex! (e.g. [] access syntax).The return value will be a new object initialized to contain a copy of the contents of the referenced memory. The referenced memory can safely be freed or released.If T is Any, then the memory is assumed to contain a reference to a Julia object (a jl_value_t*), the result will be a reference to this object, and the object will not be copied. You must be careful in this case to ensure that the object was always visible to the garbage collector (pointers do not count, but the new reference does) to ensure the memory is not prematurely freed. Note that if the object was not originally allocated by Julia, the new object will never be finalized by Julia's garbage collector.  If the Ptr itself is actually a jl_value_t*, it can be converted back to a Julia object reference by unsafe_pointer_to_objref(ptr). (Julia values v can be converted to jl_value_t* pointers, as Ptr{Cvoid}, by calling pointer_from_objref(v).)The reverse operation (writing data to a Ptr{T}), can be performed using unsafe_store!(ptr, value, [index]). Currently, this is only supported for primitive types or other pointer-free (isbits) immutable struct types.Any operation that throws an error is probably currently unimplemented and should be posted as a bug so that it can be resolved.If the pointer of interest is a plain-data array (primitive type or immutable struct), the function unsafe_wrap(Array, ptr,dims,[own]) may be more useful. The final parameter should be true if Julia should \"take ownership\" of the underlying buffer and call free(ptr) when the returned Array object is finalized.  If the own parameter is omitted or false, the caller must ensure the buffer remains in existence until all access is complete.Arithmetic on the Ptr type in Julia (e.g. using +) does not behave the same as C's pointer arithmetic. Adding an integer to a Ptr in Julia always moves the pointer by some number of bytes, not elements. This way, the address values obtained from pointer arithmetic do not depend on the element types of pointers."
+    "text": "The following methods are described as \"unsafe\" because a bad pointer or type declaration can cause Julia to terminate abruptly.Given a Ptr{T}, the contents of type T can generally be copied from the referenced memory into a Julia object using unsafe_load(ptr, [index]). The index argument is optional (default is 1), and follows the Julia-convention of 1-based indexing. This function is intentionally similar to the behavior of getindex and setindex! (e.g. [] access syntax).The return value will be a new object initialized to contain a copy of the contents of the referenced memory. The referenced memory can safely be freed or released.If T is Any, then the memory is assumed to contain a reference to a Julia object (a jl_value_t*), the result will be a reference to this object, and the object will not be copied. You must be careful in this case to ensure that the object was always visible to the garbage collector (pointers do not count, but the new reference does) to ensure the memory is not prematurely freed. Note that if the object was not originally allocated by Julia, the new object will never be finalized by Julia's garbage collector.  If the Ptr itself is actually a jl_value_t*, it can be converted back to a Julia object reference by unsafe_pointer_to_objref(ptr). (Julia values v can be converted to jl_value_t* pointers, as Ptr{Cvoid}, by calling pointer_from_objref(v).)The reverse operation (writing data to a Ptr{T}), can be performed using unsafe_store!(ptr, value, [index]). Currently, this is only supported for primitive types or other pointer-free (isbits) immutable struct types.Any operation that throws an error is probably currently unimplemented and should be posted as a bug so that it can be resolved.If the pointer of interest is a plain-data array (primitive type or immutable struct), the function unsafe_wrap(Array, ptr,dims, own = false) may be more useful. The final parameter should be true if Julia should \"take ownership\" of the underlying buffer and call free(ptr) when the returned Array object is finalized.  If the own parameter is omitted or false, the caller must ensure the buffer remains in existence until all access is complete.Arithmetic on the Ptr type in Julia (e.g. using +) does not behave the same as C's pointer arithmetic. Adding an integer to a Ptr in Julia always moves the pointer by some number of bytes, not elements. This way, the address values obtained from pointer arithmetic do not depend on the element types of pointers."
 },
 
 {
@@ -5653,7 +5653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.hasmethod",
     "category": "Function",
-    "text": "hasmethod(f, Tuple type, world=typemax(UInt)) -> Bool\n\nDetermine whether the given generic function has a method matching the given Tuple of argument types with the upper bound of world age given by world.\n\nExamples\n\njulia> hasmethod(length, Tuple{Array})\ntrue\n\n\n\n\n\n"
+    "text": "hasmethod(f, Tuple type; world = typemax(UInt)) -> Bool\n\nDetermine whether the given generic function has a method matching the given Tuple of argument types with the upper bound of world age given by world.\n\nExamples\n\njulia> hasmethod(length, Tuple{Array})\ntrue\n\n\n\n\n\n"
 },
 
 {
@@ -6457,11 +6457,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.Timer-Tuple{Function,Real,Real}",
+    "location": "base/base/#Base.Timer-Tuple{Function,Real}",
     "page": "Essentials",
     "title": "Base.Timer",
     "category": "Method",
-    "text": "Timer(callback::Function, delay, repeat=0)\n\nCreate a timer that wakes up tasks waiting for it (by calling wait on the timer object) and calls the function callback.\n\nWaiting tasks are woken and the function callback is called after an intial delay of delay seconds, and then repeating with the given repeat interval in seconds. If repeat is equal to 0, the timer is only triggered once. The function callback is called with a single argument, the timer itself. When the timer is closed (by close waiting tasks are woken with an error. Use isopen to check whether a timer is still active.\n\nExamples\n\nHere the first number is printed after a delay of two seconds, then the following numbers are printed quickly.\n\njulia> begin\n           i = 0\n           cb(timer) = (global i += 1; println(i))\n           t = Timer(cb, 2, 0.2)\n           wait(t)\n           sleep(0.5)\n           close(t)\n       end\n1\n2\n3\n\n\n\n\n\n"
+    "text": "Timer(callback::Function, delay; interval = 0)\n\nCreate a timer that wakes up tasks waiting for it (by calling wait on the timer object) and calls the function callback.\n\nWaiting tasks are woken and the function callback is called after an intial delay of delay seconds, and then repeating with the given interval in seconds. If interval is equal to 0, the timer is only triggered once. The function callback is called with a single argument, the timer itself. When the timer is closed (by close waiting tasks are woken with an error. Use isopen to check whether a timer is still active.\n\nExamples\n\nHere the first number is printed after a delay of two seconds, then the following numbers are printed quickly.\n\njulia> begin\n           i = 0\n           cb(timer) = (global i += 1; println(i))\n           t = Timer(cb, 2, interval = 0.2)\n           wait(t)\n           sleep(0.5)\n           close(t)\n       end\n1\n2\n3\n\n\n\n\n\n"
 },
 
 {
@@ -6469,7 +6469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.Timer",
     "category": "Type",
-    "text": "Timer(delay, repeat=0)\n\nCreate a timer that wakes up tasks waiting for it (by calling wait on the timer object).\n\nWaiting tasks are woken after an intial delay of delay seconds, and then repeating with the given repeat interval in seconds. If repeat is equal to 0, the timer is only triggered once. When the timer is closed (by close waiting tasks are woken with an error. Use isopen to check whether a timer is still active.\n\n\n\n\n\n"
+    "text": "Timer(delay; interval = 0)\n\nCreate a timer that wakes up tasks waiting for it (by calling wait on the timer object).\n\nWaiting tasks are woken after an intial delay of delay seconds, and then repeating with the given interval in seconds. If interval is equal to 0, the timer is only triggered once. When the timer is closed (by close waiting tasks are woken with an error. Use isopen to check whether a timer is still active.\n\n\n\n\n\n"
 },
 
 {
@@ -6493,7 +6493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Events",
     "category": "section",
-    "text": "Base.Timer(::Function, ::Real, ::Real)\nBase.Timer\nBase.AsyncCondition\nBase.AsyncCondition(::Function)"
+    "text": "Base.Timer(::Function, ::Real)\nBase.Timer\nBase.AsyncCondition\nBase.AsyncCondition(::Function)"
 },
 
 {
@@ -6533,7 +6533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.names",
     "category": "Function",
-    "text": "names(x::Module, all::Bool=false, imported::Bool=false)\n\nGet an array of the names exported by a Module, excluding deprecated names. If all is true, then the list also includes non-exported names defined in the module, deprecated names, and compiler-generated names. If imported is true, then names explicitly imported from other modules are also included.\n\nAs a special case, all names defined in Main are considered \"exported\", since it is not idiomatic to explicitly export names from Main.\n\n\n\n\n\n"
+    "text": "names(x::Module; all::Bool = false, imported::Bool = false)\n\nGet an array of the names exported by a Module, excluding deprecated names. If all is true, then the list also includes non-exported names defined in the module, deprecated names, and compiler-generated names. If imported is true, then names explicitly imported from other modules are also included.\n\nAs a special case, all names defined in Main are considered \"exported\", since it is not idiomatic to explicitly export names from Main.\n\n\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.code_native",
     "category": "Function",
-    "text": "code_native([io=STDOUT,], f, types, syntax=:att)\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax.\n\n\n\n\n\n"
+    "text": "code_native([io=STDOUT,], f, types; syntax = :att)\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax.\n\n\n\n\n\n"
 },
 
 {
@@ -7165,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
+    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
 },
 
 {
@@ -7197,7 +7197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
 },
 
 {
@@ -7509,7 +7509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -9613,7 +9613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.digits",
     "category": "Function",
-    "text": "digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)\n\nReturn an array with element type T (default Int) of the digits of n in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indices, such that n == sum([digits[k]*base^(k-1) for k=1:length(digits)]).\n\nExamples\n\njulia> digits(10, 10)\n2-element Array{Int64,1}:\n 0\n 1\n\njulia> digits(10, 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits(10, 2, 6)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n\n\n"
+    "text": "digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)\n\nReturn an array with element type T (default Int) of the digits of n in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indices, such that n == sum([digits[k]*base^(k-1) for k=1:length(digits)]).\n\nExamples\n\njulia> digits(10, base = 10)\n2-element Array{Int64,1}:\n 0\n 1\n\njulia> digits(10, base = 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits(10, base = 2, pad = 6)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n\n\n"
 },
 
 {
@@ -9621,7 +9621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.digits!",
     "category": "Function",
-    "text": "digits!(array, n::Integer, base::Integer=10)\n\nFills an array of the digits of n in the given base. More significant digits are at higher indices. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.\n\nExamples\n\njulia> digits!([2,2,2,2], 10, 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits!([2,2,2,2,2,2], 10, 2)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n\n\n"
+    "text": "digits!(array, n::Integer; base::Integer = 10)\n\nFills an array of the digits of n in the given base. More significant digits are at higher indices. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.\n\nExamples\n\njulia> digits!([2,2,2,2], 10, base = 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits!([2,2,2,2,2,2], 10, base = 2)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n\n\n"
 },
 
 {
@@ -9633,11 +9633,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers/#Base.parse-Tuple{Type,Any,Any}",
+    "location": "base/numbers/#Base.parse",
     "page": "Numbers",
     "title": "Base.parse",
-    "category": "Method",
-    "text": "parse(type, str, [base])\n\nParse a string as a number. For Integer types, a base can be specified (the default is 10). For floating-point types, the string is parsed as a decimal floating-point number.  Complex types are parsed from decimal strings of the form \"R±Iim\" as a Complex(R,I) of the requested type; \"i\" or \"j\" can also be used instead of \"im\", and \"R\" or \"Iim\" are also permitted. If the string does not contain a valid number, an error is raised.\n\njulia> parse(Int, \"1234\")\n1234\n\njulia> parse(Int, \"1234\", 5)\n194\n\njulia> parse(Int, \"afc\", 16)\n2812\n\njulia> parse(Float64, \"1.2e-3\")\n0.0012\n\njulia> parse(Complex{Float64}, \"3.2e-1 + 4.5im\")\n0.32 + 4.5im\n\n\n\n\n\n"
+    "category": "Function",
+    "text": "parse(type, str; base)\n\nParse a string as a number. For Integer types, a base can be specified (the default is 10). For floating-point types, the string is parsed as a decimal floating-point number.  Complex types are parsed from decimal strings of the form \"R±Iim\" as a Complex(R,I) of the requested type; \"i\" or \"j\" can also be used instead of \"im\", and \"R\" or \"Iim\" are also permitted. If the string does not contain a valid number, an error is raised.\n\njulia> parse(Int, \"1234\")\n1234\n\njulia> parse(Int, \"1234\", base = 5)\n194\n\njulia> parse(Int, \"afc\", base = 16)\n2812\n\njulia> parse(Float64, \"1.2e-3\")\n0.0012\n\njulia> parse(Complex{Float64}, \"3.2e-1 + 4.5im\")\n0.32 + 4.5im\n\n\n\n\n\n"
 },
 
 {
@@ -9645,7 +9645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.tryparse",
     "category": "Function",
-    "text": "tryparse(type, str, [base])\n\nLike parse, but returns either a value of the requested type, or nothing if the string does not contain a valid number.\n\n\n\n\n\n"
+    "text": "tryparse(type, str; base)\n\nLike parse, but returns either a value of the requested type, or nothing if the string does not contain a valid number.\n\n\n\n\n\n"
 },
 
 {
@@ -9741,7 +9741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Data Formats",
     "category": "section",
-    "text": "Base.bin\nBase.hex\nBase.dec\nBase.oct\nBase.base\nBase.digits\nBase.digits!\nBase.bitstring\nBase.parse(::Type, ::Any, ::Any)\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.hex2bytes\nBase.hex2bytes!\nBase.bytes2hex"
+    "text": "Base.bin\nBase.hex\nBase.dec\nBase.oct\nBase.base\nBase.digits\nBase.digits!\nBase.bitstring\nBase.parse\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.hex2bytes\nBase.hex2bytes!\nBase.bytes2hex"
 },
 
 {
@@ -10365,7 +10365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.eachmatch",
     "category": "Function",
-    "text": "eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])\n\nSearch for all matches of a the regular expression r in s and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.\n\nExamples\n\njulia> rx = r\"a.a\"\nr\"a.a\"\n\njulia> m = eachmatch(rx, \"a1a2a3a\")\nBase.RegexMatchIterator(r\"a.a\", \"a1a2a3a\", false)\n\njulia> collect(m)\n2-element Array{RegexMatch,1}:\n RegexMatch(\"a1a\")\n RegexMatch(\"a3a\")\n\njulia> collect(eachmatch(rx, \"a1a2a3a\", true))\n3-element Array{RegexMatch,1}:\n RegexMatch(\"a1a\")\n RegexMatch(\"a2a\")\n RegexMatch(\"a3a\")\n\n\n\n\n\n"
+    "text": "eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])\n\nSearch for all matches of a the regular expression r in s and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.\n\nExamples\n\njulia> rx = r\"a.a\"\nr\"a.a\"\n\njulia> m = eachmatch(rx, \"a1a2a3a\")\nBase.RegexMatchIterator(r\"a.a\", \"a1a2a3a\", false)\n\njulia> collect(m)\n2-element Array{RegexMatch,1}:\n RegexMatch(\"a1a\")\n RegexMatch(\"a3a\")\n\njulia> collect(eachmatch(rx, \"a1a2a3a\", overlap = true))\n3-element Array{RegexMatch,1}:\n RegexMatch(\"a1a\")\n RegexMatch(\"a2a\")\n RegexMatch(\"a3a\")\n\n\n\n\n\n"
 },
 
 {
@@ -10373,7 +10373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.matchall",
     "category": "Function",
-    "text": "matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}\n\nReturn a vector of the matching substrings from eachmatch.\n\nExamples\n\njulia> rx = r\"a.a\"\nr\"a.a\"\n\njulia> matchall(rx, \"a1a2a3a\")\n2-element Array{SubString{String},1}:\n \"a1a\"\n \"a3a\"\n\njulia> matchall(rx, \"a1a2a3a\", true)\n3-element Array{SubString{String},1}:\n \"a1a\"\n \"a2a\"\n \"a3a\"\n\n\n\n\n\n"
+    "text": "matchall(r::Regex, s::AbstractString; overlap::Bool = false]) -> Vector{AbstractString}\n\nReturn a vector of the matching substrings from eachmatch.\n\nExamples\n\njulia> rx = r\"a.a\"\nr\"a.a\"\n\njulia> matchall(rx, \"a1a2a3a\")\n2-element Array{SubString{String},1}:\n \"a1a\"\n \"a3a\"\n\njulia> matchall(rx, \"a1a2a3a\", overlap = true)\n3-element Array{SubString{String},1}:\n \"a1a\"\n \"a2a\"\n \"a3a\"\n\n\n\n\n\n"
 },
 
 {
@@ -10597,7 +10597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.chop",
     "category": "Function",
-    "text": "chop(s::AbstractString, head::Integer=0, tail::Integer=1)\n\nRemove the first head and the last tail characters from s. The call chop(s) removes the last character from s. If it is requested to remove more characters than length(s) then an empty string is returned.\n\nExamples\n\njulia> a = \"March\"\n\"March\"\n\njulia> chop(a)\n\"Marc\"\n\njulia> chop(a, 1, 2)\n\"ar\"\n\njulia> chop(a, 5, 5)\n\"\"\n\n\n\n\n\n"
+    "text": "chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)\n\nRemove the first head and the last tail characters from s. The call chop(s) removes the last character from s. If it is requested to remove more characters than length(s) then an empty string is returned.\n\nExamples\n\njulia> a = \"March\"\n\"March\"\n\njulia> chop(a)\n\"Marc\"\n\njulia> chop(a, head = 1, tail = 2)\n\"ar\"\n\njulia> chop(a, head = 5, tail = 5)\n\"\"\n\n\n\n\n\n"
 },
 
 {
@@ -12437,7 +12437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mkdir",
     "category": "Function",
-    "text": "mkdir(path::AbstractString, mode::Unsigned=0o777)\n\nMake a new directory with name path and permissions mode. mode defaults to 0o777, modified by the current file creation mask. This function never creates more than one directory. If the directory already exists, or some intermediate directories do not exist, this function throws an error. See mkpath for a function which creates all required intermediate directories.\n\n\n\n\n\n"
+    "text": "mkdir(path::AbstractString; mode::Unsigned = 0o777)\n\nMake a new directory with name path and permissions mode. mode defaults to 0o777, modified by the current file creation mask. This function never creates more than one directory. If the directory already exists, or some intermediate directories do not exist, this function throws an error. See mkpath for a function which creates all required intermediate directories.\n\n\n\n\n\n"
 },
 
 {
@@ -12445,7 +12445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mkpath",
     "category": "Function",
-    "text": "mkpath(path::AbstractString, mode::Unsigned=0o777)\n\nCreate all directories in the given path, with permissions mode. mode defaults to 0o777, modified by the current file creation mask.\n\n\n\n\n\n"
+    "text": "mkpath(path::AbstractString; mode::Unsigned = 0o777)\n\nCreate all directories in the given path, with permissions mode. mode defaults to 0o777, modified by the current file creation mask.\n\n\n\n\n\n"
 },
 
 {
@@ -13221,7 +13221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.countlines",
     "category": "Function",
-    "text": "countlines(io::IO, eol::Char='\\n')\n\nRead io until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\n\");\n\njulia> countlines(io)\n1\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> countlines(io)\n0\n\njulia> countlines(io, '.')\n1\n\n\n\n\n\n"
+    "text": "countlines(io::IO; eol::Char = '\\n')\n\nRead io until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\n\");\n\njulia> countlines(io)\n1\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization.\");\n\njulia> countlines(io)\n0\n\njulia> countlines(io, eol = '.')\n1\n\n\n\n\n\n"
 },
 
 {
@@ -13229,7 +13229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.PipeBuffer",
     "category": "Function",
-    "text": "PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Integer=typemax(Int)])\n\nAn IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. If data is given, creates a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.\n\n\n\n\n\n"
+    "text": "PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Integer = typemax(Int))\n\nAn IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. If data is given, creates a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.\n\n\n\n\n\n"
 },
 
 {
@@ -14245,7 +14245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "C Interface",
     "title": "Base.unsafe_wrap",
     "category": "Method",
-    "text": "unsafe_wrap(Array, pointer::Ptr{T}, dims, own=false)\n\nWrap a Julia Array object around the data at the address given by pointer, without making a copy.  The pointer element type T determines the array element type. dims is either an integer (for a 1d array) or a tuple of the array dimensions. own optionally specifies whether Julia should take ownership of the memory, calling free on the pointer when the array is no longer referenced.\n\nThis function is labeled \"unsafe\" because it will crash if pointer is not a valid memory address to data of the requested length.\n\n\n\n\n\n"
+    "text": "unsafe_wrap(Array, pointer::Ptr{T}, dims; own = false)\n\nWrap a Julia Array object around the data at the address given by pointer, without making a copy.  The pointer element type T determines the array element type. dims is either an integer (for a 1d array) or a tuple of the array dimensions. own optionally specifies whether Julia should take ownership of the memory, calling free on the pointer when the array is no longer referenced.\n\nThis function is labeled \"unsafe\" because it will crash if pointer is not a valid memory address to data of the requested length.\n\n\n\n\n\n"
 },
 
 {
@@ -19289,35 +19289,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros!-Tuple{SparseMatrixCSC,Bool}",
+    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros!",
     "page": "Sparse Arrays",
     "title": "SparseArrays.dropzeros!",
-    "category": "Method",
-    "text": "dropzeros!(A::SparseMatrixCSC, trim::Bool = true)\n\nRemoves stored numerical zeros from A, optionally trimming resulting excess space from A.rowval and A.nzval when trim is true.\n\nFor an out-of-place version, see dropzeros. For algorithmic information, see fkeep!.\n\n\n\n\n\n"
+    "category": "Function",
+    "text": "dropzeros!(A::SparseMatrixCSC; trim::Bool = true)\n\nRemoves stored numerical zeros from A, optionally trimming resulting excess space from A.rowval and A.nzval when trim is true.\n\nFor an out-of-place version, see dropzeros. For algorithmic information, see fkeep!.\n\n\n\n\n\ndropzeros!(x::SparseVector; trim::Bool = true)\n\nRemoves stored numerical zeros from x, optionally trimming resulting excess space from x.nzind and x.nzval when trim is true.\n\nFor an out-of-place version, see dropzeros. For algorithmic information, see fkeep!.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros-Tuple{SparseMatrixCSC,Bool}",
+    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros",
     "page": "Sparse Arrays",
     "title": "SparseArrays.dropzeros",
-    "category": "Method",
-    "text": "dropzeros(A::SparseMatrixCSC, trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  0.0\n  [3, 3]  =  1.0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  1.0\n  [3, 3]  =  1.0\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros!-Tuple{SparseVector,Bool}",
-    "page": "Sparse Arrays",
-    "title": "SparseArrays.dropzeros!",
-    "category": "Method",
-    "text": "dropzeros!(x::SparseVector, trim::Bool = true)\n\nRemoves stored numerical zeros from x, optionally trimming resulting excess space from x.nzind and x.nzval when trim is true.\n\nFor an out-of-place version, see dropzeros. For algorithmic information, see fkeep!.\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros-Tuple{SparseVector,Bool}",
-    "page": "Sparse Arrays",
-    "title": "SparseArrays.dropzeros",
-    "category": "Method",
-    "text": "dropzeros(x::SparseVector, trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])\n3-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  0.0\n  [3]  =  1.0\n\njulia> dropzeros(A)\n3-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1]  =  1.0\n  [3]  =  1.0\n\n\n\n\n\n"
+    "category": "Function",
+    "text": "dropzeros(A::SparseMatrixCSC; trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  0.0\n  [3, 3]  =  1.0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  1.0\n  [3, 3]  =  1.0\n\n\n\n\n\ndropzeros(x::SparseVector; trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])\n3-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  0.0\n  [3]  =  1.0\n\njulia> dropzeros(A)\n3-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1]  =  1.0\n  [3]  =  1.0\n\n\n\n\n\n"
 },
 
 {
@@ -19341,7 +19325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sparse Arrays",
     "title": "Sparse Arrays",
     "category": "section",
-    "text": "SparseArrays.SparseVector\nSparseArrays.SparseMatrixCSC\nSparseArrays.sparse\nSparseArrays.sparsevec\nSparseArrays.issparse\nSparseArrays.nnz\nSparseArrays.findnz\nSparseArrays.spzeros\nSparseArrays.spdiagm\nSparseArrays.blkdiag\nSparseArrays.sprand\nSparseArrays.sprandn\nSparseArrays.nonzeros\nSparseArrays.rowvals\nSparseArrays.nzrange\nSparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)\nSparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)\nSparseArrays.dropzeros!(::SparseVector, ::Bool)\nSparseArrays.dropzeros(::SparseVector, ::Bool)\nSparseArrays.permute\npermute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})"
+    "text": "SparseArrays.SparseVector\nSparseArrays.SparseMatrixCSC\nSparseArrays.sparse\nSparseArrays.sparsevec\nSparseArrays.issparse\nSparseArrays.nnz\nSparseArrays.findnz\nSparseArrays.spzeros\nSparseArrays.spdiagm\nSparseArrays.blkdiag\nSparseArrays.sprand\nSparseArrays.sprandn\nSparseArrays.nonzeros\nSparseArrays.rowvals\nSparseArrays.nzrange\nSparseArrays.dropzeros!\nSparseArrays.dropzeros\nSparseArrays.permute\npermute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})"
 },
 
 {
@@ -19589,7 +19573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Reflection and introspection",
     "title": "Module bindings",
     "category": "section",
-    "text": "The exported names for a Module are available using names(m::Module), which will return an array of Symbol elements representing the exported bindings. names(m::Module, true) returns symbols for all bindings in m, regardless of export status."
+    "text": "The exported names for a Module are available using names(m::Module), which will return an array of Symbol elements representing the exported bindings. names(m::Module, all = true) returns symbols for all bindings in m, regardless of export status."
 },
 
 {
