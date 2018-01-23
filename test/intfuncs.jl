@@ -142,14 +142,14 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, 2) == [0, 0, 1]
-    @test digits(5, 3) == [2, 1]
+    @test digits(4, base = 2) == [0, 0, 1]
+    @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, b)" for T in (Int, UInt, BigInt, Int32)
-            @test digits(T(8163), -10) == [3, 4, 2, 2, 1]
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+            @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
-                @test digits(T(-8163), -10) == [7, 7, 9, 9]
+                @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
             end
         end
         @test [base(b, n)

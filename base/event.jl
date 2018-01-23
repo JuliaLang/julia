@@ -341,12 +341,12 @@ end
 ## timer-based notifications
 
 """
-    Timer(delay, repeat=0)
+    Timer(delay; interval = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
 Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
-`repeat` interval in seconds. If `repeat` is equal to `0`, the timer is only triggered once. When
+`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
 the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 """
@@ -355,9 +355,9 @@ mutable struct Timer
     cond::Condition
     isopen::Bool
 
-    function Timer(timeout::Real, repeat::Real=0.0)
+    function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
-        repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
+        interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
 
         this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
@@ -374,7 +374,7 @@ mutable struct Timer
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
               this, uv_jl_timercb::Ptr{Cvoid},
-              UInt64(round(timeout * 1000)) + 1, UInt64(round(repeat * 1000)))
+              UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
         return this
     end
 end
@@ -444,13 +444,13 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay, repeat=0)
+    Timer(callback::Function, delay; interval = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
 
 Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
-and then repeating with the given `repeat` interval in seconds. If `repeat` is equal to `0`, the timer
+and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
 When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
@@ -463,7 +463,7 @@ Here the first number is printed after a delay of two seconds, then the followin
 julia> begin
            i = 0
            cb(timer) = (global i += 1; println(i))
-           t = Timer(cb, 2, 0.2)
+           t = Timer(cb, 2, interval = 0.2)
            wait(t)
            sleep(0.5)
            close(t)
@@ -473,8 +473,8 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
-    t = Timer(timeout, repeat)
+function Timer(cb::Function, timeout::Real; interval::Real = 0.0)
+    t = Timer(timeout, interval = interval)
     waiter = Task(function()
         while isopen(t)
             success = try

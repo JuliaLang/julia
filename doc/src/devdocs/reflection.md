@@ -5,7 +5,7 @@ Julia provides a variety of runtime reflection capabilities.
 ## Module bindings
 
 The exported names for a `Module` are available using [`names(m::Module)`](@ref), which will return
-an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, true)`
+an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, all = true)`
 returns symbols for all bindings in `m`, regardless of export status.
 
 ## DataType fields

@@ -206,7 +206,7 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 ))
 
 """
-    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+    matchall(r::Regex, s::AbstractString; overlap::Bool = false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from [`eachmatch`](@ref).
 
@@ -221,14 +221,14 @@ julia> matchall(rx, "a1a2a3a")
  "a1a"
  "a3a"
 
-julia> matchall(rx, "a1a2a3a", true)
+julia> matchall(rx, "a1a2a3a", overlap = true)
 3-element Array{SubString{String},1}:
  "a1a"
  "a2a"
  "a3a"
 ```
 """
-function matchall(re::Regex, str::String, overlap::Bool=false)
+function matchall(re::Regex, str::String; overlap::Bool = false)
     regex = compile(re).regex
     n = sizeof(str)
     matches = SubString{String}[]
@@ -262,8 +262,8 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::SubString, overlap::Bool=false) =
-    matchall(re, String(str), overlap)
+matchall(re::Regex, str::SubString; overlap::Bool = false) =
+    matchall(re, String(str), overlap = overlap)
 
 # TODO: return only start index and update deprecation
 function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
@@ -416,12 +416,8 @@ function next(itr::RegexMatchIterator, prev_match)
     (prev_match, nothing)
 end
 
-function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
-    RegexMatchIterator(re,str,ovr)
-end
-
 """
-    eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
@@ -440,14 +436,15 @@ julia> collect(m)
  RegexMatch("a1a")
  RegexMatch("a3a")
 
-julia> collect(eachmatch(rx, "a1a2a3a", true))
+julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
 3-element Array{RegexMatch,1}:
  RegexMatch("a1a")
  RegexMatch("a2a")
  RegexMatch("a3a")
 ```
 """
-eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+eachmatch(re::Regex, str::AbstractString; overlap = false) =
+    RegexMatchIterator(re, str, overlap)
 
 ## comparison ##
 

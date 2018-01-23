@@ -68,7 +68,7 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module, all::Bool=false, imported::Bool=false)
+    names(x::Module; all::Bool = false, imported::Bool = false)
 
 Get an array of the names exported by a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-exported names defined in the module,
@@ -79,7 +79,8 @@ are also included.
 As a special case, all names defined in `Main` are considered \"exported\",
 since it is not idiomatic to explicitly export names from `Main`.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+names(m::Module; all::Bool = false, imported::Bool = false) =
+    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -591,7 +592,7 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
         return sts
     end
     xt = xt::DataType
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, DataType)
@@ -918,15 +919,15 @@ code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, t
 code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io=STDOUT,], f, types, syntax=:att)
+    code_native([io=STDOUT,], f, types; syntax = :att)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
 """
-code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
+code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(@nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
+code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) = code_native(STDOUT, f, types, syntax = syntax)
 code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
@@ -1082,7 +1083,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    hasmethod(f, Tuple type, world=typemax(UInt)) -> Bool
+    hasmethod(f, Tuple type; world = typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1093,7 +1094,7 @@ julia> hasmethod(length, Tuple{Array})
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world = typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0

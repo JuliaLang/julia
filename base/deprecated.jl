@@ -290,7 +290,7 @@ module DFT
     export FFTW
 end
 using .DFT
-for f in filter(s -> isexported(DFT, s), names(DFT, true))
+for f in filter(s -> isexported(DFT, s), names(DFT, all = true))
     @eval export $f
 end
 module DSP
@@ -495,14 +495,14 @@ end
 
 # PR #22088
 function hex2num(s::AbstractString)
-    depwarn("`hex2num(s)` is deprecated. Use `reinterpret(Float64, parse(UInt64, s, 16))` instead.", :hex2num)
+    depwarn("`hex2num(s)` is deprecated. Use `reinterpret(Float64, parse(UInt64, s, base = 16))` instead.", :hex2num)
     if length(s) <= 4
-        return reinterpret(Float16, parse(UInt16, s, 16))
+        return reinterpret(Float16, parse(UInt16, s, base = 16))
     end
     if length(s) <= 8
-        return reinterpret(Float32, parse(UInt32, s, 16))
+        return reinterpret(Float32, parse(UInt32, s, base = 16))
     end
-    return reinterpret(Float64, parse(UInt64, s, 16))
+    return reinterpret(Float64, parse(UInt64, s, base = 16))
 end
 export hex2num
 
@@ -1582,7 +1582,8 @@ end
 @deprecate catch_stacktrace(c_funcs::Bool)  stacktrace(catch_backtrace(), c_funcs)
 @deprecate catch_stacktrace()               stacktrace(catch_backtrace())
 
-@deprecate method_exists hasmethod
+@deprecate method_exists(f, t)        hasmethod(f, t)
+@deprecate method_exists(f, t, world) hasmethod(f, t, world = world)
 
 @deprecate object_id objectid
 
@@ -1630,6 +1631,24 @@ export readandwrite
 # PR #25654
 @deprecate indmin argmin
 @deprecate indmax argmax
+
+@deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
+@deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
+@deprecate names(m, all) names(m, all = all)
+@deprecate names(m, all, imported) names(m, all = all, imported = imported)
+@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
+@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
+@deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
+@deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate chop(s, head) chop(s, head = head)
+@deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
+@deprecate tryparse(T::Type{<:Integer}, s, base) tryparse(T, s, base = base)
+@deprecate parse(T::Type{<:Integer}, s, base) parse(T, s, base = base)
+@eval Filesystem @deprecate mkdir(path, mode) mkdir(path, mode = mode)
+@eval Filesystem @deprecate mkpath(path, mode) mkpath(path, mode = mode)
+@deprecate countlines(x, eol) countlines(x, eol = eol)
+@deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
+@deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
 # END 0.7 deprecations
 

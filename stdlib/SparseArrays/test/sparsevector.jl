@@ -1050,15 +1050,15 @@ end
             for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
                 # Basic functionality / dropzeros!
                 @test dropzeros!(copy(vwithzeros)) == v
-                @test dropzeros!(copy(vwithzeros), false) == v
+                @test dropzeros!(copy(vwithzeros), trim = false) == v
                 # Basic functionality / dropzeros
                 @test dropzeros(vwithzeros) == v
-                @test dropzeros(vwithzeros, false) == v
+                @test dropzeros(vwithzeros, trim = false) == v
                 # Check trimming works as expected
                 @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
                 @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
-                @test length(dropzeros!(copy(vwithzeros), false).nzval) == length(vwithzeros.nzval)
-                @test length(dropzeros!(copy(vwithzeros), false).nzind) == length(vwithzeros.nzind)
+                @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
+                @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
             end
         end
         # original dropzeros! test
