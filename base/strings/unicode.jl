@@ -4,7 +4,7 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
-             next, done, convert, isvalid, MalformedCharError, ismalformed
+             next, done, convert, isvalid, ismalformed, isoverlong
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -43,7 +43,7 @@ true
 """
 isvalid(T,value)
 
-isvalid(c::Char) = !ismalformed(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(c::Char) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{Char}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
 isvalid(::Type{Char}, c::Integer)  = isvalid(Char, Unsigned(c))
 isvalid(::Type{Char}, c::Char)     = isvalid(c)

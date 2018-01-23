@@ -221,7 +221,11 @@ end
 end
 
 function test_overlong(c::Char, n::Integer, rep::String)
-    @test Int(c) == n
+    if isvalid(c)
+        @test Int(c) == n
+    else
+        @test_throws Base.InvalidCharError UInt32(c)
+    end
     @test sprint(show, c) == rep
 end
 
