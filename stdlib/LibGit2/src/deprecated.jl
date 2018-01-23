@@ -59,3 +59,6 @@ end
 @deprecate AbstractCredentials AbstractCredential false
 @deprecate UserPasswordCredentials UserPasswordCredential false
 @deprecate SSHCredentials SSHCredential false
+
+@deprecate hex(id::LibGit2.GitHash)      string(id)
+@deprecate hex(id::LibGit2.GitShortHash) string(id)

@@ -419,8 +419,8 @@ function hex2num(s::AbstractString)
 end
 export hex2num
 
-@deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
-@deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
+@deprecate num2hex(x::Union{Float16,Float32,Float64}) string(reinterpret(Unsigned, x), base = 16, pad = sizeof(x)*2)
+@deprecate num2hex(n::Integer) string(n, base = 16, pad = sizeof(n)*2)
 
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
@@ -1393,6 +1393,25 @@ end
 @deprecate digits(T, n, base, pad) digits(T, n, base = base, pad = pad)
 
 @deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
+
+@deprecate base(b, n)      string(n, base = b)
+@deprecate base(b, n, pad) string(n, base = b, pad = pad)
+@deprecate bin(n)          string(n, base = 2)
+@deprecate bin(n, pad)     string(n, base = 2, pad = pad)
+@deprecate oct(n)          string(n, base = 8)
+@deprecate oct(n, pad)     string(n, base = 8, pad = pad)
+@deprecate dec(n)          string(n)
+@deprecate dec(n, pad)     string(n, pad = pad)
+@deprecate hex(n)          string(n, base = 16)
+@deprecate hex(n, pad)     string(n, base = 16, pad = pad)
+@deprecate bin(n::Char)      string(UInt32(n), base = 2)
+@deprecate bin(n::Char, pad) string(UInt32(n), base = 2, pad = pad)
+@deprecate oct(n::Char)      string(UInt32(n), base = 8)
+@deprecate oct(n::Char, pad) string(UInt32(n), base = 8, pad = pad)
+@deprecate dec(n::Char)      string(UInt32(n))
+@deprecate dec(n::Char, pad) string(UInt32(n), pad = pad)
+@deprecate hex(n::Char)      string(UInt32(n), base = 16)
+@deprecate hex(n::Char, pad) string(UInt32(n), base = 16, pad = pad)
 
 @deprecate which(s::Symbol) which(Main, s)
 

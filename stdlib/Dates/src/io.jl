@@ -131,7 +131,7 @@ end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
-        write(io, dec($fn(dt), d.width))
+        write(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
@@ -153,7 +153,7 @@ end
 
     # the last n digits of y
     # will be 0 padded if y has less than n digits
-    str = dec(y, n)
+    str = string(y, base = 10, pad = n)
     l = lastindex(str)
     if l == n
         # fast path
@@ -166,11 +166,11 @@ end
 function format(io, d::DatePart{'s'}, dt)
     ms = millisecond(dt)
     if ms % 100 == 0
-        str = dec(div(ms, 100), 1)
+        str = string(div(ms, 100))
     elseif ms % 10 == 0
-        str = dec(div(ms, 10), 2)
+        str = string(div(ms, 10), pad = 2)
     else
-        str = dec(ms, 3)
+        str = string(ms, pad = 3)
     end
 
     write(io, rpad(str, d.width, '0'))

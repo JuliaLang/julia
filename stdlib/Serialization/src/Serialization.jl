@@ -307,7 +307,7 @@ end
 
 function serialize(s::AbstractSerializer, n::BigInt)
     serialize_type(s, BigInt)
-    serialize(s, base(62,n))
+    serialize(s, string(n, base = 62))
 end
 
 function serialize(s::AbstractSerializer, n::BigFloat)
