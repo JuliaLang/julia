@@ -188,7 +188,7 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, pairs((a=1,)))
+@test test4974(a=1) == (2, (a=1,))
 
 @testset "issue #7704, computed keywords" begin
     @test kwf1(1; :tens => 2) == 21
@@ -300,11 +300,11 @@ end
         counter += 1
         return counter
     end
-    f(args...; kws...) = (args, values(kws))
+    f(args...; kws...) = (args, kws)
     @test f(get_next(), a=get_next(), get_next(),
             b=get_next(), get_next(),
             [get_next(), get_next()]...; c=get_next(),
             (d = get_next(), f = get_next())...) ==
-                ((1, 3, 5, 6, 7),
+                ((1,3,5,6,7),
                  (a = 2, b = 4, c = 8, d = 9, f = 10))
 end
