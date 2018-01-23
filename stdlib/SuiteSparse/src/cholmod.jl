@@ -11,7 +11,7 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
 using SparseArrays
-using Base.Printf.@printf
+using Printf: @printf
 
 import Libdl
 
