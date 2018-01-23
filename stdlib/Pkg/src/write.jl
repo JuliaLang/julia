@@ -4,7 +4,7 @@ module Write
 
 import Pkg
 import ..Cache, ..Read, ..PkgError
-using ...LibGit2
+using LibGit2
 
 function prefetch(pkg::AbstractString, sha1::AbstractString)
     isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) && return

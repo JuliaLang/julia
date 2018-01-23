@@ -247,19 +247,6 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
 
-# VersionSet tests
-import Pkg
-import Pkg.Types: VersionInterval, VersionSet
-
-function chkint(a::VersionSet)
-    ints = a.intervals
-    for k = 1:length(ints)
-        ints[k].lower < ints[k].upper || return false
-        k < length(ints) && (ints[k].upper < ints[k+1].lower || return false)
-    end
-    return true
-end
-
 const empty_versionset = VersionSet(VersionInterval[])
 @test isempty(empty_versionset)
 

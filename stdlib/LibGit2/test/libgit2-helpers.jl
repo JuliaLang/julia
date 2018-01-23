@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
+import LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
     CachedCredentials, CredentialPayload, Payload
 using Base: coalesce
 
@@ -17,7 +17,7 @@ function credential_loop(
         allowed_types::UInt32,
         payload::CredentialPayload;
         shred::Bool=true)
-    cb = Base.LibGit2.credentials_cb()
+    cb = LibGit2.credentials_cb()
     libgitcred_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     # Number of times credentials were authenticated against. With the real LibGit2

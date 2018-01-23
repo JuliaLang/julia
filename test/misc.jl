@@ -441,11 +441,6 @@ let a = [1,2,3]
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
-let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
-    securezero!(cache)
-    @test cache["foo"].pass == "\0\0\0"
-end
 
 # Test that we can VirtualProtect jitted code to writable
 if Sys.iswindows()

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Pkg.PkgError
+using LibGit2
 using Random: randstring
 
 function capture_stdout(f::Function)
@@ -686,3 +687,38 @@ temp_pkg_dir(initialize=false) do
                     "Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
     end
 end
+
+# VersionSet tests
+import Pkg.VersionSet
+
+function chkint(a::VersionSet)
+    ints = a.intervals
+    for k = 1:length(ints)
+        ints[k].lower < ints[k].upper || return false
+        k < length(ints) && (ints[k].upper < ints[k+1].lower || return false)
+    end
+    return true
+end
+
+const empty_versionset = VersionSet(VersionInterval[])
+@test isempty(empty_versionset)
+
+# VersionSet intersections and unions
+@test empty_versionset ∩ empty_versionset == empty_versionset
+@test empty_versionset ∪ empty_versionset == empty_versionset
+for t = 1:1_000
+    a = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
+    b = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
+    @assert chkint(a)
+    @assert chkint(b)
+    u = a ∪ b
+    @test chkint(u)
+    i = a ∩ b
+    @test chkint(i)
+    for vM = 0:9, vm = 0:5
+        v = VersionNumber(vM, vm)
+        @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
+        @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
+    end
+end
+
