@@ -1090,6 +1090,15 @@ end
     @test !(1//3 < NaN)
     @test !(1//3 == NaN)
     @test !(1//3 > NaN)
+
+    # Invalid rational
+    @test_throws ArgumentError (0//1) // 0
+    @test_throws ArgumentError 0 // (0//1)
+    @test_throws ArgumentError (0//1) // (0//1)
+    @test_throws ArgumentError (1//0) // (1//0)
+    @test_throws ArgumentError 1//0 + 1//0
+    @test_throws ArgumentError 1//0 * 0//1
+    @test_throws ArgumentError 0//1 * 1//0
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin

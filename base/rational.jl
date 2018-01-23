@@ -21,7 +21,7 @@ Rational(n::Integer) = Rational(n,one(n))
 
 function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
-    div(x,g), div(y,g)
+    return iszero(g) ? (g, g) : (div(x,g), div(y,g))
 end
 
 """
