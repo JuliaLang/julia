@@ -991,6 +991,8 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
+  * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
+
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
 
