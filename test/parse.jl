@@ -1,17 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # integer parsing
-@test parse(Int32,"0",36) === Int32(0)
-@test parse(Int32,"1",36) === Int32(1)
-@test parse(Int32,"9",36) === Int32(9)
-@test parse(Int32,"A",36) === Int32(10)
-@test parse(Int32,"a",36) === Int32(10)
-@test parse(Int32,"B",36) === Int32(11)
-@test parse(Int32,"b",36) === Int32(11)
-@test parse(Int32,"F",36) === Int32(15)
-@test parse(Int32,"f",36) === Int32(15)
-@test parse(Int32,"Z",36) === Int32(35)
-@test parse(Int32,"z",36) === Int32(35)
+@test parse(Int32,"0", base = 36) === Int32(0)
+@test parse(Int32,"1", base = 36) === Int32(1)
+@test parse(Int32,"9", base = 36) === Int32(9)
+@test parse(Int32,"A", base = 36) === Int32(10)
+@test parse(Int32,"a", base = 36) === Int32(10)
+@test parse(Int32,"B", base = 36) === Int32(11)
+@test parse(Int32,"b", base = 36) === Int32(11)
+@test parse(Int32,"F", base = 36) === Int32(15)
+@test parse(Int32,"f", base = 36) === Int32(15)
+@test parse(Int32,"Z", base = 36) === Int32(35)
+@test parse(Int32,"z", base = 36) === Int32(35)
 
 @test parse(Int,"0") == 0
 @test parse(Int,"-0") == 0
@@ -24,7 +24,7 @@
 @test parse(Int64,"3830974272") == 3830974272
 @test parse(Int64,"-3830974272") == -3830974272
 @test parse(Int,'3') == 3
-@test parse(Int,'3', 8) == 3
+@test parse(Int,'3', base = 8) == 3
 
 # Issue 20587
 for T in vcat(subtypes(Signed), subtypes(Unsigned))
@@ -44,7 +44,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
         end
 
         # With a base
-        result = @test_throws ArgumentError parse(T, s, 16)
+        result = @test_throws ArgumentError parse(T, s, base = 16)
         exception_with_base = result.value
         if T == Bool
             if s == ""
@@ -107,9 +107,9 @@ end
 @test parse(Bool, "\u202f true") === true
 @test parse(Bool, "\u202f false") === false
 
-parsebin(s) = parse(Int,s,2)
-parseoct(s) = parse(Int,s,8)
-parsehex(s) = parse(Int,s,16)
+parsebin(s) = parse(Int,s, base = 2)
+parseoct(s) = parse(Int,s, base = 8)
+parsehex(s) = parse(Int,s, base = 16)
 
 @test parsebin("0") == 0
 @test parsebin("-0") == 0
@@ -151,12 +151,12 @@ parsehex(s) = parse(Int,s,16)
 @test parsehex("-10") == -16
 @test parsehex("0BADF00D") == 195948557
 @test parsehex("-0BADF00D") == -195948557
-@test parse(Int64,"BADCAB1E",16) == 3135023902
-@test parse(Int64,"-BADCAB1E",16) == -3135023902
-@test parse(Int64,"CafeBabe",16) == 3405691582
-@test parse(Int64,"-CafeBabe",16) == -3405691582
-@test parse(Int64,"DeadBeef",16) == 3735928559
-@test parse(Int64,"-DeadBeef",16) == -3735928559
+@test parse(Int64,"BADCAB1E", base = 16) == 3135023902
+@test parse(Int64,"-BADCAB1E", base = 16) == -3135023902
+@test parse(Int64,"CafeBabe", base = 16) == 3405691582
+@test parse(Int64,"-CafeBabe", base = 16) == -3405691582
+@test parse(Int64,"DeadBeef", base = 16) == 3735928559
+@test parse(Int64,"-DeadBeef", base = 16) == -3735928559
 
 @test parse(Int,"2\n") == 2
 @test parse(Int,"   2 \n ") == 2
@@ -202,7 +202,7 @@ end
 # issue #15597
 # make sure base can be any Integer
 for T in (Int, BigInt)
-    let n = parse(T, "123", Int8(10))
+    let n = parse(T, "123", base = Int8(10))
         @test n == 123
         @test isa(n, T)
     end
@@ -214,12 +214,12 @@ end
 @test parse(Bool, "false") === false
 @test tryparse(Bool, "true") === true
 @test tryparse(Bool, "false") === false
-@test_throws ArgumentError parse(Int, "2", 1)
-@test_throws ArgumentError parse(Int, "2", 63)
+@test_throws ArgumentError parse(Int, "2", base = 1)
+@test_throws ArgumentError parse(Int, "2", base = 63)
 
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
-    @test_throws ArgumentError tryparse(T, "0", base)
+    @test_throws ArgumentError tryparse(T, "0", base = base)
 end
 
 # error throwing branch from #10560

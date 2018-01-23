@@ -447,12 +447,12 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base)`](@ref)
+be passed explicitly in every call. For example, the library function [`parse(T, num, base = base)`](@ref)
 interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
 can be expressed concisely as:
 
 ```julia
-function parse(T, num, base=10)
+function parse(T, num; base = 10)
     ###
 end
 ```
@@ -461,13 +461,13 @@ With this definition, the function can be called with either two or three argume
 is automatically passed when a third argument is not specified:
 
 ```jldoctest
-julia> parse(Int,"12",10)
+julia> parse(Int, "12", base = 10)
 12
 
-julia> parse(Int,"12",3)
+julia> parse(Int, "12", base = 3)
 5
 
-julia> parse(Int,"12")
+julia> parse(Int, "12")
 12
 ```
 

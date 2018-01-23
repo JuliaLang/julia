@@ -64,7 +64,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n), b) == n
+        @test parse(T, base(b, n),  base = b) == n
     end
     end
 end
