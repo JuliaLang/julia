@@ -249,6 +249,7 @@ include("shell.jl")
 include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
+include("strings/replace.jl")
 
 # Logging
 include("logging.jl")

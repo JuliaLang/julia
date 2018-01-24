@@ -385,16 +385,18 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
     return strs
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
-
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+# cover the single pair case
 replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
     replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+
 replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
         count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
+    replace(str, occursin(first(pat_repl)) => last(pat_repl), count=count)
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
@@ -429,16 +431,20 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
 end
 
 """
-    replace(s::AbstractString, pat=>r; [count::Integer])
+    replace(s::AbstractString, pat=>r...; [count::Integer])
 
-Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
+Search for any of the given patterns `pat` in `s`, and replace each occurrence with
+corresponding `r`.
 If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression. If `r`
-is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
+is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring or,
+if the substring has length 1 and the method is defined, `r(s[1])`.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
+In the case of multiple patterns, the precedence is by low start position of matched pattern,
+then longer pattern, then order of the input list.
 
 # Examples
 ```jldoctest
@@ -450,6 +456,9 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
+
+julia> replace("The quicky quick fox", "quick"=>"slow", "quicky"=>"elegant")
+"The elegant slow fox"
 ```
 """
 replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =

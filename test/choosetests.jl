@@ -94,7 +94,7 @@ function choosetests(choices = [])
     end
 
     stringtests = ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"]
+                   "strings/io", "strings/types", "strings/replace"]
     if "strings" in skip_tests
         filter!(x -> (x != "strings" && !(x in stringtests)), tests)
     elseif "strings" in tests
