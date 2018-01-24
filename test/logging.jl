@@ -2,7 +2,7 @@
 
 using Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
-    handle_message, shouldlog, min_enabled_level
+    handle_message, shouldlog, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
 using Base.Printf: @sprintf
@@ -231,6 +231,7 @@ end
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Info, Base, :group, :asdf) === false
+    @test catch_exceptions(logger) === false
 
     # Log formatting
     function genmsg(level, message, _module, filepath, line; kws...)

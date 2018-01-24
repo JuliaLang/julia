@@ -479,6 +479,8 @@ shouldlog(logger::SimpleLogger, level, _module, group, id) =
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
+catch_exceptions(logger::SimpleLogger) = false
+
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog != nothing && maxlog isa Integer
