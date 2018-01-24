@@ -250,11 +250,6 @@ include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
-
 # multidimensional arrays
 include("cartesian.jl")
 using .Cartesian
@@ -313,6 +308,11 @@ include("task.jl")
 include("lock.jl")
 include("threads.jl")
 include("weakkeydict.jl")
+
+# Logging
+include("logging.jl")
+using .CoreLogging
+global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
 
 # To limit dependency on rand functionality (implemented in the Random
 # module), Crand is used in file.jl, and could be used in error.jl
