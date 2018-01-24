@@ -538,4 +538,15 @@ end
     end
 end
 
+@testset "special printing of Lower/UpperTriangular" begin
+    @test sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))) ==
+        "3×3 LinearAlgebra.LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2"
+    @test sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))) ==
+        "3×3 LinearAlgebra.UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1"
+    @test sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))) ==
+        "3×3 LinearAlgebra.UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2"
+    @test sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))) ==
+        "3×3 LinearAlgebra.UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1"
+end
+
 end # module TestTriangular
