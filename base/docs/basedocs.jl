@@ -988,7 +988,7 @@ callable with no arguments). The task exits when this function returns.
 
 # Examples
 ```jldoctest
-julia> a() = det(rand(1000, 1000));
+julia> a() = sum(i for i in 1:1000);
 
 julia> b = Task(a);
 ```

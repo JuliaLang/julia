@@ -9,8 +9,8 @@ Get the name of a `Module` as a `Symbol`.
 
 # Examples
 ```jldoctest
-julia> nameof(Base)
-:Base
+julia> nameof(Base.Broadcast)
+:Broadcast
 ```
 """
 nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
@@ -25,7 +25,7 @@ Get a module's enclosing `Module`. `Main` is its own parent.
 julia> parentmodule(Main)
 Main
 
-julia> parentmodule(Base.Sys)
+julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
@@ -133,10 +133,10 @@ Get an array of the fields of a `DataType`.
 
 # Examples
 ```jldoctest
-julia> fieldnames(Hermitian)
+julia> fieldnames(Rational)
 2-element Array{Symbol,1}:
- :data
- :uplo
+ :num
+ :den
 ```
 """
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]

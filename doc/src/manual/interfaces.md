@@ -115,9 +115,12 @@ Now, when we ask Julia to [`collect`](@ref) all the elements into an array it ca
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
-julia> collect(Squares(10))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 1  4  9  16  25  36  49  64  81  100
+julia> collect(Squares(4))
+4-element Array{Int64,1}:
+  1
+  4
+  9
+ 16
 ```
 
 While we can rely upon generic implementations, we can also extend specific methods where we know
@@ -150,9 +153,12 @@ julia> Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1)
 
 julia> Base.done(::Iterators.Reverse{Squares}, state) = state < 1
 
-julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 100  81  64  49  36  25  16  9  4  1
+julia> collect(Iterators.reverse(Squares(4)))
+4-element Array{Int64,1}:
+ 16
+  9
+  4
+  1
 ```
 
 ## Indexing
@@ -275,28 +281,31 @@ methods are all it takes for `SquaresVector` to be an iterable, indexable, and c
 array:
 
 ```jldoctest squarevectype
-julia> s = SquaresVector(7)
-7-element SquaresVector:
+julia> s = SquaresVector(4)
+4-element SquaresVector:
   1
   4
   9
  16
- 25
- 36
- 49
 
-julia> s[s .> 20]
-3-element Array{Int64,1}:
- 25
- 36
- 49
+julia> s[s .> 8]
+2-element Array{Int64,1}:
+  9
+ 16
 
-julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 RowVector{Float64,Array{Float64,1}}:
- 0.305389  0.335329
+julia> s + s
+4-element Array{Int64,1}:
+  2
+  8
+ 18
+ 32
 
-julia> s ⋅ s # dot(s, s)
-4676
+julia> sin.(s)
+4-element Array{Float64,1}:
+  0.8414709848078965
+ -0.7568024953079282
+  0.4121184852417566
+ -0.2879033166650653
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built
@@ -382,8 +391,8 @@ julia> A[SquaresVector(3)]
  4.0
  9.0
 
-julia> dot(A[:,1],A[:,2])
-32.0
+julia> mean(A)
+5.0
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at

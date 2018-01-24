@@ -67,17 +67,17 @@ it is not a view.
 
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> s_a = Symmetric(a)
-2×2 Symmetric{Int64,Array{Int64,2}}:
+julia> V = view(A, 1:2, :)
+2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
  1  2
- 2  4
+ 3  4
 
-julia> parent(s_a)
+julia> parent(V)
 2×2 Array{Int64,2}:
  1  2
  3  4
