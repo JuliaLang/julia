@@ -431,7 +431,7 @@ end
 
 function copyto!(dest::BitArray, src::Array)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    length(src) == 0 && return det
+    length(src) == 0 && return dest
     return unsafe_copyto!(dest, 1, src, 1, length(src))
 end
 
