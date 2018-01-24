@@ -288,16 +288,7 @@ julia> gctime
 0.0055765
 
 julia> fieldnames(typeof(memallocs))
-9-element Array{Symbol,1}:
- :allocd
- :malloc
- :realloc
- :poolalloc
- :bigalloc
- :freecall
- :total_time
- :pause
- :full_sweep
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
 julia> memallocs.total_time
 5576500

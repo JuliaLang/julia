@@ -145,19 +145,17 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 """
     fieldnames(x::DataType)
 
-Get an array of the fields of a `DataType`.
+Get a tuple with the names of the fields of a `DataType`.
 
 # Examples
 ```jldoctest
 julia> fieldnames(Rational)
-2-element Array{Symbol,1}:
- :num
- :den
+(:num, :den)
 ```
 """
-fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]
+fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
+fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
     nameof(t::DataType) -> Symbol
@@ -1062,8 +1060,8 @@ max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 """
     propertynames(x, private=false)
 
-Get an array of the properties (`x.property`) of an object `x`.   This
-is typically the same as [`fieldnames(typeof(x))`](@ref), but types
+Get a tuple or a vector of the properties (`x.property`) of an object `x`.
+This is typically the same as [`fieldnames(typeof(x))`](@ref), but types
 that overload [`getproperty`](@ref) should generally overload `propertynames`
 as well to get the properties of an instance of the type.
 

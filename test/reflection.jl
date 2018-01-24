@@ -218,7 +218,7 @@ mutable struct TLayout
     z::Int32
 end
 tlayout = TLayout(5,7,11)
-@test fieldnames(TLayout) == [:x, :y, :z] == Base.propertynames(tlayout)
+@test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
@@ -232,7 +232,7 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
-@test fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
+@test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
