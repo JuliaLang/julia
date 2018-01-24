@@ -1130,7 +1130,7 @@ the pipe. The `wr` end is given for convenience in case the old
 elsewhere.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout
 
@@ -1140,7 +1140,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`STDERR`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr
 
@@ -1152,7 +1152,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`STDIN`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin
 
@@ -1177,7 +1177,7 @@ Run the function `f` while redirecting [`STDOUT`](@ref) to `stream`.
 Upon completion, [`STDOUT`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout(f::Function, stream)
 
@@ -1188,7 +1188,7 @@ Run the function `f` while redirecting [`STDERR`](@ref) to `stream`.
 Upon completion, [`STDERR`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr(f::Function, stream)
 
@@ -1199,7 +1199,7 @@ Run the function `f` while redirecting [`STDIN`](@ref) to `stream`.
 Upon completion, [`STDIN`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin(f::Function, stream)
 

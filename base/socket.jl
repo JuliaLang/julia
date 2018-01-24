@@ -254,7 +254,13 @@ end
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
+"""
+    TCPSocket(; delay=true)
 
+Open a TCP socket using libuv. If `delay` is true, libuv delays creation of the
+socket's file descriptor till the first [`bind`](@ref) call. `TCPSocket` has various
+fields to denote the state of the socket as well as its send/receive buffers.
+"""
 mutable struct TCPSocket <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -354,7 +360,12 @@ accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
     readable=false, writable=false, julia_only=true))
 
 # UDP
+"""
+    UDPSocket()
 
+Open a UDP socket using libuv. `UDPSocket` has various
+fields to denote the state of the socket.
+"""
 mutable struct UDPSocket <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -688,7 +699,7 @@ getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 """
     getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
 
-Gets the first IP address of the `host` of the specified IPAddr type.
+Gets the first IP address of the `host` of the specified `IPAddr` type.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
 """
 function getaddrinfo(host::String, T::Type{<:IPAddr})
