@@ -253,6 +253,7 @@ include("arrayshow.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
+global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
 
 # multidimensional arrays
 include("cartesian.jl")

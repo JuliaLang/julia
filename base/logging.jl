@@ -378,7 +378,7 @@ end
 
 LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
 
-_global_logstate = LogState(NullLogger()) # See __init__
+_global_logstate = LogState(NullLogger())
 
 function current_logstate()
     logstate = current_task().logstate
