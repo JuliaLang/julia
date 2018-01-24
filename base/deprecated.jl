@@ -1409,6 +1409,9 @@ end
 @deprecate_moved ConjMatrix "LinearAlgebra" true true
 @deprecate_moved RowVector  "LinearAlgebra" true true
 
+# PR #25694
+@deprecate chown(path, owner) chown(path, owner = owner)
+@deprecate chown(path, owner, group) chown(path, owner = owner, group = group)
 
 # PR #25021
 @deprecate_moved normalize_string "Unicode" true true

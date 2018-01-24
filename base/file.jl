@@ -641,14 +641,28 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     nothing
 end
 
-"""
-    chown(path::AbstractString, owner::Integer, group::Integer=-1)
+sentinel_code(i::Integer) = i
+sentinel_code(s::Symbol) =
+    if s == :preserve
+        -1
+    elseif s == :remove
+        -2
+    else
+        error("$s is not an integer, :preserve, or :remove")
+    end
 
-Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
-is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
 """
-function chown(path::AbstractString, owner::Integer, group::Integer=-1)
-    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
+    chown(path::AbstractString; owner::Union{Symbol, Integer}, group::Union{Symbol, Integer})
+
+Change the owner and/or group of `path` to `owner` and/or `group`. If left as
+`:preserve`, then the they won't be changed. If set to `:remove`, they will be
+removed.
+"""
+function chown(path::AbstractString;
+    owner::Union{Symbol, Integer} = :preserve,
+    group::Union{Symbol, Integer} = :preserve)
+    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint),
+        path, sentinel_code(owner), sentinel_code(group))
     uv_error("chown",err)
     nothing
 end
