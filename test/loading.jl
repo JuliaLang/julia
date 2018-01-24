@@ -381,5 +381,10 @@ const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
     end
 end
 
+@testset "Issue #25719" begin
+    @test Base.root_module(Base, :Test) == Test
+    @test_throws ArgumentError Base.root_module(Base, :SomeGarbage)
+end
+
 append!(empty!(DEPOT_PATH), saved_depot_path)
 append!(empty!(LOAD_PATH), saved_load_path)

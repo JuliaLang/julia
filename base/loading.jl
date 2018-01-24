@@ -858,8 +858,11 @@ end
 
 # get a top-level Module from the given key
 root_module(key::PkgId) = loaded_modules[key]
-root_module(where::Module, name::Symbol) =
-    root_module(identify_package(where, String(name)))
+function root_module(where::Module, name::Symbol)
+    id = identify_package(where, String(name))
+    id === nothing && throw(ArgumentError("module $name not found in $where"))
+    root_module(id)
+end
 
 root_module_exists(key::PkgId) = haskey(loaded_modules, key)
 loaded_modules_array() = collect(values(loaded_modules))
