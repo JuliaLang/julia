@@ -1004,21 +1004,19 @@ See also [`accumulate`](@ref).
 
 # Examples
 ``jldoctest
-julia> x = SparseVector(7, [1, 3, 5], [2., 4., 5.]);
+julia> x = [1, 0, 2, 0, 3];
 
-julia> y = zeros(7);
+julia> y = [0, 0, 0, 0, 0];
 
 julia> accumulate!(+, y, x);
 
 julia> y
-7-element Array{Float64,1}:
-  2.0
-  2.0
-  6.0
-  6.0
- 11.0
- 11.0
- 11.0
+5-element Array{Int64,1}:
+ 1
+ 1
+ 3
+ 3
+ 6
 ```
 """
 function accumulate!(op::Op, y, x::AbstractVector) where Op

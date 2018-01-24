@@ -1512,6 +1512,15 @@ end
 
 @deprecate lexless isless
 
+@deprecate(
+    open(filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+@deprecate(
+    open(f::Function, filename::AbstractString, read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool),
+    open(f, filename, read = read, write = write, create = create, truncate = truncate, append = append)
+)
+
 @deprecate_binding iteratorsize IteratorSize
 @deprecate_binding iteratoreltype IteratorEltype
 
@@ -1624,6 +1633,12 @@ export readandwrite
 @deprecate datatype_module(t::UnionAll) parentmodule(t) false
 @deprecate function_module(f::Function) parentmodule(f) false
 @deprecate function_module(f, t) parentmodule(f, t) false
+
+# PR #25622
+@deprecate module_name(m::Module) nameof(m)
+@deprecate function_name(f::Function) nameof(f) false
+@deprecate datatype_name(t::DataType) nameof(t) false
+@deprecate datatype_name(t::UnionAll) nameof(t) false
 
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}

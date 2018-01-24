@@ -831,7 +831,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
-            f = open(hist_path, true, true, true, false, false)
+            f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
             end

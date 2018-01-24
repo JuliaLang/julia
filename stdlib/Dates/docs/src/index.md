@@ -23,7 +23,7 @@ Dates.Time
 
 ```@docs
 Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Dates.DateTime(::Dates.Period...)
+Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
@@ -32,13 +32,13 @@ Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)
 Dates.Date(::Int64, ::Int64, ::Int64)
-Dates.Date(::Dates.Period...)
+Dates.Date(::Dates.Period)
 Dates.Date(::Function, ::Any, ::Any, ::Any)
 Dates.Date(::Dates.TimeType)
 Dates.Date(::AbstractString, ::AbstractString)
 Dates.Date(::AbstractString, ::Dates.DateFormat)
 Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Dates.Time(::Dates.TimePeriod...)
+Dates.Time(::Dates.TimePeriod)
 Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
 Dates.now()

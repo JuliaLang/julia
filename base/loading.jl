@@ -197,12 +197,13 @@ struct PkgId
     name::String
 
     PkgId(u::UUID, name::AbstractString) = new(UInt128(u) == 0 ? nothing : u, name)
-    PkgId(name::AbstractString) = new(nothing, name)
+    PkgId(::Nothing, name::AbstractString) = new(nothing, name)
 end
+PkgId(name::AbstractString) = PkgId(nothing, name)
 
 function PkgId(m::Module)
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(module_name(m))
+    name = String(nameof(m))
     UInt128(uuid) == 0 && return PkgId(name)
     return PkgId(uuid, name)
 end

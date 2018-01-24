@@ -10,7 +10,7 @@ export @printf, @sprintf
 using Base.Printf: _printf, is_str_expr, fix_dec, DIGITS, print_fixed, decode_dec, decode_hex,
                    ini_hex, ini_HEX, print_exp_a, decode_0ct, decode_HEX, ini_dec, print_exp_e,
                    decode_oct, _limit
-using Unicode.textwidth
+using Unicode: textwidth
 
 """
     @printf([io::IOStream], "%Fmt", args...)

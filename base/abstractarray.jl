@@ -14,7 +14,7 @@ AbstractArray
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # catch undefined constructors before the deprecation kicks in
 # TODO: remove when deprecation is removed
 function (::Type{T})(arg) where {T<:AbstractArray}
@@ -801,39 +801,31 @@ range to efficiently index into the array with indices specified for every dimen
 other iterables, including strings and dictionaries, return an iterator object
 supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
-Example for a sparse 2-d array:
-
-```jldoctest
-julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  1
-  [2, 1]  =  -5
-  [1, 3]  =  2
-
-julia> for iter in eachindex(A)
-           @show iter.I[1], iter.I[2]
-           @show A[iter]
-       end
-(iter.I[1], iter.I[2]) = (1, 1)
-A[iter] = 1
-(iter.I[1], iter.I[2]) = (2, 1)
-A[iter] = -5
-(iter.I[1], iter.I[2]) = (1, 2)
-A[iter] = 0
-(iter.I[1], iter.I[2]) = (2, 2)
-A[iter] = 0
-(iter.I[1], iter.I[2]) = (1, 3)
-A[iter] = 2
-(iter.I[1], iter.I[2]) = (2, 3)
-A[iter] = 0
-```
-
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
 iterable that spans the largest range along each dimension.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> for i in eachindex(A) # linear indexing
+           println(i)
+       end
+1
+2
+3
+4
+
+julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
+           println(i)
+       end
+CartesianIndex(1, 1)
+CartesianIndex(2, 1)
+```
 """
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
 

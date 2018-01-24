@@ -964,6 +964,10 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
+  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
+    the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor
+    of `nameof` methods ([#25622]).
+
   * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
 
   * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
@@ -986,6 +990,9 @@ Deprecated or removed
   * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
+
+  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
+    and `Time(0)` respectively ([#23724]).
 
 Command-line option changes
 ---------------------------
@@ -1239,5 +1246,6 @@ Command-line option changes
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
+[#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
