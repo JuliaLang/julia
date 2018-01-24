@@ -1064,6 +1064,9 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
 
     // Fast path for the already-compiled case
     if (jl_is_method(li->def.method)) {
+        if (li->min_world > world || li->max_world < world)
+            // this should be an assertion, but we seem to hit this, so be nice and try to ignore it
+            return decls;
         decls = li->functionObjectsDecls;
         bool already_compiled = params->cached && decls.functionObject != NULL;
         if (!src) {
