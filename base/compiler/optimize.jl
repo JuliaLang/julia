@@ -2784,12 +2784,18 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     # after checking that they are all disjoint from the leaftype defs
     for i in 1:ndefs
         def = info.defs[i]
-        defex = (def.assign::Expr).args[2]
+        assign = def.assign::Expr
+        defex = assign.args[2]
         rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
         deftypes[i] = rhstyp
+        if rhstyp === Union{}
+            def.stmts[def.stmtidx] = defex
+            scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
+        end
     end
     for i in 1:ndefs
         rhstyp = deftypes[i]
+        rhstyp === Union{} && continue
         if !isdispatchelem(rhstyp)
             for j in 1:ndefs
                 rhstyp2 = deftypes[j]
@@ -2806,6 +2812,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     if haskey(alltypes, Any)
         for i in 1:ndefs
             rhstyp = deftypes[i]
+            rhstyp === Union{} && continue
             if !isdispatchelem(rhstyp)
                 nonleaf_slottype = tmerge(nonleaf_slottype, rhstyp)
                 deftypes[i] = Any
@@ -2839,6 +2846,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         assign = def.assign::Expr
         defex = assign.args[2]
         rhstyp = deftypes[i]
+        rhstyp === Union{} && continue
         new_slot = alltypes[rhstyp]
         if !isa(new_slot, SlotNumber)
             # create a slot for each concrete type
