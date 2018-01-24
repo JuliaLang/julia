@@ -363,7 +363,7 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
         serialize(s, Symbol(key.name))
     else
         serialize_mod_names(s, p)
-        serialize(s, module_name(m))
+        serialize(s, nameof(m))
     end
 end
 
@@ -1193,7 +1193,7 @@ end
 
 deserialize(s::AbstractSerializer, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
 
-deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), 62)
+deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
 
 function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)

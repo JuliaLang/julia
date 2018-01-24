@@ -17,7 +17,7 @@ using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_
 import Serialization: serialize, deserialize
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
-using Base.Printf.@sprintf
+using Printf: @sprintf
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 

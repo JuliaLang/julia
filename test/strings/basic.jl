@@ -64,7 +64,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n), b) == n
+        @test parse(T, base(b, n),  base = b) == n
     end
     end
 end
@@ -362,6 +362,7 @@ end
             ("\udc00\ud800", false),
         )
         @test isvalid(String, val) == pass == isvalid(String(val))
+        @test isvalid(val[1]) == pass
     end
 
     # Issue #11203
@@ -435,6 +436,17 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+
+    # invalid Chars
+    @test  isvalid('a')
+    @test  isvalid('柒')
+    @test !isvalid("\xff"[1])
+    @test !isvalid("\xc0\x80"[1])
+    @test !isvalid("\xf0\x80\x80\x80"[1])
+    @test !isvalid('\ud800')
+    @test  isvalid('\ud7ff')
+    @test !isvalid('\udfff')
+    @test  isvalid('\ue000')
 end
 
 @testset "NULL pointers are handled consistently by String" begin

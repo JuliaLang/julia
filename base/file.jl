@@ -81,8 +81,15 @@ Temporarily changes the current working directory and applies function `f` befor
 """
 cd(f::Function) = cd(f, homedir())
 
+function checkmode(mode::Integer)
+    if !(0 <= mode <= 511)
+        throw(ArgumentError("Mode must be between 0 and 511 = 0o777"))
+    end
+    mode
+end
+
 """
-    mkdir(path::AbstractString, mode::Unsigned=0o777)
+    mkdir(path::AbstractString; mode::Unsigned = 0o777)
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
 modified by the current file creation mask. This function never creates more than one
@@ -90,28 +97,28 @@ directory. If the directory already exists, or some intermediate directories do 
 this function throws an error. See [`mkpath`](@ref) for a function which creates all
 required intermediate directories.
 """
-function mkdir(path::AbstractString, mode::Unsigned=0o777)
+function mkdir(path::AbstractString; mode::Integer = 0o777)
     @static if Sys.iswindows()
         ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     else
-        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, mode)
+        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, checkmode(mode))
     end
     systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
 """
-    mkpath(path::AbstractString, mode::Unsigned=0o777)
+    mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask.
 """
-function mkpath(path::AbstractString, mode::Unsigned=0o777)
+function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
     (path == dir || isdir(path)) && return
-    mkpath(dir, mode)
+    mkpath(dir, mode = checkmode(mode))
     try
-        mkdir(path, mode)
+        mkdir(path, mode = mode)
     # If there is a problem with making the directory, but the directory
     # does in fact exist, then ignore the error. Else re-throw it.
     catch err
@@ -122,9 +129,6 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
         end
     end
 end
-
-mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
-mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)

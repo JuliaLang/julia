@@ -234,7 +234,7 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
-        !hasmethod(ex.f, arg_types, ex.world))
+        !hasmethod(ex.f, arg_types, world = ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")

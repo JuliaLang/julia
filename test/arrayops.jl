@@ -498,9 +498,9 @@ end
     @test findlast(equalto(2), g2) === nothing
 
     g3 = (i % 2 for i in 1:10, j in 1:2)
-    @test findall(!iszero, g3) == 1:2:19
-    @test findfirst(!iszero, g3) == 1
-    @test findlast(!iszero, g3) == 19
+    @test findall(!iszero, g3) == findall(!iszero, collect(g3))
+    @test findfirst(!iszero, g3) == CartesianIndex(1, 1)
+    @test findlast(!iszero, g3) == CartesianIndex(9, 2)
     @test findfirst(equalto(2), g3) === nothing
     @test findlast(equalto(2), g3) === nothing
 end

@@ -457,22 +457,22 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(x) = nameof(x, isexpr(x, :macro))
+namify(x) = astname(x, isexpr(x, :macro))
 
-function nameof(x::Expr, ismacro)
+function astname(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
     # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
     elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
-        return nameof(x.args[1].args[1].args[2], ismacro)
+        return astname(x.args[1].args[1].args[2], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
-        nameof(x.args[n], ismacro)
+        astname(x.args[n], ismacro)
     end
 end
-nameof(q::QuoteNode, ismacro) = nameof(q.value, ismacro)
-nameof(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
-nameof(other, ismacro)        = other
+astname(q::QuoteNode, ismacro) = astname(q.value, ismacro)
+astname(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
+astname(other, ismacro)        = other
 
 macroname(s::Symbol) = Symbol('@', s)
 macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))

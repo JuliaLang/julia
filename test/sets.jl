@@ -44,22 +44,32 @@ end
     d2 = Dict(Set([2]) => 33, Set([3]) => 22)
     @test hash(d1) != hash(d2)
 end
-@testset "isequal" begin
-    @test  isequal(Set(), Set())
-    @test !isequal(Set(), Set([1]))
-    @test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
-    @test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
-    # Comparison of unrelated types seems rather inconsistent
-    @test  isequal(Set{Int}(), Set{AbstractString}())
-    @test !isequal(Set{Int}(), Set{AbstractString}([""]))
-    @test !isequal(Set{AbstractString}(), Set{Int}([0]))
-    @test !isequal(Set{Int}([1]), Set{AbstractString}())
-    @test  isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
-    @test  isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3]))
-    @test !isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3,4]))
-    @test !isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3,4]))
-    @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
-    @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
+
+@testset "equality" for eq in (isequal, ==)
+    @test  eq(Set(), Set())
+    @test !eq(Set(), Set([1]))
+    @test  eq(Set{Any}(Any[1,2]), Set{Int}([1,2]))
+    @test !eq(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
+
+    # Comparison of unrelated types
+    @test  eq(Set{Int}(), Set{AbstractString}())
+    @test !eq(Set{Int}(), Set{AbstractString}([""]))
+    @test !eq(Set{AbstractString}(), Set{Int}([0]))
+    @test !eq(Set{Int}([1]), Set{AbstractString}())
+    @test  eq(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
+    @test  eq(Set{Int}([1,2,3]), Set{Any}([1,2,3]))
+    @test !eq(Set{Any}([1,2,3]), Set{Int}([1,2,3,4]))
+    @test !eq(Set{Int}([1,2,3]), Set{Any}([1,2,3,4]))
+    @test !eq(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
+    @test !eq(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
+
+    # Special cases
+    @test  eq(Set([-0.0]), Set([-0.0]))
+    @test !eq(Set([0.0]), Set([-0.0]))
+    @test  eq(Set([NaN]), Set([NaN]))
+    @test !eq(Set([NaN]), Set([1.0]))
+    @test  eq(Set([missing]), Set([missing]))
+    @test !eq(Set([missing]), Set([1]))
 end
 
 @testset "hash and == for Set/BitSet" begin

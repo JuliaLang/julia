@@ -34,9 +34,8 @@ for more information.
 """
 module Dates
 
-import ..Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
-import ..Base.broadcast
-using Base.Printf.@sprintf
+import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+using Printf: @sprintf
 
 using Base.Iterators
 

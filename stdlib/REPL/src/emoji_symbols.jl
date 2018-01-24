@@ -11,7 +11,7 @@ for emj in emojis
     if '-' in unicode
         continue
     end
-    result[name] = "$(Char(parse(UInt32, unicode, 16)))"
+    result[name] = "$(Char(parse(UInt32, unicode, base = 16)))"
 end
 
 skeys = sort(collect(keys(result)))

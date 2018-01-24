@@ -13,7 +13,7 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
@@ -22,7 +22,7 @@ to generically build upon those behaviors.
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
-| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 
@@ -250,8 +250,8 @@ arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
-`ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
-supports two dimensions, so it just defines
+`ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
+library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an

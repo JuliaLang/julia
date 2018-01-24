@@ -1281,14 +1281,14 @@ function detect_ambiguities(mods...;
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
@@ -1322,14 +1322,14 @@ function detect_unbound_args(mods...;
                              recursive::Bool = false)
     ambs = Set{Method}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && parentmodule(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
                 union!(ambs, subambs)
             elseif isa(f, DataType) && isdefined(f.name, :mt)

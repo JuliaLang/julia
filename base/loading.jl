@@ -197,12 +197,13 @@ struct PkgId
     name::String
 
     PkgId(u::UUID, name::AbstractString) = new(UInt128(u) == 0 ? nothing : u, name)
-    PkgId(name::AbstractString) = new(nothing, name)
+    PkgId(::Nothing, name::AbstractString) = new(nothing, name)
 end
+PkgId(name::AbstractString) = PkgId(nothing, name)
 
 function PkgId(m::Module)
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(module_name(m))
+    name = String(nameof(m))
     UInt128(uuid) == 0 && return PkgId(name)
     return PkgId(uuid, name)
 end
@@ -1104,7 +1105,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         close(in)
     catch ex
         close(in)
-        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        process_running(io) && Timer(t -> kill(io), interval = 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
         rethrow(ex)
     end
     return io

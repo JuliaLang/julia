@@ -5,7 +5,7 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str, [base])
+    parse(type, str; base)
 
 Parse a string as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
@@ -18,10 +18,10 @@ If the string does not contain a valid number, an error is raised.
 julia> parse(Int, "1234")
 1234
 
-julia> parse(Int, "1234", 5)
+julia> parse(Int, "1234", base = 5)
 194
 
-julia> parse(Int, "afc", 16)
+julia> parse(Int, "afc", base = 16)
 2812
 
 julia> parse(Float64, "1.2e-3")
@@ -31,9 +31,9 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 0.32 + 4.5im
 ```
 """
-parse(T::Type, str, base=Int)
+parse(T::Type, str; base = Int)
 
-function parse(::Type{T}, c::Char, base::Integer=36) where T<:Integer
+function parse(::Type{T}, c::Char; base::Integer = 36) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -202,22 +202,18 @@ end
 end
 
 """
-    tryparse(type, str, [base])
+    tryparse(type, str; base)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
-tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
-tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), 0, false)
-
-function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true)
+function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+    # Zero base means, "figure it out"
+    tryparse_internal(T, s, start(s), endof(s), base===nothing ? 0 : check_valid_base(base), false)
 end
 
-function parse(::Type{T}, s::AbstractString) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), 0, true) # Zero means, "figure it out"
+function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+    tryparse_internal(T, s, start(s), endof(s), base===nothing ? 0 : check_valid_base(base), true)
 end
 
 ## string to float functions ##

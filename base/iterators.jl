@@ -705,11 +705,15 @@ julia> collect(Iterators.product(1:2,3:5))
 """
 product(iters...) = ProductIterator(iters)
 
-IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape()
+IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
 IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
     prod_iteratorsize( IteratorSize(tuple_type_head(T)), IteratorSize(ProductIterator{tuple_type_tail(T)}) )
 
-prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
+prod_iteratorsize(::HasLength, ::HasLength) = HasShape{2}()
+prod_iteratorsize(::HasLength, ::HasShape{N}) where {N} = HasShape{N+1}()
+prod_iteratorsize(::HasShape{N}, ::HasLength) where {N} = HasShape{N+1}()
+prod_iteratorsize(::HasShape{M}, ::HasShape{N}) where {M,N} = HasShape{M+N}()
+
 # products can have an infinite iterator
 prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
