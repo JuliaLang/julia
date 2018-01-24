@@ -90,7 +90,7 @@ function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering
 end
 
 """
-    partialsort!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
 
 Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
 `rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
@@ -145,7 +145,7 @@ partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
-    partialsort(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)
 
 Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
@@ -279,7 +279,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
 end
 
 """
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the range of indices of `a` which compare as equal to `x` (using binary search)
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
@@ -304,7 +304,7 @@ julia> searchsorted(a, 4, rev=true)
 """ searchsorted
 
 """
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
@@ -324,7 +324,7 @@ julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
@@ -671,7 +671,7 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
 
 Return a partial permutation of the vector `v`, according to the order specified by
 `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
@@ -686,7 +686,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
