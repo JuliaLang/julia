@@ -72,11 +72,11 @@ reverse(itr) = Reverse(itr)
 struct Reverse{T}
     itr::T
 end
-eltype(r::Reverse) = eltype(r.itr)
+eltype(::Type{Reverse{T}}) where {T} = eltype(T)
 length(r::Reverse) = length(r.itr)
 size(r::Reverse) = size(r.itr)
-IteratorSize(r::Reverse) = IteratorSize(r.itr)
-IteratorEltype(r::Reverse) = IteratorEltype(r.itr)
+IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
+IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
 last(r::Reverse) = first(r.itr) # the first shall be last
 first(r::Reverse) = last(r.itr) # and the last shall be first
 
@@ -748,9 +748,10 @@ function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
     IteratorEltype(I) == EltypeUnknown() ? EltypeUnknown() : IteratorEltype(P)
 end
 
-eltype(P::ProductIterator) = _prod_eltype(P.iterators)
-_prod_eltype(::Tuple{}) = Tuple{}
-_prod_eltype(t::Tuple) = Base.tuple_type_cons(eltype(t[1]),_prod_eltype(tail(t)))
+eltype(::Type{<:ProductIterator{I}}) where {I} = _prod_eltype(I)
+_prod_eltype(::Type{Tuple{}}) = Tuple{}
+_prod_eltype(::Type{I}) where {I<:Tuple} =
+    Base.tuple_type_cons(eltype(tuple_type_head(I)),_prod_eltype(tuple_type_tail(I)))
 
 start(::ProductIterator{Tuple{}}) = false
 next(::ProductIterator{Tuple{}}, state) = (), true

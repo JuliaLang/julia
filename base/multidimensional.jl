@@ -89,7 +89,7 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
-    eltype(index::CartesianIndex) = eltype(index.I)
+    eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
@@ -272,7 +272,6 @@ module IteratorsMD
         CartesianIndices(axsA)
     end
 
-    eltype(R::CartesianIndices) = eltype(typeof(R))
     eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
     IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
