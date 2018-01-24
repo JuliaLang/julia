@@ -163,3 +163,10 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     end
     dest
 end
+
+# We can also implement `map` and its promotion in terms of broadcast with a stricter dimension check
+function map(f, A::StructuredMatrix, Bs::StructuredMatrix...)
+    sz = size(A)
+    all(map(B->size(B)==sz, Bs)) || throw(DimensionMismatch("dimensions must match"))
+    f.(A, Bs...)
+end
