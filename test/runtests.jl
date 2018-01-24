@@ -1170,7 +1170,11 @@ end
 
 # 0.7.0-DEV.3516
 @test argmax([10,12,9,11]) == 2
+@test argmax([10 12; 9 11]) == CartesianIndex(1, 2)
+@test argmax(Dict(:z=>10, :y=>12, :x=>9, :w=>11)) == :y
 @test argmin([10,12,9,11]) == 3
+@test argmin([10 12; 9 11]) == CartesianIndex(2, 1)
+@test argmin(Dict(:z=>10, :y=>12, :x=>9, :w=>11)) == :x
 
 # 0.7.0-DEV.3415
 @test findall(x -> x==1, [1, 2, 3, 2, 1]) == [1, 5]

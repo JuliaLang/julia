@@ -1311,8 +1311,17 @@ if !isdefined(Base, :findall)
 end
 
 @static if !isdefined(Base, :argmin)
-    const argmin = indmin
-    const argmax = indmax
+    if VERSION >= v"0.7.0-DEV.1660" # indmin/indmax return key
+        const argmin = indmin
+        const argmax = indmax
+    else
+        argmin(x::AbstractArray) = CartesianIndex(ind2sub(x, indmin(x)))
+        argmin(x::AbstractVector) = indmin(x)
+        argmin(x::Associative) = first(Iterators.drop(keys(x), indmin(values(x))-1))
+        argmax(x::AbstractArray) = CartesianIndex(ind2sub(x, indmax(x)))
+        argmax(x::AbstractVector) = indmax(x)
+        argmax(x::Associative) = first(Iterators.drop(keys(x), indmax(values(x))-1))
+    end
     export argmin, argmax
 end
 
