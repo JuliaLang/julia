@@ -207,10 +207,10 @@ end
     end
 end
 
-@testset "scale!" begin
+@testset "mul! (scaling)" begin
     A5x5, b5, C5x6 = Array{Float64}.(uninitialized,((5,5), 5, (5,6)))
     for A in (A5x5, view(A5x5, :, :)), b in (b5,  view(b5, :)), C in (C5x6, view(C5x6, :, :))
-        @test_throws DimensionMismatch scale!(A, b, C)
+        @test_throws DimensionMismatch mul!(A, Diagonal(b), C)
     end
 end
 
