@@ -442,6 +442,31 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 """
 rest(itr,state) = Rest(itr,state)
 
+"""
+    peel(iter)
+
+Returns the first element and an iterator over the remaining elements.
+
+# Example
+```jldoctest
+julia> (a, rest) = Iterators.peel("abc");
+
+julia> a
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> collect(rest)
+2-element Array{Char,1}:
+ 'b'
+ 'c'
+```
+"""
+function peel(itr)
+    s = start(itr)
+    done(itr, s) && throw(BoundsError())
+    val, s = next(itr, s)
+    val, rest(itr, s)
+end
+
 start(i::Rest) = i.st
 @propagate_inbounds next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
