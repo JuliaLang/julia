@@ -1670,6 +1670,8 @@ export readandwrite
 @deprecate oct(n, pad) base(8, n, pad = pad)
 @deprecate dec(n, pad) base(10, n, pad = pad)
 @deprecate hex(n, pad) base(16, n, pad = pad)
+@deprecate hex(id::LibGit2.GitHash) string(id)
+@deprecate hex(id::LibGit2.GitShortHash) string(id)
 
 # END 0.7 deprecations
 
