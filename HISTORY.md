@@ -417,7 +417,7 @@ Library improvements
     respectively perform predicate function negation and function composition. For example,
     `map(!iszero, (0, 1))` is now equivalent to `map(x -> !iszero(x), (0, 1))` and
     `map(uppercase ∘ hex, 250:255)` is now equivalent to
-    `map(x -> uppercase(base(16, x)), 250:255)` ([#17155]).
+    `map(x -> uppercase(hex(x)), 250:255)` ([#17155]).
 
   * `enumerate` now supports the two-argument form `enumerate(::IndexStyle, iterable)`.
     This form allows specification of the returned indices' style. For example,

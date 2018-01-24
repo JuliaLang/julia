@@ -164,7 +164,7 @@ assert_sixteen(x) =
 
 function Base.base(b, id::GitHash)
     assert_sixteen(b)
-    join([base(b,i,2) for i in id.val])
+    join([base(b, i, pad=2) for i in id.val])
 end
 function Base.base(b, id::GitShortHash)
     assert_sixteen(b)
