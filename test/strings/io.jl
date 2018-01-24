@@ -80,15 +80,15 @@
                          "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
         c = Char(i)
         cp = string(c,p)
-        op = string(Char(div(i,8)), oct(i%8), p)
-        hp = string(Char(div(i,16)), hex(i%16), p)
-        @test string(unescape_string(string("\\",oct(i,1),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,2),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,3),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,4),p))) == op
-        @test string(unescape_string(string("\\x",hex(i,1),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,2),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,3),p))) == hp
+        op = string(Char(div(i,8)), base(8, i%8), p)
+        hp = string(Char(div(i,16)), base(16, i%16), p)
+        @test string(unescape_string(string("\\",base(8,i,pad=1),p))) == cp
+        @test string(unescape_string(string("\\",base(8,i,pad=2),p))) == cp
+        @test string(unescape_string(string("\\",base(8,i,pad=3),p))) == cp
+        @test string(unescape_string(string("\\",base(8,i,pad=4),p))) == op
+        @test string(unescape_string(string("\\x",base(16,i,pad=1),p))) == cp
+        @test string(unescape_string(string("\\x",base(16,i,pad=2),p))) == cp
+        @test string(unescape_string(string("\\x",base(16,i,pad=3),p))) == hp
     end
 
     @testset "unescape_string" begin

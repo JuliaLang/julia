@@ -61,7 +61,7 @@ function table_entries(completions, unicode_dict)
     for (chars, inputs) in sort!(collect(completions), by = first)
         code_points, unicode_names, characters = String[], String[], String[]
         for char in chars
-            push!(code_points, "U+$(uppercase(hex(char, 5)))")
+            push!(code_points, "U+$(uppercase(base(16, char, pad = 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
             push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
         end

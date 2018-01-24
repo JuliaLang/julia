@@ -117,21 +117,21 @@ end
     @test all(n -> n == 1, ndigits(x, b) for b in [-20:-2;2:20] for x in [true, false])
 end
 @testset "bin/oct/dec/hex/bits" begin
-    @test bin('3') == "110011"
-    @test bin('3',7) == "0110011"
-    @test bin(3) == "11"
-    @test bin(3, 2) == "11"
-    @test bin(3, 3) == "011"
-    @test bin(-3) == "-11"
-    @test bin(-3, 3) == "-011"
+    @test base(2, '3') == "110011"
+    @test base(2, '3', pad = 7) == "0110011"
+    @test base(2, 3) == "11"
+    @test base(2, 3, pad = 2) == "11"
+    @test base(2, 3, pad = 3) == "011"
+    @test base(2, -3) == "-11"
+    @test base(2, -3, pad = 3) == "-011"
 
-    @test oct(9) == "11"
-    @test oct(-9) == "-11"
+    @test base(8, 9) == "11"
+    @test base(8, -9) == "-11"
 
-    @test dec(121) == "121"
+    @test base(10, 121) == "121"
 
-    @test hex(12) == "c"
-    @test hex(-12, 3) == "-00c"
+    @test base(16, 12) == "c"
+    @test base(16, -12, pad = 3) == "-00c"
 
     @test base(2, 5, pad = 7) == "0000101"
 

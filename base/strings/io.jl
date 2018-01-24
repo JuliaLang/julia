@@ -287,16 +287,16 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
             c in esc           ? print(io, '\\', c) :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)         ? print(io, c) :
-                                 print(io, "\\x", hex(c, 2))
+                                 print(io, "\\x", base(16, c, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
-            c <= '\x7f'        ? print(io, "\\x", hex(c, 2)) :
-            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(s, j) ? 4 : 2)) :
-                                 print(io, "\\U", hex(c, need_full_hex(s, j) ? 8 : 4))
+            c <= '\x7f'        ? print(io, "\\x", base(16, c, pad = 2)) :
+            c <= '\uffff'      ? print(io, "\\u", base(16, c, pad = need_full_hex(s, j) ? 4 : 2)) :
+                                 print(io, "\\U", base(16, c, pad = need_full_hex(s, j) ? 8 : 4))
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c))
             while true
-                print(io, "\\x", hex(u % UInt8, 2))
+                print(io, "\\x", base(16, u % UInt8, 2))
                 (u >>= 8) == 0 && break
             end
         end

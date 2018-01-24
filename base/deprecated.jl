@@ -506,8 +506,8 @@ function hex2num(s::AbstractString)
 end
 export hex2num
 
-@deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
-@deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
+@deprecate num2hex(x::Union{Float16,Float32,Float64}) base(16, reinterpret(Unsigned, x), pad = sizeof(x)*2)
+@deprecate num2hex(n::Integer) base(16, n, pad = sizeof(n)*2)
 
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
@@ -1666,6 +1666,10 @@ export readandwrite
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
 @deprecase base(b, n, pad) base(b, n, pad = pad)
+@deprecate bin(n, pad) base(2, n, pad = pad)
+@deprecate oct(n, pad) base(8, n, pad = pad)
+@deprecate dec(n, pad) base(10, n, pad = pad)
+@deprecate hex(n, pad) base(16, n, pad = pad)
 
 # END 0.7 deprecations
 

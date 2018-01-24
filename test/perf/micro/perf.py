@@ -95,7 +95,7 @@ def pisum():
 def parse_int(t):
     for i in range(1,t):
         n = random.randint(0,2**32-1)
-        s = hex(n)
+        s = base(16, n)
         if s[-1]=='L':
             s = s[0:-1]
         m = int(s,16)
@@ -107,7 +107,7 @@ def printfd(t):
     for i in range(1,t):
         f.write("{:d} {:d}\n".format(i, i+1))
     f.close()
-    
+
 
 def print_perf(name, time):
     print("python," + name + "," + str(time*1000))

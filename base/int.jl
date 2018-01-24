@@ -316,10 +316,10 @@ julia> a = bswap(4)
 julia> bswap(a)
 4
 
-julia> bin(1)
+julia> base(2, 1)
 "1"
 
-julia> bin(bswap(1))
+julia> base(2, bswap(1))
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """

@@ -708,7 +708,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
+    seed != nothing && push!(tests, "--seed=0x$(base(16, seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try

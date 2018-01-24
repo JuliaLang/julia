@@ -336,10 +336,10 @@ end
     @test_throws InexactError floor(BigInt,Inf)
     @test_throws InexactError ceil(BigInt,Inf)
 
-    @test bin(big(3)) == "11"
-    @test oct(big(9)) == "11"
-    @test oct(-big(9)) == "-11"
-    @test hex(big(12)) == "c"
+    @test base(2, big(3)) == "11"
+    @test base(8, big(9)) == "11"
+    @test base(8, -big(9)) == "-11"
+    @test base(16, big(12)) == "c"
 end
 @testset "Issue #18849" begin
     # bin, oct, dec, hex should not call sizeof on BigInts
@@ -347,25 +347,25 @@ end
     padding = 4
     low = big(4)
     high = big(2^20)
-    @test bin(low, padding) == "0100"
-    @test oct(low, padding) == "0004"
-    @test dec(low, padding) == "0004"
-    @test hex(low, padding) == "0004"
+    @test base(2, low, pad = padding) == "0100"
+    @test base(8, low, pad = padding) == "0004"
+    @test base(10, low, pad = padding) == "0004"
+    @test base(16, low, pad = padding) == "0004"
 
-    @test bin(high, padding) == "100000000000000000000"
-    @test oct(high, padding) == "4000000"
-    @test dec(high, padding) == "1048576"
-    @test hex(high, padding) == "100000"
+    @test base(2, high, pad = padding) == "100000000000000000000"
+    @test base(8, high, pad = padding) == "4000000"
+    @test base(10, high, pad = padding) == "1048576"
+    @test base(16, high, pad = padding) == "100000"
 
-    @test bin(-low, padding) == "-0100" # handle negative numbers correctly
-    @test oct(-low, padding) == "-0004"
-    @test dec(-low, padding) == "-0004"
-    @test hex(-low, padding) == "-0004"
+    @test base(2, -low, pad = padding) == "-0100" # handle negative numbers correctly
+    @test base(8, -low, pad = padding) == "-0004"
+    @test base(10, -low, pad = padding) == "-0004"
+    @test base(16, -low, pad = padding) == "-0004"
 
-    @test bin(-high, padding) == "-100000000000000000000"
-    @test oct(-high, padding) == "-4000000"
-    @test dec(-high, padding) == "-1048576"
-    @test hex(-high, padding) == "-100000"
+    @test base(2, -high, pad = padding) == "-100000000000000000000"
+    @test base(8, -high, pad = padding) == "-4000000"
+    @test base(10, -high, pad = padding) == "-1048576"
+    @test base(16, -high, pad = padding) == "-100000"
 end
 
 # respect 0-padding on big(0)

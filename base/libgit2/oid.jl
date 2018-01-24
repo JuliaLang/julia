@@ -155,8 +155,21 @@ function GitShortHash(obj::GitObject)
     return sid
 end
 
-Base.hex(id::GitHash) = join([hex(i,2) for i in id.val])
-Base.hex(id::GitShortHash) = hex(id.hash)[1:id.len]
+assert_sixteen(x) =
+    if x == 16
+        x
+    else
+        error("Must be base 16")
+    end
+
+function Base.base(b, id::GitHash)
+    assert_sixteen(b)
+    join([base(b,i,2) for i in id.val])
+end
+function Base.base(b, id::GitShortHash)
+    assert_sixteen(b)
+    base(b, id.hash)[1:id.len]
+end
 
 """
     raw(id::GitHash) -> Vector{UInt8}
@@ -165,7 +178,7 @@ Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
 """
 raw(id::GitHash) = collect(id.val)
 
-Base.string(id::AbstractGitHash) = hex(id)
+Base.string(id::AbstractGitHash) = base(16, id)
 
 Base.show(io::IO, id::GitHash) = print(io, "GitHash(\"$(string(id))\")")
 Base.show(io::IO, id::GitShortHash) = print(io, "GitShortHash(\"$(string(id))\")")

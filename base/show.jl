@@ -341,7 +341,7 @@ function show_default(io::IO, @nospecialize(x))
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
-                print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+                print(io, base(16, unsafe_load(convert(Ptr{UInt8}, p + i)), pad = 2))
             end
         end
     end
@@ -553,11 +553,11 @@ end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
-show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
-print(io::IO, n::Unsigned) = print(io, dec(n))
+show(io::IO, n::Signed) = (write(io, base(10, n)); nothing)
+show(io::IO, n::Unsigned) = print(io, "0x", base(16, n, pad = sizeof(n)<<1))
+print(io::IO, n::Unsigned) = print(io, base(10, n))
 
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
+show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(base(16, UInt(p), pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&

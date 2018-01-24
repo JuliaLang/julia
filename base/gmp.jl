@@ -593,18 +593,8 @@ flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 
-string(x::BigInt) = dec(x)
+string(x::BigInt) = base(10, x)
 show(io::IO, x::BigInt) = print(io, string(x))
-
-bin(n::BigInt) = base( 2, n)
-oct(n::BigInt) = base( 8, n)
-dec(n::BigInt) = base(10, n)
-hex(n::BigInt) = base(16, n)
-
-bin(n::BigInt, pad::Int) = base( 2, n, pad)
-oct(n::BigInt, pad::Int) = base( 8, n, pad)
-dec(n::BigInt, pad::Int) = base(10, n, pad)
-hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt; pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))

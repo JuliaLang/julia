@@ -557,7 +557,7 @@ ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
 
 ## integer to string functions ##
 
-string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
+string(x::Union{Int8,Int16,Int32,Int64,Int128}) = base(10, x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -632,6 +632,9 @@ function base(b::Int, x::Integer, pad::Int, neg::Bool)
     String(a)
 end
 
+split_sign(n::Integer) = unsigned(abs(n)), n < 0
+split_sign(n::Unsigned) = n, false
+
 """
     base(base::Integer, n::Integer; pad::Integer=1)
 
@@ -639,90 +642,31 @@ Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
 ```jldoctest
-julia> base(13,5,4)
+julia> base(13, 5, pad = 4)
 "0005"
 
-julia> base(5,13,4)
+julia> base(5, 13, pad = 4)
 "0023"
 ```
 """
 base(b::Integer, n::Integer; pad::Integer=1) =
-    base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
-
-for sym in (:bin, :oct, :dec, :hex)
-    @eval begin
-        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
-        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Char, p::Int)     = ($sym)(UInt32(x),p,false)
-        ($sym)(x::Char)             = ($sym)(UInt32(x),1,false)
-        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
+    if b == 2
+        (n_positive, neg) = split_sign(n)
+        bin(n_positive, pad, neg)
+    elseif b == 8
+        (n_positive, neg) = split_sign(n)
+        oct(n_positive, pad, neg)
+    elseif b == 10
+        (n_positive, neg) = split_sign(n)
+        dec(n_positive, pad, neg)
+    elseif b == 16
+        (n_positive, neg) = split_sign(n)
+        hex(n_positive, pad, neg)
+    else
+        base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
     end
-end
 
-"""
-    bin(n, pad::Int=1)
-
-Convert an integer to a binary string, optionally specifying a number of digits to pad to.
-
-```jldoctest
-julia> bin(10,2)
-"1010"
-
-julia> bin(10,8)
-"00001010"
-```
-"""
-bin
-
-"""
-    hex(n, pad::Int=1)
-
-Convert an integer to a hexadecimal string, optionally specifying a number of
-digits to pad to.
-
-```jldoctest
-julia> hex(20)
-"14"
-
-julia> hex(20, 3)
-"014"
-```
-"""
-hex
-
-"""
-    oct(n, pad::Int=1)
-
-Convert an integer to an octal string, optionally specifying a number of digits
-to pad to.
-
-```jldoctest
-julia> oct(20)
-"24"
-
-julia> oct(20, 3)
-"024"
-```
-"""
-oct
-
-"""
-    dec(n, pad::Int=1)
-
-Convert an integer to a decimal string, optionally specifying a number of digits
-to pad to.
-
-# Examples
-```jldoctest
-julia> dec(20)
-"20"
-
-julia> dec(20, 3)
-"020"
-```
-"""
-dec
+base(b::Integer, n::Char; pad::Integer = 1) = base(b, UInt32(n); pad = pad)
 
 """
     bitstring(n)
@@ -740,11 +684,11 @@ julia> bitstring(2.2)
 """
 function bitstring end
 
-bitstring(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
-bitstring(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
-bitstring(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
-bitstring(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
-bitstring(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+bitstring(x::Union{Bool,Int8,UInt8})           = base(2, reinterpret(UInt8,x), pad = 8)
+bitstring(x::Union{Int16,UInt16,Float16})      = base(2, reinterpret(UInt16,x), pad = 16)
+bitstring(x::Union{Char,Int32,UInt32,Float32}) = base(2, reinterpret(UInt32,x), pad = 32)
+bitstring(x::Union{Int64,UInt64,Float64})      = base(2, reinterpret(UInt64,x), pad = 64)
+bitstring(x::Union{Int128,UInt128})            = base(2, reinterpret(UInt128,x), pad = 128)
 
 """
     digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)

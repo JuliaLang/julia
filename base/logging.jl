@@ -237,7 +237,7 @@ function log_record_id(_module, level, message_ex)
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
     while true
-        id = Symbol(modname, '_', hex(h, 8))
+        id = Symbol(modname, '_', base(16, h, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
         # compilation, to ensure uniqueness of ids.  Note that this state will
         # only persist during module compilation so it will be empty when a

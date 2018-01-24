@@ -471,7 +471,7 @@ See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) f
 
 # Examples
 ```jldoctest
-julia> s = hex(12345)
+julia> s = base(16, 12345)
 "3039"
 
 julia> hex2bytes(s)
@@ -537,7 +537,7 @@ Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
 # Examples
 ```jldoctest
-julia> a = hex(12345)
+julia> a = base(16, 12345)
 "3039"
 
 julia> b = hex2bytes(a)

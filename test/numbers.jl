@@ -230,14 +230,14 @@ end
 
 @testset "bin/oct/dec/hex/base for extreme integers" begin
     # definition and printing of extreme integers
-    @test bin(typemin(UInt8)) == "0"
-    @test bin(typemax(UInt8)) == "1"^8
-    @test oct(typemin(UInt8)) == "0"
-    @test oct(typemax(UInt8)) == "377"
-    @test dec(typemin(UInt8)) == "0"
-    @test dec(typemax(UInt8)) == "255"
-    @test hex(typemin(UInt8)) == "0"
-    @test hex(typemax(UInt8)) == "ff"
+    @test base(2, typemin(UInt8)) == "0"
+    @test base(2, typemax(UInt8)) == "1"^8
+    @test base(8, typemin(UInt8)) == "0"
+    @test base(8, typemax(UInt8)) == "377"
+    @test base(10, typemin(UInt8)) == "0"
+    @test base(10, typemax(UInt8)) == "255"
+    @test base(16, typemin(UInt8)) == "0"
+    @test base(16, typemax(UInt8)) == "ff"
     @test repr(typemin(UInt8)) == "0x00"
     @test string(typemin(UInt8)) == "0"
     @test repr(typemax(UInt8)) == "0xff"
@@ -247,14 +247,14 @@ end
     @test base(12,typemin(UInt8)) == "0"
     @test base(12,typemax(UInt8)) == "193"
 
-    @test bin(typemin(UInt16)) == "0"
-    @test bin(typemax(UInt16)) == "1"^16
-    @test oct(typemin(UInt16)) == "0"
-    @test oct(typemax(UInt16)) == "177777"
-    @test dec(typemin(UInt16)) == "0"
-    @test dec(typemax(UInt16)) == "65535"
-    @test hex(typemin(UInt16)) == "0"
-    @test hex(typemax(UInt16)) == "ffff"
+    @test base(2, typemin(UInt16)) == "0"
+    @test base(2, typemax(UInt16)) == "1"^16
+    @test base(8, typemin(UInt16)) == "0"
+    @test base(8, typemax(UInt16)) == "177777"
+    @test base(10, typemin(UInt16)) == "0"
+    @test base(10, typemax(UInt16)) == "65535"
+    @test base(16, typemin(UInt16)) == "0"
+    @test base(16, typemax(UInt16)) == "ffff"
     @test repr(typemin(UInt16)) == "0x0000"
     @test string(typemin(UInt16)) == "0"
     @test repr(typemax(UInt16)) == "0xffff"
@@ -264,14 +264,14 @@ end
     @test base(12,typemin(UInt16)) == "0"
     @test base(12,typemax(UInt16)) == "31b13"
 
-    @test bin(typemin(UInt32)) == "0"
-    @test bin(typemax(UInt32)) == "1"^32
-    @test oct(typemin(UInt32)) == "0"
-    @test oct(typemax(UInt32)) == "37777777777"
-    @test dec(typemin(UInt32)) == "0"
-    @test dec(typemax(UInt32)) == "4294967295"
-    @test hex(typemin(UInt32)) == "0"
-    @test hex(typemax(UInt32)) == "ffffffff"
+    @test base(2, typemin(UInt32)) == "0"
+    @test base(2, typemax(UInt32)) == "1"^32
+    @test base(8, typemin(UInt32)) == "0"
+    @test base(8, typemax(UInt32)) == "37777777777"
+    @test base(10, typemin(UInt32)) == "0"
+    @test base(10, typemax(UInt32)) == "4294967295"
+    @test base(16, typemin(UInt32)) == "0"
+    @test base(16, typemax(UInt32)) == "ffffffff"
     @test repr(typemin(UInt32)) == "0x00000000"
     @test string(typemin(UInt32)) == "0"
     @test repr(typemax(UInt32)) == "0xffffffff"
@@ -281,14 +281,14 @@ end
     @test base(12,typemin(UInt32)) == "0"
     @test base(12,typemax(UInt32)) == "9ba461593"
 
-    @test bin(typemin(UInt64)) == "0"
-    @test bin(typemax(UInt64)) == "1"^64
-    @test oct(typemin(UInt64)) == "0"
-    @test oct(typemax(UInt64)) == "1777777777777777777777"
-    @test dec(typemin(UInt64)) == "0"
-    @test dec(typemax(UInt64)) == "18446744073709551615"
-    @test hex(typemin(UInt64)) == "0"
-    @test hex(typemax(UInt64)) == "ffffffffffffffff"
+    @test base(2, typemin(UInt64)) == "0"
+    @test base(2, typemax(UInt64)) == "1"^64
+    @test base(8, typemin(UInt64)) == "0"
+    @test base(8, typemax(UInt64)) == "1777777777777777777777"
+    @test base(10, typemin(UInt64)) == "0"
+    @test base(10, typemax(UInt64)) == "18446744073709551615"
+    @test base(16, typemin(UInt64)) == "0"
+    @test base(16, typemax(UInt64)) == "ffffffffffffffff"
     @test repr(typemin(UInt64)) == "0x0000000000000000"
     @test string(typemin(UInt64)) == "0"
     @test repr(typemax(UInt64)) == "0xffffffffffffffff"
@@ -298,33 +298,33 @@ end
     @test base(12,typemin(UInt64)) == "0"
     @test base(12,typemax(UInt64)) == "839365134a2a240713"
 
-    @test bin(typemin(UInt128)) == "0"
-    @test bin(typemax(UInt128)) == "1"^128
-    @test oct(typemin(UInt128)) == "0"
-    @test oct(typemax(UInt128)) == "3777777777777777777777777777777777777777777"
-    @test hex(typemin(UInt128)) == "0"
-    @test hex(typemax(UInt128)) == "ffffffffffffffffffffffffffffffff"
+    @test base(2, typemin(UInt128)) == "0"
+    @test base(2, typemax(UInt128)) == "1"^128
+    @test base(8, typemin(UInt128)) == "0"
+    @test base(8, typemax(UInt128)) == "3777777777777777777777777777777777777777777"
+    @test base(16, typemin(UInt128)) == "0"
+    @test base(16, typemax(UInt128)) == "ffffffffffffffffffffffffffffffff"
     @test repr(typemin(UInt128)) == "0x00000000000000000000000000000000"
     @test string(typemin(UInt128)) == "0"
     @test repr(typemax(UInt128)) == "0xffffffffffffffffffffffffffffffff"
     @test string(typemax(UInt128)) == "340282366920938463463374607431768211455"
 
-    @test dec(typemin(UInt128)) == "0"
-    @test dec(typemax(UInt128)) == "340282366920938463463374607431768211455"
+    @test base(10, typemin(UInt128)) == "0"
+    @test base(10, typemax(UInt128)) == "340282366920938463463374607431768211455"
     @test base(3,typemin(UInt128)) == "0"
     @test base(3,typemax(UInt128)) ==
         "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
     @test base(12,typemin(UInt128)) == "0"
     @test base(12,typemax(UInt128)) == "5916b64b41143526a777873841863a6a6993"
 
-    @test bin(typemin(Int8)) == "-1"*"0"^7
-    @test bin(typemax(Int8)) == "1"^7
-    @test oct(typemin(Int8)) == "-200"
-    @test oct(typemax(Int8)) == "177"
-    @test dec(typemin(Int8)) == "-128"
-    @test dec(typemax(Int8)) == "127"
-    @test hex(typemin(Int8)) == "-80"
-    @test hex(typemax(Int8)) == "7f"
+    @test base(2, typemin(Int8)) == "-1"*"0"^7
+    @test base(2, typemax(Int8)) == "1"^7
+    @test base(8, typemin(Int8)) == "-200"
+    @test base(8, typemax(Int8)) == "177"
+    @test base(10, typemin(Int8)) == "-128"
+    @test base(10, typemax(Int8)) == "127"
+    @test base(16, typemin(Int8)) == "-80"
+    @test base(16, typemax(Int8)) == "7f"
     @test string(typemin(Int8)) == "-128"
     @test string(typemax(Int8)) == "127"
     @test base(3,typemin(Int8)) == "-11202"
@@ -332,14 +332,14 @@ end
     @test base(12,typemin(Int8)) == "-a8"
     @test base(12,typemax(Int8)) == "a7"
 
-    @test bin(typemin(Int16)) == "-1"*"0"^15
-    @test bin(typemax(Int16)) == "1"^15
-    @test oct(typemin(Int16)) == "-100000"
-    @test oct(typemax(Int16)) == "77777"
-    @test dec(typemin(Int16)) == "-32768"
-    @test dec(typemax(Int16)) == "32767"
-    @test hex(typemin(Int16)) == "-8000"
-    @test hex(typemax(Int16)) == "7fff"
+    @test base(2, typemin(Int16)) == "-1"*"0"^15
+    @test base(2, typemax(Int16)) == "1"^15
+    @test base(8, typemin(Int16)) == "-100000"
+    @test base(8, typemax(Int16)) == "77777"
+    @test base(10, typemin(Int16)) == "-32768"
+    @test base(10, typemax(Int16)) == "32767"
+    @test base(16, typemin(Int16)) == "-8000"
+    @test base(16, typemax(Int16)) == "7fff"
     @test string(typemin(Int16)) == "-32768"
     @test string(typemax(Int16)) == "32767"
     @test base(3,typemin(Int16)) == "-1122221122"
@@ -347,14 +347,14 @@ end
     @test base(12,typemin(Int16)) == "-16b68"
     @test base(12,typemax(Int16)) == "16b67"
 
-    @test bin(typemin(Int32)) == "-1"*"0"^31
-    @test bin(typemax(Int32)) == "1"^31
-    @test oct(typemin(Int32)) == "-20000000000"
-    @test oct(typemax(Int32)) == "17777777777"
-    @test dec(typemin(Int32)) == "-2147483648"
-    @test dec(typemax(Int32)) == "2147483647"
-    @test hex(typemin(Int32)) == "-80000000"
-    @test hex(typemax(Int32)) == "7fffffff"
+    @test base(2, typemin(Int32)) == "-1"*"0"^31
+    @test base(2, typemax(Int32)) == "1"^31
+    @test base(8, typemin(Int32)) == "-20000000000"
+    @test base(8, typemax(Int32)) == "17777777777"
+    @test base(10, typemin(Int32)) == "-2147483648"
+    @test base(10, typemax(Int32)) == "2147483647"
+    @test base(16, typemin(Int32)) == "-80000000"
+    @test base(16, typemax(Int32)) == "7fffffff"
     @test string(typemin(Int32)) == "-2147483648"
     @test string(typemax(Int32)) == "2147483647"
     @test base(3,typemin(Int32)) == "-12112122212110202102"
@@ -362,14 +362,14 @@ end
     @test base(12,typemin(Int32)) == "-4bb2308a8"
     @test base(12,typemax(Int32)) == "4bb2308a7"
 
-    @test bin(typemin(Int64)) == "-1"*"0"^63
-    @test bin(typemax(Int64)) == "1"^63
-    @test oct(typemin(Int64)) == "-1000000000000000000000"
-    @test oct(typemax(Int64)) == "777777777777777777777"
-    @test dec(typemin(Int64)) == "-9223372036854775808"
-    @test dec(typemax(Int64)) == "9223372036854775807"
-    @test hex(typemin(Int64)) == "-8000000000000000"
-    @test hex(typemax(Int64)) == "7fffffffffffffff"
+    @test base(2, typemin(Int64)) == "-1"*"0"^63
+    @test base(2, typemax(Int64)) == "1"^63
+    @test base(8, typemin(Int64)) == "-1000000000000000000000"
+    @test base(8, typemax(Int64)) == "777777777777777777777"
+    @test base(10, typemin(Int64)) == "-9223372036854775808"
+    @test base(10, typemax(Int64)) == "9223372036854775807"
+    @test base(16, typemin(Int64)) == "-8000000000000000"
+    @test base(16, typemax(Int64)) == "7fffffffffffffff"
     @test string(typemin(Int64)) == "-9223372036854775808"
     @test string(typemax(Int64)) == "9223372036854775807"
     @test base(3,typemin(Int64)) == "-2021110011022210012102010021220101220222"
@@ -377,15 +377,15 @@ end
     @test base(12,typemin(Int64)) == "-41a792678515120368"
     @test base(12,typemax(Int64)) == "41a792678515120367"
 
-    @test bin(typemin(Int128)) == "-1"*"0"^127
-    @test bin(typemax(Int128)) == "1"^127
-    @test oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
-    @test oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
-    @test hex(typemin(Int128)) == "-80000000000000000000000000000000"
-    @test hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
+    @test base(2, typemin(Int128)) == "-1"*"0"^127
+    @test base(2, typemax(Int128)) == "1"^127
+    @test base(8, typemin(Int128)) == "-2000000000000000000000000000000000000000000"
+    @test base(8, typemax(Int128)) == "1777777777777777777777777777777777777777777"
+    @test base(16, typemin(Int128)) == "-80000000000000000000000000000000"
+    @test base(16, typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
 
-    @test dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
-    @test dec(typemax(Int128)) == "170141183460469231731687303715884105727"
+    @test base(10, typemin(Int128)) == "-170141183460469231731687303715884105728"
+    @test base(10, typemax(Int128)) == "170141183460469231731687303715884105727"
     @test string(typemin(Int128)) == "-170141183460469231731687303715884105728"
     @test string(typemax(Int128)) == "170141183460469231731687303715884105727"
     @test base(3,typemin(Int128)) ==
@@ -2084,7 +2084,7 @@ end
     @test signif(Float16(1.1), 70) === Float16(1.1)
 end
 @testset "issue #1308" begin
-    @test hex(~UInt128(0)) == "f"^32
+    @test base(16, ~UInt128(0)) == "f"^32
     @test (~0)%UInt128 == ~UInt128(0)
     @test Int128(~0) == ~Int128(0)
 end

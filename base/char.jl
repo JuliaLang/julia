@@ -164,7 +164,7 @@ function show(io::IO, ::MIME"text/plain", c::Char)
         else
             u = UInt32(c)
         end
-        h = hex(u, u ≤ 0xffff ? 4 : 6)
+        h = base(16, u, pad = u ≤ 0xffff ? 4 : 6)
         print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")

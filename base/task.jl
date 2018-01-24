@@ -51,7 +51,7 @@ function showerror(io::IO, ex::CompositeException)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), Sys.WORD_SIZE>>2))")
+    print(io, "Task ($(t.state)) @0x$(base(16, convert(UInt, pointer_from_objref(t)), pad = Sys.WORD_SIZE>>2))")
 end
 
 """
