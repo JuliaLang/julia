@@ -400,32 +400,85 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
-function mul!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}, c::Number)
+function mul!(A::UpperTriangular, B::UpperTriangular, c::Number)
     n = checksquare(B)
     for j = 1:n
-        if isa(B, UnitUpperTriangular)
-            @inbounds A[j,j] = c
+        for i = 1:j
+            @inbounds A[i,j] = B[i,j] * c
         end
-        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
+    end
+    return A
+end
+function mul!(A::UpperTriangular, c::Number, B::UpperTriangular)
+    n = checksquare(B)
+    for j = 1:n
+        for i = 1:j
             @inbounds A[i,j] = c * B[i,j]
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}, c::Number)
+function mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number)
     n = checksquare(B)
     for j = 1:n
-        if isa(B, UnitLowerTriangular)
-            @inbounds A[j,j] = c
+        @inbounds A[j,j] = c
+        for i = 1:(j - 1)
+            @inbounds A[i,j] = B[i,j] * c
         end
-        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
+    end
+    return A
+end
+function mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular)
+    n = checksquare(B)
+    for j = 1:n
+        @inbounds A[j,j] = c
+        for i = 1:(j - 1)
             @inbounds A[i,j] = c * B[i,j]
         end
     end
     return A
 end
+function mul!(A::LowerTriangular, B::LowerTriangular, c::Number)
+    n = checksquare(B)
+    for j = 1:n
+        for i = j:n
+            @inbounds A[i,j] = B[i,j] * c
+        end
+    end
+    return A
+end
+function mul!(A::LowerTriangular, c::Number, B::LowerTriangular)
+    n = checksquare(B)
+    for j = 1:n
+        for i = j:n
+            @inbounds A[i,j] = c * B[i,j]
+        end
+    end
+    return A
+end
+function mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number)
+    n = checksquare(B)
+    for j = 1:n
+            @inbounds A[j,j] = c
+        for i = (j + 1):n
+            @inbounds A[i,j] = B[i,j] * c
+        end
+    end
+    return A
+end
+function mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular)
+    n = checksquare(B)
+    for j = 1:n
+            @inbounds A[j,j] = c
+        for i = (j + 1):n
+            @inbounds A[i,j] = c * B[i,j]
+        end
+    end
+    return A
+end
+
 mul1!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
-mul2!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul1!(A', c')'
+mul2!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
 
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
