@@ -33,23 +33,35 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = Def
 # And structured matrices lose to the DefaultArrayStyle
 Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{Any}, ::StructuredMatrixStyle) = a
 Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{N}, ::StructuredMatrixStyle) where N = typeof(a)(Broadcast._max(Val(2),Val(N)))
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.VectorStyle) = Broadcast.DefaultArrayStyle{2}()
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.MatrixStyle) = Broadcast.DefaultArrayStyle{2}()
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.VectorStyle) = Broadcast.MatrixStyle()
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.MatrixStyle) = Broadcast.MatrixStyle()
 
-# And a definition of similar using the structured type:
-structured_similar(::Type{<:Diagonal}, ::Type{ElType}, n) where {ElType} = Diagonal(Array{ElType}(uninitialized, n))
-# TODO: this should be a Bidiagonal... but it doesn't know the upper/lower...
-structured_similar(::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType} = Tridiagonal(Array{ElType}(uninitialized, n-1),Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
-structured_similar(::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} = SymTridiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
-structured_similar(::Type{<:Tridiagonal}, ::Type{ElType}, n) where {ElType} = Tridiagonal(Array{ElType}(uninitialized, n-1),Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
-structured_similar(::Type{<:LowerTriangular}, ::Type{ElType}, n) where {ElType} = LowerTriangular(Array{ElType}(uninitialized, n, n))
-structured_similar(::Type{<:UpperTriangular}, ::Type{ElType}, n) where {ElType} = UpperTriangular(Array{ElType}(uninitialized, n, n))
-structured_similar(::Type{<:UnitLowerTriangular}, ::Type{ElType}, n) where {ElType} = UnitLowerTriangular(Array{ElType}(uninitialized, n, n))
-structured_similar(::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} = UnitUpperTriangular(Array{ElType}(uninitialized, n, n))
+# And a definition akin to similar using the structured type:
+structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElType} = Diagonal(Array{ElType}(uninitialized, n))
+# Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
+# system will return Tridiagonal when there's more than one Bidiagonal, but when
+# there's only one, we need to make figure out upper or lower
+find_bidiagonal(bc::Broadcast.Broadcasted) = find_bidiagonal(bc.args)
+find_bidiagonal(ll::Base.TupleLL) = find_bidiagonal(ll.head, ll.rest)
+find_bidiagonal(x) = throw(ArgumentError("could not find Bidiagonal within broadcast expression"))
+find_bidiagonal(a::Bidiagonal, rest) = a
+find_bidiagonal(n::Union{Base.TupleLL,Broadcast.Broadcasted}, rest) = find_bidiagonal(find_bidiagonal(n), rest)
+find_bidiagonal(x, rest) = find_bidiagonal(rest)
+function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
+    ex = find_bidiagonal(bc)
+    Bidiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1), ex.uplo)
+end
+structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} = SymTridiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
+structured_broadcast_alloc(bc, ::Type{<:Tridiagonal}, ::Type{ElType}, n) where {ElType} = Tridiagonal(Array{ElType}(uninitialized, n-1),Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
+structured_broadcast_alloc(bc, ::Type{<:LowerTriangular}, ::Type{ElType}, n) where {ElType} = LowerTriangular(Array{ElType}(uninitialized, n, n))
+structured_broadcast_alloc(bc, ::Type{<:UpperTriangular}, ::Type{ElType}, n) where {ElType} = UpperTriangular(Array{ElType}(uninitialized, n, n))
+structured_broadcast_alloc(bc, ::Type{<:UnitLowerTriangular}, ::Type{ElType}, n) where {ElType} = UnitLowerTriangular(Array{ElType}(uninitialized, n, n))
+structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} = UnitUpperTriangular(Array{ElType}(uninitialized, n, n))
 
 # A _very_ limited list of structure-preserving functions known at compile-time
 # This list is derived from the formerly-implemented `broadcast` methods in 0.6
-# Note that this must preserve both zeros and ones (for Unit***erTriangular)
+# Note that this must preserve both zeros and ones (for Unit***erTriangular) and
+# symmetry (for SymTridiagonal)
 isstructurepreserving(::Any) = false
 isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args)
 isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Broadcast.Args1{<:StructuredMatrix}) = true
@@ -57,11 +69,23 @@ isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(c
 isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Broadcast.Args2{<:Type,<:StructuredMatrix}) = true
 isstructurepreserving(f, args) = false
 
+_iszero(n::Number) = iszero(n)
+_iszero(x) = x == 0
+fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
+# Very conservatively only allow Numbers and Types in this speculative zero-test pass
+fzero(x::Number) = x
+fzero(::Type{T}) where T = T
+fzero(S::StructuredMatrix) = zero(eltype(S))
+fzero(x) = missing
+function fzero(bc::Broadcast.Broadcasted)
+    args = map(fzero, Tuple(bc.args))
+    return any(ismissing, args) ? missing : bc.f(args...)
+end
+
 function Broadcast.broadcast_similar(::StructuredMatrixStyle{T}, ::Type{ElType}, inds, bc) where {T,ElType}
-    if isstructurepreserving(bc)
-        structured_similar(T, ElType, length(inds[1]))
+    if isstructurepreserving(bc) || (!(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}) && fzeropreserving(bc))
+        structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
     else
-        # TODO: this formerly returned a sparse matrix
         broadcast_similar(DefaultArrayStyle{2}(), ElType, inds, bc)
     end
 end
