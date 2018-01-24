@@ -155,22 +155,6 @@ function GitShortHash(obj::GitObject)
     return sid
 end
 
-assert_sixteen(x) =
-    if x == 16
-        x
-    else
-        error("Must be base 16")
-    end
-
-function Base.base(b, id::GitHash)
-    assert_sixteen(b)
-    join([base(b, i, pad=2) for i in id.val])
-end
-function Base.base(b, id::GitShortHash)
-    assert_sixteen(b)
-    base(b, id.hash)[1:id.len]
-end
-
 """
     raw(id::GitHash) -> Vector{UInt8}
 
