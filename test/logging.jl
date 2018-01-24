@@ -238,26 +238,22 @@ end
         logger = SimpleLogger(io, Debug)
         handle_message(logger, level, message, _module, :group, :id,
                        filepath, line; kws...)
-        s = String(take!(io))
-        # Remove the small amount of color, as `Base.print_with_color` can't be
-        # simply controlled.
-        s = replace(s, r"^\e\[1m\e\[..m(.*)\e\[39m\e\[22m"m => s"\1")
-        # println(s)
-        s
+        String(take!(io))
     end
 
     # Simple
     @test genmsg(Info, "msg", Main, "some/path.jl", 101) ==
     """
-    [ Info: msg @ Main path.jl:101
+    ┌ Info: msg
+    └ @ Main some/path.jl:101
     """
 
     # Multiline message
     @test genmsg(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
     """
-    ┌ Warning: line1
+    ┌ Warn: line1
     │ line2
-    └ @ Main path.jl:101
+    └ @ Main some/path.jl:101
     """
 
     # Keywords
