@@ -666,8 +666,6 @@ base(b::Integer, n::Integer; pad::Integer=1) =
         base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
     end
 
-base(b::Integer, n::Char; pad::Integer = 1) = base(b, UInt32(n); pad = pad)
-
 """
     bitstring(n)
 

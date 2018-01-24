@@ -1672,6 +1672,7 @@ export readandwrite
 @deprecate hex(n, pad) base(16, n, pad = pad)
 @deprecate hex(id::LibGit2.GitHash) string(id)
 @deprecate hex(id::LibGit2.GitShortHash) string(id)
+@deprecate base(b::Integer, n::Char; pad::Integer = pad) base(b, UInt32(n); pad = pad)
 
 # END 0.7 deprecations
 
