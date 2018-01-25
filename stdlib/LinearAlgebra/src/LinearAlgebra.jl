@@ -53,6 +53,8 @@ export
     Symmetric,
     LowerTriangular,
     UpperTriangular,
+    UnitLowerTriangular,
+    UnitUpperTriangular,
     Diagonal,
     UniformScaling,
 
