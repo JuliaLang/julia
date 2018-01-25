@@ -185,7 +185,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     ]
 
     # For windows, we need to tweak a few things, as the tools available differ
-    @static if iswindows()
+    @static if Sys.iswindows()
         # For download engines, we will most likely want to use powershell.
         # Let's generate a functor to return the necessary powershell magics
         # to download a file, given a path to the powershell executable
@@ -197,7 +197,7 @@ function probe_platform_engines!(;verbose::Bool = false)
                 \$webclient = (New-Object System.Net.Webclient);
                 \$webclient.DownloadFile(\"$url\", \"$path\")
                 """
-                replace(webclient_code, "\n", " ")
+                replace(webclient_code, "\n" => " ")
                 return `$psh_path -NoProfile -Command "$webclient_code"`
             end
         end
@@ -505,7 +505,7 @@ function unpack(tarball_path::AbstractString, dest::AbstractString;
     # unpack into dest
     try mkpath(dest) end
     oc = OutputCollector(gen_unpack_cmd(tarball_path, dest); verbose=verbose)
-    try 
+    try
         if !wait(oc)
             error()
         end

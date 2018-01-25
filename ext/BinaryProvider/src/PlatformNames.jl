@@ -208,5 +208,5 @@ function valid_dl_path(path::AbstractString, platform::Platform)
     dlregex = dlext_regexes[platform_dlext(platform)]
 
     # Return whether or not that regex matches the basename of the given path
-    return ismatch(dlregex, basename(path))
+    return contains(basename(path), dlregex)
 end

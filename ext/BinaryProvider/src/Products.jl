@@ -173,7 +173,7 @@ function locate(ep::ExecutableProduct; platform::Platform = platform_key(),
 
     # If the file is not executable, fail out (unless we're on windows since
     # windows doesn't honor these permissions on its filesystems)
-    @static if !iswindows()
+    @static if !Sys.iswindows()
         if uperm(path) & 0x1 == 0
             if verbose
                 info("$(path) is not executable, reporting unsatisfied")
@@ -268,7 +268,7 @@ macro write_deps_file(capture...)
         const depsjl_path = joinpath(dirname(source), "deps.jl")
         const package_name = basename(dirname(dirname(source)))
         const platform = platform_key()
-        escape_path = path -> replace(path, "\\", "\\\\")
+        escape_path = path -> replace(path, "\\" => "\\\\")
 
         const rebuild = strip("""
         Please re-run Pkg.build(\\\"$(package_name)\\\"), and restart Julia.

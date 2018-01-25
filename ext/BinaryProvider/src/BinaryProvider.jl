@@ -1,7 +1,5 @@
 module BinaryProvider
 
-import Pkg3: iswindows, isapple, islinux
-
 # Include our subprocess running funtionality
 include("OutputCollector.jl")
 # External utilities such as downloading/decompressing tarballs
