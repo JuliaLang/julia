@@ -37,7 +37,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
-eltype(p::Pair{A,B}) where {A,B} = Union{A,B}
+eltype(p::Type{Pair{A,B}}) where {A,B} = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 

@@ -35,7 +35,6 @@ end
 
 parent(a::ReinterpretArray) = a.parent
 
-eltype(a::ReinterpretArray{T}) where {T} = T
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
     size1 = div(psize[1]*sizeof(S), sizeof(T))

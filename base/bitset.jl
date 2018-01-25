@@ -53,8 +53,6 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-eltype(s::BitSet) = Int
-
 sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
