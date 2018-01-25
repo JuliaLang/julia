@@ -53,33 +53,29 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
         for (name, default) in zip(value_names, value_defaults)
     ]
 
-    vi = 1
     parsers = Expr[
-        begin
-            if directives[i] <: DatePart
-                name = value_names[vi]
-                val = Symbol(:val, name)
-                vi += 1
-                quote
-                    pos > len && @goto done
-                    $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    $val === nothing && @goto error
-                    $name = $val
-                    pos = next_pos
-                    num_parsed += 1
-                    directive_index += 1
-                end
-            else
-                quote
-                    pos > len && @goto done
-                    delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    delim === nothing && @goto error
-                    pos = next_pos
-                    directive_index += 1
-                end
+        if directives[i] <: DatePart
+            name = value_names[vi]
+            val = Symbol(:val, name)
+            vi += 1
+            quote
+                pos > len && @goto done
+                $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                $val === nothing && @goto error
+                $name = $val
+                pos = next_pos
+                num_parsed += 1
+                directive_index += 1
             end
-        end
-        for i in 1:length(directives)
+        else
+            quote
+                pos > len && @goto done
+                delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                delim === nothing && @goto error
+                pos = next_pos
+                directive_index += 1
+            end
+        end for i in 1:length(directives)
     ]
 
     quote
