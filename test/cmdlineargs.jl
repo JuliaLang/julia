@@ -3,6 +3,7 @@
 import Libdl
 
 catcmd = `cat`
+echocmd = `echo`
 if Sys.iswindows()
     busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows
@@ -13,6 +14,7 @@ if Sys.iswindows()
     end
     if havebb
         catcmd = `$busybox cat`
+        echocmd = `$busybox echo`
     end
 end
 
@@ -482,5 +484,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         exit(0)
         """
         run(`$exename $flag -e $str`)
+    end
+end
+
+# issue #6310
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    @test read(pipeline(`$echocmd $"2+2"`, exename), String) == "4\n"
+    @test read(pipeline(`$echocmd $"2+2\n3+3\n4+4"`, exename), String) == "4\n6\n8\n"
+    @test read(pipeline(`$echocmd $""`, exename), String) == ""
+    @test read(pipeline(`$echocmd $"print(2)"`, exename), String) == "2"
+    @test read(pipeline(`$echocmd $"print(2)\nprint(3)"`, exename), String) == "23"
+    let infile = tempname()
+        touch(infile)
+        try
+            @test read(pipeline(exename, stdin=infile), String) == ""
+            write(infile, "(1, 2+3)")
+            @test read(pipeline(exename, stdin=infile), String) == "(1, 5)\n"
+            write(infile, "1+2\n2+2\n1-2\n")
+            @test read(pipeline(exename, stdin=infile), String) == "3\n4\n-1\n"
+            write(infile, "print(2)")
+            @test read(pipeline(exename, stdin=infile), String) == "2"
+            write(infile, "print(2)\nprint(3)")
+            @test read(pipeline(exename, stdin=infile), String) == "23"
+        finally
+            rm(infile)
+        end
     end
 end

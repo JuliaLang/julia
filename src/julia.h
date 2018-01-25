@@ -1779,6 +1779,7 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_COMPILE_ALL 2
 #define JL_OPTIONS_COMPILE_MIN 3
 
+#define JL_OPTIONS_COLOR_AUTO 0
 #define JL_OPTIONS_COLOR_ON 1
 #define JL_OPTIONS_COLOR_OFF 2
 
