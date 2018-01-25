@@ -4661,7 +4661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.methodswith",
     "category": "Function",
-    "text": "methodswith(typ[, module or function][, showparents::Bool=false])\n\nReturn an array of methods with an argument of type typ.\n\nThe optional second argument restricts the search to a particular module or function (the default is all top-level modules).\n\nIf optional showparents is true, also return arguments with a parent type of typ, excluding type Any.\n\n\n\n\n\n"
+    "text": "methodswith(typ[, module or function]; supertypes::Bool=false])\n\nReturn an array of methods with an argument of type typ.\n\nThe optional second argument restricts the search to a particular module or function (the default is all top-level modules).\n\nIf keyword supertypes is true, also return arguments with a parent type of typ, excluding type Any.\n\n\n\n\n\n"
 },
 
 {
@@ -6669,7 +6669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.code_lowered",
     "category": "Function",
-    "text": "code_lowered(f, types, expand_generated = true)\n\nReturn an array of the lowered forms (IR) for the methods matching the given generic function and type signature.\n\nIf expand_generated is false, the returned CodeInfo instances will correspond to fallback implementations. An error is thrown if no fallback implementation exists. If expand_generated is true, these CodeInfo instances will correspond to the method bodies yielded by expanding the generators.\n\nNote that an error will be thrown if types are not leaf types when expand_generated is true and the corresponding method is a @generated method.\n\n\n\n\n\n"
+    "text": "code_lowered(f, types; generated = true)\n\nReturn an array of the lowered forms (IR) for the methods matching the given generic function and type signature.\n\nIf generated is false, the returned CodeInfo instances will correspond to fallback implementations. An error is thrown if no fallback implementation exists. If generated is true, these CodeInfo instances will correspond to the method bodies yielded by expanding the generators.\n\nNote that an error will be thrown if types are not leaf types when generated is true and the corresponding method is a @generated method.\n\n\n\n\n\n"
 },
 
 {
@@ -7069,7 +7069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmax!",
     "category": "Function",
-    "text": "findmax!(rval, rind, A, [init=true]) -> (maxval, index)\n\nFind the maximum of A and the corresponding linear index along singleton dimensions of rval and rind, and store the results in rval and rind. NaN is treated as greater than all other values.\n\n\n\n\n\n"
+    "text": "findmax!(rval, rind, A) -> (maxval, index)\n\nFind the maximum of A and the corresponding linear index along singleton dimensions of rval and rind, and store the results in rval and rind. NaN is treated as greater than all other values.\n\n\n\n\n\n"
 },
 
 {
@@ -7077,7 +7077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmin!",
     "category": "Function",
-    "text": "findmin!(rval, rind, A, [init=true]) -> (minval, index)\n\nFind the minimum of A and the corresponding linear index along singleton dimensions of rval and rind, and store the results in rval and rind. NaN is treated as less than all other values.\n\n\n\n\n\n"
+    "text": "findmin!(rval, rind, A) -> (minval, index)\n\nFind the minimum of A and the corresponding linear index along singleton dimensions of rval and rind, and store the results in rval and rind. NaN is treated as less than all other values.\n\n\n\n\n\n"
 },
 
 {
@@ -7509,7 +7509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -13813,7 +13813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsorted",
     "category": "Function",
-    "text": "searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn the range of indices of a which compare as equal to x (using binary search) according to the order specified by the by, lt and rev keywords, assuming that a is already sorted in that order. Return an empty range located at the insertion point if a does not contain values equal to x.\n\nExamples\n\njulia> a = [4, 3, 2, 1]\n4-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n\njulia> searchsorted(a, 4)\n5:4\n\njulia> searchsorted(a, 4, rev=true)\n1:1\n\n\n\n\n\n"
+    "text": "searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)\n\nReturn the range of indices of a which compare as equal to x (using binary search) according to the order specified by the by, lt and rev keywords, assuming that a is already sorted in that order. Return an empty range located at the insertion point if a does not contain values equal to x.\n\nExamples\n\njulia> a = [4, 3, 2, 1]\n4-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n\njulia> searchsorted(a, 4)\n5:4\n\njulia> searchsorted(a, 4, rev=true)\n1:1\n\n\n\n\n\n"
 },
 
 {
@@ -13821,7 +13821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedfirst",
     "category": "Function",
-    "text": "searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn the index of the first value in a greater than or equal to x, according to the specified order. Return length(a) + 1 if x is greater than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)\n1\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 15)\n6\n\n\n\n\n\n"
+    "text": "searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)\n\nReturn the index of the first value in a greater than or equal to x, according to the specified order. Return length(a) + 1 if x is greater than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)\n1\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 15)\n6\n\n\n\n\n\n"
 },
 
 {
@@ -13829,7 +13829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedlast",
     "category": "Function",
-    "text": "searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn the index of the last value in a less than or equal to x, according to the specified order. Return 0 if x is less than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)\n5\n\njulia> searchsortedlast([1, 2, 4, 5, 14], -1)\n0\n\n\n\n\n\n"
+    "text": "searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)\n\nReturn the index of the last value in a less than or equal to x, according to the specified order. Return 0 if x is less than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)\n5\n\njulia> searchsortedlast([1, 2, 4, 5, 14], -1)\n0\n\n\n\n\n\n"
 },
 
 {
@@ -13837,7 +13837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsort!",
     "category": "Function",
-    "text": "partialsort!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nPartially sort the vector v in place, according to the order specified by by, lt and rev so that the value at index k (or range of adjacent values if k is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If k is a single index, that value is returned; if k is a range, an array of values at those indices is returned. Note that partialsort! does not fully sort the input array.\n\nExamples\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> partialsort!(a, 4)\n4\n\njulia> a\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 4\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> partialsort!(a, 4, rev=true)\n2\n\njulia> a\n5-element Array{Int64,1}:\n 4\n 4\n 3\n 2\n 1\n\n\n\n\n\n"
+    "text": "partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)\n\nPartially sort the vector v in place, according to the order specified by by, lt and rev so that the value at index k (or range of adjacent values if k is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If k is a single index, that value is returned; if k is a range, an array of values at those indices is returned. Note that partialsort! does not fully sort the input array.\n\nExamples\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> partialsort!(a, 4)\n4\n\njulia> a\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 4\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> partialsort!(a, 4, rev=true)\n2\n\njulia> a\n5-element Array{Int64,1}:\n 4\n 4\n 3\n 2\n 1\n\n\n\n\n\n"
 },
 
 {
@@ -13845,7 +13845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsort",
     "category": "Function",
-    "text": "partialsort(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nVariant of partialsort! which copies v before partially sorting it, thereby returning the same thing as partialsort! but leaving v unmodified.\n\n\n\n\n\n"
+    "text": "partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)\n\nVariant of partialsort! which copies v before partially sorting it, thereby returning the same thing as partialsort! but leaving v unmodified.\n\n\n\n\n\n"
 },
 
 {
@@ -13853,7 +13853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsortperm",
     "category": "Function",
-    "text": "partialsortperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn a partial permutation of the vector v, according to the order specified by by, lt and rev, so that v[output] returns the first k (or range of adjacent values if k is a range) values of a fully sorted version of v. If k is a single index, the index in v of the value which would be sorted at position k is returned; if k is a range, an array with the indices in v of the values which would be sorted in these positions is returned.\n\nNote that this is equivalent to, but more efficient than, calling sortperm(...)[k].\n\n\n\n\n\n"
+    "text": "partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)\n\nReturn a partial permutation of the vector v, according to the order specified by by, lt and rev, so that v[output] returns the first k (or range of adjacent values if k is a range) values of a fully sorted version of v. If k is a single index, the index in v of the value which would be sorted at position k is returned; if k is a range, an array with the indices in v of the values which would be sorted in these positions is returned.\n\nNote that this is equivalent to, but more efficient than, calling sortperm(...)[k].\n\n\n\n\n\n"
 },
 
 {
@@ -13861,7 +13861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsortperm!",
     "category": "Function",
-    "text": "partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])\n\nLike partialsortperm, but accepts a preallocated index vector ix. If initialized is false (the default), ix is initialized to contain the values 1:length(ix).\n\n\n\n\n\n"
+    "text": "partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)\n\nLike partialsortperm, but accepts a preallocated index vector ix. If initialized is false (the default), ix is initialized to contain the values 1:length(ix).\n\n\n\n\n\n"
 },
 
 {
@@ -15861,7 +15861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -19373,7 +19373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Base.runtests",
     "category": "Function",
-    "text": "Base.runtests(tests=[\"all\"], numcores=ceil(Int, Sys.CPU_CORES / 2);\n              exit_on_error=false, [seed])\n\nRun the Julia unit tests listed in tests, which can be either a string or an array of strings, using numcores processors. If exit_on_error is false, when one test fails, all remaining tests in other files will still be run; they are otherwise discarded, when exit_on_error == true. If a seed is provided via the keyword argument, it is used to seed the global RNG in the context where the tests are run; otherwise the seed is chosen randomly.\n\n\n\n\n\n"
+    "text": "Base.runtests(tests=[\"all\"]; ncores=ceil(Int, Sys.CPU_CORES / 2),\n              exit_on_error=false, [seed])\n\nRun the Julia unit tests listed in tests, which can be either a string or an array of strings, using ncores processors. If exit_on_error is false, when one test fails, all remaining tests in other files will still be run; they are otherwise discarded, when exit_on_error == true. If a seed is provided via the keyword argument, it is used to seed the global RNG in the context where the tests are run; otherwise the seed is chosen randomly.\n\n\n\n\n\n"
 },
 
 {
