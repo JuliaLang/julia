@@ -549,6 +549,9 @@ Base.require(Base, :REPL)
     @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
 
+    @deprecate_binding(SharedArray, root_module(Base, :SharedArrays).SharedArray, true,
+        ", run `using SharedArrays` to load shared array functionality")
+
     # PR #25571
     @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
@@ -559,6 +562,274 @@ Base.require(Base, :REPL)
     @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
     @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
+
+    @deprecate_stdlib readdlm  DelimitedFiles true
+    @deprecate_stdlib writedlm DelimitedFiles true
+    @deprecate_stdlib readcsv  DelimitedFiles true
+    @deprecate_stdlib writecsv DelimitedFiles true
+
+    @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
+
+    @deprecate_stdlib base64encode Base64 true
+    @deprecate_stdlib base64decode Base64 true
+    @deprecate_stdlib Base64EncodePipe Base64 true
+    @deprecate_stdlib Base64DecodePipe Base64 true
+
+    @deprecate_stdlib poll_fd FileWatching true
+    @deprecate_stdlib poll_file FileWatching true
+    @deprecate_stdlib PollingFileWatcher FileWatching true
+    @deprecate_stdlib watch_file FileWatching true
+    @deprecate_stdlib FileMonitor FileWatching true
+
+    @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@fetch")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@fetchfrom")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@everywhere")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@parallel")) Distributed true
+
+    @deprecate_stdlib addprocs Distributed true
+    @deprecate_stdlib CachingPool Distributed true
+    @deprecate_stdlib clear! Distributed true
+    @deprecate_stdlib ClusterManager Distributed true
+    @deprecate_stdlib default_worker_pool Distributed true
+    @deprecate_stdlib init_worker Distributed true
+    @deprecate_stdlib interrupt Distributed true
+    @deprecate_stdlib launch Distributed true
+    @deprecate_stdlib manage Distributed true
+    @deprecate_stdlib myid Distributed true
+    @deprecate_stdlib nprocs Distributed true
+    @deprecate_stdlib nworkers Distributed true
+    @deprecate_stdlib pmap Distributed true
+    @deprecate_stdlib procs Distributed true
+    @deprecate_stdlib remote Distributed true
+    @deprecate_stdlib remotecall Distributed true
+    @deprecate_stdlib remotecall_fetch Distributed true
+    @deprecate_stdlib remotecall_wait Distributed true
+    @deprecate_stdlib remote_do Distributed true
+    @deprecate_stdlib rmprocs Distributed true
+    @deprecate_stdlib workers Distributed true
+    @deprecate_stdlib WorkerPool Distributed true
+    @deprecate_stdlib RemoteChannel Distributed true
+    @deprecate_stdlib Future Distributed true
+    @deprecate_stdlib WorkerConfig Distributed true
+    @deprecate_stdlib RemoteException Distributed true
+    @deprecate_stdlib ProcessExitedException Distributed true
+
+    @deprecate_stdlib crc32c CRC32c true
+
+    @deprecate_stdlib DateTime Dates true
+    @deprecate_stdlib DateFormat Dates true
+    @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
+    @deprecate_stdlib now Dates true
+
+    @deprecate_stdlib eigs IterativeEigensolvers true
+    @deprecate_stdlib svds IterativeEigensolvers true
+
+    @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
+    @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
+
+    # PR #24874
+    @deprecate_stdlib rand! Random true
+    @deprecate_stdlib srand Random true
+    @deprecate_stdlib AbstractRNG Random true
+    @deprecate_stdlib randcycle  Random true
+    @deprecate_stdlib randcycle!  Random true
+    @deprecate_stdlib randperm  Random true
+    @deprecate_stdlib randperm! Random true
+    @deprecate_stdlib shuffle  Random true
+    @deprecate_stdlib shuffle! Random true
+    @deprecate_stdlib randsubseq Random true
+    @deprecate_stdlib randsubseq! Random true
+    @deprecate_stdlib randstring Random true
+    @deprecate_stdlib MersenneTwister  Random true
+    @deprecate_stdlib RandomDevice  Random true
+    @deprecate_stdlib randn! Random true
+    @deprecate_stdlib randexp Random true
+    @deprecate_stdlib randexp! Random true
+    @deprecate_stdlib bitrand Random true
+    @deprecate_stdlib randjump Random true
+    @deprecate_stdlib GLOBAL_RNG Random false
+
+    @deprecate_stdlib serialize Serialization true
+    @deprecate_stdlib deserialize Serialization true
+    @deprecate_stdlib AbstractSerializer Serialization true
+    @deprecate_stdlib SerializationState Serialization true
+
+    # PR #25249: SparseArrays to stdlib
+    ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
+    ## functions that were re-exported from Base
+    @deprecate_stdlib nonzeros   SparseArrays true
+    @deprecate_stdlib permute    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib dropzeros  SparseArrays true
+    @deprecate_stdlib dropzeros! SparseArrays true
+    @deprecate_stdlib issparse   SparseArrays true
+    @deprecate_stdlib sparse     SparseArrays true
+    @deprecate_stdlib sparsevec  SparseArrays true
+    @deprecate_stdlib spdiagm    SparseArrays true
+    @deprecate_stdlib sprand     SparseArrays true
+    @deprecate_stdlib sprandn    SparseArrays true
+    @deprecate_stdlib spzeros    SparseArrays true
+    @deprecate_stdlib rowvals    SparseArrays true
+    @deprecate_stdlib nzrange    SparseArrays true
+    @deprecate_stdlib nnz        SparseArrays true
+    @deprecate_stdlib findnz     SparseArrays true
+    ## functions that were exported from Base.SparseArrays but not from Base
+    @deprecate_stdlib droptol!   SparseArrays false
+    ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
+    @deprecate_stdlib spones     SparseArrays true
+    @deprecate_stdlib speye      SparseArrays true
+
+    # PR #25571: LinearAlgebra to stdlib
+    @deprecate_stdlib BLAS        LinearAlgebra true
+    ## functions that were re-exported from Base
+    @deprecate_stdlib bkfact!     LinearAlgebra true
+    @deprecate_stdlib bkfact      LinearAlgebra true
+    @deprecate_stdlib chol        LinearAlgebra true
+    @deprecate_stdlib cholfact!   LinearAlgebra true
+    @deprecate_stdlib cholfact    LinearAlgebra true
+    @deprecate_stdlib cond        LinearAlgebra true
+    @deprecate_stdlib condskeel   LinearAlgebra true
+    @deprecate_stdlib cross       LinearAlgebra true
+    @deprecate_stdlib adjoint!    LinearAlgebra true
+    # @deprecate_stdlib adjoint     LinearAlgebra true
+    @deprecate_stdlib det         LinearAlgebra true
+    @deprecate_stdlib diag        LinearAlgebra true
+    @deprecate_stdlib diagind     LinearAlgebra true
+    @deprecate_stdlib diagm       LinearAlgebra true
+    @deprecate_stdlib diff        LinearAlgebra true
+    @deprecate_stdlib dot         LinearAlgebra true
+    @deprecate_stdlib eig         LinearAlgebra true
+    @deprecate_stdlib eigfact!    LinearAlgebra true
+    @deprecate_stdlib eigfact     LinearAlgebra true
+    @deprecate_stdlib eigmax      LinearAlgebra true
+    @deprecate_stdlib eigmin      LinearAlgebra true
+    @deprecate_stdlib eigvals     LinearAlgebra true
+    @deprecate_stdlib eigvals!    LinearAlgebra true
+    @deprecate_stdlib eigvecs     LinearAlgebra true
+    @deprecate_stdlib factorize   LinearAlgebra true
+    @deprecate_stdlib givens      LinearAlgebra true
+    @deprecate_stdlib hessfact!   LinearAlgebra true
+    @deprecate_stdlib hessfact    LinearAlgebra true
+    @deprecate_stdlib isdiag      LinearAlgebra true
+    @deprecate_stdlib ishermitian LinearAlgebra true
+    @deprecate_stdlib isposdef!   LinearAlgebra true
+    @deprecate_stdlib isposdef    LinearAlgebra true
+    @deprecate_stdlib issymmetric LinearAlgebra true
+    @deprecate_stdlib istril      LinearAlgebra true
+    @deprecate_stdlib istriu      LinearAlgebra true
+    # @deprecate_stdlib kron        LinearAlgebra true
+    @deprecate_stdlib ldltfact    LinearAlgebra true
+    @deprecate_stdlib ldltfact!   LinearAlgebra true
+    @deprecate_stdlib linreg      LinearAlgebra true
+    @deprecate_stdlib logabsdet   LinearAlgebra true
+    @deprecate_stdlib logdet      LinearAlgebra true
+    @deprecate_stdlib lu          LinearAlgebra true
+    @deprecate_stdlib lufact!     LinearAlgebra true
+    @deprecate_stdlib lufact      LinearAlgebra true
+    @deprecate_stdlib lyap        LinearAlgebra true
+    @deprecate_stdlib norm        LinearAlgebra true
+    @deprecate_stdlib normalize   LinearAlgebra true
+    @deprecate_stdlib normalize!  LinearAlgebra true
+    @deprecate_stdlib nullspace   LinearAlgebra true
+    @deprecate_stdlib ordschur!   LinearAlgebra true
+    @deprecate_stdlib ordschur    LinearAlgebra true
+    @deprecate_stdlib peakflops   LinearAlgebra true
+    @deprecate_stdlib pinv        LinearAlgebra true
+    @deprecate_stdlib qr          LinearAlgebra true
+    @deprecate_stdlib qrfact!     LinearAlgebra true
+    @deprecate_stdlib qrfact      LinearAlgebra true
+    @deprecate_stdlib lq          LinearAlgebra true
+    @deprecate_stdlib lqfact!     LinearAlgebra true
+    @deprecate_stdlib lqfact      LinearAlgebra true
+    @deprecate_stdlib rank        LinearAlgebra true
+    @deprecate_stdlib scale!      LinearAlgebra true
+    @deprecate_stdlib schur       LinearAlgebra true
+    @deprecate_stdlib schurfact!  LinearAlgebra true
+    @deprecate_stdlib schurfact   LinearAlgebra true
+    @deprecate_stdlib svd         LinearAlgebra true
+    @deprecate_stdlib svdfact!    LinearAlgebra true
+    @deprecate_stdlib svdfact     LinearAlgebra true
+    @deprecate_stdlib svdvals!    LinearAlgebra true
+    @deprecate_stdlib svdvals     LinearAlgebra true
+    @deprecate_stdlib sylvester   LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib transpose!  LinearAlgebra true
+    # @deprecate_stdlib transpose   LinearAlgebra true
+    @deprecate_stdlib tril!       LinearAlgebra true
+    @deprecate_stdlib tril        LinearAlgebra true
+    @deprecate_stdlib triu!       LinearAlgebra true
+    @deprecate_stdlib triu        LinearAlgebra true
+    @deprecate_stdlib vecdot      LinearAlgebra true
+    @deprecate_stdlib vecnorm     LinearAlgebra true
+    # @deprecate_stdlib ⋅           LinearAlgebra true
+    # @deprecate_stdlib ×           LinearAlgebra true
+
+    ## types that were re-exported from Base
+    @deprecate_stdlib Diagonal        LinearAlgebra true
+    @deprecate_stdlib Bidiagonal      LinearAlgebra true
+    @deprecate_stdlib Tridiagonal     LinearAlgebra true
+    @deprecate_stdlib SymTridiagonal  LinearAlgebra true
+    @deprecate_stdlib UpperTriangular LinearAlgebra true
+    @deprecate_stdlib LowerTriangular LinearAlgebra true
+    @deprecate_stdlib Symmetric       LinearAlgebra true
+    @deprecate_stdlib Hermitian       LinearAlgebra true
+    @deprecate_stdlib Factorization   LinearAlgebra true
+    @deprecate_stdlib UniformScaling  LinearAlgebra true
+    @deprecate_stdlib Adjoint         LinearAlgebra true
+    @deprecate_stdlib Transpose       LinearAlgebra true
+
+    ## functions that were exported from Base.LinAlg but not from Base
+    @deprecate_stdlib axpy!           LinearAlgebra false
+    @deprecate_stdlib axpby!          LinearAlgebra false
+    @deprecate_stdlib copy_transpose! LinearAlgebra false
+    @deprecate_stdlib issuccess       LinearAlgebra false
+    @deprecate_stdlib transpose_type  LinearAlgebra false
+    @deprecate_stdlib A_mul_B!        LinearAlgebra false
+    @deprecate_stdlib A_mul_Bt!       LinearAlgebra false
+    @deprecate_stdlib At_mul_B!       LinearAlgebra false
+    @deprecate_stdlib At_mul_Bt!      LinearAlgebra false
+    @deprecate_stdlib A_mul_Bc!       LinearAlgebra false
+    @deprecate_stdlib Ac_mul_B!       LinearAlgebra false
+    @deprecate_stdlib Ac_mul_Bc!      LinearAlgebra false
+    @deprecate_stdlib A_ldiv_B!       LinearAlgebra false
+    @deprecate_stdlib At_ldiv_B!      LinearAlgebra false
+    @deprecate_stdlib Ac_ldiv_B!      LinearAlgebra false
+
+    ## types that were exported from Base.LinAlg but not from Base
+    @deprecate_stdlib BunchKaufman     LinearAlgebra false
+    @deprecate_stdlib Cholesky         LinearAlgebra false
+    @deprecate_stdlib CholeskyPivoted  LinearAlgebra false
+    @deprecate_stdlib Eigen            LinearAlgebra false
+    @deprecate_stdlib GeneralizedEigen LinearAlgebra false
+    @deprecate_stdlib GeneralizedSVD   LinearAlgebra false
+    @deprecate_stdlib GeneralizedSchur LinearAlgebra false
+    @deprecate_stdlib Hessenberg       LinearAlgebra false
+    @deprecate_stdlib LU               LinearAlgebra false
+    @deprecate_stdlib LDLt             LinearAlgebra false
+    @deprecate_stdlib QR               LinearAlgebra false
+    @deprecate_stdlib QRPivoted        LinearAlgebra false
+    @deprecate_stdlib LQ               LinearAlgebra false
+    @deprecate_stdlib Schur            LinearAlgebra false
+    @deprecate_stdlib SVD              LinearAlgebra false
+
+    ## deprecated functions that are moved to stdlib/LinearAlgebra/src/deprecated.jl
+    @deprecate_stdlib eye        LinearAlgebra true
+    @deprecate_stdlib sqrtm      LinearAlgebra true
+    @deprecate_stdlib expm       LinearAlgebra true
+    @deprecate_stdlib expm!      LinearAlgebra true
+    @deprecate_stdlib logm       LinearAlgebra true
+    @deprecate_stdlib gradient   LinearAlgebra true
+    @deprecate_stdlib ConjArray  LinearAlgebra true
+    @deprecate_stdlib ConjVector LinearAlgebra true
+    @deprecate_stdlib ConjMatrix LinearAlgebra true
+    @deprecate_stdlib RowVector  LinearAlgebra true
+
+    # PR #25021
+    @deprecate_stdlib normalize_string Unicode true
+    @deprecate_stdlib graphemes Unicode true
+    @deprecate_stdlib is_assigned_char Unicode true
 end
 
 empty!(DEPOT_PATH)
