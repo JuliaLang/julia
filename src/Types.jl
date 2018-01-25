@@ -242,9 +242,7 @@ end
 struct VersionSpec
     ranges::Vector{VersionRange}
     VersionSpec(r::Vector{<:VersionRange}) = new(union!(r))
-    # copy is defined inside the struct block to call `new` directly
-    # without going through `union!`
-    Base.copy(vs::VersionSpec) = new(copy(vs.ranges))
+    VersionSpec(vs::VersionSpec) = new(copy(vs.ranges))
 end
 
 VersionSpec() = VersionSpec(VersionRange())
@@ -260,6 +258,8 @@ function Base.in(v::VersionNumber, s::VersionSpec)
     end
     return false
 end
+
+Base.copy(vs::VersionSpec) = VersionSpec(vs)
 
 const empty_versionspec = VersionSpec(VersionRange[])
 # Windows console doesn't like Unicode
@@ -546,7 +546,7 @@ function write_env(env::EnvCache)
         uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
         for (name, infos) in manifest, info in infos
             haskey(info, "deps") || continue
-            deps = convert(Dict{String,UUID}, info["deps"])
+            deps = Dict{String,UUID}(n => UUID(u) for (n, u) in info["deps"])
             all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
             info["deps"] = sort!(collect(keys(deps)))
         end
@@ -696,7 +696,7 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     for pkg in pkgs
         pkg.mode == :project || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
-            pkg.uuid = uuids[pkg.name]
+            pkg.uuid = UUID(uuids[pkg.name])
         end
         if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
             pkg.name = names[pkg.uuid]
@@ -720,7 +720,7 @@ function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     for pkg in pkgs
         pkg.mode == :manifest || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
-            length(uuids[pkg.name]) == 1 && (pkg.uuid = uuids[pkg.name][1])
+            length(uuids[pkg.name]) == 1 && (pkg.uuid = UUID(uuids[pkg.name][1]))
         end
         if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
             pkg.name = names[pkg.uuid]

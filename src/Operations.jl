@@ -396,7 +396,7 @@ function prune_manifest(env::EnvCache)
         for (name, infos) in env.manifest, info in infos
             haskey(info, "uuid") && haskey(info, "deps") || continue
             UUID(info["uuid"]) ∈ keep || continue
-            for dep in (x -> UUID(x) for x in values(info["deps"]))
+            for dep in map(UUID, values(info["deps"]))
                 dep ∈ keep && continue
                 push!(keep, dep)
                 clean = false
@@ -513,14 +513,15 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
     sort!(builds, by = build -> order[first(build)])
     # build each package verions in a child process
     withenv("JULIA_ENV" => env.project_file) do
-        LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
         for (uuid, name, hash, build_file) in builds
             log_file = splitext(build_file)[1] * ".log"
             @info "Building $name [$(string(hash)[1:16])]..."
             @info " → $log_file"
             code = """
                 empty!(Base.LOAD_PATH)
-                append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+                append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+                empty!(Base.DEPOT_PATH)
+                append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
                 empty!(Base.LOAD_CACHE_PATH)
                 append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
                 empty!(Base.DL_LOAD_PATH)
