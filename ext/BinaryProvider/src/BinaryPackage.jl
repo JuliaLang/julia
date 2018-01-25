@@ -105,7 +105,7 @@ function manifest_path(pkg::BinaryPackage; prefix::Prefix = global_prefix(),
         Cannot find manifest path for package $(name) with unguessable manifest
         file and no products.
         """
-        error(replace(strip(msg),"\n", " "))
+        error(replace(strip(msg),"\n" => " "))
     end
 
     for product in pkg.products

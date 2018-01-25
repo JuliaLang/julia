@@ -29,7 +29,7 @@ Usage example:
 function temp_prefix(func::Function)
     # Helper function to create a docker-mountable temporary directory
     function _tempdir()
-        @static if isapple()
+        @static if Sys.isapple()
             # Docker, on OSX at least, can only mount from certain locations by
             # default, so we ensure all our temporary directories live within
             # those locations so that they are accessible by Docker.
@@ -85,7 +85,7 @@ Splits a string such as the  `PATH` environment variable into a list of strings
 according to the path separation rules for the current platform.
 """
 function split_PATH(PATH::AbstractString = ENV["PATH"])
-    @static if iswindows()
+    @static if Sys.iswindows()
         return split(PATH, ";")
     else
         return split(PATH, ":")
@@ -99,7 +99,7 @@ Given a list of strings, return a joined string suitable for the `PATH`
 environment variable appropriate for the current platform.
 """
 function join_PATH(paths::Vector{S}) where S<:AbstractString
-    @static if iswindows()
+    @static if Sys.iswindows()
         return join(paths, ";")
     else
         return join(paths, ":")
@@ -122,7 +122,7 @@ Returns the library directory for the given `prefix` (not ethat this differs
 between unix systems and windows systems).
 """
 function libdir(prefix::Prefix)
-    @static if iswindows()
+    @static if Sys.iswindows()
         return joinpath(prefix, "bin")
     else
         return joinpath(prefix, "lib")
@@ -242,7 +242,7 @@ function install(tarball_url::AbstractString,
         msg *= "explicitly set to `true`."
         error(msg)
     end
-    
+
     # Create the downloads directory if it does not already exist
     tarball_path = joinpath(prefix, "downloads", basename(tarball_url))
     try mkpath(dirname(tarball_path)) end
@@ -264,7 +264,7 @@ function install(tarball_url::AbstractString,
     if verbose
         info("Installing $(tarball_path) into $(prefix.path)")
     end
-    
+
     # First, get list of files that are contained within the tarball
     file_list = list_tarball_files(tarball_path)
 
@@ -452,7 +452,7 @@ function verify(path::AbstractString, hash::AbstractString; verbose::Bool = fals
             info("No hash cache found")
         end
     end
-    
+
     open(path) do file
         calc_hash = bytes2hex(sha256(file))
         if verbose
