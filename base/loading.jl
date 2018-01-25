@@ -355,7 +355,7 @@ const re_subsection_deps    = r"^\s*\[\s*\"?(\w+)\"?\s*\.\s*\"?deps\"?\s*\]\s*(?
 const re_key_to_string      = r"^\s*(\w+)\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_uuid_to_string     = r"^\s*uuid\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_path_to_string     = r"^\s*path\s*=\s*\"(.*)\"\s*(?:#|$)"
-const re_hash_to_string     = r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_hash_to_string     = r"^\s*git-tree-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
