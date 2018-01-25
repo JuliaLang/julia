@@ -70,8 +70,8 @@ end
 Compute the mean of whole array `v`, or optionally along the dimensions in `region`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 mean(A::AbstractArray{T}, region) where {T} =
     mean!(reducedim_init(t -> t/2, +, A, region), A)
@@ -191,9 +191,8 @@ optionally over `region`. `m` may contain means for each dimension of
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
     varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
@@ -214,9 +213,8 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
 The mean `mean` over the region may be provided.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
     varm(A, coalesce(mean, Base.mean(A, region)), region; corrected=corrected)
@@ -275,9 +273,8 @@ then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `correc
 `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
     sqrt.(var(A, region; corrected=corrected, mean=mean))
@@ -297,9 +294,8 @@ then the sum is scaled with `n-1`, whereas the sum is
 scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 stdm(iterable, m; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
@@ -630,8 +626,8 @@ elements no exact median element exists, so the result is
 equivalent to calculating mean of two median elements.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 median(v::AbstractArray, region) = mapslices(median!, v, region)
 
@@ -654,9 +650,10 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended. `quantile!` will
+    Julia does not ignore `NaN` values in the computation: `quantile!` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
+    Use the [`missing`](@ref) type to represent missing values, and the
+    [`skipmissing`](@ref) function to omit them.
 
 * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
@@ -746,9 +743,10 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended. `quantile` will
+    Julia does not ignore `NaN` values in the computation: `quantile` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
+    Use the [`missing`](@ref) type to represent missing values, and the
+    [`skipmissing`](@ref) function to omit them.
 
 - Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
