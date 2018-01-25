@@ -162,7 +162,8 @@ Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
 """
 raw(id::GitHash) = collect(id.val)
 
-Base.string(id::AbstractGitHash) = base(16, id)
+Base.string(id::GitHash) = join([base(i,2,pad=2) for i in id.val])
+Base.string(id::GitShortHash) = string(id.hash)[1:id.len]
 
 Base.show(io::IO, id::GitHash) = print(io, "GitHash(\"$(string(id))\")")
 Base.show(io::IO, id::GitShortHash) = print(io, "GitShortHash(\"$(string(id))\")")
