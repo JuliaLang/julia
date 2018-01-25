@@ -220,9 +220,9 @@ end
 
 function Broadcasted(f::F, args::Args) where {F, Args<:TupleLL}
     style = _combine_styles(args)
-    Broadcasted{typeof(style), Unknown, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
-     # Unknown is a flag indicating the ElType has not been set
-     # using Core.Typeof rather than F preserves inferrability when f is a type
+    # Unknown is a flag indicating the ElType has not been set
+    # using Core.Typeof rather than F preserves inferrability when f is a type
+    return Broadcasted{typeof(style), Unknown, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
 end
 Broadcasted{Style}(f::F, args::Args) where {Style<:BroadcastStyle, F, Args<:TupleLL} =
     Broadcasted{Style, Unknown, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
@@ -233,9 +233,8 @@ Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple) where {Style<:Broadcast
 Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple, indexing) where {Style<:Union{Nothing,BroadcastStyle}, ElType, F, Args<:TupleLL} =
     Broadcasted{Style, ElType, typeof(axes), typeof(indexing), Core.Typeof(f), Args}(f, args, axes, indexing)
 
-Base.convert(::Type{Broadcasted{Nothing}}, bc::Broadcasted{Style,ElType,Axes,Indexing,F,Args}
-    ) where {Style,ElType,Axes,Indexing,F,Args} =
-Broadcasted{Nothing,ElType,Axes,Indexing,F,Args}(bc.f, bc.args, bc.axes, bc.indexing)
+Base.convert(::Type{Broadcasted{Nothing}}, bc::Broadcasted{Style,ElType,Axes,Indexing,F,Args}) where {Style,ElType,Axes,Indexing,F,Args} =
+    Broadcasted{Nothing,ElType,Axes,Indexing,F,Args}(bc.f, bc.args, bc.axes, bc.indexing)
 
 # Fully-instantiatiated Broadcasted
 const BroadcastedF{Style<:Union{Nothing,BroadcastStyle}, ElType, N, F, Args<:TupleLL} =
@@ -356,7 +355,7 @@ instantiate(tt::Base.AnyTupleLL16, axes) = TupleLL(instantiate(tt.head, axes), i
 @inline function instantiate_eltype(bc::Broadcasted{Style,Unknown,Nothing,Nothing}) where {Style}
     args = instantiate(bc.args) # some of the args may be Broadcasted objects in their own right
     T = combine_eltypes(bc.f, args)
-    Broadcasted{Style,T}(bc.f, args)
+    return Broadcasted{Style,T}(bc.f, args)
 end
 
 # Setting axes
@@ -364,17 +363,17 @@ end
     if broadcast_skip_axes_instantiation(bc)
         return Style <: Nothing ? instantiate_eltype(bc) : bc
     end
-    instantiate(instantiate_axes(bc))
+    return instantiate(instantiate_axes(bc))
 end
 @inline instantiate(bc::Broadcasted{Style,ElType,Nothing,Nothing}, axes) where {Style,ElType} =
     instantiate(instantiate_axes(bc, axes))
 @inline function instantiate_axes(bc::Broadcasted{Style,ElType,Nothing,Nothing}) where {Style,ElType}
     axes = combine_indices(convert(Tuple, bc.args)...)
-    instantiate_axes(bc, axes)
+    return instantiate_axes(bc, axes)
 end
 @inline function instantiate_axes(bc::Broadcasted{Style,ElType,Nothing,Nothing}, axes) where {Style,ElType}
     args = instantiate(bc.args, axes)
-    Broadcasted{Style,ElType}(bc.f, args, axes)
+    return Broadcasted{Style,ElType}(bc.f, args, axes)
 end
 
 # Setting indexing
@@ -382,7 +381,7 @@ end
     @inline _newindexer(arg) = newindexer(axes(bc), arg)
     args = instantiate(bc.args)
     indexing = mapTupleLL(_newindexer, args)
-    instantiate(Broadcasted{Style,ElType}(bc.f, args, axes(bc), indexing))
+    return instantiate(Broadcasted{Style,ElType}(bc.f, args, axes(bc), indexing))
 end
 
 instantiate(bc::Broadcasted{Style,ElType,Axes,Indexing}) where {Style,ElType,Axes,Indexing<:Tuple} = bc
@@ -500,10 +499,10 @@ end
 ## Introspection
 
 function broadcast_all(ffilter::FF, argfilter::AF, bc::Broadcasted) where {FF,AF}
-    ffilter(bc.f) & broadcast_all(ffilter, argfilter, bc.args)
+    return ffilter(bc.f) & broadcast_all(ffilter, argfilter, bc.args)
 end
 function broadcast_all(ffilter::FF, argfilter::AF, t::TupleLL) where {FF,AF}
-    broadcast_all(ffilter, argfilter, t.head) & broadcast_all(ffilter, argfilter, t.rest)
+    return broadcast_all(ffilter, argfilter, t.head) & broadcast_all(ffilter, argfilter, t.rest)
 end
 broadcast_all(ffilter::FF, argfilter::AF, ::TupleLLEnd) where {FF,AF} = true
 broadcast_all(ffilter::FF, argfilter::AF, x) where {FF,AF}         = argfilter(x)
@@ -669,10 +668,9 @@ Base.@propagate_inbounds _getindex(args::TupleLL{TupleLLEnd, TupleLLEnd}, I, ::N
 
 Base.@propagate_inbounds function _broadcast_getindex_bc(bc::Broadcasted, I)
     args = _getindex(bc.args, I, bc.indexing)
-    _broadcast_getindex_evalf(bc.f, args...)
+    return _broadcast_getindex_evalf(bc.f, args...)
 end
-@inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} =
-    f(args...)  # not propagate_inbounds
+@inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
 @noinline function broadcast_getindex_error(bc, I)
     isa(bc, BroadcastedF) && error("axes $(axes(bc)) does not match $I")
@@ -781,7 +779,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 """
 function broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N}
     style = combine_styles(As...)
-    copy(instantiate(Broadcasted{typeof(style)}(f, make_TupleLL(As...))))
+    return copy(instantiate(Broadcasted{typeof(style)}(f, make_TupleLL(As...))))
 end
 
 # special cases defined for performance
@@ -802,7 +800,7 @@ function broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N}
     newargs = make_TupleLL(As...)
     bc = Broadcasted{typeof(style)}(f, newargs)
     ibc = instantiate(bc, combine_indices(dest, As...))
-    copyto!(dest, ibc)
+    return copyto!(dest, ibc)
 end
 
 ## general `copy` methods
@@ -819,16 +817,16 @@ function copy(bc::Broadcasted{Style, ElType}) where {Style, ElType}
         return copy_nonleaf(bc)
     end
     dest = broadcast_similar(Style(), ElType, axes(bc), bc)
-    copyto!(dest, bc)
+    return copyto!(dest, bc)
 end
 
 function broadcast_incremental(bc::Broadcasted)
     not_nested(bc) && return broadcast(bc.f, Tuple(bc.args)...)
-    copy(instantiate(_broadcast_incremental(bc)))
+    return copy(instantiate(_broadcast_incremental(bc)))
 end
 function _broadcast_incremental(bc::Broadcasted)
     not_nested(bc) && return broadcast(bc.f, Tuple(bc.args)...)
-    Broadcasted(bc.f, mapTupleLL(_broadcast_incremental, bc.args))
+    return Broadcasted(bc.f, mapTupleLL(_broadcast_incremental, bc.args))
 end
 _broadcast_incremental(x) = x
 
@@ -848,14 +846,13 @@ function copy_nonleaf(bc::Broadcasted{Style,ElType}) where {Style,ElType}
     dest = broadcast_similar(Style(), typeof(val), axes(bc), bc)
     dest[I] = val
     # Now handle the remaining values
-    copyto_nonleaf!(dest, bc, iter, state, 1)
+    return copyto_nonleaf!(dest, bc, iter, state, 1)
 end
 
 ## general `copyto!` methods
 # The most general method falls back to a method that replaces Style->Nothing
 # This permits specialization on typeof(dest) without introducing ambiguities
-@inline copyto!(dest::AbstractArray, bc::Broadcasted) =
-    copyto!(dest, convert(Broadcasted{Nothing}, bc))
+@inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
 # Performance optimization for the Scalar case
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:Union{Scalar,Unknown},ElType,Nothing,Nothing}) where ElType
@@ -872,7 +869,7 @@ end
         end
     end
     # Fall back to the default implementation
-    copyto!(dest, instantiate(instantiate_axes(bc)))
+    return copyto!(dest, instantiate(instantiate_axes(bc)))
 end
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
@@ -888,7 +885,7 @@ end
     @simd for I in CartesianIndices(axes(bc))
         @inbounds dest[I] = _broadcast_getindex(bc, I)
     end
-    dest
+    return dest
 end
 
 # Performance optimization: for BitArray outputs, we cache the result
@@ -912,7 +909,7 @@ function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
         @inbounds tmp[ind:bitcache_size] = false
         dumpbitcache(destc, cind, tmp)
     end
-    dest
+    return dest
 end
 
 # For some BitArray operations, we can work at the level of chunks. The trivial
@@ -948,7 +945,7 @@ function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
         @inbounds dc[i] = f.f(ithchunk(i, args...)...)
     end
     @inbounds dc[end] &= Base._msk_end(dest)
-    dest
+    return dest
 end
 
 
@@ -975,7 +972,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         end
         count += 1
     end
-    dest
+    return dest
 end
 
 ## Tuple methods
@@ -1010,8 +1007,7 @@ maybe_range_safe(::Broadcasted) = false
 const Args1{T} = TupleLL{T,TupleLLEnd}
 const Args2{S,T} = TupleLL{S,TupleLL{T,TupleLLEnd}}
 @inline maybe_range_safe(bc::Broadcasted{Style}) where {Style<:AbstractArrayStyle{1}} =
-    broadcast_all(maybe_range_safe_f, maybe_range_safe_arg, bc) &&
-    bc.args isa Union{Args1,Args2}
+    broadcast_all(maybe_range_safe_f, maybe_range_safe_arg, bc) && bc.args isa Union{Args1,Args2}
 
 maybe_range_safe_f(::typeof(+)) = true
 maybe_range_safe_f(::typeof(-)) = true
@@ -1038,7 +1034,7 @@ for op in (:*, :/, :\)
         function broadcast(::typeof($op), r1::AbstractRange, r2::AbstractRange)
             shape = combine_indices(r1, r2)
             dest = Vector{typeof($op(oneunit(eltype(r1)),oneunit(eltype(r2))))}(uninitialized, length(shape[1]))
-            copyto!(dest, instantiate(Broadcasted($op, make_TupleLL(r1, r2))))
+            return copyto!(dest, instantiate(Broadcasted($op, make_TupleLL(r1, r2))))
         end
     end
 end
@@ -1099,9 +1095,7 @@ julia> broadcast_getindex(A, [1 2 1; 1 2 2], [1, 2])
 ```
 """
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) =
-    broadcast_getindex!(Base.similar(Array{eltype(src)}, combine_indices(I...)),
-                        src,
-                        I...)
+    broadcast_getindex!(Base.similar(Array{eltype(src)}, combine_indices(I...)), src, I...)
 
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
     N = length(I)
@@ -1260,7 +1254,7 @@ function make_kwsyntax(f, args...; kwargs...)
 end
 function make(f, args...)
     args′ = make_TupleLL(args...)
-    Broadcasted(f, args′)
+    return Broadcasted(f, args′)
 end
 
 execute(bc::Broadcasted) = copy(instantiate(bc))
