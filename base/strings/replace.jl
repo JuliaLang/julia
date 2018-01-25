@@ -11,8 +11,15 @@ module ReplaceImpl
 export replace_code
 import Base: Callable, SubstitutionString
 
+#special type to wrap a function f, which has a method f(::Char)
+struct CharMethod{T<:Function} <: Function
+    f::T
+end
+(cm::CharMethod)(x::Union{Char,AbstractString}) = cm.f(x)
+
 # types of input patterns
-const TIF = Union{Char,AbstractString,Regex,Callable,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+const TIF = Union{Char,AbstractString,Regex,Callable,Tuple{Vararg{Char}},
+                  AbstractVector{Char},Set{Char}}
 # types of input replacements
 #const TIS = Union{Char,AbstractString,Callable,SubstitutionString}
 const TIS = Any
@@ -20,13 +27,17 @@ const TIS = Any
 # types input patterns are converted to
 const TF = Union{Regex,String,Callable}
 # types output patterns are converted to
-const TS = Union{Char,String,Callable,SubstitutionString}
+const TS = Union{Char,String,Callable,SubstitutionString,CharMethod}
 
-# from reflection.jl::hasmethod
-function type_hasmethod(@nospecialize(ft::DataType), @nospecialize(t), world=typemax(UInt))
-    t = Tuple{ft, t...}
-    ccall(:jl_method_exists, Cint, (Any, Any, UInt), ft.name.mt, t, world) != 0
-end
+# extract pattern from a Pair
+pattern(p::Pair{<:TF}) = p.first
+# extract replacement from a Pair
+repl(p::Pair{<:TF,CharMethod{T}}) where T<:Function = p.second.f
+repl(p::Pair{<:TF,<:TS}) = p.second
+
+# type of function, if wrapped in CharMethod
+charmethod(x::Type{CharMethod{T}}) where T<:Function = T
+charmethod(x) = x
 
 # code generation for all input patterns
 function gen_pattern_all(ptypes::NTuple{N,DataType}) where N
@@ -113,7 +124,9 @@ setprall(k::Int, n::Int) = [setpr(k, i, 0) for i = 1:n]
 
 getpa(pri::Int) = Symbol("pa_", pri)
 setpa(pri::Int, T::Type, j) = Expr(:(=), Expr(:(::), getpa(pri), T), j)
-setpaall(pt::NTuple{N,DataType}) where N = [setpa(i, pt[i].types[1], :(pat_repls[$i].first)) for i = 1:N]
+function setpaall(pt::NTuple{N,DataType}) where N
+    [setpa(i, pt[i].types[1], :(pattern(pat_repls[$i]))) for i = 1:N]
+end
 
 getpavec(pri::Int) = Symbol("pavec_", pri)
 setpavec(pri::Int, T::Type, j) = Expr(:(=), Expr(:(::), getpavec(pri), T), j)
@@ -121,7 +134,8 @@ function setpavecall(pt::NTuple{N,DataType}) where N
     ex = Expr[]
     for i = 1:N
         if pt[i].types[1] == String
-            push!(ex, setpavec(i, Vector{UInt8}, :(unsafe_wrap(Vector{UInt8}, $(getpa(i))))))
+            push!(ex, setpavec(i, Vector{UInt8},
+                               :(unsafe_wrap(Vector{UInt8}, $(getpa(i))))))
         end
     end
     ex
@@ -129,7 +143,9 @@ end
 
 getre(pri::Int) = Symbol("re_", pri)
 setre(pri::Int, T::Type, j) = Expr(:(=), Expr(:(::), getre(pri), T), j)
-setreall(pt::NTuple{N,DataType}) where N = [setre(i, pt[i].types[2], :(pat_repls[$i].second)) for i = 1:N]
+function setreall(pt::NTuple{N,DataType}) where N
+    [setre(i, charmethod(pt[i].types[2]), :(repl(pat_repls[$i]))) for i = 1:N]
+end
 
 function gen_repl_all(ptypes::NTuple{N,DataType}) where N
     extree(1, N, [gen_repl(i, ptypes[i]) for i in 1:N])
@@ -145,22 +161,22 @@ function gen_repl(pri::Int, ::Type{<:Pair{<:Any, String}})
 end
 
 # call the output methods for (Char,)
+function gen_repl(pri::Int, pt::Type{<:Pair{<:Callable, <:CharMethod}})
+    :( write(out, $(getre(pri))(getindex(str, minj))))
+end
+
+function gen_repl(pri::Int, pt::Type{<:Pair{<:Any, <:CharMethod}})
+    :( minj == maxk ?
+        write(out, $(getre(pri))(getindex(str, minj))) :
+        write(out, $(getre(pri))(getindex(str, minj:maxk))) )
+end
+
 function gen_repl(pri::Int, pt::Type{<:Pair{<:Callable, <:Callable}})
-    if type_hasmethod(pt.parameters[2], (Char,))
-        :( write(out, $(getre(pri))(getindex(str, minj))))
-    else
-        :( write(out, $(getre(pri))(getindex(str, minj:minj))))
-    end
+    :( write(out, $(getre(pri))(getindex(str, minj:minj))))
 end
 
 function gen_repl(pri::Int, pt::Type{<:Pair{<:Any, <:Callable}})
-    if type_hasmethod(pt.parameters[2], (Char,))
-        :( minj == maxk ?
-            write(out, $(getre(pri))(getindex(str, minj))) :
-            write(out, $(getre(pri))(getindex(str, minj:maxk))) )
-    else
-        :( write(out, $(getre(pri))(getindex(str, minj:maxk))))
-    end
+    :( write(out, $(getre(pri))(getindex(str, minj:maxk))))
 end
 
 function gen_repl(pri::Int, ::Type{<:Pair{Regex, <:SubstitutionString}})
@@ -206,7 +222,7 @@ function replace_gen_impl(str::Type{String}, count::Type{Int}, pat_repls...)
                     minj > eos && break
                     pos = nextind(str, minj) # but skip searching next pattern
                 else
-                    pos = wpos = nextind(str, maxk) # write and search from after pattern
+                    pos = wpos = nextind(str, maxk) # write and search from after patt
                 end
                 ctr -= 1
             end
@@ -235,12 +251,14 @@ function consol_pattern(pat::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{
     if length(pat) > 1
         occursin(pat)
     elseif length(pat) == 1
-        equalto(next(pat, start(pat))[1]) # works also for `Set{Char}` as opposed to `first`
+        equalto(next(pat, start(pat))[1])
+        # works also for `Set{Char}` as opposed to `first`
     else
         isempty # case of empty collection - `isempty(::Char) == false`
     end
 end
-function consol_pattern(pat::Base.OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}})
+function consol_pattern(pat::Base.OccursIn{<:Union{Tuple{Vararg{Char}},
+                                                   AbstractVector{Char},Set{Char}}})
     consol_pattern(pat.x)
 end
 function consol_pattern(pat::Base.OccursIn{<:AbstractString})
@@ -257,6 +275,7 @@ consol_pattern(pat) = string(pat)
 # abstract strings are converted to strings
 # other replacements are stringified (TODO should be rejected?)
 #
+consol_repl(repl::Function) = hasmethod(repl, (Char,)) ? CharMethod(repl) : repl
 consol_repl(repl::Union{Char,SubstitutionString,Callable}) = repl
 consol_repl(repl::AbstractString) = length(repl) == 1 ? repl[1] : string(repl)
 consol_repl(repl) = string(repl)
@@ -270,7 +289,8 @@ is_modify(p::Pair) = p.first != p.second
 function pat_repl_pair(p::Pair{<:TIF,<:TIS})::Pair{<:TF,<:TS}
     pat::TF  = consol_pattern(p.first)
     repl::TS = consol_repl(p.second)
-    repl isa SubstitutionString && !(pat isa Regex) && error("substitution string requires regex")
+    repl isa SubstitutionString && !(pat isa Regex) &&
+        error("substitution string requires regex")
     repl = funtostring(pat, repl)
     pat === p.first && repl === p.second ? p : pat => repl
 end
@@ -279,8 +299,8 @@ funtostring(pat::Base.EqualTo{Char}, fun::Callable) = stringfun(fun, pat.x)
 funtostring(pat::String, fun::Callable) = stringfun(fun, pat)
 funtostring(::Any, y) = y
 
-function stringfun(fun::Function, s::Union{Char,String})
-    if type_hasmethod(typeof(fun), (Char,)) && length(s) == 1
+function stringfun(fun::Callable, s::Union{Char,String})
+    if hasmethod(fun, (Char,)) && length(s) == 1
         fun(s[1])
     else
         fun(string(s))
@@ -296,6 +316,11 @@ function consolidate_args(pat_repls::Pair...)
     filter!(is_modify, collect(Pair, pat_repl_pair.(pat_repls)))
 end
 
+"""
+    replace_code(string, pattern-pairs)
+
+Return `Expr` of the body of the generated function
+"""
 function replace_code(str::String, pat_repls::Pair...; count::Int=typemax(Int))
     check_args(str, count, pat_repls...) && return :str
     pat_repls2 = consolidate_args(pat_repls...)
