@@ -43,14 +43,10 @@ uuid_version(u::UUID) = Int((u.value >> 76) & 0xf)
 UInt128(u::UUID) = u.value
 
 let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
-    global UUID
-    function UUID(s::AbstractString)
+    global function UUID(s::AbstractString)
         s = lowercase(s)
-
-        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+        contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$") ||
             throw(ArgumentError("Malformed UUID string: $(repr(s))"))
-        end
-
         u = UInt128(0)
         for i in groupings
             u <<= 4
@@ -62,7 +58,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
 end
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
-    function string(u::UUID)
+    global function string(u::UUID)
         u = u.value
         a = Base.StringVector(36)
         for i in groupings
