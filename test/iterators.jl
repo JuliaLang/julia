@@ -493,3 +493,11 @@ end
         @test Iterators.reverse(Iterators.reverse(t)) === t
     end
 end
+
+@testset "non-truncated zip" begin
+    @test_throws zip(1, repeated(1); truncate = false)
+    @test collect(zip(filter(identity, [true, false, true]), [1,2]); truncate = false)) ==
+        [(true, 1), (true, 2)]
+    @test_throws collect(zip(filter(identity, [true, true, true]), [1,2]); truncate = false)
+    @test_throws collect(zip(filter(identity, [false, false, false]), [1,2]); truncate = false)
+end

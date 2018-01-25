@@ -504,30 +504,6 @@ julia> minimum!([1 1], A)
 minimum!(r, A)
 
 """
-    all(A, dims)
-
-Test whether all values along the given dimensions of an array are `true`.
-
-# Examples
-```jldoctest
-julia> A = [true false; true true]
-2×2 Array{Bool,2}:
- true  false
- true   true
-
-julia> all(A, 1)
-1×2 Array{Bool,2}:
- true  false
-
-julia> all(A, 2)
-2×1 Array{Bool,2}:
- false
-  true
-```
-"""
-all(A::AbstractArray, dims)
-
-"""
     all!(r, A)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
@@ -550,30 +526,6 @@ julia> all!([1 1], A)
 ```
 """
 all!(r, A)
-
-"""
-    any(A, dims)
-
-Test whether any values along the given dimensions of an array are `true`.
-
-# Examples
-```jldoctest
-julia> A = [true false; true false]
-2×2 Array{Bool,2}:
- true  false
- true  false
-
-julia> any(A, 1)
-1×2 Array{Bool,2}:
- true  false
-
-julia> any(A, 2)
-2×1 Array{Bool,2}:
- true
- true
-```
-"""
-any(::AbstractArray,dims)
 
 """
     any!(r, A)
@@ -608,10 +560,14 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
+    end
 
-        $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim(f, $(op), A, region)
-        $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
+    if !(fname in (:all, :any))
+        @eval begin
+            $(fname)(f::Function, A::AbstractArray, region) =
+                mapreducedim(f, $(op), A, region)
+            $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
+        end
     end
 end
 

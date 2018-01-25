@@ -278,8 +278,11 @@ IteratorEltype(::Type{Zip1{I}}) where {I} = IteratorEltype(I)
 struct Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
+    truncate::Bool
 end
-zip(a, b) = Zip2(a, b)
+@inline function zip(a, b; truncate = true)
+    Zip2(a, b, truncate)
+end
 length(z::Zip2) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
@@ -290,7 +293,14 @@ eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
     n2 = next(z.b,st[2])
     return ((n1[1], n2[1]), (n1[2], n2[2]))
 end
-@inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
+@inline function done(z::Zip2, st)
+    da = done(z.a, st[1])
+    db = done(z.b, st[2])
+    if IteratorSize(z) != SizeUnknown() && !z.truncate
+        da != db && throw(DimensionMismatch("lengths must match if truncate is not set"))
+    end
+    da | db
+end
 
 IteratorSize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
 IteratorEltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
@@ -301,10 +311,14 @@ struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
 end
 
 """
-    zip(iters...)
+    zip(iters...; truncate=true)
 
 For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
+
+By default the zip stops after the end of the shortest component iterator is reached. If
+`truncate` is set to false, an error will be raised at that point unless all other iterators
+have also reached their end.
 
 # Examples
 ```jldoctest
@@ -329,7 +343,9 @@ julia> first(c)
 (1, "e")
 ```
 """
-zip(a, b, c...) = Zip(a, zip(b, c...))
+@inline function zip(a, b, c...; truncate = true)
+    Zip(a, zip(b, c...; truncate=truncate), truncate)
+end
 length(z::Zip) = _min_length(z.a, z.z, IteratorSize(z.a), IteratorSize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
 axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
@@ -340,7 +356,14 @@ eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
     n2 = next(z.z, st[2])
     (tuple(n1[1], n2[1]...), (n1[2], n2[2]))
 end
-@inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
+@inline function done(z::Zip, st)
+    da = done(z.a,st[1])
+    db = done(z.z,st[2])
+    if !z.truncate
+        da != db && throw(DimensionMismatch("lengths must match if truncate is not set"))
+    end
+    da | db
+end
 
 IteratorSize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
 IteratorEltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))

@@ -3,7 +3,7 @@
 using Base: findprevnot, findnextnot
 using Random, LinearAlgebra
 
-tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
+tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(tc, r1, r2)
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{Bool,Vector{Bool}}}) = true
 tc(r1::T, r2::T) where {T} = true

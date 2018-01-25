@@ -398,3 +398,18 @@ test18695(r) = sum( t^2 for t in r )
 @test prod(Char[]) == ""
 @test prod(Char['a']) == "a"
 @test prod(Char['a','b']) == "ab"
+
+@testset "multi-iterator any/all" begin
+    @test all(|, [true, false], [false, true])
+    @test_throws all(|, [true, false, true], [false, true])
+    @test !all(|, [true, false, true], [false, false])
+    @test all(|, [true, false, true], [false, true]; truncate=true)
+    @test !all((a,b,c)->a+b+c > 10, [1,2,3], [3,1,2], [2,3,1])
+    @test all((a,b,c)->a+b+c == 6, [1,2,3], [3,1,2], [2,3,1])
+    @test_throws all((a,b,c)->a+b+c == 6, [1,2,3], [3,1,2], [2,3,1,4])
+    @test all((a,b,c)->a+b+c == 6, [1,2,3], [3,1,2], [2,3,1,4]; truncate=true)
+    @test any(&, [true, true], [false, true])
+    @test any(&, [true, true, true], [false, true])
+    @test_throws any(&, [true, false, true], [false, true]; truncated=false)
+    @test !any((a,b,c)->a+b+c == 6, [1,1,1], [1,1,1], [1,1,1])
+end

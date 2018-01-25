@@ -1399,6 +1399,11 @@ export readandwrite
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
+@deprecate all(A::AbstractArray, dims::Union{Integer, NTuple{N, Integer} where N}) reducedim(&, A, dims)
+@deprecate all(f::Function, A::AbstractArray, dims::Union{Integer, NTuple{N, Integer} where N}) mapreducedim(f, &, A, dims)
+@deprecate any(A::AbstractArray, dims::Union{Integer, NTuple{N, Integer} where N}) reducedim(|, A, dims)
+@deprecate any(f::Function, A::AbstractArray, dims::Union{Integer, NTuple{N, Integer} where N}) mapreducedim(f, |, A, dims)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

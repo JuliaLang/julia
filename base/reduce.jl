@@ -653,6 +653,34 @@ function any(f, itr)
 end
 
 """
+    any(p, itrs...; truncate=true) -> Bool
+
+Like `any` on one iterator, but zips the given iterators and applies
+the element of each as separate argument to the passed predicate.
+
+By default, only elements up to the end of the shortest
+iterator are considered. If truncate is set to `false`,
+the function will error at that point.
+
+
+```jldoctest
+julia> any(&, [true,false,true], [false,true,true])
+true
+
+julia> any(&, [true,false,true], [false])
+false
+
+julia> any(&, [true,false,true], [true])
+true
+
+julia> any((a,b)->(a < 5 && a > b), [5, 1], [1, 1])
+false
+```
+"""
+any(f, itra, itrb, itrs...; truncate=true) =
+    any(args->f(args...), zip(itra, itrb, itrs...; truncate=truncate))
+
+"""
     all(p, itr) -> Bool
 
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
@@ -689,6 +717,29 @@ function all(f, itr)
     return anymissing ? missing : true
 end
 
+"""
+    all(p, itrs...; truncate=false) -> Bool
+
+Like `all` on one iterator, but zips the given iterators and applies
+the element of each as separate argument to the passed predicate.
+
+If truncate is set to true, only elements up to the end of the shortest
+iterator are considered. By default, the function will error at that
+point.
+
+```jldoctest
+julia> all(&, [true,false,true], [false,true,true])
+false
+
+julia> all(&, [true,false,true], [false]; truncate=true)
+false
+
+julia> any((a,b)->(a < 5 && a > b), [5, 1], [1, 1])
+false
+```
+"""
+all(f, itra, itrb, itrs...; truncate=false) =
+    all(args->f(args...), zip(itra, itrb, itrs...; truncate=truncate))
 
 ## in & contains
 
