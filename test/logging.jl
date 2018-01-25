@@ -252,7 +252,7 @@ end
     # Multiline message
     @test genmsg(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
     """
-    ┌ Warn: line1
+    ┌ Warning: line1
     │ line2
     └ @ Main some/path.jl:101
     """

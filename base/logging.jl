@@ -490,7 +490,7 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     end
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
-    levelstr = string(level)
+    levelstr = level == Warn ? "Warning" : string(level)
     msglines = split(chomp(string(message)), '\n')
     println(iob, "┌ ", levelstr, ": ", msglines[1])
     for i in 2:length(msglines)
