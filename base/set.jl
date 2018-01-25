@@ -565,7 +565,7 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 ## replace/replace! ##
 
 # to make replace/replace! work for a new container type Cont, only
-# replace!(prednew::Callable, A::Cont; count::Integer=typemax(Int))
+# replace!(new::Callable, A::Cont; count::Integer=typemax(Int))
 # has to be implemented
 
 """
@@ -573,8 +573,6 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 For each pair `old=>new` in `old_new`, replace all occurrences
 of `old` in collection `A` by `new`.
-As a special case, if `new` is `nothing`, then the occurence is deleted;
-wrap `nothing` as `Some(nothing)` if `nothing` must be used as the new value.
 If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
@@ -589,28 +587,18 @@ julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
 
 julia> replace!(Set([1, 2, 3]), 1=>0)
 Set([0, 2, 3])
-
-julia> replace!(Any[1, 2, 3], 1=>nothing, 3=>Some(nothing))
-[2, nothing]
 ```
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, eltype(A), count, old_new)
 
-wrap_nothing(x) = x
-wrap_nothing(::Nothing) = Some(nothing)
-unwrap_nothing(x) = x
-unwrap_nothing(::Some{Nothing}) = nothing
-
-# we use this wrapper because using directly eltype(A) as the type
-# parameter below for Some degrades performance
 function _replace!(A, ::Type{K}, count::Integer, old_new::Tuple{Vararg{Pair}}) where K
-    @inline function prednew(x)
+    @inline function new(x)
         for o_n in old_new
             first(o_n) == x && return last(o_n)
         end
-        wrap_nothing(x)
+        return x # no replace
     end
-    replace!(prednew, A, count=count)
+    replace!(new, A, count=count)
 end
 
 """
@@ -618,8 +606,6 @@ end
 
 Replace all occurrences `x` in collection `A` for which `pred(x)` is true
 by `new`.
-As a special case, if `new` is `nothing`, then the occurence is deleted;
-wrap `nothing` as `Some(nothing)` if `nothing` must be used as the new value.
 
 # Examples
 ```jldoctest
@@ -634,15 +620,14 @@ julia> replace!(isodd, A, 0, count=2)
 ```
 """
 replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> ifelse(pred(x), new, wrap_nothing(x)), A, count=count)
+    replace!(x -> ifelse(pred(x), new, x), A, count=count)
 
 """
     replace!(new::Function, A; [count::Integer])
 
-Replace all occurrences `x` in collection `A`
-by `new(x)`.
-As a special case, if `new(x)` is `nothing`, then the occurence is deleted;
-wrap `nothing` as `Some(nothing)` if `nothing` must be used as the new value.
+Replace each element `x` in collection `A` by `new(x)`.
+If `count` is specified, then replace at most `count` values in total
+(replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
@@ -651,16 +636,6 @@ julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
  2
  2
  6
- 4
-
-julia> replace!(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : x
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
  4
 
 julia> replace!(Dict(1=>2, 3=>4)) do kv
@@ -674,10 +649,10 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-function replace!(prednew::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
+function replace!(new::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
                   count::Integer=typemax(Int))
     count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count != 0 && _replace!(prednew, A, min(count, typemax(Int)) % Int)
+    count != 0 && _replace!(new, A, min(count, typemax(Int)) % Int)
     A
 end
 
@@ -722,41 +697,28 @@ replace(pred::Callable, A, new; count::Integer=typemax(Int)) =
     replace!(pred, copy(A), new, count=count)
 
 """
-    replace(prednew::Function, A; [count::Integer])
+    replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where for each value `x` in `A`, `prednew(x)` is called
-and must return  either `nothing`, in which case no replacement occurs,
-or a value, possibly wrapped as a [`Some`](@ref) object, which
-will be used as a replacement for `x`.
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
 
 # Examples
 ```jldoctest
-julia> replace(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Array{Int64,1}:
  2
  2
  6
  4
 
-julia> replace(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : nothing
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
- 4
-
 julia> replace(Dict(1=>2, 3=>4)) do kv
-           if first(kv) < 3; first(kv)=>3 end
+           first(kv) < 3 ? first(kv)=>3 : kv
        end
 Dict{Int64,Int64} with 2 entries:
   3 => 4
   1 => 3
 ```
 """
-replace(prednew::Callable, A; count::Integer=typemax(Int)) = replace!(prednew, copy(A), count=count)
+replace(new::Callable, A; count::Integer=typemax(Int)) = replace!(new, copy(A), count=count)
 
 # Handle ambiguities
 replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
@@ -771,25 +733,14 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace_update_dict!(repl::Vector{<:Pair}, x, y)
-    if x === y
-        false
-    else
-        push!(repl, x => y)
-        true
-    end
-end
-
-function _replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
-    repl = Pair{eltype(A),eltype(A)}[] # first == second means delete
+function _replace!(new::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
+    repl = Pair{eltype(A),eltype(A)}[]
     c = 0
     for x in A
-        y = prednew(x)
-        if y === nothing
-            push!(repl, x=>x) # delete
+        y = new(x)
+        if x !== y
+            push!(repl, x => y)
             c += 1
-        else
-            c += _replace_update_dict!(repl, x, unwrap_nothing(y))
         end
         c == count && break
     end
@@ -797,37 +748,21 @@ function _replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}, count:
         pop!(A, askey(first(oldnew), A))
     end
     for oldnew in repl
-        first(oldnew) !== last(oldnew) && push!(A, last(oldnew))
+        push!(A, last(oldnew))
     end
 end
 
 ### AbstractArray
 
-function _replace_update!(A::AbstractArray, i::Integer, del::Int, y)
-    @inbounds begin
-        rep = A[i] !== y
-        if rep | (del != 0)
-            A[i-del] = y
-        end
-        return rep
-    end
-end
-
-function _replace!(prednew::Callable, A::AbstractArray, count::Int)
+function _replace!(new::Callable, A::AbstractArray, count::Int)
     c = 0
-    del = 0 # number of deleted items
-    @inbounds for i in eachindex(A)
-        y = prednew(A[i])
-        if y === nothing
-            A::AbstractVector
-            del += 1
+    for i in eachindex(A)
+        @inbounds Ai = A[i]
+        y = new(Ai)
+        if Ai !== y
+            @inbounds A[i] = y
             c += 1
-        else
-            c += _replace_update!(A, i, del, unwrap_nothing(y))
         end
         c == count && break
-    end
-    if del > 0 # implies A isa AbstractVector
-        resize!(A, length(A)-del)
     end
 end

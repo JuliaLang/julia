@@ -534,19 +534,10 @@ end
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
     @test replace!(kv -> (2kv[1] => kv[2]), Dict(1=>2, 2=>4, 4=>8, 8=>16)) == Dict(2=>2, 4=>4, 8=>8, 16=>16)
 
-    # test Some(nothing)
+    # test nothing & Some(nothing) (should behave as any other value)
     a = [1, 2, nothing, 4]
-    @test replace(x -> x === nothing ? 0 : Some(nothing), a) == [nothing, nothing, 0, nothing]
-    @test replace(x -> x === nothing ? 0 : x, a) == [1, 2, 0, 4]
-    @test replace!(x -> x !== nothing ? Some(nothing) : Some(x), a) == [nothing, nothing, nothing, nothing]
-    @test replace(iseven, Any[1, 2, 3, 4], Some(nothing)) == [1, nothing, 3, nothing]
-    @test replace(Any[1, 2, 3, 4], 1=>Some(nothing), 3=>Some(nothing)) == [nothing, 2, nothing, 4]
-    s = Set([1, 2, nothing, 4])
-    @test replace(x -> x === nothing ? 0 : Some(nothing), s) == Set([0, nothing])
-    @test replace(x -> x === nothing ? 0 : x, s) == Set([1, 2, 0, 4])
-    @test replace(x -> x !== nothing ? Some(nothing) : x, s) == Set([nothing])
-    @test replace(iseven, Set(Any[1, 2, 3, 4]), Some(nothing)) == Set([1, nothing, 3, nothing])
-    @test replace(Set(Any[1, 2, 3, 4]), 1=>Some(nothing), 3=>Some(nothing)) == Set([nothing, 2, nothing, 4])
+    @test replace(x -> x === nothing ? Some(nothing) : nothing, a) == [nothing, nothing, Some(nothing), nothing]
+    @test replace(x -> x === nothing ? Some(nothing) : nothing, Set(a)) == Set([Some(nothing), nothing])
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
