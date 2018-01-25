@@ -184,8 +184,8 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
             name, _stanzas = entry
             @assert length(_stanzas) == 1
             stanzas = _stanzas[1]
-            if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "hash-sha1")
-                push!(paths_to_keep, Pkg3.Operations.find_installed(UUID(stanzas["uuid"]), SHA1(stanzas["hash-sha1"])))
+            if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
+                push!(paths_to_keep, Pkg3.Operations.find_installed(UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
             end
         end
     end

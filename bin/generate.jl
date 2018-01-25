@@ -63,7 +63,7 @@ for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
         for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
             i > 1 && println(io)
             println(io, "[", toml_key(string(ver)), "]")
-            println(io, "hash-sha1 = ", repr(trees[uuid][v.sha1]))
+            println(io, "git-tree-sha1 = ", repr(trees[uuid][v.sha1]))
         end
     end
     versions = sort!(collect(keys(p.versions)))

@@ -148,7 +148,7 @@ end
 
 function name_ver_info(info::Dict)
     name = info["name"]
-    hash = haskey(info, "hash-sha1") ? SHA1(info["hash-sha1"]) : nothing
+    hash = haskey(info, "git-tree-sha1") ? SHA1(info["git-tree-sha1"]) : nothing
     ver = haskey(info, "version") ? VersionNumber(info["version"]) : nothing
     name, VerInfo(hash, ver)
 end

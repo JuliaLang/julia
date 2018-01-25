@@ -95,7 +95,7 @@ get_or_make!(d::Dict{K,V}, k::K) where {K,V} = get!(d, k) do; V() end
 
 function load_versions(path::String)
     toml = parse_toml(path, "versions.toml")
-    Dict(VersionNumber(ver) => SHA1(info["hash-sha1"]) for (ver, info) in toml)
+    Dict(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
 end
 
 function load_package_data(f::Base.Callable, path::String, versions)
@@ -365,7 +365,7 @@ function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, ve
         push!(infos, info)
     end
     info["version"] = string(version)
-    info["hash-sha1"] = string(hash)
+    info["git-tree-sha1"] = string(hash)
     delete!(info, "deps")
     for path in registered_paths(env, uuid)
         data = load_package_data(UUID, joinpath(path, "dependencies.toml"), version)
@@ -488,8 +488,8 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
         info = manifest_info(env, uuid)
         name = info["name"]
         # TODO: handle development packages?
-        haskey(info, "hash-sha1") || continue
-        hash = SHA1(info["hash-sha1"])
+        haskey(info, "git-tree-sha1") || continue
+        hash = SHA1(info["git-tree-sha1"])
         path = find_installed(uuid, hash)
         ispath(path) || error("Build path for $name does not exist: $path")
         build_file = joinpath(path, "deps", "build.jl")
@@ -658,8 +658,8 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false)
     version_paths    = String[]
     for pkg in pkgs
         info = manifest_info(env, pkg.uuid)
-        haskey(info, "hash-sha1") || cmderror("Could not find hash-sha for package $(pkg.name)")
-        version_path = find_installed(pkg.uuid, SHA1(info["hash-sha1"]))
+        haskey(info, "git-tree-sha1") || cmderror("Could not find git-tree-sha1 for package $(pkg.name)")
+        version_path = find_installed(pkg.uuid, SHA1(info["git-tree-sha1"]))
         testfile = joinpath(version_path, "test", "runtests.jl")
         if !isfile(testfile)
             push!(missing_runtests, pkg.name)

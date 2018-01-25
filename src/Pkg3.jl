@@ -89,9 +89,9 @@ function _find_package(name::String)
     info = Pkg3.Operations.package_env_info(base, verb = "use")
     info == nothing && @goto find_global
     haskey(info, "uuid") || @goto find_global
-    haskey(info, "hash-sha1") || @goto find_global
+    haskey(info, "git-tree-sha1") || @goto find_global
     uuid = Base.Random.UUID(info["uuid"])
-    hash = Pkg3.Types.SHA1(info["hash-sha1"])
+    hash = Pkg3.Types.SHA1(info["git-tree-sha1"])
     path = Pkg3.Operations.find_installed(uuid, hash)
     ispath(path) && return joinpath(path, "src", name)
 
