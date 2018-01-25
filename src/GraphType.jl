@@ -1213,7 +1213,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
     gmsk0 = gmsk[p0]
     gconstr0 = gconstr[p0]
     eff_spp0 = count(gconstr0)
-    cvecs = BitVector[vcat(BitVector(0), (gmsk0[j1][gconstr[gadj0[j1]],v0] for j1 = 1:length(gadj0) if !ignored[gadj0[j1]])...) for v0 in findall(gconstr0)]
+    cvecs = BitVector[vcat(BitVector(), (gmsk0[j1][gconstr[gadj0[j1]],v0] for j1 = 1:length(gadj0) if !ignored[gadj0[j1]])...) for v0 in findall(gconstr0)]
 
     @assert length(cvecs) == eff_spp0
 
