@@ -89,7 +89,6 @@ Base.Docs
 Base.Iterators
 Base.LibGit2
 Base.Libc
-Base.Markdown
 Base.Meta
 Base.Pkg
 Base.StackTraces

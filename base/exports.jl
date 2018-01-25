@@ -9,7 +9,6 @@ export
     Sys,
     Libc,
     Docs,
-    Markdown,
     Threads,
     Iterators,
     Broadcast,
@@ -1023,7 +1022,6 @@ export
     @text_str,
     @html_str,
     @doc,
-    @doc_str,
 
     # output
     @show,
