@@ -46,41 +46,39 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
-    assign_defaults = Expr[
-        quote
+    assign_defaults = Expr[]
+    for (name, default) in zip(value_names, value_defaults)
+        push!(assign_defaults, quote
             $name = $default
-        end
-        for (name, default) in zip(value_names, value_defaults)
-    ]
+        end)
+    end
 
     vi = 1
-    parsers = Expr[
-        begin
-            if directives[i] <: DatePart
-                name = value_names[vi]
-                val = Symbol(:val, name)
-                vi += 1
-                quote
-                    pos > len && @goto done
-                    $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    $val === nothing && @goto error
-                    $name = $val
-                    pos = next_pos
-                    num_parsed += 1
-                    directive_index += 1
-                end
-            else
-                quote
-                    pos > len && @goto done
-                    delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    delim === nothing && @goto error
-                    pos = next_pos
-                    directive_index += 1
-                end
-            end
+    parsers = Expr[]
+    for i = 1:length(directives)
+        if directives[i] <: DatePart
+            name = value_names[vi]
+            val = Symbol(:val, name)
+            vi += 1
+            push!(parsers, quote
+                pos > len && @goto done
+                $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                $val === nothing && @goto error
+                $name = $val
+                pos = next_pos
+                num_parsed += 1
+                directive_index += 1
+            end)
+        else
+            push!(parsers, quote
+                pos > len && @goto done
+                delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                delim === nothing && @goto error
+                pos = next_pos
+                directive_index += 1
+            end)
         end
-        for i in 1:length(directives)
-    ]
+    end
 
     quote
         directives = df.tokens
