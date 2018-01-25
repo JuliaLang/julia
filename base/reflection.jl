@@ -674,28 +674,28 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types, expand_generated = true)
+    code_lowered(f, types; generated = true)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
 
-If `expand_generated` is `false`, the returned `CodeInfo` instances will correspond to fallback
+If `generated` is `false`, the returned `CodeInfo` instances will correspond to fallback
 implementations. An error is thrown if no fallback implementation exists.
-If `expand_generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
+If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
-Note that an error will be thrown if `types` are not leaf types when `expand_generated` is
+Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and the corresponding method is a `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Bool = true)
     return map(method_instances(f, t)) do m
-        if expand_generated && isgenerated(m)
+        if generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
                 return Core.Compiler.get_staged(m)
             else # isa(m, Method)
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
-                      "not leaf types, but the `expand_generated` argument is `true`.")
+                      "not leaf types, but the `generated` argument is `true`.")
             end
         end
         return uncompressed_ast(m)

@@ -580,22 +580,22 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function][, showparents::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false])
 
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
 (the default is all top-level modules).
 
-If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
+If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
+function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -607,25 +607,25 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function _methodswith(t::Type, m::Module, showparents::Bool)
+function _methodswith(t::Type, m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Function)
-                methodswith(t, f, showparents, meths)
+                methodswith(t, f, meths; supertypes = supertypes)
             end
         end
     end
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
 
-function methodswith(t::Type, showparents::Bool=false)
+function methodswith(t::Type; supertypes::Bool=false)
     meths = Method[]
     for mod in loaded_modules_array()
-        append!(meths, _methodswith(t, mod, showparents))
+        append!(meths, _methodswith(t, mod, supertypes))
     end
     return unique(meths)
 end
@@ -691,17 +691,17 @@ download(url, filename)
 # testing
 
 """
-    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
                   exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
                   exit_on_error=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
@@ -710,7 +710,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
     exit_on_error && push!(tests, "--exit-on-error")
     seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$numcores"
+    ENV2["JULIA_CPU_CORES"] = "$ncores"
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

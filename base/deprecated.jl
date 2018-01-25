@@ -1381,6 +1381,10 @@ export readandwrite
 @deprecate indmin argmin
 @deprecate indmax argmax
 
+@deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
+@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
+@deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
+
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
