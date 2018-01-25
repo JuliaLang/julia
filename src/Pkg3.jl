@@ -44,12 +44,6 @@ function __init__()
     end
 end
 
-function Base.julia_cmd(julia::AbstractString)
-    cmd = invoke(Base.julia_cmd, Tuple{Any}, julia)
-    push!(cmd.exec, "-L$(abspath(@__DIR__, "require.jl"))")
-    return cmd
-end
-
 function _query_if_interactive(base, name)
     env = Types.EnvCache()
     pkgspec = [Types.PackageSpec(base)]
