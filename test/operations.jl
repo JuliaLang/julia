@@ -11,10 +11,10 @@ function temp_pkg_dir(fn::Function)
     try
         # TODO: Use a temporary depot
         project_path = joinpath(tempdir(), randstring())
-        withenv("JULIA_ENV" => project_path) do
-            fn(project_path)
-        end
+        push!(LOAD_PATH, project_path)
+        fn(project_path)
     finally
+        project_path in LOAD_PATH && (deleteat!(LOAD_PATH, findfirst(equalto(project_path), LOAD_PATH)))
         rm(project_path, recursive=true, force=true)
     end
 end
@@ -31,7 +31,9 @@ temp_pkg_dir() do project_path
     Pkg3.add(TEST_PKG; preview = true)
     # @test_warn "not in project" Pkg3.API.rm("Example")
     Pkg3.add(TEST_PKG)
-    @test_broken @eval import $(Symbol(TEST_PKG))
+    println("Going to import")
+    @eval import $(Symbol(TEST_PKG))
+    println("Imported...")
     Pkg3.up()
     Pkg3.rm(TEST_PKG; preview = true)
     @test isinstalled(TEST_PKG)
