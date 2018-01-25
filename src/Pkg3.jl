@@ -50,36 +50,6 @@ function Base.julia_cmd(julia::AbstractString)
     return cmd
 end
 
-function Base.find_package(name::String)
-    isabspath(name) && return name
-    base = name
-    if endswith(name, ".jl")
-        base = name[1:end-3]
-    else
-        name = string(base, ".jl")
-    end
-    info = Pkg3.Operations.package_env_info(base, verb = "use")
-    info == nothing && @goto find_global
-    haskey(info, "uuid") || @goto find_global
-    haskey(info, "git-tree-sha1") || @goto find_global
-    uuid = Random.UUID(info["uuid"])
-    hash = Pkg3.Types.SHA1(info["git-tree-sha1"])
-    path = Pkg3.Operations.find_installed(uuid, hash)
-    ispath(path) && return joinpath(path, "src", name)
-
-    # If we still haven't found the file, look if the package exists in the registry
-    # and query the user (if we are interactive) to install it.
-    @label find_global
-    if isinteractive()
-        # query_if_interactive is hidden from inference
-        # since it has a significant inference cost and is not used
-        # when e.g. precompiling modules
-        return query_if_interactive[](base, name)::Union{Nothing, String}
-    else
-        return nothing
-    end
-end
-
 function _query_if_interactive(base, name)
     env = Types.EnvCache()
     pkgspec = [Types.PackageSpec(base)]
