@@ -17,7 +17,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big
+        isone, big, beta
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
@@ -679,6 +679,13 @@ function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
     return z
+end
+if version() >= v"4.0.0"
+    function beta(y::BigFloat, x::BigFloat)
+        z = BigFloat()
+        ccall((:mpfr_beta, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
+        return z
+    end
 end
 
 # Utility functions
