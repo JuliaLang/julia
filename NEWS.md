@@ -196,6 +196,11 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * Keyword arguments are now `NamedTuple`s. This is a breaking change because iterating
+    `NamedTuple`s produces values only, whereas previously iteration over keyword arguments
+    inside of functions produced name, value pairs. The `pairs` function can be used to
+    extract both names and values. ([#24795])
+
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
@@ -1223,6 +1228,7 @@ Command-line option changes
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786
 [#24794]: https://github.com/JuliaLang/julia/issues/24794
+[#24795]: https://github.com/JuliaLang/julia/issues/24795
 [#24805]: https://github.com/JuliaLang/julia/issues/24805
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#24831]: https://github.com/JuliaLang/julia/issues/24831

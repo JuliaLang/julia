@@ -478,7 +478,7 @@
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
-                                       ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
+                                       ,@(if (null? restkw) '() `((call (core NamedTuple))))
                                        ,@(map arg-name pargl)
                                        ,@(if (null? vararg) '()
                                              (list `(... ,(arg-name (car vararg)))))))))
@@ -513,13 +513,13 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) (:: ,kw (core NamedTuple)) ,@pargl ,@vararg)
           `(block
             ,(scopenest
               keynames
               (map (lambda (v dflt)
                      (let* ((k     (decl-var v))
-                            (rval0 `(call (top getindex) ,kw (inert ,k)))
+                            (rval0 `(call (top getfield) ,kw (quote ,k)))
                             ;; note: if the "declared" type of a KW arg includes something
                             ;; from keyword-sparams then don't assert it here, since those
                             ;; static parameters don't have values yet. instead, the type
@@ -548,11 +548,10 @@
                             ,dflt)))
                    vars vals)
               `(block
-                (= ,rkw (call (top pairs)
-                              ,(if (null? keynames)
-                                   kw
-                                   `(call (top structdiff) ,kw (curly (core NamedTuple)
-                                                                      (tuple ,@(map quotify keynames)))))))
+                (= ,rkw ,(if (null? keynames)
+                             kw
+                             `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                (tuple ,@(map quotify keynames))))))
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)

@@ -483,8 +483,8 @@ const valid_opts = [:header, :has_header, :use_mmap, :quotes, :comments, :dims, 
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 
 function val_opts(opts)
-    d = Dict{Symbol, Union{Bool, NTuple{2, Integer}, Char, Integer}}()
-    for (opt_name, opt_val) in opts
+    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
+    for (opt_name, opt_val) in pairs(opts)
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)::Int]
