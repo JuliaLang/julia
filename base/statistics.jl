@@ -23,7 +23,7 @@ function mean(f::Callable, iterable)
     count = 1
     value, state = next(iterable, state)
     f_value = f(value)
-    total = f_value + zero(f_value)
+    total = reduce_first(add_sum, f_value)
     while !done(iterable, state)
         value, state = next(iterable, state)
         total += f(value)
