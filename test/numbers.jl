@@ -2970,7 +2970,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     p = 2
     @test x^p == 1
     @test x^2 == 2
-    @test [x, x, x].^2 == [2, 2, 2] # literal_pow violates referential transparency
+    @test [x, x, x].^2 == [2, 2, 2]
     for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
         for p in -4:4
             v = eval(:($T(2)^$p))
