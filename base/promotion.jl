@@ -117,13 +117,13 @@ Falls back to [`typejoin`](@ref).
 """
 promote_join(@nospecialize(a), @nospecialize(b)) = join_types(a, b, promote_join)
 promote_join(::Type{Nothing}, ::Type{T}) where {T} =
-    isconcrete(T) ? Union{T, Nothing} : Any
+    isconcretetype(T) ? Union{T, Nothing} : Any
 promote_join(::Type{T}, ::Type{Nothing}) where {T} =
-    isconcrete(T) ? Union{T, Nothing} : Any
+    isconcretetype(T) ? Union{T, Nothing} : Any
 promote_join(::Type{Missing}, ::Type{T}) where {T} =
-    isconcrete(T) ? Union{T, Missing} : Any
+    isconcretetype(T) ? Union{T, Missing} : Any
 promote_join(::Type{T}, ::Type{Missing}) where {T} =
-    isconcrete(T) ? Union{T, Missing} : Any
+    isconcretetype(T) ? Union{T, Missing} : Any
 promote_join(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
 promote_join(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
 promote_join(::Type{Nothing}, ::Type{Nothing}) = Nothing
