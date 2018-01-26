@@ -118,15 +118,21 @@ function Base.show(io::IO, x::Union{Float64,Float32})
     if get(io, :compact, false)
         _show(io, x, PRECISION, 6, x isa Float64, true)
     else
-        _show(io, x, SHORTEST, 0, true, false)
+        _show(io, x, SHORTEST, 0, get(io, :typeinfo, Any) !== typeof(x), false)
     end
 end
 
 function Base.show(io::IO, x::Float16)
-    if get(io, :compact, false)
+    hastypeinfo = Float16 === get(io, :typeinfo, Any)
+    # if hastypeinfo, the printing would be more compact using `SHORTEST`
+    # while still retaining all the information
+    # BUT: we want to print all digits in `show`, not in display, so we rely
+    # on the :compact property to make the decision
+    # (cf. https://github.com/JuliaLang/julia/pull/24651#issuecomment-345535687)
+    if get(io, :compact, false) && !hastypeinfo
         _show(io, x, PRECISION, 5, false, true)
     else
-        _show(io, x, SHORTEST, 0, true, false)
+        _show(io, x, SHORTEST, 0, !hastypeinfo, false)
     end
 end
 

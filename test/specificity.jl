@@ -45,7 +45,7 @@ _z_z_z_(::Int, c...) = 3
 @test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
 @test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
 
-@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
+@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,ComplexF32,ComplexF64}, Any},
                         Tuple{Array{T} where T<:Real, Any})
 
 @test  args_morespecific(Tuple{1,T} where T, Tuple{Any})
@@ -127,8 +127,8 @@ f17016(f, t1::Tuple) = 1
 @test !args_morespecific(Tuple{Real, Real, Vararg{Real}}, Tuple{T, T, T} where T <: Real)
 @test  args_morespecific(Tuple{Real, Real, Vararg{Int}}, Tuple{T, T, T} where T <: Real)
 
-@test  args_morespecific(Tuple{Type{Base.Nullable{T}}} where T, Tuple{Type{T}, Any} where T)
-@test !args_morespecific(Tuple{Type{Base.Nullable{T}}, T} where T, Tuple{Type{Base.Nullable{T}}} where T)
+@test  args_morespecific(Tuple{Type{Base.Some{T}}} where T, Tuple{Type{T}, Any} where T)
+@test !args_morespecific(Tuple{Type{Base.Some{T}}, T} where T, Tuple{Type{Base.Some{T}}} where T)
 
 @test  args_morespecific(Tuple{Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S},
                                Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S}} where T,

@@ -4,6 +4,8 @@
 # Cross Platform tests for spawn. #
 ###################################
 
+using Random
+
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
 yescmd = `yes`
@@ -18,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(JULIA_HOME, "busybox.exe")
+    busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -46,8 +48,8 @@ end
 @test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test search(out,"world") != 0:-1
-@test search(out,"hello") != 0:-1
+@test contains(out,"world")
+@test contains(out,"hello")
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -136,16 +138,16 @@ let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
     end
 end
 
-let str = "", stdin, stdout, proc, str2, file
+let str = "", proc, str2, file
     for i = 1:1000
       str = "$str\n $(randstring(10))"
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    stdout, stdin, proc = readandwrite(`$catcmd -`)
-    write(stdin, str)
-    close(stdin)
-    str2 = read(stdout, String)
+    proc = open(`$catcmd -`, "r+")
+    write(proc, str)
+    close(proc.in)
+    str2 = read(proc, String)
     @test str2 == str
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
@@ -223,6 +225,13 @@ end
 # issue #6310
 @test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
+# setup_stdio for AbstractPipe
+let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
+    close(out.in)
+    @test read(out, String) == "Hello World\n"
+    @test success(proc)
+end
+
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
 
@@ -246,11 +255,11 @@ let fname = tempname(), p
     cmd = """
     # Overwrite libuv memory before freeing it, to make sure that a use after free
     # triggers an assertion.
-    function thrash(handle::Ptr{Void})
+    function thrash(handle::Ptr{Cvoid})
         # Kill the memory, but write a nice low value in the libuv type field to
         # trigger the right code path
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), handle, 0xee, 3 * sizeof(Ptr{Void}))
-        unsafe_store!(convert(Ptr{Cint}, handle + 2 * sizeof(Ptr{Void})), 15)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), handle, 0xee, 3 * sizeof(Ptr{Cvoid}))
+        unsafe_store!(convert(Ptr{Cint}, handle + 2 * sizeof(Ptr{Cvoid})), 15)
         nothing
     end
     OLD_STDERR = STDERR
@@ -260,7 +269,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Void, (Ptr{Void}, Ptr{Void}), oldhandle, cfunction(thrash, Void, Tuple{Ptr{Void}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
@@ -328,13 +337,13 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
-    @test nb_available(out) == 0
-    @test endswith(readuntil(out, '1'), '1')
+    @test bytesavailable(out) == 0
+    @test endswith(readuntil(out, '1', keep=true), '1')
     @test Char(read(out, UInt8)) == '\t'
     c = UInt8[0]
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
-    @test nb_available(out) > 0
+    @test bytesavailable(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
     desc = read(out, String)
@@ -343,7 +352,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test !isopen(out)
     @test infd != Base._fd(out.in) == Base.INVALID_OS_HANDLE
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
-    @test nb_available(out) == 0
+    @test bytesavailable(out) == 0
     @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello"
     @test ln1 == "orld"
@@ -453,13 +462,13 @@ if Sys.isunix()
     let ps = Pipe[]
         ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try
-            for i = 1 : 100 * get(ulimit_n, 1000)
+            for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()
                 Base.link_pipe(p)
                 push!(ps, p)
             end
-            if isnull(ulimit_n)
-                warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
+            if ulimit_n === nothing
+                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
                 @test_broken false
             else
                 @test false
@@ -520,4 +529,3 @@ let p = spawn(`$sleepcmd 100`)
     # Should not throw if already dead
     kill(p)
 end
-

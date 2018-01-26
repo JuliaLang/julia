@@ -18,7 +18,7 @@ end
 function ndgrid(vs::AbstractVector{T}...) where T
     n = length(vs)
     sz = map(length, vs)
-    out = ntuple(i->Array{T}(sz), n)
+    out = ntuple(i->Array{T}(uninitialized, sz), n)
     s = 1
     for i=1:n
         a = out[i]::Array
@@ -45,8 +45,8 @@ function meshgrid(vx::AbstractVector{T}, vy::AbstractVector{T},
     vx = reshape(vx, 1, n, 1)
     vy = reshape(vy, m, 1, 1)
     vz = reshape(vz, 1, 1, o)
-    om = ones(Int, m)
-    on = ones(Int, n)
-    oo = ones(Int, o)
+    om = fill(1, m)
+    on = fill(1, n)
+    oo = fill(1, o)
     (vx[om, :, oo], vy[:, on, oo], vz[om, on, :])
 end

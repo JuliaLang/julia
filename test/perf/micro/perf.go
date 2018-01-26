@@ -64,7 +64,7 @@ func printfd(n int) {
 	w := bufio.NewWriter(f)
 
 	for i := 0; i < n; i++ {
-		_, err = fmt.Fprintf(w, "%d %d\n", i, i)
+		_, err = fmt.Fprintf(w, "%d %d\n", i, i+1)
 	}
 	w.Flush()
 	f.Close()

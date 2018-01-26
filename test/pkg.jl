@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Pkg.PkgError
+using Random: randstring
 
 function capture_stdout(f::Function)
     let fname = tempname()
@@ -63,6 +64,7 @@ temp_pkg_dir() do
     end
 
     @test_throws PkgError Pkg.installed("MyFakePackage")
+    @test_throws PkgError Pkg.status("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
     # Check that setprotocol! works.
@@ -267,45 +269,52 @@ temp_pkg_dir() do
 
     # Various pin/free/re-pin/change-pin patterns (issue #17176)
     @test "" == capture_stdout() do
-        @test_warn "INFO: Freeing Example" Pkg.free("Example")
+        nothingtodomsg = (:info,"No packages to install, update or remove")
 
-        @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
+        @test_logs((:info,"Freeing Example"),
+                   nothingtodomsg,
+                   Pkg.free("Example"))
+
+        @test_logs (:info,r"^Creating Example branch pinned\.[0-9a-f]{8}\.tmp$") Pkg.pin("Example")
         vers = Pkg.installed("Example")
         branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
             LibGit2.branch(repo)
         end
 
-        @test_warn "INFO: Freeing Example" Pkg.free("Example")
+        @test_logs((:info,"Freeing Example"),
+                   nothingtodomsg,
+                   Pkg.free("Example"))
 
-        @test_warn ("INFO: Creating Example branch pinned.b1990792.tmp",
-                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.4.0")
+        @test_logs((:info,"Creating Example branch pinned.b1990792.tmp"),
+                   nothingtodomsg, Pkg.pin("Example", v"0.4.0"))
         @test Pkg.installed("Example") == v"0.4.0"
 
-        @test_warn r"^INFO: Package Example is already pinned to the selected commit$" Pkg.pin("Example", v"0.4.0")
+        @test_logs (:info,r"^Package Example is already pinned to the selected commit$") Pkg.pin("Example", v"0.4.0")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        @test_warn r"^INFO: Package Example is already pinned$" Pkg.pin("Example")
+        @test_logs (:info,r"^Package Example is already pinned$") Pkg.pin("Example")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        @test_warn "INFO: Package Example: skipping update (pinned)..." Pkg.update()
+        @test_logs (:info,"Package Example: skipping update (pinned)...") match_mode=:any Pkg.update()
         @test Pkg.installed("Example") == v"0.4.0"
 
-        @test_warn ("INFO: Creating Example branch pinned.d1ef7b00.tmp",
-                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.3.1")
+        @test_logs((:info,"Creating Example branch pinned.d1ef7b00.tmp"),
+                   nothingtodomsg, Pkg.pin("Example", v"0.3.1"))
         @test Pkg.installed("Example") == v"0.3.1"
 
-        @test_warn ("INFO: Package Example: checking out existing branch pinned.b1990792.tmp",
-                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.4.0")
+        @test_logs((:info,"Package Example: checking out existing branch pinned.b1990792.tmp"),
+                   nothingtodomsg, Pkg.pin("Example", v"0.4.0"))
         @test Pkg.installed("Example") == v"0.4.0"
 
-        @test_warn ("INFO: Freeing Example",
-                    "INFO: No packages to install, update or remove") Pkg.free("Example")
+        @test_logs((:info,"Freeing Example"),
+                   nothingtodomsg, Pkg.free("Example"))
         @test Pkg.installed("Example") == vers
 
-        @test_warn Regex("^INFO: Package Example: checking out existing branch $branch\$") Pkg.pin("Example")
+        @test_logs (:info,Regex("^Package Example: checking out existing branch $branch\$")) Pkg.pin("Example")
         @test Pkg.installed("Example") == vers
 
-        @test_warn "INFO: Freeing Example" Pkg.free("Example")
+        @test_logs((:info,"Freeing Example"),
+                   nothingtodomsg, Pkg.free("Example"))
         @test Pkg.installed("Example") == vers
     end
 
@@ -400,15 +409,15 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
-        @test !contains(msg, "ERROR")
+        @test !contains(msg, "Build failed for BuildFail")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
-        @test contains(msg, "ERROR")
+        @test contains(msg, "Build failed for BuildFail")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
         @test contains(msg, "Throw build error")
     end
@@ -417,7 +426,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
@@ -442,34 +451,35 @@ temp_pkg_dir() do
 
     # partial Pkg.update
     @test "" == capture_stdout() do
-        nothingtodomsg = "INFO: No packages to install, update or remove"
+        nothingtodomsg = (:info,"No packages to install, update or remove")
 
-        @test_warn "INFO: Installing Example v" begin
+        @test_logs (:info,r"Installing Example v") match_mode=:any begin
             Pkg.rm("Example")
             Pkg.add("Example")
         end
 
-        @test_warn nothingtodomsg Pkg.update("Example")
+        @test_logs nothingtodomsg match_mode=:any Pkg.update("Example")
 
-        @test_warn "INFO: Installing Example v0.4.0" begin
+        @test_logs (:info,"Installing Example v0.4.0") match_mode=:any begin
             Pkg.rm("Example")
             Pkg.add("Example", v"0", v"0.4.1-") # force version to be < 0.4.1
         end
 
-        @test_warn (r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.",
-                    "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this.",
-                    nothingtodomsg) Pkg.update("Example")
 
-        @test_warn "INFO: Installing Example" begin
+        @test_logs((:info,r"""Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.
+                              The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this."""),
+                   nothingtodomsg, match_mode=:any, Pkg.update("Example"))
+
+        @test_logs (:info,r"Installing Example") match_mode=:any begin
             Pkg.rm("Example")
             Pkg.add("Example")
             Pkg.pin("Example", v"0.4.0")
         end
 
-        @test_warn ("INFO: Package Example: skipping update (pinned)...",
-                    r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.",
-                    "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.",
-                    nothingtodomsg) Pkg.update("Example")
+        @test_logs((:info,"Package Example: skipping update (pinned)..."),
+                   (:info,r"""Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.
+                              The package is fixed. You can try using `Pkg.free\("Example"\)` to update it."""),
+                   nothingtodomsg, match_mode=:any, Pkg.update("Example"))
 
         metadata_dir = Pkg.dir("METADATA")
         old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
@@ -487,28 +497,33 @@ temp_pkg_dir() do
         @test isempty(Pkg.dependents("Example"))
         @test isempty(Pkg.dependents("Example.jl"))
 
-        @test_warn s -> !contains(s, "updated but were already imported") begin
+        logs,_ = Test.collect_test_logs() do
             Pkg.add("Iterators")
             Pkg.update("Iterators")
         end
+        @test all(!contains(l.message,"updated but were already imported") for l in logs)
 
         # Do it again, because the above Iterators test will update things prematurely
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
-        @test_warn ("INFO: Installing Colors v0.6.4",
-                    "INFO: Installing ColorTypes v0.2.2",
-                    "INFO: Installing FixedPointNumbers v0.1.3",
-                    "INFO: Installing Compat v0.7.18",
-                    "INFO: Installing Reexport v0.0.3") Pkg.add("Colors")
+        @test_logs((:info,"Installing Colors v0.6.4"),
+                   (:info,"Installing ColorTypes v0.2.2"),
+                   (:info,"Installing FixedPointNumbers v0.1.3"),
+                   (:info,"Installing Compat v0.7.18"),
+                   (:info,"Installing Reexport v0.0.3"), match_mode=:any, Pkg.add("Colors"))
 
-        @test_warn (r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+",
-                    r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+",
-                    s -> !contains(s, "INFO: Upgrading Colors: ")) Pkg.update("ColorTypes")
+        logs,_ = Test.collect_test_logs() do
+            Pkg.update("ColorTypes")
+        end
+        @test any(contains(l, (:info,r"Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+")) for l in logs)
+        @test any(contains(l, (:info,r"Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+")) for l in logs)
+        @test !any(contains(l, (:info,r"Upgrading Colors")) for l in logs)
+
         @test Pkg.installed("Colors") == v"0.6.4"
 
-        @test_warn nothingtodomsg Pkg.update("FixedPointNumbers")
+        @test_logs nothingtodomsg match_mode=:any Pkg.update("FixedPointNumbers")
     end
 
     # issue #18239
@@ -526,15 +541,15 @@ temp_pkg_dir() do
 
         Pkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`), String)
-        @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
+            "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); using Example; Pkg.update(\"$package\")"`), String)
+        @test contains(msg, Regex("- $package.*Restart Julia to use the updated versions","s"))
     end
 
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
     let package = "StartupFile"
         content = """
-            info("JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))")
-            info("Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))")
+            @info "JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))"
+            @info "Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))"
             """
 
         write_build(package, content)
@@ -549,27 +564,27 @@ temp_pkg_dir() do
         write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
-            code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
+            code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); Pkg.build(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
-            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
-            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+            @test contains(msg, "JULIA_RC_LOADED defined false")
+            @test contains(msg, "Main.JULIA_RC_LOADED defined false")
 
             msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
-            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
-            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+            @test contains(msg, "JULIA_RC_LOADED defined false")
+            @test contains(msg, "Main.JULIA_RC_LOADED defined true")
 
-            code = "redirect_stderr(STDOUT); Pkg.test(\"$package\")"
+            code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); Pkg.test(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
-            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
-            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+            @test contains(msg, "JULIA_RC_LOADED defined false")
+            @test contains(msg, "Main.JULIA_RC_LOADED defined false")
 
             # Note: Since both the startup-file and "runtests.jl" are run in the Main
             # module any global variables created in the .juliarc.jl can be referenced.
             msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
-            @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
-            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+            @test contains(msg, "JULIA_RC_LOADED defined true")
+            @test contains(msg, "Main.JULIA_RC_LOADED defined true")
         end
     end
 
@@ -660,18 +675,19 @@ temp_pkg_dir(initialize=false) do
     cd(Pkg.dir()) do
         errors = Dict()
 
+        # Log forwarding TODO - port these to @test_logs
         empty!(errors)
-        @test_warn ("INFO: Building Error",
-                    "INFO: Building Normal") Pkg.Entry.build!(["Error", "Normal"], errors)
+        @test_warn ("Building Error",
+                    "Building Normal") Pkg.Entry.build!(["Error", "Normal"], errors)
 
         empty!(errors)
-        @test_warn ("INFO: Building Exit",
-                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal"], errors)
+        @test_warn ("Building Exit",
+                    "Building Normal") Pkg.Entry.build!(["Exit", "Normal"], errors)
 
         empty!(errors)
-        @test_warn ("INFO: Building Exit",
-                    "INFO: Building Normal",
-                    "INFO: Building Exit",
-                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
+        @test_warn ("Building Exit",
+                    "Building Normal",
+                    "Building Exit",
+                    "Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
     end
 end

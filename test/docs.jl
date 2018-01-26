@@ -26,7 +26,8 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
 @doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
@@ -552,7 +553,12 @@ let d = @doc(I15424.LazyHelp)
 end
 
 # Issue #13385.
-@test @doc(I) !== nothing
+struct I13385
+    λ
+end
+"issue #13385"
+const i13385 = I13385(true)
+@test @doc(i13385) !== nothing
 
 # Issue #12700.
 @test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
@@ -633,7 +639,7 @@ f12593_2() = 1
 @test (@doc f12593_2) !== nothing
 
 # @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
-@test Docs.doc(svdvals, Tuple{Float64}) !== nothing
+# @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
@@ -884,12 +890,12 @@ let x = Binding(Base, Symbol("@time"))
     @test @var(Base.Pkg.@time) == x
 end
 
-let x = Binding(Base.LinAlg, :norm)
+let x = Binding(Iterators, :enumerate)
     @test defined(x) == true
-    @test @var(norm) == x
-    @test @var(Base.norm) == x
-    @test @var(Base.LinAlg.norm) == x
-    @test @var(Base.Pkg.Dir.norm) == x
+    @test @var(enumerate) == x
+    @test @var(Base.enumerate) == x
+    @test @var(Iterators.enumerate) == x
+    @test @var(Base.Pkg.Dir.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -952,20 +958,13 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
+    @test Docs._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+    @test eval(Base, Docs._helpmode(buf, line)) isa Union{Base.Markdown.MD,Nothing}
 end
 
-let save_color = Base.have_color
-    try
-        @eval Base have_color = false
-        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
-        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
-    finally
-        @eval Base have_color = $save_color
-    end
-end
+@test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
 # issue #15684
 begin
@@ -991,8 +990,9 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::String))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(214, doc_util_path), :(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(214, doc_util_path), :(dynamic_test(::String))))
+
 
 
 # Equality testing
@@ -1088,3 +1088,34 @@ catch e
 end
     @test ex.line == 2
 end
+
+struct t_docs_abc end
+@test "t_docs_abc" in Docs.accessible(@__MODULE__)
+
+# Call overloading issue #20087
+"""
+Docs for `MyFunc` struct.
+"""
+mutable struct MyFunc
+    x
+end
+
+"""
+Docs for calling `f::MyFunc`.
+"""
+function (f::MyFunc)(x)
+    f.x = x
+    return f
+end
+
+@test docstrings_equal(@doc(MyFunc(2)),
+doc"""
+Docs for calling `f::MyFunc`.
+""")
+
+struct A_20087 end
+
+"""a"""
+(a::A_20087)() = a
+
+@test docstrings_equal(@doc(A_20087()), doc"a")

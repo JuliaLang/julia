@@ -26,12 +26,12 @@ julia> colon(1, 2, 5)
 ```
 """
 colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 colon(start::T, step::T, stop::T) where {T<:Real} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-_colon(::HasOrder, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
+_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
-_colon(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
+_colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
@@ -57,8 +57,8 @@ end
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range(a::T, step, len::Integer) where {T} = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
-_range(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) where {T,S} =
+range(a::T, step, len::Integer) where {T} = _range(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+_range(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 _range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
@@ -78,6 +78,9 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 ## 1-dimensional ranges ##
 
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
+
+RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
+RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 ## ordinal ranges
 
@@ -232,7 +235,7 @@ function LinSpace(start, stop, len::Integer)
 end
 
 """
-    linspace(start, stop, n=50)
+    linspace(start, stop, n)
 
 Construct a range of `n` linearly spaced elements from `start` to `stop`.
 
@@ -241,8 +244,8 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(promote(start, stop)..., Int(len))
-linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
+linspace(start, stop, len::Real) = linspace(promote(start, stop)..., Int(len))
+linspace(start::T, stop::T, len::Real) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
@@ -318,7 +321,7 @@ function print_range(io::IO, r::AbstractRange,
 end
 
 """
-    logspace(start::Real, stop::Real, n::Integer=50; base=10)
+    logspace(start::Real, stop::Real, n::Integer; base=10)
 
 Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
 
@@ -340,7 +343,7 @@ julia> logspace(1.,10.,5,base=2)
  1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer=50; base=10) = base.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer; base=10) = base.^linspace(start, stop, n)
 
 ## interface implementations
 
@@ -702,7 +705,7 @@ function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::A
     i
 end
 
-# findin (the index of intersection)
+# _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
     local ifirst
     local ilast
@@ -721,17 +724,7 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
-    ifirst, ilast
-end
-
-function findin(r::AbstractUnitRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:ilast
-end
-
-function findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:1:ilast
+    r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
 ## linear operations on ranges ##
@@ -811,64 +804,61 @@ el_same(::Type, a, b) = typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
-convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
+UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
+UnitRange{T}(r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
 promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
-convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
+OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
+OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
 promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     promote_rule(a, UnitRange{eltype(UR)})
-convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
-convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
+UnitRange{T}(r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
+UnitRange(r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
-convert(::Type{AbstractUnitRange{T}}, r::AbstractUnitRange{T}) where {T} = r
-convert(::Type{AbstractUnitRange{T}}, r::UnitRange) where {T} = convert(UnitRange{T}, r)
-convert(::Type{AbstractUnitRange{T}}, r::OneTo) where {T} = convert(OneTo{T}, r)
+AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
+AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
+AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),
             # el_same only operates on array element type, so just promote second type parameter
             StepRange{T1a, promote_type(T1b,T2b)},
             StepRange{T2a, promote_type(T1b,T2b)})
-convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
+StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
-convert(::Type{StepRange{T1,T2}}, r::AbstractRange) where {T1,T2} =
+StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
+StepRange(r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
-convert(::Type{StepRange{T1,T2} where T1}, r::AbstractRange) where {T2} =
-    convert(StepRange{eltype(r),T2}, r)
+(::Type{StepRange{T1,T2} where T1})(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 
 promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
     el_same(promote_type(T1,T2),
             StepRangeLen{T1,promote_type(R1,R2),promote_type(S1,S2)},
             StepRangeLen{T2,promote_type(R1,R2),promote_type(S1,S2)})
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
+StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T,R,S} = r
+StepRangeLen{T,R,S}(r::StepRangeLen) where {T,R,S} =
     StepRangeLen{T,R,S}(convert(R, r.ref), convert(S, r.step), length(r), r.offset)
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
+StepRangeLen{T}(r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
 promote_rule(a::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:AbstractRange} =
     promote_rule(a, StepRangeLen{eltype(OR), eltype(OR), eltype(OR)})
-convert(::Type{StepRangeLen{T,R,S}}, r::AbstractRange) where {T,R,S} =
+StepRangeLen{T,R,S}(r::AbstractRange) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
-convert(::Type{StepRangeLen{T}}, r::AbstractRange) where {T} =
+StepRangeLen{T}(r::AbstractRange) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
-convert(::Type{StepRangeLen}, r::AbstractRange) = convert(StepRangeLen{eltype(r)}, r)
+StepRangeLen(r::AbstractRange) = StepRangeLen{eltype(r)}(r)
 
 promote_rule(a::Type{LinSpace{T1}}, b::Type{LinSpace{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
-convert(::Type{LinSpace{T}}, r::AbstractRange) where {T} =
-    LinSpace{T}(first(r), last(r), length(r))
-convert(::Type{LinSpace}, r::AbstractRange{T}) where {T} =
-    convert(LinSpace{T}, r)
+LinSpace{T}(r::LinSpace{T}) where {T} = r
+LinSpace{T}(r::AbstractRange) where {T} = LinSpace{T}(first(r), last(r), length(r))
+LinSpace(r::AbstractRange{T}) where {T} = LinSpace{T}(r)
 
 promote_rule(a::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
     promote_rule(a, LinSpace{eltype(OR)})
@@ -894,7 +884,7 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-convert(::Type{Array{T,1}}, r::AbstractRange{T}) where {T} = vcat(r)
+Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))

@@ -10,8 +10,8 @@ function parserow(stream::IO)
         line = readline(stream)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
-        isempty(row[1]) && shift!(row)
-        map!(x -> strip(replace(x, "\\|", "|")), row, row)
+        isempty(row[1]) && popfirst!(row)
+        map!(x -> strip(replace(x, "\\|" => "|")), row, row)
         isempty(row[end]) && pop!(row)
         return row
     end
@@ -88,7 +88,7 @@ padding(width, twidth, a) =
 
 function padcells!(rows, align; len = length, min = 0)
     widths = colwidths(rows, len = len, min = min)
-    for i = 1:length(rows), j = indices(rows[1],1)
+    for i = 1:length(rows), j = axes(rows[1],1)
         cell = rows[i][j]
         lpad, rpad = padding(len(cell), widths[j], align[j])
         rows[i][j] = " "^lpad * cell * " "^rpad
@@ -104,16 +104,16 @@ _dash(width, align) =
 
 function plain(io::IO, md::Table)
     cells = mapmap(md.rows) do each
-        replace(plaininline(each), "|", "\\|")
+        replace(plaininline(each), "|" => "\\|")
     end
     padcells!(cells, md.align, len = length, min = 3)
-    for i = indices(cells,1)
+    for i = axes(cells,1)
         print(io, "| ")
         join(io, cells[i], " | ")
         println(io, " |")
         if i == 1
             print(io, "|")
-            join(io, [_dash(length(cells[i][j]), md.align[j]) for j = indices(cells[1],1)], "|")
+            join(io, [_dash(length(cells[i][j]), md.align[j]) for j = axes(cells[1],1)], "|")
             println(io, "|")
         end
     end
@@ -138,7 +138,7 @@ function rst(io::IO, md::Table)
 end
 
 function term(io::IO, md::Table, columns)
-    cells = mapmap(terminline, md.rows)
+    cells = mapmap(x -> terminline_string(io, x), md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
         join(io, cells[i], " ")
@@ -161,7 +161,7 @@ function latex(io::IO, md::Table)
             end
             println(io, " \\\\")
             if i == 1
-                println("\\hline")
+                println(io, "\\hline")
             end
         end
     end

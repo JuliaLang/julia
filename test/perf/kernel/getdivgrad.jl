@@ -17,7 +17,7 @@ end
 #----------------- 1D finite difference on staggered grid
 function ddx(n)
 # generate 1D derivatives
-    return d = spdiags(ones(n)*[-1, 1]',[0,1],n,n+1)
+    return d = spdiags(repmat([-1. 1.], n),[0,1],n,n+1)
 end
 
 #------------- Build a diagonal matrix

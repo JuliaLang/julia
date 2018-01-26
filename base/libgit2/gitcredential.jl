@@ -5,56 +5,42 @@ Git credential information used in communication with git credential helpers. Th
 named using the [input/output key specification](https://git-scm.com/docs/git-credential#IOFMT).
 """
 mutable struct GitCredential
-    protocol::Nullable{String}
-    host::Nullable{String}
-    path::Nullable{String}
-    username::Nullable{String}
-    password::Nullable{String}
+    protocol::Union{String, Nothing}
+    host::Union{String, Nothing}
+    path::Union{String, Nothing}
+    username::Union{String, Nothing}
+    password::Union{String, Nothing}
     use_http_path::Bool
 
     function GitCredential(
-            protocol::Nullable{<:AbstractString},
-            host::Nullable{<:AbstractString},
-            path::Nullable{<:AbstractString},
-            username::Nullable{<:AbstractString},
-            password::Nullable{<:AbstractString})
+            protocol::Union{AbstractString, Nothing}=nothing,
+            host::Union{AbstractString, Nothing}=nothing,
+            path::Union{AbstractString, Nothing}=nothing,
+            username::Union{AbstractString, Nothing}=nothing,
+            password::Union{AbstractString, Nothing}=nothing)
         c = new(protocol, host, path, username, password, true)
         finalizer(securezero!, c)
         return c
     end
 end
 
-function GitCredential(
-        protocol::Union{AbstractString,Void}=nothing,
-        host::Union{AbstractString,Void}=nothing,
-        path::Union{AbstractString,Void}=nothing,
-        username::Union{AbstractString,Void}=nothing,
-        password::Union{AbstractString,Void}=nothing)
-    GitCredential(
-        Nullable{String}(protocol),
-        Nullable{String}(host),
-        Nullable{String}(path),
-        Nullable{String}(username),
-        Nullable{String}(password))
-end
-
 function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-function GitCredential(cred::UserPasswordCredentials, url::AbstractString)
+function GitCredential(cred::UserPasswordCredential, url::AbstractString)
     git_cred = parse(GitCredential, url)
-    git_cred.username = Nullable{String}(deepcopy(cred.user))
-    git_cred.password = Nullable{String}(deepcopy(cred.pass))
+    git_cred.username = deepcopy(cred.user)
+    git_cred.password = deepcopy(cred.pass)
     return git_cred
 end
 
 function securezero!(cred::GitCredential)
-    !isnull(cred.protocol) && securezero!(unsafe_get(cred.protocol))
-    !isnull(cred.host) && securezero!(unsafe_get(cred.host))
-    !isnull(cred.path) && securezero!(unsafe_get(cred.path))
-    !isnull(cred.username) && securezero!(unsafe_get(cred.username))
-    !isnull(cred.password) && securezero!(unsafe_get(cred.password))
+    cred.protocol !== nothing && securezero!(cred.protocol)
+    cred.host !== nothing && securezero!(cred.host)
+    cred.path !== nothing && securezero!(cred.path)
+    cred.username !== nothing && securezero!(cred.username)
+    cred.password !== nothing && securezero!(cred.password)
     return cred
 end
 
@@ -79,14 +65,14 @@ function ismatch(url::AbstractString, git_cred::GitCredential)
     m === nothing && error("Unable to parse URL")
 
     # Note: missing URL groups match anything
-    (m[:scheme] === nothing ? true : isequal(Nullable(m[:scheme]), git_cred.protocol)) &&
-    (m[:host] === nothing ? true : isequal(Nullable(m[:host]), git_cred.host)) &&
-    (m[:path] === nothing ? true : isequal(Nullable(m[:path]), git_cred.path)) &&
-    (m[:user] === nothing ? true : isequal(Nullable(m[:user]), git_cred.username))
+    (m[:scheme] === nothing ? true : m[:scheme] == git_cred.protocol) &&
+    (m[:host] === nothing ? true : m[:host] == git_cred.host) &&
+    (m[:path] === nothing ? true : m[:path] == git_cred.path) &&
+    (m[:user] === nothing ? true : m[:user] == git_cred.username)
 end
 
 function isfilled(cred::GitCredential)
-    !isnull(cred.username) && !isnull(cred.password)
+    cred.username !== nothing && cred.password !== nothing
 end
 
 function Base.parse(::Type{GitCredential}, url::AbstractString)
@@ -112,11 +98,11 @@ function Base.copy!(a::GitCredential, b::GitCredential)
 end
 
 function Base.write(io::IO, cred::GitCredential)
-    !isnull(cred.protocol) && println(io, "protocol=", unsafe_get(cred.protocol))
-    !isnull(cred.host) && println(io, "host=", unsafe_get(cred.host))
-    !isnull(cred.path) && cred.use_http_path && println(io, "path=", unsafe_get(cred.path))
-    !isnull(cred.username) && println(io, "username=", unsafe_get(cred.username))
-    !isnull(cred.password) && println(io, "password=", unsafe_get(cred.password))
+    cred.protocol !== nothing && println(io, "protocol=", cred.protocol)
+    cred.host !== nothing && println(io, "host=", cred.host)
+    cred.path !== nothing && cred.use_http_path && println(io, "path=", cred.path)
+    cred.username !== nothing && println(io, "username=", cred.username)
+    cred.password !== nothing && println(io, "password=", cred.password)
     nothing
 end
 
@@ -130,7 +116,7 @@ function Base.read!(io::IO, cred::GitCredential)
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
             copy!(cred, parse(GitCredential, value))
         else
-            setfield!(cred, Symbol(key), Nullable(String(value)))
+            Base.setproperty!(cred, Symbol(key), String(value))
         end
     end
 
@@ -141,7 +127,7 @@ function fill!(cfg::GitConfig, cred::GitCredential)
     cred.use_http_path = use_http_path(cfg, cred)
 
     # When the username is missing default to using the username set in the configuration
-    if isnull(cred.username)
+    if cred.username === nothing
         cred.username = default_username(cfg, cred)
     end
 
@@ -182,17 +168,16 @@ end
 
 function run!(helper::GitCredentialHelper, operation::AbstractString, cred::GitCredential)
     cmd = `$(helper.cmd) $operation`
-    output, input, p = readandwrite(cmd)
+    p = open(cmd, "r+")
 
     # Provide the helper with the credential information we know
-    write(input, cred)
-    write(input, "\n")
-    t = @async close(input)
+    write(p, cred)
+    write(p, "\n")
+    t = @async close(p.in)
 
     # Process the response from the helper
-    Base.read!(output, cred)
-    close(output)
-    wait(t)
+    Base.read!(p, cred)
+    wait(p)
 
     return cred
 end
@@ -237,19 +222,19 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         # credential helpers avoids potential issues with using the wrong credentials or
         # writing credentials to the wrong helper.
         if isempty(value)
-            Base.warn_once("Resetting the helper list is currently unsupported: " *
-                 "ignoring all git credential helpers.")
+            @warn """Resetting the helper list is currently unsupported:
+                     ignoring all git credential helpers""" maxlog=1
             return GitCredentialHelper[]
         end
 
-        push!(helpers, parse(GitCredentialHelper, value))
+        Base.push!(helpers, parse(GitCredentialHelper, value))
     end
 
     return helpers
 end
 
 """
-    default_username(config, git_cred) -> Nullable{String}
+    default_username(config, git_cred) -> Union{String, Nothing}
 
 Return the default username, if any, provided by the `config` which is valid for the
 specified `git_cred`.
@@ -262,10 +247,10 @@ function default_username(cfg::GitConfig, cred::GitCredential)
 
         # Only use configuration settings where the URL applies to the git credential
         ismatch(url, cred) || continue
-        return Nullable{String}(value)
+        return value
     end
 
-    return Nullable{String}()
+    return nothing
 end
 
 function use_http_path(cfg::GitConfig, cred::GitCredential)
@@ -285,10 +270,10 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     return use_path
 end
 
-approve(cfg::GitConfig, cred::AbstractCredentials, url::AbstractString) = nothing
-reject(cfg::GitConfig, cred::AbstractCredentials, url::AbstractString) = nothing
+approve(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
+reject(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
 
-function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractString)
+function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractString)
     git_cred = GitCredential(cred, url)
     git_cred.use_http_path = use_http_path(cfg, git_cred)
 
@@ -297,11 +282,10 @@ function approve(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStr
     end
 
     securezero!(git_cred)
-
     nothing
 end
 
-function reject(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractString)
+function reject(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractString)
     git_cred = GitCredential(cred, url)
     git_cred.use_http_path = use_http_path(cfg, git_cred)
 
@@ -310,7 +294,5 @@ function reject(cfg::GitConfig, cred::UserPasswordCredentials, url::AbstractStri
     end
 
     securezero!(git_cred)
-    securezero!(cred)
-
     nothing
 end

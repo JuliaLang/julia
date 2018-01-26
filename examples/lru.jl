@@ -25,7 +25,7 @@ import Base.haskey, Base.get
 import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
-abstract type LRU{K,V} <: Associative{K,V} end
+abstract type LRU{K,V} <: AbstractDict{K,V} end
 
 # Default cache size
 const __MAXCACHE = 1024
@@ -39,7 +39,7 @@ mutable struct UnboundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
 
-    UnboundedLRU{K,V}() where {K,V} = new(Dict(), similar(Array{CacheItem}(1), 0))
+    UnboundedLRU{K,V}() where {K,V} = new(Dict(), similar(Vector{CacheItem}(uninitialized, 1), 0))
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 
@@ -48,7 +48,7 @@ mutable struct BoundedLRU{K,V} <: LRU{K,V}
     q::Vector{CacheItem}
     maxsize::Int
 
-    BoundedLRU{K,V}(m) where {K,V} = new(Dict(), similar(Array{CacheItem}(1), 0), m)
+    BoundedLRU{K,V}(m) where {K,V} = new(Dict(), similar(Vector{CacheItem}(uninitialized, 1), 0), m)
     BoundedLRU{K,V}() where {K,V} = BoundedLRU(__MAXCACHE)
 end
 BoundedLRU(m) = BoundedLRU{Any, Any}(m)
@@ -91,7 +91,7 @@ function getindex(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     splice!(lru.q, idx)
-    unshift!(lru.q, item)
+    pushfirst!(lru.q, item)
     item.v
 end
 
@@ -105,7 +105,7 @@ function setindex!(lru::LRU, v, key)
         item = CacheItem(key, v)
         lru.ht[key] = item
     end
-    unshift!(lru.q, item)
+    pushfirst!(lru.q, item)
 end
 
 # Eviction

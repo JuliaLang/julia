@@ -107,7 +107,7 @@ end
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
 function r = abs2(z)
-    r = real(z)*real(z) + imag(z)*imag(z)
+    r = real(z)*real(z) + imag(z)*imag(z);
 end
 
 function n = mandel(z)
@@ -228,7 +228,7 @@ end
 function printfd(n)
     f = fopen('/dev/null','w');
     for i = 1:n
-        fprintf(f, '%d %d\n', i, i);
+        fprintf(f, '%d %d\n', i, i + 1);
     end
     fclose(f);
 end

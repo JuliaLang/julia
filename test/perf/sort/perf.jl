@@ -20,7 +20,7 @@ if codespeed
             for s in sorts
                 if s == InsertionSort && size != 2^6; continue; end
                 data = Vector{T}(uninitialized, size)
-                gc()
+                GC.gc()
 
                 ## Random
                 name = "$(typename)_$(size)_$(string(s)[1:end-5])_random"
@@ -45,7 +45,7 @@ else
                 if s == InsertionSort && logsize >=14 continue end #Too slow
                 println(s, s==RadixSort, s, typename, typename==AbstractString, logsize)
                 data = Vector{T}(uninitialized, size)
-                gc()
+                GC.gc()
 
                 ## Random
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_random"
@@ -81,7 +81,7 @@ else
 
                 ## All values equal
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_allequal"
-                data1 = data[ones(Int, size)]
+                data1 = data[fill(1, size)]
                 @timeit(sort!(data1, alg=s), name, "")
 
                 ## QuickSort median killer

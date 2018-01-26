@@ -36,6 +36,9 @@ end
 @test isa(map(Integer, Any[1, 2]), Vector{Int})
 @test isa(map(Integer, Any[]), Vector{Integer})
 
+# issue #25433
+@test @inferred(collect(v for v in [1] if v > 0)) isa Vector{Int}
+
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
@@ -80,7 +83,7 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int}()),           0),
+                 ((i for i = Array{Int,0}(uninitialized)),           0),
                  ((i for i = Vector{Int}(uninitialized, 1)),          1),
                  ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
                  ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
@@ -111,19 +114,19 @@ let gen = (x for x in 1:10)
 end
 
 let gen = (x * y for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test collect(gen) == Vector(1:10) .* Vector(1:10)'
     @test first(gen) == 1
-    @test collect(gen)[1:10] == collect(1:10)
+    @test collect(gen)[1:10] == 1:10
 end
 
 let gen = Base.Generator(+, 1:10, 1:10, 1:10)
     @test first(gen) == 3
-    @test collect(gen) == collect(3:3:30)
+    @test collect(gen) == 3:3:30
 end
 
 let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
     @test collect(gen) == collect(gen2)
-    @test collect(gen) == collect(2:2:10)
+    @test collect(gen) == 2:2:10
 end
 
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),

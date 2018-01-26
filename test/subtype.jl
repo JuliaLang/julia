@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Bottom
+using Base: Bottom
 using Test
+using LinearAlgebra
 
 macro UnionAll(var, expr)
     Expr(:where, esc(expr), esc(var))
@@ -539,7 +540,7 @@ function test_old()
     @test isequal_type(Tuple, Tuple{Vararg})
     #@test (Array{Tuple{Vararg{Any}}} <: Array{NTuple})
     #@test (Array{Tuple{Vararg}} <: Array{NTuple})
-    @test !(Type{Tuple{Void}} <: Tuple{Type{Void}})
+    @test !(Type{Tuple{Nothing}} <: Tuple{Type{Nothing}})
 end
 
 const menagerie =
@@ -638,7 +639,6 @@ macro testintersect(a, b, result)
     else
         cmp = :(==)
     end
-    cmp = esc(cmp)
     a = esc(a)
     b = esc(b)
     result = esc(result)
@@ -729,13 +729,13 @@ function test_intersection()
     @testintersect((@UnionAll T Tuple{Type{Array{T,1}},Array{T,1}}),
                    Tuple{Type{AbstractVector},Vector{Int}}, Bottom)
 
-    @testintersect(Tuple{Type{Vector{Complex128}}, AbstractVector},
+    @testintersect(Tuple{Type{Vector{ComplexF64}}, AbstractVector},
                    (@UnionAll T @UnionAll S @UnionAll N Tuple{Type{Array{T,N}}, Array{S,N}}),
-                   Tuple{Type{Vector{Complex128}},Vector})
+                   Tuple{Type{Vector{ComplexF64}},Vector})
 
-    @testintersect(Tuple{Type{Vector{Complex128}}, AbstractArray},
+    @testintersect(Tuple{Type{Vector{ComplexF64}}, AbstractArray},
                    (@UnionAll T @UnionAll S @UnionAll N Tuple{Type{Array{T,N}}, Array{S,N}}),
-                   Tuple{Type{Vector{Complex128}},Vector})
+                   Tuple{Type{Vector{ComplexF64}},Vector})
 
     @testintersect(Type{Array}, Type{AbstractArray}, Bottom)
 
@@ -902,7 +902,7 @@ function test_intersection()
     @test length(E)==1 && isa(E[1],TypeVar)
 
     @testintersect(Tuple{Dict{Int,Int}, Ref{Pair{K,V}}} where V where K,
-                   Tuple{Associative{Int,Int}, Ref{Pair{T,T}} where T},
+                   Tuple{AbstractDict{Int,Int}, Ref{Pair{T,T}} where T},
                    Tuple{Dict{Int,Int}, Ref{Pair{K,K}}} where K)
 
     # issue #20643
@@ -924,13 +924,13 @@ function test_intersection()
 
     # issue #21118
     A = Tuple{Ref, Vararg{Any}}
-    B = Tuple{Vararg{Union{Z,Ref,Void}}} where Z<:Union{Ref,Void}
+    B = Tuple{Vararg{Union{Z,Ref,Nothing}}} where Z<:Union{Ref,Nothing}
     @test B <: _type_intersect(A, B)
     # TODO: this would be a better version of that test:
     #let T = _type_intersect(A, B)
     #    @test T <: A
     #    @test T <: B
-    #    @test Tuple{Ref, Vararg{Union{Ref,Void}}} <: T
+    #    @test Tuple{Ref, Vararg{Union{Ref,Nothing}}} <: T
     #end
     @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
                    Tuple{Any,Int,Vararg{A}} where A>:Integer,
@@ -1011,9 +1011,9 @@ f18348(::Type{T}, x::T) where {T<:Any} = 2
 @test length(methods(f18348, Tuple{Type{Any},Any})) == 1
 
 # Issue #13165
-@test Symmetric{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
-@test Hermitian{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
-@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinAlg.RealHermSymComplexHerm
+@test Symmetric{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinearAlgebra.RealHermSymComplexHerm
 
 # Issue #12721
 f12721(::T) where {T<:Type{Int}} = true
@@ -1067,7 +1067,7 @@ let a = Tuple{Float64,T7} where T7,
 end
 let a = Tuple{T1,T1} where T1,
     b = Tuple{Val{S2},S6} where S2 where S6
-    @test_broken typeintersect(a, b) == typeintersect(b, a)
+    @test typeintersect(a, b) == typeintersect(b, a)
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6
@@ -1208,8 +1208,8 @@ end
 
 # issue #23908
 @test Array{Union{Int128, Int16, Int32, Int8}, 1} <: Array{Union{Int128, Int32, Int8, _1}, 1} where _1
-let A = Pair{Void, Pair{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Void}},
-    B = Pair{Void, Pair{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, _1}, 1}, Void}} where _1
+let A = Pair{Nothing, Pair{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Nothing}},
+    B = Pair{Nothing, Pair{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, _1}, 1}, Nothing}} where _1
     @test A <: B
     @test !(B <: A)
 end
@@ -1233,8 +1233,8 @@ end
 struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
 @test Tuple{A23764{Int, 1, T} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
-@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
-@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
+@test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+@test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
 
 # issue #24305
 f24305(x) = [g24305(x) g24305(x) g24305(x) g24305(x); g24305(x) g24305(x) 0 0];
@@ -1246,7 +1246,7 @@ f3_24305(x,y,z) = exp(x)+z-exp(y)-3
 Fun_24305(x) = [ f1_24305(x[1],x[2],x[3]); f2_24305(x[1],x[2],x[3]); f3_24305(x[1],x[2],x[3]) ]
 Jac_24305(x) = [ x[2] x[1] -2*x[3] ; x[2]*x[3]-2x[1]  x[1]*x[3]+2x[2]  x[1]*x[2] ; exp(x[1])  -exp(x[2])  1 ]
 
-x_24305 = ones(3)
+x_24305 = fill(1.,3)
 
 for it = 1:5
     h = - \(Jac_24305(x_24305), Fun_24305(x_24305))

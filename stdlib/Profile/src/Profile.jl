@@ -9,6 +9,7 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 using Base: iszero
+using Printf: @sprintf
 
 export @profile
 
@@ -45,7 +46,7 @@ line of code; backtraces generally consist of a long list of instruction pointer
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -76,7 +77,7 @@ end
 
 Clear any existing backtraces from the internal buffer.
 """
-clear() = ccall(:jl_profile_clear_data, Void, ())
+clear() = ccall(:jl_profile_clear_data, Cvoid, ())
 
 const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
 const LineInfoFlatDict = Dict{UInt64, StackFrame}
@@ -272,12 +273,12 @@ Execute the command(s) you want to test (to force JIT-compilation), then call
 [`clear_malloc_data`](@ref). Then execute your command(s) again, quit
 Julia, and examine the resulting `*.mem` files.
 """
-clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
-stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
+stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
@@ -307,9 +308,9 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("""The profile data buffer is full; profiling probably terminated
-                before your program finished. To profile for longer runs, call Profile.init
-                with a larger buffer and/or larger delay.""")
+        @warn """The profile data buffer is full; profiling probably terminated
+                 before your program finished. To profile for longer runs, call
+                 `Profile.init()` with a larger buffer and/or larger delay."""
     end
     return unsafe_wrap(Array, get_data_pointer(), (len,))
 end
@@ -335,8 +336,8 @@ function count_flat(data::Vector{T}) where T<:Unsigned
         end
         linecount[ip] = get(linecount, ip, 0)+1
     end
-    iplist = Vector{T}(0)
-    n = Vector{Int}(0)
+    iplist = Vector{T}()
+    n = Vector{Int}()
     for (k,v) in linecount
         push!(iplist, k)
         push!(n, v)
@@ -429,7 +430,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
         Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
         Base.print(io, lpad(string(li.line), wline, " "), " ")
         fname = string(li.func)
-        if !li.from_c && !isnull(li.linfo)
+        if !li.from_c && li.linfo !== nothing
             fname = sprint(show_spec_linfo, li)
         end
         Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
@@ -441,7 +442,7 @@ end
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
 function tree_aggregate(data::Vector{UInt64})
-    iz = find(iszero, data)  # find the breaks between backtraces
+    iz = findall(iszero, data)  # find the breaks between backtraces
     treecount = Dict{Vector{UInt64},Int}()
     istart = 1 + btskip
     for iend in iz
@@ -449,8 +450,8 @@ function tree_aggregate(data::Vector{UInt64})
         treecount[tmp] = get(treecount, tmp, 0) + 1
         istart = iend + 1 + btskip
     end
-    bt = Vector{Vector{UInt64}}(0)
-    counts = Vector{Int}(0)
+    bt = Vector{Vector{UInt64}}()
+    counts = Vector{Int}()
     for (k, v) in treecount
         if !isempty(k)
             push!(bt, k)
@@ -469,7 +470,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols - nindent - ndigcounts - ndigline - 5
     widthfile = floor(Integer, 0.4ntext)
     widthfunc = floor(Integer, 0.6ntext)
-    strs = Vector{String}(length(lilist))
+    strs = Vector{String}(uninitialized, length(lilist))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -488,11 +489,11 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     rpad(string(counts[i]), ndigcounts, " "),
                     " ",
                     "unknown function (pointer: 0x",
-                    hex(li.pointer,2*sizeof(Ptr{Void})),
+                    hex(li.pointer,2*sizeof(Ptr{Cvoid})),
                     ")")
             else
                 fname = string(li.func)
-                if !li.from_c && !isnull(li.linfo)
+                if !li.from_c && li.linfo !== nothing
                     fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
@@ -533,9 +534,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts
         dlen = length(d)
-        lilist = Vector{StackFrame}(dlen)
-        group = Vector{Vector{Int}}(dlen)
-        n = Vector{Int}(dlen)
+        lilist = Vector{StackFrame}(uninitialized, dlen)
+        group = Vector{Vector{Int}}(uninitialized, dlen)
+        n = Vector{Int}(uninitialized, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = key
@@ -556,9 +557,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Vector{StackFrame}(dlen)
-        group = Vector{Vector{Int}}(dlen)
-        n = Vector{Int}(dlen)
+        lilist = Vector{StackFrame}(uninitialized, dlen)
+        group = Vector{Vector{Int}}(uninitialized, dlen)
+        n = Vector{Int}(uninitialized, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = lidict[key]
@@ -645,14 +646,14 @@ function rtruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string("...", str[chr2ind(str, length(str)-w+4):end])
+        return string("...", str[prevind(str, end, w-4):end])
     end
 end
 function ltruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string(str[1:chr2ind(str,w-4)], "...")
+        return string(str[1:nextind(str, 1, w-4)], "...")
     end
 end
 
@@ -661,7 +662,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Vector{String}(length(lilist))
+    comb = Vector{String}(uninitialized, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN
@@ -673,10 +674,10 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(comb)
 end
 
-warning_empty() = warn("""
+warning_empty() = @warn """
             There were no samples collected. Run your program longer (perhaps by
             running it multiple times), or adjust the delay between samples with
-            Profile.init().""")
+            `Profile.init()`."""
 
 function purgeC(data::Vector{UInt64}, lidict::LineInfoFlatDict)
     keep = Bool[d == 0 || lidict[d].from_c == false for d in data]

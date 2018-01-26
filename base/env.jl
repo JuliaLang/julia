@@ -63,7 +63,7 @@ end # os test
 
 A singleton of this type provides a hash table interface to environment variables.
 """
-struct EnvDict <: Associative{String,String}; end
+struct EnvDict <: AbstractDict{String,String}; end
 
 """
     ENV
@@ -73,17 +73,15 @@ variables.
 """
 const ENV = EnvDict()
 
-similar(::EnvDict) = Dict{String,String}()
-
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
-in(k::AbstractString, ::KeyIterator{EnvDict}) = _hasenv(k)
+in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
-push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)
+push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.first)
 
 if Sys.iswindows()
     start(hash::EnvDict) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
@@ -99,7 +97,7 @@ if Sys.iswindows()
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
         buf = Vector{UInt16}(uninitialized, len)
-        @gc_preserve buf unsafe_copy!(pointer(buf), pos, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
         if m === nothing

@@ -5,7 +5,7 @@ using Test
 
 if Sys.iswindows()
     # libjulia needs to be in the same directory as the embedding executable or in path
-    ENV["PATH"] = string(JULIA_HOME, ";", ENV["PATH"])
+    ENV["PATH"] = string(Sys.BINDIR, ";", ENV["PATH"])
 end
 
 @test length(ARGS) == 1

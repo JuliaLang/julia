@@ -62,7 +62,7 @@ include("bindings.jl")
 
 import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
-import Base: Callable
+import Base: Callable, with_output_color
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -72,11 +72,11 @@ export doc
 const modules = Module[]
 const META    = gensym(:meta)
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META) : ObjectIdDict()
+meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        eval(m, :(const $META = $(ObjectIdDict())))
+        eval(m, :(const $META = $(IdDict())))
         push!(modules, m)
     end
     nothing
@@ -142,7 +142,7 @@ linenumber, source code, and fielddocs.
 """
 mutable struct DocStr
     text   :: Core.SimpleVector
-    object :: Nullable
+    object :: Any
     data   :: Dict{Symbol, Any}
 end
 
@@ -160,9 +160,9 @@ function docstr(binding::Binding, @nospecialize typesig = Union{})
 end
 docstr(object, data = Dict()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            Nullable(),       data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), Nullable(),       data)
-_docstr(object,                 data) = DocStr(Core.svec(),    Nullable(object), data)
+_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
 
 _docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
 
@@ -179,18 +179,18 @@ function formatdoc(d::DocStr)
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.parse(seekstart(buffer))
+    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
 function parsedoc(d::DocStr)
-    if isnull(d.object)
+    if d.object === nothing
         md = formatdoc(d)
         md.meta[:module] = d.data[:module]
         md.meta[:path]   = d.data[:path]
-        d.object = Nullable(md)
+        d.object = md
     end
-    get(d.object)
+    d.object
 end
 
 """
@@ -200,7 +200,7 @@ Stores a collection of docstrings for related objects, ie. a `Function`/`DataTyp
 associated `Method` objects.
 
 Each documented object in a `MultiDoc` is referred to by it's signature which is represented
-by a `Union` of `Tuple` types. For example the following `Method` definition
+by a `Union` of `Tuple` types. For example, the following `Method` definition
 
     f(x, y) = ...
 
@@ -216,9 +216,9 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::ObjectIdDict
+    docs::IdDict
 
-    MultiDoc() = new(Type[], ObjectIdDict())
+    MultiDoc() = new(Type[], IdDict())
 end
 
 # Docstring registration.
@@ -236,7 +236,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
+        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -457,19 +457,22 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(x) = nameof(x, isexpr(x, :macro))
+namify(x) = astname(x, isexpr(x, :macro))
 
-function nameof(x::Expr, ismacro)
+function astname(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
+    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
+    elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
+        return astname(x.args[1].args[1].args[2], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
-        nameof(x.args[n], ismacro)
+        astname(x.args[n], ismacro)
     end
 end
-nameof(q::QuoteNode, ismacro) = nameof(q.value, ismacro)
-nameof(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
-nameof(other, ismacro)        = other
+astname(q::QuoteNode, ismacro) = astname(q.value, ismacro)
+astname(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
+astname(other, ismacro)        = other
 
 macroname(s::Symbol) = Symbol('@', s)
 macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))
@@ -641,7 +644,7 @@ finddoc(λ, def) = false
 # Predicates and helpers for `docm` expression selection:
 
 const FUNC_HEADS    = [:function, :macro, :(=)]
-const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
+const BINDING_HEADS = [:const, :global, :(=)]
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&
@@ -712,7 +715,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
-    # retrieved from the module's metadata `ObjectIdDict` without a reference to the string.
+    # retrieved from the module's metadata `IdDict` without a reference to the string.
     docerror(ex)
 end
 

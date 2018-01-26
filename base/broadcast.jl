@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_op, hasvalue, isoperator
+            isoperator
 import Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
@@ -45,7 +45,6 @@ Naturally you can specialize this for your particular `C` (e.g., `MyContainer`).
 struct Style{T} <: BroadcastStyle end
 
 BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
-BroadcastStyle(::Type{<:Nullable}) = Style{Nullable}()
 
 struct Unknown <: BroadcastStyle end
 BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
@@ -142,7 +141,6 @@ BroadcastStyle(::BroadcastStyle, ::BroadcastStyle) = Unknown()
 BroadcastStyle(::Unknown, ::Unknown) = Unknown()
 BroadcastStyle(::S, ::Unknown) where S<:BroadcastStyle = S()
 # Precedence rules
-BroadcastStyle(::Style{Nullable}, ::Scalar)       = Style{Nullable}()
 BroadcastStyle(::Style{Tuple}, ::Scalar)          = Style{Tuple}()
 BroadcastStyle(a::AbstractArrayStyle{0}, ::Style{Tuple}) = typeof(a)(Val(1))
 BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
@@ -223,10 +221,9 @@ broadcast_indices() = ()
 broadcast_indices(::Type{T}) where T = ()
 broadcast_indices(A) = broadcast_indices(combine_styles(A), A)
 broadcast_indices(::Scalar, A) = ()
-broadcast_indices(::Style{Nullable}, A) = ()
 broadcast_indices(::Style{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::DefaultArrayStyle{0}, A::Ref) = ()
-broadcast_indices(::AbstractArrayStyle, A) = Base.indices(A)
+broadcast_indices(::AbstractArrayStyle, A) = Base.axes(A)
 """
     Base.broadcast_indices(::SrcStyle, A)
 
@@ -242,12 +239,6 @@ broadcast_indices
 # special cases defined for performance
 broadcast(f, x::Number...) = f(x...)
 @inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
-@inline broadcast!(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N}) where {T,S,N} =
-    Base.indices(x) == Base.indices(y) ? copy!(x, y) : _broadcast!(identity, x, y)
-
-# special cases for "X .= ..." (broadcast!) assignments
-broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
 
 ## logic for deciding the BroadcastStyle
 # Dimensionality: computing max(M,N) in the type domain so we preserve inferrability
@@ -264,7 +255,7 @@ longest(::Tuple{}, ::Tuple{}) = ()
 # combine_styles operates on values (arbitrarily many)
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
-combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
+@inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 # result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
 result_style(s::BroadcastStyle) = s
@@ -349,7 +340,7 @@ end
 # newindexer(shape, A) generates `keep` and `Idefault` (for use by
 # `newindex` above) for a particular array `A`, given the
 # broadcast indices `shape`
-# `keep` is equivalent to map(==, indices(A), shape) (but see #17126)
+# `keep` is equivalent to map(==, axes(A), shape) (but see #17126)
 @inline newindexer(shape, A) = shapeindexer(shape, broadcast_indices(A))
 @inline shapeindexer(shape, indsA::Tuple{}) = (), ()
 @inline function shapeindexer(shape, indsA::Tuple)
@@ -375,7 +366,7 @@ end
 Base.@propagate_inbounds _broadcast_getindex(::Type{T}, I) where T = T
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(combine_styles(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::DefaultArrayStyle{0}, A::Ref, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(::Union{Unknown,Scalar,Style{Nullable}}, A, I) = A
+Base.@propagate_inbounds _broadcast_getindex(::Union{Unknown,Scalar}, A, I) = A
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
 
@@ -400,6 +391,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) =
             result = @ncall $nargs f val
             @inbounds B[I] = result
         end
+        return B
     end
 end
 
@@ -436,6 +428,7 @@ end
             @inbounds C[ind:bitcache_size] = false
             dumpbitcache(Bc, cind, C)
         end
+        return B
     end
 end
 
@@ -448,16 +441,43 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline broadcast!(f, C::AbstractArray, A, Bs::Vararg{Any,N}) where {N} =
-    _broadcast!(f, C, A, Bs...)
+@inline broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, combine_styles(As...), As...)
+@inline broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
 
-# This indirection allows size-dependent implementations (e.g., see the copying `identity`
-# specialization above)
+# Default behavior (separated out so that it can be called by users who want to extend broadcast!).
+@inline function broadcast!(f, dest, ::Nothing, As::Vararg{Any, N}) where N
+    if f isa typeof(identity) && N == 1
+        A = As[1]
+        if A isa AbstractArray && Base.axes(dest) == Base.axes(A)
+            return copyto!(dest, A)
+        end
+    end
+    _broadcast!(f, dest, As...)
+    return dest
+end
+
+# Optimization for the all-Scalar case.
+@inline function broadcast!(f, dest, ::Scalar, As::Vararg{Any, N}) where N
+    if dest isa AbstractArray
+        if f isa typeof(identity) && N == 1
+            return fill!(dest, As[1])
+        else
+            @inbounds for I in eachindex(dest)
+                dest[I] = f(As...)
+            end
+            return dest
+        end
+    end
+    _broadcast!(f, dest, As...)
+    return dest
+end
+
+# This indirection allows size-dependent implementations.
 @inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
-    iter = CartesianRange(shape)
+    iter = CartesianIndices(shape)
     _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
     return C
 end
@@ -510,28 +530,20 @@ maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
 # )::_broadcast_getindex_eltype(A)
 _broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(combine_styles(A), A)
 _broadcast_getindex_eltype(::Scalar, ::Type{T}) where T = Type{T}
-_broadcast_getindex_eltype(::Union{Unknown,Scalar,Style{Nullable}}, A) = typeof(A)
+_broadcast_getindex_eltype(::Union{Unknown,Scalar}, A) = typeof(A)
 _broadcast_getindex_eltype(::BroadcastStyle, A) = eltype(A)  # Tuple, Array, etc.
-
-# An element type satisfying for all A:
-# unsafe_get(A)::unsafe_get_eltype(A)
-_unsafe_get_eltype(x::Nullable) = eltype(x)
-_unsafe_get_eltype(::Type{T}) where T = Type{T}
-_unsafe_get_eltype(x) = typeof(x)
 
 # Inferred eltype of result of broadcast(f, xs...)
 combine_eltypes(f, A, As...) =
     Base._return_type(f, maptoTuple(_broadcast_getindex_eltype, A, As...))
-_nullable_eltype(f, A, As...) =
-    Base._return_type(f, maptoTuple(_unsafe_get_eltype, A, As...))
 
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref`s, nullables, and/or scalars `As` to a
+Broadcasts the arrays, tuples, `Ref`s and/or scalars `As` to a
 container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`,
-or `Nullable` is considered a scalar. The resulting container is established by
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`
+is considered a scalar. The resulting container is established by
 the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
@@ -539,10 +551,6 @@ the following rules:
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
    and tuples as 1-dimensional arrays.
-
-The following additional rule applies to `Nullable` arguments: If there is at
-least one `Nullable`, and all the arguments are scalars or `Nullable`, it
-returns a `Nullable` treating `Nullable`s as "containers".
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -602,27 +610,19 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
  "three: 3"
  "four: 4"
 
-julia> Nullable("X") .* "Y"
-Nullable{String}("XY")
-
-julia> broadcast(/, 1.0, Nullable(2.0))
-Nullable{Float64}(0.5)
-
-julia> (1 + im) ./ Nullable{Int}()
-Nullable{Complex{Float64}}()
 ```
 """
 @inline broadcast(f, A, Bs...) =
     broadcast(f, combine_styles(A, Bs...), nothing, nothing, A, Bs...)
 
-@inline broadcast(f, s::BroadcastStyle, ::Void, ::Void, A, Bs...) =
+@inline broadcast(f, s::BroadcastStyle, ::Nothing, ::Nothing, A, Bs...) =
     broadcast(f, s, combine_eltypes(f, A, Bs...), combine_indices(A, Bs...),
               A, Bs...)
 
 const NonleafHandlingTypes = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,MatrixStyle}
 
 @inline function broadcast(f, s::NonleafHandlingTypes, ::Type{ElType}, inds::Indices, As...) where ElType
-    if !Base._isleaftype(ElType)
+    if !Base.isconcretetype(ElType)
         return broadcast_nonleaf(f, s, ElType, inds, As...)
     end
     dest = broadcast_similar(f, s, ElType, inds, As...)
@@ -639,7 +639,7 @@ end
 # accommodate later values.
 function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::Indices, As...) where ElType
     nargs = length(As)
-    iter = CartesianRange(shape)
+    iter = CartesianIndices(shape)
     if isempty(iter)
         return Base.similar(Array{ElType}, shape)
     end
@@ -653,27 +653,12 @@ function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::In
         dest = Base.similar(Array{typeof(val)}, shape)
     end
     dest[I] = val
-    return _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
+    _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
 end
 
-@inline function broadcast(f, ::Style{Nullable}, ::Void, ::Void, a...)
-    nonnull = all(hasvalue, a)
-    S = _nullable_eltype(f, a...)
-    if Base._isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
-                                                         a...).types...)
-        Nullable{S}(f(map(unsafe_get, a)...), nonnull)
-    else
-        if nonnull
-            Nullable(f(map(unsafe_get, a)...))
-        else
-            Nullable{nullable_returntype(S)}()
-        end
-    end
-end
+broadcast(f, ::Union{Scalar,Unknown}, ::Nothing, ::Nothing, a...) = f(a...)
 
-broadcast(f, ::Union{Scalar,Unknown}, ::Void, ::Void, a...) = f(a...)
-
-@inline broadcast(f, ::Style{Tuple}, ::Void, ::Void, A, Bs...) =
+@inline broadcast(f, ::Style{Tuple}, ::Nothing, ::Nothing, A, Bs...) =
     tuplebroadcast(f, longest_tuple(A, Bs...), A, Bs...)
 @inline tuplebroadcast(f, ::NTuple{N,Any}, As...) where {N} =
     ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val(N))
@@ -682,6 +667,7 @@ broadcast(f, ::Union{Scalar,Unknown}, ::Void, ::Void, a...) = f(a...)
 longest_tuple(A::Tuple, B::Tuple, Bs...) = longest_tuple(_longest_tuple(A, B), Bs...)
 longest_tuple(A, B::Tuple, Bs...) = longest_tuple(B, Bs...)
 longest_tuple(A::Tuple, B, Bs...) = longest_tuple(A, Bs...)
+longest_tuple(A, B, Bs...) = longest_tuple(Bs...)
 longest_tuple(A::Tuple) = A
 # Support only 1-tuples and N-tuples where there are no conflicts in N
 _longest_tuple(A::Tuple{Any}, B::Tuple{Any}) = A
@@ -761,9 +747,9 @@ broadcast_getindex(src::AbstractArray, I::AbstractArray...) =
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
         @nexprs $N d->(I_d = I[d])
-        check_broadcast_indices(Base.indices(dest), $(Isplat...))  # unnecessary if this function is never called directly
+        check_broadcast_indices(Base.axes(dest), $(Isplat...))  # unnecessary if this function is never called directly
         checkbounds(src, $(Isplat...))
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.indices(I_k, d) == OneTo(1)))
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == OneTo(1)))
         @nloops $N i dest d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
             @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
             @inbounds (@nref $N dest i) = (@nref $N src J)
@@ -794,7 +780,7 @@ See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
         checkbounds(A, $(Isplat...))
         shape = combine_indices($(Isplat...))
         @nextract $N shape d->(length(shape) < d ? OneTo(1) : shape[d])
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.indices(I_k, d) == 1:1))
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == 1:1))
         if !isa(x, AbstractArray)
             xA = convert(eltype(A), x)
             @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin

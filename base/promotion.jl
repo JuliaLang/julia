@@ -346,23 +346,41 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_inline_meta; T)
 
-if isdefined(Core, :Inference)
-    const _return_type = Core.Inference.return_type
+if isdefined(Core, :Compiler)
+    const _return_type = Core.Compiler.return_type
 else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+"""
+    promote_op(f, argtypes...)
+
+Guess what an appropriate container eltype would be for storing results of
+`f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
+
+!!! warning
+    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
+    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
+    should _not_ be used e.g. in the preallocation of an output array.
+
+!!! warning
+    Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
+    the container eltype on the type of the actual elements. Only in the absence of any
+    elements (for an empty result container), it may be unavoidable to call `promote_op`.
+"""
 promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(S)})
-    _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    _isleaftype(R) && _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(R), _default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(R, S, T)
 end
 

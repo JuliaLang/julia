@@ -158,16 +158,18 @@ Under the name `f`, the function does not support infix notation, however.
 
 A few special expressions correspond to calls to functions with non-obvious names. These are:
 
-| Expression        | Calls                  |
-|:----------------- |:---------------------- |
-| `[A B C ...]`     | [`hcat`](@ref)       |
-| `[A; B; C; ...]`  | [`vcat`](@ref)       |
-| `[A B; C D; ...]` | [`hvcat`](@ref)      |
-| `A'`              | [`adjoint`](@ref) |
-| `A.'`             | [`transpose`](@ref)  |
-| `1:n`             | [`colon`](@ref)      |
-| `A[i]`            | [`getindex`](@ref)   |
-| `A[i]=x`          | [`setindex!`](@ref)  |
+| Expression        | Calls                   |
+|:----------------- |:----------------------- |
+| `[A B C ...]`     | [`hcat`](@ref)          |
+| `[A; B; C; ...]`  | [`vcat`](@ref)          |
+| `[A B; C D; ...]` | [`hvcat`](@ref)         |
+| `A'`              | [`adjoint`](@ref)       |
+| `A.'`             | [`transpose`](@ref)     |
+| `1:n`             | [`colon`](@ref)         |
+| `A[i]`            | [`getindex`](@ref)      |
+| `A[i] = x`        | [`setindex!`](@ref)     |
+| `A.n`             | [`getproperty`](@ref Base.getproperty) |
+| `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 
@@ -445,12 +447,12 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base)`](@ref)
+be passed explicitly in every call. For example, the library function [`parse(T, num, base = base)`](@ref)
 interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
 can be expressed concisely as:
 
 ```julia
-function parse(T, num, base=10)
+function parse(T, num; base = 10)
     ###
 end
 ```
@@ -459,13 +461,13 @@ With this definition, the function can be called with either two or three argume
 is automatically passed when a third argument is not specified:
 
 ```jldoctest
-julia> parse(Int,"12",10)
+julia> parse(Int, "12", base = 10)
 12
 
-julia> parse(Int,"12",3)
+julia> parse(Int, "12", base = 3)
 5
 
-julia> parse(Int,"12")
+julia> parse(Int, "12")
 12
 ```
 
@@ -517,14 +519,12 @@ function f(x; y=0, kwargs...)
 end
 ```
 
-Inside `f`, `kwargs` will be a collection of `(key,value)` tuples, where each `key` is a symbol.
-Such collections can be passed as keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
-Dictionaries can also be used for this purpose.
+Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
-One can also pass `(key,value)` tuples, or any iterable expression (such as a `=>` pair) that
-can be assigned to such a tuple, explicitly after a semicolon. For example, `plot(x, y; (:width,2))`
-and `plot(x, y; :width => 2)` are equivalent to `plot(x, y, width=2)`. This is useful in situations
-where the keyword name is computed at runtime.
+One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
+is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
+at runtime.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure

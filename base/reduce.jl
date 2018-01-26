@@ -12,17 +12,25 @@ else
     const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-# Certain reductions like sum and prod may wish to promote the items being reduced over to
-# an appropriate size. Note we need x + zero(x) because some types like Bool have their sum
-# lie in a larger type.
-promote_sys_size(T::Type) = T
-promote_sys_size(::Type{<:SmallSigned}) = Int
-promote_sys_size(::Type{<:SmallUnsigned}) = UInt
+"""
+    Base.add_sum(x,y)
 
-promote_sys_size_add(x) = convert(promote_sys_size(typeof(x + zero(x))), x)
-promote_sys_size_mul(x) = convert(promote_sys_size(typeof(x * one(x))), x)
-const _PromoteSysSizeFunction = Union{typeof(promote_sys_size_add),
-                                      typeof(promote_sys_size_mul)}
+The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+add_sum(x,y) = x + y
+add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+
+"""
+    Base.mul_prod(x,y)
+
+The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+mul_prod(x,y) = x * y
+mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
@@ -61,10 +69,10 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
-        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = next(itr, i)
-    v0 = f(x)
+    v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
@@ -75,8 +83,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
 ```jldoctest
-julia> foldl(-, 1, 2:5)
--13
+julia> foldl(=>, 0, 1:4)
+(((0=>1)=>2)=>3) => 4
 ```
 """
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
@@ -88,8 +96,8 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldl(-, 2:5)
--10
+julia> foldl(=>, 1:4)
+((1=>2)=>3) => 4
 ```
 """
 foldl(op, itr) = mapfoldl(identity, op, itr)
@@ -131,9 +139,9 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldr(f, op, itr)
     i = endof(itr)
     if isempty(itr)
-        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
+    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
 end
 
 """
@@ -143,8 +151,8 @@ Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be use
 exactly once.
 
 ```jldoctest
-julia> foldr(-, 1, 2:5)
--1
+julia> foldr(=>, 0, 1:4)
+1 => (2=>(3=>(4=>0)))
 ```
 """
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
@@ -156,8 +164,8 @@ Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In gener
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldr(-, 2:5)
--2
+julia> foldr(=>, 1:4)
+1 => (2=>(3=>4))
 ```
 """
 foldr(op, itr) = mapfoldr(identity, op, itr)
@@ -174,7 +182,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 @noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
-        return f(a1)
+        return mapreduce_first(f, op, a1)
     elseif ifirst + blksize > ilast
         # sequential portion
         @inbounds a1 = A[ifirst]
@@ -238,33 +246,87 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+
+"""
+    Base.reduce_empty(op, T)
+
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or [`foldr`](@ref)
+with reduction `op` over an empty array with element type of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
 reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(*), ::Type{Char}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
+reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+
+"""
+    Base.mapreduce_empty(f, op, T)
+
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
+of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
 mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(f::_PromoteSysSizeFunction, op, T) =
-    f(mapreduce_empty(identity, op, T))
-mapreduce_empty(::typeof(abs), ::typeof(+), T) = abs(zero(T))
-mapreduce_empty(::typeof(abs2), ::typeof(+), T) = abs2(zero(T))
-mapreduce_empty(::typeof(abs), ::Union{typeof(scalarmax), typeof(max)}, T) =
-    abs(zero(T))
-mapreduce_empty(::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) =
-    abs2(zero(T))
+mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-# Allow mapreduce_empty to “see through” promote_sys_size
-let ComposedFunction = typename(typeof(identity ∘ identity)).wrapper
-    global mapreduce_empty(f::ComposedFunction{<:_PromoteSysSizeFunction}, op, T) =
-        f.f(mapreduce_empty(f.g, op, T))
-end
+mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
 mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
 mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
 mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+
+# handling of single-element iterators
+"""
+    Base.reduce_first(op, x)
+
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
+[`foldr`](@ref) with reduction `op` over an iterator which contains a single element
+`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+may call `op(reduce_first(op, x), y)`.
+
+The default is `x` for most types. The main purpose is to ensure type stability, so
+additional methods should only be defined for cases where `op` gives a result with
+different types than its inputs.
+"""
+reduce_first(op, x) = x
+reduce_first(::typeof(+), x::Bool) = Int(x)
+reduce_first(::typeof(*), x::Char) = string(x)
+
+reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
+reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
+reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+
+"""
+    Base.mapreduce_first(f, op, x)
+
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
+single element `x`. This value may also used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+
+The default is `reduce_first(op, f(x))`.
+"""
+mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -275,7 +337,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
         return mapreduce_empty(f, op, T)
     elseif n == 1
         @inbounds a1 = A[inds[1]]
-        return f(a1)
+        return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = inds[1]
         @inbounds a1 = A[i]
@@ -294,7 +356,7 @@ end
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
-mapreduce(f, op, a::Number) = f(a)
+mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
 """
     reduce(op, v0, itr)
@@ -372,7 +434,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f::Callable, a) = mapreduce(promote_sys_size_add ∘ f, +, a)
+sum(f, a) = mapreduce(f, add_sum, a)
 
 """
     sum(itr)
@@ -388,40 +450,8 @@ julia> sum(1:20)
 210
 ```
 """
-sum(a) = mapreduce(promote_sys_size_add, +, a)
+sum(a) = sum(identity, a)
 sum(a::AbstractArray{Bool}) = count(a)
-
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-
-"""
-    sum_kbn(A)
-
-Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
-summation algorithm for additional accuracy.
-"""
-function sum_kbn(A)
-    T = @default_eltype(typeof(A))
-    c = promote_sys_size_add(zero(T)::T)
-    i = start(A)
-    if done(A, i)
-        return c
-    end
-    Ai, i = next(A, i)
-    s = Ai - c
-    while !(done(A, i))
-        Ai, i = next(A, i)
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c -= ((s-t) + Ai)
-        else
-            c -= ((Ai-t) + s)
-        end
-        s = t
-    end
-    s - c
-end
 
 ## prod
 """
@@ -438,7 +468,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(promote_sys_size_mul ∘ f, *, a)
+prod(f, a) = mapreduce(f, mul_prod, a)
 
 """
     prod(itr)
@@ -454,18 +484,15 @@ julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(promote_sys_size_mul, *, a)
+prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::Union{typeof(scalarmax),
-                                     typeof(scalarmin),
-                                     typeof(max),
-                                     typeof(min)},
+function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     @inbounds a1 = A[first]
-    v = f(a1)
+    v = mapreduce_first(f, op, a1)
     i = first + 1
     while (v == v) && (i <= last)
         @inbounds ai = A[i]
@@ -475,8 +502,8 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
-minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
+maximum(f::Callable, a) = mapreduce(f, max, a)
+minimum(f::Callable, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
@@ -491,7 +518,7 @@ julia> maximum([1,2,3])
 3
 ```
 """
-maximum(a) = mapreduce(identity, scalarmax, a)
+maximum(a) = mapreduce(identity, max, a)
 
 """
     minimum(itr)
@@ -506,7 +533,7 @@ julia> minimum([1,2,3])
 1
 ```
 """
-minimum(a) = mapreduce(identity, scalarmin, a)
+minimum(a) = mapreduce(identity, min, a)
 
 ## extrema
 
@@ -597,6 +624,9 @@ Determine whether predicate `p` returns `true` for any elements of `itr`, return
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
 (short-circuiting).
 
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `false` (or equivalently, if the input contains no `true` value).
+
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -610,10 +640,16 @@ true
 ```
 """
 function any(f, itr)
+    anymissing = false
     for x in itr
-        f(x) && return true
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
+        end
     end
-    return false
+    return anymissing ? missing : false
 end
 
 """
@@ -622,6 +658,9 @@ end
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
 (short-circuiting).
+
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `true` (or equivalently, if the input contains no `false` value).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
@@ -635,11 +674,21 @@ false
 ```
 """
 function all(f, itr)
+    anymissing = false
     for x in itr
-        f(x) || return false
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+        elseif v
+            continue
+        else
+            return false
+        end
     end
-    return true
+    return anymissing ? missing : true
 end
+
 
 ## in & contains
 
@@ -652,7 +701,7 @@ end
 
 Determine whether an item is in the given collection, in the sense that it is `==` to one of
 the values generated by iterating over the collection. Some collections need a slightly
-different definition; for example [`Set`](@ref)s check whether the item
+different definition; for example, [`Set`](@ref)s check whether the item
 [`isequal`](@ref) to one of the elements. [`Dict`](@ref)s look for
 `(key,value)` pairs, and the key is compared using [`isequal`](@ref). To test for
 the presence of a key in a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.

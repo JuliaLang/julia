@@ -21,7 +21,7 @@ size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple di
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -66,7 +66,6 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     if @isdefined(E)
         return E
@@ -212,8 +211,8 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Inference!
-if module_name(@__MODULE__) === :Base
+# NOTE: this means this constructor must be avoided in Core.Compiler!
+if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
@@ -269,12 +268,16 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
+    anymissing = false
     for i = 1:length(t1)
-        if !(t1[i] == t2[i])
-            return false
-        end
+        eq = (t1[i] == t2[i])
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
+           return false
+       end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
@@ -282,6 +285,20 @@ hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
 hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
 hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
+
+function <(t1::Tuple, t2::Tuple)
+    n1, n2 = length(t1), length(t2)
+    for i = 1:min(n1, n2)
+        a, b = t1[i], t2[i]
+        eq = (a == b)
+        if ismissing(eq)
+            return missing
+        elseif !eq
+           return a < b
+        end
+    end
+    return n1 < n2
+end
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
@@ -328,3 +345,10 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+"""
+    empty(x::Tuple)
+
+Returns an empty tuple, `()`.
+"""
+empty(x::Tuple) = ()

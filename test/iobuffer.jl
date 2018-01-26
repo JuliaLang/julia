@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
+using Random
+
+ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
@@ -79,20 +81,20 @@ Base.compact(io)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test readlines(io) == String["pancakes", "waffles", "blueberries"]
 write(io,"\n\r\n\n\r \n") > 0
-@test readlines(io, chomp=false) == String["\n", "\r\n", "\n", "\r \n"]
+@test readlines(io, keep=true) == String["\n", "\r\n", "\n", "\r \n"]
 write(io,"\n\r\n\n\r \n") > 0
-@test readlines(io, chomp=true) == String["", "", "", "\r "]
+@test readlines(io, keep=false) == String["", "", "", "\r "]
 @test write(io,"α\nβ\nγ\nδ") > 0
-@test readlines(io, chomp=false) == String["α\n","β\n","γ\n","δ"]
+@test readlines(io, keep=true) == String["α\n","β\n","γ\n","δ"]
 @test write(io,"α\nβ\nγ\nδ") > 0
-@test readlines(io, chomp=true) == String["α", "β", "γ", "δ"]
-@test readlines(IOBuffer(""), chomp=false) == []
-@test readlines(IOBuffer(""), chomp=true) == []
-@test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
-@test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
+@test readlines(io, keep=false) == String["α", "β", "γ", "δ"]
+@test readlines(IOBuffer(""), keep=true) == []
+@test readlines(IOBuffer(""), keep=false) == []
+@test readlines(IOBuffer("first\nsecond"), keep=true) == String["first\n", "second"]
+@test readlines(IOBuffer("first\nsecond"), keep=false) == String["first", "second"]
 
 let fname = tempname()
-    for dochomp in [true, false],
+    for dokeep in [true, false],
         endline in ["\n", "\r\n"],
         i in -5:5
 
@@ -100,8 +102,8 @@ let fname = tempname()
         open(fname, "w") do io
             write(io, ref)
         end
-        x = readlines(fname, chomp = dochomp)
-        if dochomp
+        x = readlines(fname, keep = dokeep)
+        if !dokeep
             ref = chomp(ref)
         end
         @test ref == x[1]
@@ -168,7 +170,7 @@ let io = IOBuffer("abcdef"),
     @test eof(io)
 end
 
-@test isempty(readlines(IOBuffer(), chomp=false))
+@test isempty(readlines(IOBuffer(), keep=true))
 
 # issue #8193
 let io=IOBuffer("asdf")
@@ -190,7 +192,7 @@ end
 # pr #11554
 let a,
     io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
-    io2 = IOBuffer(b"goodnightmoon", true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
@@ -223,15 +225,15 @@ end
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
 let io = IOBuffer(0)
-   write(io, ones(UInt8, 1048577))
+   write(io, fill(0x01, 1048577))
 end
 
 let bstream = BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
-    @test nb_available(bstream) == 0
-    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    @test bytesavailable(bstream) == 0
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(bytesavailable(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
@@ -241,13 +243,13 @@ let bstream = BufferStream()
     b = read(bstream,UInt8)
     @test a[2] == b
     c = zeros(UInt8,8)
-    @test nb_available(bstream) == 8
+    @test bytesavailable(bstream) == 8
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
     @test close(bstream) === nothing
     @test eof(bstream)
-    @test nb_available(bstream) == 0
+    @test bytesavailable(bstream) == 0
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
@@ -260,25 +262,25 @@ end
 # skipchars
 let
     io = IOBuffer("")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("   ")
-    @test eof(skipchars(io, isspace))
+    @test eof(skipchars(isspace, io))
 
     io = IOBuffer("#    \n     ")
-    @test eof(skipchars(io, isspace, linecomment='#'))
+    @test eof(skipchars(isspace, io, linecomment='#'))
 
     io = IOBuffer("      text")
-    skipchars(io, isspace)
+    skipchars(isspace, io)
     @test String(readavailable(io)) == "text"
 
     io = IOBuffer("   # comment \n    text")
-    skipchars(io, isspace, linecomment='#')
+    skipchars(isspace, io, linecomment='#')
     @test String(readavailable(io)) == "text"
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(io, isalpha))
+        @test !eof(skipchars(isalpha, io))
         @test read(io, Char) == char
     end
 end
@@ -291,4 +293,13 @@ let
     @test io isa IOBuffer
     io = IOBuffer(Int64(10))
     @test io isa IOBuffer
+end
+
+let
+    # 25398 return value for write(::IO, ::IO)
+    ioa = IOBuffer()
+    iob = IOBuffer("World")
+    n = write(ioa, iob)
+    @test String(take!(ioa)) == "World"
+    @test n == 5
 end

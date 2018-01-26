@@ -439,7 +439,7 @@ end
     end
 end
 # Issue #21504
-@test isnull(tryparse(Dates.Date, "0-1000"))
+@test tryparse(Dates.Date, "0-1000") === nothing
 
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)

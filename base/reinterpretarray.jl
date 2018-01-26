@@ -35,7 +35,6 @@ end
 
 parent(a::ReinterpretArray) = a.parent
 
-eltype(a::ReinterpretArray{T}) where {T} = T
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
     size1 = div(psize[1]*sizeof(S), sizeof(T))
@@ -55,7 +54,7 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
         ind_start, sidx = divrem((inds[1]-1)*sizeof(T), sizeof(S))
         t = Ref{T}()
         s = Ref{S}()
-        @gc_preserve t s begin
+        GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
             i = 1
@@ -90,7 +89,7 @@ end
         ind_start, sidx = divrem((inds[1]-1)*sizeof(T), sizeof(S))
         t = Ref{T}(v)
         s = Ref{S}()
-        @gc_preserve t s begin
+        GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
             nbytes_copied = 0

@@ -9,10 +9,10 @@ leading newlines removed). If `raw` is `true`, the message is not stripped
 of any such newlines.
 """
 function message(c::GitCommit, raw::Bool=false)
-    Base.@gc_preserve c begin
+    GC.@preserve c begin
         local msg_ptr::Cstring
-        msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
-                        ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
+        msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
+                        ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
         if msg_ptr == C_NULL
             return nothing
         end
@@ -28,8 +28,8 @@ Return the `Signature` of the author of the commit `c`. The author is
 the person who made changes to the relevant file(s). See also [`committer`](@ref).
 """
 function author(c::GitCommit)
-    Base.@gc_preserve c begin
-        ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
+    GC.@preserve c begin
+        ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         @assert ptr != C_NULL
         sig = Signature(ptr)
     end
@@ -45,8 +45,8 @@ need not be the same as the `author`, for example, if the `author` emailed a pat
 a `committer` who committed it.
 """
 function committer(c::GitCommit)
-    Base.@gc_preserve c begin
-        ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Void},), c.ptr)
+    GC.@preserve c begin
+        ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         sig = Signature(ptr)
     end
     return sig
@@ -67,12 +67,12 @@ function commit(repo::GitRepo,
                 parents::GitCommit...)
     commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
-    parentptrs = Ptr{Void}[c.ptr for c in parents]
+    parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
     @check ccall((:git_commit_create, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Void}, Ptr{UInt8},
+                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
-                  Ptr{UInt8}, Ptr{UInt8}, Ptr{Void},
-                  Csize_t, Ptr{Ptr{Void}}),
+                  Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},
+                  Csize_t, Ptr{Ptr{Cvoid}}),
                  commit_id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
                  author.ptr, committer.ptr,
                  C_NULL, msg, tree.ptr,
@@ -113,7 +113,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     # Retrieve parents from HEAD
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
-            push!(parent_ids, GitHash(repo, refname))
+            Base.push!(parent_ids, GitHash(repo, refname))
         end
     end
 
@@ -127,7 +127,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     parents = GitCommit[]
     try
         for id in parent_ids
-            push!(parents, GitCommit(repo, id))
+            Base.push!(parents, GitCommit(repo, id))
         end
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     finally

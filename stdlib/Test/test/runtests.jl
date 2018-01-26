@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Distributed, Random
+
+import Logging: Debug, Info, Warn
 
 @testset "@test" begin
     @test true
@@ -51,7 +53,7 @@ end
 end
 @testset "@test_warn" begin
     @test 1234 === @test_nowarn(1234)
-    @test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
+    @test 5678 === @test_warn("WARNING: foo", begin println(STDERR, "WARNING: foo"); 5678; end)
     let a
         @test_throws UndefVarError(:a) a
         @test_nowarn a = 1
@@ -59,7 +61,7 @@ end
     end
 end
 @testset "@test and elements of an array" begin
-    a = Array{Float64, 5}(2, 2, 2, 2, 2)
+    a = Array{Float64, 5}(uninitialized, 2, 2, 2, 2, 2)
     a[1, 1, 1, 1, 1] = 10
     @test a[1, 1, 1, 1, 1] == 10
     @test a[1, 1, 1, 1, 1] != 2
@@ -285,10 +287,8 @@ end
                 end
             end
             @testset "some loops fail" begin
-                guardsrand(123) do
-                    @testset for i in 1:5
-                        @test i <= rand(1:10)
-                    end
+                @testset for i in 1:5
+                    @test i <= 4
                 end
                 # should add 3 errors and 3 passing tests
                 @testset for i in 1:6
@@ -592,7 +592,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
             @testset "Arrays" begin
                 @test foo(zeros(2)) == 4
-                @test foo(ones(4)) == 15
+                @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=DevNull), String)
     @test contains(msg,
@@ -614,7 +614,7 @@ end
 
 @testset "test guarded srand" begin
     seed = rand(UInt)
-    orig = copy(Base.GLOBAL_RNG)
+    orig = copy(Random.GLOBAL_RNG)
     @test guardsrand(()->rand(), seed) == guardsrand(()->rand(), seed)
     @test guardsrand(()->rand(Int), seed) == guardsrand(()->rand(Int), seed)
     r1, r2 = MersenneTwister(0), MersenneTwister(0)
@@ -628,27 +628,147 @@ end
     end::Tuple{Float64,Int}
     @test a == c == rand(r1) == rand(r2)
     @test b == d == rand(r1, Int) == rand(r2, Int)
-    @test orig == Base.GLOBAL_RNG
+    @test orig == Random.GLOBAL_RNG
     @test rand(orig) == rand()
 end
 
 @testset "file info in test errors" begin
-     local f = tempname()
+    local f = tempname()
 
-     write(f,
-     """
-     using Test
-     @testset begin
-         @test 1==2
-         @test_throws UndefVarError 1
-         @test_broken 1 == 1
-     end
-     """)
+    write(f,
+    """
+    using Test
+    @testset begin
+        @test 1==2
+        @test_throws UndefVarError 1
+        @test_broken 1 == 1
+    end
+    """)
 
-     local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
-     @test contains(msg, "at " * f * ":" * "3")
-     @test contains(msg, "at " * f * ":" * "4")
-     @test contains(msg, "at " * f * ":" * "5")
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+    @test contains(msg, "at " * f * ":" * "3")
+    @test contains(msg, "at " * f * ":" * "4")
+    @test contains(msg, "at " * f * ":" * "5")
 
-     rm(f; force=true)
- end
+    rm(f; force=true)
+end
+
+# issue #24919
+@testset "≈ with atol" begin
+    local cmd = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    f(src) = read(pipeline(ignorestatus(`$cmd -e $src`), stderr=DevNull), String)
+
+    msg = f("""
+    using Test
+    x, y = 0.9, 0.1
+    @test x ≈ y atol=0.01
+    """)
+    @test contains(msg, "Evaluated: 0.9 ≈ 0.1 (atol=0.01)")
+
+    msg = f("""
+    using Test
+    x, y = 0.9, 0.1
+    @test x ≈ y nans=true atol=0.01
+    """)
+    @test contains(msg, "Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)")
+end
+
+@testset "@test_logs" begin
+    function foo(n)
+        @info "Doing foo with n=$n"
+        for i=1:n
+            @debug "Iteration $i"
+        end
+    end
+
+    @test_logs (Info,"Doing foo with n=2") foo(2)
+
+    # Log pattern matching
+    # Regex
+    @test_logs (Info,r"^Doing foo with n=[0-9]+$") foo(10)
+    @test_logs (Info,r"^Doing foo with n=[0-9]+$") foo(1)
+    # Level symbols
+    @test_logs (:debug,) min_level=Debug @debug "foo"
+    @test_logs (:info,)  @info  "foo"
+    @test_logs (:warn,)  @warn  "foo"
+    @test_logs (:error,) @error "foo"
+
+    # Pass through so the value of the expression can also be tested
+    @test (@test_logs (Info,"blah") (@info "blah"; 42)) == 42
+
+    # Debug level log collection
+    @test_logs (Info,"Doing foo with n=2") (Debug,"Iteration 1") (Debug,"Iteration 2") min_level=Debug foo(2)
+
+    @test_logs (Debug,"Iteration 5") min_level=Debug match_mode=:any foo(10)
+
+    # Test failures
+    fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
+        @test_logs (Warn,) foo(1)
+        @test_logs (Warn,) match_mode=:any @info "foo"
+        @test_logs (Debug,) @debug "foo"
+    end
+    @test length(fails) == 3
+    @test fails[1] isa Test.LogTestFailure
+    @test fails[2] isa Test.LogTestFailure
+    @test fails[3] isa Test.LogTestFailure
+end
+
+function newfunc()
+    42
+end
+@deprecate oldfunc newfunc
+
+@testset "@test_deprecated" begin
+    @test_deprecated oldfunc()
+
+    # Expression passthrough
+    if Base.JLOptions().depwarn != 2
+        @test (@test_deprecated oldfunc()) == 42
+
+        fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
+            @test_deprecated newfunc()
+            @test_deprecated r"Not found in message" oldfunc()
+        end
+        @test length(fails) == 2
+        @test fails[1] isa Test.LogTestFailure
+        @test fails[2] isa Test.LogTestFailure
+    else
+        @warn """Omitting `@test_deprecated` tests which can't yet
+                 be tested in --depwarn=error mode"""
+    end
+end
+
+@testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
+    # i.e. it behaves as if it was wrapped in a `guardsrand(GLOBAL_RNG.seed)` block
+    seed = rand(UInt128)
+    srand(seed)
+    a = rand()
+    @testset begin
+        # global RNG must re-seeded at the beginning of @testset
+        @test a == rand()
+    end
+    @testset for i=1:3
+        @test a == rand()
+    end
+    # the @testset's above must have no consequence for rand() below
+    b = rand()
+    srand(seed)
+    @test a == rand()
+    @test b == rand()
+end
+
+@testset "non AbstractTestSet as testset" begin
+    local f, err = tempname(), tempname()
+    write(f,
+    """
+    using Test
+    desc = "description"
+    @testset desc begin
+        @test 1==1
+    end
+    """)
+    run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=err))
+    msg = read(err, String)
+    @test contains(msg, "Expected `desc` to be an AbstractTestSet, it is a String")
+    rm(f; force=true)
+end

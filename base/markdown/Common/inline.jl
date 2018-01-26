@@ -14,6 +14,12 @@ function asterisk_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
+@trigger '_' ->
+function underscore_italic(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "_")
+    return result === nothing ? nothing : Italic(parseinline(result, md))
+end
+
 mutable struct Bold
     text
 end
@@ -21,6 +27,12 @@ end
 @trigger '*' ->
 function asterisk_bold(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "**")
+    return result === nothing ? nothing : Bold(parseinline(result, md))
+end
+
+@trigger '_' ->
+function underscore_bold(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "__")
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
@@ -140,7 +152,7 @@ function _is_mailto(s::AbstractString)
     length(s) < 6 && return false
     # slicing strings is a bit risky, but this equality check is safe
     lowercase(s[1:6]) == "mailto:" || return false
-    return ismatch(_email_regex, s[6:end])
+    return contains(s[6:end], _email_regex)
 end
 
 # –––––––––––

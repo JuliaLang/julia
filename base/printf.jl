@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Printf
-using Base: Grisu, GMP
-export @printf, @sprintf
+using Base.Grisu
+using Base.GMP
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
@@ -640,6 +640,7 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
     #
     # flags:
     #  (-): left justify
+    #  (#): use `show`/`repr` instead of `print`/`string`
     #
     @gensym x
     blk = Expr(:block)
@@ -682,6 +683,9 @@ end
 function gen_p(flags::String, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
+    #
+    # flags:
+    #  (-): left justify
     #
     @gensym x
     blk = Expr(:block)
@@ -859,7 +863,7 @@ function decode_dec(d::Integer)
     return Int32(pt), Int32(pt), neg
 end
 
-function decode_hex(d::Integer, symbols::Array{UInt8,1})
+function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1})
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
@@ -1002,7 +1006,7 @@ end
 
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
         len,pt,neg = grisu(x,Grisu.PRECISION,n)
@@ -1012,15 +1016,15 @@ end
 
 function ini_dec(x::BigInt, n::Int)
     if x.size == 0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), false
     end
     d = Base.ndigits0z(x)
     if d <= n
         info = decode_dec(x)
         d == n && return info
-        p = convert(Ptr{Void}, DIGITS) + info[2]
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), p, '0', n - info[2])
+        p = convert(Ptr{Cvoid}, DIGITS) + info[2]
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
     return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
@@ -1033,13 +1037,13 @@ ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
 ini_hex(x::Real) = ini_hex(x,hex_symbols)
 ini_HEX(x::Real) = ini_hex(x,HEX_symbols)
 
-ini_hex(x::Real, n::Int, symbols::Array{UInt8,1}) = ini_hex(float(x), n, symbols)
-ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
+ini_hex(x::Real, n::Int, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), n, symbols)
+ini_hex(x::Real, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), symbols)
 
-function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1048,7 +1052,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
         # ensure last 2 exponent bits either 01 or 10
         u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
-            ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
         end
         i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
         while i > 0
@@ -1061,10 +1065,10 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
     end
 end
 
-function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', 1)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1166,9 +1170,9 @@ function _printf(macroname, io, fmt, args)
     for i = length(sym_args):-1:1
         var = sym_args[i].args[1]
         if has_splatting
-           unshift!(blk.args, :($var = G[$i]))
+           pushfirst!(blk.args, :($var = G[$i]))
         else
-           unshift!(blk.args, :($var = $(esc(args[i]))))
+           pushfirst!(blk.args, :($var = $(esc(args[i]))))
         end
     end
 
@@ -1178,41 +1182,20 @@ function _printf(macroname, io, fmt, args)
     #
     if has_splatting
        x = Expr(:call,:tuple,args...)
-       unshift!(blk.args,
+       pushfirst!(blk.args,
           quote
              G = $(esc(x))
              if length(G) != $(length(sym_args))
-                throw(ArgumentError($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")"))
+                 throw(ArgumentError(string($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")")))
              end
           end
        )
     end
 
-    unshift!(blk.args, :(out = $io))
+    pushfirst!(blk.args, :(out = $io))
     Expr(:let, Expr(:block), blk)
 end
 
-"""
-    @printf([io::IOStream], "%Fmt", args...)
-
-Print `args` using C `printf` style format specification string, with some caveats:
-`Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
-`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
-equally close to the numeric values of two possible output strings, the output
-string further away from zero is chosen.
-
-Optionally, an `IOStream`
-may be passed as the first argument to redirect output.
-
-# Examples
-```jldoctest
-julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
-Inf Inf NaN NaN\n
-
-julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
-1 0.0 -0.007813
-```
-"""
 macro printf(args...)
     isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
@@ -1224,19 +1207,6 @@ macro printf(args...)
     end
 end
 
-"""
-    @sprintf("%Fmt", args...)
-
-Return `@printf` formatted output as string.
-
-# Examples
-```jldoctest
-julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
-
-julia> println(s)
-this is a test            34.6
-```
-"""
 macro sprintf(args...)
     isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||

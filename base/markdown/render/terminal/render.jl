@@ -24,29 +24,40 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(term, md.content, columns - 10)
+    s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^margin, "│", line)
     end
 end
 
 function term(io::IO, md::Admonition, columns)
-    print(io, " "^margin, "| ")
-    with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
-    println(io, "\n", " "^margin, "|")
-    s = sprint(term, md.content, columns - 10)
+    col = :default
+    if lowercase(md.title) == "danger"
+        col = Base.error_color()
+    elseif lowercase(md.title) == "warning"
+        col = Base.warn_color()
+    elseif lowercase(md.title) in ("info", "note")
+        col = Base.info_color()
+    elseif lowercase(md.title) == "tip"
+        col = :green
+    end
+    print_with_color(col, io, " "^margin, "│ "; bold = true)
+    print_with_color(col, io, isempty(md.title) ? md.category : md.title; bold = true)
+    print_with_color(col, io, "\n", " "^margin, "│", "\n"; bold = true)
+    s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        print_with_color(col, io, " "^margin, "│"; bold = true)
+        println(io, line)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
-    print(io, " "^margin, "| ")
-    with_output_format(:bold, print, io, "[^$(f.id)]")
-    println(io, "\n", " "^margin, "|")
-    s = sprint(term, f.text, columns - 10)
+    print(io, " "^margin, "│ ")
+    print_with_color(:bold, io, "[^$(f.id)]")
+    println(io, "\n", " "^margin, "│")
+    s = sprint(term, f.text, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^margin, "│", line)
     end
 end
 
@@ -61,8 +72,8 @@ function term(io::IO, md::List, columns)
 end
 
 function _term_header(io::IO, md, char, columns)
-    text = terminline(md.text)
-    with_output_format(:bold, io) do io
+    text = terminline_string(io, md.text)
+    with_output_color(:bold, io) do io
         print(io, " "^(margin))
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
@@ -83,7 +94,7 @@ function term(io::IO, md::Header{l}, columns) where l
 end
 
 function term(io::IO, md::Code, columns)
-    with_output_format(:cyan, io) do io
+    with_output_color(:cyan, io) do io
         for line in lines(md.code)
             print(io, " "^margin)
             println(io, line)
@@ -96,14 +107,16 @@ function term(io::IO, br::LineBreak, columns)
 end
 
 function term(io::IO, br::HorizontalRule, columns)
-   println(io, " " ^ margin, "-" ^ (columns - 2margin))
+   println(io, " " ^ margin, "─" ^ (columns - 2margin))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
-terminline(md) = sprint(terminline, md)
+terminline_string(io::IO, md) = sprint(terminline, md; context=io)
+
+terminline(io::IO, content...) = terminline(io, collect(content))
 
 function terminline(io::IO, content::Vector)
     for md in content
@@ -112,15 +125,15 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, replace(md, r"[\s\t\n]+", " "))
+    print(io, replace(md, r"[\s\t\n]+" => " "))
 end
 
 function terminline(io::IO, md::Bold)
-    with_output_format(:bold, terminline, io, md.text)
+    with_output_color(terminline, :bold, io, md.text)
 end
 
 function terminline(io::IO, md::Italic)
-    with_output_format(:underline, terminline, io, md.text)
+    with_output_color(terminline, :underline, io, md.text)
 end
 
 function terminline(io::IO, md::LineBreak)
@@ -131,18 +144,19 @@ function terminline(io::IO, md::Image)
     terminline(io, "(Image: $(md.alt))")
 end
 
-terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$(f.id)]")
+terminline(io::IO, f::Footnote) = with_output_color(terminline, :bold, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
-    terminline(io, md.text)
+    url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
+    text = terminline_string(io, md.text)
+    terminline(io, text, url)
 end
 
 function terminline(io::IO, code::Code)
-    print_with_format(:cyan, io, code.code)
+    print_with_color(:cyan, io, code.code)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
-
-Base.display(d::Base.REPL.REPLDisplay, md::MD) = term(Base.REPL.outstream(d.repl), md)
+Base.show(io::IO, ::MIME"text/plain", md::MD) = (term(io, md); nothing)

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # Test various constructors
 let c = Channel(1)
     @test eltype(c) == Any
@@ -84,6 +86,7 @@ let s, c = Channel(32)
 end
 
 # Tests for channels bound to tasks.
+using Distributed
 for N in [0,10]
     # Normal exit of task
     c=Channel(N)
@@ -220,7 +223,7 @@ using Dates
         @assert (et >= 1.0) && (et <= 1.5)
         @assert !isready(rr3)
     catch
-        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
+        @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
     end
     @test isready(rr1)
 end
@@ -229,14 +232,14 @@ end
 # test for yield/wait/event failures
 @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
 let t, run = Ref(0)
-    gc_enable(false)
+    GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
     garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
     t = @task begin
-        gc_enable(true)
-        gc()
+        GC.enable(true)
+        GC.gc()
     end
     oldstderr = STDERR
     local newstderr, errstream
@@ -266,13 +269,14 @@ let t, run = Ref(0)
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n"
+    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
 end
 
 # schedule_and_wait tests
 let t = @schedule(nothing),
     ct = current_task(),
     testobject = "testobject"
+    # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
     @test length(Base.Workqueue) == 1
     @test Base.schedule_and_wait(ct, 8) == 8
     @test isempty(Base.Workqueue)
@@ -319,17 +323,17 @@ let tc = Ref(0),
         tc[] += 1
     end
     @test isopen(async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     Base.process_events(false) # schedule event
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
     @test tc[] == 0
     yield() # consume event
     @test tc[] == 1
     sleep(0.1) # no further events
     @test tc[] == 1
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)
     @test !isopen(async)
     @test tc[] == 1
@@ -345,7 +349,7 @@ let tc = Ref(0),
         tc[] += 1
     end
     @test isopen(async)
-    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)
     @test !isopen(async)
     Base.process_events(false) # schedule event & then close

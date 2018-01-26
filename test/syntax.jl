@@ -2,6 +2,8 @@
 
 # tests for parser and syntax lowering
 
+using Random
+
 import Base.Meta.ParseError
 
 function parseall(str)
@@ -114,42 +116,46 @@ macro test999_str(args...); args; end
 @test Meta.parse("1 + #= \0 =# 2") == :(1 + 2)
 
 # issue #10910
-@test Meta.parse(":(using A)") == Expr(:quote, Expr(:using, :A))
+@test Meta.parse(":(using A)") == Expr(:quote, Expr(:using, Expr(:., :A)))
 @test Meta.parse(":(using A.b, B)") == Expr(:quote,
-                                       Expr(:toplevel,
-                                            Expr(:using, :A, :b),
-                                            Expr(:using, :B)))
+                                       Expr(:using,
+                                            Expr(:., :A, :b),
+                                            Expr(:., :B)))
 @test Meta.parse(":(using A: b, c.d)") == Expr(:quote,
-                                          Expr(:toplevel,
-                                               Expr(:using, :A, :b),
-                                               Expr(:using, :A, :c, :d)))
+                                          Expr(:using,
+                                               Expr(:(:),
+                                                    Expr(:., :A),
+                                                    Expr(:., :b),
+                                                    Expr(:., :c, :d))))
 
-@test Meta.parse(":(import A)") == Expr(:quote, Expr(:import, :A))
+@test Meta.parse(":(import A)") == Expr(:quote, Expr(:import, Expr(:., :A)))
 @test Meta.parse(":(import A.b, B)") == Expr(:quote,
-                                        Expr(:toplevel,
-                                             Expr(:import, :A, :b),
-                                             Expr(:import, :B)))
+                                        Expr(:import,
+                                             Expr(:., :A, :b),
+                                             Expr(:., :B)))
 @test Meta.parse(":(import A: b, c.d)") == Expr(:quote,
-                                           Expr(:toplevel,
-                                                Expr(:import, :A, :b),
-                                                Expr(:import, :A, :c, :d)))
+                                           Expr(:import,
+                                                Expr(:(:),
+                                                     Expr(:., :A),
+                                                     Expr(:., :b),
+                                                     Expr(:., :c, :d))))
 
 # issue #11332
 @test Meta.parse("export \$(Symbol(\"A\"))") == :(export $(Expr(:$, :(Symbol("A")))))
 @test Meta.parse("export \$A") == :(export $(Expr(:$, :A)))
-@test Meta.parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
-@test Meta.parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
-                                                          Expr(:$, :b)),
-                                          Expr(:using, Expr(:$, :c)))
+@test Meta.parse("using \$a.\$b") == Expr(:using, Expr(:., Expr(:$, :a), Expr(:$, :b)))
+@test Meta.parse("using \$a.\$b, \$c") == Expr(:using,
+                                               Expr(:., Expr(:$, :a), Expr(:$, :b)),
+                                               Expr(:., Expr(:$, :c)))
 @test Meta.parse("using \$a: \$b, \$c.\$d") ==
-    Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
-         Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))
+    Expr(:using,
+         Expr(:(:), Expr(:., Expr(:$, :a)), Expr(:., Expr(:$, :b)),
+              Expr(:., Expr(:$, :c), Expr(:$, :d))))
 
 # fix pr #11338 and test for #11497
-@test parseall("using \$\na") == Expr(:block, Expr(:using, :$), :a)
-@test parseall("using \$,\na") == Expr(:toplevel, Expr(:using, :$),
-                                       Expr(:using, :a))
-@test parseall("using &\na") == Expr(:block, Expr(:using, :&), :a)
+@test parseall("using \$\na") == Expr(:block, Expr(:using, Expr(:., :$)), :a)
+@test parseall("using \$,\na") == Expr(:using, Expr(:., :$), Expr(:., :a))
+@test parseall("using &\na") == Expr(:block, Expr(:using, Expr(:., :&)), :a)
 
 @test parseall("a = &\nb") == Expr(:block, Expr(:(=), :a, :&), :b)
 @test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
@@ -231,6 +237,12 @@ end
     Meta.parse("\"\"\"\nfoo\nbar\"\"\"") == Meta.parse("\"\"\"\rfoo\rbar\"\"\"") ==
     Meta.parse("\"foo\r\nbar\"") == Meta.parse("\"foo\rbar\"") == Meta.parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
+
+# allow invalid UTF-8 in string literals
+@test "\ud800"[1] == Char(0xd800)
+@test "\udfff"[1] == Char(0xdfff)
+@test length("\xc0\xb0") == 1
+@test "\xc0\xb0"[1] == reinterpret(Char, 0xc0b00000)
 
 # issue #14561 - generating 0-method generic function def
 let fname = :f
@@ -541,7 +553,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3].inlineable
 
 # issue #16096
 module M16096
@@ -711,7 +723,7 @@ m4_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m4 end))
 # and the return is handled correctly
 # NOTE: we currently only emit push/pop locations for macros from other files
 @test_broken count_meta_loc(m1_exprs) == 1
-@test_broken is_return_ssavalue(m1_exprs[end])
+@test is_return_ssavalue(m1_exprs[end])
 @test_broken is_pop_loc(m1_exprs[end - 1])
 
 @test_broken count_meta_loc(m2_exprs) == 1
@@ -745,7 +757,7 @@ f2_exprs = get_expr_list(@code_typed(f2(1))[1])
 @test is_pop_loc(f2_exprs[end])
 @test Meta.isexpr(f2_exprs[end - 1], :return)
 
-if Base.JLOptions().code_coverage != 0 && Base.JLOptions().can_inline != 0
+if Base.JLOptions().can_inline != 0
     @test count_meta_loc(f1_exprs) == 1
     @test count_meta_loc(f2_exprs) == 2
 else
@@ -783,7 +795,7 @@ module Mod18756
 mutable struct Type
 end
 end
-@test method_exists(Mod18756.Type, ())
+@test hasmethod(Mod18756.Type, ())
 
 # issue 18002
 @test Meta.parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
@@ -827,7 +839,7 @@ let f = function (x; kw...)
     g = function (x; a = 2)
             return (x, a)
         end
-    @test f(1) == (1, Any[])
+    @test f(1) == (1, pairs(NamedTuple()))
     @test g(1) == (1, 2)
 end
 
@@ -946,18 +958,18 @@ end
                         using ..x,
                               ..y
                     end").args[3].args)[1] ==
-      Expr(:toplevel,
-           Expr(:using, Symbol("."), Symbol("."), :x),
-           Expr(:using, Symbol("."), Symbol("."), :y))
+      Expr(:using,
+           Expr(:., :., :., :x),
+           Expr(:., :., :., :y))
 
 @test filter(!isline,
              Meta.parse("module A
                         using .B,
                               .C
                     end").args[3].args)[1] ==
-      Expr(:toplevel,
-           Expr(:using, Symbol("."), :B),
-           Expr(:using, Symbol("."), :C))
+      Expr(:using,
+           Expr(:., :., :B),
+           Expr(:., :., :C))
 
 # issue #21440
 @test Meta.parse("+(x::T,y::T) where {T} = 0") == Meta.parse("(+)(x::T,y::T) where {T} = 0")
@@ -1226,3 +1238,30 @@ end
     @test raw"x \\\" y" == "x \\\" y"
     @test raw"x \\\ y" == "x \\\\\\ y"
 end
+
+# issue #9972
+@test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
+
+# issue #25055, make sure quote makes new Exprs
+function f25055()
+    x = quote end
+    return x
+end
+@test f25055() !== f25055()
+
+# issue #25391
+@test Meta.parse("0:-1, \"\"=>\"\"") == Meta.parse("(0:-1, \"\"=>\"\")") ==
+    Expr(:tuple, Expr(:(:), 0, -1), Expr(:call, :(=>), "", ""))
+@test Meta.parse("a => b = c") == Expr(:(=), Expr(:call, :(=>), :a, :b), Expr(:block, LineNumberNode(1, :none), :c))
+@test Meta.parse("a = b => c") == Expr(:(=), :a, Expr(:call, :(=>), :b, :c))
+
+# issue #16239, hygiene of rest keyword name
+macro foo16239(x)
+    :($(esc(:blah))(args...; kwargs...) = $(esc(x)))
+end
+function bar16239()
+    kwargs = 0
+    f = @foo16239 kwargs
+    f()
+end
+@test bar16239() == 0

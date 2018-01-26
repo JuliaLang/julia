@@ -691,26 +691,6 @@ Stacktrace:
  [2] verbose_fussy_sqrt(::Int64) at ./none:3
 ```
 
-### Warnings and informational messages
-
-Julia also provides other functions that write messages to the standard error I/O, but do not
-throw any `Exception`s and hence do not interrupt execution:
-
-```jldoctest
-julia> info("Hi"); 1+1
-INFO: Hi
-2
-
-julia> warn("Hi"); 1+1
-WARNING: Hi
-2
-
-julia> error("Hi"); 1+1
-ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:33
-```
-
 ### The `try/catch` statement
 
 The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized
@@ -957,7 +937,7 @@ In addition to [`yieldto`](@ref), a few other basic functions are needed to use 
 ### Tasks and events
 
 Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
 The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);

@@ -1,6 +1,7 @@
 __precompile__()
 module LocalModule
 
+using Distributed
 export myapp
 
 function myapp()

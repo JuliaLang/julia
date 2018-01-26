@@ -7,7 +7,7 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 abstract type AbstractSet{T} end
-abstract type Associative{K,V} end
+abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -106,35 +106,14 @@ julia> convert(Rational{Int64}, x)
 6004799503160661//18014398509481984
 ```
 
-If `T` is a collection type and `x` a collection, the result of `convert(T, x)` may alias
-`x`.
+If `T` is a collection type and `x` a collection, the result of
+`convert(T, x)` may alias all or part of `x`.
 ```jldoctest
-julia> x = Int[1,2,3];
+julia> x = Int[1, 2, 3];
 
 julia> y = convert(Vector{Int}, x);
 
 julia> y === x
-true
-```
-Similarly, if `T` is a composite type and `x` a related instance, the result of
-`convert(T, x)` may alias part or all of `x`.
-```jldoctest
-julia> x = sparse(1.0I, 5, 5);
-
-julia> typeof(x)
-SparseMatrixCSC{Float64,Int64}
-
-julia> y = convert(SparseMatrixCSC{Float64,Int64}, x);
-
-julia> z = convert(SparseMatrixCSC{Float32,Int64}, y);
-
-julia> y === x
-true
-
-julia> z === x
-false
-
-julia> z.colptr === x.colptr
 true
 ```
 """
@@ -284,6 +263,19 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     oftype(x, y)
 
 Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+
+# Examples
+```jldoctest
+julia> x = 4;
+
+julia> y = 3.;
+
+julia> oftype(x, y)
+3
+
+julia> oftype(y, x)
+4.0
+```
 """
 oftype(x, y) = convert(typeof(x), y)
 
@@ -293,7 +285,7 @@ signed(x::UInt) = reinterpret(Int, x)
 # conversions used by ccall
 ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
+ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
 
 """
     cconvert(T,x)
@@ -351,14 +343,14 @@ Size, in bytes, of the canonical binary representation of the given DataType `T`
 julia> sizeof(Float32)
 4
 
-julia> sizeof(Complex128)
+julia> sizeof(ComplexF64)
 16
 ```
 
 If `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
-julia> sizeof(Base.LinAlg.LU)
+julia> sizeof(AbstractArray)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
 [...]
@@ -376,14 +368,14 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
+                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
                 l += 16
             end
             Core.arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), out, l-i+1)
+    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
     out
 end
 
@@ -417,9 +409,11 @@ esc(@nospecialize(e)) = Expr(:escape, e)
 
 Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
 
-Note that the function in which `@boundscheck` is written must be inlined into
-its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+!!! note
+    The function in which `@boundscheck` is written must be inlined into
+    its caller in order for `@inbounds` to have effect.
 
+# Examples
 ```jldoctest
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
@@ -484,8 +478,9 @@ end
 macro inbounds(blk)
     return Expr(:block,
         Expr(:inbounds, true),
-        esc(blk),
-        Expr(:inbounds, :pop))
+        Expr(:local, Expr(:(=), :val, esc(blk))),
+        Expr(:inbounds, :pop),
+        :val)
 end
 
 """
@@ -517,7 +512,7 @@ function getindex(v::SimpleVector, i::Int)
         throw(BoundsError(v,i))
     end
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
     o = unsafe_pointer_to_objref(x)
     @_gc_preserve_end t
@@ -526,7 +521,7 @@ end
 
 function length(v::SimpleVector)
     t = @_gc_preserve_begin v
-    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    l = unsafe_load(convert(Ptr{Int},pointer_from_objref(v)))
     @_gc_preserve_end t
     return l
 end
@@ -535,9 +530,9 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
 isempty(v::SimpleVector) = (length(v) == 0)
-indices(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = indices(v, 1)
-indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)
+axes(v::SimpleVector) = (OneTo(length(v)),)
+linearindices(v::SimpleVector) = axes(v, 1)
+axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -557,6 +552,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
+# Examples
 ```jldoctest
 julia> isassigned(rand(3, 3), 5)
 true
@@ -581,7 +577,7 @@ function isassigned end
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     @_gc_preserve_end t
     return x != C_NULL
 end
@@ -632,26 +628,6 @@ function vector_any(@nospecialize xs...)
         Core.arrayset(false, a, xs[i], i)
     end
     a
-end
-
-function as_kwargs(xs::Union{AbstractArray,Associative})
-    n = length(xs)
-    to = Vector{Any}(uninitialized, n*2)
-    i = 1
-    for (k, v) in xs
-        to[i]   = k::Symbol
-        to[i+1] = v
-        i += 2
-    end
-    return to
-end
-
-function as_kwargs(xs)
-    to = Vector{Any}()
-    for (k, v) in xs
-        ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
-    end
-    return to
 end
 
 """
@@ -749,5 +725,42 @@ For an iterator or collection that has keys and values, return an iterator
 over the values.
 This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> values(d)
+Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+  2
+  1
+
+julia> values([2])
+1-element Array{Int64,1}:
+ 2
+```
 """
 values(itr) = itr
+
+"""
+    Missing
+
+A type with no fields whose singleton instance [`missing`](@ref) is used
+to represent missing values.
+"""
+struct Missing end
+
+"""
+    missing
+
+The singleton instance of type [`Missing`](@ref) representing a missing value.
+"""
+const missing = Missing()
+
+"""
+    ismissing(x)
+
+Indicate whether `x` is [`missing`](@ref).
+"""
+ismissing(::Any) = false
+ismissing(::Missing) = true

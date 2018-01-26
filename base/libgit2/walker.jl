@@ -19,16 +19,16 @@ Here, `count` finds the number of commits along the walk with a certain `GitHash
 Since the `GitHash` is unique to a commit, `cnt` will be `1`.
 """
 function GitRevWalker(repo::GitRepo)
-    w_ptr = Ref{Ptr{Void}}(C_NULL)
+    w_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_revwalk_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), w_ptr, repo.ptr)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), w_ptr, repo.ptr)
     return GitRevWalker(repo, w_ptr[])
 end
 
 function Base.start(w::GitRevWalker)
     id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
-                (Ptr{GitHash}, Ptr{Void}), id_ptr, w.ptr)
+                (Ptr{GitHash}, Ptr{Cvoid}), id_ptr, w.ptr)
     err != Int(Error.GIT_OK) && return (nothing, true)
     return (id_ptr[], false)
 end
@@ -38,12 +38,12 @@ Base.done(w::GitRevWalker, state) = Bool(state[2])
 function Base.next(w::GitRevWalker, state)
     id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
-                (Ptr{GitHash}, Ptr{Void}), id_ptr, w.ptr)
+                (Ptr{GitHash}, Ptr{Cvoid}), id_ptr, w.ptr)
     err != Int(Error.GIT_OK) && return (state[1], (nothing, true))
     return (state[1], (id_ptr[], false))
 end
 
-Base.iteratorsize(::Type{GitRevWalker}) = Base.SizeUnknown()
+Base.IteratorSize(::Type{GitRevWalker}) = Base.SizeUnknown()
 
 """
     LibGit2.push_head!(w::GitRevWalker)
@@ -53,7 +53,7 @@ Push the HEAD commit and its ancestors onto the [`GitRevWalker`](@ref)
 during the walk.
 """
 function push_head!(w::GitRevWalker)
-    @check ccall((:git_revwalk_push_head, :libgit2), Cint, (Ptr{Void},), w.ptr)
+    @check ccall((:git_revwalk_push_head, :libgit2), Cint, (Ptr{Cvoid},), w.ptr)
     return w
 end
 
@@ -64,19 +64,19 @@ Start the [`GitRevWalker`](@ref) `walker` at commit `cid`. This function can be 
 to apply a function to all commits since a certain year, by passing the first commit
 of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
 """
-function Base.push!(w::GitRevWalker, cid::GitHash)
-    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Void}, Ptr{GitHash}), w.ptr, Ref(cid))
+function push!(w::GitRevWalker, cid::GitHash)
+    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Cvoid}, Ptr{GitHash}), w.ptr, Ref(cid))
     return w
 end
 
-function Base.push!(w::GitRevWalker, range::AbstractString)
-    @check ccall((:git_revwalk_push_range, :libgit2), Cint, (Ptr{Void}, Ptr{UInt8}), w.ptr, range)
+function push!(w::GitRevWalker, range::AbstractString)
+    @check ccall((:git_revwalk_push_range, :libgit2), Cint, (Ptr{Cvoid}, Ptr{UInt8}), w.ptr, range)
     return w
 end
 
 function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=false)
     rev && (by |= Consts.SORT_REVERSE)
-    ccall((:git_revwalk_sorting, :libgit2), Void, (Ptr{Void}, Cint), w.ptr, by)
+    ccall((:git_revwalk_sorting, :libgit2), Cvoid, (Ptr{Cvoid}, Cint), w.ptr, by)
     return w
 end
 
@@ -126,7 +126,7 @@ function Base.map(f::Function, walker::GitRevWalker;
     repo = repository(walker)
     while !done(walker, s)
         val = f(s[1], repo)
-        push!(res, val)
+        Base.push!(res, val)
         val, s = next(walker, s)
         c +=1
         count == c && break

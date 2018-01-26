@@ -1,19 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
-                   onto::Nullable{GitAnnotated}=Nullable{GitAnnotated}(),
+                   onto::Union{GitAnnotated, Nothing}=nothing,
                    opts::RebaseOptions = RebaseOptions())
-    rebase_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    rebase_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_rebase_init, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-                   Ptr{Void}, Ptr{RebaseOptions}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                   Ptr{Cvoid}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
-                   isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
+                   onto === nothing ? C_NULL : onto.ptr, Ref(opts))
     return GitRebase(repo, rebase_ptr_ptr[])
 end
 
 function Base.count(rb::GitRebase)
-    return ccall((:git_rebase_operation_entrycount, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
+    return ccall((:git_rebase_operation_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
 end
 
 """
@@ -25,17 +25,17 @@ has not yet been called or iteration over `rb` has not yet begun), return
 `GIT_REBASE_NO_OPERATION`, which is equal to `typemax(Csize_t)`.
 """
 function current(rb::GitRebase)
-    return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
+    return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
 end
 
 function Base.getindex(rb::GitRebase, i::Integer)
     if !(1 <= i <= count(rb))
         throw(BoundsError(rb, (i,)))
     end
-    Base.@gc_preserve rb begin
+    GC.@preserve rb begin
         rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
                           Ptr{RebaseOperation},
-                          (Ptr{Void}, Csize_t), rb.ptr, i-1)
+                          (Ptr{Cvoid}, Csize_t), rb.ptr, i-1)
         rb_op = unsafe_load(rb_op_ptr)
     end
     return rb_op
@@ -43,10 +43,10 @@ end
 
 function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
-    Base.@gc_preserve rb begin
+    GC.@preserve rb begin
         try
             @check ccall((:git_rebase_next, :libgit2), Cint,
-                          (Ptr{Ptr{RebaseOperation}}, Ptr{Void}),
+                          (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),
                            rb_op_ptr_ptr, rb.ptr)
         catch err
             err.code == Error.ITEROVER && return nothing
@@ -73,7 +73,7 @@ function commit(rb::GitRebase, sig::GitSignature)
     oid_ptr = Ref(GitHash())
     try
         @check ccall((:git_rebase_commit, :libgit2), Error.Code,
-                     (Ptr{GitHash}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
+                     (Ptr{GitHash}, Ptr{Cvoid}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
                       oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
     catch err
         # TODO: return current HEAD instead
@@ -94,7 +94,7 @@ rebase had completed), and `-1` for other errors.
 """
 function abort(rb::GitRebase)
     return ccall((:git_rebase_abort, :libgit2), Csize_t,
-                      (Ptr{Void},), rb.ptr)
+                      (Ptr{Cvoid},), rb.ptr)
 end
 
 """
@@ -106,6 +106,6 @@ rebase finishes successfully, `-1` if there is an error.
 """
 function finish(rb::GitRebase, sig::GitSignature)
     return ccall((:git_rebase_finish, :libgit2), Csize_t,
-                  (Ptr{Void}, Ptr{SignatureStruct}),
+                  (Ptr{Cvoid}, Ptr{SignatureStruct}),
                    rb.ptr, sig.ptr)
 end

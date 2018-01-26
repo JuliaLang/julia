@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Serialization
+
 import Base.MPFR
 @testset "constructors" begin
     setprecision(53) do
@@ -7,22 +9,10 @@ import Base.MPFR
         x = BigFloat(12)
     end
     x = BigFloat(12)
-    y = BigFloat(x)
-    @test x ≈ y
-    y = BigFloat(0xc)
-    @test x ≈ y
-    y = BigFloat(12.)
-    @test x ≈ y
-    y = BigFloat(BigInt(12))
-    @test x ≈ y
-    y = BigFloat(BigFloat(12))
-    @test x ≈ y
-    y = parse(BigFloat,"12")
-    @test x ≈ y
-    y = BigFloat(Float32(12.))
-    @test x ≈ y
-    y = BigFloat(12//1)
-    @test x ≈ y
+    @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
+          BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
+          parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
+          BigFloat(Float32(12.)) == BigFloat(12//1)
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -365,6 +355,7 @@ end
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
+    @test copysign(1.0, BigFloat(NaN)) == 1.0
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -392,6 +383,9 @@ end
     @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
     @test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
     @test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
+
+    @test signbit(BigFloat(NaN)) == 0
+    @test signbit(BigFloat(-NaN)) == 1
 end
 @testset "convert from BigFloat" begin
     @test convert(Float64, BigFloat(0.5)) == 0.5
@@ -400,6 +394,9 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+
+    @test signbit(Float64(BigFloat(NaN))) == 0
+    @test signbit(Float64(-BigFloat(NaN))) == 1
 end
 @testset "exponent, frexp, significand" begin
     x = BigFloat(0)
@@ -502,13 +499,20 @@ end
     # total ordering
     @test isless(big(-0.0), big(0.0))
     @test isless(big(1.0), big(NaN))
+    @test isless(big(Inf), big(NaN))
+    @test isless(big(Inf), -big(NaN))
+    @test !isless(big(NaN), big(NaN))
+    @test !isless(big(-NaN), big(NaN))
+    @test !isless(-big(NaN), big(NaN))
+    @test !isless(-big(NaN), big(1.0))
+    @test !isless(-big(NaN), 1.0)
 
     # cmp
-    @test cmp(big(-0.0), big(0.0)) == 0
-    @test cmp(big(0.0), big(-0.0)) == 0
-    @test_throws DomainError cmp(big(1.0), big(NaN))
-    @test_throws DomainError cmp(big(NaN), big(NaN))
-    @test_throws DomainError cmp(big(NaN), big(1.0))
+    @test cmp(big(-0.0), big(0.0)) == -1
+    @test cmp(big(0.0), big(-0.0)) == 1
+    @test cmp(big(1.0), big(NaN)) == -1
+    @test cmp(big(NaN), big(NaN)) == 0
+    @test cmp(big(NaN), big(1.0)) == 1
 end
 @testset "signbit" begin
     @test signbit(BigFloat(-1.0)) == 1
@@ -555,7 +559,7 @@ end
     z = BigFloat(3)
     w = BigFloat(4)
     @test sum([x,y,z,w]) == BigFloat(10)
-    big_array = ones(BigFloat, 100)
+    big_array = fill(BigFloat(1), 100)
     @test sum(big_array) == BigFloat(100)
     @test sum(BigFloat[]) == BigFloat(0)
 end
@@ -876,8 +880,9 @@ end
         end
     end
 end
+
 # issue #22758
-if MPFR.version() > v"3.1.5" || "r11590" in MPFR.version().build
+if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
     setprecision(2_000_000) do
         @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
     end
@@ -916,3 +921,5 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
+
+@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()

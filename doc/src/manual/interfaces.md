@@ -13,20 +13,20 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
-| Value returned by `iteratorsize(IterType)` | Required Methods                           |
+| Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
-| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 
-| Value returned by `iteratoreltype(IterType)` | Required Methods   |
+| Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
 | `HasEltype()`                                | `eltype(IterType)` |
 | `EltypeUnknown()`                            | (*none*)           |
@@ -131,7 +131,7 @@ julia> sum(Squares(1803))
 1955361914
 ```
 
-This is a very common pattern throughout the Julia standard library: a small set of required methods
+This is a very common pattern throughout Julia Base: a small set of required methods
 define an informal interface that enable many fancier behaviors. In some cases, types will want
 to additionally specialize those extra behaviors when they know a more efficient algorithm can
 be used in their specific case.
@@ -226,15 +226,15 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
 | `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
-| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(dims)`                       | Return a mutable array with the specified element type and size                       |
+| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(uninitialized, dims)`        | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `indices(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
 | `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
-the [arrays manual page](@ref man-multi-dim-arrays) and [standard library section](@ref lib-arrays) for more supported methods.
+the [arrays manual page](@ref man-multi-dim-arrays) and the [Julia Base section](@ref lib-arrays) for more supported methods.
 
 A key part in defining an `AbstractArray` subtype is [`IndexStyle`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
@@ -250,8 +250,8 @@ arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
-`ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
-supports two dimensions, so it just defines
+`ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
+library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
@@ -373,7 +373,7 @@ julia> copy(A)
 ```
 
 In addition to all the iterable and indexable methods from above, these types can also interact
-with each other and use most of the methods defined in the standard library for `AbstractArrays`:
+with each other and use most of the methods defined in Julia Base for `AbstractArrays`:
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]
@@ -391,6 +391,37 @@ something other than 1), you should specialize `indices`. You should also specia
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
 
+## [Strided Arrays](@id man-interface-strided-arrays)
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+
+A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
+Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
+for more efficient linear algebra routines.  A typical example of a user-defined strided array is one
+that wraps a standard `Array` with additional structure.
+
+Warning: do not implement these methods if the underlying storage is not actually strided, as it
+may lead to incorrect results or segmentation faults.
+
+Here are some examples to demonstrate which type of arrays are strided and which are not:
+```julia
+1:5   # not strided (there is no storage associated with this array.)
+Vector(1:5)  # is strided with strides (1,)
+A = [1 5; 2 6; 3 7; 4 8]  # is strided with strides (1,4)
+V = view(A, 1:2, :)   # is strided with strides (1,4)
+V = view(A, 1:2:3, 1:2)   # is strided with strides (2,4)
+V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not fixed.
+```
+
+
+
+
+
 ## [Broadcasting](@id man-interfaces-broadcasting)
 
 | Methods to implement | Brief description |
@@ -399,11 +430,13 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 | `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `indices(A)`) |
+| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
 | **Bypassing default machinery** | |
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
-| `broadcast(f, ::DestStyle, ::Void, ::Void, As...)` | Bypass after container type is computed |
+| `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
 | `broadcast(f, ::DestStyle, ::Type{ElType}, inds::Tuple, As...)` | Bypass after container type, eltype, and indices are computed |
+| `broadcast!(f, dest::DestType, ::Nothing, As...)` | Bypass in-place broadcast, specialization on destination type |
+| `broadcast!(f, dest, ::BroadcastStyle, As...)` | Bypass in-place broadcast, specialization on `BroadcastStyle` |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
 "dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
@@ -591,3 +624,37 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
+
+### [Extending `broadcast!`](@id extending-in-place-broadcast)
+
+Extending `broadcast!` (in-place broadcast) should be done with care, as it is easy to introduce
+ambiguities between packages. To avoid these ambiguities, we adhere to the following conventions.
+
+First, if you want to specialize on the destination type, say `DestType`, then you should
+define a method with the following signature:
+
+```julia
+broadcast!(f, dest::DestType, ::Nothing, As...)
+```
+
+Note that no bounds should be placed on the types of `f` and `As...`.
+
+Second, if specialized `broadcast!` behavior is desired depending on the input types,
+you should write [binary broadcasting rules](@ref writing-binary-broadcasting-rules) to
+determine a custom `BroadcastStyle` given the input types, say `MyBroadcastStyle`, and you should define a method with the following
+signature:
+
+```julia
+broadcast!(f, dest, ::MyBroadcastStyle, As...)
+```
+
+Note the lack of bounds on `f`, `dest`, and `As...`.
+
+Third, simultaneously specializing on both the type of `dest` and the `BroadcastStyle` is fine. In this case,
+it is also allowed to specialize on the types of the source arguments (`As...`). For example, these method signatures are OK:
+
+```julia
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As...)
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As::AbstractArray...)
+broadcast!(f, dest::DestType, ::Broadcast.Scalar, As::Number...)
+```

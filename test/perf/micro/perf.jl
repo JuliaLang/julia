@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
 using Test
+using Printf
+
 
 include("../perfutil.jl")
 
@@ -18,7 +21,7 @@ function parseintperf(t)
     for i=1:t
         n = rand(UInt32)
         s = hex(n)
-        m = UInt32(parse(Int64,s,16))
+        m = UInt32(parse(Int64,s, base = 16))
     end
     @test m == n
     return n
@@ -28,12 +31,11 @@ end
 
 ## array constructors ##
 
-@test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones" "description"
+@test all(fill(1.,200,200) .== 1)
 
 ## matmul and transpose ##
 
-A = ones(200,200)
+A = fill(1.,200,200)
 @test all(A*A' .== 200)
 # @timeit A*A' "AtA" "description"
 
@@ -126,8 +128,8 @@ function randmatstat(t)
         d = randn(n,n)
         P = [a b c d]
         Q = [a b; c d]
-        v[i] = trace((P.'*P)^4)
-        w[i] = trace((Q.'*Q)^4)
+        v[i] = trace((P'*P)^4)
+        w[i] = trace((Q'*Q)^4)
     end
     return (std(v)/mean(v), std(w)/mean(w))
 end

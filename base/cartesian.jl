@@ -13,7 +13,7 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
 `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
-the range is `indices(var, d)` for dimension `d`.
+the range is `axes(var, d)` for dimension `d`.
 
 Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
 respectively, in the body of each loop. For example:
@@ -24,9 +24,9 @@ respectively, in the body of each loop. For example:
 
 would generate:
 
-    for i_2 = indices(A, 2)
+    for i_2 = axes(A, 2)
         j_2 = min(i_2, 5)
-        for i_1 = indices(A, 1)
+        for i_1 = axes(A, 1)
             j_1 = min(i_1, 5)
             s += A[j_1, j_2]
         end
@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->Base.indices($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
@@ -92,7 +92,7 @@ end
 Generate a function call expression. `sym` represents any number of function arguments, the
 last of which may be an anonymous-function expression and is expanded into `N` arguments.
 
-For example `@ncall 3 func a` generates
+For example, `@ncall 3 func a` generates
 
     func(a_1, a_2, a_3)
 

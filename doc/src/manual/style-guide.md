@@ -110,7 +110,7 @@ function double!(a::AbstractArray{<:Number})
 end
 ```
 
-The Julia standard library uses this convention throughout and contains examples of functions
+Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
@@ -126,11 +126,11 @@ When creating a type such as:
 ```julia
 mutable struct MyType
     ...
-    x::Union{Void,T}
+    x::Union{Nothing,T}
 end
 ```
 
-ask whether the option for `x` to be `nothing` (of type `Void`) is really necessary. Here are
+ask whether the option for `x` to be `nothing` (of type `Nothing`) is really necessary. Here are
 some alternatives to consider:
 
   * Find a safe default value to initialize `x` with
@@ -139,18 +139,16 @@ some alternatives to consider:
   * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
     will start as `nothing` but get initialized at some well-defined point. In that case, consider
     leaving it undefined at first.
-  * If `x` really needs to hold no value at some times, define it as `::Nullable{T}` instead, as this
-    guarantees type-stability in the code accessing this field (see [Nullable types](@ref man-nullable-types)).
 
 ## Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following:
 
 ```julia
-a = Array{Union{Int,AbstractString,Tuple,Array}}(n)
+a = Vector{Union{Int,AbstractString,Tuple,Array}}(uninitialized, n)
 ```
 
-In this case `Array{Any}(n)` is better. It is also more helpful to the compiler to annotate specific
+In this case `Vector{Any}(uninitialized, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
@@ -159,12 +157,72 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
   * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn`](@ref)).
+    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
+
+## Write functions with argument ordering similar to Julia's Base
+
+As a general rule, the Base library uses the following order of arguments to functions,
+as applicable:
+
+1. **Function argument**.
+   Putting a function argument first permits the use of [`do`](@ref) blocks for passing
+   multiline anonymous functions.
+
+2. **I/O stream**.
+   Specifying the `IO` object first permits passing the function to functions such as
+   [`sprint`](@ref), e.g. `sprint(show, x)`.
+
+3. **Input being mutated**.
+   For example, in [`fill!(x, v)`](@ref fill!), `x` is the object being mutated and it
+   appears before the value to be inserted into `x`.
+
+4. **Type**.
+   Passing a type typically means that the output will have the given type.
+   In [`parse(Int, "1")`](@ref parse), the type comes before the string to parse.
+   There are many such examples where the type appears first, but it's useful to note that
+   in [`read(io, String)`](@ref read), the `IO` argument appears before the type, which is
+   in keeping with the order outlined here.
+
+5. **Input not being mutated**.
+   In `fill!(x, v)`, `v` is *not* being mutated and it comes after `x`.
+
+6. **Key**.
+   For associative collections, this is the key of the key-value pair(s).
+   For other indexed collections, this is the index.
+
+7. **Value**.
+   For associative collections, this is the value of the key-value pair(s).
+   In cases like `fill!(x, v)`, this is `v`.
+
+8. **Everything else**.
+   Any other arguments.
+
+9. **Varargs**.
+   This refers to arguments that can be listed indefinitely at the end of a function call.
+   For example, in `Matrix{T}(uninitialized, dims)`, the dimensions can be given as a
+   [`Tuple`](@ref), e.g. `Matrix{T}(uninitialized, (1,2))`, or as [`Vararg`](@ref)s,
+   e.g. `Matrix{T}(uninitialized, 1, 2)`.
+
+10. **Keyword arguments**.
+   In Julia keyword arguments have to come last anyway in function definitions; they're
+   listed here for the sake of completeness.
+
+The vast majority of functions will not take every kind of argument listed above; the
+numbers merely denote the precedence that should be used for any applicable arguments
+to a function.
+
+There are of course a few exceptions.
+For example, in [`convert`](@ref), the type should always come first.
+In [`setindex!`](@ref), the value comes before the indices so that the indices can be
+provided as varargs.
+
+When designing APIs, adhering to this general order as much as possible is likely to give
+users of your functions a more consistent experience.
 
 ## Don't overuse try-catch
 

@@ -136,6 +136,12 @@ julia> 0x123456789abcdef
 
 julia> typeof(ans)
 UInt64
+
+julia> 0x11112222333344445555666677778888
+0x11112222333344445555666677778888
+
+julia> typeof(ans)
+UInt128
 ```
 
 This behavior is based on the observation that when one uses unsigned hex literals for integer
@@ -154,11 +160,36 @@ julia> 0b10
 julia> typeof(ans)
 UInt8
 
-julia> 0o10
+julia> 0o010
 0x08
 
 julia> typeof(ans)
 UInt8
+
+julia> 0x00000000000000001111222233334444
+0x00000000000000001111222233334444
+
+julia> typeof(ans)
+UInt128
+```
+
+As for hexadecimal literals, binary and octal literals produce unsigned integer types. The size
+of the binary data item is the minimal needed size, if the leading digit of the literal is not
+`0`. In the case of leading zeros, the size is determined by the minimal needed size for a
+literal, which has the same length but leading digit `1`. That allows the user to control
+the size.
+Values, which cannot be stored in `UInt128` cannot be written as such literals.
+
+Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
+unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
+would do, with the two's complement of the value:
+
+```jldoctest
+julia> -0x2
+0xfe
+
+julia> -0x0002
+0xfffe
 ```
 
 The minimum and maximum representable values of primitive numeric types such as integers are given

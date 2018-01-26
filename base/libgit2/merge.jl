@@ -14,25 +14,25 @@ tip of a remote branch, for instance when a [`FetchHead`](@ref) is passed, or to
 branch head described using `GitReference`.
 """
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
-    ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    ann_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
     return GitAnnotated(repo, ann_ptr_ptr[])
 end
 
 function GitAnnotated(repo::GitRepo, ref::GitReference)
-    ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
+    ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}),
                    ann_ref_ref, repo.ptr, ref.ptr)
     return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
-    ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
+    ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{GitHash}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{GitHash}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
     return GitAnnotated(repo, ann_ref_ref[])
 end
@@ -44,8 +44,8 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
 end
 
 function GitHash(ann::GitAnnotated)
-    Base.@gc_preserve ann begin
-        oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
+    GC.@preserve ann begin
+        oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Cvoid},), ann.ptr))
     end
     return oid
 end
@@ -81,10 +81,10 @@ Return two outputs, `analysis` and `preference`. `analysis` has several possible
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     analysis = Ref{Cint}(0)
     preference = Ref{Cint}(0)
-    anns_ref = Ref(map(a->a.ptr, anns))
+    anns_ref = Ref(map(a->a.ptr, anns), 1)
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge_analysis, :libgit2), Cint,
-                  (Ptr{Cint}, Ptr{Cint}, Ptr{Void}, Ptr{Ptr{Void}}, Csize_t),
+                  (Ptr{Cint}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),
                    analysis, preference, repo.ptr, anns_ref, anns_size)
     return analysis[], preference[]
 end
@@ -142,11 +142,11 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                 checkout_opts::CheckoutOptions = CheckoutOptions())
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
+                  (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, map(x->x.ptr, anns), anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
-    info("Review and commit merged changes.")
+    @info "Review and commit merged changes"
     return true
 end
 
@@ -209,7 +209,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
@@ -222,13 +222,13 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])
             end
         else
-            warn("Cannot perform fast-forward merge.")
+            @warn "Cannot perform fast-forward merge"
             false
         end
     elseif ffpref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
@@ -255,11 +255,10 @@ function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
     moid_ptr = Ref(GitHash())
     moid = try
         @check ccall((:git_merge_base, :libgit2), Cint,
-                (Ptr{GitHash}, Ptr{Void}, Ptr{GitHash}, Ptr{GitHash}),
+                (Ptr{GitHash}, Ptr{Cvoid}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
-        #warn("Pkg:",path(repo),"=>",e.msg)
         GitHash()
     end
     return moid

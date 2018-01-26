@@ -82,7 +82,7 @@ catalan = 0.9159655941772...
 catalan
 
 # loop over types to prevent ambiguities for ^(::Number, x)
-for T in (AbstractIrrational, Rational, Integer, Number)
+for T in (AbstractIrrational, Rational, Integer, Number, Complex)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
 end
 Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)

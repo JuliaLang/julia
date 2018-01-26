@@ -121,9 +121,9 @@ values such as `NaN`.
 """
 function isless end
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
 
 function ==(T::Type, S::Type)
@@ -300,7 +300,6 @@ const ≥ = >=
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
-lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 """
     ifelse(condition::Bool, x, y)
@@ -322,8 +321,7 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
-respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
-but throws an error for unordered arguments.
+respectively. Uses the total order implemented by `isless`.
 
 # Examples
 ```jldoctest
@@ -342,35 +340,12 @@ Stacktrace:
 cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
-    lexcmp(x, y)
+    cmp(<, x, y)
 
-Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
-less than, equal to, or greater than `y`, respectively. This function should be defined for
-lexicographically comparable types, and `lexless` will call `lexcmp` by default.
-
-# Examples
-```jldoctest
-julia> lexcmp("abc", "abd")
--1
-
-julia> lexcmp("abc", "abc")
-0
-```
+Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
+respectively. The first argument specifies a less-than comparison function to use.
 """
-lexcmp(x, y) = cmp(x, y)
-
-"""
-    lexless(x, y)
-
-Determine whether `x` is lexicographically less than `y`.
-
-# Examples
-```jldoctest
-julia> lexless("abc", "abd")
-true
-```
-"""
-lexless(x, y) = lexcmp(x,y) < 0
+cmp(<, x, y) = (x < y) ? -1 : ifelse(y < x, 1, 0)
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
@@ -415,16 +390,6 @@ julia> minmax('c','b')
 ```
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
-
-scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
-
-scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -500,7 +465,7 @@ julia> inv(A) * x
   4.5
 ```
 """
-\(x,y) = (y'/x')'
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -739,172 +704,17 @@ fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
-# transpose
-
-"""
-    adjoint(A)
-
-The conjugate transposition operator (`'`).
-
-# Examples
-```jldoctest
-julia> A =  [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> adjoint(A)
-2×2 Array{Complex{Int64},2}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
-adjoint(x) = conj(transpose(x))
 conj(x) = x
 
-# transposed multiply
-
-"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B(a,b)  = adjoint(a)*b
-
-"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc(a,b)  = a*adjoint(b)
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc(a,b) = adjoint(a)*adjoint(b)
-
-"""
-    At_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
-"""
-At_mul_B(a,b)  = transpose(a)*b
-
-"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
-"""
-A_mul_Bt(a,b)  = a*transpose(b)
-
-"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
-"""
-At_mul_Bt(a,b) = transpose(a)*transpose(b)
-
-# transposed divide
-
-"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B(a,b)  = adjoint(a)/b
-
-"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc(a,b)  = a/adjoint(b)
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc(a,b) = adjoint(a)/adjoint(b)
-
-"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
-"""
-At_rdiv_B(a,b)  = transpose(a)/b
-
-"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
-"""
-A_rdiv_Bt(a,b)  = a/transpose(b)
-
-"""
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
-"""
-At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
-
-"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B(a,b)  = adjoint(a)\b
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc(a,b)  = a\adjoint(b)
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc(a,b) = adjoint(a)\adjoint(b)
-
-"""
-    At_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
-"""
-At_ldiv_B(a,b)  = transpose(a)\b
-
-"""
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
-"""
-A_ldiv_Bt(a,b)  = a\transpose(b)
-
-"""
-    At_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
-"""
-At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
-
-"""
-    Ac_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
-"""
-Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 """
     widen(x)
 
-If `x` is a type, return a "larger" type (for numeric types, this will be
-a type with at least as much range and precision as the argument, and usually more).
-Otherwise `x` is converted to `widen(typeof(x))`.
+If `x` is a type, return a "larger" type, defined so that arithmetic operations
+`+` and `-` are guaranteed not to overflow nor lose precision for any combination
+of values that type `x` can hold.
+
+If `x` is a value, it is converted to `widen(typeof(x))`.
 
 # Examples
 ```jldoctest
@@ -915,7 +725,8 @@ julia> widen(1.5f0)
 1.5
 ```
 """
-widen(x::T) where {T<:Number} = convert(widen(T), x)
+widen(x::T) where {T} = convert(widen(T), x)
+widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 
 # function pipelining
 
@@ -993,3 +804,22 @@ The returned function is of type `Base.EqualTo`. This allows dispatching to
 specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
 """
 const equalto = EqualTo
+
+struct OccursIn{T} <: Function
+    x::T
+
+    OccursIn(x::T) where {T} = new{T}(x)
+end
+
+(f::OccursIn)(y) = y in f.x
+
+"""
+    occursin(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
+`y -> y in x`.
+
+The returned function is of type `Base.OccursIn`. This allows dispatching to
+specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+"""
+const occursin = OccursIn

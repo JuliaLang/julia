@@ -16,8 +16,8 @@ const DOUBLE = Int32(0)        # all numerical values are double
 const SINGLE = Int32(1)        # all numerical values are float
 dtyp(::Type{Float32}) = SINGLE
 dtyp(::Type{Float64}) = DOUBLE
-dtyp(::Type{Complex64}) = SINGLE
-dtyp(::Type{Complex128}) = DOUBLE
+dtyp(::Type{ComplexF32}) = SINGLE
+dtyp(::Type{ComplexF64}) = DOUBLE
 
 ## xtype defines the kind of numerical values used:
 const PATTERN = Int32(0)       # pattern only, no numerical values
@@ -26,8 +26,8 @@ const COMPLEX = Int32(2)       # a complex matrix (ANSI C99 compatible)
 const ZOMPLEX = Int32(3)       # a complex matrix (MATLAB compatible)
 xtyp(::Type{Float32})    = REAL
 xtyp(::Type{Float64})    = REAL
-xtyp(::Type{Complex64})  = COMPLEX
-xtyp(::Type{Complex128}) = COMPLEX
+xtyp(::Type{ComplexF32}) = COMPLEX
+xtyp(::Type{ComplexF64}) = COMPLEX
 
 ## Scaling modes, selected by the scale input parameter:
 const SCALAR = Int32(0)        # A = s*A
@@ -67,7 +67,7 @@ else
     const ITypes = Union{Int32, Int64}
 end
 
-const VTypes = Union{Complex128, Float64}
+const VTypes = Union{ComplexF64, Float64}
 const VRealTypes = Union{Float64}
 
 struct CHOLMODException <: Exception

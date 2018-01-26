@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Libdl
+
 catcmd = `cat`
 if Sys.iswindows()
-    busybox = joinpath(JULIA_HOME, "busybox.exe")
+    busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows
         success(`$busybox`)
         true
@@ -41,8 +43,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # --home
-    @test success(`$exename -H $JULIA_HOME`)
-    @test success(`$exename --home=$JULIA_HOME`)
+    @test success(`$exename -H $(Sys.BINDIR)`)
+    @test success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
@@ -104,15 +106,15 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
-    # --machinefile
-    # this does not check that machinefile works,
+    # --machine-file
+    # this does not check that machine file works,
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e
-                "println(unsafe_string(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machine-file $fname -e
+                "println(unsafe_string(Base.JLOptions().machine_file))"`) == fname
         finally
             rm(fname)
         end
@@ -196,10 +198,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -E "exit(0)" --check-bounds=false`)
 
     # --depwarn
-    @test readchomp(`$exename --depwarn=no -E
-        "Base.syntax_deprecation_warnings(true)"`) == "false"
-    @test readchomp(`$exename --depwarn=yes -E
-        "Base.syntax_deprecation_warnings(false)"`) == "true"
+    @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
+    @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
     @test !success(`$exename --depwarn=false`)
     # test deprecated syntax
     @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
@@ -231,7 +231,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             close(out.in)
             wait(proc)
             @test success(proc)
-            @test wait(output) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
+            @test wait(output) == "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5"
         end
 
         let out  = Pipe(),
@@ -386,7 +386,7 @@ end
 libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
 
 # test error handling code paths of running --sysimage
-let exename = joinpath(JULIA_HOME, Base.julia_exename()),
+let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),
@@ -434,10 +434,10 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, DevNull))
+run(pipeline(DevNull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, DevNull))
 
 # Test that `julia [some other option] --lisp` is disallowed
-@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME,
+@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(Sys.BINDIR,
     Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
 
 # --sysimage-native-code={yes|no}

@@ -26,6 +26,7 @@ Base.setindex!(md::MD, args...) = setindex!(md.content, args...)
 Base.endof(md::MD) = endof(md.content)
 Base.length(md::MD) = length(md.content)
 Base.isempty(md::MD) = isempty(md.content)
+Base.copy(md::MD) = MD(copy(md.content), copy(md.meta))
 
 ==(a::MD, b::MD) = (html(a) == html(b))
 

@@ -53,6 +53,15 @@
         0x0010ffff      '\U10ffff'  "\\U10ffff"
     ]
 
+    buf = IOBuffer()
+    @test typeof(escape_string(buf, "test")) == Nothing
+    @test String(take!(buf)) == "test"
+    @test typeof(escape_string(buf, "hello", "l")) == Nothing
+    @test String(take!(buf)) == "he\\l\\lo"
+
+    @test typeof(escape_string("test", "t")) == String
+    @test escape_string("test", "t") == "\\tes\\t"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
@@ -140,6 +149,7 @@ end
     @test join("HELLO",'-') == "H-E-L-L-O"
     @test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
     @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
+    @test_throws MethodError join(1, 2, 3, 4)
 end
 
 # issue #9178 `join` calls `done()` twice on the iterables
@@ -162,8 +172,7 @@ myio = IOBuffer()
 join(myio, "", "", 1)
 @test isempty(take!(myio))
 
-@testset "unescape_chars" begin
-    @test Base.unescape_chars("\\t","t") == "t"
+@testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
 end

@@ -26,7 +26,7 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findin(dr, dr) == Int64[]
+                @test findall(occursin(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
@@ -38,6 +38,8 @@ let
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
                 @test !(l1 + pos_step in dr)
+                @test dr == []
+                @test hash(dr) == hash([])
 
                 for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                     dr = f:pos_step:l
@@ -56,8 +58,10 @@ let
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findin(dr, dr) == [1:len;]
+                        @test findall(occursin(dr), dr) == [1:len;]
                         @test length([dr;]) == len
+                        @test dr == dr1
+                        @test hash(dr) == hash(dr1)
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -80,7 +84,7 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findin(dr, dr) == Int64[]
+                @test findall(occursin(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
@@ -92,6 +96,8 @@ let
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
                 @test !(l1 + neg_step in dr)
+                @test dr == []
+                @test hash(dr) == hash([])
 
                 for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                     dr = l:neg_step:f
@@ -110,8 +116,10 @@ let
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findin(dr, dr) == [1:len;]
+                        @test findall(occursin(dr), dr) == [1:len;]
                         @test length([dr;]) == len
+                        @test dr == dr1
+                        @test hash(dr) == hash(dr1)
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -136,7 +144,7 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findin(dr, dr) == Int64[]
+                    @test findall(occursin(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
@@ -148,6 +156,8 @@ let
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
                     @test !(l1 + pos_step in dr)
+                    @test dr == []
+                    @test hash(dr) == hash([])
 
                     for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                         dr = f:pos_step:l
@@ -166,8 +176,10 @@ let
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findin(dr, dr) == [1:len;]
+                            @test findall(occursin(dr), dr) == [1:len;]
                             @test length([dr;]) == len
+                            @test dr == dr1
+                            @test hash(dr) == hash(dr1)
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
@@ -190,7 +202,7 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findin(dr, dr) == Int64[]
+                    @test findall(occursin(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
@@ -202,6 +214,8 @@ let
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)
                     @test !(l1 + neg_step in dr)
+                    @test dr == []
+                    @test hash(dr) == hash([])
 
                     for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                         dr = l:neg_step:f
@@ -220,8 +234,10 @@ let
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findin(dr, dr) == [1:len;]
+                            @test findall(occursin(dr), dr) == [1:len;]
                             @test length([dr;]) == len
+                            @test dr == dr1
+                            @test hash(dr) == hash(dr1)
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
@@ -277,7 +293,7 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
 @test map(length, drs) == map(x->size(x)[1], drs)
 @test map(length, drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))), drs)
 @test map(length, drs) == map(x->length(reverse(x)), drs)
-@test all(x->findin(x, x)==[1:length(x);], drs[1:4])
+@test all(x->findall(occursin(x), x)==[1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == range(last(x), -step(x), length(x)), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -291,7 +307,7 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.DateTime(2013, 1, 1)
 b = Dates.DateTime(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Array{Dates.DateTime}(32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Vector{Dates.DateTime}(uninitialized, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 @test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
@@ -355,7 +371,7 @@ drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findin(x, x) == [1:length(x);], drs[1:4])
+@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -369,7 +385,7 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.Date(2013, 1, 1)
 b = Dates.Date(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Array{Dates.Date}(32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Vector{Dates.Date}(uninitialized, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 @test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
@@ -541,7 +557,7 @@ drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findin(x, x) == [1:length(x);], drs[1:4])
+@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])

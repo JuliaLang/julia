@@ -358,7 +358,7 @@ f(x) do a,b
 end
 ```
 
-parses as `(call f (-> (tuple a b) (block body)) x)`.
+parses as `(do (call f x) (-> (tuple a b) (block body)))`.
 
 ### Operators
 
@@ -435,12 +435,12 @@ parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x
 
 | Input               | AST                                          |
 |:------------------- |:-------------------------------------------- |
-| `import a`          | `(import a)`                                 |
-| `import a.b.c`      | `(import a b c)`                             |
-| `import ...a`       | `(import . . . a)`                           |
-| `import a.b, c.d`   | `(toplevel (import a b) (import c d))`       |
-| `import Base: x`    | `(import Base x)`                            |
-| `import Base: x, y` | `(toplevel (import Base x) (import Base y))` |
+| `import a`          | `(import (. a))`                             |
+| `import a.b.c`      | `(import (. a b c))`                         |
+| `import ...a`       | `(import (. . . . a))`                       |
+| `import a.b, c.d`   | `(import (. a b) (. c d))`                   |
+| `import Base: x`    | `(import (: (. Base) (. x)))`                |
+| `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
 | `export a, b`       | `(export a b)`                               |
 
 ### Numbers

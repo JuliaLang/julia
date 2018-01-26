@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Printf, Random
+
 const mintrials = 5
 const mintime = 2000.0
 print_output = isempty(ARGS)
@@ -63,25 +65,27 @@ macro output_timings(t,name,desc,group)
         elseif print_output
             @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
-        gc()
+        GC.gc()
     end
 end
 
 macro timeit(ex,name,desc,group...)
     quote
-        t = Float64[]
-        tot = 0.0
-        i = 0
-        while i < mintrials || tot < mintime
-            e = 1000*(@elapsed $(esc(ex)))
-            tot += e
-            if i > 0
-                # warm up on first iteration
-                push!(t, e)
+        let
+            t = Float64[]
+            tot = 0.0
+            i = 0
+            while i < mintrials || tot < mintime
+                e = 1000*(@elapsed $(esc(ex)))
+                tot += e
+                if i > 0
+                    # warm up on first iteration
+                    push!(t, e)
+                end
+                i += 1
             end
-            i += 1
+            @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
         end
-        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
     end
 end
 
@@ -105,7 +109,7 @@ function maxrss(name)
     @static if Sys.islinux()
         rus = Vector{Int64}(uninitialized, div(144,8))
         fill!(rus, 0x0)
-        res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)
+        res = ccall(:getrusage, Int32, (Int32, Ptr{Cvoid}), 0, rus)
         if res == 0
             mx = rus[5]/1024
             @printf "julia,%s.mem,%f,%f,%f,%f\n" name mx mx mx 0

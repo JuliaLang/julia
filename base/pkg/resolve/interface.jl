@@ -44,7 +44,7 @@ mutable struct Interface
 
     function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
         # generate pkgs
-        pkgs = sort!(String[Set{String}(keys(deps))...])
+        pkgs = sort!(String[keys(deps)...])
 
         np = length(pkgs)
 
@@ -82,7 +82,7 @@ mutable struct Interface
         end
 
         ## generate wveights:
-        vweight = Vector{Vector{VersionWeight}}(np)
+        vweight = Vector{Vector{VersionWeight}}(uninitialized, np)
         for p0 = 1:np
             pvers0 = pvers[p0]
             spp0 = spp[p0]
@@ -216,9 +216,23 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
             if sol[p0] == v0
                 for (rp, rvs) in a.requires
                     p1 = pdict[rp]
-                    sol[p1] != spp[p1] || return false
-                    vn = pvers[p1][sol[p1]]
-                    vn ∈ rvs || return false
+                    if sol[p1] == spp[p1]
+                        println("""
+                                VERIFICATION ERROR: REQUIRED DEPENDENCY NOT INSTALLED
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp is not being installed (p1=$p1 sol[p1]=$(sol[p1]) == spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
+                    vn1 = pvers[p1][sol[p1]]
+                    if vn1 ∉ rvs
+                        println("""
+                                VERIFICATION ERROR: INVALID VERSION
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp version is being set to $vn1 (p1=$p1 sol[p1]=$(sol[p1]) spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
                 end
             end
         end
@@ -307,7 +321,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             end
             viol && continue
             # So the solution is non-optimal: we bump it manually
-            #warn("nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
+            #@debug "Nonoptimal solution for package `$(interface.pkgs[p0])`: sol=$s0"
             sol[p0] += 1
             restart = true
         end
@@ -340,7 +354,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
         staged = staged_next
     end
 
-    for p0 in find(uninst)
+    for p0 in findall(uninst)
         sol[p0] = spp[p0]
     end
 

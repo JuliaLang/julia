@@ -604,13 +604,14 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->current_module = NULL;
     t->parent = ptls->current_task;
     t->tls = jl_nothing;
-    t->consumers = jl_nothing;
     t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
     t->backtrace = jl_nothing;
+    // Inherit logger state from parent task
+    t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->gcstack = NULL;
@@ -678,11 +679,11 @@ void jl_init_tasks(void)
                                         "parent",
                                         "storage",
                                         "state",
-                                        "consumers",
                                         "donenotify",
                                         "result",
                                         "exception",
                                         "backtrace",
+                                        "logstate",
                                         "code"),
                         jl_svec(9,
                                 jl_any_type,
@@ -724,13 +725,13 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->parent = ptls->current_task;
     ptls->current_task->current_module = ptls->current_module;
     ptls->current_task->tls = jl_nothing;
-    ptls->current_task->consumers = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;
     ptls->current_task->exception = jl_nothing;
     ptls->current_task->backtrace = jl_nothing;
+    ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
     ptls->current_task->tid = ptls->tid;

@@ -1,8 +1,8 @@
 # [Dates and Time](@id stdlib-dates)
 
-Functionality to handle time and dates are defined in the standard library module `Dates`.
+Functionality to handle time and dates is defined in the standard library module `Dates`.
 You'll need to import the module using `import Dates` and prefix each
-function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternatively, You can write
+function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternatively, you can write
 `using Dates` to bring all exported functions into `Main` to be used without the `Dates.`
 prefix.
 
@@ -23,7 +23,7 @@ Dates.Time
 
 ```@docs
 Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Dates.DateTime(::Dates.Period...)
+Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
@@ -32,13 +32,13 @@ Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)
 Dates.Date(::Int64, ::Int64, ::Int64)
-Dates.Date(::Dates.Period...)
+Dates.Date(::Dates.Period)
 Dates.Date(::Function, ::Any, ::Any, ::Any)
 Dates.Date(::Dates.TimeType)
 Dates.Date(::AbstractString, ::AbstractString)
 Dates.Date(::AbstractString, ::Dates.DateFormat)
 Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Dates.Time(::Dates.TimePeriod...)
+Dates.Time(::Dates.TimePeriod)
 Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
 Dates.now()

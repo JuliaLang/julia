@@ -51,8 +51,8 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
-@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Void}}}((1, 2))) ===
-    NamedTuple{(:a,), Tuple{Union{Int,Void}}}((2,))
+@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
+    NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
 
@@ -81,10 +81,10 @@ end
 @test merge((a=2, b=1), NamedTuple()) == (a=2, b=1)
 @test merge(NamedTuple(), NamedTuple()) == NamedTuple()
 # `merge` should preserve element types
-let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Void}}}((1,Int32(2))),
-               NamedTuple{(:a,:c),Tuple{Union{Int8,Void},Float64}}((nothing,1.0)))
-    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Void},Union{Int32,Void},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Void, Int8},Union{Void, Int32},Float64}}((nothing, 2, 1.0))"
+let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
+               NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
+    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
+    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -114,6 +114,9 @@ end
 @test Meta.lower(Main, Meta.parse("(a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
 @test Meta.lower(Main, Meta.parse("(c=1,a=1,b=0,a=2)")) == Expr(:error, "field name \"a\" repeated in named tuple")
 
+@test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
+@test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
+
 @test Meta.parse("(;)") == quote end
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
@@ -123,6 +126,14 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     @test (d..., a=10) == (a=10, b=2, c=3)
     @test (a=0, b=0, z=1, d..., x=4, y=5) == (a=1, b=2, z=1, c=3, x=4, y=5)
     @test (a=0, (b=2,a=1)..., c=3) == (a=1, b=2, c=3)
+
+    t = (x=1, y=20)
+    @test (;d...) == (a=1, b=2, c=3)
+    @test (;d..., :z=>20) == (a=1, b=2, c=3, z=20)
+    @test (;a=10, d..., :c=>30) == (a=1, b=2, c=30)
+    y = (w=30, z=40)
+    @test (;t..., y...) == (x=1, y=20, w=30, z=40)
+    @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
 end
 
 # inference tests
@@ -146,7 +157,7 @@ function nt_from_abstractly_typed_array()
 end
 @test nt_from_abstractly_typed_array() === (3,5)
 
-let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Void}}}, nt = T((1, nothing))
+let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Nothing}}}, nt = T((1, nothing))
     @test nt == (a=1, b=nothing)
     @test typeof(nt) == T
     @test convert(T, (a=1, b=nothing)) == nt
@@ -189,3 +200,24 @@ function abstr_nt_22194_3()
 end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
+
+@test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
+@test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
+@test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
+@test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1, a=0)) == NamedTuple()
+@test Base.structdiff((a=1, b=2, z=20), NamedTuple{(:b,)}) == (a=1, z=20)
+@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
+                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}
+
+@test findall(equalto(1), (a=1, b=2)) == [:a]
+@test findall(equalto(1), (a=1, b=1)) == [:a, :b]
+@test isempty(findall(equalto(1), NamedTuple()))
+@test isempty(findall(equalto(1), (a=2, b=3)))
+@test findfirst(equalto(1), (a=1, b=2)) == :a
+@test findlast(equalto(1), (a=1, b=2)) == :a
+@test findfirst(equalto(1), (a=1, b=1)) == :a
+@test findlast(equalto(1), (a=1, b=1)) == :b
+@test findfirst(equalto(1), ()) === nothing
+@test findlast(equalto(1), ()) === nothing
+@test findfirst(equalto(1), (a=2, b=3)) === nothing
+@test findlast(equalto(1), (a=2, b=3)) === nothing

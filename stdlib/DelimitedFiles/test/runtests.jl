@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 using DelimitedFiles
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
@@ -230,7 +230,7 @@ end
     for data in ["A B C", "A B C\n"]
         data,hdr = readdlm(IOBuffer(data), header=true)
         @test hdr == AbstractString["A" "B" "C"]
-        @test data == Array{Float64}(0, 3)
+        @test data == Matrix{Float64}(uninitialized, 0, 3)
     end
 end
 
@@ -289,4 +289,8 @@ end
 let d = TextDisplay(IOBuffer())
     display(d, "text/csv", [3 1 4])
     @test String(take!(d.io)) == "3,1,4\n"
+end
+
+@testset "complex" begin
+    @test readdlm(IOBuffer("3+4im, 4+5im"), ',', Complex{Int}) == [3+4im 4+5im]
 end

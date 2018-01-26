@@ -4,7 +4,7 @@ module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_indices, check_broadcast_shape, newindex, _bcs
 using Base: OneTo
-using Test
+using Test, Random
 
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)
@@ -134,7 +134,7 @@ for arr in (identity, as_sub)
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
-    @test A == diagm(0 => 10:12)
+    @test A == [10 0 0; 0 11 0; 0 0 12]
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
@@ -211,7 +211,7 @@ let a = sin.([1, 2])
 end
 
 # PR #17300: loop fusion
-@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == collect(7:16)
+@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
@@ -317,7 +317,6 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(Meta.lower(Main, :(f.(x,y))), :call)
 @test isexpr(Meta.lower(Main, :(f.(x,1))), :thunk)
 @test isexpr(Meta.lower(Main, :(f.(x,1.0))), :thunk)
 @test isexpr(Meta.lower(Main, :(f.(x,$π))), :thunk)
@@ -519,10 +518,10 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
 end
 
 # broadcast should only "peel off" one container layer
-@test get.([Nullable(1), Nullable(2)]) == [1, 2]
+@test getindex.([Ref(1), Ref(2)]) == [1, 2]
 let io = IOBuffer()
-    broadcast(x -> print(io, x), [Nullable(1.0)])
-    @test String(take!(io)) == "Nullable{Float64}(1.0)"
+    broadcast(x -> print(io, x), [Ref(1.0)])
+    @test String(take!(io)) == "Base.RefValue{Float64}(1.0)"
 end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
@@ -554,16 +553,16 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    @test iszero(ones(N, N) .= zeros(N, N))
-    @test iszero(ones(N, N) .= zeros(N, 1))
-    @test iszero(ones(N, N) .= zeros(1, N))
-    @test iszero(ones(N, N) .= zeros(1, 1))
+    @test iszero(fill(1, N, N) .= zeros(N, N))
+    @test iszero(fill(1, N, N) .= zeros(N, 1))
+    @test iszero(fill(1, N, N) .= zeros(1, N))
+    @test iszero(fill(1, N, N) .= zeros(1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin
-    A = fill(zeros(2,2), 4, 4)
-    A[1:3,1:3] .= [ones(2,2)]
-    @test all(A[1:3,1:3] .== [ones(2,2)])
+    A = fill([0 0; 0 0], 4, 4)
+    A[1:3,1:3] .= [[1 1; 1 1]]
+    @test all(A[1:3,1:3] .== [[1 1; 1 1]])
 end
 
 # Test that broadcast does not confuse eltypes. See also
@@ -576,9 +575,6 @@ end
     @test isequal(
         [Set([1]), Set([2])] .∪ Set([3]),
         [Set([1, 3]), Set([2, 3])])
-
-    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
-                  Nullable("hello"))
 end
 
 @testset "broadcast resulting in tuples" begin
@@ -609,4 +605,10 @@ end
 # end
 
 # Issue #22180
-@test isequal(convert.(Nullable, [1,2]), [Nullable(1), Nullable(2)])
+@test convert.(Any, [1, 2]) == [1, 2]
+
+# Issue #24944
+let n = 1
+    @test ceil.(Int, n ./ (1,)) == (1,)
+    @test ceil.(Int, 1 ./ (1,)) == (1,)
+end

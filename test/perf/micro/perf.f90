@@ -193,9 +193,9 @@ end function
 subroutine printfd(n)
 integer, intent(in) :: n
 integer :: i , unit
-open(unit=1, file="foo")
+open(unit=1, file="/dev/null")
 do i = 1, n
-    write(unit=1, fmt=*) i, i
+    write(unit=1, fmt=*) i, i+1
 end do
 close(unit=1)
 end subroutine

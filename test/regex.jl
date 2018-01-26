@@ -1,24 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function collect_eachmatch(re, str, overlap=false)
-    [m.match for m in collect(eachmatch(re, str, overlap))]
+function collect_eachmatch(re, str; overlap=false)
+    [m.match for m in collect(eachmatch(re, str, overlap = overlap))]
 end
 
 for f in [matchall, collect_eachmatch]
     @test f(r"a?b?", "asbd") == ["a","","b","",""] == f(r"""a?b?""", "asbd")
-    @test f(r"a?b?", "asbd", true) == ["a","","b","",""]
-    @test f(r"\w+", "hello", true) == ["hello","ello","llo","lo","o"]
+    @test f(r"a?b?", "asbd", overlap=true) == ["a","","b","",""]
+    @test f(r"\w+", "hello", overlap=true) == ["hello","ello","llo","lo","o"]
     @test f(r".\s", "x \u2200 x \u2203 y") == ["x ", "∀ ", "x ", "∃ "]
     @test f(r"(\w+)(\s*)", "The dark side of the moon") ==
           ["The ", "dark ", "side ", "of ", "the ", "moon"]
     @test f(r"", "") == [""]
-    @test f(r"", "", true) == [""]
+    @test f(r"", "", overlap=true) == [""]
     @test f(r"aa", "aaaa") == ["aa", "aa"]
-    @test f(r"aa", "aaaa", true) == ["aa", "aa", "aa"]
+    @test f(r"aa", "aaaa", overlap=true) == ["aa", "aa", "aa"]
     @test f(r"", "aaa") == ["", "", "", ""]
-    @test f(r"", "aaa", true) == ["", "", "", ""]
+    @test f(r"", "aaa", overlap=true) == ["", "", "", ""]
     @test f(r"GCG","GCGCG") == ["GCG"]
-    @test f(r"GCG","GCGCG",true) == ["GCG","GCG"]
+    @test f(r"GCG","GCGCG",overlap=true) == ["GCG","GCG"]
 end
 
 # Issue 8278
@@ -32,11 +32,11 @@ show(buf, r"")
 @test read(buf, String) == "r\"\""
 
 # see #10994, #11447: PCRE2 allows NUL chars in the pattern
-@test ismatch(Regex("^a\0b\$"), "a\0b")
+@test contains("a\0b", Regex("^a\0b\$"))
 
 # regex match / search string must be a String
 @test_throws ArgumentError match(r"test", GenericString("this is a test"))
-@test_throws ArgumentError search(GenericString("this is a test"), r"test")
+@test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
 # Named subpatterns
 let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
@@ -45,8 +45,8 @@ let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
 end
 
 # Backcapture reference in substitution string
-@test replace("abcde", r"(..)(?P<byname>d)", s"\g<byname>xy\\\1") == "adxy\\bce"
-@test_throws ErrorException replace("a", r"(?P<x>)", s"\g<y>")
+@test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
+@test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")
 
 # Proper unicode handling
 @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"

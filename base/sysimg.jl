@@ -3,7 +3,18 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+
+getproperty(x, f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+# Try to help prevent users from shooting them-selves in the foot
+# with ambiguities by defining a few common and critical operations
+# (and these don't need the extra convert code)
+getproperty(x::Module, f::Symbol) = getfield(x, f)
+setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
+getproperty(x::Type, f::Symbol) = getfield(x, f)
+setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
 function include(mod::Module, path::AbstractString)
     local result
@@ -31,7 +42,7 @@ function include(path::AbstractString)
 end
 const _included_files = Array{Tuple{Module,String},1}()
 function _include1(mod::Module, path)
-    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.Compiler.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
     Core.include(mod, path)
 end
 let SOURCE_PATH = ""
@@ -64,8 +75,8 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str, WrappedException
-if isdefined(Core, :Inference)
-    import Core.Inference.CoreDocs
+if isdefined(Core, :Compiler)
+    import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
 end
 
@@ -85,7 +96,6 @@ end
 include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
-include("nullabletype.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
@@ -108,10 +118,6 @@ include("pointer.jl")
 include("refpointer.jl")
 include("checked.jl")
 using .Checked
-
-# buggy handling of ispure in type-inference means this should be
-# after re-defining the basic operations that they might try to call
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
@@ -146,21 +152,15 @@ Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int
 # empty vector constructor
 Vector() = Vector{Any}(uninitialized, 0)
 
-## preexisting dims-type-converting Array constructors for convenience, i.e. without uninitialized, to deprecate
-# type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
-# type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
-Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
-Array{T}(d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
-# dimensionality but not type specified, accepting dims as series of Integers
-Vector(m::Integer) = Vector{Any}(uninitialized, Int(m))
-Matrix(m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
+# Array constructors for nothing and missing
+# type and dimensionality specified
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
+# type but not dimensionality specified
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
 
-
-include("associative.jl")
+include("abstractdict.jl")
 
 include("namedtuple.jl")
 
@@ -182,9 +182,8 @@ struct MIME{mime} end
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
-
-include("char.jl")
-include("strings/string.jl")
+# fallback text/plain representation of any type:
+show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 # SIMD loops
 include("simdloop.jl")
@@ -198,16 +197,23 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 
-if !isdefined(Core, :Inference)
+if !isdefined(Core, :Compiler)
     include("docs/core.jl")
     Core.atdoc!(CoreDocs.docm)
 end
+
+# Some type
+include("some.jl")
 
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
+
+include("char.jl")
+include("strings/basic.jl")
+include("strings/string.jl")
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
@@ -242,6 +248,7 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
+include("arrayshow.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -249,9 +256,6 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
-
-# nullable types
-include("nullable.jl")
 
 include("broadcast.jl")
 using .Broadcast
@@ -288,8 +292,13 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
-include("libdl.jl")
-using .Libdl: DL_LOAD_PATH
+
+const DL_LOAD_PATH = String[]
+if Sys.isapple()
+    push!(DL_LOAD_PATH, "@loader_path/julia")
+    push!(DL_LOAD_PATH, "@loader_path")
+end
+
 include("env.jl")
 
 # Scheduling
@@ -299,6 +308,36 @@ include("task.jl")
 include("lock.jl")
 include("threads.jl")
 include("weakkeydict.jl")
+
+# Logging
+include("logging.jl")
+using .CoreLogging
+global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
+
+# To limit dependency on rand functionality (implemented in the Random
+# module), Crand is used in file.jl, and could be used in error.jl
+# (but it breaks a test)
+"""
+    Crand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
+"""
+Crand() = ccall(:rand, Cuint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
+Crand(::Type{Float64}) = Crand(UInt32) / 2^32
+
+"""
+    Csrand([seed])
+
+Interface the the C `srand(seed)` function.
+"""
+Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+# functions defined in Random
+function rand end
+function randn end
 
 # I/O
 include("stream.jl")
@@ -362,15 +401,9 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# random number generation
-include("random/dSFMT.jl")
-include("random/random.jl")
-using .Random
-import .Random: rand, rand!
-
 # (s)printf macros
 include("printf.jl")
-using .Printf
+# import .Printf
 
 # metaprogramming
 include("meta.jl")
@@ -380,16 +413,13 @@ include("Enums.jl")
 using .Enums
 
 # concurrency and parallelism
-include("serialize.jl")
-using .Serializer
-import .Serializer: serialize, deserialize
 include("channels.jl")
 
 # utilities - timing, help, edit
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
-include("replutil.jl")
+include("errorshow.jl")
 include("i18n.jl")
 using .I18n
 
@@ -403,14 +433,11 @@ include("client.jl")
 # misc useful functions & macros
 include("util.jl")
 
-# dense linear algebra
-include("linalg/linalg.jl")
-using .LinAlg
-const ⋅ = dot
-const × = cross
-
 # statistics
 include("statistics.jl")
+
+# missing values
+include("missing.jl")
 
 # libgit2 support
 include("libgit2/libgit2.jl")
@@ -418,23 +445,18 @@ include("libgit2/libgit2.jl")
 # package manager
 include("pkg/pkg.jl")
 
-# sparse matrices, vectors, and sparse linear algebra
-include("sparse/sparse.jl")
-using .SparseArrays
-
-include("asyncmap.jl")
-
-include("distributed/Distributed.jl")
-using .Distributed
-
 # worker threads
 include("threadcall.jl")
 
 # code loading
+include("uuid.jl")
 include("loading.jl")
 
-# set up load path to be able to find stdlib packages
-init_load_path(ccall(:jl_get_julia_home, Any, ()))
+# set up depot & load paths to be able to find stdlib packages
+let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+    init_depot_path(BINDIR)
+    init_load_path(BINDIR)
+end
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -442,14 +464,10 @@ import Base64
 
 INCLUDE_STATE = 2
 
+include("asyncmap.jl")
+
 include("multimedia.jl")
 using .Multimedia
-
-# frontend
-include("repl/Terminals.jl")
-include("repl/LineEdit.jl")
-include("repl/REPLCompletions.jl")
-include("repl/REPL.jl")
 
 # deprecated functions
 include("deprecated.jl")
@@ -461,19 +479,20 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
 function __init__()
+    # for the few uses of Crand in Base:
+    Csrand()
     # Base library init
     reinit_stdio()
+    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
+    init_depot_path()
     init_load_path()
-    Distributed.init_parallel()
     init_threadcall()
 end
-
-include("precompile.jl")
 
 INCLUDE_STATE = 3 # include = include_relative
 
@@ -482,21 +501,341 @@ end # baremodule Base
 using Base
 
 # Ensure this file is also tracked
-unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(:Base64)
-Base.require(:CRC32c)
-Base.require(:Dates)
-Base.require(:DelimitedFiles)
-Base.require(:FileWatching)
-Base.require(:Mmap)
-Base.require(:Profile)
-Base.require(:SharedArrays)
-Base.require(:SuiteSparse)
-Base.require(:Test)
+Base.require(Base, :Base64)
+Base.require(Base, :CRC32c)
+Base.require(Base, :Dates)
+Base.require(Base, :DelimitedFiles)
+Base.require(Base, :Serialization)
+Base.require(Base, :Distributed)
+Base.require(Base, :FileWatching)
+Base.require(Base, :Future)
+Base.require(Base, :IterativeEigensolvers)
+Base.require(Base, :Libdl)
+Base.require(Base, :LinearAlgebra)
+Base.require(Base, :Logging)
+Base.require(Base, :Mmap)
+Base.require(Base, :Printf)
+Base.require(Base, :Profile)
+Base.require(Base, :Random)
+Base.require(Base, :SharedArrays)
+Base.require(Base, :SparseArrays)
+Base.require(Base, :SuiteSparse)
+Base.require(Base, :Test)
+Base.require(Base, :Unicode)
+Base.require(Base, :REPL)
 
+@eval Base begin
+    @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
+    @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
+    @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
+    @deprecate_binding Dates root_module(Base, :Dates) true ", run `using Dates` instead"
+    @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
+    @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
+    @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
+    @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
 
+    # PR #25249
+    @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
+    @deprecate_binding(AbstractSparseArray, root_module(Base, :SparseArrays).AbstractSparseArray, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(AbstractSparseMatrix, root_module(Base, :SparseArrays).AbstractSparseMatrix, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(AbstractSparseVector, root_module(Base, :SparseArrays).AbstractSparseVector, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(SparseMatrixCSC, root_module(Base, :SparseArrays).SparseMatrixCSC, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+    @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
+        ", run `using SparseArrays` to load sparse array functionality")
+
+    @deprecate_binding(SharedArray, root_module(Base, :SharedArrays).SharedArray, true,
+        ", run `using SharedArrays` to load shared array functionality")
+
+    # PR #25571
+    @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
+    @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
+        ", run `using LinearAlgebra` to load linear algebra functionality.")
+
+    # PR 25544
+    @deprecate_binding REPL            root_module(Base, :REPL)                 true ", run `using REPL` instead"
+    @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
+    @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
+    @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
+
+    @deprecate_stdlib readdlm  DelimitedFiles true
+    @deprecate_stdlib writedlm DelimitedFiles true
+    @deprecate_stdlib readcsv  DelimitedFiles true
+    @deprecate_stdlib writecsv DelimitedFiles true
+
+    @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
+
+    @deprecate_stdlib base64encode Base64 true
+    @deprecate_stdlib base64decode Base64 true
+    @deprecate_stdlib Base64EncodePipe Base64 true
+    @deprecate_stdlib Base64DecodePipe Base64 true
+
+    @deprecate_stdlib poll_fd FileWatching true
+    @deprecate_stdlib poll_file FileWatching true
+    @deprecate_stdlib PollingFileWatcher FileWatching true
+    @deprecate_stdlib watch_file FileWatching true
+    @deprecate_stdlib FileMonitor FileWatching true
+
+    @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@fetch")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@fetchfrom")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@everywhere")) Distributed true
+    @eval @deprecate_stdlib $(Symbol("@parallel")) Distributed true
+
+    @deprecate_stdlib addprocs Distributed true
+    @deprecate_stdlib CachingPool Distributed true
+    @deprecate_stdlib clear! Distributed true
+    @deprecate_stdlib ClusterManager Distributed true
+    @deprecate_stdlib default_worker_pool Distributed true
+    @deprecate_stdlib init_worker Distributed true
+    @deprecate_stdlib interrupt Distributed true
+    @deprecate_stdlib launch Distributed true
+    @deprecate_stdlib manage Distributed true
+    @deprecate_stdlib myid Distributed true
+    @deprecate_stdlib nprocs Distributed true
+    @deprecate_stdlib nworkers Distributed true
+    @deprecate_stdlib pmap Distributed true
+    @deprecate_stdlib procs Distributed true
+    @deprecate_stdlib remote Distributed true
+    @deprecate_stdlib remotecall Distributed true
+    @deprecate_stdlib remotecall_fetch Distributed true
+    @deprecate_stdlib remotecall_wait Distributed true
+    @deprecate_stdlib remote_do Distributed true
+    @deprecate_stdlib rmprocs Distributed true
+    @deprecate_stdlib workers Distributed true
+    @deprecate_stdlib WorkerPool Distributed true
+    @deprecate_stdlib RemoteChannel Distributed true
+    @deprecate_stdlib Future Distributed true
+    @deprecate_stdlib WorkerConfig Distributed true
+    @deprecate_stdlib RemoteException Distributed true
+    @deprecate_stdlib ProcessExitedException Distributed true
+
+    @deprecate_stdlib crc32c CRC32c true
+
+    @deprecate_stdlib DateTime Dates true
+    @deprecate_stdlib DateFormat Dates true
+    @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
+    @deprecate_stdlib now Dates true
+
+    @deprecate_stdlib eigs IterativeEigensolvers true
+    @deprecate_stdlib svds IterativeEigensolvers true
+
+    @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
+    @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
+
+    # PR #24874
+    @deprecate_stdlib rand! Random true
+    @deprecate_stdlib srand Random true
+    @deprecate_stdlib AbstractRNG Random true
+    @deprecate_stdlib randcycle  Random true
+    @deprecate_stdlib randcycle!  Random true
+    @deprecate_stdlib randperm  Random true
+    @deprecate_stdlib randperm! Random true
+    @deprecate_stdlib shuffle  Random true
+    @deprecate_stdlib shuffle! Random true
+    @deprecate_stdlib randsubseq Random true
+    @deprecate_stdlib randsubseq! Random true
+    @deprecate_stdlib randstring Random true
+    @deprecate_stdlib MersenneTwister  Random true
+    @deprecate_stdlib RandomDevice  Random true
+    @deprecate_stdlib randn! Random true
+    @deprecate_stdlib randexp Random true
+    @deprecate_stdlib randexp! Random true
+    @deprecate_stdlib bitrand Random true
+    @deprecate_stdlib randjump Random true
+    @deprecate_stdlib GLOBAL_RNG Random false
+
+    @deprecate_stdlib serialize Serialization true
+    @deprecate_stdlib deserialize Serialization true
+    @deprecate_stdlib AbstractSerializer Serialization true
+    @deprecate_stdlib SerializationState Serialization true
+
+    # PR #25249: SparseArrays to stdlib
+    ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
+    ## functions that were re-exported from Base
+    @deprecate_stdlib nonzeros   SparseArrays true
+    @deprecate_stdlib permute    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib dropzeros  SparseArrays true
+    @deprecate_stdlib dropzeros! SparseArrays true
+    @deprecate_stdlib issparse   SparseArrays true
+    @deprecate_stdlib sparse     SparseArrays true
+    @deprecate_stdlib sparsevec  SparseArrays true
+    @deprecate_stdlib spdiagm    SparseArrays true
+    @deprecate_stdlib sprand     SparseArrays true
+    @deprecate_stdlib sprandn    SparseArrays true
+    @deprecate_stdlib spzeros    SparseArrays true
+    @deprecate_stdlib rowvals    SparseArrays true
+    @deprecate_stdlib nzrange    SparseArrays true
+    @deprecate_stdlib nnz        SparseArrays true
+    @deprecate_stdlib findnz     SparseArrays true
+    ## functions that were exported from Base.SparseArrays but not from Base
+    @deprecate_stdlib droptol!   SparseArrays false
+    ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
+    @deprecate_stdlib spones     SparseArrays true
+    @deprecate_stdlib speye      SparseArrays true
+
+    # PR #25571: LinearAlgebra to stdlib
+    @deprecate_stdlib BLAS        LinearAlgebra true
+    ## functions that were re-exported from Base
+    @deprecate_stdlib bkfact!     LinearAlgebra true
+    @deprecate_stdlib bkfact      LinearAlgebra true
+    @deprecate_stdlib chol        LinearAlgebra true
+    @deprecate_stdlib cholfact!   LinearAlgebra true
+    @deprecate_stdlib cholfact    LinearAlgebra true
+    @deprecate_stdlib cond        LinearAlgebra true
+    @deprecate_stdlib condskeel   LinearAlgebra true
+    @deprecate_stdlib cross       LinearAlgebra true
+    @deprecate_stdlib adjoint!    LinearAlgebra true
+    # @deprecate_stdlib adjoint     LinearAlgebra true
+    @deprecate_stdlib det         LinearAlgebra true
+    @deprecate_stdlib diag        LinearAlgebra true
+    @deprecate_stdlib diagind     LinearAlgebra true
+    @deprecate_stdlib diagm       LinearAlgebra true
+    @deprecate_stdlib diff        LinearAlgebra true
+    @deprecate_stdlib dot         LinearAlgebra true
+    @deprecate_stdlib eig         LinearAlgebra true
+    @deprecate_stdlib eigfact!    LinearAlgebra true
+    @deprecate_stdlib eigfact     LinearAlgebra true
+    @deprecate_stdlib eigmax      LinearAlgebra true
+    @deprecate_stdlib eigmin      LinearAlgebra true
+    @deprecate_stdlib eigvals     LinearAlgebra true
+    @deprecate_stdlib eigvals!    LinearAlgebra true
+    @deprecate_stdlib eigvecs     LinearAlgebra true
+    @deprecate_stdlib factorize   LinearAlgebra true
+    @deprecate_stdlib givens      LinearAlgebra true
+    @deprecate_stdlib hessfact!   LinearAlgebra true
+    @deprecate_stdlib hessfact    LinearAlgebra true
+    @deprecate_stdlib isdiag      LinearAlgebra true
+    @deprecate_stdlib ishermitian LinearAlgebra true
+    @deprecate_stdlib isposdef!   LinearAlgebra true
+    @deprecate_stdlib isposdef    LinearAlgebra true
+    @deprecate_stdlib issymmetric LinearAlgebra true
+    @deprecate_stdlib istril      LinearAlgebra true
+    @deprecate_stdlib istriu      LinearAlgebra true
+    # @deprecate_stdlib kron        LinearAlgebra true
+    @deprecate_stdlib ldltfact    LinearAlgebra true
+    @deprecate_stdlib ldltfact!   LinearAlgebra true
+    @deprecate_stdlib linreg      LinearAlgebra true
+    @deprecate_stdlib logabsdet   LinearAlgebra true
+    @deprecate_stdlib logdet      LinearAlgebra true
+    @deprecate_stdlib lu          LinearAlgebra true
+    @deprecate_stdlib lufact!     LinearAlgebra true
+    @deprecate_stdlib lufact      LinearAlgebra true
+    @deprecate_stdlib lyap        LinearAlgebra true
+    @deprecate_stdlib norm        LinearAlgebra true
+    @deprecate_stdlib normalize   LinearAlgebra true
+    @deprecate_stdlib normalize!  LinearAlgebra true
+    @deprecate_stdlib nullspace   LinearAlgebra true
+    @deprecate_stdlib ordschur!   LinearAlgebra true
+    @deprecate_stdlib ordschur    LinearAlgebra true
+    @deprecate_stdlib peakflops   LinearAlgebra true
+    @deprecate_stdlib pinv        LinearAlgebra true
+    @deprecate_stdlib qr          LinearAlgebra true
+    @deprecate_stdlib qrfact!     LinearAlgebra true
+    @deprecate_stdlib qrfact      LinearAlgebra true
+    @deprecate_stdlib lq          LinearAlgebra true
+    @deprecate_stdlib lqfact!     LinearAlgebra true
+    @deprecate_stdlib lqfact      LinearAlgebra true
+    @deprecate_stdlib rank        LinearAlgebra true
+    @deprecate_stdlib scale!      LinearAlgebra true
+    @deprecate_stdlib schur       LinearAlgebra true
+    @deprecate_stdlib schurfact!  LinearAlgebra true
+    @deprecate_stdlib schurfact   LinearAlgebra true
+    @deprecate_stdlib svd         LinearAlgebra true
+    @deprecate_stdlib svdfact!    LinearAlgebra true
+    @deprecate_stdlib svdfact     LinearAlgebra true
+    @deprecate_stdlib svdvals!    LinearAlgebra true
+    @deprecate_stdlib svdvals     LinearAlgebra true
+    @deprecate_stdlib sylvester   LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib transpose!  LinearAlgebra true
+    # @deprecate_stdlib transpose   LinearAlgebra true
+    @deprecate_stdlib tril!       LinearAlgebra true
+    @deprecate_stdlib tril        LinearAlgebra true
+    @deprecate_stdlib triu!       LinearAlgebra true
+    @deprecate_stdlib triu        LinearAlgebra true
+    @deprecate_stdlib vecdot      LinearAlgebra true
+    @deprecate_stdlib vecnorm     LinearAlgebra true
+    # @deprecate_stdlib ⋅           LinearAlgebra true
+    # @deprecate_stdlib ×           LinearAlgebra true
+
+    ## types that were re-exported from Base
+    @deprecate_stdlib Diagonal        LinearAlgebra true
+    @deprecate_stdlib Bidiagonal      LinearAlgebra true
+    @deprecate_stdlib Tridiagonal     LinearAlgebra true
+    @deprecate_stdlib SymTridiagonal  LinearAlgebra true
+    @deprecate_stdlib UpperTriangular LinearAlgebra true
+    @deprecate_stdlib LowerTriangular LinearAlgebra true
+    @deprecate_stdlib Symmetric       LinearAlgebra true
+    @deprecate_stdlib Hermitian       LinearAlgebra true
+    @deprecate_stdlib Factorization   LinearAlgebra true
+    @deprecate_stdlib UniformScaling  LinearAlgebra true
+    @deprecate_stdlib Adjoint         LinearAlgebra true
+    @deprecate_stdlib Transpose       LinearAlgebra true
+
+    ## functions that were exported from Base.LinAlg but not from Base
+    @deprecate_stdlib axpy!           LinearAlgebra false
+    @deprecate_stdlib axpby!          LinearAlgebra false
+    @deprecate_stdlib copy_transpose! LinearAlgebra false
+    @deprecate_stdlib issuccess       LinearAlgebra false
+    @deprecate_stdlib transpose_type  LinearAlgebra false
+    @deprecate_stdlib A_mul_B!        LinearAlgebra false
+    @deprecate_stdlib A_mul_Bt!       LinearAlgebra false
+    @deprecate_stdlib At_mul_B!       LinearAlgebra false
+    @deprecate_stdlib At_mul_Bt!      LinearAlgebra false
+    @deprecate_stdlib A_mul_Bc!       LinearAlgebra false
+    @deprecate_stdlib Ac_mul_B!       LinearAlgebra false
+    @deprecate_stdlib Ac_mul_Bc!      LinearAlgebra false
+    @deprecate_stdlib A_ldiv_B!       LinearAlgebra false
+    @deprecate_stdlib At_ldiv_B!      LinearAlgebra false
+    @deprecate_stdlib Ac_ldiv_B!      LinearAlgebra false
+
+    ## types that were exported from Base.LinAlg but not from Base
+    @deprecate_stdlib BunchKaufman     LinearAlgebra false
+    @deprecate_stdlib Cholesky         LinearAlgebra false
+    @deprecate_stdlib CholeskyPivoted  LinearAlgebra false
+    @deprecate_stdlib Eigen            LinearAlgebra false
+    @deprecate_stdlib GeneralizedEigen LinearAlgebra false
+    @deprecate_stdlib GeneralizedSVD   LinearAlgebra false
+    @deprecate_stdlib GeneralizedSchur LinearAlgebra false
+    @deprecate_stdlib Hessenberg       LinearAlgebra false
+    @deprecate_stdlib LU               LinearAlgebra false
+    @deprecate_stdlib LDLt             LinearAlgebra false
+    @deprecate_stdlib QR               LinearAlgebra false
+    @deprecate_stdlib QRPivoted        LinearAlgebra false
+    @deprecate_stdlib LQ               LinearAlgebra false
+    @deprecate_stdlib Schur            LinearAlgebra false
+    @deprecate_stdlib SVD              LinearAlgebra false
+
+    ## deprecated functions that are moved to stdlib/LinearAlgebra/src/deprecated.jl
+    @deprecate_stdlib eye        LinearAlgebra true
+    @deprecate_stdlib sqrtm      LinearAlgebra true
+    @deprecate_stdlib expm       LinearAlgebra true
+    @deprecate_stdlib expm!      LinearAlgebra true
+    @deprecate_stdlib logm       LinearAlgebra true
+    @deprecate_stdlib gradient   LinearAlgebra true
+    @deprecate_stdlib ConjArray  LinearAlgebra true
+    @deprecate_stdlib ConjVector LinearAlgebra true
+    @deprecate_stdlib ConjMatrix LinearAlgebra true
+    @deprecate_stdlib RowVector  LinearAlgebra true
+
+    # PR #25021
+    @deprecate_stdlib normalize_string Unicode true
+    @deprecate_stdlib graphemes Unicode true
+    @deprecate_stdlib is_assigned_char Unicode true
+end
+
+empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+
+Base.include(Base, "precompile.jl")

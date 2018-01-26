@@ -94,7 +94,11 @@ end
 
 # REPL help
 
-function helpmode(io::IO, line::AbstractString)
+# This is split into helpmode and _helpmode to easier unittest _helpmode
+helpmode(io::IO, line::AbstractString) = :(Base.Docs.insert_hlines($io, $(Base.Docs._helpmode(io, line))))
+helpmode(line::AbstractString) = helpmode(STDOUT, line)
+
+function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
         if haskey(keywords, Symbol(line))
@@ -102,9 +106,7 @@ function helpmode(io::IO, line::AbstractString)
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Base.syntax_deprecation_warnings(false) do
-                Meta.parse(line, raise = false)
-            end
+            x = Meta.parse(line, raise = false, depwarn = false)
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
             # the docsystem to return different results. The first returns all documentation
@@ -116,7 +118,21 @@ function helpmode(io::IO, line::AbstractString)
     # so that the resulting expressions are evaluated in the Base.Docs namespace
     :(Base.Docs.@repl $io $expr)
 end
-helpmode(line::AbstractString) = helpmode(STDOUT, line)
+_helpmode(line::AbstractString) = _helpmode(STDOUT, line)
+
+# Print vertical lines along each docstring if there are multiple docs
+function insert_hlines(io::IO, docs)
+    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
+        return docs
+    end
+    v = Any[]
+    for (n, doc) in enumerate(docs.content)
+        push!(v, doc)
+        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
+    end
+    return Markdown.MD(v)
+end
+
 
 function repl_search(io::IO, s)
     pre = "search:"
@@ -128,9 +144,7 @@ repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    Markdown.with_output_format(:cyan, io) do io
-        println(io, s)
-    end
+    print_with_color(:cyan, io, s, '\n')
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(STDOUT, s)
@@ -138,8 +152,8 @@ repl_corrections(s) = repl_corrections(STDOUT, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex)
-        for (k,v) in Base.REPLCompletions.latex_symbols
+    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+        for (k,v) in Base.REPL_MODULE_REF[].REPLCompletions.latex_symbols
             symbols_latex[v] = k
         end
     end
@@ -149,21 +163,15 @@ function repl_latex(io::IO, s::String)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, s)
-        end
+        print_with_color(:cyan, io, s)
         print(io, "\" can be typed by ")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, latex, "<tab>")
-        end
+        print_with_color(:cyan, io, latex, "<tab>")
         println(io, '\n')
     elseif any(c -> haskey(symbols_latex, string(c)), s)
         print(io, "\"")
-        Markdown.with_output_format(:cyan, io) do io
-            print(io, s)
-        end
+        print_with_color(:cyan, io, s)
         print(io, "\" can be typed by ")
-        Markdown.with_output_format(:cyan, io) do io
+        with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
@@ -230,10 +238,11 @@ function matchinds(needle, haystack; acronym = false)
     lastc = '\0'
     for (i, char) in enumerate(haystack)
         isempty(chars) && break
-        while chars[1] == ' ' shift!(chars) end # skip spaces
-        if lowercase(char) == lowercase(chars[1]) && (!acronym || !isalpha(lastc))
+        while chars[1] == ' ' popfirst!(chars) end # skip spaces
+        if lowercase(char) == lowercase(chars[1]) &&
+           (!acronym || !isalpha(lastc))
             push!(is, i)
-            shift!(chars)
+            popfirst!(chars)
         end
         lastc = char
     end
@@ -299,13 +308,11 @@ end
 
 function printmatch(io::IO, word, match)
     is, _ = bestmatch(word, match)
-    Markdown.with_output_format(:fade, io) do io
-        for (i, char) = enumerate(match)
-            if i in is
-                Markdown.with_output_format(print, :bold, io, char)
-            else
-                print(io, char)
-            end
+    for (i, char) = enumerate(match)
+        if i in is
+            print_with_color(:bold, io, char)
+        else
+            print(io, char)
         end
     end
 end
@@ -359,10 +366,10 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
+filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s->Base.isdeprecated(mod, s), names(mod, true, true));
+    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
@@ -373,9 +380,9 @@ completions(name::Symbol) = completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(search(haystack, needle))
+docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
-docsearch(::Void, needle) = false
+docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)
     for elt in haystack
         docsearch(elt, needle) && return true
@@ -383,7 +390,7 @@ function docsearch(haystack::Array, needle)
     false
 end
 function docsearch(haystack, needle)
-    Base.warn_once("unable to search documentation of type $(typeof(haystack))")
+    @warn "Unable to search documentation of type $(typeof(haystack))" maxlog=1
     false
 end
 
@@ -418,7 +425,7 @@ element searchable.
 """
 stripmd(@nospecialize x) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
-stripmd(x::Void) = " "
+stripmd(x::Nothing) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)
 stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"

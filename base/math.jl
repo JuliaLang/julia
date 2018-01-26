@@ -25,7 +25,7 @@ using Base: sign_mask, exponent_mask, exponent_one,
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base.IEEEFloat
+using Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -244,7 +244,7 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
+for f in (:cbrt, :sinh, :cosh, :tanh, :asinh, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -253,7 +253,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
 end
 exp(x::Real) = exp(float(x))
 exp10(x::Real) = exp10(float(x))
-
+atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -506,7 +506,7 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = vecnorm(x)
+hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
 """
     atan2(y, x)
@@ -732,9 +732,9 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
-@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 function angle_restrict_symm(theta)
@@ -969,7 +969,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
              :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::Complex32) = Complex32($func(Complex64(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 

@@ -4,8 +4,8 @@ __precompile__(true)
 
 module SuiteSparse
 
-import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
-import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!
+import Base: \
+import LinearAlgebra: ldiv!, rdiv!
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -27,6 +27,7 @@ if Base.USE_GPL_LIBS
     include("umfpack.jl")
     include("cholmod.jl")
     include("spqr.jl")
+    include("deprecated.jl")
 end
 
 end # module SuiteSparse

@@ -108,7 +108,7 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream, chomp=false))
+                write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -139,10 +139,10 @@ function footnote(stream::IO, block::MD)
         else
             ref = match(regex, str).captures[1]
             buffer = IOBuffer()
-            write(buffer, readline(stream, chomp=false))
+            write(buffer, readline(stream, keep=true))
             while !eof(stream)
                 if startswith(stream, "    ")
-                    write(buffer, readline(stream, chomp=false))
+                    write(buffer, readline(stream, keep=true))
                 elseif blankline(stream)
                     write(buffer, '\n')
                 else
@@ -174,7 +174,7 @@ function blockquote(stream::IO, block::MD)
         empty = true
         while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
-            write(buffer, readline(stream, chomp=false))
+            write(buffer, readline(stream, keep=true))
             empty = false
         end
         empty && return false
@@ -211,11 +211,11 @@ function admonition(stream::IO, block::MD)
             let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
-                if ismatch(untitled, line)
+                if contains(line, untitled)
                     m = match(untitled, line)
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
                     m.captures[1], ucfirst(m.captures[1])
-                elseif ismatch(titled, line)
+                elseif contains(line, titled)
                     m = match(titled, line)
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
@@ -229,7 +229,7 @@ function admonition(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ")
-                write(buffer, readline(stream, chomp=false))
+                write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -270,10 +270,10 @@ function list(stream::IO, block::MD)
         indent = isempty(bullet) ? (return false) : length(bullet)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if ismatch(BULLETS, bullet)
+            if contains(bullet, BULLETS)
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif ismatch(r"^ {0,3}\d+(\.|\))( |$)", bullet)
+            elseif contains(bullet, r"^ {0,3}\d+(\.|\))( |$)")
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
                 r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
                 Base.parse(Int, match(r, bullet).captures[1]), r
@@ -305,7 +305,7 @@ function list(stream::IO, block::MD)
                 newline = false
                 if startswith(stream, " "^indent)
                     # Indented text that is part of the current list item.
-                    print(buffer, readline(stream, chomp=false))
+                    print(buffer, readline(stream, keep=true))
                 else
                     matched = startswith(stream, regex)
                     if isempty(matched)
@@ -316,7 +316,7 @@ function list(stream::IO, block::MD)
                         # Start of a new list item.
                         count += 1
                         count > 1 && pushitem!(list, buffer)
-                        print(buffer, readline(stream, chomp=false))
+                        print(buffer, readline(stream, keep=true))
                     end
                 end
             end

@@ -10,6 +10,9 @@ import Base: show
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"foo _bar_ baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"foo **bar** baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
+@test md"foo __bar__ baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
 @test md"""foo
 bar""" == MD(Paragraph(["foo bar"]))
 @test md"""foo\
@@ -224,7 +227,9 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 
 # multiple whitespace is ignored
 @test sprint(term, md"a  b") == "  a b\n"
-@test sprint(term, md"[x](https://julialang.org)") == "  x\n"
+@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)\n"
+@test sprint(term, md"[x](@ref)") == "  x\n"
+@test sprint(term, md"[x](@ref something)") == "  x\n"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
 
 # enumeration is normalized
@@ -296,25 +301,34 @@ Some **bolded**
 - list2
 """
 @test latex(book) == "\\section{Title}\nSome discussion\n\n\\begin{quote}\nA quote\n\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\n\\begin{itemize}\n\\item list1\n\n\n\\item list2\n\n\\end{itemize}\n"
+table = md"""
+ a | b
+---|---
+ 1 | 2
+"""
+@test latex(table) ==
+    "\\begin{tabular}\n{r | r}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+
 # mime output
 let out =
-    """
-    # Title
+    @test sprint(show, "text/plain", book) ==
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n      \n    •    list2\n      \n"
+    @test sprint(show, "text/markdown", book) ==
+        """
+        # Title
 
-    Some discussion
+        Some discussion
 
-    > A quote
+        > A quote
 
 
-    ## Section *important*
+        ## Section *important*
 
-    Some **bolded**
+        Some **bolded**
 
-      * list1
-      * list2
-    """
-    @test sprint(show, "text/plain", book) == out
-    @test sprint(show, "text/markdown", book) == out
+          * list1
+          * list2
+        """
 end
 let out =
     """
@@ -1050,4 +1064,35 @@ let text =
             """
         @test expected == Markdown.latex(md)
     end
+end
+
+# different output depending on whether color is requested:
+let buf = IOBuffer()
+    show(buf, "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  emph\n"
+    show(buf, "text/markdown", md"*emph*")
+    @test String(take!(buf)) == "*emph*\n"
+    show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+end
+
+# table rendering with term #25213
+t = """
+    a   |   b
+    :-- | --:
+    1   |   2"""
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+
+# test Base.copy
+let
+    md = doc"test"
+    md′ = copy(md)
+    @test length(md) == length(md′) == 1
+    push!(md, "new")
+    @test length(md) == 2
+    @test length(md′) == 1
+
+    @test !haskey(md.meta, :foo)
+    md.meta[:foo] = 42
+    @test !haskey(md′.meta, :foo)
 end

@@ -19,7 +19,7 @@ the argument out in the method definition.
 
 Return a tuple of 2 elements `(res, idx)`, where:
 
-* `res` is a `Nullable{T}` - the result of the parsing, null if parsing failed.
+* `res` is either the result of the parsing, or `nothing` if parsing failed.
 * `idx` is an `Int` - if parsing failed, the index at which it failed; if
    parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
 """
@@ -99,11 +99,11 @@ end
 for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = isnull(word) ? 0 : $fn(get(word), locale)
+        val = word === nothing ? 0 : $fn(word, locale)
         if val == 0
-            return Nullable{Int64}(), i
+            return nothing, i
         else
-            return Nullable{Int64}(val), i
+            return val, i
         end
     end
 end
@@ -113,8 +113,8 @@ struct Decimal3 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
-    if !isnull(ms)
-        val0 = val = get(ms)
+    if ms !== nothing
+        val0 = val = ms
         len = ii - i
         if len > 3
             val, r = divrem(val, Int64(10) ^ (len - 3))
@@ -122,7 +122,7 @@ struct Decimal3 end
         else
             val *= Int64(10) ^ (3 - len)
         end
-        ms = Nullable{Int64}(val)
+        ms = val
     end
     return ms, ii
 end
@@ -186,30 +186,28 @@ Delim(d::Char) = Delim{Char, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
 @inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
     for j=1:N
-        i > len && return (R(), i)
+        i > len && return (nothing, i)
         c, i = next(str, i)
-        c != d.d && return (R(), i)
+        c != d.d && return (nothing, i)
     end
-    return R(true), i
+    return true, i
 end
 
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
     i1 = i
     i2 = start(d.d)
     for j = 1:N
         if i1 > len
-            return R(), i1
+            return nothing, i1
         end
         c1, i1 = next(str, i1)
         c2, i2 = next(d.d, i2)
         if c1 != c2
-            return R(), i1
+            return nothing, i1
         end
     end
-    return R(true), i1
+    return true, i1
 end
 
 @inline function format(io, d::Delim, dt, locale)
@@ -330,7 +328,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     letters = String(collect(keys(CONVERSION_SPECIFIERS)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
-        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)", s"\1")
+        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
@@ -350,7 +348,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:endof(f)], r"\\(.)", s"\1")
+    tran = replace(f[prev_offset:endof(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev
@@ -483,7 +481,7 @@ end
 
 function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     # preallocate to reduce resizing
-    io = IOBuffer(Vector{UInt8}(bufsize), true, true)
+    io = IOBuffer(Vector{UInt8}(uninitialized, bufsize), true, true)
     format(io, dt, fmt)
     String(io.data[1:io.ptr - 1])
 end

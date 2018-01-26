@@ -18,13 +18,13 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
 mutable struct Channel{T} <: AbstractChannel
-    cond_take::Condition    # waiting for data to become available
-    cond_put::Condition     # waiting for a writeable slot
+    cond_take::Condition                 # waiting for data to become available
+    cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Nullable{Exception} # Exception to be thrown when state != :open
+    excp::Union{Exception, Nothing}         # exception to be thrown when state != :open
 
     data::Vector{T}
-    sz_max::Int            # maximum size of channel
+    sz_max::Int                          # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
     waiters::Int
@@ -42,20 +42,12 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(), sz, 0)
+        ch = new(Condition(), Condition(), :open, nothing, Vector{T}(), sz, 0)
         if sz == 0
             ch.takers = Vector{Task}()
             ch.putters = Vector{Task}()
         end
         return ch
-    end
-
-    # deprecated empty constructor
-    function Channel{T}() where T
-        depwarn(string("The empty constructor Channel() is deprecated. ",
-                        "The channel size needs to be specified explictly. ",
-                        "Defaulting to Channel{$T}(32)."), :Channel)
-        Channel(32)
     end
 end
 
@@ -119,17 +111,13 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 end
 
 
-
-# deprecated empty constructor
-Channel() = Channel{Any}()
-
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
 isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        !isnull(c.excp) && throw(get(c.excp))
+        c.excp !== nothing && throw(c.excp)
         throw(closed_exception())
     end
 end
@@ -143,7 +131,7 @@ Close a channel. An exception is thrown by:
 """
 function close(c::Channel)
     c.state = :closed
-    c.excp = Nullable{}(closed_exception())
+    c.excp = closed_exception()
     notify_error(c)
     nothing
 end
@@ -237,7 +225,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
         !isopen(c) && return
         if istaskfailed(t)
             c.state = :closed
-            c.excp = Nullable{Exception}(task_result(t))
+            c.excp = task_result(t)
             notify_error(c)
         else
             close(c)
@@ -286,7 +274,7 @@ function put_unbuffered(c::Channel, v)
             rethrow(ex)
         end
     end
-    taker = shift!(c.takers)
+    taker = popfirst!(c.takers)
     yield(taker, v) # immediately give taker a chance to run, but don't block the current task
     return v
 end
@@ -318,12 +306,12 @@ task.
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
     wait(c)
-    v = shift!(c.data)
+    v = popfirst!(c.data)
     notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
     v
 end
 
-shift!(c::Channel) = take!(c)
+popfirst!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
@@ -331,10 +319,10 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            let refputter = Ref(shift!(c.putters))
+            let refputter = Ref(popfirst!(c.putters))
                 return Base.try_yieldto(refputter) do putter
                     # if we fail to start putter, put it back in the queue
-                    putter === current_task || unshift!(c.putters, putter)
+                    putter === current_task || pushfirst!(c.putters, putter)
                 end::T
             end
         else
@@ -387,7 +375,7 @@ function notify_error(c::Channel, err)
         foreach(t->schedule(t, err; error=true), waiters)
     end
 end
-notify_error(c::Channel) = notify_error(c, get(c.excp))
+notify_error(c::Channel) = notify_error(c, c.excp)
 
 eltype(::Type{Channel{T}}) where {T} = T
 
@@ -417,4 +405,4 @@ function done(c::Channel, state::ChannelIterState)
 end
 next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
-iteratorsize(::Type{<:Channel}) = SizeUnknown()
+IteratorSize(::Type{<:Channel}) = SizeUnknown()

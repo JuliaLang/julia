@@ -2,12 +2,13 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
+using LinearAlgebra: mul1!, mul2!, Adjoint, Transpose
 
 @testset "Sparse QR" begin
 m, n = 100, 10
 nn = 100
 
-@test size(qrfact(sprandn(m, n, 0.1))[:Q]) == (m, m)
+@test size(qrfact(sprandn(m, n, 0.1)).Q) == (m, m)
 
 @testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
     if eltyA <: Real
@@ -24,28 +25,28 @@ nn = 100
     @test_throws ArgumentError size(F, 0)
 
     @testset "getindex" begin
-        @test istriu(F[:R])
-        @test isperm(F[:pcol])
-        @test isperm(F[:prow])
-        @test_throws KeyError F[:T]
+        @test istriu(F.R)
+        @test isperm(F.pcol)
+        @test isperm(F.prow)
+        @test_throws ErrorException F.T
     end
 
     @testset "apply Q" begin
-        Q = F[:Q]
+        Q = F.Q
         Imm = Matrix{Float64}(I, m, m)
         @test Q' * (Q*Imm) ≈ Imm
         @test (Imm*Q) * Q' ≈ Imm
 
         # test that Q'Pl*A*Pr = R
-        R0 = Q'*Array(A[F[:prow], F[:pcol]])
-        @test R0[1:n, :] ≈ F[:R]
+        R0 = Q'*Array(A[F.prow, F.pcol])
+        @test R0[1:n, :] ≈ F.R
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
-        @test_throws DimensionMismatch A_mul_B!(Q, offsizeA)
-        @test_throws DimensionMismatch Ac_mul_B!(Q, offsizeA)
-        @test_throws DimensionMismatch A_mul_B!(offsizeA, Q)
-        @test_throws DimensionMismatch A_mul_Bc!(offsizeA, Q)
+        @test_throws DimensionMismatch mul2!(Q, offsizeA)
+        @test_throws DimensionMismatch mul2!(adjoint(Q), offsizeA)
+        @test_throws DimensionMismatch mul1!(offsizeA, Q)
+        @test_throws DimensionMismatch mul1!(offsizeA, adjoint(Q))
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
@@ -61,11 +62,12 @@ nn = 100
         @test A\B[:,1] ≈ Array(A)\B[:,1]
         @test A\B ≈ Array(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]
-        @test A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ≈ ones(9) # Underdetermined system
+        C, x = A[1:9, :], fill(eltyB(1), 9)
+        @test C*(C\x) ≈ x # Underdetermined system
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ ones(eltyA, 5) == ones(5)
+    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
 end
 
 @testset "basic solution of rank deficient ls" begin

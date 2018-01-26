@@ -51,7 +51,7 @@ Elements of `dims` must be unique and within the range `1:ndims(A)`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:4),(2,2,1,1))
+julia> a = reshape(Vector(1:4),(2,2,1,1))
 2×2×1×1 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3
@@ -67,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -75,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., indices(A, i))
+            d = tuple(d..., axes(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(indices(A), dims)))
+    reshape(A, d::typeof(_sub(axes(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
@@ -120,7 +120,7 @@ function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
     d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
-    A[setindex(indices(A), i, d)...]
+    A[setindex(axes(A), i, d)...]
 end
 
 """
@@ -149,7 +149,7 @@ function flipdim(A::AbstractArray, d::Integer)
     elseif nd == 1
         return reverse(A)
     end
-    inds = indices(A)
+    inds = axes(A)
     B = similar(A)
     nnd = 0
     for i = 1:nd
@@ -165,7 +165,7 @@ function flipdim(A::AbstractArray, d::Integer)
         return B
     end
     let B=B # workaround #15276
-        alli = [ indices(B,n) for n in 1:nd ]
+        alli = [ axes(B,n) for n in 1:nd ]
         for i in indsd
             B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
         end
@@ -186,7 +186,7 @@ first dimension.
 
 # Examples
 ```jldoctest
-julia> b = reshape(collect(1:16), (4,4))
+julia> b = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -236,73 +236,6 @@ See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
-end
-
-# Uses K-B-N summation
-function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
-    r = similar(v)
-    if isempty(v); return r; end
-
-    inds = indices(v, 1)
-    i1 = first(inds)
-    s = r[i1] = v[i1]
-    c = zero(T)
-    for i=i1+1:last(inds)
-        vi = v[i]
-        t = s + vi
-        if abs(s) >= abs(vi)
-            c += ((s-t) + vi)
-        else
-            c += ((vi-t) + s)
-        end
-        s = t
-        r[i] = s+c
-    end
-    return r
-end
-
-# Uses K-B-N summation
-# TODO: Needs a separate IndexCartesian method, this is only fast for IndexLinear
-
-"""
-    cumsum_kbn(A, dim::Integer)
-
-Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
-algorithm for additional accuracy.
-"""
-function cumsum_kbn(A::AbstractArray{T}, axis::Integer) where T<:AbstractFloat
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    axis_size = dimsA[axis]
-    axis_stride = 1
-    for i = 1:(axis-1)
-        axis_stride *= size(A,i)
-    end
-
-    if axis_size <= 1
-        return A
-    end
-
-    B = similar(A)
-    C = similar(A)
-
-    for i = 1:length(A)
-        if div(i-1, axis_stride) % axis_size == 0
-            B[i] = A[i]
-            C[i] = zero(T)
-        else
-            s = B[i-axis_stride]
-            Ai = A[i]
-            B[i] = t = s + Ai
-            if abs(s) >= abs(Ai)
-                C[i] = C[i-axis_stride] + ((s-t) + Ai)
-            else
-                C[i] = C[i-axis_stride] + ((Ai-t) + s)
-            end
-        end
-    end
-
-    return B + C
 end
 
 ## Other array functions ##
@@ -438,10 +371,10 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        R[indices(A)...] = A
+        R[axes(A)...] = A
     else
         inner_indices = [1:n for n in inner]
-        for c in CartesianRange(indices(A))
+        for c in CartesianIndices(axes(A))
             for i in 1:ndims(A)
                 n = inner[i]
                 inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)

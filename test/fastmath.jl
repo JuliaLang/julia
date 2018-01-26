@@ -72,7 +72,7 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         end
     end
 
-    for T in (Complex64, Complex128, Complex{BigFloat})
+    for T in (ComplexF32, ComplexF64, Complex{BigFloat})
         zero = convert(T,0)
         one = convert(T,1) + im*eps(real(convert(T,1)))
         two = convert(T,2) + im//10
@@ -122,7 +122,7 @@ end
             end
         end
         for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
-                  :atan2, :hypot, :max, :min)
+                  :atan2, :hypot, :max, :min, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third)
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
@@ -139,7 +139,7 @@ end
     end
 end
 @testset "complex arithmetic" begin
-    for T in (Complex64, Complex128, Complex{BigFloat})
+    for T in (ComplexF32, ComplexF64, Complex{BigFloat})
         half = (1+1im)/T(2)
         third = (1-1im)/T(3)
 
@@ -156,7 +156,7 @@ end
                 @test @fastmath($f($third)) ≈ $f($third) rtol=$rtol
             end
         end
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third) rtol=$rtol
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half) rtol=$rtol
@@ -172,7 +172,7 @@ end
         chalf = (1+1im)/CT(2)
         cthird = (1-1im)/CT(3)
 
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($chalf, $third)) ≈ $f($chalf, $third)
                 @test @fastmath($f($half, $cthird)) ≈ $f($half, $cthird)
@@ -188,8 +188,8 @@ end
     end
 end
 @testset "issue #10544" begin
-    a = ones(2,2)
-    b = ones(2,2)
+    a = fill(1.,2,2)
+    b = fill(1.,2,2)
     @test @fastmath(a[1] += 2.0) ≈ (b[1] += 2.0)
     @test @fastmath(a[2] -= 2.0) ≈ (b[2] -= 2.0)
     @test @fastmath(a[1,1] *= 2.0) ≈ (b[1,1] *= 2.0)
@@ -203,7 +203,7 @@ end
 
 @testset "issue #23218" begin
     a = zeros(1)
-    b = ones(1)
+    b = [1.0]
     idx = (1,)
     @fastmath a[idx...] += b[idx...]
     @test a == b

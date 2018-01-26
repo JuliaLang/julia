@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.MathConstants
+using Random
+using LinearAlgebra
+
 const ≣ = isequal # convenient for comparing NaNs
 
 # remove these tests and re-enable the same ones in the
@@ -720,6 +723,8 @@ end
     @test !isless(+NaN,+Inf)
     @test !isless(+NaN,-NaN)
     @test !isless(+NaN,+NaN)
+    @test !isless(+NaN,1)
+    @test !isless(-NaN,1)
 
     @test  isequal(   0, 0.0)
     @test  isequal( 0.0,   0)
@@ -729,11 +734,11 @@ end
     @test  !isless(   0,-0.0)
 
     @test isless(-0.0, 0.0f0)
-    @test lexcmp(-0.0, 0.0f0) == -1
-    @test lexcmp(0.0, -0.0f0) == 1
-    @test lexcmp(NaN, 1) == 1
-    @test lexcmp(1, NaN) == -1
-    @test lexcmp(NaN, NaN) == 0
+    @test cmp(isless, -0.0, 0.0f0) == -1
+    @test cmp(isless, 0.0, -0.0f0) == 1
+    @test cmp(isless, NaN, 1) == 1
+    @test cmp(isless, 1, NaN) == -1
+    @test cmp(isless, NaN, NaN) == 0
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -1834,18 +1839,17 @@ end
     @test 0o100 == 0x40
     @test 0o1000 == 0x200
     @test 0o724 == 0x1d4
-    @test isa(0o377,UInt8)
     @test isa(0o00,UInt8)
-    @test isa(0o000,UInt16)
+    @test isa(0o000,UInt8)
     @test isa(0o00000,UInt16)
-    @test isa(0o000000,UInt32)
+    @test isa(0o000000,UInt16)
     @test isa(0o0000000000,UInt32)
-    @test isa(0o00000000000,UInt64)
+    @test isa(0o00000000000,UInt32)
     @test isa(0o000000000000000000000,UInt64)
-    @test isa(0o0000000000000000000000,UInt128)
+    @test isa(0o0000000000000000000000,UInt64)
     @test isa(0o000000000000000000000000000000000000000000,UInt128)
     # remove BigInt unsigned integer literals #11105
-    @test_throws Meta.ParseError Meta.parse("0o0000000000000000000000000000000000000000000")
+    @test_throws Meta.ParseError Meta.parse("0o00000000000000000000000000000000000000000000")
     @test isa(0o11,UInt8)
     @test isa(0o111,UInt8)
     @test isa(0o11111,UInt16)
@@ -1856,8 +1860,29 @@ end
     @test isa(0o1111111111111111111111,UInt64)
     @test isa(0o111111111111111111111111111111111111111111,UInt128)
     @test isa(0o1111111111111111111111111111111111111111111,UInt128)
+    @test isa(0o3777777777777777777777777777777777777777777,UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
     # remove BigInt unsigned integer literals #11105
     @test_throws Meta.ParseError Meta.parse("0o11111111111111111111111111111111111111111111")
+    @test isa(0o077, UInt8)
+    @test isa(0o377, UInt8)
+    @test isa(0o400, UInt16)
+    @test isa(0o077777, UInt16)
+    @test isa(0o177777, UInt16)
+    @test isa(0o200000, UInt32)
+    @test isa(0o00000000000, UInt32)
+    @test isa(0o17777777777, UInt32)
+    @test isa(0o40000000000, UInt64)
+    @test isa(0o0000000000000000000000, UInt64)
+    @test isa(0o1000000000000000000000, UInt64)
+    @test isa(0o2000000000000000000000, UInt128)
+    @test isa(0o0000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o1000000000000000000000000000000000000000000, UInt128)
+    @test isa(0o2000000000000000000000000000000000000000000, UInt128)
+    @test_throws Meta.ParseError Meta.parse("0o4000000000000000000000000000000000000000000")
+
+    @test String([0o110, 0o145, 0o154, 0o154, 0o157, 0o054, 0o040, 0o127, 0o157, 0o162, 0o154, 0o144, 0o041]) == "Hello, World!"
+
 end
 @testset "hexadecimal literals" begin
     @test isa(0x00,UInt8)
@@ -2400,6 +2425,9 @@ end
     @test typeof(widemul(UInt64(1),Int64(1))) == Int128
     @test typeof(widemul(Int128(1),UInt128(1))) == BigInt
     @test typeof(widemul(UInt128(1),Int128(1))) == BigInt
+
+    # Check that the widen() fallback doesn't trigger a StackOverflowError
+    @test_throws MethodError widen(String)
 end
 @testset ".//" begin
     @test [1,2,3] // 4 == [1//4, 2//4, 3//4]
@@ -2421,8 +2449,8 @@ end
 
 @testset "issue #12832" begin
     @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, Complex64(1))
-    @test_throws ErrorException reinterpret(Complex64, Float64(1))
+    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
+    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2437,24 +2465,24 @@ ndigf(n) = Float64(log(Float32(n)))
 @test sum([Int128(1) Int128(2)]) == Int128(3)
 
 @testset "digits and digits!" begin
-    @test digits(24, 2) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
+    @test digits(24, base = 2) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 3) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 7) == [0, 0, 0, 1, 1, 0, 0]
     @test digits(100) == [0, 0, 1]
-    @test digits(BigInt(2)^128, 2) == [zeros(128); 1]
+    @test digits(BigInt(2)^128, base = 2) == [zeros(128); 1]
     let a = zeros(Int, 3)
         digits!(a, 50)
         @test a == [0, 5, 0]
-        digits!(a, 9, 2)
+        digits!(a, 9, base = 2)
         @test a == [1, 0, 0]
-        digits!(a, 7, 2)
+        digits!(a, 7, base = 2)
         @test a == [1, 1, 1]
     end
 end
 # Fill a pre allocated 2x4 matrix
 let a = zeros(Int,(2,4))
     for i in 0:3
-        digits!(view(a,:,i+1),i,2)
+        digits!(view(a,:,i+1),i, base = 2)
     end
     @test a == [0 1 0 1;
                 0 0 1 1]
@@ -2504,8 +2532,8 @@ end
     zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
                      0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    z1 = read(zbuf, Complex64)
-    z2 = read(zbuf, Complex128)
+    z1 = read(zbuf, ComplexF32)
+    z2 = read(zbuf, ComplexF64)
     @test bswap(z1) === -1.5f0 + 2.5f0im
     @test bswap(z2) ===  3.5 - 4.5im
 end
@@ -2516,12 +2544,12 @@ for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
 end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
-            elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
+            elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
                 allsubtypes!(t, x, sts)
             end
         end
@@ -2711,7 +2739,8 @@ end
     yf = Complex{BigFloat}(1//2 + 1//5*im)
     yi = 4
 
-    @test x^y ≈ xf^yf
+    # FIXME: reenable once #25221 is fixed
+    # @test x^y ≈ xf^yf
     @test x^yi ≈ xf^yi
     @test x^true ≈ xf^true
     @test x^false == xf^false
@@ -2822,9 +2851,9 @@ end
     @test ndims(Integer) == 0
     @test size(1,1) == 1
     @test_throws BoundsError size(1,-1)
-    @test indices(1) == ()
-    @test indices(1,1) == 1:1
-    @test_throws BoundsError indices(1,-1)
+    @test axes(1) == ()
+    @test axes(1,1) == 1:1
+    @test_throws BoundsError axes(1,-1)
     @test isinteger(Integer(2)) == true
     @test !isinteger(π)
     @test size(1) == ()
@@ -2842,7 +2871,7 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
-                 Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+                 Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
         for S in types
             for op in (+, -)
                 T = @inferred Base.promote_op(op, S)
@@ -2965,6 +2994,14 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Test.@test PR20889(2)^3 == 5
 end
 
+@testset "literal negative power accuracy" begin
+    @test 0.7130409001548401^-2 == 0.7130409001548401^-2.0
+    @test 0.09496527f0^-2 == 0.09496527f0^-2.0f0
+    @test 0.20675883960662367^-100 == 0.20675883960662367^-100.0
+    @test 0.6123676f0^-100 == 0.6123676f0^-100.0f0
+    @test 0.004155780785470562^-1 == 0.004155780785470562^-1.0
+end
+
 @testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
@@ -2992,8 +3029,8 @@ end
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
-    @test !isone(tril(ones(Int, 5, 5)))
-    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(tril(fill(1, 5, 5)))
+    @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF

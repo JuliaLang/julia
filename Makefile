@@ -94,13 +94,13 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/ui julia-$*
 
-julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+julia-base-compiler : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/basecompiler.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-julia-sysimg-release : julia-inference julia-ui-release
+julia-sysimg-release : julia-base-compiler julia-ui-release
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
-julia-sysimg-debug : julia-inference julia-ui-debug
+julia-sysimg-debug : julia-base-compiler julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
@@ -174,19 +174,17 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(DSYMUTIL) $@
 
 CORE_SRCS := $(addprefix $(JULIAHOME)/, \
-		base/boot.jl base/coreimg.jl \
+		base/boot.jl \
 		base/docs/core.jl \
 		base/abstractarray.jl \
 		base/array.jl \
 		base/bool.jl \
-		base/associative.jl \
-		base/codevalidation.jl \
+		base/abstractdict.jl \
 		base/error.jl \
 		base/essentials.jl \
 		base/generator.jl \
 		base/expr.jl \
 		base/hashing.jl \
-		base/inference.jl \
 		base/int.jl \
 		base/bitset.jl \
 		base/number.jl \
@@ -198,18 +196,19 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/tuple.jl)
+COMPILER_SRCS = $(sort $(shell find $(JULIAHOME)/base/compiler -name \*.jl))
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
 STDLIB_SRCS := $(sort $(shell find $(JULIAHOME)/stdlib/*/src -name \*.jl))
 
-$(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
+$(build_private_libdir)/basecompiler.ji: $(CORE_SRCS) $(COMPILER_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@) \
-		--startup-file=no -g0 -O0 coreimg.jl)
+		--startup-file=no -g0 -O0 compiler/compiler.jl)
 
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/basecompiler.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
@@ -232,61 +231,44 @@ julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir
 JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS := ccalltest
+JL_PRIVATE_LIBS-0 := libccalltest
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += suitesparse_wrapper
+JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
 endif
-ifeq ($(USE_SYSTEM_PCRE),0)
-JL_PRIVATE_LIBS += pcre
+JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ARPACK) += libarpack
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM
 endif
+
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS += openlibm
+JL_PRIVATE_LIBS-0 += $(LIBMNAME)
 endif
 endif
-ifeq ($(USE_SYSTEM_DSFMT),0)
-JL_PRIVATE_LIBS += dSFMT
+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
+ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
-ifeq ($(USE_SYSTEM_BLAS),0)
-JL_PRIVATE_LIBS += openblas
-else ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += lapack
-endif
-ifeq ($(USE_SYSTEM_GMP),0)
-JL_PRIVATE_LIBS += gmp
-endif
-ifeq ($(USE_SYSTEM_MPFR),0)
-JL_PRIVATE_LIBS += mpfr
-endif
-ifeq ($(USE_SYSTEM_MBEDTLS),0)
-JL_PRIVATE_LIBS += mbedtls mbedcrypto mbedx509
-endif
-ifeq ($(USE_SYSTEM_LIBSSH2),0)
-JL_PRIVATE_LIBS += ssh2
-endif
-ifeq ($(USE_SYSTEM_CURL),0)
-JL_PRIVATE_LIBS += curl
-endif
-ifeq ($(USE_SYSTEM_LIBGIT2),0)
-JL_PRIVATE_LIBS += git2
-endif
-ifeq ($(USE_SYSTEM_ARPACK),0)
-JL_PRIVATE_LIBS += arpack
-endif
-ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
+ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+JL_PRIVATE_LIBS-0 += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
 endif
 endif
-ifeq ($(USE_SYSTEM_LLVM),0)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS += LLVM
-endif
-endif
+
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
-JL_PRIVATE_LIBS += gfortblas
+JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
 endif
@@ -342,12 +324,16 @@ endif
 			fi \
 		done \
 	done
-	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
+		for lib in $(build_libdir)/$${suffix}*.$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
+	done
+	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
+		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
+		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 	done
 endif
 
@@ -535,7 +521,7 @@ distcleanall: cleanall
 .PHONY: default debug release check-whitespace release-candidate \
 	julia-debug julia-release julia-deps \
 	julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
-	julia-symlink julia-base julia-inference julia-sysimg-release julia-sysimg-debug \
+	julia-symlink julia-base julia-base-compiler julia-sysimg-release julia-sysimg-debug \
 	test testall testall1 test clean distcleanall cleanall clean-* \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \

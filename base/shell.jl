@@ -14,7 +14,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
-    r = RevString(s)
+    r = reverse(s)
     i = start(r)
     c_old = nothing
     while !done(r,i)
@@ -222,11 +222,11 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             return true
         end
         if all(isword, arg)
-            have_single && (arg = replace(arg, '\'', "\\'"))
-            have_double && (arg = replace(arg, '"', "\\\""))
+            have_single && (arg = replace(arg, '\'' => "\\'"))
+            have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'', "'\\''"), '\'')
+            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
         end
         first = false
     end

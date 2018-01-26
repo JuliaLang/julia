@@ -23,6 +23,9 @@ const text_colors = AnyDict(
     :default       => "\033[39m",
     :bold          => "\033[1m",
     :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
     :nothing       => "",
 )
 
@@ -31,10 +34,14 @@ for i in 0:255
 end
 
 const disable_text_style = AnyDict(
-    :bold => "\033[22m",
+    :bold      => "\033[22m",
     :underline => "\033[24m",
-    :normal => "",
-    :default => "",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
+    :nothing   => "",
 )
 
 # Create a docstring with an automatically generated list
@@ -63,6 +70,7 @@ have_color = false
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
+default_color_debug = :blue
 default_color_input = :normal
 default_color_answer = :normal
 color_normal = text_colors[:normal]
@@ -70,13 +78,14 @@ color_normal = text_colors[:normal]
 function repl_color(key, default)
     env_str = get(ENV, key, "")
     c = tryparse(Int, env_str)
-    c_conv = isnull(c) ? Symbol(env_str) : get(c)
+    c_conv = coalesce(c, Symbol(env_str))
     haskey(text_colors, c_conv) ? c_conv : default
 end
 
 error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
 info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
+debug_color()  = repl_color("JULIA_DEBUG_COLOR" , default_color_debug)
 
 input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
@@ -123,13 +132,21 @@ function repl_cmd(cmd, out)
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
             end
-            cmd = `$shell`
-            isa(STDIN, TTY) && (cmd = `$cmd -i`)
-            cmd = `$cmd -c $shell_escape_cmd`
+            cmd = `$shell -c $shell_escape_cmd`
         end
         run(ignorestatus(cmd))
     end
     nothing
+end
+
+function ip_matches_func(ip, func::Symbol)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        fr.func === func && return true
+    end
+    return false
 end
 
 function display_error(io::IO, er, bt)
@@ -141,8 +158,8 @@ function display_error(io::IO, er, bt)
     end
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
-    if eval_ind != 0
+    eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
+    if eval_ind !== nothing
         bt = bt[1:eval_ind-1]
     end
     showerror(IOContext(io, :limit => true), er, bt)
@@ -194,19 +211,7 @@ function eval_user_input(@nospecialize(ast), show_value)
     isa(STDIN,TTY) && println()
 end
 
-syntax_deprecation_warnings(warn::Bool) =
-    ccall(:jl_parse_depwarn, Cint, (Cint,), warn) == 1
-
-function syntax_deprecation_warnings(f::Function, warn::Bool)
-    prev = syntax_deprecation_warnings(warn)
-    try
-        f()
-    finally
-        syntax_deprecation_warnings(prev)
-    end
-end
-
-function parse_input_line(s::String; filename::String="none")
+function parse_input_line(s::String; filename::String="none", depwarn=true)
     # (expr, pos) = Meta.parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
@@ -215,8 +220,11 @@ function parse_input_line(s::String; filename::String="none")
     #     throw(Meta.ParseError("extra input after end of expression"))
     # end
     # expr
-    ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    # For now, assume all parser warnings are depwarns
+    ex = with_logger(depwarn ? current_logger() : NullLogger()) do
+        ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+              s, sizeof(s), filename, sizeof(filename))
+    end
     if ex isa Symbol && all(equalto('_'), string(ex))
         # remove with 0.7 deprecation
         Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
@@ -228,7 +236,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s *= readline(io, chomp=false)
+        s *= readline(io, keep=true)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e
@@ -256,7 +264,7 @@ try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, pa
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
-        idxs = find(x -> x == "--", ARGS)
+        idxs = findall(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
     quiet                 = (opts.quiet != 0)
@@ -280,31 +288,18 @@ function process_options(opts::JLOptions)
         elseif cmd == 'L'
             # nothing
         else
-            warn("unexpected command -$cmd'$arg'")
+            @warn "Unexpected command -$cmd'$arg'"
         end
     end
 
     # remove filename from ARGS
-    global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
-    # startup worker.
-    # opts.startupfile, opts.load, etc should should not be processed for workers.
-    if opts.worker == 1
-        # does not return
-        if opts.cookie != C_NULL
-            start_worker(unsafe_string(opts.cookie))
-        else
-            start_worker()
-        end
-    end
-
-    # add processors
-    if opts.nprocs > 0
-        addprocs(opts.nprocs)
-    end
-    # load processes from machine file
-    if opts.machinefile != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    # Load Distributed module only if any of the Distributed options have been specified.
+    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
+    if distributed_mode
+        eval(Main, :(using Distributed))
+        invokelatest(Main.Distributed.process_opts, opts)
     end
 
     # load ~/.juliarc file
@@ -319,8 +314,13 @@ function process_options(opts::JLOptions)
             println()
         elseif cmd == 'L'
             # load file immediately on all processors
-            @sync for p in procs()
-                @async remotecall_wait(include, p, Main, arg)
+            if !distributed_mode
+                include(Main, arg)
+            else
+                # TODO: Move this logic to Distributed and use a callback
+                @sync for p in invokelatest(Main.procs)
+                    @async invokelatest(Main.remotecall_wait, include, p, Main, arg)
+                end
             end
         end
     end
@@ -329,7 +329,7 @@ function process_options(opts::JLOptions)
     if arg_is_program
         # program
         if !is_interactive
-            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
         include(Main, PROGRAM_FILE)
     end
@@ -339,33 +339,15 @@ end
 
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
-    #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
-        include(Main, abspath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
     else
-        try_include(Main, abspath(JULIA_HOME, "..", "etc", "julia", "juliarc.jl"))
+        try_include(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "juliarc.jl"))
     end
     try_include(Main, abspath(homedir(), ".juliarc.jl"))
     nothing
 end
-
-function load_machine_file(path::AbstractString)
-    machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
-        map!(strip, s, s)
-        if length(s) > 1
-            cnt = isnumber(s[1]) ? parse(Int,s[1]) : Symbol(s[1])
-            push!(machines,(s[2], cnt))
-        else
-            push!(machines,line)
-        end
-    end
-    return machines
-end
-
-import .Terminals
-import .REPL
 
 const repl_hooks = []
 
@@ -377,7 +359,7 @@ interactive sessions; this is useful to customize the interface. The argument of
 REPL object. This function should be called from within the `.juliarc.jl` initialization
 file.
 """
-atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
+atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
 function __atreplinit(repl)
     for f in repl_hooks
@@ -391,7 +373,11 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 function _start()
+    repl_stdlib_loaded = isassigned(REPL_MODULE_REF)
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
@@ -400,7 +386,6 @@ function _start()
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1
 
-        local term
         global active_repl
         global active_repl_backend
         if repl
@@ -409,23 +394,25 @@ function _start()
                 banner |= opts.banner != 0 && is_interactive
                 color_set || (global have_color = false)
             else
+                if !repl_stdlib_loaded
+                    error("REPL standard library not loaded, cannot start a REPL.")
+                end
                 term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-                term = Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
+                term = REPL_MODULE_REF[].Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 banner |= opts.banner != 0
-                color_set || (global have_color = Terminals.hascolor(term))
-                banner && REPL.banner(term,term)
+                color_set || (global have_color = REPL_MODULE_REF[].Terminals.hascolor(term))
+                banner && REPL_MODULE_REF[].banner(term,term)
                 if term.term_type == "dumb"
-                    active_repl = REPL.BasicREPL(term)
-                    quiet || warn("Terminal not fully functional")
+                    active_repl = REPL_MODULE_REF[].BasicREPL(term)
+                    quiet || @warn "Terminal not fully functional"
                 else
-                    active_repl = REPL.LineEditREPL(term, true)
+                    active_repl = REPL_MODULE_REF[].LineEditREPL(term, have_color, true)
                     active_repl.history_file = history_file
-                    active_repl.hascolor = have_color
                 end
                 # Make sure any displays pushed in .juliarc.jl ends up above the
                 # REPLDisplay
-                pushdisplay(REPL.REPLDisplay(active_repl))
+                pushdisplay(REPL_MODULE_REF[].REPLDisplay(active_repl))
             end
         else
             banner |= opts.banner != 0 && is_interactive
@@ -444,8 +431,11 @@ function _start()
                     end
                 end
             else
+                if !repl_stdlib_loaded
+                    error("REPL standard library not loaded")
+                end
                 _atreplinit(active_repl)
-                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+                REPL_MODULE_REF[].run_repl(active_repl, backend->(global active_repl_backend = backend))
             end
         end
     catch err
