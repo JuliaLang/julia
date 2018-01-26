@@ -232,7 +232,7 @@ readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg;
 readuntil(io::AbstractPipe, arg::Char; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, out) = readuntil_vector!(pipe_reader(io), target, out)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
@@ -676,7 +676,7 @@ end
 #    0 0 0 1 2 3 4 0
 # So after if we mismatch after the second aδc sequence,
 # we can immediately jump back to index 5 (4 + 1).
-function readuntil_vector!(io::IO, target::AbstractVector{T}, out) where {T}
+function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) where {T}
     first = firstindex(target)
     last = lastindex(target)
     len = last - first + 1
@@ -686,14 +686,10 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, out) where {T}
     pos = 0 # array-offset
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
+    output! = (isa(out, IO) ? write : push!)
     while !eof(io)
         c = read(io, T)
         # Backtrack until the next target character matches what was found
-        if out isa IO
-            write(out, c)
-        else
-            push!(out, c)
-        end
         while true
             c1 = target[pos + first]
             if c == c1
@@ -702,6 +698,9 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, out) where {T}
             elseif pos == 0
                 break
             elseif pos == 1
+                if !keep
+                    output!(out, target[first])
+                end
                 pos = 0
             else
                 # grow cache to contain up to `pos`
@@ -721,10 +720,30 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, out) where {T}
                         end
                     end
                 end
-                pos = cache[pos]
+                # read new position from cache
+                pos1 = cache[pos]
+                if !keep
+                    # and add the removed prefix from the target to the output
+                    # if not always keeping the match
+                    for b in 1:(pos - pos1)
+                        output!(out, target[b - 1 + first])
+                    end
+                end
+                pos = pos1
             end
         end
+        if keep || pos == 0
+            output!(out, c)
+        end
         pos == len && return true
+    end
+    if !keep
+        # failed early without finishing the match,
+        # add the partial match to the output
+        # if not always keeping the match
+        for b in 1:pos
+            output!(out, target[b - 1 + first])
+        end
     end
     return false
 end
@@ -747,13 +766,7 @@ end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    found = readuntil_vector!(io, target, out)
-    if !keep && found
-        lo, lt = length(out), length(target)
-        if lt <= lo
-            resize!(out, lo - lt)
-        end
-    end
+    readuntil_vector!(io, target, keep, out)
     return out
 end
 
