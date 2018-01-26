@@ -669,8 +669,34 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
     if done(target, first)
         return true
     end
-    len = endof(target)
+
+    # In readuntil, we use a cache to accelerate scanning of sequences
+    # with repeated patterns. Each cache entry tells us which index
+    # we should start the search at. When we allocate the cache,
+    # we initialize it to 0 (and offset by the first index afterwards).
+    # Suppose target is:
+    #    Index:  1245689
+    #    Value: "aδcaδcx"
+    # We would set the cache to
+    #    0 0 0 1 0 3 4 0
+    # So after if we mismatch after the second aδc sequence,
+    # we can pick back up at index 5 (4 + 1).
+    @inline function grow_readuntil_cache!(cache, target, max_pos, pos)
+        local first = start(target)
+        while max_pos < pos
+            b = cache[max_pos] + first
+            cb, b1 = next(target, b)
+            ci, max_pos1 = next(target, max_pos)
+            if ci == cb
+                cache[max_pos1] = b1 - first
+            end
+            max_pos = max_pos1
+        end
+        max_pos
+    end
     local cache # will be lazy initialized when needed
+
+    len = endof(target)
     second = next(target, first)[2]
     max_pos = second
     pos = first
@@ -693,18 +719,8 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
                 pos = first
             else
                 # grow cache to contain up to `pos`
-                if !@isdefined(cache)
-                    cache = zeros(Int, len)
-                end
-                while max_pos < pos
-                    b = cache[max_pos] + first
-                    cb, b1 = next(target, b)
-                    ci, max_pos1 = next(target, max_pos)
-                    if ci == cb
-                        cache[max_pos1] = b1 - first
-                    end
-                    max_pos = max_pos1
-                end
+                @isdefined(cache) || (cache = zeros(Int, len))
+                max_pos = grow_readuntil_cache!(cache, target, max_pos, pos)
                 pos = cache[pos] + first
             end
         end
