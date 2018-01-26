@@ -1254,7 +1254,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         return;
     }
     void **top = sp.pc + pc_offset;
-    char *data_top = sp.data;
+    jl_gc_mark_data_t *data_top = sp.data;
     sp.data = ptls->gc_cache.data_stack;
     sp.pc = ptls->gc_cache.pc_stack;
     int isroot = 1;
@@ -1264,7 +1264,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         isroot = 0;
         if (pc == gc_mark_label_addrs[GC_MARK_L_marked_obj]) {
             gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1275,7 +1275,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_scan_only]) {
             gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1286,7 +1286,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_finlist]) {
             gc_mark_finlist_t *data = gc_repush_markdata(&sp, gc_mark_finlist_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1296,7 +1296,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
             gc_mark_objarray_t *data = gc_repush_markdata(&sp, gc_mark_objarray_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1307,7 +1307,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
             gc_mark_obj8_t *data = gc_repush_markdata(&sp, gc_mark_obj8_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1320,7 +1320,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj16]) {
             gc_mark_obj16_t *data = gc_repush_markdata(&sp, gc_mark_obj16_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1333,7 +1333,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj32]) {
             gc_mark_obj32_t *data = gc_repush_markdata(&sp, gc_mark_obj32_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1346,7 +1346,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_stack]) {
             gc_mark_stackframe_t *data = gc_repush_markdata(&sp, gc_mark_stackframe_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1358,7 +1358,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
             // module_binding
             gc_mark_binding_t *data = gc_repush_markdata(&sp, gc_mark_binding_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
