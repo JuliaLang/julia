@@ -1392,6 +1392,12 @@ function firstindex(a)
     1
 end
 
+# PR 25763
+function lastindex(a, n)
+    depwarn("if appropriate you should implement `lastindex(a, n)` for type $(typeof(a))`, which might just return `last(axes(a, n))`", :lastindex)
+    last(axes(a, n))
+end
+
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)

@@ -176,6 +176,7 @@ julia> lastindex([1,2,4])
 ```
 """
 lastindex(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray, n) = (@_inline_meta; last(axes(a, n)))
 
 """
     firstindex(collection) -> Integer
@@ -189,6 +190,7 @@ julia> firstindex([1,2,4])
 ```
 """
 firstindex(a::AbstractArray) = (@_inline_meta; first(linearindices(a)))
+firstindex(a::AbstractArray, n) = (@_inline_meta; first(axes(a, n)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 

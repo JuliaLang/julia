@@ -453,7 +453,16 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     B = T(A)
 
     # last(a)
-    @test last(B) == B[length(B)]
+    @test last(B) == B[lastindex(B)] == B[end] == A[end]
+    @test lastindex(B) == lastindex(A) == last(linearindices(B))
+    @test lastindex(B, 1) == lastindex(A, 1) == last(axes(B, 1))
+    @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
+
+    # first(a)
+    @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
+    @test firstindex(B) == firstindex(A) == first(linearindices(B))
+    @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
+    @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))

@@ -328,6 +328,9 @@ cv = copy(v)
 @test reverse!(cv) == rv
 
 A = OffsetArray(rand(4,4), (-3,5))
+@test lastindex(A) == 16
+@test lastindex(A, 1) == 1
+@test lastindex(A, 2) == 9
 @test A ≈ A
 @test axes(A') === (6:9, -2:1)
 @test parent(copy(A')) == copy(parent(A)')
