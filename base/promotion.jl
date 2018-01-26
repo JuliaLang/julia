@@ -15,7 +15,6 @@ typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 typejoin(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; join_types(a, b, typejoin))
 
 function join_types(@nospecialize(a), @nospecialize(b), f::Function)
-    @_pure_meta
     if a <: b
         return b
     elseif b <: a
