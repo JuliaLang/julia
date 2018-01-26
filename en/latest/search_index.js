@@ -7085,7 +7085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.sum",
     "category": "Function",
-    "text": "sum(A, dims)\n\nSum elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum(A, 1)\n1×2 Array{Int64,2}:\n 4  6\n\njulia> sum(A, 2)\n2×1 Array{Int64,2}:\n 3\n 7\n\n\n\n\n\nsum(itr)\n\nReturns the sum of all elements in a collection.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> sum(1:20)\n210\n\n\n\n\n\n"
+    "text": "sum(f, itr)\n\nSum the results of calling function f on each element of itr.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> sum(abs2, [2; 3; 4])\n29\n\nNote the important difference between sum(A) and reduce(+, A) for arrays with small integer eltype:\n\njulia> sum(Int8[100, 28])\n128\n\njulia> reduce(+, Int8[100, 28])\n-128\n\nIn the former case, the integers are widened to system word size and therefore the result is 128. In the latter case, no such widening happens and integer overflow results in -128.\n\n\n\n\n\nsum(itr)\n\nReturns the sum of all elements in a collection.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> sum(1:20)\n210\n\n\n\n\n\nsum(A::AbstractArray, dims)\n\nSum elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum(A, 1)\n1×2 Array{Int64,2}:\n 4  6\n\njulia> sum(A, 2)\n2×1 Array{Int64,2}:\n 3\n 7\n\n\n\n\n\n"
 },
 
 {
@@ -7101,7 +7101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.prod",
     "category": "Function",
-    "text": "prod(A, dims)\n\nMultiply elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod(A, 1)\n1×2 Array{Int64,2}:\n 3  8\n\njulia> prod(A, 2)\n2×1 Array{Int64,2}:\n  2\n 12\n\n\n\n\n\nprod(itr)\n\nReturns the product of all elements of a collection.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> prod(1:20)\n2432902008176640000\n\n\n\n\n\n"
+    "text": "prod(f, itr)\n\nReturns the product of f applied to each element of itr.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> prod(abs2, [2; 3; 4])\n576\n\n\n\n\n\nprod(itr)\n\nReturns the product of all elements of a collection.\n\nThe return type is Int for signed integers of less than system word size, and UInt for unsigned integers of less than system word size.  For all other arguments, a common return type is found to which all arguments are promoted.\n\njulia> prod(1:20)\n2432902008176640000\n\n\n\n\n\nprod(A::AbstractArray, dims)\n\nMultiply elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod(A, 1)\n1×2 Array{Int64,2}:\n 3  8\n\njulia> prod(A, 2)\n2×1 Array{Int64,2}:\n  2\n 12\n\n\n\n\n\n"
 },
 
 {
@@ -7805,7 +7805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
