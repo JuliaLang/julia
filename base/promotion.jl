@@ -108,26 +108,26 @@ function join_types(@nospecialize(a), @nospecialize(b), f::Function)
 end
 
 """
-    promote_join(T, S)
+    promote_typejoin(T, S)
 
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_join(@nospecialize(a), @nospecialize(b)) =
-    (@_pure_meta; join_types(a, b, promote_join))
-promote_join(::Type{Nothing}, ::Type{T}) where {T} =
+promote_typejoin(@nospecialize(a), @nospecialize(b)) =
+    (@_pure_meta; join_types(a, b, promote_typejoin))
+promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) ? Union{T, Nothing} : Any
-promote_join(::Type{T}, ::Type{Nothing}) where {T} =
+promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
     isconcretetype(T) ? Union{T, Nothing} : Any
-promote_join(::Type{Missing}, ::Type{T}) where {T} =
+promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
     isconcretetype(T) ? Union{T, Missing} : Any
-promote_join(::Type{T}, ::Type{Missing}) where {T} =
+promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
     isconcretetype(T) ? Union{T, Missing} : Any
-promote_join(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-promote_join(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-promote_join(::Type{Nothing}, ::Type{Nothing}) = Nothing
-promote_join(::Type{Missing}, ::Type{Missing}) = Missing
+promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)

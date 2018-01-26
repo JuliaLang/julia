@@ -55,8 +55,8 @@ indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 
-promote_join(::Type{NamedTuple{n, S}}, ::Type{NamedTuple{n, T}}) where {n, S, T} =
-    NamedTuple{n, promote_join(S, T)}
+promote_typejoin(::Type{NamedTuple{n, S}}, ::Type{NamedTuple{n, T}}) where {n, S, T} =
+    NamedTuple{n, promote_typejoin(S, T)}
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
