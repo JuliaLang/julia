@@ -457,7 +457,17 @@ function sqrt(z::Complex{<:AbstractFloat})
     end
     Complex(ξ,η)
 end
-sqrt(z::Complex) = sqrt(float(z))
+
+_sqrt(z::Complex{<:AbstractFloat}) = sqrt(z)
+
+function _sqrt(z)
+    ρ = abs(z)
+    θ = angle(z)
+
+    return sqrt(ρ) * cis(θ/2)
+end
+
+sqrt(z::Complex) = _sqrt(float(z))
 
 # function sqrt(z::Complex)
 #     rz = float(real(z))
