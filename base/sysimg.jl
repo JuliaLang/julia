@@ -360,6 +360,7 @@ const (∛)=cbrt
 INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
+include("accumulate.jl")
 include("reducedim.jl")  # macros in this file relies on string.jl
 
 # basic data structures
