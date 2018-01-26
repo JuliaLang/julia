@@ -695,11 +695,16 @@ function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
                     cache = zeros(Int, len)
                 end
                 while max_pos < pos
-                    b = cache[max_pos] + first
-                    cb, b1 = next(target, b)
-                    ci, max_pos1 = next(target, max_pos)
-                    if ci == cb
-                        cache[max_pos1] = b1 - first
+                    b = max_pos
+                    local max_pos1
+                    while b != first
+                        b = cache[b] + first
+                        cb, b1 = next(target, b)
+                        ci, max_pos1 = next(target, max_pos)
+                        if ci == cb
+                            cache[max_pos1] = b1 - first
+                            break
+                        end
                     end
                     max_pos = max_pos1
                 end
