@@ -316,10 +316,10 @@ julia> a = bswap(4)
 julia> bswap(a)
 4
 
-julia> base(2, 1)
+julia> string(1, base = 2)
 "1"
 
-julia> base(2, bswap(1))
+julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """

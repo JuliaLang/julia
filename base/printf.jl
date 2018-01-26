@@ -696,7 +696,7 @@ function gen_p(flags::String, width::Int, precision::Int, c::Char)
     end
     push!(blk.args, :(write(out, '0')))
     push!(blk.args, :(write(out, 'x')))
-    push!(blk.args, :(write(out, String(base(16, unsigned($x), pad = $ptrwidth)))))
+    push!(blk.args, :(write(out, String(string(unsigned($x), pad = $ptrwidth, base = 16)))))
     if width > 0 && '-' in flags
         push!(blk.args, pad(width, width, ' '))
     end

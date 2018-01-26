@@ -593,10 +593,9 @@ flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 
-string(x::BigInt) = base(10, x)
 show(io::IO, x::BigInt) = print(io, string(x))
 
-function base(b::Integer, n::BigInt; pad::Integer=1)
+function base(n::BigInt; b::Integer = 10, pad::Integer = 1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     iszero(n) && pad < 1 && return ""

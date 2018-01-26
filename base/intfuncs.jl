@@ -549,15 +549,13 @@ julia> ndigits(12345)
 julia> ndigits(1022, 16)
 3
 
-julia> base(16, 1022)
+julia> string(1022, bass = 16)
 "3fe"
 ```
 """
 ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
 
 ## integer to string functions ##
-
-string(x::Union{Int8,Int16,Int32,Int64,Int128}) = base(10, x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -611,7 +609,6 @@ end
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-
 function base(b::Int, x::Integer, pad::Int, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
     2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
@@ -636,20 +633,20 @@ split_sign(n::Integer) = unsigned(abs(n)), n < 0
 split_sign(n::Unsigned) = n, false
 
 """
-    base(base::Integer, n::Integer; pad::Integer=1)
+    string(n::Integer; base::Integer = 10, pad::Integer = 1)
 
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
 ```jldoctest
-julia> base(13, 5, pad = 4)
+julia> string(5, base = 13, pad = 4)
 "0005"
 
-julia> base(5, 13, pad = 4)
+julia> string(13, base = 5, pad = 4)
 "0023"
 ```
 """
-base(b::Integer, n::Integer; pad::Integer=1) =
+string(n::Integer; base::Integer = 10, pad::Integer = 1) =
     if b == 2
         (n_positive, neg) = split_sign(n)
         bin(n_positive, pad, neg)
@@ -682,11 +679,11 @@ julia> bitstring(2.2)
 """
 function bitstring end
 
-bitstring(x::Union{Bool,Int8,UInt8})           = base(2, reinterpret(UInt8,x), pad = 8)
-bitstring(x::Union{Int16,UInt16,Float16})      = base(2, reinterpret(UInt16,x), pad = 16)
-bitstring(x::Union{Char,Int32,UInt32,Float32}) = base(2, reinterpret(UInt32,x), pad = 32)
-bitstring(x::Union{Int64,UInt64,Float64})      = base(2, reinterpret(UInt64,x), pad = 64)
-bitstring(x::Union{Int128,UInt128})            = base(2, reinterpret(UInt128,x), pad = 128)
+bitstring(x::Union{Bool,Int8,UInt8})           = string(reinterpret(UInt8,x), pad = 8, base = 2)
+bitstring(x::Union{Int16,UInt16,Float16})      = string(reinterpret(UInt16,x), pad = 16, base = 2)
+bitstring(x::Union{Char,Int32,UInt32,Float32}) = string(reinterpret(UInt32,x), pad = 32, base = 2)
+bitstring(x::Union{Int64,UInt64,Float64})      = string(reinterpret(UInt64,x), pad = 64, base = 2)
+bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), pad = 128, base = 2)
 
 """
     digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)
