@@ -196,7 +196,7 @@ end
 end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
-    i, end_pos = start(s), endof(s)
+    i, end_pos = start(s), lastindex(s)
 
     dm = dd = Int64(1)
     th = tm = ts = tms = Int64(0)
@@ -263,13 +263,13 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
 end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
-    pos, len = start(str), endof(str)
+    pos, len = start(str), lastindex(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, true)
     T(values...)
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
-    pos, len = start(str), endof(str)
+    pos, len = start(str), lastindex(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if values === nothing
         nothing
@@ -294,7 +294,7 @@ number of components may be less than the total number of `DatePart`.
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
 
     quote
-        pos, len = start(str), endof(str)
+        pos, len = start(str), lastindex(str)
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
         t = values
         types = $(Expr(:tuple, tokens...))

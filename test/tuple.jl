@@ -95,9 +95,9 @@ end
     @test_throws ArgumentError Base.front(())
     @test_throws ArgumentError first(())
 
-    @test endof(()) === 0
-    @test endof((1,)) === 1
-    @test endof((1,2)) === 2
+    @test lastindex(()) === 0
+    @test lastindex((1,)) === 1
+    @test lastindex((1,2)) === 2
 
     @test size((), 1) === 0
     @test size((1,), 1) === 1

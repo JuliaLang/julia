@@ -516,7 +516,7 @@ Library improvements
     has been changed to `KeySet{K, <:Associative{K}} <: AbstractSet{K}` ([#24580]).
 
   * New function `ncodeunits(s::AbstractString)` gives the number of code units in a string.
-    The generic definition is constant time but calls `endof(s)` which may be inefficient.
+    The generic definition is constant time but calls `lastindex(s)` which may be inefficient.
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
@@ -993,6 +993,8 @@ Deprecated or removed
 
   * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
 
+  * `endof(a)` has been renamed to `lastindex(a)` ([#23554]).
+
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
 
@@ -1152,6 +1154,7 @@ Command-line option changes
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
 [#23404]: https://github.com/JuliaLang/julia/issues/23404

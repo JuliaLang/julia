@@ -16,7 +16,8 @@ NTuple
 ## indexing ##
 
 length(t::Tuple) = nfields(t)
-endof(t::Tuple) = length(t)
+firstindex(t::Tuple) = 1
+lastindex(t::Tuple) = length(t)
 size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))

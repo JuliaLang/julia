@@ -314,7 +314,7 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 
 # other functions
 v = OffsetArray(v0, (-3,))
-@test endof(v) == 1
+@test lastindex(v) == 1
 @test v ≈ v
 @test axes(v') === (Base.OneTo(1),-2:1)
 @test parent(v) == collect(v)
