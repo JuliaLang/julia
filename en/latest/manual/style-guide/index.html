@@ -17,12 +17,12 @@ foo(x, y)</code></pre><p>use:</p><pre><code class="language-julia">function foo(
     ...
 end
 foo(Int(x), Int(y))</code></pre><p>This is better style because <code>foo</code> does not really accept numbers of all types; it really needs <code>Int</code> s.</p><p>One issue here is that if a function inherently requires integers, it might be better to force the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue is that declaring more specific types leaves more &quot;space&quot; for future method definitions.</p><h2><a class="nav-anchor" id="Append-!-to-names-of-functions-that-modify-their-arguments-1" href="#Append-!-to-names-of-functions-that-modify-their-arguments-1">Append <code>!</code> to names of functions that modify their arguments</a></h2><p>Instead of:</p><pre><code class="language-julia">function double(a::AbstractArray{&lt;:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a
 end</code></pre><p>use:</p><pre><code class="language-julia">function double!(a::AbstractArray{&lt;:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a
