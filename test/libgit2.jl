@@ -427,7 +427,7 @@ mktempdir() do dir
     test_repo = joinpath(dir, "Example.Test")
     test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
     test_dir = "testdir"
-    test_file = joinpath(test_dir, "testfile")
+    test_file = "$(test_dir)/testfile"
     config_file = "testconfig"
     commit_msg1 = randstring(10)
     commit_msg2 = randstring(10)
