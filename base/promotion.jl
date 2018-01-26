@@ -12,7 +12,7 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin)
+typejoin(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; join_types(a, b, typejoin))
 
 function join_types(@nospecialize(a), @nospecialize(b), f::Function)
     @_pure_meta
@@ -115,7 +115,8 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_join(@nospecialize(a), @nospecialize(b)) = join_types(a, b, promote_join)
+promote_join(@nospecialize(a), @nospecialize(b)) =
+    (@_pure_meta; join_types(a, b, promote_join))
 promote_join(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) ? Union{T, Nothing} : Any
 promote_join(::Type{T}, ::Type{Nothing}) where {T} =
