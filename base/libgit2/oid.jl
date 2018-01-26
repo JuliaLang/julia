@@ -155,9 +155,6 @@ function GitShortHash(obj::GitObject)
     return sid
 end
 
-Base.hex(id::GitHash) = join([hex(i,2) for i in id.val])
-Base.hex(id::GitShortHash) = hex(id.hash)[1:id.len]
-
 """
     raw(id::GitHash) -> Vector{UInt8}
 
@@ -165,7 +162,8 @@ Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
 """
 raw(id::GitHash) = collect(id.val)
 
-Base.string(id::AbstractGitHash) = hex(id)
+Base.string(id::GitHash) = join([string(i, base = 16, pad = 2) for i in id.val])
+Base.string(id::GitShortHash) = string(id.hash)[1:id.len]
 
 Base.show(io::IO, id::GitHash) = print(io, "GitHash(\"$(string(id))\")")
 Base.show(io::IO, id::GitShortHash) = print(io, "GitShortHash(\"$(string(id))\")")

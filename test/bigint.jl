@@ -336,10 +336,10 @@ end
     @test_throws InexactError floor(BigInt,Inf)
     @test_throws InexactError ceil(BigInt,Inf)
 
-    @test bin(big(3)) == "11"
-    @test oct(big(9)) == "11"
-    @test oct(-big(9)) == "-11"
-    @test hex(big(12)) == "c"
+    @test string(big(3), base = 2) == "11"
+    @test string(big(9), base = 8) == "11"
+    @test string(-big(9), base = 8) == "-11"
+    @test string(big(12), base = 16) == "c"
 end
 @testset "Issue #18849" begin
     # bin, oct, dec, hex should not call sizeof on BigInts
@@ -347,25 +347,25 @@ end
     padding = 4
     low = big(4)
     high = big(2^20)
-    @test bin(low, padding) == "0100"
-    @test oct(low, padding) == "0004"
-    @test dec(low, padding) == "0004"
-    @test hex(low, padding) == "0004"
+    @test string(low, pad = padding, base = 2) == "0100"
+    @test string(low, pad = padding, base = 8) == "0004"
+    @test string(low, pad = padding, base = 10) == "0004"
+    @test string(low, pad = padding, base = 16) == "0004"
 
-    @test bin(high, padding) == "100000000000000000000"
-    @test oct(high, padding) == "4000000"
-    @test dec(high, padding) == "1048576"
-    @test hex(high, padding) == "100000"
+    @test string(high, pad = padding, base = 2) == "100000000000000000000"
+    @test string(high, pad = padding, base = 8) == "4000000"
+    @test string(high, pad = padding, base = 10) == "1048576"
+    @test string(high, pad = padding, base = 16) == "100000"
 
-    @test bin(-low, padding) == "-0100" # handle negative numbers correctly
-    @test oct(-low, padding) == "-0004"
-    @test dec(-low, padding) == "-0004"
-    @test hex(-low, padding) == "-0004"
+    @test string(-low, pad = padding, base = 2) == "-0100" # handle negative numbers correctly
+    @test string(-low, pad = padding, base = 8) == "-0004"
+    @test string(-low, pad = padding, base = 10) == "-0004"
+    @test string(-low, pad = padding, base = 16) == "-0004"
 
-    @test bin(-high, padding) == "-100000000000000000000"
-    @test oct(-high, padding) == "-4000000"
-    @test dec(-high, padding) == "-1048576"
-    @test hex(-high, padding) == "-100000"
+    @test string(-high, pad = padding, base = 2) == "-100000000000000000000"
+    @test string(-high, pad = padding, base = 8) == "-4000000"
+    @test string(-high, pad = padding, base = 10) == "-1048576"
+    @test string(-high, pad = padding, base = 16) == "-100000"
 end
 
 # respect 0-padding on big(0)
@@ -373,7 +373,7 @@ for f in (bin, oct, dec, hex)
     local f
     @test f(big(0), 0) == ""
 end
-@test base(rand(2:62), big(0), 0) == ""
+@test string(big(0), base = rand(2:62), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

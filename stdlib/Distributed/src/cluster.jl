@@ -206,7 +206,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
         process_messages(client, client, true)
     end
     print(out, "julia_worker:")  # print header
-    print(out, "$(dec(LPROC.bind_port))#") # print port
+    print(out, "$(string(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)

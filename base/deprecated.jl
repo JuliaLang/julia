@@ -444,8 +444,8 @@ function hex2num(s::AbstractString)
 end
 export hex2num
 
-@deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
-@deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
+@deprecate num2hex(x::Union{Float16,Float32,Float64}) string(reinterpret(Unsigned, x), base = 16, pad = sizeof(x)*2)
+@deprecate num2hex(n::Integer) string(n, base = 16, pad = sizeof(n)*2)
 
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
@@ -1402,6 +1402,22 @@ export readandwrite
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
+
+@deprecase base(b, n, pad) string(n, base = b, pad = pad)
+@deprecate bin(n, pad) string(n, base = 2, pad = pad)
+@deprecate oct(n, pad) string(n, base = 8, pad = pad)
+@deprecate dec(n, pad) string(n, pad = pad)
+@deprecate hex(n, pad) string(n, base = 16, pad = pad)
+@deprecate hex(id::LibGit2.GitHash) string(id)
+@deprecate hex(id::LibGit2.GitShortHash) string(id)
+@deprecate bin(n::Char, pad) string(UInt32(n), base = 2, pad = pad)
+@deprecate oct(n::Char, pad) string(UInt32(n), base = 8, pad = pad)
+@deprecate dec(n::Char, pad) string(UInt32(n), pad = pad)
+@deprecate hex(n::Char, pad) string(UInt32(n), base = 16, pad = pad)
+@deprecate bin(n::Char) string(UInt32(n), base = 2)
+@deprecate oct(n::Char) string(UInt32(n), base = 8)
+@deprecate dec(n::Char) string(UInt32(n))
+@deprecate hex(n::Char) string(UInt32(n), base = 16)
 
 # END 0.7 deprecations
 

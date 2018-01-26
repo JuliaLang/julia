@@ -85,7 +85,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
             write(io, '0')
         end
         write(io, (typed && isa(x,Float32)) ? 'f' : 'e')
-        write(io, dec(pt-1))
+        write(io, string(pt - 1))
         typed && isa(x,Float16) && write(io, ")")
         return
     elseif pt <= 0
@@ -160,7 +160,7 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
         # => ########e###
         unsafe_write(io, pdigits+0, len)
         write(io, 'e')
-        write(io, dec(e))
+        write(io, string(e))
         return
     elseif pt <= 0
         # => 0.000########
