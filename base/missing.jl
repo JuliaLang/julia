@@ -99,7 +99,11 @@ for f in (:(ceil), :(floor), :(round), :(trunc))
         ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
-            throw(MissingException("cannot convert a missing value to type $T"))
+            throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        # to fix ambiguities
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 
