@@ -595,7 +595,7 @@ flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 
 show(io::IO, x::BigInt) = print(io, string(x))
 
-function base(n::BigInt; b::Integer = 10, pad::Integer = 1)
+function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     iszero(n) && pad < 1 && return ""

@@ -573,7 +573,6 @@ export
 
 # strings and text output
     ascii,
-    base,
     bitstring,
     bytes2hex,
     chomp,

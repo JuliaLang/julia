@@ -85,7 +85,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
             write(io, '0')
         end
         write(io, (typed && isa(x,Float32)) ? 'f' : 'e')
-        write(io, string(pt - 1, base = 10))
+        write(io, string(pt - 1))
         typed && isa(x,Float16) && write(io, ")")
         return
     elseif pt <= 0
