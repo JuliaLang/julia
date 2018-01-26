@@ -9,7 +9,7 @@ import Base: map, map!, broadcast, copy, copyto!
 using Base: TupleLL, TupleLLEnd, front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
-using Base.Broadcast: BroadcastStyle, Broadcasted, Args1, Args2, flatten
+using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
 # This module is organized as follows:
@@ -955,6 +955,7 @@ end
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
 @inline copy(bc::Broadcasted{<:SPVM}) = _copy(bc.args, bc)
 
+const Args2{S,T} = Base.TupleLL{S,Base.TupleLL{T,Base.TupleLLEnd}}
 function _copy(::Args2{Type{T},S}, bc::Broadcasted{<:SPVM}) where {T,S<:SparseVecOrMat}
     BC = Broadcasted{typeof(BroadcastStyle(typeof(bc))),eltype(bc)}
     copy(BC(x->bc.f(bc.args.head, x), bc.args.rest, bc.axes, bc.indexing))

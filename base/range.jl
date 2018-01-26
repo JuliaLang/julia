@@ -734,52 +734,6 @@ end
     StepRangeLen{T,R,S}(-r.ref, -r.step, length(r), r.offset)
 -(r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
 
-## scalar-range broadcast operations ##
-
-broadcast(::typeof(-), r::OrdinalRange) = range(-first(r), -step(r), length(r))
-broadcast(::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
-broadcast(::typeof(-), r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
-
-broadcast(::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
-broadcast(::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, length(r))
-# For #18336 we need to prevent promotion of the step type:
-broadcast(::typeof(+), r::AbstractRange, x::Number) = range(first(r) + x, step(r), length(r))
-broadcast(::typeof(+), x::Number, r::AbstractRange) = range(x + first(r), step(r), length(r))
-broadcast(::typeof(+), r::StepRangeLen{T}, x::Number) where T =
-    StepRangeLen{typeof(T(r.ref)+x)}(r.ref + x, r.step, length(r), r.offset)
-broadcast(::typeof(+), x::Number, r::StepRangeLen{T}) where T =
-    StepRangeLen{typeof(x+T(r.ref))}(x + r.ref, r.step, length(r), r.offset)
-broadcast(::typeof(+), r::LinSpace, x::Number) = LinSpace(r.start + x, r.stop + x, length(r))
-broadcast(::typeof(+), x::Number, r::LinSpace) = LinSpace(x + r.start, x + r.stop, length(r))
-
-broadcast(::typeof(-), r::AbstractUnitRange, x::Number) = range(first(r)-x, length(r))
-broadcast(::typeof(-), r::AbstractRange, x::Number) = range(first(r)-x, step(r), length(r))
-broadcast(::typeof(-), x::Number, r::AbstractRange) = range(x-first(r), -step(r), length(r))
-broadcast(::typeof(-), r::StepRangeLen{T}, x::Number) where T =
-    StepRangeLen{typeof(T(r.ref)-x)}(r.ref - x, r.step, length(r), r.offset)
-broadcast(::typeof(-), x::Number, r::StepRangeLen{T}) where T =
-    StepRangeLen{typeof(x-T(r.ref))}(x - r.ref, -r.step, length(r), r.offset)
-broadcast(::typeof(-), r::LinSpace, x::Number) = LinSpace(r.start - x, r.stop - x, length(r))
-broadcast(::typeof(-), x::Number, r::LinSpace) = LinSpace(x - r.start, x - r.stop, length(r))
-
-broadcast(::typeof(*), x::Number, r::AbstractRange) = range(x*first(r), x*step(r), length(r))
-broadcast(::typeof(*), x::Number, r::StepRangeLen{T}) where {T} =
-    StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
-broadcast(::typeof(*), x::Number, r::LinSpace) = LinSpace(x * r.start, x * r.stop, r.len)
-# separate in case of noncommutative multiplication
-broadcast(::typeof(*), r::AbstractRange, x::Number) = range(first(r)*x, step(r)*x, length(r))
-broadcast(::typeof(*), r::StepRangeLen{T}, x::Number) where {T} =
-    StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
-broadcast(::typeof(*), r::LinSpace, x::Number) = LinSpace(r.start * x, r.stop * x, r.len)
-
-broadcast(::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step(r)/x, length(r))
-broadcast(::typeof(/), r::StepRangeLen{T}, x::Number) where {T} =
-    StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)
-broadcast(::typeof(/), r::LinSpace, x::Number) = LinSpace(r.start / x, r.stop / x, r.len)
-
-broadcast(::typeof(/), x::Number, r::AbstractRange) = [(x/y) for y in r]
-
-
 # promote eltype if at least one container wouldn't change, otherwise join container types.
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
@@ -957,6 +911,3 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
-
-broadcast(::typeof(+), r1::AbstractRange, r2::AbstractRange) = r1 + r2
-broadcast(::typeof(-), r1::AbstractRange, r2::AbstractRange) = r1 - r2

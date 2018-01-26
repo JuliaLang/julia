@@ -80,12 +80,13 @@ structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n)
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
 # preserve both zeros and ones (for Unit***erTriangular) and symmetry (for SymTridiagonal)
-
+const Args1{T} = Base.TupleLL{T,Base.TupleLLEnd}
+const Args2{S,T} = Base.TupleLL{S,Base.TupleLL{T,Base.TupleLLEnd}}
 isstructurepreserving(::Any) = false
 isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args)
-isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Broadcast.Args1{<:StructuredMatrix}) = true
-isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Broadcast.Args1{<:StructuredMatrix}) = true
-isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Broadcast.Args2{<:Type,<:StructuredMatrix}) = true
+isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Args1{<:StructuredMatrix}) = true
+isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Args1{<:StructuredMatrix}) = true
+isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Args2{<:Type,<:StructuredMatrix}) = true
 isstructurepreserving(f, args) = false
 
 _iszero(n::Number) = iszero(n)

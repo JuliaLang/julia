@@ -8,7 +8,7 @@ using Base: Indices, OneTo, TupleLL, TupleLLEnd, make_TupleLL, mapTupleLL,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: broadcast, broadcast!, copy, copyto!
 export BroadcastStyle, broadcast_indices, broadcast_similar, broadcast_skip_axes_instantiation,
-       is_broadcast_incremental, broadcast_getindex, broadcast_setindex!, dotview, @__dot__
+       broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 
@@ -296,20 +296,6 @@ broadcast_skip_axes_instantiation(bc::Broadcasted)               = false
 broadcast_skip_axes_instantiation(bc::Broadcasted{Scalar})       = true
 broadcast_skip_axes_instantiation(bc::Broadcasted{Unknown})      = true
 broadcast_skip_axes_instantiation(bc::Broadcasted{Style{Tuple}}) = true
-
-"""
-    is_broadcast_incremental(bc)
-
-Return `true` if `bc` contains arguments and operations that should be evaluated incrementally.
-
-Defining this to be true means that you want this particular expression to be
-eagerly executed as an independent call to `broadcast(f, args...)`. As such,
-you must also ensure that you have specialized the particular `broadcast`
-signature for which this returns true; falling back to the default
-implementation will lead to a dispatch loop and a stack overflow.
-"""
-is_broadcast_incremental(bc::Broadcasted) = false
-is_broadcast_incremental(bc::Broadcasted{DefaultArrayStyle{1}}) = maybe_range_safe(bc)
 
 ### End of methods that users will typically have to specialize ###
 
@@ -777,10 +763,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-function broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N}
-    style = combine_styles(As...)
-    return copy(instantiate(Broadcasted{typeof(style)}(f, make_TupleLL(As...))))
-end
+broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N} = execute(make(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
@@ -798,7 +781,7 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 function broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N}
     style = combine_styles(As...)
     newargs = make_TupleLL(As...)
-    bc = Broadcasted{typeof(style)}(f, newargs)
+    bc = Broadcasted{typeof(style)}(f, newargs) # TODO: Note that this doesn't use `make`
     ibc = instantiate(bc, combine_indices(dest, As...))
     return copyto!(dest, ibc)
 end
@@ -812,23 +795,12 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,
 
 function copy(bc::Broadcasted{Style, ElType}) where {Style, ElType}
     # Special handling for types that should be treated incrementally
-    is_broadcast_incremental(bc) && return broadcast_incremental(bc)
     if Style<:NonleafHandlingStyles && !Base.isconcretetype(ElType)
         return copy_nonleaf(bc)
     end
     dest = broadcast_similar(Style(), ElType, axes(bc), bc)
     return copyto!(dest, bc)
 end
-
-function broadcast_incremental(bc::Broadcasted)
-    not_nested(bc) && return broadcast(bc.f, Tuple(bc.args)...)
-    return copy(instantiate(_broadcast_incremental(bc)))
-end
-function _broadcast_incremental(bc::Broadcasted)
-    not_nested(bc) && return broadcast(bc.f, Tuple(bc.args)...)
-    return Broadcasted(bc.f, mapTupleLL(_broadcast_incremental, bc.args))
-end
-_broadcast_incremental(x) = x
 
 # When ElType is not concrete, use narrowing. Use the first output
 # value to determine the starting output eltype; copyto_nonleaf!
@@ -1000,44 +972,60 @@ _longest_tuple(A::Tuple{Any}, B::NTuple{N,Any}) where N = B
     throw(DimensionMismatch("tuples $A and $B could not be broadcast to a common size"))
 
 ## scalar-range broadcast operations ##
+# DefaultArrayStyle and \ are not available at the time of range.jl
+make(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), -step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(-), r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
 
-maybe_range_safe(::Broadcasted) = false
-# For ranges, we specifically support 1&2-argument arithmetic operations involving at
-# least 1 AbstractRange and potentially 1 Number
-const Args1{T} = TupleLL{T,TupleLLEnd}
-const Args2{S,T} = TupleLL{S,TupleLL{T,TupleLLEnd}}
-@inline maybe_range_safe(bc::Broadcasted{Style}) where {Style<:AbstractArrayStyle{1}} =
-    broadcast_all(maybe_range_safe_f, maybe_range_safe_arg, bc) && bc.args isa Union{Args1,Args2}
+make(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, length(r))
+# For #18336 we need to prevent promotion of the step type:
+make(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) = range(first(r) + x, step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) = range(x + first(r), step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen{T}, x::Number) where T =
+    StepRangeLen{typeof(T(r.ref)+x)}(r.ref + x, r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::StepRangeLen{T}) where T =
+    StepRangeLen{typeof(x+T(r.ref))}(x + r.ref, r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(+), r::LinSpace, x::Number) = LinSpace(r.start + x, r.stop + x, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::LinSpace) = LinSpace(x + r.start, x + r.stop, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(+), r1::AbstractRange, r2::AbstractRange) = r1 + r2
 
-maybe_range_safe_f(::typeof(+)) = true
-maybe_range_safe_f(::typeof(-)) = true
-maybe_range_safe_f(::typeof(*)) = true
-maybe_range_safe_f(::typeof(/)) = true
-maybe_range_safe_f(::typeof(\)) = true
-maybe_range_safe_f(f)           = false
+make(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Number) = range(first(r)-x, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) = range(first(r)-x, step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) = range(x-first(r), -step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen{T}, x::Number) where T =
+    StepRangeLen{typeof(T(r.ref)-x)}(r.ref - x, r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::StepRangeLen{T}) where T =
+    StepRangeLen{typeof(x-T(r.ref))}(x - r.ref, -r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(-), r::LinSpace, x::Number) = LinSpace(r.start - x, r.stop - x, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::LinSpace) = LinSpace(x - r.start, x - r.stop, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(-), r1::AbstractRange, r2::AbstractRange) = r1 - r2
 
-maybe_range_safe_arg(::AbstractRange) = true
-maybe_range_safe_arg(::Number)        = true
-maybe_range_safe_arg(x)               = false
+make(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) = range(x*first(r), x*step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::StepRangeLen{T}) where {T} =
+    StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::LinSpace) = LinSpace(x * r.start, x * r.stop, r.len)
+# separate in case of noncommutative multiplication
+make(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) = range(first(r)*x, step(r)*x, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(*), r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(*), r::LinSpace, x::Number) = LinSpace(r.start * x, r.stop * x, r.len)
 
-# \ is not available at the time of range.jl
-broadcast(::typeof(\), x::Number, r::AbstractRange) = range(x\first(r), x\step(r), length(r))
-broadcast(::typeof(\), x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
-broadcast(::typeof(\), x::Number, r::LinSpace) = LinSpace(x \ r.start, x \ r.stop, r.len)
-broadcast(::typeof(\), r::AbstractRange, x::Number) = [(y\x) for y in r]
+make(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step(r)/x, length(r))
+make(::DefaultArrayStyle{1}, ::typeof(/), r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(/), r::LinSpace, x::Number) = LinSpace(r.start / x, r.stop / x, r.len)
 
-# range-range broadcast operations
-# *, /, and \ fall back to the generic interface. To avoid a StackOverflow triggered
-# by calling `copy`, we allocate the output container and call copyto!
-for op in (:*, :/, :\)
-    @eval begin
-        function broadcast(::typeof($op), r1::AbstractRange, r2::AbstractRange)
-            shape = combine_indices(r1, r2)
-            dest = Vector{typeof($op(oneunit(eltype(r1)),oneunit(eltype(r2))))}(uninitialized, length(shape[1]))
-            return copyto!(dest, instantiate(Broadcasted($op, make_TupleLL(r1, r2))))
-        end
-    end
-end
+make(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::AbstractRange) = range(x\first(r), x\step(r), length(r))
+make(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::LinSpace) = LinSpace(x \ r.start, x \ r.stop, r.len)
+
+make(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):big(last(r))
+make(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
+make(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
+make(::DefaultArrayStyle{1}, ::typeof(big), r::LinSpace) = LinSpace(big(r.start), big(r.stop), length(r))
+
+execute(r::AbstractRange) = r
 
 """
     broadcast_getindex(A, inds...)
@@ -1252,10 +1240,8 @@ function make_kwsyntax(f, args...; kwargs...)
     g = (args...)->f(args...; kwargs...)
     return Broadcasted(g, args′)
 end
-function make(f, args...)
-    args′ = make_TupleLL(args...)
-    return Broadcasted(f, args′)
-end
+make(f, args...) = make(combine_styles(args...), f, args...)
+make(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, make_TupleLL(args...))
 
 execute(bc::Broadcasted) = copy(instantiate(bc))
 execute!(dest, bc::Broadcasted) = copyto!(dest, instantiate(bc))
