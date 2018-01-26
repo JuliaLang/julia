@@ -5,29 +5,33 @@
 """
     typejoin(T, S)
 
-Compute a type that contains both `T` and `S`.
+
+Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
+they both inherit.
 """
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(@nospecialize(a), @nospecialize(b))
+typejoin(@nospecialize(a), @nospecialize(b)) = join_types(a, b, typejoin)
+
+function join_types(@nospecialize(a), @nospecialize(b), f::Function)
     @_pure_meta
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        return UnionAll(a.var, join_types(a.body, b, f))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return UnionAll(b.var, join_types(a, b.body, f))
     elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
+        return f(a.ub, b)
     elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
+        return f(a, b.ub)
     elseif isa(a,Union)
-        return typejoin(typejoin(a.a,a.b), b)
+        return f(f(a.a,a.b), b)
     elseif isa(b,Union)
-        return typejoin(a, typejoin(b.a,b.b))
+        return f(a, f(b.a,b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -35,31 +39,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
         if lar == 0
-            return Tuple{Vararg{tailjoin(bp,1)}}
+            return Tuple{Vararg{tailjoin(bp,1,f)}}
         end
         if lbr == 0
-            return Tuple{Vararg{tailjoin(ap,1)}}
+            return Tuple{Vararg{tailjoin(ap,1,f)}}
         end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(uninitialized, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
+                c[laf] = Vararg{f(unwrapva(ap[lar]), tailjoin(bp,laf,f))}
                 n = laf-1
             else
                 c = Vector{Any}(uninitialized, laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                c[laf+1] = Vararg{tailjoin(bp,laf+1,f)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(uninitialized, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
+                c[lbf] = Vararg{f(unwrapva(bp[lbr]), tailjoin(ap,lbf,f))}
                 n = lbf-1
             else
                 c = Vector{Any}(uninitialized, lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                c[lbf+1] = Vararg{tailjoin(ap,lbf+1,f)}
                 n = lbf
             end
         else
@@ -68,7 +72,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            ci = f(unwrapva(ai),unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -116,30 +120,37 @@ function full_va_len(p)
     return length(p)::Int, true
 end
 
-# reduce typejoin over A[i:end]
-function tailjoin(A, i)
+# reduce join_types over A[i:end]
+function tailjoin(A, i, f)
     if i > length(A)
         return unwrapva(A[end])
     end
     t = Bottom
     for j = i:length(A)
-        t = typejoin(t, unwrapva(A[j]))
+        t = f(t, unwrapva(A[j]))
     end
     return t
 end
 
 ## promotion mechanism ##
 
+abstract type PromotionStyle end
+struct ExactPromotion <: PromotionStyle end
+struct DefaultPromotion <: PromotionStyle end
+
 """
     promote_type(type1, type2)
+    promote_type(::DefaultPromotion, type1, type2)
 
 Promotion refers to converting values of mixed types to a single common type.
-`promote_type` represents the default promotion behavior in Julia when
+`promote_type(type1, type2)`, equivalent to `promote_type(DefaultPromotion(), type1, type2)`
+represents the default promotion behavior in Julia when
 operators (usually mathematical) are given arguments of differing types.
+
 `promote_type` generally tries to return a type which can at least approximate
-most values of either input type without excessively widening.  Some loss is
-tolerated; for example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
+most values of either input type without excessively widening. Contrary to
+`ExactPromotion` some loss is tolerated. For example, `promote_type(Int64, Float64)`
+returns [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
 ```jldoctest
@@ -162,119 +173,121 @@ julia> promote_type(Int8, UInt16)
 UInt16
 ```
 """
-function promote_type end
-
-promote_type()  = Bottom
-promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
-
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
-function promote_type(::Type{T}, ::Type{S}) where {T,S}
+function promote_type(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S}
     @_inline_meta
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
+    #   promote_type(DefaultPromotion(), T, S) =>
+    #   promote_result(DefaultPromotion(), T, S, result, Bottom) =>
+    #   promote_type(ExactPromotion(), T, S) =>
+    #   promote_result(ExactPromotion(), T, S, result, Bottom) =>
     #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    promote_result(DefaultPromotion(), T, S,
+                   promote_rule(DefaultPromotion(),T,S),
+                   promote_rule(DefaultPromotion(),S,T))
+end
+
+"""
+    promote_type(::ExactPromotion, type1, type2)
+
+`ExactPromotion` represents the promotion mechanism used by [`collect`](@ref)
+[`map`](@ref) and [`broadcast`](@ref) when producing an array with elements of
+differing types. It is guaranteed to return a type which can exactly represent
+all values of either input type. Contrary to [`promote_type`](@ref),
+no loss is tolerated. For example, `promote_type(ExactPromotion(), Int64, Float64)`
+returns `Union{Float64, Int64}` since not all [`Int64`](@ref) values can be
+represented exactly as `Float64` values.
+
+```jldoctest
+julia> promote_type(ExactPromotion(), Int64, Float64)
+Union{Float64, Int64}
+
+julia> promote_type(ExactPromotion(), Int32, Int64)
+Int64
+
+julia> promote_type(ExactPromotion(), Float32, BigInt)
+BigFloat
+
+julia> promote_type(ExactPromotion(), Int16, Float16)
+Float16
+
+julia> promote_type(ExactPromotion(), Int64, Float16)
+Real
+
+julia> promote_type(ExactPromotion(), Int8, UInt16)
+UInt16
+```
+"""
+function promote_type(::ExactPromotion, ::Type{T}, ::Type{S}) where {T,S}
+    @_inline_meta
+    # Try promote_rule in both orders. Typically only one is defined,
+    # and there is a fallback returning Bottom below, so the common case is
+    #   promote_type(ExactPromotion(), T, S) =>
+    #   promote_result(ExactPromotion(), T, S, result, Bottom) =>
+    #   typejoin(result, Bottom) => result
+    promote_result(ExactPromotion(), T, S,
+                   promote_rule(ExactPromotion(),T,S),
+                   promote_rule(ExactPromotion(),S,T))
+end
+
+promote_type(::DefaultPromotion, ::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::DefaultPromotion, ::Type{T}, ::Type{T}) where {T} = T
+promote_type(::DefaultPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::DefaultPromotion, ::Type{Bottom}, ::Type{T}) where {T} = T
+
+promote_type(::ExactPromotion, ::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::ExactPromotion, ::Type{T}, ::Type{T}) where {T} = T
+promote_type(::ExactPromotion, ::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::ExactPromotion, ::Type{Bottom}, ::Type{T}) where {T} = T
+
+promote_type(::PromotionStyle) = Bottom
+promote_type(::PromotionStyle, T::Type) = T
+promote_type(p::PromotionStyle, T::Type, S::Type, U::Type, V::Type...) =
+    (@_inline_meta; promote_type(p, T, promote_type(p, S, U, V...)))
+# Default fallback
+promote_type(T::Type) = T
+function promote_type(T::Type, S::Type, U::Type...)
+    @_inline_meta
+    promote_type(DefaultPromotion(), T, promote_type(DefaultPromotion(), S, U...))
 end
 
 """
     promote_rule(type1, type2)
+    promote_rule(style::PromotionStyle, type1, type2)
 
 Specifies what type should be used by [`promote`](@ref) when given values of types `type1` and
 `type2`. This function should not be called directly, but should have definitions added to
 it for new types as appropriate.
+
+Defining a two-argument method is equivalent to defining a
+`promote_rule(style::DefaultPromotion, type1, type2)` method. `style` can also be of
+type `ExactPromotion` to define a promotion rule which is guaranteed to return a type
+able to represent all values of `type1` and `type2` exactly (see [`promote_type`](@ref)).
 """
 function promote_rule end
 
+# Fallback so that rules defined without DefaultPromotion() are used
+promote_rule(::DefaultPromotion, ::Type{T}, ::Type{S}) where {T,S} = promote_rule(T, S)
+promote_rule(::DefaultPromotion, ::Type{Any}, ::Type{<:Any}) = Any
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type{Any}, ::Type{<:Any}) = Any
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
+promote_rule(::ExactPromotion, ::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::ExactPromotion, ::Type{Any}, ::Type) = Any
+
+promote_result(::DefaultPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
+    (@_inline_meta; promote_type(DefaultPromotion(), T, S))
+# If no promote_rule is defined, both directions give Bottom. In that
+# case use ExactPromotion on the original types instead.
+promote_result(::DefaultPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
+    (@_inline_meta; promote_type(ExactPromotion(),T,S))
+
+promote_result(::ExactPromotion,::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} =
+    (promote_type(ExactPromotion(),T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
-
-"""
-    promote(xs...)
-
-Convert all arguments to a common type, and return them all (as a tuple).
-If no arguments can be converted, an error is raised.
-
-# Examples
-```jldoctest
-julia> promote(Int8(1), Float16(4.5), Float32(4.1))
-(1.0f0, 4.5f0, 4.1f0)
-```
-"""
-function promote end
-
-function _promote(x::T, y::S) where {T,S}
-    @_inline_meta
-    R = promote_type(T, S)
-    return (convert(R, x), convert(R, y))
-end
-promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
-function _promote(x, y, z)
-    @_inline_meta
-    R = promote_typeof(x, y, z)
-    return (convert(R, x), convert(R, y), convert(R, z))
-end
-function _promote(x, y, zs...)
-    @_inline_meta
-    R = promote_typeof(x, y, zs...)
-    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
-end
-# TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
-
-## promotions in arithmetic, etc. ##
-
-# Because of the promoting fallback definitions for Number, we need
-# a special case for undefined promote_rule on numeric types.
-# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
-# happens, and +(promote(x,y)...) is called again, causing a stack
-# overflow.
-function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_inline_meta
-    promote_to_supertype(T, S, typejoin(T,S))
-end
-
-# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
-# for example this makes promote_type(Integer,Real) == Real without
-# promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_inline_meta; S)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
-    error("no promotion exists for ", T, " and ", S)
-
-promote() = ()
-promote(x) = (x,)
-
-function promote(x, y)
-    @_inline_meta
-    px, py = _promote(x, y)
-    not_sametype((x,y), (px,py))
-    px, py
-end
-function promote(x, y, z)
-    @_inline_meta
-    px, py, pz = _promote(x, y, z)
-    not_sametype((x,y,z), (px,py,pz))
-    px, py, pz
-end
-function promote(x, y, z, a...)
-    p = _promote(x, y, z, a...)
-    not_sametype((x, y, z, a...), p)
-    p
-end
-
-promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
+promote_result(::ExactPromotion,::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} =
+    (join_types(T, S, (T,S)->promote_type(ExactPromotion(),T,S)))
 
 not_sametype(x::T, y::T) where {T} = sametype_error(x)
 
@@ -286,6 +299,99 @@ function sametype_error(input)
           join(map(x->string(typeof(x)), input), ", ", " and "),
           " failed to change any arguments")
 end
+
+"""
+    promote(xs...)
+    promote(style::PromotionStyle, xs...)
+
+Convert all arguments to a common type, and return them all (as a tuple).
+If no arguments can be converted, an error is raised.
+
+`style` can be either `DefaultPromotion` (the default when omitted), or
+`ExactPromotion` to guarantee that the returned type can hold all values of
+`type1` and `type2` (see [`promote_type`](@ref)).
+
+# Examples
+```jldoctest
+julia> promote(Int8(1), Float16(4.5), Float32(4.1))
+(1.0f0, 4.5f0, 4.1f0)
+```
+"""
+function promote end
+
+function _promote(p::PromotionStyle, x::T, y::S) where {T,S}
+    @_inline_meta
+    R = promote_type(p, T, S)
+    return (convert(R, x), convert(R, y))
+end
+
+promote_typeof(args...) = promote_typeof(DefaultPromotion(), args...)
+promote_typeof(::PromotionStyle, x) = typeof(x)
+promote_typeof(p::PromotionStyle, x, xs...) =
+    (@_inline_meta; promote_type(p, typeof(x), promote_typeof(p, xs...)))
+function _promote(p::PromotionStyle, x, y, z)
+    @_inline_meta
+    R = promote_typeof(p, x, y, z)
+    return (convert(R, x), convert(R, y), convert(R, z))
+end
+function _promote(p::PromotionStyle, x, y, zs...)
+    @_inline_meta
+    R = promote_typeof(p, x, y, zs...)
+    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
+end
+# TODO: promote(::P, x::T, ys::T...) where {P<:PromotionStyle, T} here to catch all circularities?
+
+promote(args...) = promote(DefaultPromotion(), args...)
+
+promote(::PromotionStyle) = ()
+promote(::PromotionStyle, x) = (x,)
+
+function promote(p::PromotionStyle, x, y)
+    @_inline_meta
+    px, py = _promote(p, x, y)
+    not_sametype((x,y), (px,py))
+    px, py
+end
+function promote(p::PromotionStyle, x, y, z)
+    @_inline_meta
+    px, py, pz = _promote(p, x, y, z)
+    not_sametype((x,y,z), (px,py,pz))
+    px, py, pz
+end
+function promote(p::PromotionStyle, x, y, z, a...)
+    p = _promote(p, x, y, z, a...)
+    not_sametype((x, y, z, a...), p)
+    p
+end
+
+promote(p::PromotionStyle, x::T, y::T, zs::T...) where {T} = (x, y, zs...)
+
+## promotions in arithmetic, etc. ##
+
+# Because of the promoting fallback definitions for Number, we need
+# a special case for undefined promote_rule on numeric types.
+# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
+# happens, and +(promote(x,y)...) is called again, causing a stack
+# overflow.
+# FIXME: find a way to re-enable this. The issue is that
+# this function should only be called when DefaultPromotion falls back to ExactPromotion,
+# just before the latter falls back to typejoin(). But it should not be called when
+# ExactPromotion is used directly, as it triggers errors in places where typejoin() would be fine.
+# function promote_result(::ExactPromotion,
+#                         ::Type{T},::Type{S},
+#                         ::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
+#     @_inline_meta
+#     promote_to_supertype(T, S, typejoin(T,S))
+# end
+#
+# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
+# for example this makes promote_type(Integer,Real) == Real without
+# promoting arbitrary pairs of numeric types to Number.
+promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_inline_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_inline_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_inline_meta; S)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
+    error("no promotion exists for ", T, " and ", S)
 
 +(x::Number, y::Number) = +(promote(x,y)...)
 *(x::Number, y::Number) = *(promote(x,y)...)

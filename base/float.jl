@@ -44,7 +44,18 @@ A not-a-number value of type [`Float64`](@ref).
 """
 const NaN = NaN64
 
-## conversions to floating-point ##
+## promotions and conversions to floating-point ##
+
+promote_rule(::ExactPromotion, ::Type{Float16}, ::Union{Type{Int8}, Type{UInt8}}) = Float16
+promote_rule(::ExactPromotion, ::Type{Float32}, ::Union{Type{Int8}, Type{UInt8}, Type{Int16}, Type{UInt16}}) = Float32
+promote_rule(::ExactPromotion, ::Type{Float64}, ::Union{Type{Int8}, Type{UInt8}, Type{Int16}, Type{UInt16}, Type{Int32}, Type{UInt32}}) = Float64
+
+promote_rule(::ExactPromotion, ::Type{Float16}, ::Union{Type{Int16}, Type{UInt16}, Type{Int32}, Type{UInt32}}) = Float32
+promote_rule(::ExactPromotion, ::Type{Float32}, ::Union{Type{Int32}, Type{UInt32}}) = Float64
+
+promote_rule(::ExactPromotion, ::Type{Float32}, ::Type{Float16}) = Float32
+promote_rule(::ExactPromotion, ::Type{Float64}, ::Union{Type{Float16}, Type{Float32}}) = Float64
+
 Float16(x::Integer) = convert(Float16, convert(Float32, x))
 for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16

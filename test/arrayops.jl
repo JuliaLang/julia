@@ -966,7 +966,7 @@ end
     @testset "tuples" begin # Issue #25338
         @test union((1, 2), (3)) == [1, 2, 3]
         u = union((1, 0x2), [3])
-        @test eltype(u) == Integer
+        @test eltype(u) == Int
         @test u == [1, 2, 3]
         @test intersect((1, 2), (3, 2)) == [2]
         @test setdiff((1, 2), (3, 2)) == [1]
@@ -1221,6 +1221,9 @@ end
     end
     @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
     @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
+
+    @test [s for s in Union{String, Nothing}["a", nothing]] isa Vector{Union{String, Nothing}}
+    @test [s for s in Union{String, Missing}["a", missing]] isa Vector{Union{String, Missing}}
 
     @testset "comprehension in let-bound function" begin
         let x⊙y = sum([x[i]*y[i] for i=1:length(x)])

@@ -175,7 +175,9 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
-            new = empty(dest, typejoin(K,typeof(k)), typejoin(V,typeof(v)))
+            new = empty(dest,
+                        promote_type(ExactPromotion(),K,typeof(k)),
+                        promote_type(ExactPromotion(),V,typeof(v)))
             merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)
