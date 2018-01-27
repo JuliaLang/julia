@@ -98,9 +98,11 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## thisind, prevind, nextind ##
+## thisind, nextind ##
 
-function thisind(s::String, i::Int)
+thisind(s::String, i::Int) = _thisind_str(s, i)
+
+function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
@@ -118,7 +120,9 @@ function thisind(s::String, i::Int)
     return i
 end
 
-function nextind(s::String, i::Int)
+nextind(s::String, i::Int) = _nextind_str(s, i)
+
+function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
