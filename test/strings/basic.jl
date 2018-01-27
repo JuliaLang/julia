@@ -842,3 +842,15 @@ end
 let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
+
+# make sure length for identical String and AbstractString return the same value, PR #25533
+let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
+                                   String(rand(rng, UInt8, 200))]
+    for s in strs, i in 1:ncodeunits(s)+1, j in 0:ncodeunits(s)
+            @test length(s,i,j) == length(GenericString(s),i,j)
+    end
+    for i in 0:10, j in 1:100,
+        s in [randstring(rng, i), randstring(rng, "∀∃α1", i), String(rand(rng, UInt8, i))]
+        @test length(s) == length(GenericString(s))
+    end
+end

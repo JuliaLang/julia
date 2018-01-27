@@ -101,11 +101,12 @@ end
 ## thisind, prevind, nextind ##
 
 function thisind(s::String, i::Int)
+    i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
-    @boundscheck between(i, 0, n) || throw(BoundsError(s, i))
+    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || return i
+    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
     @inbounds b = codeunit(s, i-1)
     between(b, 0b11000000, 0b11110111) && return i-1
     (b & 0xc0 == 0x80) & (i-2 > 0) || return i
@@ -245,9 +246,8 @@ function length(s::String, i::Int, j::Int)
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
     j < i && return 0
-    c = j - i + 1
     @inbounds i, k = thisind(s, i), i
-    c -= i < k
+    c = j - i + (i == k)
     _length(s, i, j, c)
 end
 
