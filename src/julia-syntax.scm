@@ -1676,8 +1676,8 @@
     (if (fuse? e)
         ; expanded to a fuse op call
         (if (null? lhs)
-            (expand-forms `(call (|.| (top Broadcast) 'execute) ,(cdr e)))
-            (expand-forms `(call (|.| (top Broadcast) 'execute!) ,lhs-view ,(cdr e))))
+            (expand-forms `(call (|.| (top Broadcast) 'materialize) ,(cdr e)))
+            (expand-forms `(call (|.| (top Broadcast) 'materialize!) ,lhs-view ,(cdr e))))
         ; expanded to something else (like a getfield)
         (if (null? lhs)
             (expand-forms e)

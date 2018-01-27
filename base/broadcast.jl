@@ -763,7 +763,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N} = execute(make(f, As...))
+broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N} = materialize(make(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
@@ -778,13 +778,7 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-function broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N}
-    style = combine_styles(As...)
-    newargs = make_TupleLL(As...)
-    bc = Broadcasted{typeof(style)}(f, newargs) # TODO: Note that this doesn't use `make`
-    ibc = instantiate(bc, combine_indices(dest, As...))
-    return copyto!(dest, ibc)
-end
+broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = materialize!(dest, make(f, As...))
 
 ## general `copy` methods
 copy(bc::Broadcasted{Scalar, ElType}) where ElType = _broadcast_getindex(bc, 1)
@@ -1025,7 +1019,6 @@ make(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.s
 make(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 make(::DefaultArrayStyle{1}, ::typeof(big), r::LinSpace) = LinSpace(big(r.start), big(r.stop), length(r))
 
-execute(r::AbstractRange) = r
 
 """
     broadcast_getindex(A, inds...)
@@ -1243,7 +1236,16 @@ end
 make(f, args...) = make(combine_styles(args...), f, args...)
 make(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, make_TupleLL(args...))
 
-execute(bc::Broadcasted) = copy(instantiate(bc))
-execute!(dest, bc::Broadcasted) = copyto!(dest, instantiate(bc))
+materialize(bc::Broadcasted) = copy(instantiate(bc))
+materialize(x) = x
+function materialize!(dest, bc::Broadcasted)
+    args = instantiate(bc.args)
+    axs = combine_indices(dest, convert(Tuple, args)...)
+    return copyto!(dest, instantiate(Broadcasted(bc.f, args), axs))
+end
+function materialize!(dest, x)
+    axs = combine_indices(dest, x)
+    return copyto!(dest, instantiate(Broadcasted(identity, make_TupleLL(x)), axs))
+end
 
 end # module
