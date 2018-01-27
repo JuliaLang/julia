@@ -107,9 +107,8 @@ julia> Y
 mul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat) = _mul!(C, A, B, MemoryLayout(C), MemoryLayout(A), MemoryLayout(B))
 
 _mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector, _1, _2, _3) = generic_matvecmul!(y, 'N', A, x)
-
 _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::AbstractStridedLayout, ::AbstractStridedLayout, _) where {T<:BlasFloat} =
-    mul!(y, A, convert(AbstractVector{T}, x))
+    mul!(y, A, convert(Vector{T}, x))
 _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
 for elty in (Float32,Float64)
     @eval begin

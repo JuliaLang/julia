@@ -346,7 +346,7 @@ _mul!(y::AbstractVector{T},    A::AbstractMatrix{T}, x::AbstractVector{T},
     BLAS.symv!(AL.uplo, one(T), parent(A), x, zero(T), y)
 _mul!(y::AbstractVector{T},     A::AbstractMatrix{T}, x::AbstractVector{T},
       ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
-    BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
+    BLAS.hemv!(A.uplo, one(T), parent(A), x, zero(T), y)
 ## Matrix-matrix product
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
       ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
@@ -361,7 +361,9 @@ _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
       ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout) where {T<:BlasComplex} =
     BLAS.hemm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 
-*(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+_mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
+      ::AbstractStridedLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
+    mul!(C, A, Matrix{T}(B))
 
 
 for T in (:Symmetric, :Hermitian), op in (:*, :/)
@@ -751,35 +753,3 @@ for func in (:log, :sqrt)
         end
     end
 end
-
-# dismabiguation methods: *(Adj of RealHermSymComplexHerm, Trans of RealHermSymComplexSym) and symmetric partner
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A.parent * B.parent
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A.parent * B.parent
-# dismabiguation methods: *(Adj/Trans of AbsVec/AbsMat, Adj/Trans of RealHermSymComplex{Herm|Sym})
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-# dismabiguation methods: *(Adj/Trans of RealHermSymComplex{Herm|Sym}, Adj/Trans of AbsVec/AbsMat)
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractMatrix}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractVector}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractMatrix}) = A.parent * B
-
-# dismabiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj/Trans of other)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * B.parent
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = A * B.parent
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractTriangular}) = A.parent * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Transpose{<:Any,<:AbstractTriangular}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractTriangular}) = A.parent * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Transpose{<:Any,<:AbstractTriangular}) = A.parent * B
