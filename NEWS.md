@@ -388,6 +388,10 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays insted of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
+  * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
+    number of dimensions, which must correspond to the length of the tuple returned by
+    `size` ([#25655]).
+
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
     for `BitSet`.
@@ -1254,3 +1258,4 @@ Command-line option changes
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
+[#25655]: https://github.com/JuliaLang/julia/issues/25655
