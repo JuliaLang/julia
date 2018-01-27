@@ -156,7 +156,7 @@ function display_error(io::IO, er, bt)
             io = redirect(io, log_error_to, st[1])
         end
     end
-    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
     if eval_ind !== nothing
@@ -236,7 +236,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s *= readline(io, chomp=false)
+        s *= readline(io, keep=true)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e
@@ -296,7 +296,7 @@ function process_options(opts::JLOptions)
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
     # Load Distributed module only if any of the Distributed options have been specified.
-    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machinefile != C_NULL)
+    distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         eval(Main, :(using Distributed))
         invokelatest(Main.Distributed.process_opts, opts)

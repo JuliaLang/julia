@@ -89,7 +89,6 @@ Base.Docs
 Base.Iterators
 Base.LibGit2
 Base.Libc
-Base.Markdown
 Base.Meta
 Base.Pkg
 Base.StackTraces
@@ -152,7 +151,7 @@ Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
 Base.isstructtype
-Base.datatype_name
+Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
 ```
@@ -323,7 +322,7 @@ Base.ExponentialBackOff
 ## Events
 
 ```@docs
-Base.Timer(::Function, ::Real, ::Real)
+Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
@@ -332,14 +331,14 @@ Base.AsyncCondition(::Function)
 ## Reflection
 
 ```@docs
-Base.module_name
+Base.nameof(::Module)
 Base.parentmodule
 Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
 Base.isconst
-Base.function_name
+Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@functionloc

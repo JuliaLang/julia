@@ -101,9 +101,9 @@ function temp_pkg_dir_noinit(fn::Function)
     end
 end
 
-test_complete(s) = completions(s,endof(s))
-test_scomplete(s) = shell_completions(s,endof(s))
-test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
+test_complete(s) = completions(s,lastindex(s))
+test_scomplete(s) = shell_completions(s,lastindex(s))
+test_bslashcomplete(s) = bslash_completions(s,lastindex(s))[2]
 
 let s = ""
     c, r = test_complete(s)
@@ -446,35 +446,35 @@ end
 let s = "(1+2im)."
     c,r = test_complete(s)
     @test length(c) == 2
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c == ["im", "re"]
 end
 
 let s = "((1+2im))."
     c, r = test_complete(s)
     @test length(c) == 2
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c == ["im", "re"]
 end
 
 let s = "CompletionFoo.test_y_array[1]."
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c[1] == "yy"
 end
 
 let s = "CompletionFoo.Test_y(rand()).y"
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == endof(s):endof(s)
+    @test r == lastindex(s):lastindex(s)
     @test c[1] == "yy"
 end
 
 let s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == endof(s):endof(s)
+    @test r == lastindex(s):lastindex(s)
     @test c[1] == "yy"
 end
 
@@ -721,12 +721,12 @@ let path = tempdir(),
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
-            @test r == endof(s)-4:endof(s)
+            @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
-            @test r == endof(s)-4:endof(s)
+            @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
@@ -834,7 +834,7 @@ function test_dict_completion(dict_name)
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
-    c, r = completions(s, endof(s) - 1)
+    c, r = completions(s, lastindex(s) - 1)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)

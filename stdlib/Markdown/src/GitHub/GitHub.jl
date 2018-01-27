@@ -30,7 +30,7 @@ function fencedcode(stream::IO, block::MD)
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream, chomp=false))
+            write(buffer, readline(stream, keep=true))
         end
         return false
     end

@@ -197,12 +197,13 @@ struct PkgId
     name::String
 
     PkgId(u::UUID, name::AbstractString) = new(UInt128(u) == 0 ? nothing : u, name)
-    PkgId(name::AbstractString) = new(nothing, name)
+    PkgId(::Nothing, name::AbstractString) = new(nothing, name)
 end
+PkgId(name::AbstractString) = PkgId(nothing, name)
 
 function PkgId(m::Module)
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(module_name(m))
+    name = String(nameof(m))
     UInt128(uuid) == 0 && return PkgId(name)
     return PkgId(uuid, name)
 end
@@ -354,7 +355,7 @@ const re_subsection_deps    = r"^\s*\[\s*\"?(\w+)\"?\s*\.\s*\"?deps\"?\s*\]\s*(?
 const re_key_to_string      = r"^\s*(\w+)\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_uuid_to_string     = r"^\s*uuid\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_path_to_string     = r"^\s*path\s*=\s*\"(.*)\"\s*(?:#|$)"
-const re_hash_to_string     = r"^\s*hash-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_hash_to_string     = r"^\s*git-tree-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
@@ -1051,7 +1052,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
-            code = chop(readuntil(STDIN, '\\0'))
+            code = readuntil(STDIN, '\\0')
             eval(Main, Meta.parse(code))
         end
         """
@@ -1104,7 +1105,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         close(in)
     catch ex
         close(in)
-        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        process_running(io) && Timer(t -> kill(io), interval = 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
         rethrow(ex)
     end
     return io

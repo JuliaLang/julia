@@ -411,7 +411,7 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(uninitialized, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
@@ -456,8 +456,9 @@ _similar_for(c, T, itr, isz) = similar(c, T)
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
-trait, the result will have the same shape and number of dimensions as the argument.
+`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+and number of dimensions as the argument.
 
 # Examples
 ```jldoctest
@@ -1499,7 +1500,9 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 _pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = _pairs(IteratorSize(iter), iter)
-_pairs(::Union{HasLength, HasShape}, iter) = zip(1:length(iter), iter)
+# includes HasShape{1} for consistency with keys(::AbstractVector)
+_pairs(::Union{HasLength, HasShape{1}}, iter) = zip(1:length(iter), iter)
+_pairs(::HasShape, iter) = zip(CartesianIndices(size(iter)), iter)
 _pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
 
 """
@@ -2077,7 +2080,7 @@ function findmin(a)
 end
 
 """
-    indmax(itr) -> Integer
+    argmax(itr) -> Integer
 
 Return the index of the maximum element in a collection. If there are multiple maximal
 elements, then the first one will be returned.
@@ -2086,20 +2089,20 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmax([8,0.1,-9,pi])
+julia> argmax([8,0.1,-9,pi])
 1
 
-julia> indmax([1,7,7,6])
+julia> argmax([1,7,7,6])
 2
 
-julia> indmax([1,7,7,NaN])
+julia> argmax([1,7,7,NaN])
 4
 ```
 """
-indmax(a) = findmax(a)[2]
+argmax(a) = findmax(a)[2]
 
 """
-    indmin(itr) -> Integer
+    argmin(itr) -> Integer
 
 Return the index of the minimum element in a collection. If there are multiple minimal
 elements, then the first one will be returned.
@@ -2108,17 +2111,17 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmin([8,0.1,-9,pi])
+julia> argmin([8,0.1,-9,pi])
 3
 
-julia> indmin([7,1,1,6])
+julia> argmin([7,1,1,6])
 2
 
-julia> indmin([7,1,1,NaN])
+julia> argmin([7,1,1,NaN])
 4
 ```
 """
-indmin(a) = findmin(a)[2]
+argmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
 """

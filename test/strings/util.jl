@@ -269,23 +269,23 @@ end
     @test chop("fooε") == "foo"
     @test chop("foεo") == "foε"
     @test chop("∃∃∃∃") == "∃∃∃"
-    @test chop("∀ϵ∃Δ", 0, 0) == "∀ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", 0, 1) == "∀ϵ∃"
-    @test chop("∀ϵ∃Δ", 0, 2) == "∀ϵ"
-    @test chop("∀ϵ∃Δ", 0, 3) == "∀"
-    @test chop("∀ϵ∃Δ", 0, 4) == ""
-    @test chop("∀ϵ∃Δ", 0, 5) == ""
-    @test chop("∀ϵ∃Δ", 1, 0) == "ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", 2, 0) == "∃Δ"
-    @test chop("∀ϵ∃Δ", 3, 0) == "Δ"
-    @test chop("∀ϵ∃Δ", 4, 0) == ""
-    @test chop("∀ϵ∃Δ", 5, 0) == ""
-    @test chop("∀ϵ∃Δ", 1, 1) == "ϵ∃"
-    @test chop("∀ϵ∃Δ", 2, 2) == ""
-    @test chop("∀ϵ∃Δ", 3, 3) == ""
-    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, 3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", 3, -3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, -3)
+    @test chop("∀ϵ∃Δ", head=0, tail=0) == "∀ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", head=0, tail=1) == "∀ϵ∃"
+    @test chop("∀ϵ∃Δ", head=0, tail=2) == "∀ϵ"
+    @test chop("∀ϵ∃Δ", head=0, tail=3) == "∀"
+    @test chop("∀ϵ∃Δ", head=0, tail=4) == ""
+    @test chop("∀ϵ∃Δ", head=0, tail=5) == ""
+    @test chop("∀ϵ∃Δ", head=1, tail=0) == "ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", head=2, tail=0) == "∃Δ"
+    @test chop("∀ϵ∃Δ", head=3, tail=0) == "Δ"
+    @test chop("∀ϵ∃Δ", head=4, tail=0) == ""
+    @test chop("∀ϵ∃Δ", head=5, tail=0) == ""
+    @test chop("∀ϵ∃Δ", head=1, tail=1) == "ϵ∃"
+    @test chop("∀ϵ∃Δ", head=2, tail=2) == ""
+    @test chop("∀ϵ∃Δ", head=3, tail=3) == ""
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=3, tail=-3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=-3)
 
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)

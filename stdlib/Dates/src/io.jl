@@ -154,7 +154,7 @@ end
     # the last n digits of y
     # will be 0 padded if y has less than n digits
     str = dec(y, n)
-    l = endof(str)
+    l = lastindex(str)
     if l == n
         # fast path
         write(io, str)
@@ -348,7 +348,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:endof(f)], r"\\(.)" => s"\1")
+    tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev

@@ -3,6 +3,7 @@ using Test
 using REPL
 using Random
 import REPL.LineEdit
+using Markdown
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -116,11 +117,11 @@ fake_repl() do stdin_write, stdout_read, repl
     #    write(stdin_write, ";")
     #    readuntil(stdout_read, "shell> ")
     #    write(stdin_write, "echo hello >/dev/null\n")
-    #    let s = readuntil(stdout_read, "\n")
+    #    let s = readuntil(stdout_read, "\n", keep=true)
     #        @test contains(s, "shell> ") # make sure we echoed the prompt
     #        @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
     #    end
-    #    @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    #    @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #end
 
     # issue #20771
@@ -147,7 +148,7 @@ fake_repl() do stdin_write, stdout_read, repl
     #            @test contains(s, "shell> ") # make sure we echoed the prompt
     #            @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
     #        end
-    #        @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    #        @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #        @test read(tmp, String) == "123\n"
     #    finally
     #        rm(tmp, force=true)
@@ -165,7 +166,7 @@ fake_repl() do stdin_write, stdout_read, repl
             Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
             write(stdin_write, """ -e "println(\\"HI\\")"\n""")
             while true
-                s = readuntil(stdout_read, "\n")
+                s = readuntil(stdout_read, "\n", keep=true)
                 s == "\e[0m\n" && break # the child has exited
                 @test contains(s, "shell> ") # check for the echo of the prompt
             end
@@ -597,13 +598,13 @@ fake_repl() do stdin_write, stdout_read, repl
     sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
     wait(c)
     readuntil(stdout_read, "begin")
-    @test readuntil(stdout_read, "end") == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+    @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
     # for incomplete input (`end` below is added after the end of bracket paste)
     sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n\e[201~end""")
     wait(c)
     readuntil(stdout_read, "begin")
     readuntil(stdout_read, "begin")
-    @test readuntil(stdout_read, "end") == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+    @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
     # Close repl
     write(stdin_write, '\x04')
@@ -659,7 +660,7 @@ let exename = Base.julia_cmd()
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
             p = spawn(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave)
-            output = readuntil(master,"julia> ")
+            output = readuntil(master,"julia> ",keep=true)
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a
                 # valgrind banner here, not just the prompt.
@@ -668,7 +669,7 @@ let exename = Base.julia_cmd()
             write(master,"1\nquit()\n")
 
             wait(p)
-            output = readuntil(master,' ')
+            output = readuntil(master,' ',keep=true)
             @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
             @test bytesavailable(master) == 0
         end
@@ -825,7 +826,7 @@ for keys = [altkeys, merge(altkeys...)],
             close(repl.interface.modes[1].hist.history_file)
 
             # Check that the correct prompt was displayed
-            output = readuntil(stdout_read, "1 * 1;")
+            output = readuntil(stdout_read, "1 * 1;", keep=true)
             @test !contains(LineEdit.prompt_string(altprompt), output)
             @test !contains("julia> ", output)
 
@@ -876,4 +877,25 @@ fake_repl() do stdin_write, stdout_read, repl
     # Close REPL ^D
     write(stdin_write, '\x04')
     wait(repltask)
+end
+
+# Docs.helpmode tests: we test whether the correct expressions are being generated here,
+# rather than complete integration with Julia's REPL mode system.
+for (line, expr) in Pair[
+    "sin"          => :sin,
+    "Base.sin"     => :(Base.sin),
+    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
+    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
+    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
+    "ccall"        => :ccall, # keyword
+    "while       " => :while, # keyword, trailing spaces should be stripped.
+    "0"            => 0,
+    "\"...\""      => "...",
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    ]
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
+    buf = IOBuffer()
+    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

@@ -19,7 +19,7 @@ is binary and not valid Unicode.
 """
 function rawcontent(blob::GitBlob)
     ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), blob.ptr)
-    copy(unsafe_wrap(Array, ptr, (length(blob),), false))
+    copy(unsafe_wrap(Array, ptr, (length(blob),), own = false))
 end
 
 """

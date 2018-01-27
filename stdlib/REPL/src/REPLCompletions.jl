@@ -21,8 +21,8 @@ function appendmacro!(syms, macros, needle, endchar)
     end
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
-    ssyms = names(mod, all, imported)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
+    ssyms = names(mod, all = all, imported = imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
     macros =  filter(x -> startswith(x, "@" * name), syms)
@@ -72,7 +72,7 @@ function complete_symbol(sym, ffunc)
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(!Base.isdeprecated(mod, s) && s != module_name(mod) && ffunc(mod, s))
+        p = s->(!Base.isdeprecated(mod, s) && s != nameof(mod) && ffunc(mod, s))
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
@@ -201,10 +201,10 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     end
 
     matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
-    startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
-    # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
+    startpos = pos - lastindex(prefix) + 1 - length(matchall(r" ", prefix))
+    # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
-    # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
+    # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
     return matchList, startpos:pos, !isempty(matchList)
 end
 
@@ -269,7 +269,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
     startind = nextind(s, coalesce(findprev(occursin(non_identifier_chars), s, method_name_end), 0))
-    return (startind:endof(s), method_name_end)
+    return (startind:lastindex(s), method_name_end)
 end
 
 # Returns the value in a expression if sym is defined in current namespace fn.
@@ -647,7 +647,7 @@ function shell_completions(string, pos)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
-        ret, range = completions(partial, endof(partial))
+        ret, range = completions(partial, lastindex(partial))
         range = range .+ (first(r) - 1)
         return ret, range, true
     end

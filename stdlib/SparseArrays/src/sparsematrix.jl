@@ -1224,11 +1224,11 @@ function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
     fkeep!(A, (i, j, x) -> j >= i + k, trim)
 end
 
-droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
+droptol!(A::SparseMatrixCSC, tol; trim::Bool = true) =
     fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
 """
-    dropzeros!(A::SparseMatrixCSC, trim::Bool = true)
+    dropzeros!(A::SparseMatrixCSC; trim::Bool = true)
 
 Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
 `A.rowval` and `A.nzval` when `trim` is `true`.
@@ -1236,9 +1236,9 @@ Removes stored numerical zeros from `A`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
+dropzeros!(A::SparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 """
-    dropzeros(A::SparseMatrixCSC, trim::Bool = true)
+    dropzeros(A::SparseMatrixCSC; trim::Bool = true)
 
 Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
 trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
@@ -1259,7 +1259,7 @@ julia> dropzeros(A)
   [3, 3]  =  1.0
 ```
 """
-dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
+dropzeros(A::SparseMatrixCSC; trim::Bool = true) = dropzeros!(copy(A), trim = trim)
 
 ## Find methods
 
@@ -1761,7 +1761,7 @@ function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{
     R
 end
 
-# findmax/min and indmax/min methods
+# findmax/min and argmax/min methods
 # find first zero value in sparse matrix - return linear index in full matrix
 # non-structural zeros are identified by x == 0 in line with the sparse constructors.
 function _findz(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n) where {Tv,Ti}
@@ -1868,8 +1868,8 @@ findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isgreater_fm,
 findmin(A::SparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
-indmin(A::SparseMatrixCSC) = findmin(A)[2]
-indmax(A::SparseMatrixCSC) = findmax(A)[2]
+argmin(A::SparseMatrixCSC) = findmin(A)[2]
+argmax(A::SparseMatrixCSC) = findmax(A)[2]
 
 ## getindex
 function rangesearch(haystack::AbstractRange, needle)

@@ -222,6 +222,11 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
+#25395 keywords unlocked
+@deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)
+@deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
+@deprecate droptol!(A, tol, trim) droptol!(A, tol, trim = trim)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

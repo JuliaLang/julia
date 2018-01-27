@@ -182,12 +182,12 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
-            print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
+            printstyled(io, " broken-repo (unregistered)", color=Base.error_color())
         finally
             close(prepo)
         end
     else
-        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
+        printstyled(io, "non-repo (unregistered)", color=Base.warn_color())
     end
     println(io)
 end
@@ -635,8 +635,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     mktemp() do errfile, f
         build!(pkgs, seen, errfile)
         while !eof(f)
-            pkg = chop(readuntil(f, '\0'))
-            err = chop(readuntil(f, '\0'))
+            pkg = readuntil(f, '\0')
+            err = readuntil(f, '\0')
             errs[pkg] = err
         end
     end
@@ -745,7 +745,7 @@ struct PkgTestError <: Exception
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
+    printstyled(io, ex.msg, color=Base.error_color())
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)

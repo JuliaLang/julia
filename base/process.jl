@@ -561,13 +561,17 @@ Run a command object asynchronously, returning the resulting `Process` object.
 spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd; chomp::Bool=true)
+function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
     stdout = Pipe()
     processes = spawn(cmd, (DevNull,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, chomp=chomp,
+    return EachLine(out, keep=keep,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 
@@ -816,9 +820,10 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :endof, :start, :keys, :eltype, :first, :last)
+for f in (:length, :firstindex, :lastindex, :start, :keys, :first, :last)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:next, :done, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
 end

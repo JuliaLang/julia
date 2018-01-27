@@ -39,8 +39,8 @@ for str in [astr, GenericString(astr)]
     @test findnext(equalto(','), str, 7) == nothing
     @test findfirst(equalto('\n'), str) == 14
     @test findnext(equalto('\n'), str, 15) == nothing
-    @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,endof(str))+1)
-    @test_throws BoundsError findnext(equalto('a'), str, nextind(str,endof(str))+1)
+    @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext(equalto('a'), str, nextind(str,lastindex(str))+1)
 end
 
 # ascii backward search
@@ -85,10 +85,10 @@ for str in (u8str, GenericString(u8str))
     @test findfirst(equalto('ε'), str) == 5
     @test findnext(equalto('ε'), str, nextind(str,5)) == 54
     @test findnext(equalto('ε'), str, nextind(str,54)) == nothing
-    @test findnext(equalto('ε'), str, nextind(str,endof(str))) == nothing
-    @test findnext(equalto('a'), str, nextind(str,endof(str))) == nothing
-    @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,endof(str))+1)
-    @test_throws BoundsError findnext(equalto('a'), str, nextind(str,endof(str))+1)
+    @test findnext(equalto('ε'), str, nextind(str,lastindex(str))) == nothing
+    @test findnext(equalto('a'), str, nextind(str,lastindex(str))) == nothing
+    @test_throws BoundsError findnext(equalto('ε'), str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext(equalto('a'), str, nextind(str,lastindex(str))+1)
 end
 
 # utf-8 backward search
@@ -192,38 +192,38 @@ end
 @test findfirst(r"ε", u8str) == 5:5
 @test findnext(r"ε", u8str, 7) == 54:54
 @test findnext(r"ε", u8str, 56) == 0:-1
-for i = 1:endof(astr)
+for i = 1:lastindex(astr)
     @test findnext(r"."s, astr, i) == i:i
 end
-for i = 1:endof(u8str)
+for i = 1:lastindex(u8str)
     if isvalid(u8str,i)
         @test findnext(r"."s, u8str, i) == i:i
     end
 end
 
 # string forward search with a zero-char string
-for i = 1:endof(astr)
+for i = 1:lastindex(astr)
     @test findnext("", astr, i) == i:i-1
 end
-for i = 1:endof(u8str)
+for i = 1:lastindex(u8str)
     @test findnext("", u8str, i) == i:i-1
 end
 @test findfirst("", "") == 1:0
 
 # string backward search with a zero-char string
-for i = 1:endof(astr)
+for i = 1:lastindex(astr)
     @test findprev("", astr, i) == i:i-1
 end
-for i = 1:endof(u8str)
+for i = 1:lastindex(u8str)
     @test findprev("", u8str, i) == i:i-1
 end
 @test findlast("", "") == 1:0
 
 # string forward search with a zero-char regex
-for i = 1:endof(astr)
+for i = 1:lastindex(astr)
     @test findnext(r"", astr, i) == i:i-1
 end
-for i = 1:endof(u8str)
+for i = 1:lastindex(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
         @test findnext(r"", u8str, i) == i:i-1
@@ -267,23 +267,23 @@ end
 
 # string backward search with a two-char UTF-8 (2 byte) string literal
 @test findlast("éé", "ééé") == 3:5
-@test findprev("éé", "ééé", endof("ééé")) == 3:5
+@test findprev("éé", "ééé", lastindex("ééé")) == 3:5
 # string backward search with a two-char UTF-8 (3 byte) string literal
 @test findlast("€€", "€€€") == 4:7
-@test findprev("€€", "€€€", endof("€€€")) == 4:7
+@test findprev("€€", "€€€", lastindex("€€€")) == 4:7
 # string backward search with a two-char UTF-8 (4 byte) string literal
 @test findlast("\U1f596\U1f596", "\U1f596\U1f596\U1f596") == 5:9
-@test findprev("\U1f596\U1f596", "\U1f596\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5:9
+@test findprev("\U1f596\U1f596", "\U1f596\U1f596\U1f596", lastindex("\U1f596\U1f596\U1f596")) == 5:9
 
 # string backward search with a two-char UTF-8 (2 byte) string literal
 @test findlast("éé", "éé") == 1:3        # should really be 1:4!
-@test findprev("éé", "éé", endof("ééé")) == 1:3
+@test findprev("éé", "éé", lastindex("ééé")) == 1:3
 # string backward search with a two-char UTF-8 (3 byte) string literal
 @test findlast("€€", "€€") == 1:4        # should really be 1:6!
-@test findprev("€€", "€€", endof("€€€")) == 1:4
+@test findprev("€€", "€€", lastindex("€€€")) == 1:4
 # string backward search with a two-char UTF-8 (4 byte) string literal
 @test findlast("\U1f596\U1f596", "\U1f596\U1f596") == 1:5        # should really be 1:8!
-@test findprev("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1:5
+@test findprev("\U1f596\U1f596", "\U1f596\U1f596", lastindex("\U1f596\U1f596\U1f596")) == 1:5
 
 # string backward search with a two-char string literal
 @test findlast("xx", "foo,bar,baz") == 0:-1

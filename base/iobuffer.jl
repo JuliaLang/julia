@@ -115,7 +115,7 @@ IOBuffer(maxsize::Integer) = (x=IOBuffer(StringVector(maxsize), true, true, maxs
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
 
 """
-    PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Integer=typemax(Int)])
+    PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Integer = typemax(Int))
 
 An [`IOBuffer`](@ref) that allows reading and performs writes by appending.
 Seeking and truncating are not supported.
@@ -123,9 +123,9 @@ See [`IOBuffer`](@ref) for the available constructors.
 If `data` is given, creates a `PipeBuffer` to operate on a data vector,
 optionally specifying a size beyond which the underlying `Array` may not be grown.
 """
-PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
+PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
     GenericIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize), maxsize = maxsize); x.size=0; x)
 
 function copy(b::GenericIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
@@ -444,26 +444,30 @@ function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
     return nothing
 end
 
-function readuntil(io::GenericIOBuffer, delim::UInt8)
+function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     lb = 70
     A = StringVector(lb)
-    n = 0
+    nread = 0
+    nout = 0
     data = io.data
     for i = io.ptr : io.size
-        n += 1
-        if n > lb
-            lb = n*2
-            resize!(A, lb)
-        end
         @inbounds b = data[i]
-        @inbounds A[n] = b
+        nread += 1
+        if keep || b != delim
+            nout += 1
+            if nout > lb
+                lb = nout*2
+                resize!(A, lb)
+            end
+            @inbounds A[nout] = b
+        end
         if b == delim
             break
         end
     end
-    io.ptr += n
-    if lb != n
-        resize!(A, n)
+    io.ptr += nread
+    if lb != nout
+        resize!(A, nout)
     end
     A
 end

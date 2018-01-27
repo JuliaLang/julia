@@ -1470,12 +1470,24 @@ function LinearAlgebra.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
 end
 
 
-# scale
+# scaling
 
-scale!(x::SparseVectorUnion, a::Real)    = (scale!(nonzeros(x), a); x)
-scale!(x::SparseVectorUnion, a::Complex) = (scale!(nonzeros(x), a); x)
-scale!(a::Real, x::SparseVectorUnion)    = (scale!(nonzeros(x), a); x)
-scale!(a::Complex, x::SparseVectorUnion) = (scale!(nonzeros(x), a); x)
+function mul1!(x::SparseVectorUnion, a::Real)
+    mul1!(nonzeros(x), a)
+    return x
+end
+function mul1!(x::SparseVectorUnion, a::Complex)
+    mul1!(nonzeros(x), a)
+    return x
+end
+function mul2!(a::Real, x::SparseVectorUnion)
+    mul1!(nonzeros(x), a)
+    return x
+end
+function mul2!(a::Complex, x::SparseVectorUnion)
+    mul1!(nonzeros(x), a)
+    return x
+end
 
 (*)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
 (*)(a::Number, x::SparseVectorUnion) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
@@ -1576,7 +1588,7 @@ function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number,
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : scale!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
     end
     α == zero(α) && return y
 
@@ -1615,7 +1627,7 @@ function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractS
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : scale!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
     end
     α == zero(α) && return y
 
@@ -1673,7 +1685,7 @@ function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Numbe
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : scale!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
     end
     α == zero(α) && return y
 
@@ -1717,7 +1729,7 @@ function _At_or_Ac_mul_B!(tfun::Function,
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : scale!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
     end
     α == zero(α) && return y
 
@@ -1972,10 +1984,10 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
     x
 end
 
-droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
+droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
 
 """
-    dropzeros!(x::SparseVector, trim::Bool = true)
+    dropzeros!(x::SparseVector; trim::Bool = true)
 
 Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
 `x.nzind` and `x.nzval` when `trim` is `true`.
@@ -1983,9 +1995,10 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
+
 """
-    dropzeros(x::SparseVector, trim::Bool = true)
+    dropzeros(x::SparseVector; trim::Bool = true)
 
 Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
@@ -2006,7 +2019,7 @@ julia> dropzeros(A)
   [3]  =  1.0
 ```
 """
-dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
+dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}

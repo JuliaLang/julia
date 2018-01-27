@@ -22,7 +22,7 @@ else # !windows
         file::IOStream
         unlimited::Bool
 
-        RandomDevice(unlimited::Bool=true) =
+        RandomDevice(; unlimited::Bool=true) =
             new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
@@ -34,7 +34,7 @@ else # !windows
     end
     function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
         unlimited = deserialize(s)
-        return RandomDevice(unlimited)
+        return RandomDevice(unlimited=unlimited)
     end
 
 end # os-test
@@ -246,7 +246,7 @@ function make_seed()
         try
             seed = hash(seed, parse(UInt64,
                                     read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    16))
+                                    base = 16))
         end
         return make_seed(seed)
     end

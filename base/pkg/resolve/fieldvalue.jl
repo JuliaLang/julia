@@ -93,9 +93,9 @@ end
 # some hard constraint is being violated
 validmax(a::FieldValue) = a.l0 >= 0
 
-# like usual indmax, but favors the highest indices
+# like usual argmax, but favors the highest indices
 # in case of a tie
-function Base.indmax(f::Field)
+function Base.argmax(f::Field)
     m = typemin(FieldValue)
     mi = 0
     for j = length(f):-1:1

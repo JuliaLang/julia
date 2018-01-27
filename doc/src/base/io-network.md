@@ -59,7 +59,7 @@ Base.showcompact
 Base.summary
 Base.print
 Base.println
-Base.print_with_color
+Base.printstyled
 Base.sprint
 Base.showerror
 Base.dump
@@ -137,6 +137,8 @@ Base.getsockname
 Base.getpeername
 Base.IPv4
 Base.IPv6
+Base.TCPSocket
+Base.UDPSocket
 Base.bytesavailable
 Base.accept
 Base.listenany

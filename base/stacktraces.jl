@@ -274,7 +274,10 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            print_with_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
+            color = get(io, :color, false) && get(io, :backtrace, false) ?
+                        Base.stackframe_function_color() :
+                        :nothing
+            printstyled(io, string(frame.func), color=color)
         end
     elseif frame.linfo isa Core.MethodInstance
         if isa(frame.linfo.def, Method)
@@ -318,7 +321,7 @@ function from(frame::StackFrame, m::Module)
     if finfo isa Core.MethodInstance
         frame_m = finfo.def
         isa(frame_m, Method) && (frame_m = frame_m.module)
-        result = module_name(frame_m) === module_name(m)
+        result = nameof(frame_m) === nameof(m)
     end
 
     return result

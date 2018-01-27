@@ -130,7 +130,7 @@ end
 function (ss::SummarySize)(obj::Module)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
-    for binding in names(obj, true)
+    for binding in names(obj, all = true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
             if !isa(value, Module) || parentmodule(value) === obj

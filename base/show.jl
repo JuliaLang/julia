@@ -233,12 +233,12 @@ The following properties are in common use:
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> print_with_color(:red, IOContext(io, :color => true), "string")
+julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
 julia> String(take!(io))
 "\e[31mstring\e[39m"
 
-julia> print_with_color(:red, io, "string")
+julia> printstyled(io, "string", color=:red)
 
 julia> String(take!(io))
 "string"
@@ -584,7 +584,7 @@ end
 
 function show(io::IO, m::Module)
     if is_root_module(m)
-        print(io, module_name(m))
+        print(io, nameof(m))
     else
         print(io, join(fullname(m),"."))
     end
@@ -907,7 +907,7 @@ end
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
-    print_with_color(col, io, str; bold = true) :
+    printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
@@ -1509,7 +1509,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        Base.print_with_color(color, io, name, "(...)")
+        Base.printstyled(io, name, "(...)", color=color)
         return
     end
     sig = unwrap_unionall(sig).parameters
@@ -1529,13 +1529,13 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
-    print_with_color(print_style, io, "(")
+    printstyled(io, "(", color=print_style)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print_with_color(print_style, io, ")")
+    printstyled(io, ")", color=print_style)
     nothing
 end
 
@@ -1725,12 +1725,12 @@ directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.
 # Fallback to handle TypeVar's
 directsubtype(a, b::DataType) = false
 function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
             if t === x || t === m
                 continue
-            elseif isa(t, Module) && module_name(t) === s && parentmodule(t) === m
+            elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)

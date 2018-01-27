@@ -2,6 +2,11 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+using Markdown
+using REPL
+
+using REPL: @repl, repl_latex, _repl, accessible
+
 # For curmod_*
 include("testenv.jl")
 
@@ -66,6 +71,8 @@ end
 const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
+
+using Markdown
 
 "f-1"
 function f(x)
@@ -523,6 +530,8 @@ end
 
 module I15424
 
+using REPL
+
 struct LazyHelp
     text
 end
@@ -541,7 +550,7 @@ function Base.Docs.catdoc(hs::LazyHelp...)
     end
 end
 
-Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needle)
+REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needle)
 
 @doc LazyHelp("LazyHelp\n") LazyHelp
 @doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)
@@ -646,17 +655,17 @@ f12593_2() = 1
                         Docs.doc(getindex, Tuple{Type{Int64},Int}))
 
 # test that macro documentation works
-@test (Docs.@repl :@assert) !== nothing
+@test (@repl :@assert) !== nothing
 
-@test (Docs.@repl 0) !== nothing
+@test (@repl 0) !== nothing
 
 let t = @doc(DocsTest.t(::Int, ::Int))
-    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
-    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+    @test docstrings_equal(@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(@repl(DocsTest.t(::Int, ::Int)), t)
 end
 
 # Issue #13467.
-@test (Docs.@repl :@r_str) !== nothing
+@test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
 @test contains(sprint(apropos, "pearson"), "cor")
@@ -942,29 +951,9 @@ let x = Binding(Main, :⊕)
 end
 
 doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-# Docs.helpmode tests: we test whether the correct expressions are being generated here,
-# rather than complete integration with Julia's REPL mode system.
-for (line, expr) in Pair[
-    "sin"          => :sin,
-    "Base.sin"     => :(Base.sin),
-    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
-    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
-    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
-    "ccall"        => :ccall, # keyword
-    "while       " => :while, # keyword, trailing spaces should be stripped.
-    "0"            => 0,
-    "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
-    ]
-    @test Docs._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
-    buf = IOBuffer()
-    @test eval(Base, Docs._helpmode(buf, line)) isa Union{Base.Markdown.MD,Nothing}
-end
 
-@test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
-@test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+@test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
 # issue #15684
 begin
@@ -990,10 +979,20 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(214, doc_util_path), :(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(214, doc_util_path), :(dynamic_test(::String))))
-
-
+let dt1 = _repl(:(dynamic_test(1.0)))
+    @test dt1 isa Expr
+    @test dt1.args[1] isa Expr
+    @test dt1.args[1].head === :macrocall
+    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+end
+let dt2 = _repl(:(dynamic_test(::String)))
+    @test dt2 isa Expr
+    @test dt2.args[1] isa Expr
+    @test dt2.args[1].head === :macrocall
+    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+end
 
 # Equality testing
 
@@ -1090,7 +1089,7 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in Docs.accessible(@__MODULE__)
+@test "t_docs_abc" in accessible(@__MODULE__)
 
 # Call overloading issue #20087
 """

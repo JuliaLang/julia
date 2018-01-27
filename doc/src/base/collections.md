@@ -94,8 +94,8 @@ Base.minimum(::Any, ::Any)
 Base.minimum!
 Base.extrema(::Any)
 Base.extrema(::AbstractArray, ::Any)
-Base.indmax
-Base.indmin
+Base.argmax
+Base.argmin
 Base.findmax(::Any)
 Base.findmax(::AbstractArray, ::Any)
 Base.findmin(::Any)
@@ -143,7 +143,8 @@ Base.replace!
 ```@docs
 Base.getindex
 Base.setindex!
-Base.endof
+Base.firstindex
+Base.lastindex
 ```
 
 Fully implemented by:

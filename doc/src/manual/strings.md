@@ -178,12 +178,15 @@ julia> str[end]
 '\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
 
-All indexing in Julia is 1-based: the first element of any integer-indexed object is found at
+Many Julia objects, including strings, can be indexed with integers. The index of the first
+element is returned by [`firstindex(str)`](@ref), and the index of the last element
+with [`lastindex(str)`](@ref). The keyword`end` can be used inside an indexing
+operation as shorthand for the last index along the given dimension.
+Most indexing in Julia is 1-based: the first element of many integer-indexed objects is found at
 index 1. (As we will see below, this does not necessarily mean that the last element is found
 at index `n`, where `n` is the length of the string.)
 
-In any indexing expression, the keyword `end` can be used as a shorthand for the last index (computed
-by [`endof(str)`](@ref)). You can perform arithmetic and other operations with `end`, just like
+You can perform arithmetic and other operations with `end`, just like
 a normal value:
 
 ```jldoctest helloworldstring
@@ -302,14 +305,14 @@ julia> s[1:4]
 ```
 
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
-is not always the same as the last index. If you iterate through the indices 1 through [`endof(s)`](@ref)
+is not always the same as the last index. If you iterate through the indices 1 through [`lastindex(s)`](@ref)
 and index into `s`, the sequence of characters returned when errors aren't thrown is the sequence
-of characters comprising the string `s`. Thus we have the identity that `length(s) <= endof(s)`,
+of characters comprising the string `s`. Thus we have the identity that `length(s) <= lastindex(s)`,
 since each character in a string must have its own index. The following is an inefficient and
 verbose way to iterate through the characters of `s`:
 
 ```jldoctest unicodestring
-julia> for i = 1:endof(s)
+julia> for i = begindex(s):lastindex(s)
            try
                println(s[i])
            catch
@@ -562,13 +565,14 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 
 Some other useful functions include:
 
-  * [`endof(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
+  * [`firstindex(str)`](@ref) gives the minimal (byte) index that can be used to index into `str` (always 1 for strings, not necessarily true for other containers).
+  * [`lastindex(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
   * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
     (typically 1).
   * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start`](@ref) and [`endof`](@ref), can be used to iterate
+    character index following that. With [`start`](@ref) and [`lastindex`](@ref), can be used to iterate
     through the characters in `str`.
   * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
   * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.

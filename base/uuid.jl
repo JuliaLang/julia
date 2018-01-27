@@ -62,6 +62,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
 end
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
+    global string
     function string(u::UUID)
         u = u.value
         a = Base.StringVector(36)

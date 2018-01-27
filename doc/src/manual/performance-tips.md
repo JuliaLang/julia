@@ -614,7 +614,8 @@ type:
 
 ```@meta
 DocTestSetup = quote
-    srand(1234)
+    import Random
+    Random.srand(1234)
 end
 ```
 

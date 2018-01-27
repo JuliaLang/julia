@@ -77,36 +77,49 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
-        done = Channel(1)
+        timer = Channel{Symbol}(1)
         @async begin
-            sleep(timeout)
+            waited = 0
+            while waited < timeout && process_running(p)
+                sleep(1)
+                waited += 1
+            end
+
             if process_running(p)
                 kill(p)
-                put!(done, :timed_out)
+                put!(timer, :timeout)
+            elseif success(p)
+                put!(timer, :success)
             else
-                put!(done, :exited)
+                put!(timer, :failure)
             end
+
+            # SIGKILL stubborn processes
+            if process_running(p)
+                sleep(3)
+                process_running(p) && kill(p, Base.SIGKILL)
+            end
+
             close(master)
         end
 
-        try
-            for (challenge, response) in challenges
-                write(out, readuntil(master, challenge))
-                if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". ",
-                          format_output(out))
-                end
-                write(master, response)
+        for (challenge, response) in challenges
+            write(out, readuntil(master, challenge, keep=true))
+            if !isopen(master)
+                error("Could not locate challenge: \"$challenge\". ",
+                      format_output(out))
             end
-            wait(p)
-        finally
-            kill(p)
+            write(master, response)
         end
 
-        # Process timed out or aborted
-        if !success(p)
+        # Capture output from process until `master` is closed
+        while !eof(master)
             write(out, readavailable(master))
-            if isready(done) && fetch(done) == :timed_out
+        end
+
+        status = fetch(timer)
+        if status != :success
+            if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
                       format_output(out))
             else

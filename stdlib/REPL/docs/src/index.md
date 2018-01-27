@@ -86,23 +86,12 @@ help?> @time
 
   See also @timev, @timed, @elapsed, and @allocated.
 
-help?> AbstractString
-search: AbstractString AbstractSparseMatrix AbstractSparseVector AbstractSet
+help?> Int32
+search: Int32 UInt32
 
-  No documentation found.
+  Int32 <: Signed
 
-  Summary
-  ≡≡≡≡≡≡≡≡≡
-
-  abstract type AbstractString <: Any
-
-  Subtypes
-  ≡≡≡≡≡≡≡≡≡≡
-
-  Base.SubstitutionString
-  String
-  SubString
-  Test.GenericString
+  32-bit signed integer type.
 ```
 
 Help mode can be exited by pressing backspace at the beginning of the line.
@@ -325,7 +314,7 @@ Fields for output from functions can also be completed:
 
 ```julia-repl
 julia> split("","")[1].[TAB]
-endof  offset  string
+lastindex  offset  string
 ```
 
 The completion of fields for output from functions uses type inference, and it can only suggest

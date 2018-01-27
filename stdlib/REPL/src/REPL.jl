@@ -42,6 +42,8 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
+include("docview.jl")
+
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
 end
@@ -207,7 +209,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         interrupted = false
         while true
             try
-                line *= readline(repl.terminal, chomp=false)
+                line *= readline(repl.terminal, keep=true)
             catch e
                 if isa(e,InterruptException)
                     try # raise the debugger if present
@@ -332,7 +334,7 @@ beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, endof(partial))
+    ret, range, should_complete = completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
@@ -340,14 +342,14 @@ function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = shell_completions(full, endof(partial))
+    ret, range, should_complete = shell_completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
-    ret, range, should_complete = bslash_completions(full, endof(partial))[2]
+    ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return ret, partial[range], should_complete
 end
 
@@ -378,7 +380,7 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = readline(file, chomp=false)
+        line = readline(file, keep=true)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
@@ -612,7 +614,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # into the search data to index into the response string
     b = a + sizeof(searchdata)
     b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
-    b = min(endof(response_str), b) # ensure that b is valid
+    b = min(lastindex(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -623,7 +625,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    if 1 <= searchstart <= endof(response_str)
+    if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match) - 1)
@@ -802,7 +804,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(Docs.helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -831,7 +833,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
-            f = open(hist_path, true, true, true, false, false)
+            f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
             end
@@ -979,10 +981,10 @@ function setup_interface(
                 @goto writeback
             end
             Base.edit(linfos[n][1], linfos[n][2])
-            Base.LineEdit.refresh_line(s)
+            LineEdit.refresh_line(s)
             return
             @label writeback
-            write(Base.LineEdit.buffer(s), str)
+            write(LineEdit.buffer(s), str)
             return
         end,
     )
@@ -1112,7 +1114,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         if have_color
             print(repl.stream, input_color(repl))
         end
-        line = readline(repl.stream, chomp=false)
+        line = readline(repl.stream, keep=true)
         if !isempty(line)
             ast = Base.parse_input_line(line)
             if have_color

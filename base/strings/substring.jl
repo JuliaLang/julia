@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    SubString(s::AbstractString, i::Integer, j::Integer=endof(s))
+    SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s))
     SubString(s::AbstractString, r::UnitRange{<:Integer})
 
 Like [`getindex`](@ref), but returns a view into the parent string `s`
@@ -36,7 +36,7 @@ struct SubString{T<:AbstractString} <: AbstractString
 end
 
 SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int(i), Int(j))
+SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
@@ -44,8 +44,8 @@ function SubString(s::SubString, i::Int, j::Int)
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, endof(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
@@ -148,7 +148,7 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 """
 function reverse(s::Union{String,SubString{String}})::String
     sprint() do io
-        i, j = start(s), endof(s)
+        i, j = start(s), lastindex(s)
         while i ≤ j
             c, j = s[j], prevind(s, j)
             write(io, c)

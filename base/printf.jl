@@ -53,7 +53,7 @@ function parse(s::AbstractString)
         j1 = j
         j = k
     end
-    i > endof(s) || push!(list, s[i:end])
+    i > lastindex(s) || push!(list, s[i:end])
     # coalesce adjacent strings
     i = 1
     while i < length(list)

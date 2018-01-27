@@ -72,11 +72,11 @@ reverse(itr) = Reverse(itr)
 struct Reverse{T}
     itr::T
 end
-eltype(r::Reverse) = eltype(r.itr)
+eltype(::Type{Reverse{T}}) where {T} = eltype(T)
 length(r::Reverse) = length(r.itr)
 size(r::Reverse) = size(r.itr)
-IteratorSize(r::Reverse) = IteratorSize(r.itr)
-IteratorEltype(r::Reverse) = IteratorEltype(r.itr)
+IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
+IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
 last(r::Reverse) = first(r.itr) # the first shall be last
 first(r::Reverse) = last(r.itr) # and the last shall be first
 
@@ -705,11 +705,15 @@ julia> collect(Iterators.product(1:2,3:5))
 """
 product(iters...) = ProductIterator(iters)
 
-IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape()
+IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
 IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
     prod_iteratorsize( IteratorSize(tuple_type_head(T)), IteratorSize(ProductIterator{tuple_type_tail(T)}) )
 
-prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
+prod_iteratorsize(::HasLength, ::HasLength) = HasShape{2}()
+prod_iteratorsize(::HasLength, ::HasShape{N}) where {N} = HasShape{N+1}()
+prod_iteratorsize(::HasShape{N}, ::HasLength) where {N} = HasShape{N+1}()
+prod_iteratorsize(::HasShape{M}, ::HasShape{N}) where {M,N} = HasShape{M+N}()
+
 # products can have an infinite iterator
 prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
@@ -744,9 +748,10 @@ function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
     IteratorEltype(I) == EltypeUnknown() ? EltypeUnknown() : IteratorEltype(P)
 end
 
-eltype(P::ProductIterator) = _prod_eltype(P.iterators)
-_prod_eltype(::Tuple{}) = Tuple{}
-_prod_eltype(t::Tuple) = Base.tuple_type_cons(eltype(t[1]),_prod_eltype(tail(t)))
+eltype(::Type{<:ProductIterator{I}}) where {I} = _prod_eltype(I)
+_prod_eltype(::Type{Tuple{}}) = Tuple{}
+_prod_eltype(::Type{I}) where {I<:Tuple} =
+    Base.tuple_type_cons(eltype(tuple_type_head(I)),_prod_eltype(tuple_type_tail(I)))
 
 start(::ProductIterator{Tuple{}}) = false
 next(::ProductIterator{Tuple{}}, state) = (), true

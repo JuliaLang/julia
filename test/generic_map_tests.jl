@@ -61,7 +61,7 @@ function testmap_equivalence(mapf, f, c...)
     x1 = mapf(f,c...)
     x2 = map(f,c...)
 
-    if Base.IteratorSize == Base.HasShape()
+    if Base.IteratorSize isa Base.HasShape
         @test size(x1) == size(x2)
     else
         @test length(x1) == length(x2)

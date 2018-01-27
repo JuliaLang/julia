@@ -32,11 +32,11 @@ end
 let b = IOBuffer("foo\n")
     @test collect(EachLine(b)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    @test collect(EachLine(b, keep=true)) == ["foo\n"]
     seek(b, 0)
     @test collect(EachLine(b, ondone=()->0)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+    @test collect(EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
 # enumerate (issue #6284)
@@ -318,11 +318,11 @@ end
 @test Base.IteratorSize(product(1:2, countfrom(1)))          == Base.IsInfinite()
 @test Base.IteratorSize(product(countfrom(2), countfrom(1))) == Base.IsInfinite()
 @test Base.IteratorSize(product(countfrom(1), 1:2))          == Base.IsInfinite()
-@test Base.IteratorSize(product(1:2))                        == Base.HasShape()
-@test Base.IteratorSize(product(1:2, 1:2))                   == Base.HasShape()
-@test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
-@test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape()
-@test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape()
+@test Base.IteratorSize(product(1:2))                        == Base.HasShape{1}()
+@test Base.IteratorSize(product(1:2, 1:2))                   == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape{1}()
+@test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape{2}()
 
 # IteratorEltype trait business
 let f1 = Iterators.filter(i->i>0, 1:10)

@@ -773,7 +773,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-            newbuf = PipeBuffer(a, #=maxsize=# nb)
+            newbuf = PipeBuffer(a, maxsize = nb)
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -810,7 +810,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-            newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), #=maxsize=# Int(nb))
+            newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize = Int(nb))
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -840,11 +840,11 @@ function readavailable(this::LibuvStream)
     return take!(buf)
 end
 
-function readuntil(this::LibuvStream, c::UInt8)
+function readuntil(this::LibuvStream, c::UInt8; keep::Bool=false)
     wait_readbyte(this, c)
     buf = this.buffer
     @assert buf.seekable == false
-    return readuntil(buf, c)
+    return readuntil(buf, c, keep=keep)
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
@@ -1130,7 +1130,7 @@ the pipe. The `wr` end is given for convenience in case the old
 elsewhere.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout
 
@@ -1140,7 +1140,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`STDERR`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr
 
@@ -1152,7 +1152,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`STDIN`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin
 
@@ -1177,7 +1177,7 @@ Run the function `f` while redirecting [`STDOUT`](@ref) to `stream`.
 Upon completion, [`STDOUT`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout(f::Function, stream)
 
@@ -1188,7 +1188,7 @@ Run the function `f` while redirecting [`STDERR`](@ref) to `stream`.
 Upon completion, [`STDERR`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr(f::Function, stream)
 
@@ -1199,7 +1199,7 @@ Run the function `f` while redirecting [`STDIN`](@ref) to `stream`.
 Upon completion, [`STDIN`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin(f::Function, stream)
 

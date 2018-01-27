@@ -196,6 +196,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `readuntil` now does *not* include the delimiter in its result, matching the
+    behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
@@ -305,7 +308,9 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
-  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+  * `indmin` and `indmax` have been renamed to `argmin` and `argmax`, respectively ([#25654]).
+
+  * `findmin`, `findmax`, `argmin`, and `argmax` used to always return linear indices.
     They now return `CartesianIndex`es for all but 1-d arrays, and in general return
     the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
 
@@ -382,6 +387,10 @@ This section lists changes that do not have deprecation warnings.
     In particular, this means that they use `CartesianIndex` objects for matrices
     and higher-dimensional arrays insted of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
+
+  * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
+    number of dimensions, which must correspond to the length of the tuple returned by
+    `size` ([#25655]).
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
@@ -511,7 +520,7 @@ Library improvements
     has been changed to `KeySet{K, <:Associative{K}} <: AbstractSet{K}` ([#24580]).
 
   * New function `ncodeunits(s::AbstractString)` gives the number of code units in a string.
-    The generic definition is constant time but calls `endof(s)` which may be inefficient.
+    The generic definition is constant time but calls `lastindex(s)` which may be inefficient.
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
@@ -959,7 +968,14 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
+  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
+    the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor
+    of `nameof` methods ([#25622]).
+
   * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
+
+  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
+    `Random.RandomDevice(; unlimited=unlimited)` ([#25668]).
 
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
@@ -978,6 +994,15 @@ Deprecated or removed
   * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
+
+  * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
+
+  * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
+    lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
+    where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
+
+  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
+    and `Time(0)` respectively ([#23724]).
 
 Command-line option changes
 ---------------------------
@@ -1135,6 +1160,7 @@ Command-line option changes
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
@@ -1231,4 +1257,7 @@ Command-line option changes
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
+[#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
+[#25654]: https://github.com/JuliaLang/julia/issues/25654
+[#25655]: https://github.com/JuliaLang/julia/issues/25655
