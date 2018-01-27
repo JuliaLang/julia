@@ -67,28 +67,28 @@ cd(dirname(@__FILE__)) do
     percent_align = length("GC %")
     alloc_align   = length("Alloc (MB)")
     rss_align     = length("RSS (MB)")
-    print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
-    print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
+    printstyled(rpad("Test (Worker)", name_align, " "), " | ", color=:white)
+    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results=[]
     print_lock = ReentrantLock()
 
     function print_testworker_stats(test, wrkr, resp)
         lock(print_lock)
         try
-            print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+            printstyled(rpad(test*" ($wrkr)", name_align, " "), " | ", color=:white)
             time_str = @sprintf("%7.2f",resp[2])
-            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
+            printstyled(rpad(time_str,elapsed_align," "), " | ", color=:white)
             gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
-            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+            printstyled(rpad(gc_str, gc_align, " "), " | ", color=:white)
 
             # since there may be quite a few digits in the percentage,
             # the left-padding here is less to make sure everything fits
             percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
-            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
+            printstyled(rpad(percent_str, percent_align, " "), " | ", color=:white)
             alloc_str = @sprintf("%5.2f",resp[3]/2^20)
-            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
+            printstyled(rpad(alloc_str, alloc_align, " "), " | ", color=:white)
             rss_str = @sprintf("%5.2f",resp[6]/2^20)
-            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
+            printstyled(rpad(rss_str, rss_align, " "), "\n", color=:white)
         finally
             unlock(print_lock)
         end

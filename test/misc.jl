@@ -465,14 +465,14 @@ if Sys.iswindows()
 end
 
 let buf = IOBuffer()
-    print_with_color(:red, IOContext(buf, :color=>true), "foo")
+    printstyled(IOContext(buf, :color=>true), "foo", color=:red)
     @test startswith(String(take!(buf)), Base.text_colors[:red])
 end
 
-# Test that `print_with_color` accepts non-string values, just as `print` does
+# Test that `printstyled` accepts non-string values, just as `print` does
 let buf_color = IOBuffer()
     args = (3.2, "foo", :testsym)
-    print_with_color(:red, IOContext(buf_color, :color=>true), args...)
+    printstyled(IOContext(buf_color, :color=>true), args..., color=:red)
     buf_plain = IOBuffer()
     print(buf_plain, args...)
     expected_str = string(Base.text_colors[:red],
@@ -481,11 +481,11 @@ let buf_color = IOBuffer()
     @test expected_str == String(take!(buf_color))
 end
 
-# Test that `print_with_color` on multiline input prints the ANSI codes
+# Test that `printstyled` on multiline input prints the ANSI codes
 # on each line
 let buf_color = IOBuffer()
     str = "Two\nlines"
-    print_with_color(:red, IOContext(buf_color, :color=>true), str; bold=true)
+    printstyled(IOContext(buf_color, :color=>true), str; bold=true, color=:red)
     @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
@@ -511,12 +511,12 @@ end
 
 let buf = IOBuffer()
     buf_color = IOContext(buf, :color => true)
-    print_with_color(:red, buf_color, "foo")
+    printstyled(buf_color, "foo", color=:red)
     # Check that we get back to normal text color in the end
     @test String(take!(buf)) == "\e[31mfoo\e[39m"
 
     # Check that boldness is turned off
-    print_with_color(:red, buf_color, "foo"; bold = true)
+    printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 end
 

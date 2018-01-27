@@ -156,7 +156,7 @@ function display_error(io::IO, er, bt)
             io = redirect(io, log_error_to, st[1])
         end
     end
-    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
     if eval_ind !== nothing

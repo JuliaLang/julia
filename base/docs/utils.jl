@@ -144,7 +144,7 @@ repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    print_with_color(:cyan, io, s, '\n')
+    printstyled(io, s, '\n', color=:cyan)
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(STDOUT, s)
@@ -163,13 +163,13 @@ function repl_latex(io::IO, s::String)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
-        print_with_color(:cyan, io, s)
+        printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        print_with_color(:cyan, io, latex, "<tab>")
+        printstyled(io, latex, "<tab>", color=:cyan)
         println(io, '\n')
     elseif any(c -> haskey(symbols_latex, string(c)), s)
         print(io, "\"")
-        print_with_color(:cyan, io, s)
+        printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
         with_output_color(:cyan, io) do io
             for c in s
@@ -310,7 +310,7 @@ function printmatch(io::IO, word, match)
     is, _ = bestmatch(word, match)
     for (i, char) = enumerate(match)
         if i in is
-            print_with_color(:bold, io, char)
+            printstyled(io, char, bold=true)
         else
             print(io, char)
         end
