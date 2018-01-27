@@ -191,6 +191,7 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
