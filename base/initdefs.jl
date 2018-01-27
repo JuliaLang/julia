@@ -21,22 +21,12 @@ const ARGS = String[]
 """
     exit(code=0)
 
-Quit the program with an exit code. The default exit code is zero, indicating that the
-program completed successfully (see also [`quit`](@ref)). In an interactive session,
-`exit()` can be called with the keyboard shorcut `^D`.
-
+Stop the program with an exit code. The default exit code is zero, indicating that the
+program completed successfully. In an interactive session, `exit()` can be called with
+the keyboard shortcut `^D`.
 """
 exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
-
-"""
-    quit()
-
-Quit the program indicating successful completion. This function is equivalent to
-`exit(0)` (see [`exit`](@ref)). In an interactive session, `quit()` can be called
-with the keyboard shorcut `^D`.
-"""
-quit() = exit()
 
 const roottask = current_task()
 

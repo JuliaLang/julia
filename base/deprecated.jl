@@ -1377,6 +1377,8 @@ export readandwrite
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
+@deprecate quit() exit()
+
 # PR #25654
 @deprecate indmin argmin
 @deprecate indmax argmax

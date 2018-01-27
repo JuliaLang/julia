@@ -666,18 +666,18 @@ let exename = Base.julia_cmd()
                 # valgrind banner here, not just the prompt.
                 @test output == "julia> "
             end
-            write(master,"1\nquit()\n")
+            write(master,"1\nexit()\n")
 
             wait(p)
             output = readuntil(master,' ',keep=true)
-            @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
             @test bytesavailable(master) == 0
         end
     end
 
     # Test stream mode
     p = open(`$exename --startup-file=no -q`, "r+")
-    write(p, "1\nquit()\n")
+    write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
 end # let exename
 
