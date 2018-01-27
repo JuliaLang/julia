@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra: mul!, ldiv!, rdiv!
+module SparseTests
+
+using Test
+using SparseArrays
+using LinearAlgebra
 using Base.Printf: @printf
 using Random
 
@@ -2209,3 +2213,5 @@ end
     @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
     @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
 end
+
+end # module
