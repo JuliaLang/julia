@@ -215,7 +215,7 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
     open_flags(; keywords...) -> NamedTuple
 
 Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
-a given set of keyword arguments to `open` a `NamedTuple`.
+a given set of keyword arguments to [`open`](@ref) a `NamedTuple`.
 """
 function open_flags(;
     read     :: Union{Bool,Nothing} = nothing,
