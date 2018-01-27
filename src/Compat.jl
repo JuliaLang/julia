@@ -1334,6 +1334,13 @@ end
     export parentmodule
 end
 
+@static if !isdefined(Base, :codeunits)
+    codeunits(s::String) = Vector{UInt8}(s)
+    ncodeunits(s::Union{String,SubString{String}}) = sizeof(s)
+    codeunits(s::SubString{String}) = view(codeunits(s.string),1+s.offset:s.offset+sizeof(s))
+    export codeunits, ncodeunits
+end
+
 include("deprecated.jl")
 
 end # module Compat

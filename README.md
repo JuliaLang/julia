@@ -243,6 +243,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   an array (respectively), and indexing such objects allows translating from one kind of index
   to the other ([#25113]).
 
+* `codeunits(s)` returns an array-like view of the `UInt8` code units of
+  a string and `ncodeunits(s)` returns the number of code units ([#25241]).
+
 ## Renaming
 
 
@@ -483,6 +486,7 @@ includes this fix. Find the minimum version from there.
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25227]: https://github.com/JuliaLang/julia/issues/25227
+[#25241]: https://github.com/JuliaLang/julia/issues/25241
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
