@@ -221,3 +221,14 @@ abstr_nt_22194_3()
 @test findlast(equalto(1), ()) === nothing
 @test findfirst(equalto(1), (a=2, b=3)) === nothing
 @test findlast(equalto(1), (a=2, b=3)) === nothing
+
+# Test map with Nothing and Missing
+for T in (Nothing, Missing)
+    x = [(a=1, b=T()), (a=1, b=2)]
+    y = map(v -> (a=v.a, b=v.b), [(a=1, b=T()), (a=1, b=2)])
+    @test y isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{T,Int}}}}
+    @test isequal(x, y)
+end
+y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
+@test y isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{Missing,Int}}}}
+@test isequal(y, [(a=1, b=missing), (a=1, b=3)])

@@ -79,11 +79,11 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
-    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
-        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
     end
     return r
 end
