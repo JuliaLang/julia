@@ -139,6 +139,8 @@ function GitHash(obj::GitObject)
     GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj.ptr))
 end
 
+==(obj1::GitObject, obj2::GitObject) = GitHash(obj1) == GitHash(obj2)
+
 """
     GitShortHash(obj::GitObject)
 
