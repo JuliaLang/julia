@@ -42,6 +42,8 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
+include("docview.jl")
+
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
 end
@@ -802,7 +804,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(Docs.helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";

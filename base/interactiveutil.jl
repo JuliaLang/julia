@@ -722,8 +722,9 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
     end
 end
 
-# testing
+# varinfo
 
+const MARKDOWN_MODULE_REF = Ref{Module}()
 
 """
     varinfo(m::Module=Main, pattern::Regex=r"")
@@ -744,6 +745,10 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
 
     pushfirst!(rows, Any["name", "size", "summary"])
 
+    if !isassigned(MARKDOWN_MODULE_REF)
+        MARKDOWN_MODULE_REF[] = root_module(Base, :Markdown)
+    end
+    Markdown = MARKDOWN_MODULE_REF[]
     return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end
 varinfo(pat::Regex) = varinfo(Main, pat)
