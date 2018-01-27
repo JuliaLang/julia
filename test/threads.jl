@@ -455,6 +455,7 @@ test_nested_loops()
 @testset "libatomic" begin
     prog = """
     using Base.Threads
+    using InteractiveUtils: code_native
     function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
         Base.llvmcall(\"\"\"
             %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*

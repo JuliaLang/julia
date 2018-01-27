@@ -27,7 +27,7 @@
 @test parse(Int,'3', base = 8) == 3
 
 # Issue 20587
-for T in vcat(subtypes(Signed), subtypes(Unsigned))
+for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
         # Without a base (handles things like "0x00001111", etc)

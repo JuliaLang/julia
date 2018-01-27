@@ -6,6 +6,7 @@ using Markdown
 using REPL
 
 using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
 
 # For curmod_*
 include("testenv.jl")
