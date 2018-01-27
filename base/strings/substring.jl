@@ -49,6 +49,7 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
+convert(::Type{T}, s::T) where {T<:SubString} = s
 
 String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
 

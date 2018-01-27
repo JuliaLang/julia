@@ -854,3 +854,10 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
         @test length(s) == length(GenericString(s))
     end
 end
+
+# conversion of SubString to the same type, issue #25525
+let x = SubString("ab", 1, 1)
+    y = convert(SubString{String}, x)
+    @test y === x
+    chop("ab") === chop.(["ab"])[1]
+end
