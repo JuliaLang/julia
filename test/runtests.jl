@@ -1076,7 +1076,7 @@ end
 
 # 0.7.0-DEV.3309
 let v = [1, 2, 3]
-    @test Compat.IteratorSize(v) == Base.HasShape()
+    @test Compat.IteratorSize(v) isa Base.HasShape
     @test Compat.IteratorEltype(v) == Base.HasEltype()
 end
 
