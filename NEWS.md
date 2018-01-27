@@ -997,7 +997,9 @@ Deprecated or removed
 
   * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
 
-  * `endof(a)` has been renamed to `lastindex(a)` ([#23554]).
+  * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
+    lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
+    where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
 
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
