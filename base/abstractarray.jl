@@ -1129,10 +1129,10 @@ function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
     return B
 end
 
-vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat(A::AbstractMatrix{T}...) where {T} = typed_vcat(T, A...)
+vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
+vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
-function typed_vcat(::Type{T}, A::AbstractMatrix...) where T
+function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
