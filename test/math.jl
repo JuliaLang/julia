@@ -868,13 +868,24 @@ struct FloatWrapper <: Real
     x::Float64
 end
 
-import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+import Base: +, -, *, /, ^, <, ==,
+    sqrt, sin, cos, sinh, cosh, atan2,
+    exp, expm1, exp2, exp10,
+    log, log1p, log2, log10,
+    asin, acos, atan,
+    asinh, acosh, atanh,
+    convert, isfinite, float, promote_rule
 
-for op in (:+, :-, :*, :/, :^)
+for op in (:+, :-, :*, :/, :^, :atan2)
     @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
 end
 
-for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
+for op in (:-, :sqrt, :sin, :cos, :sinh, :cosh,
+        :exp, :exp2, :exp10, :expm1,
+        :log, :log1p, :log2, :log10,
+        :asin, :acos, :atan,
+        :asinh, :acosh, :atanh)
+
     @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
 end
 
@@ -885,9 +896,29 @@ end
 convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
 promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
 
+convert(::Type{FloatWrapper}, x::Float64) = FloatWrapper(x)
+promote_rule(::Type{FloatWrapper}, ::Type{Float64}) = FloatWrapper
+
+
 float(x::FloatWrapper) = x
 
-@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+<(x::FloatWrapper, y::FloatWrapper) = (x.x < y.x)
+==(x::FloatWrapper, y::FloatWrapper) = (x.x == y.x)
+
+
+@testset "sqrt(a+ib) for a, b that are not AbstractFloats" begin
+
+    x = FloatWrapper(3)
+    y = FloatWrapper(4)
+
+    z = Complex(x, y)
+
+    z2 = sqrt(z)
+
+    @test z2 == Complex(FloatWrapper(2), FloatWrapper(1))
+end
+
+@testset "f(a+ib) for a, b that are not AbstractFloats; #25292" begin
 
     x = FloatWrapper(3.1)
     y = FloatWrapper(4.1)
@@ -896,7 +927,13 @@ float(x::FloatWrapper) = x
 
     z = Complex(x, y)
 
-    @test isa(exp(z), Complex)
-    @test isa(sin(z), Complex)
-    @test isa(cos(z), Complex)
+    for f in (inv,
+              exp, expm1,
+              sin, cos, sinh, cosh,
+              log, log2, log10, log1p,
+              asin, acos,
+              asinh, acosh)
+
+        @test isa(f(z), Complex)
+    end
 end
