@@ -478,3 +478,19 @@ test_nested_loops()
         @test !contains(err, "__atomic_store")
     end
 end
+
+function test_thread_too_few_iters()
+    x = Atomic()
+    a = zeros(Int, nthreads()+2)
+    threaded_loop(a, 1:nthreads()-1, x)
+    found = zeros(Bool, nthreads()+2)
+    for i=1:nthreads()-1
+        found[a[i]] = true
+    end
+    @test x[] == nthreads()-1
+    # Next test checks that all loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test !(false in found[1:nthreads()-1])
+    @test !(true in found[nthreads():end])
+end
+test_thread_too_few_iters()
