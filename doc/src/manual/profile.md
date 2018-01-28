@@ -53,6 +53,8 @@ julia> myfunc() # run once to force compilation
 Now we're ready to profile this function:
 
 ```julia-repl
+julia> using Profile
+
 julia> @profile myfunc()
 ```
 

@@ -12,14 +12,14 @@ macro kw_str(text) Keyword(Symbol(text)) end
 
     https://docs.julialang.org/
 
-as well many great tutorials and learning resources:
+as well as many great tutorials and learning resources:
 
     https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 """
-kw"help", kw"?", kw"julia"
+kw"help", kw"?", kw"julia", kw""
 
 """
     using
@@ -287,6 +287,10 @@ Multiple variables can be declared within a single `const`:
 const y, z = 7, 11
 ```
 
+Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
+declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
+declares both `x` and `y` as constants.
+
 Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
 dictionary (for example) you can still add and remove elements.
 
@@ -472,7 +476,7 @@ kw"try", kw"catch"
 """
     finally
 
-`finally` provides a way to run some code when a given block of code exits, regardless
+Run some code when a given block of code exits, regardless
 of how it exits. For example, here is how we can guarantee that an opened file is
 closed:
 
@@ -485,8 +489,8 @@ finally
 end
 ```
 
-When control leaves the `try` block (for example due to a `return`, or just finishing
-normally), `close(f)` will be executed. If the `try` block exits due to an exception,
+When control leaves the [`try`](@ref) block (for example, due to a [`return`](@ref), or just finishing
+normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to an exception,
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
@@ -496,7 +500,7 @@ kw"finally"
 """
     break
 
-`break` breaks out of a loop immediately.
+Break out of a loop immediately.
 
 # Examples
 ```jldoctest
@@ -520,7 +524,7 @@ kw"break"
 """
     continue
 
-`continue` skips the rest of the current loop, then carries on looping.
+Skip the rest of the current loop, then carries on looping.
 
 # Examples
 ```jldoctest
@@ -538,7 +542,7 @@ kw"continue"
 """
     do
 
-The `do` keyword creates an anonymous function. For example:
+Create an anonymous function. For example:
 
 ```julia
 map(1:10) do x
@@ -800,17 +804,17 @@ DevNull
 # doc strings for code in boot.jl and built-ins
 
 """
-    Void
+    Nothing
 
 A type with no fields that is the type [`nothing`](@ref).
 """
-Void
+Nothing
 
 """
     nothing
 
-The singleton instance of type `Void`, used by convention when there is no value to return
-(as in a C `void` function). Can be converted to an empty `Nullable` value.
+The singleton instance of type `Nothing`, used by convention when there is no value to return
+(as in a C `void` function) or when a variable or field holds no value.
 """
 nothing
 
@@ -831,7 +835,7 @@ julia> isa(+, Function)
 true
 
 julia> typeof(sin)
-Base.#sin
+typeof(sin)
 
 julia> ans <: Function
 true
@@ -854,6 +858,15 @@ Generic error type. The error message, in the `.msg` field, may provide more spe
 ErrorException
 
 """
+    WrappedException(msg)
+
+Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
+`InitError`. Those exceptions contain information about the the root cause of an
+exception. Subtypes define a field `error` containing the causing `Exception`.
+"""
+Core.WrappedException
+
+"""
     UndefRefError()
 
 The item or field is not defined for the given object.
@@ -863,7 +876,7 @@ UndefRefError
 """
     Float32(x [, mode::RoundingMode])
 
-Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
+Create a `Float32` from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
 # Examples
@@ -882,7 +895,7 @@ Float32(x)
 """
     Float64(x [, mode::RoundingMode])
 
-Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
+Create a `Float64` from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
 # Examples
@@ -913,24 +926,24 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 
 # Examples
 ```jldoctest
-julia> A = ones(7);
+julia> A = fill(1.0, 7);
 
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:758
 
-julia> B = ones(2, 3);
+julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:759
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:758
 ```
 """
 BoundsError
@@ -970,7 +983,7 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function (which must be
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
 callable with no arguments). The task exits when this function returns.
 
 # Examples
@@ -1074,6 +1087,24 @@ invoke
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
+
+# Examples
+```jldoctest
+julia> isa(1, Int)
+true
+
+julia> isa(1, Matrix)
+false
+
+julia> isa(1, Char)
+false
+
+julia> isa(1, Number)
+true
+
+julia> 1 isa Number
+true
+```
 """
 isa
 
@@ -1177,6 +1208,15 @@ end
     Symbol(x...) -> Symbol
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
+
+# Examples
+```jldoctest
+julia> Symbol("my", "name")
+:myname
+
+julia> Symbol("day", 4)
+:day4
+```
 """
 Symbol
 
@@ -1196,8 +1236,8 @@ tuple
 """
     getfield(value, name::Symbol)
 
-Extract a named field from a `value` of composite type. The syntax `a.b` calls
-`getfield(a, :b)`.
+Extract a named field from a `value` of composite type.
+See also [`getproperty`](@ref Base.getproperty).
 
 # Examples
 ```jldoctest
@@ -1206,6 +1246,9 @@ julia> a = 1//2
 
 julia> getfield(a, :num)
 1
+
+julia> a.num
+1
 ```
 """
 getfield
@@ -1213,8 +1256,29 @@ getfield
 """
     setfield!(value, name::Symbol, x)
 
-Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
-`setfield!(a, :b, c)`.
+Assign `x` to a named field in `value` of composite type.
+The `value` must be mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+See also [`setproperty!`](@ref Base.setproperty!).
+
+# Examples
+```jldoctest
+julia> mutable struct MyMutableStruct
+           field::Int
+       end
+
+julia> a = MyMutableStruct(1);
+
+julia> setfield!(a, :field, 2);
+
+julia> getfield(a, :field)
+2
+
+julia> a = 1//2
+1//2
+
+julia> setfield!(a, :num, 3);
+ERROR: type Rational is immutable
+```
 """
 setfield!
 
@@ -1237,66 +1301,226 @@ isdefined
 
 
 """
-    Vector{T}(n)
+    Vector{T}(uninitialized, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> Vector{Float64}(3)
+julia> Vector{Float64}(uninitialized, 3)
 3-element Array{Float64,1}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
 ```
 """
-Vector{T}(n)
+Vector{T}(::Uninitialized, n)
 
 """
-    Matrix{T}(m, n)
+    Vector{T}(nothing, m)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+Construct a [`Vector{T}`](@ref) of length `m`, initialized with
+[`nothing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Nothing <: T`.
+
+# Examples
+```jldoctest
+julia> Vector{Union{Nothing, String}}(nothing, 2)
+2-element Array{Union{Nothing, String},1}:
+ nothing
+ nothing
+```
+"""
+Vector{T}(::Nothing, n)
+
+"""
+    Vector{T}(missing, m)
+
+Construct a [`Vector{T}`](@ref) of length `m`, initialized with
+[`missing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Vector{Union{Missing, String}}(missing, 2)
+2-element Array{Union{Missing, String},1}:
+ missing
+ missing
+```
+"""
+Vector{T}(::Missing, n)
+
+"""
+    Matrix{T}(uninitialized, m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> Matrix{Float64}(2, 3)
+julia> Matrix{Float64}(uninitialized, 2, 3)
 2×3 Array{Float64,2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
 """
-Matrix{T}(m, n)
+Matrix{T}(::Uninitialized, m, n)
 
 """
-    Array{T}(dims)
-    Array{T,N}(dims)
+    Matrix{T}(nothing, m, n)
+
+Construct a [`Matrix{T}`](@ref) of size `m`×`n`, initialized with
+[`nothing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Nothing <: T`.
+
+# Examples
+```jldoctest
+julia> Matrix{Union{Nothing, String}}(nothing, 2, 3)
+2×3 Array{Union{Nothing, String},2}:
+ nothing  nothing  nothing
+ nothing  nothing  nothing
+```
+"""
+Matrix{T}(::Nothing, m, n)
+
+"""
+    Matrix{T}(missing, m, n)
+
+Construct a [`Matrix{T}`](@ref) of size `m`×`n`, initialized with
+[`missing`](@ref) entries. Element type `T` must be able to hold
+these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Matrix{Union{Missing, String}}(missing, 2, 3)
+2×3 Array{Union{Missing, String},2}:
+ missing  missing  missing
+ missing  missing  missing
+```
+"""
+Matrix{T}(::Missing, m, n)
+
+"""
+    Array{T}(uninitialized, dims)
+    Array{T,N}(uninitialized, dims)
 
 Construct an uninitialized `N`-dimensional [`Array`](@ref)
 containing elements of type `T`. `N` can either be supplied explicitly,
-as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+as in `Array{T,N}(uninitialized, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`.
+match the length or number of `dims`. See [`uninitialized`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(2, 3) # N given explicitly
+julia> A = Array{Float64,2}(uninitialized, 2, 3) # N given explicitly
 2×3 Array{Float64,2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(2) # N determined by the input
+julia> B = Array{Float64}(uninitialized, 2) # N determined by the input
 2-element Array{Float64,1}:
  1.87103e-320
  0.0
 ```
 """
-Array{T,N}(dims)
+Array{T,N}(::Uninitialized, dims)
+
+"""
+    Array{T}(nothing, dims)
+    Array{T,N}(nothing, dims)
+
+Construct an `N`-dimensional [`Array`](@ref) containing elements of type `T`,
+initialized with [`nothing`](@ref) entries. Element type `T` must be able
+to hold these values, i.e. `Nothing <: T`.
+
+# Examples
+```jldoctest
+julia> Array{Union{Nothing, String}}(nothing, 2)
+2-element Array{Union{Nothing, String},1}:
+ nothing
+ nothing
+
+julia> Array{Union{Nothing, Int}}(nothing, 2, 3)
+2×3 Array{Union{Nothing, Int64},2}:
+ nothing  nothing  nothing
+ nothing  nothing  nothing
+```
+"""
+Array{T,N}(::Nothing, dims)
+
+
+"""
+    Array{T}(missing, dims)
+    Array{T,N}(missing, dims)
+
+Construct an `N`-dimensional [`Array`](@ref) containing elements of type `T`,
+initialized with [`missing`](@ref) entries. Element type `T` must be able
+to hold these values, i.e. `Missing <: T`.
+
+# Examples
+```jldoctest
+julia> Array{Union{Missing, String}}(missing, 2)
+2-element Array{Union{Missing, String},1}:
+ missing
+ missing
+
+julia> Array{Union{Missing, Int}}(missing, 2, 3)
+2×3 Array{Union{Missing, Int64},2}:
+ missing  missing  missing
+ missing  missing  missing
+```
+"""
+Array{T,N}(::Missing, dims)
+
+"""
+    Uninitialized
+
+Singleton type used in array initialization, indicating the array-constructor-caller
+would like an uninitialized array. See also [`uninitialized`](@ref),
+an alias for `Uninitialized()`.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(Uninitialized(), 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+Uninitialized
+
+"""
+    uninitialized
+
+Alias for `Uninitialized()`, which constructs an instance of the singleton type
+[`Uninitialized`](@ref), used in array initialization to indicate the
+array-constructor-caller would like an uninitialized array.
+
+# Examples
+```julia-repl
+julia> Array{Float64,1}(uninitialized, 3)
+3-element Array{Float64,1}:
+ 2.2752528595e-314
+ 2.202942107e-314
+ 2.275252907e-314
+```
+"""
+uninitialized
 
 """
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+
+# Examples
+```jldoctest
+julia> 1 + 20 + 4
+25
+
+julia> +(1, 20, 4)
+25
+```
 """
 (+)(x, y...)
 
@@ -1304,6 +1528,20 @@ Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x
     -(x)
 
 Unary minus operator.
+
+# Examples
+```jldoctest
+julia> -1
+-1
+
+julia> -(2)
+-2
+
+julia> -[1 2; 3 4]
+2×2 Array{Int64,2}:
+ -1  -2
+ -3  -4
+```
 """
 -(x)
 
@@ -1311,6 +1549,15 @@ Unary minus operator.
     -(x, y)
 
 Subtraction operator.
+
+# Examples
+```jldoctest
+julia> 2 - 3
+-1
+
+julia> -(2, 4.5)
+-2.5
+```
 """
 -(x, y)
 
@@ -1318,6 +1565,15 @@ Subtraction operator.
     *(x, y...)
 
 Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+
+# Examples
+```jldoctest
+julia> 2 * 7 * 8
+112
+
+julia> *(2, 7, 8)
+112
+```
 """
 (*)(x, y...)
 
@@ -1326,6 +1582,18 @@ Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e
 
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
 floating-point results for integer arguments.
+
+# Examples
+```jldoctest
+julia> 1/2
+0.5
+
+julia> 4/2
+2.0
+
+julia> 4.5/2
+2.25
+```
 """
 /(x, y)
 
@@ -1402,7 +1670,7 @@ union [`Union{}`](@ref) is the bottom type of Julia.
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString, Int64}
+Union{Int64, AbstractString}
 
 julia> 1 :: IntOrString
 1
@@ -1411,7 +1679,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
 ```
 """
 Union
@@ -1500,5 +1768,27 @@ Tuple
 The base library of Julia.
 """
 kw"Base"
+
+"""
+    typeassert(x, type)
+
+Throw a TypeError unless `x isa type`.
+The syntax `x::type` calls this function.
+"""
+typeassert
+
+"""
+    getproperty(value, name::Symbol)
+
+The syntax `a.b` calls `getproperty(a, :b)`.
+"""
+Base.getproperty
+
+"""
+    setproperty!(value, name::Symbol, x)
+
+The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+"""
+Base.setproperty!
 
 end

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)
@@ -30,7 +32,7 @@
     @test_throws ArgumentError parse(IPv4, "192.")
 
     @test ip"::1" == IPv6(1)
-    @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3",16))
+    @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))
 
     @test ip"2001:db8:0:0:0:0:2:1" == ip"2001:db8::2:1" == ip"2001:db8::0:2:1"
 
@@ -333,7 +335,7 @@ end
             end
         catch e
             if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
-                warn("UDP broadcast test skipped (permission denied upon send, restrictive firewall?)")
+                @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
             end
@@ -346,7 +348,7 @@ end
     P = Pipe()
     Base.link_pipe(P)
     write(P, "hello")
-    @test nb_available(P) == 0
+    @test bytesavailable(P) == 0
     @test !eof(P)
     @test read(P, Char) === 'h'
     @test !eof(P)
@@ -369,7 +371,7 @@ end
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
-    @test readuntil(P, 'w') == "llow"
+    @test readuntil(P, 'w') == "llo"
     Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
@@ -405,5 +407,42 @@ end
         end
 
         @test test_connect(addr)
+    end
+end
+
+@testset "TCPServer constructor" begin
+    s = Base.TCPServer(; delay=false)
+    if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+        @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+    end
+end
+
+# Issues #18818 and #24169
+mutable struct RLimit
+    cur::Int64
+    max::Int64
+end
+function with_ulimit(f::Function, stacksize::Int)
+    RLIMIT_STACK = 3 # from /usr/include/sys/resource.h
+    rlim = Ref(RLimit(0, 0))
+    # Get the current maximum stack size in bytes
+    rc = ccall(:getrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+    @assert rc == 0
+    current = rlim[].cur
+    try
+        rlim[].cur = stacksize * 1024
+        ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+        f()
+    finally
+        rlim[].cur = current
+        ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_STACK, rlim)
+    end
+    nothing
+end
+@static if Sys.isapple()
+    @testset "Issues #18818 and #24169" begin
+        with_ulimit(7001) do
+            @test getaddrinfo("localhost") isa IPAddr
+        end
     end
 end

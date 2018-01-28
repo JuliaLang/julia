@@ -63,11 +63,14 @@ def randmatmul(n):
 
 ## mandelbrot ##
 
+def abs2(z):
+    return real(z)*real(z) +  imag(z)*imag(z)
+
 def mandel(z):
     maxiter = 80
     c = z
     for n in range(maxiter):
-        if abs(z) > 2:
+        if abs2(z) > 4:
             return n
         z = z*z + c
     return maxiter
@@ -102,7 +105,7 @@ def parse_int(t):
 def printfd(t):
     f = open("/dev/null", "w")
     for i in range(1,t):
-        f.write("%d %d\n")
+        f.write("{:d} {:d}\n".format(i, i+1))
     f.close()
     
 
@@ -139,7 +142,7 @@ if __name__=="__main__":
         mandelperf()
         t = time.time()-t
         if t < tmin: tmin = t
-    print_perf ("iteration_mandelbrot", tmin)
+    print_perf ("userfunc_mandelbrot", tmin)
 
     tmin = float('inf')
     for i in range(mintrials):

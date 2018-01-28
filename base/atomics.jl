@@ -59,8 +59,8 @@ julia> x[]
 1
 ```
 
-Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
-`atomic_xchg!`, etc.
+Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
+[`atomic_xchg!`](@ref), etc.
 """
 mutable struct Atomic{T<:AtomicTypes}
     value::T
@@ -354,7 +354,7 @@ for typ in atomictypes
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  store atomic $lt %1, $lt* %ptr release, align $(alignment(typ))
                  ret void
-                 """, Void, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
+                 """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
@@ -421,7 +421,7 @@ for op in [:+, :-, :max, :min]
             old = atomic_cas!(var, cmp, new)
             reinterpret(IT, old) == reinterpret(IT, cmp) && return new
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -444,4 +444,4 @@ For further details, see LLVM's `fence` instruction.
 atomic_fence() = llvmcall("""
                           fence seq_cst
                           ret void
-                          """, Void, Tuple{})
+                          """, Cvoid, Tuple{})

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random, Serialization
+
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
 c = parse(BigInt,"246913578024691357802469135780")
@@ -196,11 +198,14 @@ end
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")
     @test binomial(BigInt(113), BigInt(42)) == parse(BigInt,"18672199984318438125634054194360")
 end
-a = rand(1:100, 10000)
-b = map(BigInt, a)
-@test sum(a) == sum(b)
+let a, b
+    a = rand(1:100, 10000)
+    b = map(BigInt, a)
+    @test sum(a) == sum(b)
+end
 
 @testset "Iterated arithmetic" begin
+    local a, b, c, d, f, g
     a = parse(BigInt,"315135")
     b = parse(BigInt,"12412")
     c = parse(BigInt,"3426495623485904783478347")
@@ -247,7 +252,7 @@ end
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
    x = a[2]*b[2]
-   c = Array{BigInt,1}(3)
+   c = Vector{BigInt}(uninitialized, 3)
    c[1] = a[1]*b[1] + x
    c[2] = a[1]*b[2] + a[2]*b[3]
    c[3] = x + a[3]*b[3]
@@ -308,7 +313,7 @@ end
 @test Base.ndigits0zpb(big(0), big(rand(2:100))) == 0
 
 # digits with BigInt bases (#16844)
-@test digits(big(2)^256, big(2)^128) == [0, 0, 1]
+@test digits(big(2)^256, base = big(2)^128) == [0, 0, 1]
 
 @testset "conversion from float" begin
     @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
@@ -393,3 +398,6 @@ end
     @test typeof(cos(a)) == BigFloat
     @test typeof(sin(a)) == BigFloat
 end
+
+# Issue #24298
+@test mod(BigInt(6), UInt(5)) == mod(6, 5)

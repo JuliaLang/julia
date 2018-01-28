@@ -1,3 +1,8 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#include <llvm/Support/Debug.h>
+#include <llvm/IR/DebugLoc.h>
+
 enum AddressSpace {
     Generic = 0,
     Tracked = 10, Derived = 11, CalleeRooted = 12,
@@ -12,7 +17,7 @@ static inline void llvm_dump(llvm::Value *v)
 {
 #if JL_LLVM_VERSION >= 50000
     v->print(llvm::dbgs(), true);
-    putchar('\n');
+    llvm::dbgs() << "\n";
 #else
     v->dump();
 #endif
@@ -25,7 +30,7 @@ static inline void llvm_dump(llvm::Type *v)
 #else
     v->dump();
 #endif
-    putchar('\n');
+    llvm::dbgs() << "\n";
 }
 
 static inline void llvm_dump(llvm::Function *f)
@@ -50,8 +55,18 @@ static inline void llvm_dump(llvm::Metadata *m)
 {
 #if JL_LLVM_VERSION >= 50000
     m->print(llvm::dbgs());
-    putchar('\n');
+    llvm::dbgs() << "\n";
 #else
     m->dump();
 #endif
+}
+
+static inline void llvm_dump(llvm::DebugLoc *dbg)
+{
+#if JL_LLVM_VERSION >= 50000
+    dbg->print(llvm::dbgs());
+#else
+    dbg->dump();
+#endif
+    llvm::dbgs() << "\n";
 }

@@ -2,7 +2,7 @@
 
 module TestBoundsCheck
 
-using Test
+using Test, Random
 
 @enum BCOption bc_default bc_on bc_off
 bc_opt = BCOption(Base.JLOptions().check_bounds)

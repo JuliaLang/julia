@@ -11,7 +11,7 @@ referenced in a hash table.
 
 See [`Dict`](@ref) for further help.
 """
-mutable struct WeakKeyDict{K,V} <: Associative{K,V}
+mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function
@@ -21,7 +21,10 @@ mutable struct WeakKeyDict{K,V} <: Associative{K,V}
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
-            islocked(t) && return finalizer(k, t.finalizer)
+            if islocked(t)
+                finalizer(t.finalizer, k)
+                return nothing
+            end
             delete!(t, k)
         end
         return t
@@ -55,7 +58,7 @@ WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
+        Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
     catch e
         if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
@@ -65,23 +68,7 @@ function WeakKeyDict(kv)
     end
 end
 
-similar(d::WeakKeyDict{K,V}) where {K,V} = WeakKeyDict{K,V}()
-similar(d::WeakKeyDict, ::Type{Pair{K,V}}) where {K,V} = WeakKeyDict{K,V}()
-
-# conversion between Dict types
-function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K
-    h = WeakKeyDict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
-        end
-    end
-    return h
-end
-convert(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) where {K,V} = d
+empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
@@ -89,7 +76,7 @@ trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
     k = convert(K, key)
-    finalizer(k, wkh.finalizer)
+    finalizer(wkh.finalizer, k)
     lock(wkh) do
         wkh.ht[WeakRef(k)] = v
     end
@@ -119,12 +106,12 @@ length(t::WeakKeyDict) = length(t.ht)
 
 function start(t::WeakKeyDict{K,V}) where V where K
     gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd
-    finalizer(gc_token, function(r)
+    finalizer(gc_token) do r
         if r[]
             r[] = false
             unlock(t.lock)
         end
-    end)
+    end
     s = lock(t.lock)
     gc_token[] = true
     return (start(t.ht), gc_token)

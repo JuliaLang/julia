@@ -108,32 +108,32 @@ end
 end
 
 # @simd with cartesian iteration
-function simd_cartesian_range!(indexes, crng)
+function simd_cartesian_range!(indices, crng)
     @simd for I in crng
-        push!(indexes, I)
+        push!(indices, I)
     end
-    indexes
+    indices
 end
 
-crng = CartesianRange(2:4, 0:1, 1:1, 3:5)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(2:4, 0:1, 1:1, 3:5)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(-1:1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(-1:1, 1:3)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(-1:-1, 1:3)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices(-1:-1, 1:3)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
-crng = CartesianRange(2:4)
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == collect(crng)
+crng = CartesianIndices(2:4)
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == collect(crng)
 
-crng = CartesianRange()
-indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
-@test indexes == vec(collect(crng))
+crng = CartesianIndices()
+indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
+@test indices == vec(collect(crng))
 
 # @simd with array as "range"
 # issue #13869
@@ -144,5 +144,5 @@ function simd_sum_over_array(a)
     end
     s
 end
-@test 2001000 == simd_sum_over_array(collect(1:2000))
+@test 2001000 == simd_sum_over_array(Vector(1:2000))
 @test 2001000 == simd_sum_over_array(Float32[i+j*500 for i=1:500, j=0:3])

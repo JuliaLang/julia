@@ -71,7 +71,7 @@ public class PerfPure {
             if (t < tmin) tmin = t;
         }
         assert(mandel_sum == 14720) : "value was "+mandel_sum;
-        print_perf("iteration_mandelbrot", tmin);
+        print_perf("userfunc_mandelbrot", tmin);
 
         // sort
         tmin = Long.MAX_VALUE;
@@ -149,7 +149,7 @@ public class PerfPure {
             PrintStream ps = new PrintStream(f);
             long i = 0;
             for (i = 0; i < n; i++) {
-                ps.println(i+" "+i);
+                ps.println(i + " " + (i+1));
             }
             ps.close();
         } catch (FileNotFoundException e) {
@@ -297,7 +297,7 @@ public class PerfPure {
         double cReal = zReal;
         double cImag = zImag;
         for (n=0; n<=79; ++n) {
-            if (complexAbs(zReal,zImag) > 2.0) {
+            if (complexAbs2(zReal,zImag) > 4.0) {
                 n -= 1;
                 break;
             }
@@ -316,6 +316,10 @@ public class PerfPure {
 
     private double complexAbs(double zReal, double zImag) {
         return Math.sqrt(zReal*zReal + zImag*zImag);
+    }
+
+    private double complexAbs2(double zReal, double zImag) {
+        return zReal*zReal + zImag*zImag;
     }
 
     protected int mandelperf() {

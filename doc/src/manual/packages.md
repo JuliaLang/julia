@@ -18,7 +18,7 @@ Initially, you'll have no packages installed:
 
 ```julia-repl
 julia> Pkg.status()
-INFO: Initializing package repository /Users/stefan/.julia/v0.6
+INFO: Initializing package repository /Users/someone/.julia/v0.6
 INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
 No packages installed.
 ```
@@ -745,8 +745,8 @@ knows about:
 
 ```julia-repl
 julia> PkgDev.generate("FooBar","MIT")
-INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.6/FooBar
-INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
+INFO: Initializing FooBar repo: /Users/someone/.julia/v0.6/FooBar
+INFO: Origin: git://github.com/someone/FooBar.jl.git
 INFO: Generating LICENSE.md
 INFO: Generating README.md
 INFO: Generating src/FooBar.jl
@@ -765,15 +765,15 @@ a bunch of files that all packages should have, and commits them to the reposito
 $ cd ~/.julia/v0.6/FooBar && git show --stat
 
 commit 84b8e266dae6de30ab9703150b3bf771ec7b6285
-Author: Stefan Karpinski <stefan@karpinski.org>
+Author: Some One <some.one@example.com>
 Date:   Wed Oct 16 17:57:58 2013 -0400
 
     FooBar.jl generated files.
 
         license: MIT
-        authors: Stefan Karpinski
+        authors: Some One
         years:   2013
-        user:    StefanKarpinski
+        user:    someone
 
     Julia Version 0.3.0-prerelease+3217 [5fcfb13*]
 
@@ -823,7 +823,7 @@ too hard to figure out [^3]. Once you've done this, letting people try out your 
 as sending them the URL of the published repo – in this case:
 
 ```
-git://github.com/StefanKarpinski/FooBar.jl.git
+git://github.com/someone/FooBar.jl.git
 ```
 
 For your package, it will be your GitHub user name and the name of your package, but you get the
@@ -831,8 +831,8 @@ idea. People you send this URL to can use [`Pkg.clone()`](@ref) to install the p
 it out:
 
 ```julia-repl
-julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
-INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
+julia> Pkg.clone("git://github.com/someone/FooBar.jl.git")
+INFO: Cloning FooBar from git@github.com:someone/FooBar.jl.git
 ```
 
 [^3]:
@@ -851,7 +851,7 @@ it to your local copy of `METADATA` using `PkgDev.register()`:
 
 ```julia-repl
 julia> PkgDev.register("FooBar")
-INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
+INFO: Registering FooBar at git://github.com/someone/FooBar.jl.git
 INFO: Committing METADATA for FooBar
 ```
 
@@ -861,7 +861,7 @@ This creates a commit in the `~/.julia/v0.6/METADATA` repo:
 $ cd ~/.julia/v0.6/METADATA && git show
 
 commit 9f71f4becb05cadacb983c54a72eed744e5c019d
-Author: Stefan Karpinski <stefan@karpinski.org>
+Author: Some One <some.one@example.com>
 Date:   Wed Oct 16 18:46:02 2013 -0400
 
     Register FooBar
@@ -872,7 +872,7 @@ index 0000000..30e525e
 --- /dev/null
 +++ b/FooBar/url
 @@ -0,0 +1 @@
-+git://github.com/StefanKarpinski/FooBar.jl.git
++git://github.com/someone/FooBar.jl.git
 ```
 
 This commit is only locally visible, however. To make it visible to the Julia community, you
@@ -885,11 +885,11 @@ julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: No new package versions to publish
 INFO: Submitting METADATA changes
-INFO: Forking JuliaLang/METADATA.jl to StefanKarpinski
+INFO: Forking JuliaLang/METADATA.jl to someone
 INFO: Pushing changes as branch pull-request/ef45f54b
 INFO: To create a pull-request open:
 
-  https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/ef45f54b
+  https://github.com/someone/METADATA.jl/compare/pull-request/ef45f54b
 ```
 
 !!! tip
@@ -928,7 +928,7 @@ It also creates a new version entry in your local `METADATA` repo for `FooBar`:
 ```
 $ cd ~/.julia/v0.6/FooBar && git show
 commit de77ee4dc0689b12c5e8b574aef7f70e8b311b0e
-Author: Stefan Karpinski <stefan@karpinski.org>
+Author: Some One <some.one@example.com>
 Date:   Wed Oct 16 23:06:18 2013 -0400
 
     Tag FooBar v0.0.1
@@ -963,11 +963,11 @@ julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: Pushing FooBar permanent tags: v0.0.1
 INFO: Submitting METADATA changes
-INFO: Forking JuliaLang/METADATA.jl to StefanKarpinski
+INFO: Forking JuliaLang/METADATA.jl to someone
 INFO: Pushing changes as branch pull-request/3ef4f5c4
 INFO: To create a pull-request open:
 
-  https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/3ef4f5c4
+  https://github.com/someone/METADATA.jl/compare/pull-request/3ef4f5c4
 ```
 
 #### Publishing METADATA manually

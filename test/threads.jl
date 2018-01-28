@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Array{T}(n-m+1)
-    oldy = Array{T}(n-m+1)
+    oldx = Vector{T}(uninitialized, n-m+1)
+    oldy = Vector{T}(uninitialized, n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -124,7 +124,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
     @threads for i = 1:20
         @test lock(critical) === nothing
         @test islocked(critical)
-        gc(false)
+        GC.gc(false)
         @test unlock(critical) === nothing
     end
     @test !islocked(critical)
@@ -173,7 +173,7 @@ end
 # Ensure only LLVM-supported types can be atomic
 @test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Complex128}
+@test_throws TypeError Atomic{ComplexF64}
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
@@ -200,7 +200,7 @@ function test_atomic_read(commbuf::CommBuf, n::Int)
         correct &= var1 >= var2
         var1 == n && break
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
     commbuf.correct_read = correct
 end
@@ -245,7 +245,7 @@ function test_fence(p::Peterson, id::Int, n::Int)
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
         p.critical[id][] = 1
@@ -302,7 +302,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -347,6 +347,8 @@ for T in (Int32, Int64, Float32, Float64)
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
 end
+
+using Dates
 for period in (0.06, Dates.Millisecond(60))
     let async = Base.AsyncCondition(), t
         c = Condition()
@@ -355,12 +357,12 @@ for period in (0.06, Dates.Millisecond(60))
             wait(c)
             t = Timer(period)
             wait(t)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         end))
         wait(c)
         notify(c)
@@ -392,7 +394,7 @@ function test_thread_cfunction()
     @threads for i in 1:1000
         # Make sure this is not inferrable
         # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
+        ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any),
               complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
     end
 end
@@ -426,7 +428,7 @@ function test_load_and_lookup_18020(n)
     @threads for i in 1:n
         try
             ccall(:jl_load_and_lookup,
-                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
         end
     end
@@ -449,3 +451,30 @@ function test_nested_loops()
     end
 end
 test_nested_loops()
+
+@testset "libatomic" begin
+    prog = """
+    using Base.Threads
+    function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
+        Base.llvmcall(\"\"\"
+            %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
+            store atomic i128 %1, i128* %ptr release, align 8
+            ret void
+        \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
+    end
+    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
+    """
+
+    mktempdir() do dir
+        file = joinpath(dir, "test23901.jl")
+        write(file, prog)
+        run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $file`),
+                     stdout=joinpath(dir, "out.txt"),
+                     stderr=joinpath(dir, "err.txt"),
+                     append=false))
+        out = readchomp(joinpath(dir, "out.txt"))
+        err = readchomp(joinpath(dir, "err.txt"))
+        @test contains(out, "libat_store") || contains(out, "atomic_store")
+        @test !contains(err, "__atomic_store")
+    end
+end

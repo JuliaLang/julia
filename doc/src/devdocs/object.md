@@ -197,7 +197,7 @@ objects.
 
 !!! sidebar "Singleton Types"
     Singleton types have only one instance and no data fields. Singleton instances have a size of
-    0 bytes, and consist only of their metadata. e.g. `nothing::Void`.
+    0 bytes, and consist only of their metadata. e.g. `nothing::Nothing`.
 
     See [Singleton Types](@ref man-singleton-types) and [Nothingness and missing values](@ref)
 

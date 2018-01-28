@@ -21,7 +21,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +31,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -46,6 +46,8 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
     VersionNumber(VInt(major), VInt(minor), VInt(patch),
         map(x->x isa Integer ? UInt64(x) : String(x), pre),
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
+
+VersionNumber(v::Tuple) = VersionNumber(v...)
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -65,9 +67,6 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
-convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
-convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
-
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -84,7 +83,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
+        contains(ident, r"^\d+$") ? parse(UInt64, ident) : String(ident)
     end
 end
 
@@ -103,8 +102,6 @@ function VersionNumber(v::AbstractString)
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     return VersionNumber(major, minor, patch, prerl, build)
 end
-
-convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 
 macro v_str(v); VersionNumber(v); end
 
@@ -215,7 +212,7 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
-    ver = convert(VersionNumber, VERSION_STRING)
+    ver = VersionNumber(VERSION_STRING)
     if !isempty(ver.prerelease)
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
@@ -232,7 +229,7 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = convert(VersionNumber, libllvm_version_string)
+const libllvm_version = VersionNumber(libllvm_version_string)
 
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit
@@ -255,7 +252,7 @@ function banner(io::IO = STDOUT)
     end
     commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
 
-    if have_color
+    if get(io, :color, false)
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia

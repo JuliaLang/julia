@@ -44,7 +44,7 @@ timeit("parse_integers", parseintperf, 1000)
 printfdperf = function(t) {
     fd<-file("/dev/null")
     for (i in 1:t) {
-        s = sprintf("%d %d", i, i)
+        s = sprintf("%d %d", i, i+1)
 	writeLines(s, fd)
     }	
 }
@@ -88,12 +88,15 @@ assert(!is.unsorted(sortperf(5000)))
 timeit('recursion_quicksort', sortperf, 5000)
 
 ## mandel ##
+Mod2 = function(z) {
+     return(Re(z)*Re(z) + Im(z)*Im(z))
+}
 
 mandel = function(z) {
     c = z
     maxiter = 80
     for (n in 1:maxiter) {
-        if (Mod(z) > 2) return(n-1)
+        if (Mod2(z) > 4) return(n-1)
         z = z^2+c
     }
     return(maxiter)
@@ -114,7 +117,7 @@ mandelperf = function() {
 }
 
 assert(sum(mandelperf()) == 14791)
-timeit("iteration_mandelbrot", mandelperf)
+timeit("userfunc_mandelbrot", mandelperf)
 
 ## pi_sum ##
 

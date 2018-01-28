@@ -133,8 +133,8 @@ For *every* binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
 to perform `^` element-by-element on arrays. For example,
 `[1,2,3] ^ 3` is not defined, since there is no standard
-mathematical meaning to "cubing" an array, but `[1,2,3] .^ 3`
-is defined as computing the elementwise
+mathematical meaning to "cubing" a (non-square) array, but
+`[1,2,3] .^ 3` is defined as computing the elementwise
 (or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
@@ -360,7 +360,9 @@ Julia applies the following order and associativity of operations, from highest 
 | Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
-| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Syntax         | `: ..`                                                                                            | Left                       |
+| Syntax         | `\|>`                                                                                             | Left                       |
+| Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
@@ -423,9 +425,9 @@ julia> Int8(128)
 ERROR: InexactError: trunc(Int8, 128)
 Stacktrace:
  [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
- [2] checked_trunc_sint at ./int.jl:419 [inlined]
- [3] convert at ./int.jl:439 [inlined]
- [4] Int8(::Int64) at ./sysimg.jl:102
+ [2] checked_trunc_sint at ./int.jl:438 [inlined]
+ [3] convert at ./int.jl:458 [inlined]
+ [4] Int8(::Int64) at ./sysimg.jl:114
 
 julia> Int8(127.0)
 127
@@ -433,14 +435,14 @@ julia> Int8(127.0)
 julia> Int8(3.14)
 ERROR: InexactError: convert(Int8, 3.14)
 Stacktrace:
- [1] convert at ./float.jl:660 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:102
+ [1] convert at ./float.jl:682 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> Int8(128.0)
 ERROR: InexactError: convert(Int8, 128.0)
 Stacktrace:
- [1] convert at ./float.jl:660 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:102
+ [1] convert at ./float.jl:682 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> 127 % Int8
 127
@@ -454,8 +456,8 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError: trunc(Int8, 128.0)
 Stacktrace:
- [1] trunc at ./float.jl:653 [inlined]
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:338
+ [1] trunc at ./float.jl:675 [inlined]
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:353
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.

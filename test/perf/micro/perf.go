@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/cmplx"
+//	"math/cmplx"
 	"math/rand"
 	"strconv"
 	"testing"
+	"os"
+	"bufio"
 
 	"github.com/gonum/blas/blas64"
 	"github.com/gonum/blas/cgo"
@@ -35,7 +37,7 @@ func init() {
 	// Use the BLAS implementation specified in CGO_LDFLAGS. This line can be
 	// commented out to use the native Go BLAS implementation found in
 	// github.com/gonum/blas/native.
-	blas64.Use(cgo.Implementation{})
+	//blas64.Use(cgo.Implementation{})
 
 	// These are here so that toggling the BLAS implementation does not make imports unused
 	_ = cgo.Implementation{}
@@ -49,6 +51,23 @@ func fib(n int) int {
 		return n
 	}
 	return fib(n-1) + fib(n-2)
+}
+
+// print to file descriptor
+
+func printfd(n int) {
+	f, err := os.Create("/dev/null")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	w := bufio.NewWriter(f)
+
+	for i := 0; i < n; i++ {
+		_, err = fmt.Fprintf(w, "%d %d\n", i, i+1)
+	}
+	w.Flush()
+	f.Close()
 }
 
 // quicksort
@@ -151,12 +170,14 @@ func randmatmul(n int) *mat64.Dense {
 }
 
 // mandelbrot
-
+func abs2(z complex128) float64 {
+	return real(z)*real(z) + imag(z)*imag(z)
+}
 func mandel(z complex128) int {
 	maxiter := 80
 	c := z
 	for n := 0; n < maxiter; n++ {
-		if cmplx.Abs(z) > 2 {
+		if abs2(z) > 4 {
 			return n
 		}
 		z = z*z + c
@@ -253,12 +274,21 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "iteration_mandelbrot",
+		name: "userfunc_mandelbrot",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				if mandelperf() != 14791 {
 					b.Fatal("unexpected value for mandelperf")
 				}
+			}
+		},
+	},
+
+	{
+		name: "print_to_file",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				printfd(100000)
 			}
 		},
 	},

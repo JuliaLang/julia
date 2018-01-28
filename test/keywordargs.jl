@@ -188,14 +188,14 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, [(:a, 1)])
+@test test4974(a=1) == (2, pairs((a=1,)))
 
 @testset "issue #7704, computed keywords" begin
-    @test kwf1(1; (:tens, 2)) == 21
+    @test kwf1(1; :tens => 2) == 21
     let p = (:hundreds, 3),
         q = (:tens, 1)
-        @test kwf1(0; p, q) == 310
-        @test kwf1(0; q, hundreds=4) == 410
+        @test kwf1(0; p[1]=>p[2], q[1]=>q[2]) == 310
+        @test kwf1(0; q[1]=>q[2], hundreds=4) == 410
     end
 end
 @testset "with anonymous functions, issue #2773" begin
@@ -235,11 +235,11 @@ end
     end
 end
 # pr #18396, kwargs before Base is defined
-@eval Core.Inference begin
+@eval Core.Compiler begin
     f18396(;kwargs...) = g18396(;kwargs...)
     g18396(;x=1,y=2) = x+y
 end
-@test Core.Inference.f18396() == 3
+@test Core.Compiler.f18396() == 3
 @testset "issue #7045, `invoke` with keyword args" begin
     f7045(x::Float64; y=true) = y ? 1 : invoke(f7045,Tuple{Real},x,y=y)
     f7045(x::Real; y=true) = y ? 2 : 3
@@ -300,11 +300,11 @@ end
         counter += 1
         return counter
     end
-    f(args...; kws...) = (args, kws)
+    f(args...; kws...) = (args, values(kws))
     @test f(get_next(), a=get_next(), get_next(),
             b=get_next(), get_next(),
             [get_next(), get_next()]...; c=get_next(),
-            [(:d, get_next()), (:f, get_next())]...) ==
-                ((1,3,5,6,7),
-                 Any[(:a,2), (:b,4), (:c,8), (:d,9), (:f,10)])
+            (d = get_next(), f = get_next())...) ==
+                ((1, 3, 5, 6, 7),
+                 (a = 2, b = 4, c = 8, d = 9, f = 10))
 end

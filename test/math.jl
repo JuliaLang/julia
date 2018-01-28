@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using LinearAlgebra
+
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
@@ -41,6 +44,7 @@ end
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
     @test contains(sprint(show,π),"3.14159")
+    @test widen(pi) === pi
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -296,13 +300,14 @@ end
 
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
-    TAA = (TAA + TAA.')/2.
+    TAA = (TAA + TAA')/2.
     STAA = Symmetric(TAA)
     @test Array(atanh.(STAA)) == atanh.(TAA)
     @test Array(asinh.(STAA)) == asinh.(TAA)
-    @test Array(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
-    @test Array(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
-    @test Array(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
+    TAA .+= 1
+    @test Array(acosh.(STAA)) == acosh.(TAA)
+    @test Array(acsch.(STAA)) == acsch.(TAA)
+    @test Array(acoth.(STAA)) == acoth.(TAA)
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -619,14 +624,18 @@ end
     end
 end
 
-@testset "issues #3024, #12822" begin
-    @test_throws DomainError 2 ^ -2
+@testset "issues #3024, #12822, #24240" begin
+    p2 = -2
+    p3 = -3
+    @test_throws DomainError 2 ^ p2
+    @test 2 ^ -2 == 0.25 == (2^-1)^2
     @test_throws DomainError (-2)^(2.2)
     @test_throws DomainError (-2.0)^(2.2)
-    @test_throws DomainError false ^ -2
-    @test 1 ^ -2 === (-1) ^ -2 === 1
-    @test (-1) ^ -3 === -1
-    @test true ^ -2 === true
+    @test_throws DomainError false ^ p2
+    @test false ^ -2 == Inf
+    @test 1 ^ -2 === (-1) ^ -2 == 1 ^ p2 === (-1) ^ p2 === 1
+    @test (-1) ^ -1 === (-1) ^ -3 == (-1) ^ p3 === -1
+    @test true ^ -2 == true ^ p2 === true
 end
 
 @testset "issue #13748" begin
@@ -752,6 +761,33 @@ end
     end
 end
 
+@testset "atan #23383" begin
+    for T in (Float32, Float64)
+        @test atan(T(NaN)) === T(NaN)
+        @test atan(-T(Inf)) === -T(pi)/2
+        @test atan(T(Inf)) === T(pi)/2
+        # no reduction needed |x| < 7/16
+        @test atan(zero(T)) === zero(T)
+        @test atan(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test atan(nextfloat(zero(T))) === nextfloat(zero(T))
+        for x in (T(7/16), (T(7/16)+T(11/16))/2, T(11/16),
+                  (T(11/16)+T(19/16))/2, T(19/16),
+                  (T(19/16)+T(39/16))/2, T(39/16),
+                  (T(39/16)+T(2)^23)/2, T(2)^23)
+            x = T(7/16)
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+            x = prevfloat(T(7/16))
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+            x = nextfloat(T(7/16))
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+        end
+        # This case was used to find a bug, but it isn't special in itself
+        @test atan(1.7581305072934137) ≈ 1.053644580517088
+    end
+end
 @testset "atan2" begin
     for T in (Float32, Float64)
         @test isnan_type(T, atan2(T(NaN), T(NaN)))
@@ -825,4 +861,42 @@ end
         @test_throws DomainError acos(T(Inf))
         @test isnan_type(T, acos(T(NaN)))
     end
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper <: Real
+    x::Float64
+end
+
+import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+
+for op in (:+, :-, :*, :/, :^)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
+end
+
+for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
+    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
+end
+
+for op in (:isfinite,)
+    @eval $op(x::FloatWrapper) = $op(x.x)
+end
+
+convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
+promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
+
+float(x::FloatWrapper) = x
+
+@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+
+    x = FloatWrapper(3.1)
+    y = FloatWrapper(4.1)
+
+    @test sincos(x) == (sin(x), cos(x))
+
+    z = Complex(x, y)
+
+    @test isa(exp(z), Complex)
+    @test isa(sin(z), Complex)
+    @test isa(cos(z), Complex)
 end

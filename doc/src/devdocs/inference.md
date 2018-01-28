@@ -9,12 +9,12 @@ posts
 ([1](https://juliacomputing.com/blog/2016/04/04/inference-convergence.html),
 [2](https://juliacomputing.com/blog/2017/05/15/inference-converage2.html)).
 
-## Debugging inference.jl
+## Debugging compiler.jl
 
-You can start a Julia session, edit `inference.jl` (for example to
-insert `print` statements), and then replace `Core.Inference` in your
-running session by navigating to `base/` and executing
-`include("coreimg.jl")`. This trick typically leads to much faster
+You can start a Julia session, edit `compiler/*.jl` (for example to
+insert `print` statements), and then replace `Core.Compiler` in your
+running session by navigating to `base/compiler` and executing
+`include("compiler.jl")`. This trick typically leads to much faster
 development than if you rebuild Julia for each change.
 
 A convenient entry point into inference is `typeinf_code`. Here's a
@@ -27,16 +27,16 @@ mths = methods(convert, atypes)  # worth checking that there is only one
 m = first(mths)
 
 # Create variables needed to call `typeinf_code`
-params = Core.Inference.InferenceParams(typemax(UInt))  # parameter is the world age,
+params = Core.Compiler.Params(typemax(UInt))  # parameter is the world age,
                                                         #   typemax(UInt) -> most recent
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
 cached = false             # force inference to happen (do not use cached results)
-Core.Inference.typeinf_code(m, atypes, sparams, optimize, cached, params)
+Core.Compiler.typeinf_code(m, atypes, sparams, optimize, cached, params)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
-calling `Core.Inference.code_for_method` using many of the variables above.
+calling `Core.Compiler.code_for_method` using many of the variables above.
 A `CodeInfo` object may be obtained with
 ```julia
 # Returns the CodeInfo object for `convert(Int, ::UInt)`:
@@ -84,7 +84,7 @@ input and output types were inferred in advance) is assigned a fixed
 cost (currently 20 cycles). In contrast, a `:call` expression, for
 functions other than intrinsics/builtins, indicates that the call will
 require dynamic dispatch, in which case we assign a cost set by
-`InferenceParams.inline_nonleaf_penalty` (currently set at 1000). Note
+`Params.inline_nonleaf_penalty` (currently set at 1000). Note
 that this is not a "first-principles" estimate of the raw cost of
 dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.
@@ -93,11 +93,11 @@ Each statement gets analyzed for its total cost in a function called
 `statement_cost`. You can run this yourself by following this example:
 
 ```julia
-params = Core.Inference.InferenceParams(typemax(UInt))
+params = Core.Compiler.Params(typemax(UInt))
 # Get the CodeInfo object
 ci = (@code_typed fill(3, (5, 5)))[1]  # we'll try this on the code for `fill(3, (5, 5))`
 # Calculate cost of each statement
-cost(stmt) = Core.Inference.statement_cost(stmt, ci, Base, params)
+cost(stmt) = Core.Compiler.statement_cost(stmt, ci, Base, params)
 cst = map(cost, ci.code)
 ```
 

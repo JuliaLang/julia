@@ -276,6 +276,7 @@ static void ti_initthread(int16_t tid)
     ptls->defer_signal = 0;
     ptls->current_module = NULL;
     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
+    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {
         jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
         gc_debug_critical_error();
@@ -307,7 +308,7 @@ static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        (void)jl_assume(fptr->jlcall_api != 2);
+        (void)jl_assume(fptr->jlcall_api != JL_API_CONST);
         jl_call_fptr_internal(fptr, mfunc, args, nargs);
     }
     JL_CATCH {

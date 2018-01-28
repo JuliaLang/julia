@@ -2,6 +2,7 @@
 
 # Test integer conversion routines from int.jl
 
+using Random
 
 for y in (-4, Float32(-4), -4.0, big(-4.0))
     @test flipsign(3, y)  == -3
@@ -259,3 +260,8 @@ end
         end
     end
 end
+
+# issue #21092
+@test big"1_0_0_0" == BigInt(1000)
+@test_throws ArgumentError big"1_0_0_0_"
+@test_throws ArgumentError big"_1_0_0_0"

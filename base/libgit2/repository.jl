@@ -6,9 +6,9 @@
 Open a git repository at `path`.
 """
 function GitRepo(path::AbstractString)
-    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_open, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
+                 (Ptr{Ptr{Cvoid}}, Cstring), repo_ptr_ptr, path)
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -20,16 +20,16 @@ user must be a member of a special access group to read `path`).
 """
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     separator = @static Sys.iswindows() ? ";" : ":"
-    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_open_ext, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cuint, Cstring),
                  repo_ptr_ptr, path, flags, separator)
     return GitRepo(repo_ptr_ptr[])
 end
 
 function cleanup(r::GitRepo)
     if r.ptr != C_NULL
-        ccall((:git_repository__cleanup, :libgit2), Void, (Ptr{Void},), r.ptr)
+        ccall((:git_repository__cleanup, :libgit2), Cvoid, (Ptr{Cvoid},), r.ptr)
     end
 end
 
@@ -41,9 +41,9 @@ the working tree will be created in `path/.git`. If `bare`
 is `true`, no working directory will be created.
 """
 function init(path::AbstractString, bare::Bool=false)
-    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_init, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Cstring, Cuint), repo_ptr_ptr, path, bare)
+                (Ptr{Ptr{Cvoid}}, Cstring, Cuint), repo_ptr_ptr, path, bare)
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -67,7 +67,7 @@ end
 
 Lookup the name of the current HEAD of git
 repository `repo`. If `repo` is currently
-detached, returns the name of the HEAD it's
+detached, return the name of the HEAD it's
 detached from.
 """
 function headname(repo::GitRepo)
@@ -91,7 +91,7 @@ in the `.git` subdirectory. This means that there is nowhere to check out the wo
 tree, and no tracking information for remote branches or configurations is present.
 """
 function isbare(repo::GitRepo)
-    return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) == 1
+    return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Cvoid},), repo.ptr) == 1
 end
 
 """
@@ -101,7 +101,7 @@ Determine if `repo` is detached - that is, whether its HEAD points to a commit
 (detached) or whether HEAD points to a branch tip (attached).
 """
 function isattached(repo::GitRepo)
-    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
+    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Cvoid},), repo.ptr) != 1
 end
 
 @doc """
@@ -128,9 +128,9 @@ Return a `$T` object from `repo` specified by `hash`/`spec`.
 end
 
 function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, spec)
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring), obj_ptr_ptr, repo.ptr, spec)
     # check object is of correct type
     if T != GitObject && T != GitUnknownObject
         t = Consts.OBJECT(obj_ptr_ptr[])
@@ -141,20 +141,20 @@ end
 
 function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
     oid_ptr  = Ref(oid)
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     @check ccall((:git_object_lookup, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Consts.OBJECT),
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}, Consts.OBJECT),
                  obj_ptr_ptr, repo.ptr, oid_ptr, Consts.OBJECT(T))
 
     return T(repo, obj_ptr_ptr[])
 end
 function (::Type{T})(repo::GitRepo, oid::GitShortHash) where T<:GitObject
     oid_ptr  = Ref(oid.hash)
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     @check ccall((:git_object_lookup_prefix, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Csize_t, Consts.OBJECT),
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}, Csize_t, Consts.OBJECT),
                  obj_ptr_ptr, repo.ptr, oid_ptr, oid.len, Consts.OBJECT(T))
 
     return T(repo, obj_ptr_ptr[])
@@ -175,7 +175,7 @@ See also [`workdir`](@ref), [`path`](@ref).
 """
 function gitdir(repo::GitRepo)
     return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
-                        (Ptr{Void},), repo.ptr))
+                        (Ptr{Cvoid},), repo.ptr))
 end
 
 """
@@ -194,7 +194,7 @@ See also [`gitdir`](@ref), [`path`](@ref).
 """
 function workdir(repo::GitRepo)
     sptr = ccall((:git_repository_workdir, :libgit2), Cstring,
-                (Ptr{Void},), repo.ptr)
+                (Ptr{Cvoid},), repo.ptr)
     sptr == C_NULL && throw(GitError(Error.Object, Error.ERROR, "No working directory found."))
     return unsafe_string(sptr)
 end
@@ -234,10 +234,10 @@ then `obj` will be peeled until the type changes.
 - A `GitCommit` will be peeled to a `GitTree`.
 """
 function peel(::Type{T}, obj::GitObject) where T<:GitObject
-    new_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    new_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     @check ccall((:git_object_peel, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
+                (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
 
     return T(obj.owner, new_ptr_ptr[])
 end
@@ -264,9 +264,9 @@ information.
 """
 function GitDescribeResult(commitish::GitObject;
                            options::DescribeOptions=DescribeOptions())
-    result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_describe_commit, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{DescribeOptions}),
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
                  result_ptr_ptr, commitish.ptr, Ref(options))
     return GitDescribeResult(commitish.owner, result_ptr_ptr[])
 end
@@ -289,9 +289,9 @@ Equivalent to `git describe`. See [`DescribeOptions`](@ref) for more
 information.
 """
 function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
-    result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_describe_workdir, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{DescribeOptions}),
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
                  result_ptr_ptr, repo.ptr, Ref(options))
     return GitDescribeResult(repo, result_ptr_ptr[])
 end
@@ -307,7 +307,7 @@ Formatting options are controlled by the keyword argument:
 function format(result::GitDescribeResult; options::DescribeFormatOptions=DescribeFormatOptions())
     buf_ref = Ref(Buffer())
     @check ccall((:git_describe_format, :libgit2), Cint,
-                 (Ptr{Buffer}, Ptr{Void}, Ptr{DescribeFormatOptions}),
+                 (Ptr{Buffer}, Ptr{Cvoid}, Ptr{DescribeFormatOptions}),
                  buf_ref, result.ptr, Ref(options))
     buf = buf_ref[]
     str = unsafe_string(buf.ptr, buf.size)
@@ -331,23 +331,23 @@ be performed. See [`CheckoutOptions`](@ref) for more information.
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
                  repo.ptr, obj.ptr, Ref(options))
 end
 
 """
-    checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}(); options::CheckoutOptions = CheckoutOptions())
+    checkout_index(repo::GitRepo, idx::Union{GitIndex, Nothing} = nothing; options::CheckoutOptions = CheckoutOptions())
 
-Update the working tree of `repo` to match the index `idx`. If `idx` is null, the
+Update the working tree of `repo` to match the index `idx`. If `idx` is `nothing`, the
 index of `repo` will be used. `options` controls how the checkout will be performed.
 See [`CheckoutOptions`](@ref) for more information.
 """
-function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
+function checkout_index(repo::GitRepo, idx::Union{GitIndex, Nothing} = nothing;
                         options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
                  repo.ptr,
-                 isnull(idx) ? C_NULL : Base.get(idx).ptr,
+                 idx === nothing ? C_NULL : idx.ptr,
                  Ref(options))
 end
 
@@ -363,7 +363,7 @@ Update the index and working tree of `repo` to match the commit pointed to by HE
 """
 function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_head, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{CheckoutOptions}),
+                 (Ptr{Cvoid}, Ptr{CheckoutOptions}),
                  repo.ptr, Ref(options))
 end
 
@@ -380,16 +380,16 @@ The keyword argument `options` sets checkout and merge options for the cherrypic
 """
 function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions = CherrypickOptions())
     @check ccall((:git_cherrypick, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{CherrypickOptions}),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CherrypickOptions}),
                  repo.ptr, commit.ptr, Ref(options))
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
-function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractString...)
+function reset!(repo::GitRepo, obj::Union{GitObject, Nothing}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{StrArrayStruct}),
                  repo.ptr,
-                 isnull(obj) ? C_NULL : Base.get(obj).ptr,
+                 obj === nothing ? C_NULL : obj.ptr,
                  collect(pathspecs))
     return head_oid(repo)
 end
@@ -398,7 +398,7 @@ end
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
                checkout_opts::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_reset, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Cint, Ptr{CheckoutOptions}),
                   repo.ptr, obj.ptr, mode, Ref(checkout_opts))
     return head_oid(repo)
 end
@@ -419,9 +419,9 @@ repo = LibGit2.clone(repo_url, "/home/me/projects/Example")
 function clone(repo_url::AbstractString, repo_path::AbstractString,
                clone_opts::CloneOptions)
     clone_opts_ref = Ref(clone_opts)
-    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Cstring, Cstring, Ref{CloneOptions}),
+            (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Ref{CloneOptions}),
             repo_ptr_ptr, repo_url, repo_path, clone_opts_ref)
     return GitRepo(repo_ptr_ptr[])
 end
@@ -453,7 +453,7 @@ function fetchheads(repo::GitRepo)
     fh = FetchHead[]
     ffcb = fetchhead_foreach_cb()
     @check ccall((:git_repository_fetchhead_foreach, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Any),
+                 (Ptr{Cvoid}, Ptr{Cvoid}, Any),
                  repo.ptr, ffcb, fh)
     return fh
 end
@@ -466,7 +466,7 @@ Return a vector of the names of the remotes of `repo`.
 function remotes(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_list, :libgit2), Cint,
-                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
+                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo.ptr)
     res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
     return res

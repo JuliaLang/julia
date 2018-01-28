@@ -72,7 +72,7 @@ printfdperf[t_] := Module[
 	filename = "/dev/null";
 	fd = OpenWrite[filename];
 	For[i=1, i<=t, ++i,
-		 WriteString[fd, StringForm["`1` `2`\n", i, i]];
+		 WriteString[fd, StringForm["`1` `2`\n", i, i + 1]];
 	];
 	Close[fd];
 ];
@@ -91,6 +91,11 @@ test[And @@ And @@@ Thread /@ Thread[A.ConjugateTranspose[A] == 200]];
 
 (* mandelbrot set: complex arithmetic and comprehensions *)
 
+ClearAll[abs2];
+(*abs2[z_] := Module[
+	Re(z)*Re(z) + Im(z)*Im(z);
+];*)
+
 ClearAll[mandel];
 (*mandel[zin_] := Module[
 	{z, c, maxiter, n},
@@ -98,7 +103,7 @@ ClearAll[mandel];
 	c = z;
 	maxiter = 80;
 	Do[
-		If[ Abs[z] > 2,
+		If[ Abs2[z] > 4,
 			maxiter = n-1;
 			Break[]
 		];
@@ -128,7 +133,7 @@ ClearAll[mandelperf];
 mandelperf[] := Table[mandel[r + i*I], {i, -1., 1., 0.1}, {r, -2.0, 0.5, 0.1}];
 
 test[ Total[mandelperf[], 2] == 14791];
-timeit[mandelperf[], "iteration_mandelbrot"];
+timeit[mandelperf[], "userfunc_mandelbrot"];
 
 (* numeric vector sort *)
 

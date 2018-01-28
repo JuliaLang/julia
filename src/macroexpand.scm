@@ -20,10 +20,9 @@
         ((atom? x)  x)
         ((and (= d 0) (eq? (car x) '$))
          (if (length= x 2)
-             (if (and (length= (cadr x) 2) (eq? (caadr x) 'tuple)
-                      (vararg? (cadadr x)))
-                 ;; splice expr ($ (tuple (... x)))
-                 `(... ,(cadr (cadr (cadr x))))
+             (if (vararg? (cadr x))
+                 ;; splice expr ($ (... x))
+                 `(... ,(cadr (cadr x)))
                  ;; otherwise normal interpolation
                  (cadr x))
              ;; in e.g. `quote quote $$(x...) end end` multiple expressions can be
@@ -210,18 +209,25 @@
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
-  (safe-arg-names
-   (filter (lambda (a) (not (and (pair? a)
-                                 (eq? (car a) 'parameters))))
-           lst)
-   escaped))
+  (receive
+   (params normal) (separate (lambda (a) (and (pair? a)
+                                              (eq? (car a) 'parameters)))
+                             lst)
+   (safe-arg-names
+    (append normal
+            ;; rest keywords name is not a keyword
+            (apply append (map (lambda (a) (filter vararg? a))
+                               params)))
+    escaped)))
 
 ;; arg names from keyword arguments, and positional arguments with escaped names
 (define (safe-llist-keyword-args lst)
-  (let ((kwargs (apply nconc
-                       (map cdr
-                            (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
-                                    lst)))))
+  (let* ((kwargs (apply nconc
+                        (map cdr
+                             (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
+                                     lst))))
+         ;; rest keywords name is not a keyword
+         (kwargs (filter (lambda (x) (not (vararg? x))) kwargs)))
     (append
      (safe-arg-names kwargs #f)
      (safe-arg-names kwargs #t)
@@ -304,9 +310,9 @@
                              ((assignment? arg)
                               `(global
                                 (= ,(unescape (cadr arg))
-                                   ,(resolve-expansion-vars-with-new-env (caddr arg) env m inarg))))
+                                   ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
-                              `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
+                              `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
            ((using import importall export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
@@ -399,11 +405,6 @@
   (if (and (pair? e) (eq? (car e) 'tuple))
       (apply append (map decl-vars* (cdr e)))
       (list (decl-var* e))))
-
-(define (function-def? e)
-  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
-                     (and (eq? (car e) '=) (length= e 3)
-                          (eventually-call? (cadr e))))))
 
 ;; count hygienic / escape pairs
 ;; and fold together a list resulting from applying the function to

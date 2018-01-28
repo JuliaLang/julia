@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
 using Test
+using Printf
+
 
 include("../perfutil.jl")
 
@@ -18,7 +21,7 @@ function parseintperf(t)
     for i=1:t
         n = rand(UInt32)
         s = hex(n)
-        m = UInt32(parse(Int64,s,16))
+        m = UInt32(parse(Int64,s, base = 16))
     end
     @test m == n
     return n
@@ -28,22 +31,25 @@ end
 
 ## array constructors ##
 
-@test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones" "description"
+@test all(fill(1.,200,200) .== 1)
 
 ## matmul and transpose ##
 
-A = ones(200,200)
+A = fill(1.,200,200)
 @test all(A*A' .== 200)
 # @timeit A*A' "AtA" "description"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
+function myabs2(z)
+    return real(z)*real(z) + imag(z)*imag(z)
+end
+
 function mandel(z)
     c = z
     maxiter = 80
     for n = 1:maxiter
-        if abs(z) > 2
+        if myabs2(z) > 4
             return n-1
         end
         z = z^2 + c
@@ -53,7 +59,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
 @test sum(mandelperf()) == 14791
-@timeit mandelperf() "iteration_mandelbrot" "Calculation of mandelbrot set"
+@timeit mandelperf() "userfunc_mandelbrot" "Calculation of mandelbrot set"
 
 ## numeric vector sort ##
 
@@ -122,8 +128,8 @@ function randmatstat(t)
         d = randn(n,n)
         P = [a b c d]
         Q = [a b; c d]
-        v[i] = trace((P.'*P)^4)
-        w[i] = trace((Q.'*Q)^4)
+        v[i] = trace((P'*P)^4)
+        w[i] = trace((Q'*Q)^4)
     end
     return (std(v)/mean(v), std(w)/mean(w))
 end

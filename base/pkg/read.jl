@@ -18,10 +18,10 @@ function available(names=readdir("METADATA"))
         versdir = joinpath("METADATA", pkg, "versions")
         isdir(versdir) || continue
         for ver in readdir(versdir)
-            ismatch(Base.VERSION_REGEX, ver) || continue
+            contains(ver, Base.VERSION_REGEX) || continue
             isfile(versdir, ver, "sha1") || continue
             haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
-            pkgs[pkg][convert(VersionNumber,ver)] = Available(
+            pkgs[pkg][VersionNumber(ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
             )
@@ -39,9 +39,9 @@ function latest(names=readdir("METADATA"))
         isdir(versdir) || continue
         pkgversions = VersionNumber[]
         for ver in readdir(versdir)
-            ismatch(Base.VERSION_REGEX, ver) || continue
+            contains(ver, Base.VERSION_REGEX) || continue
             isfile(versdir, ver, "sha1") || continue
-            push!(pkgversions, convert(VersionNumber,ver))
+            push!(pkgversions, VersionNumber(ver))
         end
         isempty(pkgversions) && continue
         ver = string(maximum(pkgversions))
@@ -64,7 +64,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
-    if isnull(find("REQUIRE", LibGit2.GitIndex(prepo)))
+    if findall("REQUIRE", LibGit2.GitIndex(prepo)) === nothing
         isfile(pkg,"REQUIRE") && return true
     end
     head = string(LibGit2.head_oid(prepo))
@@ -93,7 +93,8 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
                     break
                 end
             else
-                Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
+                @warn """Unknown $pkg commit $(info.sha1[1:8]), metadata may be
+                         ahead of package cache""" maxlog=1
             end
         end
     finally
@@ -113,7 +114,7 @@ function ispinned(prepo::LibGit2.GitRepo)
     LibGit2.isattached(prepo) || return false
     br = LibGit2.branch(prepo)
     # note: regex is based on the naming scheme used in Entry.pin()
-    return ismatch(r"^pinned\.[0-9a-f]{8}\.tmp$", br)
+    return contains(br, r"^pinned\.[0-9a-f]{8}\.tmp$")
 end
 
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
@@ -154,7 +155,8 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
             elseif LibGit2.iscommit(sha1, prepo)
                 LibGit2.merge_base(prepo, head, sha1)
             else
-                Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
+                @warn """Unknown $pkg commit $(sha1[1:8]), metadata may be ahead
+                         of package cache""" maxlog=1
                 continue
             end
             string(base) == sha1 && push!(ancestors,ver)
@@ -164,7 +166,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
         cache_has_head && LibGit2.close(crepo)
     end
     both = sort!(intersect(ancestors,descendants))
-    isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
+    isempty(both) || @warn "$pkg: some versions are both ancestors and descendants of head: $both"
     if !isempty(descendants)
         v = minimum(descendants)
         return VersionNumber(v.major, v.minor, v.patch, ("",), ())
@@ -183,7 +185,7 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
-        if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
+        if findall("REQUIRE", LibGit2.GitIndex(repo)) === nothing
             isfile(pkgreq) && return pkgreq
         end
         string(LibGit2.head_oid(repo))

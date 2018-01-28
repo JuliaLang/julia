@@ -82,3 +82,11 @@ end
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
     (0x87654321, 0x0000000087654321, 0xffffffff87654321, 0xc005d4c4, 0xc000ba9880000000)
 @test_throws ErrorException compiled_conv(Bool, im)
+
+let f = Core.Intrinsics.ashr_int
+    @test f(Int8(-17), 1) == -9
+    @test f(Int32(-1), 33) == -1
+    @test f(Int32(-1), -1) == -1
+    @test f(Int32(-1), -10) == -1
+    @test f(Int32(2), -1) == 0
+end

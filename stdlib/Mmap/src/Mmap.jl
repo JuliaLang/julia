@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Low level module for mmap (memory mapping of files).
 """
@@ -15,10 +17,26 @@ mutable struct Anonymous <: IO
 end
 
 """
-    Mmap.Anonymous(name, readonly, create)
+    Mmap.Anonymous(name::AbstractString="", readonly::Bool=false, create::Bool=true)
 
 Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
-for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
+for use in [`Mmap.mmap`](@ref Mmap.mmap). Used by `SharedArray` for creating shared memory arrays.
+
+# Examples
+```jldoctest
+julia> using Mmap
+
+julia> anon = Mmap.Anonymous();
+
+julia> isreadable(anon)
+true
+
+julia> iswritable(anon)
+true
+
+julia> isopen(anon)
+true
+```
 """
 Anonymous() = Anonymous("",false,true)
 
@@ -173,7 +191,7 @@ function mmap(io::IO,
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(uninitialized, ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -189,32 +207,32 @@ function mmap(io::IO,
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
-        ptr = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int,ptr) == -1)
     else
         name, readonly, create = settings(io)
         szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, DWORD, DWORD, DWORD, Cwstring),
+        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (Cptrdiff_t, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
-                          ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (DWORD, Cint, Cwstring),
+                          ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
-        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, DWORD, DWORD, DWORD, Csize_t),
+        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A, function(x)
+    finalizer(A) do x
         @static if Sys.isunix()
-            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)
+            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
-            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
-            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
+            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
             status || error("could not unmap view: $(Libc.FormatMessage())")
         end
-    end)
+    end
     return A
 end
 
@@ -237,13 +255,39 @@ mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonym
 """
     Mmap.mmap(io, BitArray, [dims, offset])
 
-Create a `BitArray` whose values are linked to a file, using memory-mapping; it has the same
+Create a [`BitArray`](@ref) whose values are linked to a file, using memory-mapping; it has the same
 purpose, works in the same way, and has the same arguments, as [`mmap`](@ref Mmap.mmap), but
 the byte representation is different.
 
-**Example**: `B = Mmap.mmap(s, BitArray, (25,30000))`
+# Examples
+```jldoctest
+julia> using Mmap
 
-This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
+julia> io = open("mmap.bin", "w+");
+
+julia> B = Mmap.mmap(io, BitArray, (25,30000));
+
+julia> B[3, 4000] = true;
+
+julia> Mmap.sync!(B);
+
+julia> close(io);
+
+julia> io = open("mmap.bin", "r+");
+
+julia> C = Mmap.mmap(io, BitArray, (25,30000));
+
+julia> C[3, 4000]
+true
+
+julia> C[2, 4000]
+false
+
+julia> close(io)
+
+julia> rm("mmap.bin")
+```
+This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
               offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
@@ -257,7 +301,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(i->0,Val(N))...)
+    B = BitArray{N}(uninitialized, ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -288,17 +332,17 @@ const MS_SYNC = 4
     Mmap.sync!(array)
 
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
-`BitArray` and the on-disk version.
+[`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    Base.@gc_preserve m @static if Sys.isunix()
+    GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
     else
         systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
-                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), ptr, length(m)) == 0)
+                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)

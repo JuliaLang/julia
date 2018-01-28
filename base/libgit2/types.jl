@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: coalesce
 import Base.@kwdef
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
 
@@ -20,6 +21,7 @@ struct GitHash <: AbstractGitHash
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
 GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
+GitHash(h::GitHash) = h
 
 """
     GitShortHash(hash::GitHash, len::Integer)
@@ -93,7 +95,7 @@ end
 StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ref)
+    ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -119,7 +121,7 @@ end
 Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
-    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
+    ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
 """
@@ -166,42 +168,42 @@ The fields represent:
     file_open_flags::Cint
 
     notify_flags::Cuint         = Consts.CHECKOUT_NOTIFY_NONE
-    notify_cb::Ptr{Void}
-    notify_payload::Ptr{Void}
+    notify_cb::Ptr{Cvoid}
+    notify_payload::Ptr{Cvoid}
 
-    progress_cb::Ptr{Void}
-    progress_payload::Ptr{Void}
+    progress_cb::Ptr{Cvoid}
+    progress_payload::Ptr{Cvoid}
 
     paths::StrArrayStruct
 
-    baseline::Ptr{Void}
-    baseline_index::Ptr{Void}
+    baseline::Ptr{Cvoid}
+    baseline_index::Ptr{Cvoid}
 
     target_directory::Cstring
     ancestor_label::Cstring
     our_label::Cstring
     their_label::Cstring
 
-    perfdata_cb::Ptr{Void}
-    perfdata_payload::Ptr{Void}
+    perfdata_cb::Ptr{Cvoid}
+    perfdata_payload::Ptr{Cvoid}
 end
 
 abstract type Payload end
 
 @kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
-    sideband_progress::Ptr{Void}
-    completion::Ptr{Void}
-    credentials::Ptr{Void}
-    certificate_check::Ptr{Void}
-    transfer_progress::Ptr{Void}
-    update_tips::Ptr{Void}
-    pack_progress::Ptr{Void}
-    push_transfer_progress::Ptr{Void}
-    push_update_reference::Ptr{Void}
-    push_negotiation::Ptr{Void}
-    transport::Ptr{Void}
-    payload::Ptr{Void}
+    sideband_progress::Ptr{Cvoid}
+    completion::Ptr{Cvoid}
+    credentials::Ptr{Cvoid}
+    certificate_check::Ptr{Cvoid}
+    transfer_progress::Ptr{Cvoid}
+    update_tips::Ptr{Cvoid}
+    pack_progress::Ptr{Cvoid}
+    push_transfer_progress::Ptr{Cvoid}
+    push_update_reference::Ptr{Cvoid}
+    push_negotiation::Ptr{Cvoid}
+    transport::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 """
@@ -213,12 +215,12 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
 struct RemoteCallbacks
     cb::RemoteCallbacksStruct
     gcroot::Ref{Any}
-    function RemoteCallbacks(; payload::Union{Payload, Void}=nothing, kwargs...)
+    function RemoteCallbacks(; payload::Union{Payload, Nothing}=nothing, kwargs...)
         p = Ref{Any}(payload)
         if payload === nothing
             pp = C_NULL
         else
-            pp = unsafe_load(Ptr{Ptr{Void}}(Base.unsafe_convert(Ptr{Any}, p)))
+            pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
         end
         return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
     end
@@ -261,9 +263,9 @@ julia> fetch(remote, "master", options=fo)
     version::Cuint               = 1
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
-    credential_cb::Ptr{Void}
-    certificate_cb::Ptr{Void}
-    payload::Ptr{Void}
+    credential_cb::Ptr{Cvoid}
+    certificate_cb::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 @kwdef struct FetchOptionsStruct
@@ -315,10 +317,10 @@ end
     bare::Cint
     localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
     checkout_branch::Cstring
-    repository_cb::Ptr{Void}
-    repository_cb_payload::Ptr{Void}
-    remote_cb::Ptr{Void}
-    remote_cb_payload::Ptr{Void}
+    repository_cb::Ptr{Cvoid}
+    repository_cb_payload::Ptr{Cvoid}
+    remote_cb::Ptr{Cvoid}
+    remote_cb_payload::Ptr{Cvoid}
 end
 
 """
@@ -389,11 +391,11 @@ The fields represent:
     # options controlling which files are in the diff
     ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
     pathspec::StrArrayStruct
-    notify_cb::Ptr{Void}
+    notify_cb::Ptr{Cvoid}
     @static if LibGit2.VERSION >= v"0.24.0"
-        progress_cb::Ptr{Void}
+        progress_cb::Ptr{Cvoid}
     end
-    payload::Ptr{Void}
+    payload::Ptr{Cvoid}
 
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
@@ -569,7 +571,7 @@ The fields represent:
     flags::Cint
     rename_threshold::Cuint           = 50
     target_limit::Cuint               = 200
-    metric::Ptr{Void}
+    metric::Ptr{Cvoid}
     @static if LibGit2.VERSION >= v"0.24.0"
         recursion_limit::Cuint
     end
@@ -856,12 +858,52 @@ Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/g
     name::Cstring
     value::Cstring
     level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Void}
-    payload::Ptr{Void}
+    free::Ptr{Cvoid}
+    payload::Ptr{Cvoid}
 end
 
 function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
+end
+
+"""
+    split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+
+Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
+
+# Examples
+Given the git configuration file containing:
+```
+[credential "https://example.com"]
+    username = me
+```
+
+The `ConfigEntry` would look like the following:
+
+```julia-repl
+julia> entry
+ConfigEntry("credential.https://example.com.username", "me")
+
+julia> split(entry)
+("credential", "https://example.com", "username", "me")
+```
+
+Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
+for more details.
+"""
+function Base.split(ce::ConfigEntry)
+    key = unsafe_string(ce.name)
+
+    # Determine the positions of the delimiters
+    subsection_delim = coalesce(findfirst(equalto('.'), key), 0)
+    name_delim = coalesce(findlast(equalto('.'), key), 0)
+
+    section = SubString(key, 1, subsection_delim - 1)
+    subsection = SubString(key, subsection_delim + 1, name_delim - 1)
+    name = SubString(key, name_delim + 1)
+    value = unsafe_string(ce.value)
+
+    return (section, subsection, name, value)
 end
 
 # Abstract object types
@@ -871,40 +913,40 @@ Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 abstract type GitObject <: AbstractGitObject end
 
 for (typ, owntyp, sup, cname) in [
-    (:GitRepo,           nothing,               :AbstractGitObject, :git_repository),
-    (:GitConfig,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
-    (:GitIndex,          :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
-    (:GitRemote,         :GitRepo,              :AbstractGitObject, :git_remote),
-    (:GitRevWalker,      :GitRepo,              :AbstractGitObject, :git_revwalk),
-    (:GitReference,      :GitRepo,              :AbstractGitObject, :git_reference),
-    (:GitDescribeResult, :GitRepo,              :AbstractGitObject, :git_describe_result),
-    (:GitDiff,           :GitRepo,              :AbstractGitObject, :git_diff),
-    (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
-    (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
-    (:GitBlame,          :GitRepo,              :AbstractGitObject, :git_blame),
-    (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
-    (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
-    (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
-    (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
-    (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
-    (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),
-    (:GitTree,           :GitRepo,              :GitObject,         :git_tree),
-    (:GitTag,            :GitRepo,              :GitObject,         :git_tag),
-    (:GitTreeEntry,      :GitTree,              :AbstractGitObject, :git_tree_entry),
+    (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
+    (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
+    (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
+    (:GitRemote,         :GitRepo,                :AbstractGitObject, :git_remote),
+    (:GitRevWalker,      :GitRepo,                :AbstractGitObject, :git_revwalk),
+    (:GitReference,      :GitRepo,                :AbstractGitObject, :git_reference),
+    (:GitDescribeResult, :GitRepo,                :AbstractGitObject, :git_describe_result),
+    (:GitDiff,           :GitRepo,                :AbstractGitObject, :git_diff),
+    (:GitDiffStats,      :GitRepo,                :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,      :GitRepo,                :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,         :GitRepo,                :AbstractGitObject, :git_rebase),
+    (:GitBlame,          :GitRepo,                :AbstractGitObject, :git_blame),
+    (:GitStatus,         :GitRepo,                :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,     :GitRepo,                :AbstractGitObject, :git_branch_iterator),
+    (:GitConfigIter,     nothing,                 :AbstractGitObject, :git_config_iterator),
+    (:GitUnknownObject,  :GitRepo,                :GitObject,         :git_object),
+    (:GitCommit,         :GitRepo,                :GitObject,         :git_commit),
+    (:GitBlob,           :GitRepo,                :GitObject,         :git_blob),
+    (:GitTree,           :GitRepo,                :GitObject,         :git_tree),
+    (:GitTag,            :GitRepo,                :GitObject,         :git_tag),
+    (:GitTreeEntry,      :GitTree,                :AbstractGitObject, :git_tree_entry),
     ]
 
     if owntyp === nothing
         @eval mutable struct $typ <: $sup
-            ptr::Ptr{Void}
-            function $typ(ptr::Ptr{Void}, fin::Bool=true)
+            ptr::Ptr{Cvoid}
+            function $typ(ptr::Ptr{Cvoid}, fin::Bool=true)
                 # fin=false should only be used when the pointer should not be free'd
                 # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
@@ -912,28 +954,26 @@ for (typ, owntyp, sup, cname) in [
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
-            ptr::Ptr{Void}
-            function $typ(owner::$owntyp, ptr::Ptr{Void}, fin::Bool=true)
+            ptr::Ptr{Cvoid}
+            function $typ(owner::$owntyp, ptr::Ptr{Cvoid}, fin::Bool=true)
                 @assert ptr != C_NULL
                 obj = new(owner, ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Nullable
+        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[3] == :Nothing
             @eval begin
-                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
-                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Void}, fin::Bool=true) =
-                    $typ($owntyp(owner), ptr, fin)
+                $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
         end
     end
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
-            ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
+            ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
                 # will the last finalizer please turn out the lights?
@@ -944,7 +984,7 @@ for (typ, owntyp, sup, cname) in [
 end
 
 ## Calling `GitObject(repo, ...)` will automatically resolve to the appropriate type.
-function GitObject(repo::GitRepo, ptr::Ptr{Void})
+function GitObject(repo::GitRepo, ptr::Ptr{Cvoid})
     T = objtype(Consts.OBJECT(ptr))
     T(repo, ptr)
 end
@@ -960,13 +1000,13 @@ mutable struct GitSignature <: AbstractGitObject
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
         obj = new(ptr)
-        finalizer(obj, Base.close)
+        finalizer(Base.close, obj)
         return obj
     end
 end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
-        ccall((:git_signature_free, :libgit2), Void, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
         obj.ptr = C_NULL
     end
 end
@@ -1046,7 +1086,7 @@ function with_warn(f::Function, ::Type{T}, args...) where T
     try
         with(f, obj)
     catch err
-        warn("$(string(T)) thrown exception: $err")
+        @warn "$(string(T)) thrown exception:" exception=err
     end
 end
 
@@ -1062,13 +1102,13 @@ Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
-Consts.OBJECT(ptr::Ptr{Void}) =
-    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr)
+Consts.OBJECT(ptr::Ptr{Cvoid}) =
+    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
 
 """
     objtype(obj_type::Consts.OBJECT)
 
-Returns the type corresponding to the enum value.
+Return the type corresponding to the enum value.
 """
 function objtype(obj_type::Consts.OBJECT)
     if obj_type == Consts.OBJ_COMMIT
@@ -1088,77 +1128,76 @@ end
 
 import Base.securezero!
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
+abstract type AbstractCredential end
 
 """
-    isfilled(cred::AbstractCredentials) -> Bool
+    isfilled(cred::AbstractCredential) -> Bool
 
 Verifies that a credential is ready for use in authentication.
 """
-isfilled(::AbstractCredentials)
+isfilled(::AbstractCredential)
 
-"Credentials that support only `user` and `password` parameters"
-mutable struct UserPasswordCredentials <: AbstractCredentials
+"Credential that support only `user` and `password` parameters"
+mutable struct UserPasswordCredential <: AbstractCredential
     user::String
     pass::String
-    function UserPasswordCredentials(user::AbstractString="", pass::AbstractString="")
+    function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
         c = new(user, pass)
-        finalizer(c, securezero!)
+        finalizer(securezero!, c)
         return c
     end
 
     # Deprecated constructors
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
+    function UserPasswordCredential(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
         Base.depwarn(string(
-            "`UserPasswordCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "`UserPasswordCredential` no longer supports the `prompt_if_incorrect` parameter. ",
             "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :UserPasswordCredentials)
-        UserPasswordCredentials(u, p)
+            "instead."), :UserPasswordCredential)
+        UserPasswordCredential(u, p)
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool) = UserPasswordCredentials("","",prompt_if_incorrect)
+    UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredentials)
+function securezero!(cred::UserPasswordCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     return cred
 end
 
-function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
+function Base.:(==)(a::UserPasswordCredential, b::UserPasswordCredential)
     a.user == b.user && a.pass == b.pass
 end
 
-function isfilled(cred::UserPasswordCredentials)
+function isfilled(cred::UserPasswordCredential)
     !isempty(cred.user) && !isempty(cred.pass)
 end
 
-"SSH credentials type"
-mutable struct SSHCredentials <: AbstractCredentials
+"SSH credential type"
+mutable struct SSHCredential <: AbstractCredential
     user::String
     pass::String
     prvkey::String
     pubkey::String
-    function SSHCredentials(user::AbstractString="", pass::AbstractString="",
+    function SSHCredential(user::AbstractString="", pass::AbstractString="",
                             prvkey::AbstractString="", pubkey::AbstractString="")
         c = new(user, pass, prvkey, pubkey)
-        finalizer(c, securezero!)
+        finalizer(securezero!, c)
         return c
     end
 
     # Deprecated constructors
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
+    function SSHCredential(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
         Base.depwarn(string(
-            "`SSHCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "`SSHCredential` no longer supports the `prompt_if_incorrect` parameter. ",
             "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :SSHCredentials)
-        SSHCredentials(u, p, prvkey, pubkey)
+            "instead."), :SSHCredential)
+        SSHCredential(u, p, prvkey, pubkey)
     end
-    SSHCredentials(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredentials(u,p,"","",prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool) = SSHCredentials("","","","",prompt_if_incorrect)
+    SSHCredential(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredential(u,p,"","",prompt_if_incorrect)
+    SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function securezero!(cred::SSHCredentials)
+function securezero!(cred::SSHCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     securezero!(cred.prvkey)
@@ -1166,19 +1205,19 @@ function securezero!(cred::SSHCredentials)
     return cred
 end
 
-function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
+function Base.:(==)(a::SSHCredential, b::SSHCredential)
     a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
-function isfilled(cred::SSHCredentials)
+function isfilled(cred::SSHCredential)
     !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
     (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
 end
 
-"Credentials that support caching"
-struct CachedCredentials <: AbstractCredentials
-    cred::Dict{String,AbstractCredentials}
-    CachedCredentials() = new(Dict{String,AbstractCredentials}())
+"Caches credential information for re-use"
+struct CachedCredentials
+    cred::Dict{String,AbstractCredential}
+    CachedCredentials() = new(Dict{String,AbstractCredential}())
 end
 
 Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
@@ -1190,16 +1229,15 @@ function securezero!(p::CachedCredentials)
     return p
 end
 
-function approve(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+function approve(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     cache.cred[cred_id] = cred
     nothing
 end
 
-function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     if haskey(cache.cred, cred_id)
-        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
         delete!(cache.cred, cred_id)
     end
     nothing
@@ -1213,16 +1251,20 @@ A `CredentialPayload` instance is expected to be `reset!` whenever it will be us
 different URL.
 """
 mutable struct CredentialPayload <: Payload
-    explicit::Nullable{AbstractCredentials}
-    cache::Nullable{CachedCredentials}
-    allow_ssh_agent::Bool  # Allow the use of the SSH agent to get credentials
-    allow_prompt::Bool     # Allow prompting the user for credentials
+    explicit::Union{AbstractCredential, Nothing}
+    cache::Union{CachedCredentials, Nothing}
+    allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials
+    allow_git_helpers::Bool  # Allow the use of git credential helpers
+    allow_prompt::Bool       # Allow prompting the user for credentials
+
+    config::GitConfig
 
     # Ephemeral state fields
-    credential::Nullable{AbstractCredentials}
+    credential::Union{AbstractCredential, Nothing}
     first_pass::Bool
     use_ssh_agent::Bool
     use_env::Bool
+    use_git_helpers::Bool
     remaining_prompts::Int
 
     url::String
@@ -1231,34 +1273,39 @@ mutable struct CredentialPayload <: Payload
     host::String
 
     function CredentialPayload(
-            credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
-            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}();
+            credential::Union{AbstractCredential, Nothing}=nothing,
+            cache::Union{CachedCredentials, Nothing}=nothing,
+            config::GitConfig=GitConfig();
             allow_ssh_agent::Bool=true,
+            allow_git_helpers::Bool=true,
             allow_prompt::Bool=true)
-        payload = new(credential, cache, allow_ssh_agent, allow_prompt)
+
+        payload = new(credential, cache, allow_ssh_agent, allow_git_helpers, allow_prompt, config)
         return reset!(payload)
     end
 end
 
-function CredentialPayload(credential::AbstractCredentials; kwargs...)
-    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
+function CredentialPayload(credential::AbstractCredential; kwargs...)
+    CredentialPayload(credential, nothing; kwargs...)
 end
 
 function CredentialPayload(cache::CachedCredentials; kwargs...)
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache); kwargs...)
+    CredentialPayload(nothing, cache; kwargs...)
 end
 
 """
-    reset!(payload) -> CredentialPayload
+    reset!(payload, [config]) -> CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
-the credential callback.
+the credential callback. If a `config` is provided the configuration will also be updated.
 """
-function reset!(p::CredentialPayload)
-    p.credential = Nullable{AbstractCredentials}()
+function reset!(p::CredentialPayload, config::GitConfig=p.config)
+    p.config = config
+    p.credential = nothing
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
     p.use_env = true
+    p.use_git_helpers = p.allow_git_helpers
     p.remaining_prompts = p.allow_prompt ? 3 : 0
     p.url = ""
     p.scheme = ""
@@ -1269,31 +1316,51 @@ function reset!(p::CredentialPayload)
 end
 
 """
-    approve(payload::CredentialPayload) -> Void
+    approve(payload::CredentialPayload; shred::Bool=true) -> Nothing
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
-"""
-function approve(p::CredentialPayload)
-    isnull(p.credential) && return  # No credentials were used
-    cred = unsafe_get(p.credential)
 
-    if !isnull(p.cache)
-        approve(unsafe_get(p.cache), cred, p.url)
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
+"""
+function approve(p::CredentialPayload; shred::Bool=true)
+    cred = p.credential
+    cred === nothing && return  # No credentials were used
+
+    if p.cache !== nothing
+        approve(p.cache, cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
+    if p.allow_git_helpers
+        approve(p.config, cred, p.url)
+    end
+
+    shred && securezero!(cred)
+    nothing
 end
 
 """
-    reject(payload::CredentialPayload) -> Void
+    reject(payload::CredentialPayload; shred::Bool=true) -> Nothing
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.
-"""
-function reject(p::CredentialPayload)
-    isnull(p.credential) && return  # No credentials were used
-    cred = unsafe_get(p.credential)
 
-    if !isnull(p.cache)
-        reject(unsafe_get(p.cache), cred, p.url)
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
+"""
+function reject(p::CredentialPayload; shred::Bool=true)
+    cred = p.credential
+    cred === nothing && return  # No credentials were used
+
+    if p.cache !== nothing
+        reject(p.cache, cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
+    if p.allow_git_helpers
+        reject(p.config, cred, p.url)
+    end
+
+    shred && securezero!(cred)
+    nothing
 end

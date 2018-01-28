@@ -7,32 +7,42 @@
 # they are also used elsewhere where Int128/UInt128 support is separated out,
 # such as in hashing2.jl
 
-const BitSigned64_types      = (Int8, Int16, Int32, Int64)
-const BitUnsigned64_types    = (UInt8, UInt16, UInt32, UInt64)
+const BitSigned32_types      = (Int8, Int16, Int32)
+const BitUnsigned32_types    = (UInt8, UInt16, UInt32)
+const BitInteger32_types     = (BitSigned32_types..., BitUnsigned32_types...)
+
+const BitSigned64_types      = (BitSigned32_types..., Int64)
+const BitUnsigned64_types    = (BitUnsigned32_types..., UInt64)
 const BitInteger64_types     = (BitSigned64_types..., BitUnsigned64_types...)
+
 const BitSigned_types        = (BitSigned64_types..., Int128)
 const BitUnsigned_types      = (BitUnsigned64_types..., UInt128)
 const BitInteger_types       = (BitSigned_types..., BitUnsigned_types...)
+
 const BitSignedSmall_types   = Int === Int64 ? ( Int8,  Int16,  Int32) : ( Int8,  Int16)
 const BitUnsignedSmall_types = Int === Int64 ? (UInt8, UInt16, UInt32) : (UInt8, UInt16)
 const BitIntegerSmall_types  = (BitSignedSmall_types..., BitUnsignedSmall_types...)
 
+const BitSigned32      = Union{BitSigned32_types...}
+const BitUnsigned32    = Union{BitUnsigned32_types...}
+const BitInteger32     = Union{BitInteger32_types...}
+
 const BitSigned64      = Union{BitSigned64_types...}
 const BitUnsigned64    = Union{BitUnsigned64_types...}
 const BitInteger64     = Union{BitInteger64_types...}
+
 const BitSigned        = Union{BitSigned_types...}
 const BitUnsigned      = Union{BitUnsigned_types...}
 const BitInteger       = Union{BitInteger_types...}
+
 const BitSignedSmall   = Union{BitSignedSmall_types...}
 const BitUnsignedSmall = Union{BitUnsignedSmall_types...}
 const BitIntegerSmall  = Union{BitIntegerSmall_types...}
+
 const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
-
-throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
-    (@_noinline_meta; throw(InexactError(f, T, val)))
 
 ## integer comparisons ##
 
@@ -51,7 +61,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 """
     isodd(x::Integer) -> Bool
 
-Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> isodd(9)
@@ -66,7 +76,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 """
     iseven(x::Integer) -> Bool
 
-Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
 ```jldoctest
 julia> iseven(9)
@@ -207,7 +217,7 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::Signed, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
+mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
@@ -419,75 +429,19 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::Int) =
     select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
-function is_top_bit_set(x::BitInteger)
-    @_inline_meta
-    lshr_int(x, (sizeof(x) << 0x03) - 1) == rem(0x01, typeof(x))
-end
-function check_top_bit(x::BitInteger)
-    @_inline_meta
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
-    x
-end
-
-## integer conversions ##
-
-function checked_trunc_sint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
-    y = trunc_int(To, x)
-    back = sext_int(From, y)
-    x == back || throw_inexacterror(:trunc, To, x)
-    y
-end
-
-function checked_trunc_uint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
-    y = trunc_int(To, x)
-    back = zext_int(From, y)
-    x == back || throw_inexacterror(:trunc, To, x)
-    y
-end
-
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size
-            if to <: Signed
-                if from <: Unsigned
-                    @eval convert(::Type{$to}, x::($from)) =
-                        checked_trunc_sint($to, check_top_bit(x))
-                else
-                    @eval convert(::Type{$to}, x::($from)) =
-                        checked_trunc_sint($to, x)
-                end
-            else
-                @eval convert(::Type{$to}, x::($from)) =
-                    checked_trunc_uint($to, x)
-            end
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
-            # Bools use i8 storage and may have garbage in their 7 high bits
-            @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
             if from <: Signed
-                if to <: Unsigned
-                    @eval convert(::Type{$to}, x::($from)) =
-                        sext_int($to, check_top_bit(x))
-                else
-                    @eval convert(::Type{$to}, x::($from)) =
-                        sext_int($to, x)
-                end
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
-                @eval convert(::Type{$to}, x::($from)) = zext_int($to, x)
                 @eval rem(x::($from), ::Type{$to}) = convert($to, x)
             end
         else
-            if !((from <: Signed) === (to <: Signed))
-                # raise InexactError if x's top bit is set
-                @eval convert(::Type{$to}, x::($from)) = bitcast($to, check_top_bit(x))
-            else
-                @eval convert(::Type{$to}, x::($from)) = bitcast($to, x)
-            end
             @eval rem(x::($from), ::Type{$to}) = bitcast($to, x)
         end
     end
@@ -496,7 +450,7 @@ end
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documention two function signatures at the same time
 # doesn't work either at this point.
-if module_name(@__MODULE__) === :Base
+if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
         @eval @doc ("""
             rem(x::Integer, T::Type{<:Integer}) -> T
@@ -522,16 +476,6 @@ rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
-for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
-    @eval convert(::Type{Signed}, x::$Tu) = convert($Ts, x)
-    @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)
-end
-
-convert(::Type{Signed}, x::Union{Float32, Float64, Bool}) = convert(Int, x)
-convert(::Type{Unsigned}, x::Union{Float32, Float64, Bool}) = convert(UInt, x)
-
-convert(::Type{Integer}, x::Integer) = x
-convert(::Type{Integer}, x::Real) = convert(Signed, x)
 
 """
     trunc([T,] x, [digits, [base]])
@@ -593,10 +537,23 @@ macro uint128_str(s)
 end
 
 macro big_str(s)
-    n = tryparse(BigInt, s)
-    !isnull(n) && return get(n)
-    n = tryparse(BigFloat, s)
-    !isnull(n) && return get(n)
+    if '_' in s
+        # remove _ in s[2:end-1]
+        bf = IOBuffer(lastindex(s))
+        print(bf, s[1])
+        for c in SubString(s, 2, lastindex(s)-1)
+            c != '_' && print(bf, c)
+        end
+        print(bf, s[end])
+        seekstart(bf)
+        n = tryparse(BigInt, String(take!(bf)))
+        n === nothing || return n
+    else
+        n = tryparse(BigInt, s)
+        n === nothing || return n
+        n = tryparse(BigFloat, s)
+        n === nothing || return n
+    end
     message = "invalid number format $s for BigInt or BigFloat"
     return :(throw(ArgumentError($message)))
 end

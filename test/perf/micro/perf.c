@@ -57,11 +57,15 @@ double *matmul_aat(int n, double *b) {
     return c;
 }
 
+double cabs2(double complex z) {
+  return creal(z)*creal(z) + cimag(z)*cimag(z);
+}
+
 int mandel(double complex z) {
     int maxiter = 80;
     double complex c = z;
     for (int n = 0; n < maxiter; ++n) {
-        if (cabs(z) > 2.0) {
+        if (cabs2(z) > 4.0) {
             return n;
         }
         z = z*z+c;
@@ -169,8 +173,8 @@ struct double_pair randmatstat(int t) {
                     4*n, 4*n, 4*n, 1.0, PtP1, 4*n, PtP1, 4*n, 0.0, PtP2, 4*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     4*n, 4*n, 4*n, 1.0, PtP2, 4*n, PtP2, 4*n, 0.0, PtP1, 4*n);
-        for (int j=0; j < n; j++) {
-            v[i] += PtP1[(n+1)*j];
+        for (int j=0; j < 4*n; j++) {
+            v[i] += PtP1[(4*n+1)*j];
         }
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
@@ -219,7 +223,7 @@ void printfd(int n) {
     FILE *f = fopen("/dev/null", "w");
     long i = 0;
     for (i = 0; i < n; i++)
-        fprintf(f, "%ld %ld\n", i, i);
+        fprintf(f, "%ld %ld\n", i, i+1);
     fclose(f);
 }
 
@@ -321,7 +325,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     assert(mandel_sum2 == 14791 * NITER);
-    print_perf("iteration_mandelbrot", tmin / 100);
+    print_perf("userfunc_mandelbrot", tmin / 100);
 
     // sort
     tmin = INFINITY;

@@ -4,14 +4,14 @@
 """
     ReentrantLock()
 
-Creates a reentrant lock for synchronizing Tasks.
+Creates a reentrant lock for synchronizing [`Task`](@ref)s.
 The same task can acquire the lock as many times as required.
-Each `lock` must be matched with an `unlock`.
+Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
-This lock is NOT threadsafe. See `Threads.Mutex` for a threadsafe lock.
+This lock is NOT threadsafe. See [`Threads.Mutex`](@ref) for a threadsafe lock.
 """
 mutable struct ReentrantLock
-    locked_by::Nullable{Task}
+    locked_by::Union{Task, Nothing}
     cond_wait::Condition
     reentrancy_cnt::Int
 
@@ -19,24 +19,24 @@ mutable struct ReentrantLock
 end
 
 """
-    islocked(the_lock) -> Status (Boolean)
+    islocked(lock) -> Status (Boolean)
 
-Check whether the lock is held by any task/thread.
-This should not be used for synchronization (see instead `trylock`).
+Check whether the `lock` is held by any task/thread.
+This should not be used for synchronization (see instead [`trylock`](@ref)).
 """
 function islocked(rl::ReentrantLock)
     return rl.reentrancy_cnt != 0
 end
 
 """
-    trylock(the_lock) -> Success (Boolean)
+    trylock(lock) -> Success (Boolean)
 
-Acquires the lock if it is available,
-returning `true` if successful.
+Acquire the lock if it is available,
+and return `true` if successful.
 If the lock is already locked by a different task/thread,
-returns `false`.
+return `false`.
 
-Each successful `trylock` must be matched by an `unlock`.
+Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
 function trylock(rl::ReentrantLock)
     t = current_task()
@@ -44,7 +44,7 @@ function trylock(rl::ReentrantLock)
         rl.locked_by = t
         rl.reentrancy_cnt = 1
         return true
-    elseif t == get(rl.locked_by)
+    elseif t == notnothing(rl.locked_by)
         rl.reentrancy_cnt += 1
         return true
     end
@@ -52,13 +52,13 @@ function trylock(rl::ReentrantLock)
 end
 
 """
-    lock(the_lock)
+    lock(lock)
 
-Acquires the lock when it becomes available.
+Acquire the `lock` when it becomes available.
 If the lock is already locked by a different task/thread,
-it waits for it to become available.
+wait for it to become available.
 
-Each `lock` must be matched by an `unlock`.
+Each `lock` must be matched by an [`unlock`](@ref).
 """
 function lock(rl::ReentrantLock)
     t = current_task()
@@ -67,7 +67,7 @@ function lock(rl::ReentrantLock)
             rl.locked_by = t
             rl.reentrancy_cnt = 1
             return
-        elseif t == get(rl.locked_by)
+        elseif t == notnothing(rl.locked_by)
             rl.reentrancy_cnt += 1
             return
         end
@@ -76,12 +76,12 @@ function lock(rl::ReentrantLock)
 end
 
 """
-    unlock(the_lock)
+    unlock(lock)
 
-Releases ownership of the lock.
+Releases ownership of the `lock`.
 
-If this is a recursive lock which has been acquired before, it
-just decrements an internal counter and returns immediately.
+If this is a recursive lock which has been acquired before, decrement an
+internal counter and return immediately.
 """
 function unlock(rl::ReentrantLock)
     if rl.reentrancy_cnt == 0
@@ -118,7 +118,7 @@ end
 """
     Semaphore(sem_size)
 
-Creates a counting semaphore that allows at most `sem_size`
+Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be mached with a release.
 

@@ -1,20 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Provide the [`SharedArray`](@ref) type. It represents an array, which is shared across multiple processes, on a single machine.
 """
 module SharedArrays
 
-using Mmap, Base.Distributed
+using Mmap, Distributed, Random
 
-import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
-             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copy!, unsafe_convert
-import Base.Random
-import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
-import Base.Distributed: RRID, procs
+import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+import Random
+using Serialization
+using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
+import Serialization: serialize, deserialize
+import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
+using Printf: @sprintf
 
-export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindexes
+export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -34,12 +39,12 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
-    # this can be removed when @parallel or its equivalent supports looping on
+    # this can be removed when @distributed or its equivalent supports looping on
     # a subset of workers.
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
-        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
+        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(uninitialized, ntuple(d->0,N)), 1:0))
         sa_refs[S.id] = WeakRef(S)
         S
     end
@@ -57,7 +62,7 @@ host.  If `N` is specified by calling `SharedArray{T,N}(dims)`, then
 `N` must match the length of `dims`.
 
 If `pids` is left unspecified, the shared array will be mapped across all processes on the
-current host, including the master. But, `localindexes` and `indexpids` will only refer to
+current host, including the master. But, `localindices` and `indexpids` will only refer to
 worker processes. This facilitates work distribution code to use workers for actual
 computation with the master process acting as a driver.
 
@@ -83,7 +88,7 @@ file is mmapped into the host memory, with the following consequences:
 
 If `pids` is left unspecified, the shared array will be mapped across
 all processes on the current host, including the master. But,
-`localindexes` and `indexpids` will only refer to worker
+`localindices` and `indexpids` will only refer to worker
 processes. This facilitates work distribution code to use workers for
 actual computation with the master process acting as a driver.
 
@@ -105,7 +110,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     pids, onlocalhost = shared_pids(pids)
 
     local shm_seg_name = ""
-    local s = Array{T}(ntuple(d->0,N))
+    local s = Array{T}(uninitialized, ntuple(d->0,N))
     local S
     local shmmem_create_pid
     try
@@ -125,7 +130,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Vector{Future}(length(pids))
+        refs = Vector{Future}(uninitialized, length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -202,11 +207,11 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     end
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Vector{Future}(length(pids))
+    refs = Vector{Future}(uninitialized, length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
-    s = Array{T}(ntuple(d->0,N))
+    s = Array{T}(uninitialized, ntuple(d->0,N))
     if onlocalhost
         s = func_mmap(mode)
         refs[1] = remotecall(pids[1]) do
@@ -255,7 +260,7 @@ function initialize_shared_array(S, onlocalhost, init, pids)
         end
     end
 
-    finalizer(S, finalize_refs)
+    finalizer(finalize_refs, S)
     S
 end
 
@@ -267,7 +272,7 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
-        S.s = Array{T}(ntuple(d->0,N))
+        S.s = Array{T}(uninitialized, ntuple(d->0,N))
         delete!(sa_refs, S.id)
     end
     S
@@ -286,7 +291,7 @@ function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
-    refs = Array{Future}(length(a.pids))
+    refs = Vector{Future}(uninitialized, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
             reshape(fetch(r),d)
@@ -323,41 +328,41 @@ sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
 """
-    localindexes(S::SharedArray)
+    localindices(S::SharedArray)
 
-Returns a range describing the "default" indexes to be handled by the
+Returns a range describing the "default" indices to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
 (or any process for which [`indexpids`](@ref) returns 0).
 
-It's worth emphasizing that `localindexes` exists purely as a
+It's worth emphasizing that `localindices` exists purely as a
 convenience, and you can partition work on the array among workers any
-way you wish. For a `SharedArray`, all indexes should be equally fast
+way you wish. For a `SharedArray`, all indices should be equally fast
 for each worker process.
 """
-localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
+localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 
-function convert(::Type{SharedArray}, A::Array)
+function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
-function convert(::Type{SharedArray{T}}, A::Array) where T
+function SharedArray{T}(A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
-function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
+function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     S = SharedArray{TS,ndims(A)}(size(A))
-    copy!(S, A)
+    copyto!(S, A)
 end
 
-function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
+function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
-    copy!(sdata(R), sdata(S))
+    copyto!(sdata(R), sdata(S))
     stackdict[S] = R
     return R
 end
@@ -415,9 +420,9 @@ function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     else
         S.pidx = 0
         if empty_local
-            S.s = Array{T}(ntuple(d->0,N))
+            S.s = Array{T}(uninitialized, ntuple(d->0,N))
         end
-        S.loc_subarr_1d = view(Array{T}(ntuple(d->0,N)), 1:0)
+        S.loc_subarr_1d = view(Array{T}(uninitialized, ntuple(d->0,N)), 1:0)
     end
 end
 
@@ -488,7 +493,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     end
 end
 
-convert(::Type{Array}, S::SharedArray) = S.s
+Array(S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
 getindex(S::SharedArray, i::Real) = getindex(S.s, i)
@@ -504,7 +509,7 @@ function fill!(S::SharedArray, v)
     return S
 end
 
-function rand!(S::SharedArray{T}) where T
+function Random.rand!(S::SharedArray{T}) where T
     f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
@@ -555,12 +560,12 @@ reduce(f, S::SharedArray) =
 
 
 function map!(f, S::SharedArray, Q::SharedArray)
-    if (S !== Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+    if (S !== Q) && (procs(S) != procs(Q) || localindices(S) != localindices(Q))
         throw(ArgumentError("incompatible source and destination arguments"))
     end
     @sync for p in procs(S)
         @spawnat p begin
-            for idx in localindexes(S)
+            for idx in localindices(S)
                 S.s[idx] = f(Q.s[idx])
             end
         end
@@ -568,9 +573,9 @@ function map!(f, S::SharedArray, Q::SharedArray)
     return S
 end
 
-copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
+copyto!(S::SharedArray, A::Array) = (copyto!(S.s, A); S)
 
-function copy!(S::SharedArray, R::SharedArray)
+function copyto!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
     ps = intersect(procs(S), procs(R))
     isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))
@@ -626,7 +631,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local A = nothing
 
     if (prod(dims) == 0) || (sizeof(T) == 0)
-        return Array{T}(dims)
+        return Array{T}(uninitialized, dims)
     end
 
     try
@@ -688,5 +693,6 @@ end # os-test
            SharedArray{T}(filename, dims, offset; kwargs...))
 @deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
            SharedArray{T}(filename, dims, offset; kwargs...))
+@deprecate localindexes localindices
 
 end # module

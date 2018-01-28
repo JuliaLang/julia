@@ -4,13 +4,13 @@
 struct JLOptions
     quiet::Int8
     banner::Int8
-    julia_home::Ptr{UInt8}
+    julia_bindir::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
     nprocs::Int32
-    machinefile::Ptr{UInt8}
+    machine_file::Ptr{UInt8}
     isinteractive::Int8
     color::Int8
     historyfile::Int8
@@ -43,7 +43,7 @@ end
 # This runs early in the sysimage != is not defined yet
 if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
 else
-    ccall(:jl_throw, Void, (Any,), "Option structure mismatch")
+    ccall(:jl_throw, Cvoid, (Any,), "Option structure mismatch")
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))

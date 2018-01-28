@@ -5,11 +5,11 @@
 import Core.Intrinsics: cglobal, bitcast
 
 """
-    cglobal((symbol, library) [, type=Void])
+    cglobal((symbol, library) [, type=Cvoid])
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
 in [`ccall`](@ref).
-Returns a `Ptr{Type}`, defaulting to `Ptr{Void}` if no `Type` argument is
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
 supplied.
 The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
 respectively.
@@ -17,7 +17,7 @@ respectively.
 cglobal
 
 """
-    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
+    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Cvoid}
 
 Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
 value in the callback function is a must for situations where Julia cannot infer the return
@@ -30,10 +30,10 @@ julia> function foo(x::Int, y::Int)
        end
 
 julia> cfunction(foo, Int, Tuple{Int,Int})
-Ptr{Void} @0x000000001b82fcd0
+Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     const Cchar = Int8
@@ -90,14 +90,16 @@ Cwchar_t
     end
 end
 
-# construction from typed pointers
-convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
-convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
+# construction from pointers
+Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
+(::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
 
-# construction from untyped pointers
-convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
+convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = Ptr{T}(p)
+convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = Ptr{T}(p)
 
 """
     pointer(array [, index])
@@ -125,7 +127,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
+    v = transcode(Cwchar_t, String(s))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -138,7 +140,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
+function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -157,7 +159,8 @@ function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
 end
 
 # symbols are guaranteed not to contain embedded NUL
-convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+cconvert(::Type{Cstring}, s::Symbol) = s
+unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 @static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
@@ -171,7 +174,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = Vector{UInt8}(String(s))
+    bytes = codeunits(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -199,19 +202,20 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
+transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(src))
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
+transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Vector{UInt8})
+function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -339,8 +343,8 @@ end
 # reennable_sigint is provided so that immediate ctrl-c handling is
 # re-enabled within a sigatomic region, e.g. inside a Julia callback function
 # within a long-running C routine.
-sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
-sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Cvoid, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 
 """
     disable_sigint(f::Function)
@@ -382,7 +386,7 @@ function reenable_sigint(f::Function)
 end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
 function expand_ccallable(rt, def)

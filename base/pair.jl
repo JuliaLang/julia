@@ -1,16 +1,43 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Pair(x, y)
+    x => y
+
+Construct a `Pair` object with type `Pair{typeof(x), typeof(y)}`. The elements
+are stored in the fields `first` and `second`. They can also be accessed via
+iteration.
+
+See also: [`Dict`](@ref)
+
+# Examples
+```jldoctest
+julia> p = "foo" => 7
+"foo" => 7
+
+julia> typeof(p)
+Pair{String,Int64}
+
+julia> p.first
+"foo"
+
+julia> for x in p
+           println(x)
+       end
+foo
+7
+```
+"""
 struct Pair{A,B}
     first::A
     second::B
 end
-
 const => = Pair
 
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
-eltype(p::Pair{A,B}) where {A,B} = Union{A,B}
+eltype(p::Type{Pair{A,B}}) where {A,B} = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -25,7 +52,8 @@ getindex(p::Pair,i::Int) = getfield(p,i)
 getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
 reverse(p::Pair{A,B}) where {A,B} = Pair{B,A}(p.second, p.first)
 
-endof(p::Pair) = 2
+firstindex(p::Pair) = 1
+lastindex(p::Pair) = 2
 length(p::Pair) = 2
 first(p::Pair) = p.first
 last(p::Pair) = p.second

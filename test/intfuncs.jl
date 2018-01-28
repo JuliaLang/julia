@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "gcd/lcm" begin
     # Int32 and Int64 take different code paths -- test both
     for T in (Int32, Int64)
@@ -133,21 +135,21 @@ end
 
     @test base(2, 5, 7) == "0000101"
 
-    @test bits(Int16(3)) == "0000000000000011"
-    @test bits('3') == "00000000000000000000000000110011"
-    @test bits(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
+    @test bitstring(Int16(3)) == "0000000000000011"
+    @test bitstring('3') == "00110011000000000000000000000000"
+    @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
-    @test bits(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, 2) == [0, 0, 1]
-    @test digits(5, 3) == [2, 1]
+    @test digits(4, base = 2) == [0, 0, 1]
+    @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, b)" for T in (Int, UInt, BigInt, Int32)
-            @test digits(T(8163), -10) == [3, 4, 2, 2, 1]
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+            @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
-                @test digits(T(-8163), -10) == [7, 7, 9, 9]
+                @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
             end
         end
         @test [base(b, n)
@@ -214,10 +216,10 @@ end
     end
 end
 # issue #9786
-let ptr = Ptr{Void}(typemax(UInt))
+let ptr = Ptr{Cvoid}(typemax(UInt))
     for T in (Int, Cssize_t)
         @test T(ptr) == -1
-        @test ptr == Ptr{Void}(T(ptr))
+        @test ptr == Ptr{Cvoid}(T(ptr))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
 end

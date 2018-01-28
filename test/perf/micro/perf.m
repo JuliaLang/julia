@@ -24,7 +24,7 @@ function perf()
 	
 	mandel(complex(-.53,.68));
 	assert(sum(sum(mandelperf(true))) == 14791)
-	timeit('iteration_mandelbrot', @mandelperf, true)
+	timeit('userfunc_mandelbrot', @mandelperf, true)
 	
 	assert(issorted(sortperf(5000)))
 	timeit('recursion_quicksort', @sortperf, 5000)
@@ -106,11 +106,15 @@ end
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
+function r = abs2(z)
+    r = real(z)*real(z) + imag(z)*imag(z);
+end
+
 function n = mandel(z)
     n = 0;
     c = z;
     for n=0:79
-        if abs(z)>2
+        if abs2(z)>4
             return
         end
         z = z^2+c;
@@ -224,7 +228,7 @@ end
 function printfd(n)
     f = fopen('/dev/null','w');
     for i = 1:n
-        fprintf(f, '%d %d\n', i, i);
+        fprintf(f, '%d %d\n', i, i + 1);
     end
     fclose(f);
 end

@@ -40,7 +40,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     repo = if isdir(cache)
         LibGit2.GitRepo(cache) # open repo, free it at the end
     else
-        info("Cloning cache of $pkg from $normalized_url")
+        @info "Cloning cache of $pkg from $normalized_url"
         try
             # clone repo, free it at the end
             LibGit2.clone(normalized_url, cache, isbare = true, remote_cb = LibGit2.mirror_cb())
@@ -58,11 +58,11 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     end
     try
         LibGit2.set_remote_url(repo, "origin", normalized_url)
-        in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
+        in_cache = BitVector(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         if !all(in_cache)
-            info("Updating cache of $pkg...")
+            @info "Updating cache of $pkg..."
             LibGit2.fetch(repo)
-            in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
+            in_cache = BitVector(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         end
         sha1s[.!in_cache]
     finally

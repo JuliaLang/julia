@@ -5,7 +5,7 @@ Julia provides a variety of runtime reflection capabilities.
 ## Module bindings
 
 The exported names for a `Module` are available using [`names(m::Module)`](@ref), which will return
-an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, true)`
+an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, all = true)`
 returns symbols for all bindings in `m`, regardless of export status.
 
 ## DataType fields
@@ -91,12 +91,12 @@ julia> macroexpand(@__MODULE__, :(@edit println("")) )
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
 and depth-nested detail views for any expression.
 
-Finally, the [`expand`](@ref) function gives the `lowered` form of any expression and is of
+Finally, the [`Meta.lower`](@ref) function gives the `lowered` form of any expression and is of
 particular interest for understanding both macros and top-level statements such as function declarations
 and variable assignments:
 
 ```jldoctest
-julia> expand(@__MODULE__, :(f() = 1) )
+julia> Meta.lower(@__MODULE__, :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
         $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin
