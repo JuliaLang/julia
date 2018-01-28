@@ -850,6 +850,15 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     return jl_new_bits(ty, (char*)v + offs);
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(i < jl_datatype_nfields(st));
+    size_t offs = jl_field_offset(st,i);
+    assert(jl_field_isptr(st,i));
+    return *(jl_value_t**)((char*)v + offs);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);

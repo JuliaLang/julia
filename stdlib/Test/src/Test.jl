@@ -1451,7 +1451,7 @@ for (G, A) in ((GenericSet, AbstractSet),
         Base.done(s::$G, state) = done(s.s, state)
         Base.next(s::$G, state) = next(s.s, state)
     end
-    for f in (:eltype, :isempty, :length, :start)
+    for f in (:isempty, :length, :start)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end

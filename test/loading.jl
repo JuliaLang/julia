@@ -230,7 +230,7 @@ function gen_manifest(dir::String, name::String, uuid::UUID, tree::SHA1,
     open(joinpath(dir, "Manifest.toml"), "a") do io
         println(io, "[[$name]]")
         println(io, "uuid = \"$uuid\"")
-        println(io, "hash-sha1 = \"$(bytes2hex(tree.bytes))\"")
+        println(io, "git-tree-sha1 = \"$(bytes2hex(tree.bytes))\"")
         if !isempty(deps)
             println(io, "    [$name.deps]")
             for (n, u) in deps

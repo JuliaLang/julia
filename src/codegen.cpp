@@ -3742,7 +3742,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     if (!jl_is_expr(expr)) {
         int needroot = true;
         if (jl_is_quotenode(expr)) {
-            expr = jl_fieldref(expr,0);
+            expr = jl_fieldref_noalloc(expr,0);
         }
         // numeric literals
         if (jl_is_int32(expr)) {

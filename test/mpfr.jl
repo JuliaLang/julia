@@ -921,3 +921,5 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
+
+@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()

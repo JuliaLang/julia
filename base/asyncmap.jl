@@ -401,7 +401,7 @@ end
 
 # pass-through iterator traits to the iterable
 # on which the mapping function is being applied
-IteratorSize(itr::AsyncGenerator) = IteratorSize(itr.collector.enumerator)
+IteratorSize(itr::AsyncGenerator) = SizeUnknown()
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 

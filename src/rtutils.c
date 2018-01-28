@@ -913,7 +913,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
-                n += jl_static_show_x(out, jl_fieldref(v, 0), depth);
+                n += jl_static_show_x(out, jl_fieldref_noalloc(v, 0), depth);
             }
         }
         n += jl_printf(out, ")");

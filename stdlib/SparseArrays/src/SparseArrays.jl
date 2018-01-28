@@ -14,7 +14,7 @@ using LinearAlgebra
 import Base: +, -, *, \, /, &, |, xor, ==
 import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, diff, dot, eig,
     issymmetric, istril, istriu, lu, trace, transpose!, tril!, triu!,
-    vecnorm, cond, diagm, factorize, ishermitian, norm, scale!, tril, triu
+    vecnorm, cond, diagm, factorize, ishermitian, norm, mul1!, mul2!, tril, triu
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, conj!, cos, cosc, cosd, cosh, cospi, cot,

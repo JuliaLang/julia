@@ -322,31 +322,31 @@ sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
 
-@testset "scale and scale!" begin
+@testset "scaling with * and mul!, mul1!, and mul2!" begin
     b = randn(7)
     @test dA * Diagonal(b) == sA * Diagonal(b)
-    @test dA * Diagonal(b) == scale!(sC, sA, b)
-    @test dA * Diagonal(b) == scale!(copy(sA), b)
+    @test dA * Diagonal(b) == mul!(sC, sA, Diagonal(b))
+    @test dA * Diagonal(b) == mul1!(copy(sA), Diagonal(b))
     b = randn(3)
     @test Diagonal(b) * dA == Diagonal(b) * sA
-    @test Diagonal(b) * dA == scale!(sC, b, sA)
-    @test Diagonal(b) * dA == scale!(b, copy(sA))
+    @test Diagonal(b) * dA == mul!(sC, Diagonal(b), sA)
+    @test Diagonal(b) * dA == mul2!(Diagonal(b), copy(sA))
 
     @test dA * 0.5            == sA * 0.5
-    @test dA * 0.5            == scale!(sC, sA, 0.5)
-    @test dA * 0.5            == scale!(copy(sA), 0.5)
+    @test dA * 0.5            == mul!(sC, sA, 0.5)
+    @test dA * 0.5            == mul1!(copy(sA), 0.5)
     @test 0.5 * dA            == 0.5 * sA
-    @test 0.5 * dA            == scale!(sC, sA, 0.5)
-    @test 0.5 * dA            == scale!(0.5, copy(sA))
-    @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
+    @test 0.5 * dA            == mul!(sC, sA, 0.5)
+    @test 0.5 * dA            == mul2!(0.5, copy(sA))
+    @test mul!(sC, 0.5, sA)   == mul!(sC, sA, 0.5)
 
-    @testset "inverse scale!" begin
+    @testset "inverse scaling with mul!" begin
         bi = inv.(b)
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
-        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
+        @test mul1!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end

@@ -131,21 +131,28 @@ macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
-macro deprecate_moved(old, new, export_old=true, default_package=false)
-    eold = esc(old)
+macro deprecate_stdlib(old, mod, export_old=true)
+    dep_message = """: it has been moved to the standard library package `$mod`.
+                        Add a `using $mod` to your imports."""
+    new = GlobalRef(Base.root_module(Base, mod), old)
     return Expr(:toplevel,
-         default_package ? :(function $eold(args...; kwargs...)
-                                 error($eold, " has been moved to the standard library package ", $new, ".\n",
-                                       "Restart Julia and then run `using ", $new, "` to load it.")
-                             end) :
-                           :(function $eold(args...; kwargs...)
-                                 error($eold, " has been moved to the package ", $new, ".jl.\n",
-                                       "Run `Pkg.add(\"", $new, "\")` to install it, restart Julia,\n",
-                                       "and then run `using ", $new, "` to load it.")
-                             end),
-         export_old ? Expr(:export, eold) : nothing,
-         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
+         export_old ? Expr(:export, esc(old)) : nothing,
+         Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
+         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
+
+macro deprecate_moved(old, new, export_old=true)
+    eold = esc(old)
+    emsg = string(old, " has been moved to the package ", new, ".jl.\n",
+        "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
+        "and then run `using ", new, "` to load it.")
+    return Expr(:toplevel,
+        :($eold(args...; kwargs...) = error($emsg)),
+        export_old ? Expr(:export, eold) : nothing,
+        Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
+end
+
 
 # BEGIN 0.6 deprecations
 
@@ -301,75 +308,6 @@ end
 deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
-
-@deprecate_moved SharedArray "SharedArrays" true true
-
-@eval @deprecate_moved $(Symbol("@profile")) "Profile" true true
-
-@deprecate_moved readdlm  "DelimitedFiles" true true
-@deprecate_moved writedlm "DelimitedFiles" true true
-@deprecate_moved readcsv  "DelimitedFiles" true true
-@deprecate_moved writecsv "DelimitedFiles" true true
-
-@deprecate_moved base64encode "Base64" true true
-@deprecate_moved base64decode "Base64" true true
-@deprecate_moved Base64EncodePipe "Base64" true true
-@deprecate_moved Base64DecodePipe "Base64" true true
-
-@deprecate_moved poll_fd "FileWatching" true true
-@deprecate_moved poll_file "FileWatching" true true
-@deprecate_moved PollingFileWatcher "FileWatching" true true
-@deprecate_moved watch_file "FileWatching" true true
-@deprecate_moved FileMonitor "FileWatching" true true
-
-@eval @deprecate_moved $(Symbol("@spawn")) "Distributed" true true
-@eval @deprecate_moved $(Symbol("@spawnat")) "Distributed" true true
-@eval @deprecate_moved $(Symbol("@fetch")) "Distributed" true true
-@eval @deprecate_moved $(Symbol("@fetchfrom")) "Distributed" true true
-@eval @deprecate_moved $(Symbol("@everywhere")) "Distributed" true true
-@eval @deprecate_moved $(Symbol("@parallel")) "Distributed" true true
-
-@deprecate_moved addprocs "Distributed" true true
-@deprecate_moved CachingPool "Distributed" true true
-@deprecate_moved clear! "Distributed" true true
-@deprecate_moved ClusterManager "Distributed" true true
-@deprecate_moved default_worker_pool "Distributed" true true
-@deprecate_moved init_worker "Distributed" true true
-@deprecate_moved interrupt "Distributed" true true
-@deprecate_moved launch "Distributed" true true
-@deprecate_moved manage "Distributed" true true
-@deprecate_moved myid "Distributed" true true
-@deprecate_moved nprocs "Distributed" true true
-@deprecate_moved nworkers "Distributed" true true
-@deprecate_moved pmap "Distributed" true true
-@deprecate_moved procs "Distributed" true true
-@deprecate_moved remote "Distributed" true true
-@deprecate_moved remotecall "Distributed" true true
-@deprecate_moved remotecall_fetch "Distributed" true true
-@deprecate_moved remotecall_wait "Distributed" true true
-@deprecate_moved remote_do "Distributed" true true
-@deprecate_moved rmprocs "Distributed" true true
-@deprecate_moved workers "Distributed" true true
-@deprecate_moved WorkerPool "Distributed" true true
-@deprecate_moved RemoteChannel "Distributed" true true
-@deprecate_moved Future "Distributed" true true
-@deprecate_moved WorkerConfig "Distributed" true true
-@deprecate_moved RemoteException "Distributed" true true
-@deprecate_moved ProcessExitedException "Distributed" true true
-
-
-@deprecate_moved crc32c "CRC32c" true true
-
-@deprecate_moved DateTime "Dates" true true
-@deprecate_moved DateFormat "Dates" true true
-@eval @deprecate_moved $(Symbol("@dateformat_str")) "Dates" true true
-@deprecate_moved now "Dates" true true
-
-@deprecate_moved eigs "IterativeEigensolvers" true true
-@deprecate_moved svds "IterativeEigensolvers" true true
-
-@eval @deprecate_moved $(Symbol("@printf")) "Printf" true true
-@eval @deprecate_moved $(Symbol("@sprintf")) "Printf" true true
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
@@ -962,33 +900,6 @@ end
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
-# PR #24874
-@deprecate_moved rand! "Random" true true
-@deprecate_moved srand "Random" true true
-@deprecate_moved AbstractRNG "Random" true true
-@deprecate_moved randcycle  "Random" true true
-@deprecate_moved randcycle!  "Random" true true
-@deprecate_moved randperm  "Random" true true
-@deprecate_moved randperm! "Random" true true
-@deprecate_moved shuffle  "Random" true true
-@deprecate_moved shuffle! "Random" true true
-@deprecate_moved randsubseq "Random" true true
-@deprecate_moved randsubseq! "Random" true true
-@deprecate_moved randstring "Random" true true
-@deprecate_moved MersenneTwister  "Random" true true
-@deprecate_moved RandomDevice  "Random" true true
-@deprecate_moved randn! "Random" true true
-@deprecate_moved randexp "Random" true true
-@deprecate_moved randexp! "Random" true true
-@deprecate_moved bitrand "Random" true true
-@deprecate_moved randjump "Random" true true
-@deprecate_moved GLOBAL_RNG "Random" false true
-
-@deprecate_moved serialize "Serialization" true true
-@deprecate_moved deserialize "Serialization" true true
-@deprecate_moved AbstractSerializer "Serialization" true true
-@deprecate_moved SerializationState "Serialization" true true
-
 # 24595
 @deprecate falses(A::AbstractArray) falses(size(A))
 @deprecate trues(A::AbstractArray) trues(size(A))
@@ -1238,183 +1149,6 @@ end
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
 
-# PR #25249: SparseArrays to stdlib
-## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
-## functions that were re-exported from Base
-@deprecate_moved nonzeros   "SparseArrays" true true
-@deprecate_moved permute    "SparseArrays" true true
-@deprecate_moved blkdiag    "SparseArrays" true true
-@deprecate_moved dropzeros  "SparseArrays" true true
-@deprecate_moved dropzeros! "SparseArrays" true true
-@deprecate_moved issparse   "SparseArrays" true true
-@deprecate_moved sparse     "SparseArrays" true true
-@deprecate_moved sparsevec  "SparseArrays" true true
-@deprecate_moved spdiagm    "SparseArrays" true true
-@deprecate_moved sprand     "SparseArrays" true true
-@deprecate_moved sprandn    "SparseArrays" true true
-@deprecate_moved spzeros    "SparseArrays" true true
-@deprecate_moved rowvals    "SparseArrays" true true
-@deprecate_moved nzrange    "SparseArrays" true true
-@deprecate_moved nnz        "SparseArrays" true true
-@deprecate_moved findnz     "SparseArrays" true true
-## functions that were exported from Base.SparseArrays but not from Base
-@deprecate_moved droptol!   "SparseArrays" false true
-## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
-@deprecate_moved spones     "SparseArrays" true true
-@deprecate_moved speye      "SparseArrays" true true
-
-# PR #25571: LinearAlgebra to stdlib
-## the LinearAlgebra module itself is deprecated base/sysimg.jl
-
-## functions that were re-exported from Base
-@deprecate_moved bkfact!     "LinearAlgebra" true true
-@deprecate_moved bkfact      "LinearAlgebra" true true
-@deprecate_moved chol        "LinearAlgebra" true true
-@deprecate_moved cholfact!   "LinearAlgebra" true true
-@deprecate_moved cholfact    "LinearAlgebra" true true
-@deprecate_moved cond        "LinearAlgebra" true true
-@deprecate_moved condskeel   "LinearAlgebra" true true
-@deprecate_moved cross       "LinearAlgebra" true true
-@deprecate_moved adjoint!    "LinearAlgebra" true true
-# @deprecate_moved adjoint     "LinearAlgebra" true true
-@deprecate_moved det         "LinearAlgebra" true true
-@deprecate_moved diag        "LinearAlgebra" true true
-@deprecate_moved diagind     "LinearAlgebra" true true
-@deprecate_moved diagm       "LinearAlgebra" true true
-@deprecate_moved diff        "LinearAlgebra" true true
-@deprecate_moved dot         "LinearAlgebra" true true
-@deprecate_moved eig         "LinearAlgebra" true true
-@deprecate_moved eigfact!    "LinearAlgebra" true true
-@deprecate_moved eigfact     "LinearAlgebra" true true
-@deprecate_moved eigmax      "LinearAlgebra" true true
-@deprecate_moved eigmin      "LinearAlgebra" true true
-@deprecate_moved eigvals     "LinearAlgebra" true true
-@deprecate_moved eigvals!    "LinearAlgebra" true true
-@deprecate_moved eigvecs     "LinearAlgebra" true true
-@deprecate_moved factorize   "LinearAlgebra" true true
-@deprecate_moved givens      "LinearAlgebra" true true
-@deprecate_moved hessfact!   "LinearAlgebra" true true
-@deprecate_moved hessfact    "LinearAlgebra" true true
-@deprecate_moved isdiag      "LinearAlgebra" true true
-@deprecate_moved ishermitian "LinearAlgebra" true true
-@deprecate_moved isposdef!   "LinearAlgebra" true true
-@deprecate_moved isposdef    "LinearAlgebra" true true
-@deprecate_moved issymmetric "LinearAlgebra" true true
-@deprecate_moved istril      "LinearAlgebra" true true
-@deprecate_moved istriu      "LinearAlgebra" true true
-# @deprecate_moved kron        "LinearAlgebra" true true
-@deprecate_moved ldltfact    "LinearAlgebra" true true
-@deprecate_moved ldltfact!   "LinearAlgebra" true true
-@deprecate_moved linreg      "LinearAlgebra" true true
-@deprecate_moved logabsdet   "LinearAlgebra" true true
-@deprecate_moved logdet      "LinearAlgebra" true true
-@deprecate_moved lu          "LinearAlgebra" true true
-@deprecate_moved lufact!     "LinearAlgebra" true true
-@deprecate_moved lufact      "LinearAlgebra" true true
-@deprecate_moved lyap        "LinearAlgebra" true true
-@deprecate_moved norm        "LinearAlgebra" true true
-@deprecate_moved normalize   "LinearAlgebra" true true
-@deprecate_moved normalize!  "LinearAlgebra" true true
-@deprecate_moved nullspace   "LinearAlgebra" true true
-@deprecate_moved ordschur!   "LinearAlgebra" true true
-@deprecate_moved ordschur    "LinearAlgebra" true true
-@deprecate_moved peakflops   "LinearAlgebra" true true
-@deprecate_moved pinv        "LinearAlgebra" true true
-@deprecate_moved qr          "LinearAlgebra" true true
-@deprecate_moved qrfact!     "LinearAlgebra" true true
-@deprecate_moved qrfact      "LinearAlgebra" true true
-@deprecate_moved lq          "LinearAlgebra" true true
-@deprecate_moved lqfact!     "LinearAlgebra" true true
-@deprecate_moved lqfact      "LinearAlgebra" true true
-@deprecate_moved rank        "LinearAlgebra" true true
-@deprecate_moved scale!      "LinearAlgebra" true true
-@deprecate_moved schur       "LinearAlgebra" true true
-@deprecate_moved schurfact!  "LinearAlgebra" true true
-@deprecate_moved schurfact   "LinearAlgebra" true true
-@deprecate_moved svd         "LinearAlgebra" true true
-@deprecate_moved svdfact!    "LinearAlgebra" true true
-@deprecate_moved svdfact     "LinearAlgebra" true true
-@deprecate_moved svdvals!    "LinearAlgebra" true true
-@deprecate_moved svdvals     "LinearAlgebra" true true
-@deprecate_moved sylvester   "LinearAlgebra" true true
-@deprecate_moved trace       "LinearAlgebra" true true
-@deprecate_moved transpose!  "LinearAlgebra" true true
-# @deprecate_moved transpose   "LinearAlgebra" true true
-@deprecate_moved tril!       "LinearAlgebra" true true
-@deprecate_moved tril        "LinearAlgebra" true true
-@deprecate_moved triu!       "LinearAlgebra" true true
-@deprecate_moved triu        "LinearAlgebra" true true
-@deprecate_moved vecdot      "LinearAlgebra" true true
-@deprecate_moved vecnorm     "LinearAlgebra" true true
-# @deprecate_moved ⋅           "LinearAlgebra" true true
-# @deprecate_moved ×           "LinearAlgebra" true true
-
-## types that were re-exported from Base
-@deprecate_moved Diagonal        "LinearAlgebra" true true
-@deprecate_moved Bidiagonal      "LinearAlgebra" true true
-@deprecate_moved Tridiagonal     "LinearAlgebra" true true
-@deprecate_moved SymTridiagonal  "LinearAlgebra" true true
-@deprecate_moved UpperTriangular "LinearAlgebra" true true
-@deprecate_moved LowerTriangular "LinearAlgebra" true true
-@deprecate_moved Symmetric       "LinearAlgebra" true true
-@deprecate_moved Hermitian       "LinearAlgebra" true true
-@deprecate_moved Factorization   "LinearAlgebra" true true
-@deprecate_moved UniformScaling  "LinearAlgebra" true true
-@deprecate_moved Adjoint         "LinearAlgebra" true true
-@deprecate_moved Transpose       "LinearAlgebra" true true
-
-## functions that were exported from Base.LinAlg but not from Base
-@deprecate_moved axpy!           "LinearAlgebra" false true
-@deprecate_moved axpby!          "LinearAlgebra" false true
-@deprecate_moved copy_transpose! "LinearAlgebra" false true
-@deprecate_moved issuccess       "LinearAlgebra" false true
-@deprecate_moved transpose_type  "LinearAlgebra" false true
-@deprecate_moved A_mul_B!        "LinearAlgebra" false true
-@deprecate_moved A_mul_Bt!       "LinearAlgebra" false true
-@deprecate_moved At_mul_B!       "LinearAlgebra" false true
-@deprecate_moved At_mul_Bt!      "LinearAlgebra" false true
-@deprecate_moved A_mul_Bc!       "LinearAlgebra" false true
-@deprecate_moved Ac_mul_B!       "LinearAlgebra" false true
-@deprecate_moved Ac_mul_Bc!      "LinearAlgebra" false true
-@deprecate_moved A_ldiv_B!       "LinearAlgebra" false true
-@deprecate_moved At_ldiv_B!      "LinearAlgebra" false true
-@deprecate_moved Ac_ldiv_B!      "LinearAlgebra" false true
-
-## types that were exported from Base.LinAlg but not from Base
-@deprecate_moved BunchKaufman     "LinearAlgebra" false true
-@deprecate_moved Cholesky         "LinearAlgebra" false true
-@deprecate_moved CholeskyPivoted  "LinearAlgebra" false true
-@deprecate_moved Eigen            "LinearAlgebra" false true
-@deprecate_moved GeneralizedEigen "LinearAlgebra" false true
-@deprecate_moved GeneralizedSVD   "LinearAlgebra" false true
-@deprecate_moved GeneralizedSchur "LinearAlgebra" false true
-@deprecate_moved Hessenberg       "LinearAlgebra" false true
-@deprecate_moved LU               "LinearAlgebra" false true
-@deprecate_moved LDLt             "LinearAlgebra" false true
-@deprecate_moved QR               "LinearAlgebra" false true
-@deprecate_moved QRPivoted        "LinearAlgebra" false true
-@deprecate_moved LQ               "LinearAlgebra" false true
-@deprecate_moved Schur            "LinearAlgebra" false true
-@deprecate_moved SVD              "LinearAlgebra" false true
-
-## deprecated functions that are moved to stdlib/LinearAlgebra/src/deprecated.jl
-@deprecate_moved eye        "LinearAlgebra" true true
-@deprecate_moved sqrtm      "LinearAlgebra" true true
-@deprecate_moved expm       "LinearAlgebra" true true
-@deprecate_moved expm!      "LinearAlgebra" true true
-@deprecate_moved logm       "LinearAlgebra" true true
-@deprecate_moved gradient   "LinearAlgebra" true true
-@deprecate_moved ConjArray  "LinearAlgebra" true true
-@deprecate_moved ConjVector "LinearAlgebra" true true
-@deprecate_moved ConjMatrix "LinearAlgebra" true true
-@deprecate_moved RowVector  "LinearAlgebra" true true
-
-
-# PR #25021
-@deprecate_moved normalize_string "Unicode" true true
-@deprecate_moved graphemes "Unicode" true true
-@deprecate_moved is_assigned_char "Unicode" true true
-
 @deprecate isalnum(c::Char) isalpha(c) || isnumeric(c)
 @deprecate isgraph(c::Char) isprint(c) && !isspace(c)
 @deprecate isnumber(c::Char) isnumeric(c)
@@ -1646,6 +1380,10 @@ export readandwrite
 # PR #25654
 @deprecate indmin argmin
 @deprecate indmax argmax
+
+@deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
+@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
+@deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
