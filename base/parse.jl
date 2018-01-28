@@ -236,7 +236,7 @@ end
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     sign, c, i = parsefloat_preamble(s, base)
-       
+
     lowercase(c) == 'n' && return T(NaN)
     lowercase(c) == 'i' && return sign*T(Inf)
 
@@ -252,9 +252,9 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         done(s, i) && break
         c, i = next(s, i)
     end
-    
+
     n = -1
-    while !done(s, i) 
+    while !done(s, i)
         c, i = next(s, i)
         isspace(c) && break
         c == 'e' && break
@@ -274,7 +274,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         d = parse(Int, c, base)
         exponent = exponent*b + d
     end
-    
+
     sign*res*b^(expsign*exponent)
 end
 

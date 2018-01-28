@@ -301,4 +301,6 @@ end
 @test parse(Float64, "2.3e23",5) === 3.173828125e9
 @test parse(Float64, "2.3e-23",5) === 2.129920000000003e-9
 
+@test parse(BigFloat, "2.3e-23",5) === 2.129919999999999999999999999999999999999999999999999999999999999999999999999986e-09
+
 @test_throws ArgumentError parse(Float64, "14.0", 3)
