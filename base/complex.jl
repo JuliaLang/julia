@@ -833,7 +833,7 @@ function asin(z::Complex)
     Complex(ξ,η)
 end
 
-function acos(z::Complex{<:AbstractFloat})
+function acos(z::Complex)
     zr, zi = reim(z)
     if isnan(zr)
         if isinf(zi) return Complex(zr, -zi)
