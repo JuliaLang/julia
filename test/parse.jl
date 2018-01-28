@@ -262,3 +262,25 @@ end
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
 @test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+
+# issue #22480
+@test isnan(parse(Float64, "NaN", 16))
+@test isnan(parse(Float64, "nan", 16))
+@test isnan(parse(Float64, "nAN", 16))
+
+@test parse(Float64, "Inf", 16) === Inf
+@test parse(Float64, "-Inf", 16) === -Inf
+@test parse(Float64, "inf", 16) === Inf
+
+@test parse(Float32, "100.1",2) === 4.5f0
+@test parse(Float32, "-100.1",2) === -4.5f0
+
+@test parse(Float64, "ff.4", 16) === 255.25
+@test parse(Float64, "-ff.4", 16) === -255.25
+@test parse(Float64, "1.1", 2) === 1.5
+@test parse(Float64, "0.001", 2) === 0.125
+@test parse(Float64, "-100.0",2) === -4.0
+@test parse(Float64, "100",2) === 4.0
+@test parse(Float64, "0.1", 3) === 0.3333333333333333
+
+@test_throws ArgumentError parse(Float64, "14.0", 3)
