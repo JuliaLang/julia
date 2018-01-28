@@ -544,7 +544,17 @@ function log(z::Complex{T}) where T<:AbstractFloat
     end
     Complex(ρρ, angle(z))
 end
-log(z::Complex) = log(float(z))
+
+_log(z::Complex{<:AbstractFloat}) = log(z)
+
+function _log(z::Complex)
+    ρ = abs(z)
+    θ = angle(z)
+
+    return Complex(log(ρ), θ)
+end
+
+log(z::Complex) = _log(float(z))
 
 # function log(z::Complex)
 #     ar = abs(real(z))
