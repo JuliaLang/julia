@@ -549,7 +549,7 @@ julia> ndigits(12345)
 julia> ndigits(1022, 16)
 3
 
-julia> string(1022, bass = 16)
+julia> string(1022, base = 16)
 "3fe"
 ```
 """
@@ -647,20 +647,20 @@ julia> string(13, base = 5, pad = 4)
 ```
 """
 string(n::Integer; base::Integer = 10, pad::Integer = 1) =
-    if b == 2
+    if base == 2
         (n_positive, neg) = split_sign(n)
         bin(n_positive, pad, neg)
-    elseif b == 8
+    elseif base == 8
         (n_positive, neg) = split_sign(n)
         oct(n_positive, pad, neg)
-    elseif b == 10
+    elseif base == 10
         (n_positive, neg) = split_sign(n)
         dec(n_positive, pad, neg)
-    elseif b == 16
+    elseif base == 16
         (n_positive, neg) = split_sign(n)
         hex(n_positive, pad, neg)
     else
-        base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
+        base(Int(base), base > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (base>0) & (n<0))
     end
 
 """

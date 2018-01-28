@@ -117,8 +117,8 @@ end
     @test all(n -> n == 1, ndigits(x, b) for b in [-20:-2;2:20] for x in [true, false])
 end
 @testset "bin/oct/dec/hex/bits" begin
-    @test string('3', base = 2) == "110011"
-    @test string('3', pad = 7, base = 2) == "0110011"
+    @test string(UInt32('3'), base = 2) == "110011"
+    @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = 3, base = 2) == "011"

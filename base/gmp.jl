@@ -596,13 +596,13 @@ flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 show(io::IO, x::BigInt) = print(io, string(x))
 
 function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
-    b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+    base < 0 && return base(Int(base), n, pad, (base>0) & (n.size<0))
+    2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, b)
+    nd1 = ndigits(n, base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
