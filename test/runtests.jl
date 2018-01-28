@@ -211,6 +211,7 @@ cd(dirname(@__FILE__)) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
+    #=
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
@@ -281,4 +282,5 @@ cd(dirname(@__FILE__)) do
         Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
+    =#
 end

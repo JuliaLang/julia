@@ -990,7 +990,12 @@ function testset_beginend(args, tests, source)
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
-    ex = quote
+    return quote
+        let
+            $(esc(tests))
+        end
+    end
+    quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         ts = $(testsettype)($desc; $options...)
         # this empty loop is here to force the block to be compiled,
@@ -1061,6 +1066,15 @@ function testset_forloop(args, testloop, source)
     # Uses a similar block as for `@testset`, except that it is
     # wrapped in the outer loop provided by the user
     tests = testloop.args[2]
+    blk = quote
+        $(esc(tests))
+    end
+
+    return quote
+        let
+            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+        end
+    end
     blk = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         # Trick to handle `break` and `continue` in the test code before
