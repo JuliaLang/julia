@@ -269,24 +269,30 @@ end
 @test isnan(parse(Float64, "nAN", 16))
 
 @test parse(Float64, "Inf", 16) === Inf
+@test parse(Float64, "+Inf", 16) === Inf
 @test parse(Float64, "-Inf", 16) === -Inf
 @test parse(Float64, "inf", 16) === Inf
 
 @test parse(Float32, "100.1",2) === 4.5f0
+@test parse(Float32, "+100.1",2) === 4.5f0
 @test parse(Float32, "-100.1",2) === -4.5f0
 
 @test parse(Float64, "ff.4", 16) === 255.25
+@test parse(Float64, "+ff.4", 16) === 255.25
 @test parse(Float64, "-ff.4", 16) === -255.25
 @test parse(Float64, "1.1", 2) === 1.5
 @test parse(Float64, "0.001", 2) === 0.125
-@test parse(Float64, "-100.0",2) === -4.0
 @test parse(Float64, "100",2) === 4.0
+@test parse(Float64, "+100",2) === 4.0
+@test parse(Float64, "-100.0",2) === -4.0
 @test parse(Float64, "0.1", 3) === 0.3333333333333333
 
 @test parse(Float64, "2.3e3",4) === 176.0
+@test parse(Float64, "2.3e-3",4) === 0.04296875
 @test_throws ArgumentError parse(Float64, "2.3e4",4)
 @test parse(Float64, "2.3e10",4) === 704.0
 @test parse(Float64, "2.3e4",5) === 1625.0
 @test parse(Float64, "2.3e23",5) === 3.173828125e9
+@test parse(Float64, "2.3e-23",5) === 2.129920000000003e-9
 
 @test_throws ArgumentError parse(Float64, "14.0", 3)
