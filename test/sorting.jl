@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Order: Forward
+using Random
 
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
@@ -20,7 +21,7 @@ end
 @test partialsort([3,6,30,1,9],3) == 6
 @test partialsort([3,6,30,1,9],3:4) == [6,9]
 @test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
-@test partialsortperm!(collect(1:5), [3,6,30,1,9], 3:4) == [2,5]
+@test partialsortperm!(Vector(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test partialsort(a, r) == [r;]
@@ -39,7 +40,7 @@ end
     @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
     @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
     @test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
-    @test searchsorted(ones(15), 1, 6, 10, Forward) == 6:10
+    @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
 
     for R in numTypes, T in numTypes
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
@@ -56,7 +57,7 @@ end
         @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
         @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
         @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
-        @test searchsorted(ones(R, 15), T(1), 6, 10, Forward) == 6:10
+        @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
@@ -172,7 +173,7 @@ Base.step(r::ConstantRange) = 0
         permute!(c, ix)
         @test c == b
 
-        ipermute!(c, ix)
+        invpermute!(c, ix)
         @test c == a
 
         c = sort(a, alg=alg, lt=(>))
@@ -220,79 +221,79 @@ randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
-    x = find(rand(n).<p)
+    x = findall(rand(n).<p)
     v[x] = randnans(length(x))
     return v
 end
 
 @testset "advanced sorting" begin
-    guardsrand(0xdeadbeef) do
-        for n in [0:10; 100; 101; 1000; 1001]
-            local r
-            r = -5:5
-            v = rand(r,n)
-            h = [sum(v .== x) for x in r]
+    srand(0xdeadbeef)
+    for n in [0:10; 100; 101; 1000; 1001]
+        local r
+        r = -5:5
+        v = rand(r,n)
+        h = [sum(v .== x) for x in r]
 
-            for rev in [false,true]
-                # insertion sort (stable) as reference
-                pi = sortperm(v, alg=InsertionSort, rev=rev)
-                @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
-                @test isperm(pi)
-                si = v[pi]
-                @test [sum(si .== x) for x in r] == h
-                @test issorted(si, rev=rev)
-                @test all(issorted,[pi[si.==x] for x in r])
-                c = copy(v)
-                permute!(c, pi)
-                @test c == si
-                ipermute!(c, pi)
-                @test c == v
+        for rev in [false,true]
+            # insertion sort (stable) as reference
+            pi = sortperm(v, alg=InsertionSort, rev=rev)
+            @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
+            @test isperm(pi)
+            si = v[pi]
+            @test [sum(si .== x) for x in r] == h
+            @test issorted(si, rev=rev)
+            @test all(issorted,[pi[si.==x] for x in r])
+            c = copy(v)
+            permute!(c, pi)
+            @test c == si
+            invpermute!(c, pi)
+            @test c == v
 
-                # stable algorithms
-                for alg in [MergeSort]
-                    p = sortperm(v, alg=alg, rev=rev)
-                    @test p == sortperm(float(v), alg=alg, rev=rev)
-                    @test p == pi
-                    s = copy(v)
-                    permute!(s, p)
-                    @test s == si
-                    ipermute!(s, p)
-                    @test s == v
-                end
-
-                # unstable algorithms
-                for alg in [QuickSort, PartialQuickSort(n)]
-                    p = sortperm(v, alg=alg, rev=rev)
-                    @test p == sortperm(float(v), alg=alg, rev=rev)
-                    @test isperm(p)
-                    @test v[p] == si
-                    s = copy(v)
-                    permute!(s, p)
-                    @test s == si
-                    ipermute!(s, p)
-                    @test s == v
-                end
-            end
-
-            v = randn_with_nans(n,0.1)
-            # TODO: alg = PartialQuickSort(n) fails here
-            for alg in [InsertionSort, QuickSort, MergeSort],
-                rev in [false,true]
-                # test float sorting with NaNs
-                s = sort(v, alg=alg, rev=rev)
-                @test issorted(s, rev=rev)
-                @test reinterpret(UInt64,v[isnan.(v)]) == reinterpret(UInt64,s[isnan.(s)])
-
-                # test float permutation with NaNs
+            # stable algorithms
+            for alg in [MergeSort]
                 p = sortperm(v, alg=alg, rev=rev)
-                @test isperm(p)
-                vp = v[p]
-                @test isequal(vp,s)
-                @test reinterpret(UInt64,vp) == reinterpret(UInt64,s)
+                @test p == sortperm(float(v), alg=alg, rev=rev)
+                @test p == pi
+                s = copy(v)
+                permute!(s, p)
+                @test s == si
+                invpermute!(s, p)
+                @test s == v
             end
+
+            # unstable algorithms
+            for alg in [QuickSort, PartialQuickSort(n)]
+                p = sortperm(v, alg=alg, rev=rev)
+                @test p == sortperm(float(v), alg=alg, rev=rev)
+                @test isperm(p)
+                @test v[p] == si
+                s = copy(v)
+                permute!(s, p)
+                @test s == si
+                invpermute!(s, p)
+                @test s == v
+            end
+        end
+
+        v = randn_with_nans(n,0.1)
+        # TODO: alg = PartialQuickSort(n) fails here
+        for alg in [InsertionSort, QuickSort, MergeSort],
+            rev in [false,true]
+            # test float sorting with NaNs
+            s = sort(v, alg=alg, rev=rev)
+            @test issorted(s, rev=rev)
+            @test reinterpret(UInt64,v[isnan.(v)]) == reinterpret(UInt64,s[isnan.(s)])
+
+            # test float permutation with NaNs
+            p = sortperm(v, alg=alg, rev=rev)
+            @test isperm(p)
+            vp = v[p]
+            @test isequal(vp,s)
+            @test reinterpret(UInt64,vp) == reinterpret(UInt64,s)
         end
     end
 end
+
 @testset "sortperm" begin
     inds = [
         1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,

@@ -1,6 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## generic operations on numbers ##
+
+# Numbers are convertible
+convert(::Type{T}, x::T)      where {T<:Number} = x
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+
 """
     isinteger(x) -> Bool
 
@@ -41,14 +46,15 @@ isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
-indices(x::Number) = ()
-indices(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
+axes(x::Number) = ()
+axes(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
 eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
-endof(x::Number) = 1
-iteratorsize(::Type{<:Number}) = HasShape()
+firstindex(x::Number) = 1
+lastindex(x::Number) = 1
+IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
@@ -64,7 +70,7 @@ function getindex(x::Number, I::Integer...)
 end
 first(x::Number) = x
 last(x::Number) = x
-copy(x::Number) = x  # some code treats numbers as collection-like
+copy(x::Number) = x # some code treats numbers as collection-like
 
 """
     divrem(x, y)
@@ -166,6 +172,28 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
+"""
+    adjoint(A)
+
+Lazy adjoint (conjugate transposition) (also postfix `'`). Note that `adjoint` is applied recursively to
+elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
 adjoint(x::Number) = conj(x)
 angle(z::Real) = atan2(zero(z), z)
 
@@ -203,7 +231,7 @@ Multiply `x` and `y`, giving the result as a larger type.
 
 ```jldoctest
 julia> widemul(Float32(3.), 4.)
-1.200000000000000000000000000000000000000000000000000000000000000000000000000000e+01
+1.2e+01
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -226,7 +254,7 @@ julia> zero(1)
 0
 
 julia> zero(big"2.0")
-0.000000000000000000000000000000000000000000000000000000000000000000000000000000
+0.0
 
 julia> zero(rand(2,2))
 2×2 Array{Float64,2}:
@@ -263,7 +291,7 @@ julia> one(3.7)
 julia> one(Int)
 1
 
-julia> one(Dates.Day(1))
+julia> import Dates; one(Dates.Day(1))
 1
 ```
 """
@@ -285,7 +313,7 @@ while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 julia> oneunit(3.7)
 1.0
 
-julia> oneunit(Dates.Day)
+julia> import Dates; oneunit(Dates.Day)
 1 day
 ```
 """

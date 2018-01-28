@@ -9,11 +9,11 @@ println("""
 
 # CHECK-LABEL: @return_obj
 # CHECK-NOT: @julia.gc_alloc_obj
-# CHECK: %v = call noalias %jl_value_t addrspace(10)* @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(11)* {{.*}}, !tbaa !0
+# CHECK: %v = call noalias nonnull %jl_value_t addrspace(10)* @jl_gc_pool_alloc
+# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
 println("""
 define %jl_value_t addrspace(10)* @return_obj() {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   ret %jl_value_t addrspace(10)* %v
@@ -22,7 +22,7 @@ define %jl_value_t addrspace(10)* @return_obj() {
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @return_load
-# CHECK: alloca i64, align 8
+# CHECK: alloca i64
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK: call void @llvm.lifetime.start{{.*}}(i64 8, i8*
@@ -31,7 +31,7 @@ define %jl_value_t addrspace(10)* @return_obj() {
 # CHECK-NOT: @llvm.lifetime.end
 println("""
 define i64 @return_load(i64 %i) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %v64 = bitcast %jl_value_t addrspace(10)* %v to i64 addrspace(10)*
@@ -44,36 +44,14 @@ define i64 @return_load(i64 %i) {
 """)
 # CHECK-LABEL: }
 
-# CHECK-LABEL: @return_tag
-# CHECK: alloca i128, align 8
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
-# CHECK-NOT: @julia.gc_alloc_obj
-# CHECK-NOT: @jl_gc_pool_alloc
-# CHECK: call void @llvm.lifetime.start{{.*}}(i64 16, i8*
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)** {{.*}}, !tbaa !0
-# CHECK-NOT: @llvm.lifetime.end
-println("""
-define %jl_value_t addrspace(10)* @return_tag() {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
-  %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
-  %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
-  %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
-  %vab = bitcast %jl_value_t addrspace(11)* %va to %jl_value_t addrspace(10)* addrspace(11)*
-  %tagaddr = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(11)* %vab, i64 -1
-  %tag = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(11)* %tagaddr, align 8, !tbaa !0
-  ret %jl_value_t addrspace(10)* %tag
-}
-""")
-# CHECK-LABEL: }
-
 # CHECK-LABEL: @ccall_obj
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(11)* {{.*}}, !tbaa !0
+# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
 println("""
 define void @ccall_obj(i8* %fptr) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %f = bitcast i8* %fptr to void (%jl_value_t addrspace(10)*)*
@@ -85,42 +63,44 @@ define void @ccall_obj(i8* %fptr) {
 
 # CHECK-LABEL: @ccall_ptr
 # CHECK: alloca i64
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK: call void @llvm.lifetime.start{{.*}}(i64 8, i8*
-# CHECK: %f = bitcast i8* %fptr to void (i64)*
+# CHECK: %f = bitcast i8* %fptr to void (i8*)*
 # Currently the GC frame lowering pass strips away all operand bundles
-# CHECK-NEXT: call void %f(i64
+# CHECK-NEXT: call void %f(i8*
 # CHECK-NEXT: ret void
 println("""
 define void @ccall_ptr(i8* %fptr) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
-  %ptr = call i64 @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
-  %f = bitcast i8* %fptr to void (i64)*
-  call void %f(i64 %ptr) [ "jl_roots"(%jl_value_t addrspace(10)* %v), "unknown_bundle"(i64 %ptr) ]
+  %ptrj = call %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
+  %ptr = bitcast %jl_value_t* %ptrj to i8*
+  %f = bitcast i8* %fptr to void (i8*)*
+  call void %f(i8* %ptr) [ "jl_roots"(%jl_value_t addrspace(10)* %v), "unknown_bundle"(i8* %ptr) ]
   ret void
 }
 """)
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @ccall_unknown_bundle
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(11)* {{.*}}, !tbaa !0
+# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
 println("""
 define void @ccall_unknown_bundle(i8* %fptr) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
-  %ptr = call i64 @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
-  %f = bitcast i8* %fptr to void (i64)*
-  call void %f(i64 %ptr) [ "jl_not_jl_roots"(%jl_value_t addrspace(10)* %v) ]
+  %ptrj = call %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
+  %ptr = bitcast %jl_value_t* %ptrj to i8*
+  %f = bitcast i8* %fptr to void (i8*)*
+  call void %f(i8* %ptr) [ "jl_not_jl_roots"(%jl_value_t addrspace(10)* %v) ]
   ret void
 }
 """)
@@ -128,11 +108,11 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 
 # CHECK-LABEL: @lifetime_branches
 # CHECK: alloca i64
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK: L1:
 # CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
-# CHECK: %f = bitcast i8* %fptr to void (i64)*
-# CHECK-NEXT: call void %f(i64
+# CHECK: %f = bitcast i8* %fptr to void (i8*)*
+# CHECK-NEXT: call void %f(i8*
 # CHECK-NEXT: br i1 %b2, label %L2, label %L3
 
 # CHECK: L2:
@@ -144,16 +124,17 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 # CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @lifetime_branches(i8* %fptr, i1 %b, i1 %b2) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   br i1 %b, label %L1, label %L3
 
 L1:
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
-  %ptr = call i64 @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
-  %f = bitcast i8* %fptr to void (i64)*
-  call void %f(i64 %ptr) [ "jl_roots"(%jl_value_t addrspace(10)* %v) ]
+  %ptrj = call %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)* %va)
+  %ptr = bitcast %jl_value_t* %ptrj to i8*
+  %f = bitcast i8* %fptr to void (i8*)*
+  call void %f(i8* %ptr) [ "jl_roots"(%jl_value_t addrspace(10)* %v) ]
   br i1 %b2, label %L2, label %L3
 
 L2:
@@ -168,13 +149,13 @@ L3:
 # CHECK-LABEL: }
 
 # CHECK-LABEL: @object_field
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
-# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(11)* {{.*}}, !tbaa !0
+# CHECK: store %jl_value_t addrspace(10)* @tag, %jl_value_t addrspace(10)* addrspace(10)* {{.*}}, !tbaa !0
 println("""
 define void @object_field(%jl_value_t addrspace(10)* %field) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   %v = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, %jl_value_t addrspace(10)* @tag)
   %va = addrspacecast %jl_value_t addrspace(10)* %v to %jl_value_t addrspace(11)*
@@ -187,14 +168,14 @@ define void @object_field(%jl_value_t addrspace(10)* %field) {
 
 # CHECK-LABEL: @memcpy_opt
 # CHECK: alloca i128, align 16
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK: call void @llvm.memcpy.p0i8.p0i8.i64
 println("""
 define void @memcpy_opt(i8* %v22) {
 top:
-  %v6 = call %jl_value_t*** @jl_get_ptls_states()
+  %v6 = call %jl_value_t*** @julia.ptls_states()
   %v18 = bitcast %jl_value_t*** %v6 to i8*
   %v19 = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %v18, $isz 16, %jl_value_t addrspace(10)* @tag)
   %v20 = bitcast %jl_value_t addrspace(10)* %v19 to i8 addrspace(10)*
@@ -207,7 +188,7 @@ top:
 
 # CHECK-LABEL: @preserve_opt
 # CHECK: alloca i128, align 16
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK: @llvm.lifetime.start
@@ -218,7 +199,7 @@ top:
 println("""
 define void @preserve_opt(i8* %v22) {
 top:
-  %v6 = call %jl_value_t*** @jl_get_ptls_states()
+  %v6 = call %jl_value_t*** @julia.ptls_states()
   %v18 = bitcast %jl_value_t*** %v6 to i8*
   %v19 = call noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8* %v18, $isz 16, %jl_value_t addrspace(10)* @tag)
   %v20 = bitcast %jl_value_t addrspace(10)* %v19 to i8 addrspace(10)*
@@ -234,7 +215,7 @@ top:
 
 # CHECK-LABEL: @preserve_branches
 # CHECK: alloca i64
-# CHECK: call %jl_value_t*** @jl_get_ptls_states()
+# CHECK: call %jl_value_t*** @julia.ptls_states()
 # CHECK: L1:
 # CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
 # CHECK-NEXT: @external_function()
@@ -249,7 +230,7 @@ top:
 # CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
-  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %ptls = call %jl_value_t*** @julia.ptls_states()
   %ptls_i8 = bitcast %jl_value_t*** %ptls to i8*
   br i1 %b, label %L1, label %L3
 
@@ -269,13 +250,13 @@ L3:
 """)
 # CHECK-LABEL: }
 
-# CHECK: declare noalias %jl_value_t addrspace(10)* @jl_gc_pool_alloc(i8*,
-# CHECK: declare noalias %jl_value_t addrspace(10)* @jl_gc_big_alloc(i8*,
+# CHECK: declare noalias nonnull %jl_value_t addrspace(10)* @jl_gc_pool_alloc(i8*,
+# CHECK: declare noalias nonnull %jl_value_t addrspace(10)* @jl_gc_big_alloc(i8*,
 println("""
 declare void @external_function()
-declare %jl_value_t*** @jl_get_ptls_states()
-declare noalias %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8*, $isz, %jl_value_t addrspace(10)*)
-declare i64 @julia.pointer_from_objref(%jl_value_t addrspace(11)*)
+declare %jl_value_t*** @julia.ptls_states()
+declare noalias nonnull %jl_value_t addrspace(10)* @julia.gc_alloc_obj(i8*, $isz, %jl_value_t addrspace(10)*)
+declare %jl_value_t* @julia.pointer_from_objref(%jl_value_t addrspace(11)*)
 declare void @llvm.memcpy.p11i8.p0i8.i64(i8 addrspace(11)* nocapture writeonly, i8* nocapture readonly, i64, i32, i1)
 declare token @llvm.julia.gc_preserve_begin(...)
 declare void @llvm.julia.gc_preserve_end(token)

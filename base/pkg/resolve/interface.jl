@@ -44,7 +44,7 @@ mutable struct Interface
 
     function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
         # generate pkgs
-        pkgs = sort!(String[Set{String}(keys(deps))...])
+        pkgs = sort!(String[keys(deps)...])
 
         np = length(pkgs)
 
@@ -52,7 +52,7 @@ mutable struct Interface
         pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
-        spp = Vector{Int}(np)
+        spp = Vector{Int}(uninitialized, np)
 
         pvers = [VersionNumber[] for i = 1:np]
 
@@ -82,11 +82,11 @@ mutable struct Interface
         end
 
         ## generate wveights:
-        vweight = Vector{Vector{VersionWeight}}(np)
+        vweight = Vector{Vector{VersionWeight}}(uninitialized, np)
         for p0 = 1:np
             pvers0 = pvers[p0]
             spp0 = spp[p0]
-            vweight0 = vweight[p0] = Vector{VersionWeight}(spp0)
+            vweight0 = vweight[p0] = Vector{VersionWeight}(uninitialized, spp0)
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
@@ -216,9 +216,23 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
             if sol[p0] == v0
                 for (rp, rvs) in a.requires
                     p1 = pdict[rp]
-                    sol[p1] != spp[p1] || return false
-                    vn = pvers[p1][sol[p1]]
-                    vn ∈ rvs || return false
+                    if sol[p1] == spp[p1]
+                        println("""
+                                VERIFICATION ERROR: REQUIRED DEPENDENCY NOT INSTALLED
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp is not being installed (p1=$p1 sol[p1]=$(sol[p1]) == spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
+                    vn1 = pvers[p1][sol[p1]]
+                    if vn1 ∉ rvs
+                        println("""
+                                VERIFICATION ERROR: INVALID VERSION
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp version is being set to $vn1 (p1=$p1 sol[p1]=$(sol[p1]) spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
                 end
             end
         end
@@ -240,7 +254,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
-    pdeps = [Vector{Requires}(spp[p0]-1) for p0 = 1:np]
+    pdeps = [Vector{Requires}(uninitialized, spp[p0]-1) for p0 = 1:np]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
     prevdeps = [Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np]
@@ -307,7 +321,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             end
             viol && continue
             # So the solution is non-optimal: we bump it manually
-            #warn("nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
+            #@debug "Nonoptimal solution for package `$(interface.pkgs[p0])`: sol=$s0"
             sol[p0] += 1
             restart = true
         end
@@ -340,7 +354,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
         staged = staged_next
     end
 
-    for p0 in find(uninst)
+    for p0 in findall(uninst)
         sol[p0] = spp[p0]
     end
 

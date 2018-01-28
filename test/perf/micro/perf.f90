@@ -193,12 +193,17 @@ end function
 subroutine printfd(n)
 integer, intent(in) :: n
 integer :: i , unit
-open(unit=1, file="foo")
+open(unit=1, file="/dev/null")
 do i = 1, n
-  write(unit=1, fmt=*) i, i
+    write(unit=1, fmt=*) i, i+1
 end do
 close(unit=1)
 end subroutine
+
+real(dp) function abs2(z) result(r)
+complex(dp), intent(in) :: z
+    r = real(z)*real(z) + imag(z)*imag(z);
+end function
 
 integer function mandel(z0) result(r)
 complex(dp), intent(in) :: z0
@@ -208,7 +213,7 @@ maxiter = 80
 z = z0
 c = z0
 do n = 1, maxiter
-    if (abs(z) > 2) then
+    if (abs2(z) > 4) then
         r = n-1
         return
     end if
@@ -382,7 +387,7 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(f == 14791)
-print "('fortran,iteration_mandelbrot,',f0.6)", sysclock2ms(tmin) / NRUNS
+print "('fortran,userfunc_mandelbrot,',f0.6)", sysclock2ms(tmin) / NRUNS
 
 tmin = huge(0_i64)
 do i = 1, 5

@@ -7,6 +7,7 @@ import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
+using Base.Printf: @printf
 
 macro recover(ex)
     quote
@@ -28,7 +29,7 @@ function edit(f::Function, pkg::AbstractString, args...)
     reqsʹ = Reqs.parse(rʹ)
     reqsʹ != reqs && resolve(reqsʹ,avail)
     Reqs.write("REQUIRE",rʹ)
-    info("Package database updated")
+    @info "Package database updated"
     return true
 end
 
@@ -40,8 +41,8 @@ function edit()
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
     reqsʹ = Reqs.parse("REQUIRE")
-    reqs == reqsʹ && return info("Nothing to be done")
-    info("Computing changes...")
+    reqs == reqsʹ && return @info "Nothing to be done"
+    @info "Computing changes..."
     resolve(reqsʹ)
 end
 
@@ -50,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Package $pkg is already installed")
+            @info "Package $pkg is already installed"
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
@@ -70,16 +71,18 @@ function add(pkg::AbstractString, vers::VersionSet)
     end
     if outdated != :no
         is = outdated == :yes ? "is" : "might be"
-        info("METADATA $is out-of-date — you may not have the latest version of $pkg")
-        info("Use `Pkg.update()` to get the latest versions of your packages")
+        @info """
+            METADATA $is out-of-date — you may not have the latest version of $pkg
+            Use `Pkg.update()` to get the latest versions of your packages
+            """
     end
 end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Package $pkg is not installed")
-    info("Removing $pkg (unregistered)")
+    ispath(pkg) || return @info "Package $pkg is not installed"
+    @info "Removing $pkg (unregistered)"
     Write.remove(pkg)
 end
 
@@ -124,6 +127,9 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
+    if !isempty(pkgname) && !ispath(pkgname)
+        throw(PkgError("Package $pkgname does not exist"))
+    end
     showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
@@ -155,6 +161,9 @@ end
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
+    if !isempty(pkg) && !ispath(pkg)
+        throw(PkgError("Package $pkg does not exist"))
+    end
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver
@@ -173,12 +182,12 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
-            print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
+            printstyled(io, " broken-repo (unregistered)", color=Base.error_color())
         finally
             close(prepo)
         end
     else
-        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
+        printstyled(io, "non-repo (unregistered)", color=Base.warn_color())
     end
     println(io)
 end
@@ -188,7 +197,7 @@ function status(io::IO, pkg::AbstractString, msg::AbstractString)
 end
 
 function clone(url::AbstractString, pkg::AbstractString)
-    info("Cloning $pkg from $url")
+    @info "Cloning $pkg from $url"
     ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
@@ -198,7 +207,7 @@ function clone(url::AbstractString, pkg::AbstractString)
         isdir(pkg) && Base.rm(pkg, recursive=true)
         rethrow(err)
     end
-    info("Computing changes...")
+    @info "Computing changes..."
     if !edit(Reqs.add, pkg)
         isempty(Reqs.parse("$pkg/REQUIRE")) && return
         resolve()
@@ -221,14 +230,14 @@ clone(url_or_pkg::AbstractString) = clone(url_and_pkg(url_or_pkg)...)
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    info("Checking out $pkg $branch...")
+    @info "Checking out $pkg $branch..."
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
             LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
             LibGit2.branch!(repo, branch, track=LibGit2.Consts.REMOTE_ORIGIN)
             do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
             if do_pull
-                info("Pulling $pkg latest $branch...")
+                @info "Pulling $pkg latest $branch..."
                 LibGit2.fetch(repo)
                 LibGit2.merge!(repo, fastforward=true)
             end
@@ -244,7 +253,7 @@ function free(pkg::AbstractString)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
     with(GitRepo, pkg) do repo
         LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
-        info("Freeing $pkg")
+        @info "Freeing $pkg"
         vers = sort!(collect(keys(avail)), rev=true)
         while true
             for ver in vers
@@ -271,7 +280,7 @@ function free(pkgs)
             isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
             with(GitRepo, pkg) do repo
                 LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
-                info("Freeing $pkg")
+                @info "Freeing $pkg"
                 vers = sort!(collect(keys(avail)), rev=true)
                 for ver in vers
                     sha1 = avail[ver].sha1
@@ -304,31 +313,31 @@ function pin(pkg::AbstractString, head::AbstractString)
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"
             if LibGit2.isattached(repo) && LibGit2.branch(repo) == branch
-                info("Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit"))
+                @info "Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit")
                 should_resolve = false
                 return
             end
             ref = LibGit2.lookup_branch(repo, branch)
             try
-                if !isnull(ref)
+                if ref !== nothing
                     if LibGit2.revparseid(repo, branch) != id
                         throw(PkgError("Package $pkg: existing branch $branch has " *
                             "been edited and doesn't correspond to its original commit"))
                     end
-                    info("Package $pkg: checking out existing branch $branch")
+                    @info "Package $pkg: checking out existing branch $branch"
                 else
-                    info("Creating $pkg branch $branch")
-                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
+                    @info "Creating $pkg branch $branch"
+                    ref = LibGit2.create_branch(repo, branch, commit)
                 end
 
                 # checkout selected branch
-                with(LibGit2.peel(LibGit2.GitTree, get(ref))) do btree
+                with(LibGit2.peel(LibGit2.GitTree, ref)) do btree
                     LibGit2.checkout_tree(repo, btree)
                 end
                 # switch head to the branch
-                LibGit2.head!(repo, get(ref))
+                LibGit2.head!(repo, ref)
             finally
-                close(get(ref))
+                close(ref)
             end
         finally
             close(commit)
@@ -349,7 +358,7 @@ function pin(pkg::AbstractString, ver::VersionNumber)
 end
 
 function update(branch::AbstractString, upkgs::Set{String})
-    info("Updating METADATA...")
+    @info "Updating METADATA..."
     with(GitRepo, "METADATA") do repo
         try
             with(LibGit2.head(repo)) do h
@@ -418,9 +427,9 @@ function update(branch::AbstractString, upkgs::Set{String})
             with(GitRepo, pkg) do repo
                 if LibGit2.isattached(repo)
                     if LibGit2.isdirty(repo)
-                        warn("Package $pkg: skipping update (dirty)...")
+                        @warn "Package $pkg: skipping update (dirty)..."
                     elseif Read.ispinned(repo)
-                        info("Package $pkg: skipping update (pinned)...")
+                        @info "Package $pkg: skipping update (pinned)..."
                     else
                         prev_sha = string(LibGit2.head_oid(repo))
                         success = true
@@ -436,8 +445,8 @@ function update(branch::AbstractString, upkgs::Set{String})
                         if success
                             post_sha = string(LibGit2.head_oid(repo))
                             branch = LibGit2.branch(repo)
-                            info("Updating $pkg $branch...",
-                                prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
+                            @info "Updating $pkg $branch..." * (prev_sha != post_sha ?
+                                  " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
                         end
                     end
                 end
@@ -455,7 +464,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     finally
         Base.securezero!(creds)
     end
-    info("Computing changes...")
+    @info "Computing changes..."
     resolve(reqs, avail, instd, fixed, free, upkgs)
     # Don't use instd here since it may have changed
     updatehook(sort!(collect(keys(installed()))))
@@ -474,8 +483,10 @@ function resolve(
     have  :: Dict = Read.free(instd),
     upkgs :: Set{String} = Set{String}()
 )
-    orig_reqs = reqs
-    reqs, bktrc = Query.requirements(reqs, fixed, avail)
+    bktrc = Query.init_resolve_backtrace(reqs, fixed)
+    orig_reqs = deepcopy(reqs)
+    Query.check_fixed(reqs, fixed, avail)
+    Query.propagate_fixed!(reqs, bktrc, fixed)
     deps, conflicts = Query.dependencies(avail, fixed)
 
     for pkg in keys(reqs)
@@ -503,7 +514,7 @@ function resolve(
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    isempty(changes) && return info("No packages to install, update or remove")
+    isempty(changes) && return @info "No packages to install, update or remove"
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = []
@@ -529,17 +540,16 @@ function resolve(
     try
         for (pkg,(ver1,ver2)) in changes
             if ver1 === nothing
-                info("Installing $pkg v$ver2")
+                @info "Installing $pkg v$ver2"
                 Write.install(pkg, Read.sha1(pkg,ver2))
             elseif ver2 === nothing
-                info("Removing $pkg v$ver1")
+                @info "Removing $pkg v$ver1"
                 Write.remove(pkg)
             else
                 up = ver1 <= ver2 ? "Up" : "Down"
-                info("$(up)grading $pkg: v$ver1 => v$ver2")
+                @info "$(up)grading $pkg: v$ver1 => v$ver2"
                 Write.update(pkg, Read.sha1(pkg,ver2))
-                pkgsym = Symbol(pkg)
-                if Base.root_module_exists(pkgsym)
+                if Base.root_module_exists(Base.PkgId(pkg))
                     push!(imported, "- $pkg")
                 end
             end
@@ -548,44 +558,34 @@ function resolve(
     catch err
         for (pkg,(ver1,ver2)) in reverse!(changed)
             if ver1 === nothing
-                info("Rolling back install of $pkg")
+                @info "Rolling back install of $pkg"
                 @recover Write.remove(pkg)
             elseif ver2 === nothing
-                info("Rolling back deleted $pkg to v$ver1")
+                @info "Rolling back deleted $pkg to v$ver1"
                 @recover Write.install(pkg, Read.sha1(pkg,ver1))
             else
-                info("Rolling back $pkg from v$ver2 to v$ver1")
+                @info "Rolling back $pkg from v$ver2 to v$ver1"
                 @recover Write.update(pkg, Read.sha1(pkg,ver1))
             end
         end
         rethrow(err)
     end
     if !isempty(imported)
-        warn(join(["The following packages have been updated but were already imported:",
-            imported..., "Restart Julia to use the updated versions."], "\n"))
+        @warn join(["The following packages have been updated but were already imported:",
+            imported..., "Restart Julia to use the updated versions."], "\n")
     end
     # re/build all updated/installed packages
     build(map(x->x[1], filter(x -> x[2][2] !== nothing, changes)))
 end
 
-function warnbanner(msg...; label="[ WARNING ]", prefix="")
-    cols = Base.displaysize(STDERR)[2]
-    str = rpad(lpad(label, div(cols+textwidth(label), 2), "="), cols, "=")
-    warn(prefix="", str)
-    println(STDERR)
-    warn(prefix=prefix, msg...)
-    println(STDERR)
-    warn(prefix="", "="^cols)
-end
-
 function build(pkg::AbstractString, build_file::AbstractString, errfile::AbstractString)
     # To isolate the build from the running Julia process, we execute each build.jl file in
-    # a separate process. Errors are serialized to errfile for later reporting.
-    # TODO: serialize the same way the load cache does, not with strings
-    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
+    # a separate process. Errors are written to errfile for later reporting.
     code = """
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        empty!(Base.DEPOT_PATH)
+        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.LOAD_CACHE_PATH)
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
@@ -593,14 +593,17 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         open("$(escape_string(errfile))", "a") do f
             pkg, build_file = "$pkg", "$(escape_string(build_file))"
             try
-                info("Building \$pkg")
+                @info "Building \$pkg"
                 cd(dirname(build_file)) do
                     evalfile(build_file)
                 end
             catch err
-                Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
-                serialize(f, pkg)
-                serialize(f, err)
+                @error \"""
+                    ------------------------------------------------------------
+                    # Build failed for \$pkg
+                    \""" exception=err,catch_backtrace()
+                write(f, pkg); write(f, 0x00)
+                write(f, sprint(showerror, err)); write(f, 0x00)
             end
         end
         """
@@ -629,19 +632,13 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
-    errfile = tempname()
-    touch(errfile)  # create empty file
-    try
+    mktemp() do errfile, f
         build!(pkgs, seen, errfile)
-        open(errfile, "r") do f
-            while !eof(f)
-                pkg = deserialize(f)
-                err = deserialize(f)
-                errs[pkg] = err
-            end
+        while !eof(f)
+            pkg = readuntil(f, '\0')
+            err = readuntil(f, '\0')
+            errs[pkg] = err
         end
-    finally
-        isfile(errfile) && Base.rm(errfile)
     end
 end
 
@@ -649,14 +646,16 @@ function build(pkgs::Vector)
     errs = Dict()
     build!(pkgs,errs)
     isempty(errs) && return
-    println(STDERR)
-    warnbanner(label="[ BUILD ERRORS ]", """
-    WARNING: $(join(keys(errs),", "," and ")) had build errors.
+    @warn """
+        ------------------------------------------------------------
+        # Build error summary
 
-     - packages with build errors remain installed in $(pwd())
-     - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
-     - build a single package by running its `deps/build.jl` script
-    """)
+        $(join(keys(errs),", "," and ")) had build errors.
+
+         - packages with build errors remain installed in $(pwd())
+         - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
+         - build a single package by running its `deps/build.jl` script
+        """
 end
 build() = build(sort!(collect(keys(installed()))))
 
@@ -666,11 +665,14 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
         updatehook!(Read.requires_list(pkg),errs,push!(seen,pkg))
         path = abspath(pkg,"deps","update.jl")
         isfile(path) || continue
-        info("Running update script for $pkg")
+        @info "Running update script for $pkg"
         cd(dirname(path)) do
             try evalfile(path)
             catch err
-                warnbanner(err, label="[ ERROR: $pkg ]")
+                @error """
+                    ------------------------------------------------------------
+                    # Update hook failed for $pkg
+                    """ exception=err,catch_backtrace()
                 errs[pkg] = err
             end
         end
@@ -682,12 +684,15 @@ function updatehook(pkgs::Vector)
     updatehook!(pkgs,errs)
     isempty(errs) && return
     println(STDERR)
-    warnbanner(label="[ UPDATE ERRORS ]", """
-    WARNING: $(join(keys(errs),", "," and ")) had update errors.
+    @warn """
+        ------------------------------------------------------------
+        # Update hook summary
 
-     - Unrelated packages are unaffected
-     - To retry, run Pkg.update() again
-    """)
+        $(join(keys(errs),", "," and ")) had update errors.
+
+        - Unrelated packages are unaffected
+        - To retry, run Pkg.update() again
+        """
 end
 
 function test!(pkg::AbstractString,
@@ -698,7 +703,7 @@ function test!(pkg::AbstractString,
     if isfile(reqs_path)
         tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
-            info("Computing test dependencies for $pkg...")
+            @info "Computing test dependencies for $pkg..."
             resolve(merge(Reqs.parse("REQUIRE"), tests_require))
         end
     end
@@ -708,7 +713,7 @@ function test!(pkg::AbstractString,
     elseif !isfile(test_path)
         push!(notests, pkg)
     else
-        info("Testing $pkg")
+        @info "Testing $pkg"
         cd(dirname(test_path)) do
             try
                 cmd = ```
@@ -722,9 +727,12 @@ function test!(pkg::AbstractString,
                     $test_path
                     ```
                 run(cmd)
-                info("$pkg tests passed")
+                @info "$pkg tests passed"
             catch err
-                warnbanner(err, label="[ ERROR: $pkg ]")
+                @error """
+                    ------------------------------------------------------------
+                    # Testing failed for $pkg
+                    """ exception=err,catch_backtrace()
                 push!(errs,pkg)
             end
         end
@@ -737,7 +745,7 @@ struct PkgTestError <: Exception
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
+    printstyled(io, ex.msg, color=Base.error_color())
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)

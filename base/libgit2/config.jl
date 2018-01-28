@@ -11,8 +11,8 @@ function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                    force::Bool=false)
     # create new config object
-    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_config_new, :libgit2), Cint, (Ptr{Ptr{Void}},), cfg_ptr_ptr)
+    cfg_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_config_new, :libgit2), Cint, (Ptr{Ptr{Cvoid}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     try
         addfile(cfg, path, level, force)
@@ -31,9 +31,9 @@ have a specific configuration file set, the default git configuration will be
 used.
 """
 function GitConfig(repo::GitRepo)
-    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    cfg_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, repo.ptr)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), cfg_ptr_ptr, repo.ptr)
     return GitConfig(repo, cfg_ptr_ptr[])
 end
 
@@ -45,16 +45,16 @@ files into a prioritized configuration. This can be used to access default confi
 options outside a specific git repository.
 """
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
-    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    cfg_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
-                  (Ptr{Ptr{Void}},), cfg_ptr_ptr)
+                  (Ptr{Ptr{Cvoid}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     if level != Consts.CONFIG_LEVEL_DEFAULT
-        glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+        glb_cfg_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
         tmpcfg = cfg
         try
             @check ccall((:git_config_open_level, :libgit2), Cint,
-                         (Ptr{Ptr{Void}}, Ptr{Void}, Cint),
+                         (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint),
                           glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
             cfg = GitConfig(glb_cfg_ptr_ptr[])
         finally
@@ -79,14 +79,14 @@ function addfile(cfg::GitConfig, path::AbstractString,
                  level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                  force::Bool=false)
     @check ccall((:git_config_add_file_ondisk, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Cstring, Cint, Cint),
+                  (Ptr{Ptr{Cvoid}}, Cstring, Cint, Cint),
                    cfg.ptr, path, Cint(level), Cint(force))
 end
 
 function get(::Type{<:AbstractString}, c::GitConfig, name::AbstractString)
     buf_ref = Ref(Buffer())
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
-                 (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ref, c.ptr, name)
+                 (Ptr{Buffer}, Ptr{Cvoid}, Cstring), buf_ref, c.ptr, name)
     buf = buf_ref[]
     str = unsafe_string(buf.ptr, buf.size)
     free(buf_ref)
@@ -96,21 +96,21 @@ end
 function get(::Type{Bool}, c::GitConfig, name::AbstractString)
     val_ptr = Ref(Cint(0))
     @check ccall((:git_config_get_bool, :libgit2), Cint,
-          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+          (Ptr{Cint}, Ptr{Cvoid}, Cstring), val_ptr, c.ptr, name)
     return Bool(val_ptr[])
 end
 
 function get(::Type{Int32}, c::GitConfig, name::AbstractString)
     val_ptr = Ref(Cint(0))
     @check ccall((:git_config_get_int32, :libgit2), Cint,
-          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+          (Ptr{Cint}, Ptr{Cvoid}, Cstring), val_ptr, c.ptr, name)
     return val_ptr[]
 end
 
 function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     val_ptr = Ref(Cintmax_t(0))
     @check ccall((:git_config_get_int64, :libgit2), Cint,
-          (Ptr{Cintmax_t}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+          (Ptr{Cintmax_t}, Ptr{Cvoid}, Cstring), val_ptr, c.ptr, name)
     return val_ptr[]
 end
 
@@ -142,52 +142,52 @@ end
 
 function set!(c::GitConfig, name::AbstractString, value::AbstractString)
     @check ccall((:git_config_set_string, :libgit2), Cint,
-                  (Ptr{Void}, Cstring, Cstring), c.ptr, name, value)
+                  (Ptr{Cvoid}, Cstring, Cstring), c.ptr, name, value)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Bool)
     bval = Int32(value)
     @check ccall((:git_config_set_bool, :libgit2), Cint,
-                  (Ptr{Void}, Cstring, Cint), c.ptr, name, bval)
+                  (Ptr{Cvoid}, Cstring, Cint), c.ptr, name, bval)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Int32)
     @check ccall((:git_config_set_int32, :libgit2), Cint,
-                  (Ptr{Void}, Cstring, Cint), c.ptr, name, value)
+                  (Ptr{Cvoid}, Cstring, Cint), c.ptr, name, value)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Int64)
     @check ccall((:git_config_set_int64, :libgit2), Cint,
-                  (Ptr{Void}, Cstring, Cintmax_t), c.ptr, name, value)
+                  (Ptr{Cvoid}, Cstring, Cintmax_t), c.ptr, name, value)
 end
 
 function GitConfigIter(cfg::GitConfig)
-    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    ci_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_iterator_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), ci_ptr, cfg.ptr)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), ci_ptr, cfg.ptr)
     return GitConfigIter(ci_ptr[])
 end
 
 function GitConfigIter(cfg::GitConfig, name::AbstractString)
-    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    ci_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring),
                   ci_ptr, cfg.ptr, name, C_NULL)
     return GitConfigIter(ci_ptr[])
 end
 
 function GitConfigIter(cfg::GitConfig, name::AbstractString, value::Regex)
-    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    ci_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring),
                   ci_ptr, cfg.ptr, name, value.pattern)
     return GitConfigIter(ci_ptr[])
 end
 
 function GitConfigIter(cfg::GitConfig, name::Regex)
-    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    ci_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_iterator_glob_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring),
                   ci_ptr, cfg.ptr, name.pattern)
     return GitConfigIter(ci_ptr[])
 end
@@ -195,32 +195,32 @@ end
 function Base.start(ci::GitConfigIter)
     entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
     err = ccall((:git_config_next, :libgit2), Cint,
-                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Cvoid}), entry_ptr_ptr, ci.ptr)
     if err == Cint(Error.GIT_OK)
-        state = Nullable{ConfigEntry}(unsafe_load(entry_ptr_ptr[]))
+        state = unsafe_load(entry_ptr_ptr[])
     elseif err == Cint(Error.ITEROVER)
-        state = Nullable{ConfigEntry}()
+        state = nothing
     else
         throw(GitError(err))
     end
     return state
 end
 
-Base.done(ci::GitConfigIter, state) = isnull(state)
+Base.done(ci::GitConfigIter, state) = state === nothing
 
 function Base.next(ci::GitConfigIter, state)
-    entry = Base.get(state)
+    entry = notnothing(state)
     entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
     err = ccall((:git_config_next, :libgit2), Cint,
-                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Cvoid}), entry_ptr_ptr, ci.ptr)
     if err == Cint(Error.GIT_OK)
-        state = Nullable{ConfigEntry}(unsafe_load(entry_ptr_ptr[]))
+        state = unsafe_load(entry_ptr_ptr[])
     elseif err == Cint(Error.ITEROVER)
-        state = Nullable{ConfigEntry}()
+        state = nothing
     else
         throw(GitError(err))
     end
     return (entry, state)
 end
 
-Base.iteratorsize(::Type{GitConfigIter}) = Base.SizeUnknown()
+Base.IteratorSize(::Type{GitConfigIter}) = Base.SizeUnknown()

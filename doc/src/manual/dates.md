@@ -1,7 +1,7 @@
 # Date and DateTime
 
 ```@meta
-CurrentModule = Base.Dates
+CurrentModule = Dates
 ```
 
 The `Dates` module provides two types for working with dates: [`Date`](@ref) and [`DateTime`](@ref),
@@ -125,7 +125,7 @@ julia> for i = 1:10^5
        end
 ```
 
-A full suite of parsing and formatting tests and examples is available in [`tests/dates/io.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
+A full suite of parsing and formatting tests and examples is available in [`stdlib/Dates/test/io.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/io.jl).
 
 ## Durations/Comparisons
 
@@ -144,14 +144,14 @@ julia> dt2 = Date(2000,2,1)
 
 julia> dump(dt)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 734562
 
 julia> dump(dt2)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 730151
 
 julia> dt > dt2
@@ -240,12 +240,12 @@ One may also access the underlying `UTInstant` or integer value:
 ```jldoctest tdate
 julia> dump(t)
 Date
-  instant: Base.Dates.UTInstant{Base.Dates.Day}
-    periods: Base.Dates.Day
+  instant: Dates.UTInstant{Dates.Day}
+    periods: Dates.Day
       value: Int64 735264
 
 julia> t.instant
-Base.Dates.UTInstant{Base.Dates.Day}(735264 days)
+Dates.UTInstant{Dates.Day}(735264 days)
 
 julia> Dates.value(t)
 735264
@@ -458,8 +458,7 @@ adjustment criterion.
 For example:
 
 ```jldoctest
-julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday # Returns true if the day of the week of x is Tuesday
-(::#1) (generic function with 1 method)
+julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday
 
 julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
 2014-07-15
@@ -504,7 +503,7 @@ julia> filter(dr) do x
  2014-11-11
 ```
 
-Additional examples and tests are available in [`test/dates/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
+Additional examples and tests are available in [`stdlib/Dates/test/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/adjusters.jl).
 
 ## Period Types
 

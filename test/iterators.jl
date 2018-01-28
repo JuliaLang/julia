@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Iterators
+using Random
 
 # zip and filter iterators
 # issue #4718
@@ -31,11 +32,11 @@ end
 let b = IOBuffer("foo\n")
     @test collect(EachLine(b)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    @test collect(EachLine(b, keep=true)) == ["foo\n"]
     seek(b, 0)
     @test collect(EachLine(b, ondone=()->0)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+    @test collect(EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
 # enumerate (issue #6284)
@@ -115,7 +116,7 @@ let i = 0
 end
 
 @test length(drop(1:3,typemax(Int))) == 0
-@test Base.iteratorsize(drop(countfrom(1),3)) == Base.IsInfinite()
+@test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
 
 # double take
@@ -160,11 +161,11 @@ let i = 0
 end
 @test eltype(repeated(0))    == Int
 @test eltype(repeated(0, 5)) == Int
-@test Base.iteratorsize(repeated(0))      == Base.IsInfinite()
-@test Base.iteratorsize(repeated(0, 5))   == Base.HasLength()
-@test Base.iteratoreltype(repeated(0))    == Base.HasEltype()
-@test Base.iteratoreltype(repeated(0, 5)) == Base.HasEltype()
-@test Base.iteratorsize(zip(repeated(0), repeated(0))) == Base.IsInfinite()
+@test Base.IteratorSize(repeated(0))      == Base.IsInfinite()
+@test Base.IteratorSize(repeated(0, 5))   == Base.HasLength()
+@test Base.IteratorEltype(repeated(0))    == Base.HasEltype()
+@test Base.IteratorEltype(repeated(0, 5)) == Base.HasEltype()
+@test Base.IteratorSize(zip(repeated(0), repeated(0))) == Base.IsInfinite()
 
 
 # product
@@ -305,45 +306,45 @@ let a = 1:2,
     end
 end
 
-# iteratorsize trait business
+# IteratorSize trait business
 let f1 = Iterators.filter(i->i>0, 1:10)
-    @test Base.iteratorsize(product(f1))               == Base.SizeUnknown()
-    @test Base.iteratorsize(product(1:2, f1))          == Base.SizeUnknown()
-    @test Base.iteratorsize(product(f1, 1:2))          == Base.SizeUnknown()
-    @test Base.iteratorsize(product(f1, f1))           == Base.SizeUnknown()
-    @test Base.iteratorsize(product(f1, countfrom(1))) == Base.IsInfinite()
-    @test Base.iteratorsize(product(countfrom(1), f1)) == Base.IsInfinite()
+    @test Base.IteratorSize(product(f1))               == Base.SizeUnknown()
+    @test Base.IteratorSize(product(1:2, f1))          == Base.SizeUnknown()
+    @test Base.IteratorSize(product(f1, 1:2))          == Base.SizeUnknown()
+    @test Base.IteratorSize(product(f1, f1))           == Base.SizeUnknown()
+    @test Base.IteratorSize(product(f1, countfrom(1))) == Base.IsInfinite()
+    @test Base.IteratorSize(product(countfrom(1), f1)) == Base.IsInfinite()
 end
-@test Base.iteratorsize(product(1:2, countfrom(1)))          == Base.IsInfinite()
-@test Base.iteratorsize(product(countfrom(2), countfrom(1))) == Base.IsInfinite()
-@test Base.iteratorsize(product(countfrom(1), 1:2))          == Base.IsInfinite()
-@test Base.iteratorsize(product(1:2))                        == Base.HasShape()
-@test Base.iteratorsize(product(1:2, 1:2))                   == Base.HasShape()
-@test Base.iteratorsize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
-@test Base.iteratorsize(product(take(1:2, 2)))               == Base.HasShape()
-@test Base.iteratorsize(product([1 2; 3 4]))                 == Base.HasShape()
+@test Base.IteratorSize(product(1:2, countfrom(1)))          == Base.IsInfinite()
+@test Base.IteratorSize(product(countfrom(2), countfrom(1))) == Base.IsInfinite()
+@test Base.IteratorSize(product(countfrom(1), 1:2))          == Base.IsInfinite()
+@test Base.IteratorSize(product(1:2))                        == Base.HasShape{1}()
+@test Base.IteratorSize(product(1:2, 1:2))                   == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape{1}()
+@test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape{2}()
 
-# iteratoreltype trait business
+# IteratorEltype trait business
 let f1 = Iterators.filter(i->i>0, 1:10)
-    @test Base.iteratoreltype(product(f1))               == Base.HasEltype() # FIXME? eltype(f1) is Any
-    @test Base.iteratoreltype(product(1:2, f1))          == Base.HasEltype() # FIXME? eltype(f1) is Any
-    @test Base.iteratoreltype(product(f1, 1:2))          == Base.HasEltype() # FIXME? eltype(f1) is Any
-    @test Base.iteratoreltype(product(f1, f1))           == Base.HasEltype() # FIXME? eltype(f1) is Any
-    @test Base.iteratoreltype(product(f1, countfrom(1))) == Base.HasEltype() # FIXME? eltype(f1) is Any
-    @test Base.iteratoreltype(product(countfrom(1), f1)) == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(f1))               == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(1:2, f1))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(f1, 1:2))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(f1, f1))           == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(f1, countfrom(1))) == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.IteratorEltype(product(countfrom(1), f1)) == Base.HasEltype() # FIXME? eltype(f1) is Any
 end
-@test Base.iteratoreltype(product(1:2, countfrom(1)))          == Base.HasEltype()
-@test Base.iteratoreltype(product(countfrom(1), 1:2))          == Base.HasEltype()
-@test Base.iteratoreltype(product(1:2))                        == Base.HasEltype()
-@test Base.iteratoreltype(product(1:2, 1:2))                   == Base.HasEltype()
-@test Base.iteratoreltype(product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
-@test Base.iteratoreltype(product(take(1:2, 2)))               == Base.HasEltype()
-@test Base.iteratoreltype(product([1 2; 3 4]))                 == Base.HasEltype()
+@test Base.IteratorEltype(product(1:2, countfrom(1)))          == Base.HasEltype()
+@test Base.IteratorEltype(product(countfrom(1), 1:2))          == Base.HasEltype()
+@test Base.IteratorEltype(product(1:2))                        == Base.HasEltype()
+@test Base.IteratorEltype(product(1:2, 1:2))                   == Base.HasEltype()
+@test Base.IteratorEltype(product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
+@test Base.IteratorEltype(product(take(1:2, 2)))               == Base.HasEltype()
+@test Base.IteratorEltype(product([1 2; 3 4]))                 == Base.HasEltype()
 
 @test collect(product(1:2,3:4)) == [(1,3) (1,4); (2,3) (2,4)]
 @test isempty(collect(product(1:0,1:2)))
 @test length(product(1:2,1:10,4:6)) == 60
-@test Base.iteratorsize(product(1:2, countfrom(1))) == Base.IsInfinite()
+@test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
 # flatten
 # -------
@@ -359,7 +360,7 @@ end
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
-@test Base.iteratoreltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
+@test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
@@ -413,7 +414,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(take(1:6, T(3))) == 3
     @test length(drop(1:6, T(3))) == 3
     @test length(repeated(1, T(5))) == 5
-    @test collect(partition(1:5, T(5)))[1] == collect(1:5)
+    @test collect(partition(1:5, T(5)))[1] == 1:5
 end
 
 @testset "collect finite iterators issue #12009" begin
@@ -428,4 +429,81 @@ end
     arr = filter(n -> true, 1:0)
     @test length(arr) == 0
     @test eltype(arr) == Int
+end
+
+@testset "IndexValue type" begin
+    for A in ([4.0 5.0 6.0],
+              [],
+              (4.0, 5.0, 6.0),
+              (a=4.0, b=5.0, c=6.0),
+              (),
+              NamedTuple(),
+             )
+        d = pairs(A)
+        @test d === pairs(d)
+        @test isempty(d) == isempty(A)
+        @test length(d) == length(A)
+        @test keys(d) == keys(A)
+        @test values(d) == A
+        @test Base.IteratorSize(d) == Base.HasLength()
+        @test Base.IteratorEltype(d) == Base.HasEltype()
+        @test isempty(d) || haskey(d, first(keys(d)))
+        @test collect(v for (k, v) in d) == vec(collect(A))
+        if A isa NamedTuple
+            K = isempty(d) ? Union{} : Symbol
+            V = isempty(d) ? Union{} : Float64
+            @test isempty(d) || haskey(d, :a)
+            @test !haskey(d, :abc)
+            @test !haskey(d, 1)
+        elseif A isa Tuple
+            K = Int
+            V = isempty(d) ? Union{} : Float64
+        else
+            K = A isa AbstractVector ? Int : CartesianIndex{2}
+            V = isempty(d) ? Any : Float64
+            @test get(A, 4, "not found") === "not found"
+            if !isempty(A)
+                @test get(A, 2, "not found") === 5.0
+                @test getindex(d, 3) === 6.0
+                @test setindex!(d, 9, 3) === d
+                @test A[3] === 9.0
+            end
+        end
+        @test keytype(d) == K
+        @test valtype(d) == V
+        @test eltype(d) == Pair{K, V}
+    end
+end
+
+@testset "reverse iterators" begin
+    squash(x::Number) = x
+    squash(A) = reshape(A, length(A))
+    Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
+    for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
+                eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
+                Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
+                pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5))
+        @test squash(collect(Iterators.reverse(itr))) == reverse(squash(collect(itr)))
+    end
+    @test collect(take(Iterators.reverse(cycle(1:3)), 7)) == collect(take(cycle(3:-1:1), 7))
+    let r = repeated(3.14159)
+        @test Iterators.reverse(r) === r
+    end
+    let t = (2,3,5,7,11)
+        @test Iterators.reverse(Iterators.reverse(t)) === t
+    end
+end
+
+@testset "Iterators.Stateful" begin
+    let a = Iterators.Stateful("abcdef")
+        @test !isempty(a)
+        @test popfirst!(a) == 'a'
+        @test collect(Iterators.take(a, 3)) == ['b','c','d']
+        @test collect(a) == ['e', 'f']
+    end
+    let a = Iterators.Stateful([1, 1, 1, 2, 3, 4])
+        for x in a; x == 1 || break; end
+        @test Base.peek(a) == 3
+        @test sum(a) == 7
+    end
 end

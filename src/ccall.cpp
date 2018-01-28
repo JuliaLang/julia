@@ -554,7 +554,7 @@ static Value *julia_to_address(
                 // no copy, just reference the data field
                 return ctx.builder.CreateBitCast(emit_pointer_from_objref(ctx, data_pointer(ctx, jvinfo)), to);
             }
-            else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) { // anything declared `struct`, except Ptr{Void}
+            else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) { // anything declared `struct`, except Ptr{Cvoid}
                 // yes copy
                 Value *nbytes;
                 AllocaInst *ai;
@@ -1062,17 +1062,22 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
-        Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
-        if (!failed)
-            m = jl_Module;
-        if (m == NULL) {
+#if JL_LLVM_VERSION >= 60000
+        // Do not enable update debug info since it runs the verifier on the whole module
+        // and will error on the function we are currently emitting.
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err, nullptr, /* UpdateDebugInfo */ false);
+#else
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err);
+#endif
+        if (failed) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
             Err.print("julia",stream,true);
             jl_error(stream.str().c_str());
         }
-        f = m->getFunction(ir_name);
+        f = jl_Module->getFunction(ir_name);
     }
     else {
         assert(isPtr);
@@ -1134,8 +1139,8 @@ static jl_cgval_t mark_or_box_ccall_result(jl_codectx_t &ctx, Value *result, boo
     if (!static_rt) {
         assert(!isboxed && ctx.spvals_ptr && unionall && jl_is_datatype(rt));
         Value *runtime_dt = runtime_apply_type(ctx, rt, unionall);
-        // TODO: is this leaf check actually necessary, or is it structurally guaranteed?
-        emit_leafcheck(ctx, runtime_dt, "ccall: return type must be a leaf DataType");
+        // TODO: is this concrete check actually necessary, or is it structurally guaranteed?
+        emit_concretecheck(ctx, runtime_dt, "ccall: return type must be a concrete DataType");
 #if JL_LLVM_VERSION >= 40000
         const DataLayout &DL = jl_data_layout;
 #else
@@ -1409,11 +1414,11 @@ static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl
     }
 
     if (!retboxed && static_rt) {
-        if (!jl_is_leaf_type(rt)) {
+        if (!jl_is_concrete_type(rt)) {
             if (jl_is_cpointer_type(rt))
                 return "ccall: return type Ptr should have an element type (not Ptr{_<:T})";
             else if (rt != jl_bottom_type)
-                return "ccall: return type must be a leaf DataType";
+                return "ccall: return type must be a concrete DataType";
         }
     }
 
@@ -1736,20 +1741,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
-    else if (is_libjulia_func(jl_is_leaf_type)) {
-        assert(!isVa && !llvmcall && nargt == 1 && !addressOf.at(0));
-        const jl_cgval_t &arg = argv[0];
-        jl_value_t *ty = arg.constant;
-        if (!ty && jl_is_type_type(arg.typ) && !jl_has_free_typevars(arg.typ))
-            ty = jl_tparam0(arg.typ);
-        if (ty) {
-            int isleaf = jl_is_leaf_type(ty);
-            JL_GC_POP();
-            return mark_or_box_ccall_result(ctx,
-                    ConstantInt::get(T_int32, isleaf),
-                    false, rt, unionall, static_rt);
-        }
-    }
     else if (is_libjulia_func(jl_function_ptr)) {
         assert(!isVa && !llvmcall && nargt == 3);
         assert(lrt == T_size);
@@ -1878,7 +1869,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t &arg = argv[ai];
 
         // if we know the function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
+        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
             jl_svec_len(ctx.linfo->sparam_vals) > 0) {
@@ -1936,7 +1927,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     bool sretboxed = false;
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
-        if (jl_isbits(rt)) {
+        if (jl_justbits(rt)) {
             result = emit_static_alloca(ctx, lrt);
         }
         else {

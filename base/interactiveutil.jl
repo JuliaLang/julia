@@ -5,7 +5,7 @@
 """
     editor()
 
-Determines the editor to use when running functions like `edit`. Returns an Array compatible
+Determine the editor to use when running functions like `edit`. Return an `Array` compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
 `EDITOR` as an environment variable.
 """
@@ -27,7 +27,7 @@ end
     edit(path::AbstractString, line::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Returns to the `julia` prompt when you quit the editor. The editor can be changed
+Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
@@ -41,8 +41,8 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
             name == "mvim" || name == "nano" ||
-            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
-            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
+            name == "emacs" && any(c -> c in ["-nw", "--no-window-system" ], command) ||
+            name == "emacsclient" && any(c -> c in ["-nw", "-t", "-tty"], command)
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
@@ -67,7 +67,7 @@ function edit(path::AbstractString, line::Integer=0)
     if Sys.iswindows() && name == "open"
         @static Sys.iswindows() && # don't emit this ccall on other platforms
             systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
-                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                     (Ptr{Cvoid}, Cwstring, Cwstring, Ptr{Cvoid}, Ptr{Cvoid}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
         spawn(pipeline(cmd, stderr=STDERR))
@@ -133,30 +133,49 @@ if Sys.isapple()
     end
     clipboard() = read(`pbpaste`, String)
 
-elseif Sys.islinux()
+elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing
+    const _clipboardcmds = Dict(
+        :copy => Dict(
+            :xsel  => Sys.islinux() ?
+                `xsel --nodetach --input --clipboard` : `xsel -c`,
+            :xclip => `xclip -silent -in -selection clipboard`,
+        ),
+        :paste => Dict(
+            :xsel  => Sys.islinux() ?
+                `xsel --nodetach --output --clipboard` : `xsel -p`,
+            :xclip => `xclip -quiet -out -selection clipboard`,
+        )
+    )
     function clipboardcmd()
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
             success(pipeline(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
-        error("no clipboard command found, please install xsel or xclip")
+        pkgs = @static if Sys.islinux()
+            "xsel or xclip"
+        elseif Sys.KERNEL === :FreeBSD
+            "x11/xsel or x11/xclip"
+        end
+        error("no clipboard command found, please install $pkgs")
     end
     function clipboard(x)
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
-              c == :xclip ? `xclip -silent -in -selection clipboard` :
+        cmd = get(_clipboardcmds[:copy], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
     function clipboard()
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
-              c == :xclip ? `xclip -quiet -out -selection clipboard` :
+        cmd = get(_clipboardcmds[:paste], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         read(pipeline(cmd, stderr=STDERR), String)
     end
 
@@ -166,7 +185,7 @@ elseif Sys.iswindows()
         if containsnul(x)
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
         end
-        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = cwstring(x)
         # copy data to locked, allocated space
@@ -175,14 +194,14 @@ elseif Sys.iswindows()
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), p)
         systemerror(:GlobalLock, plock==C_NULL)
         ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16},Ptr{UInt16},Int), plock, x_u16, sizeof(x_u16))
-        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Cvoid},), plock))
         pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32, Ptr{UInt16}), 13, p)
         systemerror(:SetClipboardData, pdata!=p)
-        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        ccall((:CloseClipboard, "user32"), stdcall, Cvoid, ())
     end
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
-        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL))
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
         systemerror(:SetClipboardData, pdata==C_NULL)
         systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
@@ -226,20 +245,20 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
         if tck > 0
-            @printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
+            Printf.@printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
                     "speed", "user", "nice", "sys", "idle", "irq")
         else
-            @printf(io, "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n",
+            Printf.@printf(io, "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n",
                     "speed", "user", "nice", "sys", "idle", "irq")
         end
     end
     print(io, prefix)
     if tck > 0
-        @printf(io, "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s",
+        Printf.@printf(io, "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s",
                 info.speed, info.cpu_times!user / tck, info.cpu_times!nice / tck,
                 info.cpu_times!sys / tck, info.cpu_times!idle / tck, info.cpu_times!irq / tck)
     else
-        @printf(io, "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks",
+        Printf.@printf(io, "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks",
                 info.speed, info.cpu_times!user, info.cpu_times!nice,
                 info.cpu_times!sys, info.cpu_times!idle, info.cpu_times!irq)
     end
@@ -303,25 +322,18 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "  BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "  BLAS: ",libblas_name)
-    end
-    println(io, "  LAPACK: ",liblapack_name)
     println(io, "  LIBM: ",libm_name)
-    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
     println(io, "Environment:")
     for (k,v) in ENV
-        if ismatch(r"JULIA", String(k))
+        if contains(String(k), r"JULIA")
             println(io, "  $(k) = $(v)")
         end
     end
     if verbose
         for (k,v) in ENV
-            if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
+            if contains(String(k), r"PATH|FLAG|^TERM$|HOME")
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -348,6 +360,8 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
+In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
+these are often intentional.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))
@@ -406,18 +420,24 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             return quote
                 local arg1 = $(esc(args[1]))
                 $(fcn)(Core.kwfunc(arg1),
-                       Tuple{Vector{Any}, Core.Typeof(arg1),
+                       Tuple{Any, Core.Typeof(arg1),
                              $(typesof)($(map(esc, args[2:end])...)).parameters...})
             end
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+        elseif ex0.head == :(.)
+            return Expr(:call, fcn, :getproperty,
+                        Expr(:call, typesof, map(esc, ex0.args)...))
+        elseif ex0.head == :(=) && length(ex0.args) == 2 && ex0.args[1].head == :(.)
+            return Expr(:call, fcn, :(setproperty!),
+                        Expr(:call, typesof, map(esc, [ex0.args[1].args..., ex0.args[2]])...))
         end
     end
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     end
-    ex = expand(__module__, ex0)
+    ex = Meta.lower(__module__, ex0)
     exret = Expr(:none)
     if !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
@@ -553,29 +573,29 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
-    return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !_isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
+    # TODO: handle UnionAll properly
+    return (isa(x, DataType) && isa(t, DataType) && x.name === t.name && x <: t) ||
+           (isa(x, Union) && isa(t, DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function][, showparents::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false])
 
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
 (the default is all top-level modules).
 
-If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
+If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
+function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -587,25 +607,25 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function _methodswith(t::Type, m::Module, showparents::Bool)
+function _methodswith(t::Type, m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Function)
-                methodswith(t, f, showparents, meths)
+                methodswith(t, f, meths; supertypes = supertypes)
             end
         end
     end
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
 
-function methodswith(t::Type, showparents::Bool=false)
+function methodswith(t::Type; supertypes::Bool=false)
     meths = Method[]
     for mod in loaded_modules_array()
-        append!(meths, _methodswith(t, mod, showparents))
+        append!(meths, _methodswith(t, mod, supertypes))
     end
     return unique(meths)
 end
@@ -614,12 +634,14 @@ end
 
 downloadcmd = nothing
 if Sys.iswindows()
+    downloadcmd = :powershell
     function download(url::AbstractString, filename::AbstractString)
-        res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                    (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
-        if res != 0
-            error("automatic download failed (error: $res): $url")
-        end
+        ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+        tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
+        client = "New-Object System.Net.Webclient"
+        # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
+        downloadfile = "($client).DownloadFile('$(replace(url, "'" => "''"))', '$(replace(filename, "'" => "''"))')"
+        run(`$ps -NoProfile -Command "$tls12; $downloadfile"`)
         filename
     end
 else
@@ -666,58 +688,31 @@ functionality instead.
 """
 download(url, filename)
 
-# workspace management
-
-"""
-    workspace()
-
-Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`.
-
-If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
-loaded copy. Run `reload("Package")` first to load a fresh copy.
-
-This function should only be used interactively.
-"""
-function workspace()
-    last = Core.Main # ensure to reference the current Main module
-    b = Base # this module
-    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
-    m = Core.Main # now grab a handle to the new Main module
-    ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m, Expr(:toplevel,
-                 :(const Base = $b),
-                 :(const LastMain = $last),
-                 :(using Base.MainInclude)))
-    empty!(package_locks)
-    return m
-end
-
 # testing
 
 """
-    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
                   exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
                   exit_on_error=false,
-                  seed::Union{BitInteger,Void}=nothing)
+                  seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
     seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$numcores"
+    ENV2["JULIA_CPU_CORES"] = "$ncores"
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(JULIA_HOME,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
@@ -727,58 +722,33 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
     end
 end
 
-# testing
+# varinfo
 
+const MARKDOWN_MODULE_REF = Ref{Module}()
 
 """
-    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r"")
 
-Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
+Return a markdown table giving information about exported global variables in a module, optionally restricted
+to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
-    maxline = displaysize(io)[2]
-    line = zeros(UInt8, maxline)
-    head = PipeBuffer(maxline + 1)
-    for v in sort!(names(m))
-        s = string(v)
-        if isdefined(m, v) && ismatch(pattern, s)
-            value = getfield(m, v)
-            @printf head "%30s " s
-            try
-                if value ∈ (Base, Main, Core)
-                    print(head, "              ")
-                else
-                    bytes = summarysize(value)
-                    if bytes < 10_000
-                        @printf(head, "%6d bytes  ", bytes)
-                    else
-                        @printf(head, "%6d KB     ", bytes ÷ (1024))
-                    end
-                end
-                print(head, summary(value))
-            catch e
-                print(head, "#=ERROR: unable to show value=#")
-            end
-            newline = search(head, UInt8('\n')) - 1
-            if newline < 0
-                newline = nb_available(head)
-            end
-            if newline > maxline
-                newline = maxline - 1 # make space for ...
-            end
-            line = resize!(line, newline)
-            line = read!(head, line)
+function varinfo(m::Module=Main, pattern::Regex=r"")
+    rows =
+        Any[ let value = getfield(m, v)
+                 Any[string(v),
+                     (any(x -> x === value, (Base, Main, Core)) ? "" : format_bytes(summarysize(value))),
+                     summary(value)]
+             end
+             for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]
 
-            write(io, line)
-            if nb_available(head) > 0 # more to read? replace with ...
-                print(io, '\u2026') # hdots
-            end
-            println(io)
-            seekend(head) # skip the rest of the text
-        end
+    pushfirst!(rows, Any["name", "size", "summary"])
+
+    if !isassigned(MARKDOWN_MODULE_REF)
+        MARKDOWN_MODULE_REF[] = root_module(Base, :Markdown)
     end
+    Markdown = MARKDOWN_MODULE_REF[]
+    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end
-whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, Main, pat)
+varinfo(pat::Regex) = varinfo(Main, pat)

@@ -41,7 +41,7 @@ the above test program `test.c` with `gcc` using:
 gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
 ```
 
-Then if the environment variable `JULIA_HOME` is set to `$JULIA_DIR/bin`, the output `test` program
+Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
 can be executed.
 
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `examples/` folder.
@@ -125,7 +125,7 @@ too, and the makefile can be used to take advantage of that.  The above example 
 use a Makefile:
 
 ```
-JL_SHARE = $(shell julia -e 'print(joinpath(JULIA_HOME,Base.DATAROOTDIR,"julia"))')
+JL_SHARE = $(shell julia -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))')
 CFLAGS   += $(shell $(JL_SHARE)/julia-config.jl --cflags)
 CXXFLAGS += $(shell $(JL_SHARE)/julia-config.jl --cflags)
 LDFLAGS  += $(shell $(JL_SHARE)/julia-config.jl --ldflags)

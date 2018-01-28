@@ -9,9 +9,9 @@ the file when, and how. `options` controls how to separate the contents of the f
 which commits to probe - see [`BlameOptions`](@ref) for more information.
 """
 function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())
-    blame_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    blame_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_blame_file, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Ptr{BlameOptions}),
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{BlameOptions}),
                    blame_ptr_ptr, repo.ptr, path, Ref(options))
     return GitBlame(repo, blame_ptr_ptr[])
 end
@@ -25,17 +25,20 @@ a function added to a source file or an inner loop that was optimized out of
 that function later.
 """
 function counthunks(blame::GitBlame)
-    return ccall((:git_blame_get_hunk_count, :libgit2), Int32, (Ptr{Void},), blame.ptr)
+    return ccall((:git_blame_get_hunk_count, :libgit2), Int32, (Ptr{Cvoid},), blame.ptr)
 end
 
 function Base.getindex(blame::GitBlame, i::Integer)
     if !(1 <= i <= counthunks(blame))
         throw(BoundsError(blame, (i,)))
     end
-    hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
-                      Ptr{BlameHunk},
-                      (Ptr{Void}, Csize_t), blame.ptr, i-1)
-    return unsafe_load(hunk_ptr)
+    GC.@preserve blame begin
+        hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
+                          Ptr{BlameHunk},
+                          (Ptr{Cvoid}, Csize_t), blame.ptr, i-1)
+        elem = unsafe_load(hunk_ptr)
+    end
+    return elem
 end
 
 function Base.show(io::IO, blame_hunk::BlameHunk)

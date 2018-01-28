@@ -32,17 +32,17 @@ cleanall: clean
 html: deps
 	@echo "Building HTML documentation."
 ifneq ($(OS),WINNT)
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl)
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl)
 else
 # work around issue #11727, windows output redirection breaking on buildbot
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) > docbuild.log 2>&1
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) > docbuild.log 2>&1
 	@cat docbuild.log
 endif
 	@echo "Build finished. The HTML pages are in _build/html."
 
 pdf: deps
 	@echo "Building PDF documentation."
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf
 	@echo "Build finished."
 
 linkcheck: deps
@@ -63,5 +63,5 @@ check: deps
 # The deploy target should only be called in Travis builds
 deploy: deps
 	@echo "Deploying HTML documentation."
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy
 	@echo "Build & deploy of docs finished."

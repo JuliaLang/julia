@@ -81,11 +81,6 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# When set, give julia binaries CPUID specific names. This is useful in cluster environments
-# with heterogeneous architectures. N.B.: will not be automatically rebuilt for all
-# architectures if julia is updated.
-CPUID_SPECIFIC_BINARIES ?= 0
-
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -267,8 +262,8 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//")
-STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
+STD_LIB_PATH := $(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//")
+STD_LIB_PATH := $(STD_LIB_PATH):$(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
@@ -690,6 +685,32 @@ endif
 # If we are running on powerpc64 or ppc64, fail out dramatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
+endif
+
+# File name of make binary-dist result
+ifeq ($(JULIA_BINARYDIST_FILENAME),)
+DIST_OS:=$(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
+ifeq (WINNT,$(OS))
+DIST_OS:=win
+endif
+ifeq (Linux,$(OS))
+DIST_OS:=linux
+endif
+ifeq (Darwin,$(OS))
+DIST_OS:=mac
+endif
+DIST_ARCH:=$(ARCH)
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+DIST_ARCH:=ppc64le
+endif
+ifeq (1,$(ISX86))
+DIST_ARCH:=$(BINARY)
+endif
+ifneq (,$(findstring arm,$(ARCH)))
+DIST_ARCH:=arm
+endif
+
+JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
 endif
 
 # If we are running on ARM, set certain options automatically

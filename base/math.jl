@@ -25,7 +25,7 @@ using Base: sign_mask, exponent_mask, exponent_one,
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base.IEEEFloat
+using Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -59,8 +59,8 @@ are promoted to a common type.
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
 3-element Array{BigFloat,1}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
- 2.000000000000000000000000000000000000000000000000000000000000000000000000000000
- 9.000000000000000000000000000000000000000000000000000000000000000000000000000000
+ 2.0
+ 9.0
 ```
 """
 clamp(x::X, lo::L, hi::H) where {X,L,H} =
@@ -208,35 +208,35 @@ const libm = Base.libm_name
 
 Compute hyperbolic sine of `x`.
 """
-sinh(x)
+sinh(x::Number)
 
 """
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
 """
-cosh(x)
+cosh(x::Number)
 
 """
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
 """
-tanh(x)
+tanh(x::Number)
 
 """
     atan(x)
 
 Compute the inverse tangent of `x`, where the output is in radians.
 """
-atan(x)
+atan(x::Number)
 
 """
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
 """
-asinh(x)
+asinh(x::Number)
 
 """
     expm1(x)
@@ -253,7 +253,7 @@ for f in (:cbrt, :atan, :exp2, :expm1)
 end
 exp(x::Real) = exp(float(x))
 exp10(x::Real) = exp10(float(x))
-
+atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -266,7 +266,7 @@ The prefix operator `∛` is equivalent to `cbrt`.
 
 ```jldoctest
 julia> cbrt(big(27))
-3.000000000000000000000000000000000000000000000000000000000000000000000000000000
+3.0
 ```
 """
 cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
@@ -327,49 +327,49 @@ end
 
 Compute sine of `x`, where `x` is in radians.
 """
-sin(x)
+sin(x::Number)
 
 """
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
 """
-cos(x)
+cos(x::Number)
 
 """
     tan(x)
 
 Compute tangent of `x`, where `x` is in radians.
 """
-tan(x)
+tan(x::Number)
 
 """
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
 """
-asin(x)
+asin(x::Number)
 
 """
     acos(x)
 
 Compute the inverse cosine of `x`, where the output is in radians
 """
-acos(x)
+acos(x::Number)
 
 """
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
 """
-acosh(x)
+acosh(x::Number)
 
 """
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
 """
-atanh(x)
+atanh(x::Number)
 
 """
     log(x)
@@ -380,7 +380,7 @@ Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
 """
-log(x)
+log(x::Number)
 
 """
     log2(x)
@@ -442,13 +442,6 @@ for f in (:log, :log2, :log10, :lgamma, :log1p)
         @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
-
-@inline asin(x::Real) = asin(float(x))
-@inline sin(x::Real) = sin(float(x))
-@inline cos(x::Real) = cos(float(x))
-@inline tan(x::Real) = tan(float(x))
-@inline sincos(x::Real) = sincos(float(x))
-@inline acos(x::Real) = acos(float(x))
 
 @inline function sqrt(x::Union{Float32,Float64})
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
@@ -513,7 +506,7 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = vecnorm(x)
+hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
 """
     atan2(y, x)
@@ -739,9 +732,9 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
-@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 function angle_restrict_symm(theta)
@@ -976,7 +969,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
              :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::Complex32) = Complex32($func(Complex64(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 

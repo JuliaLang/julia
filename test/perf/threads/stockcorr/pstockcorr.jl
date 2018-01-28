@@ -48,7 +48,7 @@ function runpath!(n, Wiener, CorrWiener, SA, SB, T, UpperTriangle, k11, k12, k21
     #for i = 1:n
         randn!(rngs[threadid()], Wiener)
         #randn!(rngs[1], Wiener)
-        A_mul_B!(CorrWiener, Wiener, UpperTriangle)
+        LinearAlgebra.mul!(CorrWiener, Wiener, UpperTriangle)
         @simd for j = 2:T
             @inbounds SA[j, i] = SA[j-1, i] * exp(k11 + k12*CorrWiener[j-1, 1])
             @inbounds SB[j, i] = SB[j-1, i] * exp(k21 + k22*CorrWiener[j-1, 2])
@@ -78,13 +78,13 @@ function pstockcorr(n)
     SimulPriceB[1,:] = CurrentPrice[2]
 
     ## Generating the paths of stock prices by Geometric Brownian Motion
-    UpperTriangle = full(chol(Corr))    # UpperTriangle Matrix by Cholesky decomposition
+    UpperTriangle = Matrix(chol(Corr))    # UpperTriangle Matrix by Cholesky decomposition
 
     # Optimization: pre-allocate these for performance
     # NOTE: the new GC will hopefully fix this, but currently GC time
     # kills performance if we don't do in-place computations
-    Wiener = Array{Float64}(T-1, 2)
-    CorrWiener = Array{Float64}(T-1, 2)
+    Wiener = Matrix{Float64}(uninitialized, T-1, 2)
+    CorrWiener = Matrix{Float64}(uninitialized, T-1, 2)
 
     # Runtime requirement: need per-thread RNG since it stores state
     rngs = [MersenneTwister(777+x) for x in 1:nthreads()]
@@ -107,4 +107,4 @@ function pstockcorr(n)
 end
 
 @time pstockcorr(1000000)
-#ccall(:jl_threading_profile, Void, ())
+#ccall(:jl_threading_profile, Cvoid, ())

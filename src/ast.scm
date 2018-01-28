@@ -54,7 +54,9 @@
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
         ((memq (car e) '($ &))
-         (string (car e) (deparse (cadr e))))
+         (if (pair? (cadr e))
+             (string (car e) "(" (deparse (cadr e)) ")")
+             (string (car e) (deparse (cadr e)))))
         ((eq? (car e) '|::|)
          (if (length> e 2)
              (string (deparse (cadr e)) (car e) (deparse (caddr e)))
@@ -153,6 +155,7 @@
 ;; predicates and accessors
 
 (define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
+(define (quotify e) `',e)
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -234,7 +237,9 @@
       (ssavalue? e)))
 
 (define (simple-atom? x)
-  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
+  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)
+      (and (pair? x) (memq (car x) '(ssavalue null)))
+      (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)
@@ -357,6 +362,20 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+
+(define (if-generated? e)
+  (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
+
+(define (generated-meta? e)
+  (and (length= e 3) (eq? (car e) 'meta) (eq? (cadr e) 'generated)))
+
+(define (generated_only-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'generated_only)))
+
+(define (function-def? e)
+  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
+                     (and (eq? (car e) '=) (length= e 3)
+                          (eventually-call? (cadr e))))))
 
 ;; flatten nested expressions with the given head
 ;; (op (op a b) c) => (op a b c)

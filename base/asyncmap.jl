@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators.Enumerate
+using Base.Iterators: Enumerate
 
 """
     asyncmap(f, c...; ntasks=0, batch_size=nothing)
@@ -23,11 +23,11 @@ then be a function that must accept a `Vector` of argument tuples and must
 return a vector of results. The input vector will have a length of `batch_size` or less.
 
 The following examples highlight execution in different tasks by returning
-the `object_id` of the tasks in which the mapping function is executed.
+the `objectid` of the tasks in which the mapping function is executed.
 
 First, with `ntasks` undefined, each element is processed in a different task.
 ```
-julia> tskoid() = object_id(current_task());
+julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
 5-element Array{UInt64,1}:
@@ -124,8 +124,8 @@ function verify_ntasks(iterable, ntasks)
     end
 
     if ntasks == 0
-        chklen = iteratorsize(iterable)
-        if (chklen == HasLength()) || (chklen == HasShape())
+        chklen = IteratorSize(iterable)
+        if (chklen isa HasLength) || (chklen isa HasShape)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100
@@ -246,9 +246,9 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2 = Array{Char,1}(length(s))
+    s2 = Vector{Char}(uninitialized, length(s))
     asyncmap!(f, s2, s; kwargs...)
-    return convert(String, s2)
+    return String(s2)
 end
 
 # map on a single BitArray returns a BitArray if the mapping function is boolean.
@@ -258,13 +258,6 @@ function asyncmap(f, b::BitArray; kwargs...)
         return BitArray(b2)
     end
     return b2
-end
-
-# TODO: Optimize for sparse arrays
-# For now process as regular arrays and convert back
-function asyncmap(f, s::AbstractSparseArray...; kwargs...)
-    sa = map(Array, s)
-    return sparse(asyncmap(f, sa...; kwargs...))
 end
 
 mutable struct AsyncCollector
@@ -281,7 +274,7 @@ end
 """
     AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing) -> iterator
 
-Returns an iterator which applies `f` to each element of `c` asynchronously
+Return an iterator which applies `f` to each element of `c` asynchronously
 and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
@@ -313,7 +306,7 @@ function start(itr::AsyncCollector)
     itr.batch_size = verify_batch_size(itr.batch_size)
     if itr.batch_size !== nothing
         exec_func = batch -> begin
-            # extract indexes from the input tuple
+            # extract indices from the input tuple
             batch_idxs = map(x->x[1], batch)
 
             # and the args tuple....
@@ -408,7 +401,7 @@ end
 
 # pass-through iterator traits to the iterable
 # on which the mapping function is being applied
-iteratorsize(itr::AsyncGenerator) = iteratorsize(itr.collector.enumerator)
+IteratorSize(itr::AsyncGenerator) = SizeUnknown()
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 

@@ -60,7 +60,7 @@ brokenSignedInt = Union{}
 brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
 brokenUnsignedIntMul = UInt128
-if Core.sizeof(Ptr{Void}) == 4
+if Core.sizeof(Ptr{Cvoid}) == 4
     brokenSignedIntMul = Union{brokenSignedIntMul, Int64}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt64}
 end

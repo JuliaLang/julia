@@ -21,7 +21,7 @@ end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Array{Union{}}(0))), Array{Union{},1})
+@test isequal(typeof(map(x -> x, Vector{Union{}}(uninitialized, 0))), Vector{Union{}})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -35,6 +35,9 @@ end
 # issue #10633
 @test isa(map(Integer, Any[1, 2]), Vector{Int})
 @test isa(map(Integer, Any[]), Vector{Integer})
+
+# issue #25433
+@test @inferred(collect(v for v in [1] if v > 0)) isa Vector{Int}
 
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
@@ -80,10 +83,10 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int}()),           0),
-                 ((i for i = Array{Int}(1)),          1),
-                 ((i for i = Array{Int}(1, 2)),       2),
-                 ((i for i = Array{Int}(1, 2, 3)),    3)]
+                 ((i for i = Array{Int,0}(uninitialized)),           0),
+                 ((i for i = Vector{Int}(uninitialized, 1)),          1),
+                 ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
+                 ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
     for (gen, dim) in gens_dims
         @test ndims(gen) == ndims(collect(gen)) == dim
     end
@@ -111,24 +114,29 @@ let gen = (x for x in 1:10)
 end
 
 let gen = (x * y for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test collect(gen) == Vector(1:10) .* Vector(1:10)'
     @test first(gen) == 1
-    @test collect(gen)[1:10] == collect(1:10)
+    @test collect(gen)[1:10] == 1:10
 end
 
 let gen = Base.Generator(+, 1:10, 1:10, 1:10)
     @test first(gen) == 3
-    @test collect(gen) == collect(3:3:30)
+    @test collect(gen) == 3:3:30
 end
 
 let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
     @test collect(gen) == collect(gen2)
-    @test collect(gen) == collect(2:2:10)
+    @test collect(gen) == 2:2:10
 end
 
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
     @test collect(gen) == collect(gen2)
+end
+
+# inference on vararg generator of a type (see #22907 comments)
+let f(x) = collect(Base.Generator(=>, x, x))
+    @test @inferred(f((1,2))) == [1=>1, 2=>2]
 end
 
 # generators with nested loops (#4867)
@@ -142,3 +150,30 @@ end
                  for n = 0:5:100-q-d
                  for p = 100-q-d-n
                  if p < n < d < q] == [(50,30,15,5), (50,30,20,0), (50,40,10,0), (75,20,5,0)]
+
+@testset "map/collect return type on generators with $T" for T in (Nothing, Missing)
+    x = ["a", "b"]
+    res = @inferred collect(s for s in x)
+    @test res isa Vector{String}
+    res = @inferred map(identity, x)
+    @test res isa Vector{String}
+    res = @inferred collect(s isa T for s in x)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s isa T, x)
+    @test res isa Vector{Bool}
+    y = Union{String, T}["a", T()]
+    f(s::Union{Nothing, Missing}) = s
+    f(s::String) = s == "a"
+    res = collect(s for s in y)
+    @test res isa Vector{Union{String, T}}
+    res = map(identity, y)
+    @test res isa Vector{Union{String, T}}
+    res = @inferred collect(s isa T for s in y)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s isa T, y)
+    @test res isa Vector{Bool}
+    res = collect(f(s) for s in y)
+    @test res isa Vector{Union{Bool, T}}
+    res = map(f, y)
+    @test res isa Vector{Union{Bool, T}}
+end

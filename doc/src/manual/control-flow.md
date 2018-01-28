@@ -412,9 +412,10 @@ julia> for i = 1:5
 Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in an other
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not afterwards.
-You'll either need a new interactive session instance or a different variable name to test this:
+during which the variable is visible. If the variable `i` has not been introduced in another
+scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
+outside/afterwards. You'll either need a new interactive session instance or a different variable
+name to test this:
 
 ```jldoctest
 julia> for j = 1:5
@@ -476,9 +477,9 @@ julia> while true
 4
 5
 
-julia> for i = 1:1000
-           println(i)
-           if i >= 5
+julia> for j = 1:1000
+           println(j)
+           if j >= 5
                break
            end
        end
@@ -530,8 +531,8 @@ A `break` statement inside such a loop exits the entire nest of loops, not just 
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
-program, printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances, allow that code to take the appropriate action.
+program while printing a diagnostic error message, or if the programmer has provided code to handle
+such exceptional circumstances then allow that code to take the appropriate action.
 
 ### Built-in `Exception`s
 
@@ -688,26 +689,6 @@ ERROR: negative x not allowed
 Stacktrace:
  [1] fussy_sqrt at ./none:1 [inlined]
  [2] verbose_fussy_sqrt(::Int64) at ./none:3
-```
-
-### Warnings and informational messages
-
-Julia also provides other functions that write messages to the standard error I/O, but do not
-throw any `Exception`s and hence do not interrupt execution:
-
-```jldoctest
-julia> info("Hi"); 1+1
-INFO: Hi
-2
-
-julia> warn("Hi"); 1+1
-WARNING: Hi
-2
-
-julia> error("Hi"); 1+1
-ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:21
 ```
 
 ### The `try/catch` statement
@@ -956,7 +937,7 @@ In addition to [`yieldto`](@ref), a few other basic functions are needed to use 
 ### Tasks and events
 
 Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
 The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);

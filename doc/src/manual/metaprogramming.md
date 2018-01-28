@@ -26,7 +26,7 @@ The next step is to [parse](https://en.wikipedia.org/wiki/Parsing#Computer_langu
 into an object called an expression, represented by the Julia type `Expr`:
 
 ```jldoctest prog
-julia> ex1 = parse(prog)
+julia> ex1 = Meta.parse(prog)
 :(1 + 1)
 
 julia> typeof(ex1)
@@ -86,7 +86,7 @@ Expr
 `Expr` objects may also be nested:
 
 ```jldoctest ex3
-julia> ex3 = parse("(4 + 4) / 2")
+julia> ex3 = Meta.parse("(4 + 4) / 2")
 :((4 + 4) / 2)
 ```
 
@@ -160,12 +160,12 @@ Expr
 (to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump`](@ref)
 as above or [`Meta.@dump`](@ref))
 
-Note that equivalent expressions may be constructed using [`parse`](@ref) or the direct `Expr`
+Note that equivalent expressions may be constructed using [`Meta.parse`](@ref) or the direct `Expr`
 form:
 
 ```jldoctest
-julia>      :(a + b*c + 1)  ==
-       parse("a + b*c + 1") ==
+julia>      :(a + b*c + 1)       ==
+       Meta.parse("a + b*c + 1") ==
        Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
 true
 ```
@@ -217,7 +217,6 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 ```jldoctest interp1
 julia> $a + b
 ERROR: unsupported or misplaced expression $
- ...
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:
@@ -259,9 +258,9 @@ julia> x = :(1 + 2);
 
 julia> e = quote quote $x end end
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:$, :x))
 end))
 end
@@ -275,7 +274,7 @@ so its argument is only evaluated when the inner quote expression is:
 ```jldoctest interp1
 julia> eval(e)
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     1 + 2
 end
 ```
@@ -287,9 +286,9 @@ This is done with multiple `$`s:
 ```jldoctest interp1
 julia> e = quote quote $$x end end
 quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:$, :(1 + 2)))
 end))
 end
@@ -301,7 +300,7 @@ Evaluating this expression yields an interpolated `3`:
 ```jldoctest interp1
 julia> eval(e)
 quote
-    #= REPL[2]:1 =#
+    #= none:1 =#
     3
 end
 ```
@@ -315,7 +314,7 @@ equivalent of `eval(eval(:x))`.
 The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
 
 ```jldoctest interp1
-julia> dump(parse(":(1+2)"))
+julia> dump(Meta.parse(":(1+2)"))
 Expr
   head: Symbol quote
   args: Array{Any}((1,))
@@ -336,7 +335,7 @@ as an object of type `QuoteNode`.
 The parser yields `QuoteNode`s for simple quoted items like symbols:
 
 ```jldoctest interp1
-julia> dump(parse(":x"))
+julia> dump(Meta.parse(":x"))
 QuoteNode
   value: Symbol x
 ```
@@ -677,7 +676,7 @@ Notice that it would not be possible to write this as a function, since only the
 condition is available and it would be impossible to display the expression that computed it in
 the error message.
 
-The actual definition of `@assert` in the standard library is more complicated. It allows the
+The actual definition of `@assert` in Julia Base is more complicated. It allows the
 user to optionally specify their own error message, instead of just printing the failed expression.
 Just like in functions with a variable number of arguments, this is specified with an ellipses
 following the last argument:
@@ -777,7 +776,7 @@ end
 ```
 
 Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in the standard library, not to any `time` variable the user
+to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
 expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
 variable. We might get errors, or mysteriously incorrect behavior.
@@ -788,7 +787,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the standard library definitions.
+with any user variables, and `time` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 
@@ -864,6 +863,47 @@ end
 However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
 also slightly changes the meaning of the expression (the scope of any variables in it),
 while we want `@time` to be usable with minimum impact on the wrapped code.
+
+### Macros and dispatch
+
+Macros, just like Julia functions, are generic. This means they can also have multiple method definitions, thanks to multiple dispatch:
+```jldoctest macromethods
+julia> macro m end
+@m (macro with 0 methods)
+
+julia> macro m(args...)
+           println("$(length(args)) arguments")
+       end
+@m (macro with 1 method)
+
+julia> macro m(x,y)
+           println("Two arguments")
+       end
+@m (macro with 2 methods)
+
+julia> @m "asd"
+1 arguments
+
+julia> @m 1 2
+Two arguments
+```
+However one should keep in mind, that macro dispatch is based on the types of AST
+that are handed to the macro, not the types that the AST evaluates to at runtime:
+```jldoctest macromethods
+julia> macro m(::Int)
+           println("An Integer")
+       end
+@m (macro with 3 methods)
+
+julia> @m 2
+An Integer
+
+julia> x = 2
+2
+
+julia> @m x
+1 arguments
+```
 
 ## Code Generation
 
@@ -1012,17 +1052,16 @@ syntax tree.
 A very special macro is `@generated`, which allows you to define so-called *generated functions*.
 These have the capability to generate specialized code depending on the types of their arguments
 with more flexibility and/or less code than what can be achieved with multiple dispatch. While
-macros work with expressions at parsing-time and cannot access the types of their inputs, a generated
+macros work with expressions at parse time and cannot access the types of their inputs, a generated
 function gets expanded at a time when the types of the arguments are known, but the function is
 not yet compiled.
 
 Instead of performing some calculation or action, a generated function declaration returns a quoted
 expression which then forms the body for the method corresponding to the types of the arguments.
-When called, the body expression is first evaluated and compiled, then the returned expression
-is compiled and run. To make this efficient, the result is often cached. And to make this inferable,
-only a limited subset of the language is usable. Thus, generated functions provide a flexible
-framework to move work from run-time to compile-time, at the expense of greater restrictions on
-the allowable constructs.
+When a generated function is called, the expression it returns is compiled and then run.
+To make this efficient, the result is usually cached. And to make this inferable, only a limited
+subset of the language is usable. Thus, generated functions provide a flexible way to move work from
+run time to compile time, at the expense of greater restrictions on allowed constructs.
 
 When defining generated functions, there are four main differences to ordinary functions:
 
@@ -1034,11 +1073,11 @@ When defining generated functions, there are four main differences to ordinary f
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
 4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
-   for example, IO, locks, non-local dictionaries, or using `method_exists`).
+   for example, IO, locks, non-local dictionaries, or using `hasmethod`).
    This means they can only read global constants, and cannot have any side effects.
    In other words, they must be completely pure.
    Due to an implementation limitation, this also means that they currently cannot define a closure
-   or untyped generator.
+   or generator.
 
 It's easiest to illustrate this with an example. We can declare a generated function `foo` as
 
@@ -1053,9 +1092,8 @@ foo (generic function with 1 method)
 Note that the body returns a quoted expression, namely `:(x * x)`, rather than just the value
 of `x * x`.
 
-From the caller's perspective, they are very similar to regular functions; in fact, you don't
-have to know if you're calling a regular or generated function - the syntax and result of the
-call is just the same. Let's see how `foo` behaves:
+From the caller's perspective, this is identical to a regular function; in fact, you don't
+have to know whether you're calling a regular or generated function. Let's see how `foo` behaves:
 
 ```jldoctest generated
 julia> x = foo(2); # note: output is from println() statement in the body
@@ -1199,7 +1237,7 @@ end and at the call site; however, *don't copy them*, for the following reasons:
     when, how often or how many times these side-effects will occur
   * the `bar` function solves a problem that is better solved with multiple dispatch - defining `bar(x) = x`
     and `bar(x::Integer) = x ^ 2` will do the same thing, but it is both simpler and faster.
-  * the `baz` function is pathologically insane
+  * the `baz` function is pathological
 
 Note that the set of operations that should not be attempted in a generated function is unbounded,
 and the runtime system can currently only detect a subset of the invalid operations. There are
@@ -1210,7 +1248,7 @@ run during inference, it must respect all of the limitations of that code.
 Some operations that should not be attempted include:
 
 1. Caching of native pointers.
-2. Interacting with the contents or methods of Core.Inference in any way.
+2. Interacting with the contents or methods of Core.Compiler in any way.
 3. Observing any mutable state.
 
      * Inference on the generated function may be run at *any* time, including while your code is attempting
@@ -1226,7 +1264,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a [`sub2ind`](@ref) function to calculate a linear index into an n-dimensional
+Julia's base library has a an internal `sub2ind` function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:
@@ -1317,3 +1355,59 @@ the two tuples, multiplication and addition/subtraction. All the looping is perf
 and we avoid looping during execution entirely. Thus, we only loop *once per type*, in this case
 once per `N` (except in edge cases where the function is generated more than once - see disclaimer
 above).
+
+### Optionally-generated functions
+
+Generated functions can achieve high efficiency at run time, but come with a compile time cost:
+a new function body must be generated for every combination of concrete argument types.
+Typically, Julia is able to compile "generic" versions of functions that will work for any
+arguments, but with generated functions this is impossible.
+This means that programs making heavy use of generated functions might be impossible to
+statically compile.
+
+To solve this problem, the language provides syntax for writing normal, non-generated
+alternative implementations of generated functions.
+Applied to the `sub2ind` example above, it would look like this:
+
+```julia
+function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+    if N != length(I)
+        throw(ArgumentError("Number of dimensions must match number of indices."))
+    end
+    if @generated
+        ex = :(I[$N] - 1)
+        for i = (N - 1):-1:1
+            ex = :(I[$i] - 1 + dims[$i] * $ex)
+        end
+        return :($ex + 1)
+    else
+        ind = I[N] - 1
+        for i = (N - 1):-1:1
+            ind = I[i] - 1 + dims[i]*ind
+        end
+        return ind + 1
+    end
+end
+```
+
+Internally, this code creates two implementations of the function: a generated one where
+the first block in `if @generated` is used, and a normal one where the `else` block is used.
+Inside the `then` part of the `if @generated` block, code has the same semantics as other
+generated functions: argument names refer to types, and the code should return an expression.
+Multiple `if @generated` blocks may occur, in which case the generated implementation uses
+all of the `then` blocks and the alternate implementation uses all of the `else` blocks.
+
+Notice that we added an error check to the top of the function.
+This code will be common to both versions, and is run-time code in both versions
+(it will be quoted and returned as an expression from the generated version).
+That means that the values and types of local variables are not available at code generation
+time --- the code-generation code can only see the types of arguments.
+
+In this style of definition, the code generation feature is essentially an optional
+optimization.
+The compiler will use it if convenient, but otherwise may choose to use the normal
+implementation instead.
+This style is preferred, since it allows the compiler to make more decisions and compile
+programs in more ways, and since normal code is more readable than code-generating code.
+However, which implementation is used depends on compiler implementation details, so it
+is essential for the two implementations to behave identically.

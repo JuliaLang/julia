@@ -121,7 +121,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     of the form `if cond; statement; end`, `cond && statement` and `!cond || statement`. Assignment
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
-  * Julia's `->` creates an anonymous function, like Python.
+  * Julia's `->` creates an anonymous function.
   * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
@@ -137,11 +137,10 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia does not provide `nrow` and `ncol`. Instead, use `size(M, 1)` for `nrow(M)` and `size(M, 2)`
     for `ncol(M)`.
   * Julia is careful to distinguish scalars, vectors and matrices.  In R, `1` and `c(1)` are the same.
-    In Julia, they can not be used interchangeably. One potentially confusing result of this is that
-    `x' * y` for vectors `x` and `y` is a 1-element vector, not a scalar. To get a scalar, use [`dot(x, y)`](@ref).
+    In Julia, they cannot be used interchangeably.
   * Julia's [`diag`](@ref) and [`diagm`](@ref) are not like R's.
   * Julia cannot assign to the results of function calls on the left hand side of an assignment operation:
-    you cannot write `diag(M) = ones(n)`.
+    you cannot write `diag(M) = fill(1, n)`.
   * Julia discourages populating the main namespace with functions. Most statistical functionality
     for Julia is found in [packages](https://pkg.julialang.org/) under the [JuliaStats organization](https://github.com/JuliaStats).
     For example:
@@ -181,7 +180,12 @@ For users coming to Julia from R, these are some noteworthy differences:
     code is often achieved by using devectorized loops.
   * Julia is eagerly evaluated and does not support R-style lazy evaluation. For most users, this
     means that there are very few unquoted expressions or column names.
-  * Julia does not support the `NULL` type.
+  * Julia does not support the `NULL` type. The closest equivalent is [`nothing`](@ref), but it
+    behaves like a scalar value rather than like a list. Use `x == nothing` instead of `is.null(x)`.
+  * In Julia, missing values are represented by the [`missing`](@ref) object rather than by `NA`.
+    Use [`ismissing(x)`](@ref) instead of `isna(x)`. The [`skipmissing`](@ref) function is generally
+    used instead of `na.rm=TRUE` (though in some particular cases functions take a `skipmissing`
+    argument).
   * Julia lacks the equivalent of R's `assign` or `get`.
   * In Julia, `return` does not require parentheses.
   * In R, an idiomatic way to remove unwanted values is to use logical indexing, like in the expression
@@ -196,7 +200,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
-  * Julia does not support negative indexes. In particular, the last element of a list or array is
+  * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python.
@@ -207,7 +211,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     by default. To get optimal performance when looping over arrays, the order of the loops should
     be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
-    means `A = ones(4); B = A; B += 3` doesn't change values in `A`, it rather rebinds the name `B`
+    means `A = [1, 1]; B = A; B += [3, 3]` doesn't change values in `A`, it rather rebinds the name `B`
     to the result of the right-hand side `B = B + 3`, which is a new array. For in-place operation, use `B .+= 3`
     (see also [dot operators](@ref man-dot-operators)), explicit loops, or `InplaceOps.jl`.
   * Julia evaluates default values of function arguments every time the method is invoked, unlike
@@ -291,7 +295,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     and have both a function-like syntax, `@mymacro(arg1, arg2, arg3)`, and a statement-like syntax,
     `@mymacro arg1 arg2 arg3`. The forms are interchangable; the function-like form is particularly
     useful if the macro appears within another expression, and is often clearest. The statement-like
-    form is often used to annotate blocks, as in the parallel `for` construct: `@parallel for i in 1:n; #= body =#; end`.
+    form is often used to annotate blocks, as in the distributed `for` construct: `@distributed for i in 1:n; #= body =#; end`.
     Where the end of the macro construct may be unclear, use the function-like form.
   * Julia now has an enumeration type, expressed using the macro `@enum(name, value1, value2, ...)`
     For example: `@enum(Fruit, banana=1, apple, pear)`

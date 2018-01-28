@@ -453,8 +453,10 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
+This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
+since type constructors fall back to convert methods.
 Stacktrace:
-[...]
+ [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
 ```
 
 The inner constructor requires that the element type of `A` be `T`.
@@ -612,7 +614,8 @@ type:
 
 ```@meta
 DocTestSetup = quote
-    srand(1234)
+    import Random
+    Random.srand(1234)
 end
 ```
 
@@ -644,7 +647,7 @@ julia> function fill_twos!(a)
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Array{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
            fill_twos!(a)
            return a
        end
@@ -664,7 +667,7 @@ of `fill_twos!` for different types of `a`.
 
 The second form is also often better style and can lead to more code reuse.
 
-This pattern is used in several places in the standard library. For example, see `hvcat_fill`
+This pattern is used in several places in Julia Base. For example, see `hvcat_fill`
 in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
 the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
@@ -802,7 +805,7 @@ statement can be found [on the mailing list](https://groups.google.com/forum/#!m
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
 then every function that accepts such an object as a parameter (from a custom `get_year` function
-you might write yourself, to the generic `push!` function in the standard library) will have hundreds
+you might write yourself, to the generic `push!` function in Julia Base) will have hundreds
 or thousands of variants compiled for it.  Each of these increases the size of the cache of compiled
 code, the length of internal lists of methods, etc.  Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
@@ -842,7 +845,7 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[:, i] = x
@@ -851,7 +854,7 @@ function copy_cols(x::Vector{T}) where T
 end
 
 function copy_rows(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for i = inds
         out[i, :] = x
@@ -860,7 +863,7 @@ function copy_rows(x::Vector{T}) where T
 end
 
 function copy_col_row(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for col = inds, row = inds
         out[row, col] = x[row]
@@ -869,7 +872,7 @@ function copy_col_row(x::Vector{T}) where T
 end
 
 function copy_row_col(x::Vector{T}) where T
-    inds = indices(x, 1)
+    inds = axes(x, 1)
     out = similar(Array{T}, inds, inds)
     for row = inds, col = inds
         out[row, col] = x[col]
@@ -931,7 +934,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Array{Int}(3)
+    ret = Vector{Int}(uninitialized, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1074,8 +1077,8 @@ julia> @time sum(view(A, :, inds) * view(x, inds))
 7253.242699002263
 
 julia> @time begin
-           copy!(xtmp, view(x, inds))
-           copy!(Atmp, view(A, :, inds))
+           copyto!(xtmp, view(x, inds))
+           copyto!(Atmp, view(A, :, inds))
            sum(Atmp * xtmp)
        end
   0.261294 seconds (41 allocations: 1.391 KiB)
@@ -1282,7 +1285,7 @@ end
 
 function main()
     n = 2000
-    u = Array{Float64}(n)
+    u = Vector{Float64}(uninitialized, n)
     init!(u)
     du = similar(u)
 
@@ -1480,6 +1483,11 @@ effects of type instability.  This is particularly relevant in cases where fixin
 is difficult or impossible: for example, currently it's not possible to infer the return type
 of an anonymous function.  In such cases, the tips above (e.g., adding type annotations and/or
 breaking up functions) are your best tools to contain the "damage" from type instability.
+Also, note that even Julia Base has functions that are type unstable.
+For example, the function [`findfirst`](@ref) returns the index into an array where a key is found,
+or `nothing` if it is not found, a clear type instability. In order to make it easier to find the
+type instabilities that are likely to be important, `Union`s containing either `missing` or `nothing`
+are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 

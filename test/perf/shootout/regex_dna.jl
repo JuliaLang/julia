@@ -36,7 +36,7 @@ function regex_dna(infile="regexdna-input.txt")
     seq = read(infile, String)
     l1 = length(seq)
 
-    seq = replace(seq, r">.*\n|\n", "")
+    seq = replace(seq, r">.*\n|\n" => "")
     l2 = length(seq)
 
     for v in variants
@@ -48,7 +48,7 @@ function regex_dna(infile="regexdna-input.txt")
     end
 
     for (u, v) in subs
-        seq = replace(seq, u, v)
+        seq = replace(seq, u => v)
     end
 
 #    println()
@@ -56,4 +56,3 @@ function regex_dna(infile="regexdna-input.txt")
 #    println(l2)
 #    println(length(seq))
 end
-

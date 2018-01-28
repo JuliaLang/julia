@@ -7,8 +7,8 @@ struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw::Vector{Ptr{Void}})
-        # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
+    function CapturedException(ex, bt_raw::Vector)
+        # bt_raw MUST be a vector that can be processed by StackTraces.stacktrace
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized
@@ -133,9 +133,9 @@ task_result(t::Task) = t.result
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
     if t.storage === nothing
-        t.storage = ObjectIdDict()
+        t.storage = IdDict()
     end
-    (t.storage)::ObjectIdDict
+    (t.storage)::IdDict
 end
 
 """
@@ -186,7 +186,7 @@ function wait(t::Task)
     return task_result(t)
 end
 
-suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
+suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
@@ -204,34 +204,16 @@ function task_done_hook(t::Task)
         t.backtrace = catch_backtrace()
     end
 
-    q = t.consumers
-    t.consumers = nothing
-
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
         notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
-    if isa(t.storage, ObjectIdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
         foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
         delete!(t.storage, :TASKDONE_HOOKS)
         handled = true
-    end
-
-    #### un-optimized version
-    #isa(q,Condition) && notify(q, result, error=err)
-    if isa(q,Task)
-        handled = true
-        nexttask = q
-        nexttask.state = :runnable
-        if err
-            nexttask.exception = result
-        end
-        yieldto(nexttask, result) # this terminates the task
-    elseif isa(q,Condition) && !isempty(q.waitq)
-        handled = true
-        notify(q, result, error=err)
     end
 
     if err && !handled
@@ -253,7 +235,20 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait() # this will not return
+    try
+        wait() # this will not return
+    catch e
+        # If an InterruptException happens while blocked in the event loop, try handing
+        # the exception to the REPL task since the current task is done.
+        # issue #19467
+        if isa(e,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, e)
+        else
+            rethrow(e)
+        end
+    end
 end
 
 
@@ -362,7 +357,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = Timer(timercb, pollint, pollint)
+        t = Timer(timercb, pollint, interval = pollint)
         ret = fetch(done)
         close(t)
     else

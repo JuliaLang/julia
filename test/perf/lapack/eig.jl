@@ -2,9 +2,8 @@
 
 # Real
 function realeigtest(n, iter)
+    local d, v
     A = rand(n,n)
-    d = Vector{eltype(A)}
-    v = similar(A)
     for i = 1:iter
         d,v = eig(A)
     end
@@ -13,10 +12,9 @@ end
 
 # Symmetric
 function symeigtest(n, iter)
+    local d, v
     A = rand(n,n)
     A = A + A'
-    d = Vector{eltype(A)}
-    v = similar(A)
     for i = 1:iter
         d,v = eig(A)
     end
@@ -25,10 +23,9 @@ end
 
 # Hermitian
 function hermitianeigtest(n, iter)
-    A = rand(n,n) + im*rand(n,n)
+    local d, v
+    A = rand(ComplexF64, n, n)
     A = A + A'
-    d = Vector{eltype(A)}
-    v = similar(A)
     for i = 1:iter
         d,v = eig(A)
     end
