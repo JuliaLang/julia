@@ -283,4 +283,10 @@ end
 @test parse(Float64, "100",2) === 4.0
 @test parse(Float64, "0.1", 3) === 0.3333333333333333
 
+@test parse(Float64, "2.3e3",4) === 176.0
+@test_throws ArgumentError parse(Float64, "2.3e4",4)
+@test parse(Float64, "2.3e10",4) === 704.0
+@test parse(Float64, "2.3e4",5) === 1625.0
+@test parse(Float64, "2.3e23",5) === 3.173828125e9
+
 @test_throws ArgumentError parse(Float64, "14.0", 3)
