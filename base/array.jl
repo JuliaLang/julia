@@ -1564,7 +1564,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1661,7 +1661,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1757,7 +1757,7 @@ Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1853,7 +1853,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1899,7 +1899,7 @@ If there are no such elements of `A`, return an empty array.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1955,7 +1955,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
