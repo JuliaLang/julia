@@ -25,7 +25,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, i-1, 0)
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)
@@ -49,6 +49,7 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
+convert(::Type{T}, s::T) where {T<:SubString} = s
 
 String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
 
