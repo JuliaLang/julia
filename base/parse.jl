@@ -217,6 +217,66 @@ function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = noth
 end
 
 ## string to float functions ##
+function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
+    isempty(s) && throw(ArgumentError("Empty string!"))
+    c = ' '
+    sign = 1
+    while isspace(c)
+        c, i = next(s,i)
+    end
+    if c in ('-', '+')
+        sign = (c == '-') ? -1 : 1
+        c, i = next(s, i)
+    end
+    while isspace(c)
+        c, i = next(s,i)
+    end
+    return sign, c, i
+end
+
+function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
+    sign, c, i = parsefloat_preamble(s, base)
+       
+    lowercase(c) == 'n' && return T(NaN)
+    lowercase(c) == 'i' && return sign*T(Inf)
+
+    res = zero(T)
+    b = T(base)
+    exponent = 0
+    tmpexp = 0
+    while true
+        c == '.' && break
+        d = parse(Int, c, base)
+        res = res*b + d
+        done(s, i) && break
+        c, i = next(s, i)
+    end
+    
+    n = -1
+    while !done(s, i)
+        c, i = next(s, i)
+        c == 'e' && break
+        d = parse(Int, c, base)
+        res += d*b^n
+        n -= 1
+    end
+
+    expsign = 1
+    while !done(s, i)
+        c, i = next(s, i)
+        if c == '-'
+            expsign = -1
+            continue
+        end
+        d = parse(Int, c, base)
+        exponent = exponent*b + d
+    end
+    
+    sign*res*b^(expsign*exponent)
+end
+
+float(s::AbstractString, base::Integer) = parse(Float64,s,base)
+
 
 function tryparse(::Type{Float64}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
