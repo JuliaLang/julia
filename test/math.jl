@@ -863,7 +863,10 @@ end
     end
 end
 
-# Define simple wrapper of a Float type:
+
+# Tests for f(a+ib) for a, b not AbstractFloats:
+## Define simple float wrapper type:
+
 struct FloatWrapper <: Real
     x::Float64
 end
@@ -904,8 +907,9 @@ float(x::FloatWrapper) = x
 
 <(x::FloatWrapper, y::FloatWrapper) = (x.x < y.x)
 ==(x::FloatWrapper, y::FloatWrapper) = (x.x == y.x)
+≈(x::FloatWrapper, y::FloatWrapper) = (x.x ≈ y.x)
 
-
+## Tests for f(a+ib):
 @testset "sqrt(a+ib) for a, b that are not AbstractFloats" begin
 
     x = FloatWrapper(3)
@@ -920,12 +924,12 @@ end
 
 @testset "f(a+ib) for a, b that are not AbstractFloats; #25292" begin
 
-    x = FloatWrapper(3.1)
-    y = FloatWrapper(4.1)
+    x, y = 3.1, 4.1
+    z = x + im*y
+    wrapped_z = FloatWrapper(x) + im * FloatWrapper(y)
+    z2 = x + im*y
 
     @test sincos(x) == (sin(x), cos(x))
-
-    z = Complex(x, y)
 
     for f in (inv,
               exp, expm1,
@@ -934,6 +938,9 @@ end
               asin, acos,
               asinh, acosh)
 
+        z3 = f(z2)
+
         @test isa(f(z), Complex)
+        @test f(z) ≈ FloatWrapper(z3.re) + im*FloatWrapper(z3.im)
     end
 end
