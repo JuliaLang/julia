@@ -245,6 +245,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     exponent = 0
     tmpexp = 0
     while true
+        isspace(c) && break
         c == '.' && break
         d = parse(Int, c, base)
         res = res*b + d
@@ -253,8 +254,9 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     end
     
     n = -1
-    while !done(s, i)
+    while !done(s, i) 
         c, i = next(s, i)
+        isspace(c) && break
         c == 'e' && break
         d = parse(Int, c, base)
         res += d*b^n
@@ -264,6 +266,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     expsign = 1
     while !done(s, i)
         c, i = next(s, i)
+        isspace(c) && break
         if c == '-'
             expsign = -1
             continue
