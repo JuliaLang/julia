@@ -161,7 +161,11 @@ for (name, f) in l
             ("αααβγ", "αβ", "αα", "αααβ"),
             ("αααβγ", "ααβ", "α", "αααβ"),
             ("αααβγ", "αγ", "αααβγ", "αααβγ"),
-            ("barbarbarians", "barbarian", "bar", "barbarbarian")]
+            ("barbarbarians", "barbarian", "bar", "barbarbarian"),
+            ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
+            ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
+            ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+           ]
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
