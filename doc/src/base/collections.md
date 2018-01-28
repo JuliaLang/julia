@@ -48,6 +48,7 @@ Fully implemented by:
   * `AbstractString`
   * [`Set`](@ref)
   * [`Pair`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## General Collections
 
@@ -70,6 +71,7 @@ Fully implemented by:
   * [`WeakKeyDict`](@ref)
   * `AbstractString`
   * [`Set`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Iterable Collections
 
@@ -163,6 +165,7 @@ Partially implemented by:
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Dictionaries
 
