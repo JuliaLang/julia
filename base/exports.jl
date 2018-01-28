@@ -818,7 +818,6 @@ export
     clipboard,
     exit,
     ntuple,
-    quit,
 
 # IP address stuff
     @ip_str,

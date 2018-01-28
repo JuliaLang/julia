@@ -19,7 +19,6 @@ Some general notes:
 
 ```@docs
 Base.exit
-Base.quit
 Base.atexit
 Base.isinteractive
 Base.varinfo
