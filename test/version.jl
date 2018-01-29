@@ -281,21 +281,3 @@ for t = 1:1_000
         @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
     end
 end
-
-# PR #23075
-@testset "versioninfo" begin
-    # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
-    mktempdir() do dir
-        withenv("JULIA_PKGDIR" => dir) do
-            buf = PipeBuffer()
-            versioninfo(buf, verbose=true)
-            ver = read(buf, String)
-            @test startswith(ver, "Julia Version $VERSION")
-            @test contains(ver, "Environment:")
-            @test contains(ver, "Package Status:")
-            @test contains(ver, "no packages installed")
-            @test isempty(readdir(dir))
-        end
-    end
-end

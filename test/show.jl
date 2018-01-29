@@ -1057,7 +1057,7 @@ end
 end
 
 @testset "Methods" begin
-    m = @which sin(1.0)
+    m = which(sin, (Float64,))
     io = IOBuffer()
     show(io, "text/html", m)
     s = String(take!(io))

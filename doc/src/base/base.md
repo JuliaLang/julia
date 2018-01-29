@@ -21,14 +21,7 @@ Some general notes:
 Base.exit
 Base.atexit
 Base.isinteractive
-Base.varinfo
 Base.summarysize
-Base.edit(::AbstractString, ::Integer)
-Base.edit(::Any)
-Base.@edit
-Base.less(::AbstractString)
-Base.less(::Any)
-Base.@less
 Base.clipboard(::Any)
 Base.clipboard()
 Base.require
@@ -37,14 +30,9 @@ Base.__precompile__
 Base.include
 Base.include_string
 Base.include_dependency
-Base.Docs.apropos
 Base.which(::Any, ::Any)
-Base.which(::Symbol)
-Base.@which
 Base.methods
-Base.methodswith
 Base.@show
-Base.versioninfo
 ans
 ```
 
@@ -135,7 +123,6 @@ Base.identity
 Base.supertype
 Core.:(<:)
 Base.:(>:)
-Base.subtypes
 Base.typejoin
 Base.typeintersect
 Base.promote_type
@@ -341,7 +328,6 @@ Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
-Base.@functionloc
 ```
 
 ## Internals
@@ -357,14 +343,6 @@ Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
-Base.@code_lowered
 Base.code_typed
-Base.@code_typed
-Base.code_warntype
-Base.@code_warntype
-Base.code_llvm
-Base.@code_llvm
-Base.code_native
-Base.@code_native
 Base.precompile
 ```

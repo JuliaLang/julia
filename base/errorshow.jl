@@ -149,6 +149,8 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
 
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.

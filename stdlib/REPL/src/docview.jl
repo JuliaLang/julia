@@ -9,6 +9,8 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color
 
+using InteractiveUtils: subtypes
+
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode

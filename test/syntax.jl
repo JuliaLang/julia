@@ -750,8 +750,8 @@ end
     end
 end
 
-f1_exprs = get_expr_list(@code_typed(f1(1))[1])
-f2_exprs = get_expr_list(@code_typed(f2(1))[1])
+f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
+f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
 @test is_pop_loc(f2_exprs[end])

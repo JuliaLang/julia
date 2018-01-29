@@ -203,10 +203,6 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
     return i == 1 ? getfield(p, p.openstream) : p
 end
 
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
-
 # also remove all support machinery in src for current_module when removing this deprecation
 # and make Base.include an error
 _current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
@@ -743,14 +739,6 @@ Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getinde
     end
     nothing
 end
-
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
 
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
@@ -1384,7 +1372,6 @@ export readandwrite
 @deprecate indmax argmax
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
 
 # PR 25458
@@ -1404,8 +1391,6 @@ end
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
 @deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
 @deprecate chop(s, head) chop(s, head = head)
@@ -1419,6 +1404,8 @@ end
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
 
 @deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
+
+@deprecate which(s::Symbol) which(Main, s)
 
 # END 0.7 deprecations
 

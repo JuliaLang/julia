@@ -305,6 +305,11 @@ function process_options(opts::JLOptions)
     # load ~/.juliarc file
     startup && load_juliarc()
 
+    if repl || is_interactive
+        # load interactive-only libraries
+        eval(Main, :(using InteractiveUtils))
+    end
+
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'

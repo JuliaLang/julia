@@ -415,9 +415,10 @@ using .Enums
 # concurrency and parallelism
 include("channels.jl")
 
-# utilities - timing, help, edit
+# utilities
 include("deepcopy.jl")
-include("interactiveutil.jl")
+include("clipboard.jl")
+include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
 include("i18n.jl")
@@ -834,6 +835,27 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib normalize_string Unicode true
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
+
+    @deprecate_stdlib whos          InteractiveUtils true
+    @deprecate_stdlib subtypes      InteractiveUtils true
+    @deprecate_stdlib apropos       InteractiveUtils true
+    @deprecate_stdlib edit          InteractiveUtils true
+    @deprecate_stdlib less          InteractiveUtils true
+    @deprecate_stdlib code_llvm     InteractiveUtils true
+    @deprecate_stdlib code_native   InteractiveUtils true
+    @deprecate_stdlib code_warntype InteractiveUtils true
+    @deprecate_stdlib methodswith   InteractiveUtils true
+    @deprecate_stdlib varinfo       InteractiveUtils true
+    @deprecate_stdlib versioninfo   InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@functionloc"))   InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_typed"))    InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_warntype")) InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
 
 empty!(DEPOT_PATH)
