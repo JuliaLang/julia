@@ -79,7 +79,8 @@ mktempdir() do dir
     end
 end
 
-import Base: UUID, SHA1, PkgId, load_path, identify_package, locate_package, version_slug
+import Random: UUID, uuid4, shuffle, randstring
+import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
@@ -241,10 +242,10 @@ function gen_manifest(dir::String, name::String, uuid::UUID, tree::SHA1,
     end
 end
 
-const name = "Flarp"
-const uuidA = UUID("b2cb3794-8625-4058-bcde-7eeb13ac1c8b")
-const uuidB = UUID("1513c021-3639-4616-a37b-ee45c9d2f773")
-const uuids = [nothing, uuidA, uuidB]
+let name = "Flarp"
+uuidA = UUID("b2cb3794-8625-4058-bcde-7eeb13ac1c8b")
+uuidB = UUID("1513c021-3639-4616-a37b-ee45c9d2f773")
+uuids = [nothing, uuidA, uuidB]
 
 ft(::UUID)    =  true:true
 ft(::Nothing) = false:true
@@ -339,7 +340,7 @@ end
     end
 end
 
-const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
+uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
 
 @testset "indirect dependency loading: explicit + explicit" begin
     mktempdir() do depot
@@ -379,6 +380,185 @@ const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
             end
         end
     end
+end
+end # let
+
+## systematic generation of test environments ##
+
+const M = 3 # number of node names
+const N = 5 # different UUIDs per name
+const NAMES = map(string, ('A':'Z')[1:M])
+const UUIDS = [uuid4() for i = 1:M, j = 1:N]
+
+L(i::Int) = NAMES[mod1(i, M)]
+
+# first generate random dependncy graphs
+
+const graphs = Any[]
+
+while length(graphs) < 32
+    flat = rand(Bool) # flat = representable as package directory
+    size = flat ? rand(1:3) : rand(1:10)
+    root = rand(1:M*N)
+    graph = Dict(root => [root])
+    nodes = flat ? graph[root] : [root]
+    pool = filter(i -> flat ? L(i) ≠ L(root) : i ≠ root, 1:M*N)
+    while !isempty(pool) && length(nodes) < size
+        i = rand(nodes)
+        J = filter(j -> all(L(j) ≠ L(k) for k in graph[i]), pool)
+        isempty(J) && continue
+        j = rand(J)
+        if !(j in nodes)
+            flat && filter!(k -> L(k) ≠ L(j), pool)
+            push!(nodes, j)
+            graph[j] = [j]
+        end
+        j in graph[i] || push!(graph[i], j)
+    end
+    sort!(nodes)
+    foreach(sort!, values(graph))
+    t = (flat, rand(Bool) ? L(root) : nothing,
+        Dict(L(i) => i for i in graph[root]),
+        Dict(i => Dict(L(j) => j for j in graph[i]) for i in nodes))
+    t in graphs || push!(graphs, t)
+end
+
+const envs = Dict{String,eltype(graphs)}()
+
+# materialize dependency graphs as explicit environments
+
+for (flat, root, roots, graph) in graphs
+    dir = mktempdir()
+    envs[dir] = (flat, root, roots, graph)
+
+    # generate project file
+    open(joinpath(dir, "Project.toml"), "w") do io
+        if root != nothing
+            uuid = UUIDS[roots[root]]
+            println(io, "name = ", repr(root))
+            println(io, "uuid = ", repr(string(uuid)))
+        end
+        println(io, "[deps]")
+        for (name, i) in roots
+            name == root && continue
+            println(io, "$name = ", repr(string(UUIDS[i])))
+        end
+    end
+
+    # count manifest entries
+    root_id = root == nothing ? nothing : roots[root]
+    counts = Dict(name => 0 for name in NAMES)
+    for (i, _) in graph
+        i == root_id && continue
+        counts[L(i)] += 1
+    end
+
+    # generate manifest file
+    open(joinpath(dir, "Manifest.toml"), "w") do io
+        for (i, deps) in graph
+            i == root_id && continue
+            name, uuid = L(i), UUIDS[i]
+            println(io, "[[$name]]")
+            println(io, "uuid = ", repr(string(uuid)))
+            deps = delete!(copy(deps), name)
+            isempty(deps) && continue
+            if all(counts[n] == 1 for n in keys(deps))
+                println(io, "deps = ", repr(keys(deps)))
+            else
+                println(io, "  [$name.deps]")
+                for (n, j) in deps
+                    println(io, "  $n = ", repr(string(UUIDS[j])))
+                end
+            end
+        end
+    end
+end
+
+# materialize dependency graphs as implicit environments (if possible)
+
+for (flat, root, roots, graph) in graphs
+    flat || continue # must be representable as package directory
+    dir = mktempdir()
+    envs[dir] = (flat, root, roots, graph)
+
+    for (i, deps) in graph
+        name, uuid = L(i), UUIDS[i]
+        deps = delete!(copy(deps), name)
+        # generate project file
+        proj = joinpath(dir, name, "Project.toml")
+        mkdir(dirname(proj))
+        open(proj, "w") do io
+            println(io, "name = ", repr(name))
+            println(io, "uuid = ", repr(string(uuid)))
+            isempty(deps) || println(io, "[deps]")
+            for (n, j) in deps
+                println(io, "$n = ", repr(string(UUIDS[j])))
+            end
+        end
+        # generate package entry point
+        entry = joinpath(dir, name, "src", "$name.jl")
+        mkdir(dirname(entry))
+        open(entry, "w") do io
+            print(io, """
+            module $name
+            name = $(repr(name))
+            uuid = $(repr(string(uuid)))
+            end
+            """)
+        end
+    end
+end
+
+pkg_id(id::Int) = PkgId(UUIDS[id], L(id))
+pkg_id(ids::Dict{String,Int}, name::String) =
+    haskey(ids, name) ? pkg_id(ids[name]) : nothing
+
+## use generated environments to test package loading ##
+
+empty!(DEPOT_PATH)
+
+function test_identify(roots::Dict{String,Int}, graph::Dict{Int,Dict{String,Int}})
+    for name in NAMES
+        @test identify_package(name) == pkg_id(roots, name)
+        for (node, deps) in graph
+            where = pkg_id(node)
+            @test identify_package(where, name) == pkg_id(deps, name)
+        end
+    end
+end
+
+@testset "identify_package with one env in load path" begin
+    for (env, (_, _, roots, graph)) in envs
+        push!(empty!(LOAD_PATH), env)
+        test_identify(roots, graph)
+    end
+end
+
+@testset "identify_package with two envs in load path" begin
+    for (env1, (_, _, roots1, graph1)) in envs,
+        (env2, (_, _, roots2, graph2)) in envs
+        push!(empty!(LOAD_PATH), env1, env2)
+        roots = merge(roots2, roots1)
+        graph = merge(graph2, graph1)
+        test_identify(roots, graph)
+    end
+end
+
+@testset "identify_package with three envs in load path" begin
+    for (env1, (_, _, roots1, graph1)) in rand(envs, 10),
+        (env2, (_, _, roots2, graph2)) in rand(envs, 10),
+        (env3, (_, _, roots3, graph3)) in rand(envs, 10)
+        push!(empty!(LOAD_PATH), env1, env2, env3)
+        roots = merge(roots3, roots2, roots1)
+        graph = merge(graph3, graph2, graph1)
+        test_identify(roots, graph)
+    end
+end
+
+## cleanup after tests ##
+
+for env in keys(envs)
+    rm(env, force=true, recursive=true)
 end
 
 append!(empty!(DEPOT_PATH), saved_depot_path)
