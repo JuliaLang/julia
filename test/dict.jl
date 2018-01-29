@@ -160,6 +160,17 @@ end
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
 end
 
+@testset "type of Dict constructed from varargs of Pairs" begin
+    @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
+    @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
+    @test Dict(1=>1.0, 2.0=>2) isa Dict{Real,Real}
+
+    @test Dict(1=>1, 2=>missing) isa Dict{Int,Union{Int,Missing}}
+    @test Dict(1=>1, 2=>nothing) isa Dict{Int,Union{Int,Nothing}}
+    @test Dict(1=>1, missing=>2) isa Dict{Union{Int,Missing},Int}
+    @test Dict(1=>1, nothing=>2) isa Dict{Union{Int,Nothing},Int}
+end
+
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 @testset "issue #1821" begin
