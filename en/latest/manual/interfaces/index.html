@@ -40,9 +40,12 @@ julia&gt; mean(Squares(100))
 3383.5
 
 julia&gt; std(Squares(100))
-3024.355854282583</code></pre><p>There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a <code>Squares</code> sequence will always be <code>Int</code>. By extending the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a> method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend <a href="../../base/collections/#Base.length"><code>length</code></a>, too.</p><p>Now, when we ask Julia to <a href="../../base/collections/#Base.collect-Tuple{Any}"><code>collect</code></a> all the elements into an array it can preallocate a <code>Vector{Int}</code> of the right size instead of blindly <a href="../../base/collections/#Base.push!"><code>push!</code></a>ing each element into a <code>Vector{Any}</code>:</p><pre><code class="language-julia-repl">julia&gt; collect(Squares(10))&#39; # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 1  4  9  16  25  36  49  64  81  100</code></pre><p>While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm. For example, there&#39;s a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution:</p><pre><code class="language-julia-repl">julia&gt; Base.sum(S::Squares) = (n = S.count; return n*(n+1)*(2n+1)÷6)
+3024.355854282583</code></pre><p>There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a <code>Squares</code> sequence will always be <code>Int</code>. By extending the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a> method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend <a href="../../base/collections/#Base.length"><code>length</code></a>, too.</p><p>Now, when we ask Julia to <a href="../../base/collections/#Base.collect-Tuple{Any}"><code>collect</code></a> all the elements into an array it can preallocate a <code>Vector{Int}</code> of the right size instead of blindly <a href="../../base/collections/#Base.push!"><code>push!</code></a>ing each element into a <code>Vector{Any}</code>:</p><pre><code class="language-julia-repl">julia&gt; collect(Squares(4))
+4-element Array{Int64,1}:
+  1
+  4
+  9
+ 16</code></pre><p>While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm. For example, there&#39;s a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution:</p><pre><code class="language-julia-repl">julia&gt; Base.sum(S::Squares) = (n = S.count; return n*(n+1)*(2n+1)÷6)
 
 julia&gt; sum(Squares(1803))
 1955361914</code></pre><p>This is a very common pattern throughout Julia Base: a small set of required methods define an informal interface that enable many fancier behaviors. In some cases, types will want to additionally specialize those extra behaviors when they know a more efficient algorithm can be used in their specific case.</p><p>It is also often useful to allow iteration over a collection in <em>reverse order</em> by iterating over <a href="../../base/iterators/#Base.Iterators.reverse"><code>Iterators.reverse(iterator)</code></a>.  To actually support reverse-order iteration, however, an iterator type <code>T</code> needs to implement <code>start</code>, <code>next</code>, and <code>done</code> methods for <code>Iterators.Reverse{T}</code>. (Given <code>r::Iterators.Reverse{T}</code>, the underling iterator of type <code>T</code> is <code>r.itr</code>.) In our <code>Squares</code> example, we would implement <code>Iterators.Reverse{Squares}</code> methods:</p><pre><code class="language-julia-repl">julia&gt; Base.start(rS::Iterators.Reverse{Squares}) = rS.itr.count
@@ -51,9 +54,12 @@ julia&gt; Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1
 
 julia&gt; Base.done(::Iterators.Reverse{Squares}, state) = state &lt; 1
 
-julia&gt; collect(Iterators.reverse(Squares(10)))&#39; # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 100  81  64  49  36  25  16  9  4  1</code></pre><h2><a class="nav-anchor" id="Indexing-1" href="#Indexing-1">Indexing</a></h2><table><tr><th>Methods to implement</th><th>Brief description</th></tr><tr><td><code>getindex(X, i)</code></td><td><code>X[i]</code>, indexed element access</td></tr><tr><td><code>setindex!(X, v, i)</code></td><td><code>X[i] = v</code>, indexed assignment</td></tr><tr><td><code>firstindex(X)</code></td><td>The first index</td></tr><tr><td><code>lastindex(X)</code></td><td>The last index, used in <code>X[end]</code></td></tr></table><p>For the <code>Squares</code> iterable above, we can easily compute the <code>i</code>th element of the sequence by squaring it.  We can expose this as an indexing expression <code>S[i]</code>. To opt into this behavior, <code>Squares</code> simply needs to define <a href="../../base/collections/#Base.getindex"><code>getindex</code></a>:</p><pre><code class="language-julia-repl">julia&gt; function Base.getindex(S::Squares, i::Int)
+julia&gt; collect(Iterators.reverse(Squares(4)))
+4-element Array{Int64,1}:
+ 16
+  9
+  4
+  1</code></pre><h2><a class="nav-anchor" id="Indexing-1" href="#Indexing-1">Indexing</a></h2><table><tr><th>Methods to implement</th><th>Brief description</th></tr><tr><td><code>getindex(X, i)</code></td><td><code>X[i]</code>, indexed element access</td></tr><tr><td><code>setindex!(X, v, i)</code></td><td><code>X[i] = v</code>, indexed assignment</td></tr><tr><td><code>firstindex(X)</code></td><td>The first index</td></tr><tr><td><code>lastindex(X)</code></td><td>The last index, used in <code>X[end]</code></td></tr></table><p>For the <code>Squares</code> iterable above, we can easily compute the <code>i</code>th element of the sequence by squaring it.  We can expose this as an indexing expression <code>S[i]</code>. To opt into this behavior, <code>Squares</code> simply needs to define <a href="../../base/collections/#Base.getindex"><code>getindex</code></a>:</p><pre><code class="language-julia-repl">julia&gt; function Base.getindex(S::Squares, i::Int)
            1 &lt;= i &lt;= S.count || throw(BoundsError(S, i))
            return i*i
        end
@@ -79,28 +85,31 @@ julia&gt; Base.size(S::SquaresVector) = (S.count,)
 
 julia&gt; Base.IndexStyle(::Type{&lt;:SquaresVector}) = IndexLinear()
 
-julia&gt; Base.getindex(S::SquaresVector, i::Int) = i*i</code></pre><p>Note that it&#39;s very important to specify the two parameters of the <code>AbstractArray</code>; the first defines the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a>, and the second defines the <a href="../../base/arrays/#Base.ndims"><code>ndims</code></a>. That supertype and those three methods are all it takes for <code>SquaresVector</code> to be an iterable, indexable, and completely functional array:</p><pre><code class="language-julia-repl">julia&gt; s = SquaresVector(7)
-7-element SquaresVector:
+julia&gt; Base.getindex(S::SquaresVector, i::Int) = i*i</code></pre><p>Note that it&#39;s very important to specify the two parameters of the <code>AbstractArray</code>; the first defines the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a>, and the second defines the <a href="../../base/arrays/#Base.ndims"><code>ndims</code></a>. That supertype and those three methods are all it takes for <code>SquaresVector</code> to be an iterable, indexable, and completely functional array:</p><pre><code class="language-julia-repl">julia&gt; s = SquaresVector(4)
+4-element SquaresVector:
   1
   4
   9
  16
- 25
- 36
- 49
 
-julia&gt; s[s .&gt; 20]
-3-element Array{Int64,1}:
- 25
- 36
- 49
+julia&gt; s[s .&gt; 8]
+2-element Array{Int64,1}:
+  9
+ 16
 
-julia&gt; s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 RowVector{Float64,Array{Float64,1}}:
- 0.305389  0.335329
+julia&gt; s + s
+4-element Array{Int64,1}:
+  2
+  8
+ 18
+ 32
 
-julia&gt; s ⋅ s # dot(s, s)
-4676</code></pre><p>As a more complicated example, let&#39;s define our own toy N-dimensional sparse-like array type built on top of <a href="../../base/collections/#Base.Dict"><code>Dict</code></a>:</p><pre><code class="language-julia-repl">julia&gt; struct SparseArray{T,N} &lt;: AbstractArray{T,N}
+julia&gt; sin.(s)
+4-element Array{Float64,1}:
+  0.8414709848078965
+ -0.7568024953079282
+  0.4121184852417566
+ -0.2879033166650653</code></pre><p>As a more complicated example, let&#39;s define our own toy N-dimensional sparse-like array type built on top of <a href="../../base/collections/#Base.Dict"><code>Dict</code></a>:</p><pre><code class="language-julia-repl">julia&gt; struct SparseArray{T,N} &lt;: AbstractArray{T,N}
            data::Dict{NTuple{N,Int}, T}
            dims::NTuple{N,Int}
        end
@@ -144,8 +153,8 @@ julia&gt; A[:] = 1:length(A); A
  4.0
  9.0
 
-julia&gt; dot(A[:,1],A[:,2])
-32.0</code></pre><p>If you are defining an array type that allows non-traditional indexing (indices that start at something other than 1), you should specialize <code>indices</code>. You should also specialize <a href="../../base/arrays/#Base.similar-Tuple{AbstractArray}"><code>similar</code></a> so that the <code>dims</code> argument (ordinarily a <code>Dims</code> size-tuple) can accept <code>AbstractUnitRange</code> objects, perhaps range-types <code>Ind</code> of your own design. For more information, see <a href="../../devdocs/offset-arrays/#Arrays-with-custom-indices-1">Arrays with custom indices</a>.</p><h2><a class="nav-anchor" id="man-interface-strided-arrays-1" href="#man-interface-strided-arrays-1">Strided Arrays</a></h2><table><tr><th>Methods to implement</th><th> </th><th>Brief description</th></tr><tr><td><code>strides(A)</code></td><td> </td><td>Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If <code>A</code> is an <code>AbstractArray{T,0}</code>, this should return an empty tuple.</td></tr><tr><td><code>Base.unsafe_convert(::Type{Ptr{T}}, A)</code></td><td> </td><td>Return the native address of an array.</td></tr><tr><td><strong>Optional methods</strong></td><td><strong>Default definition</strong></td><td><strong>Brief description</strong></td></tr><tr><td><code>stride(A, i::Int)</code></td><td>    <code>strides(A)[i]</code></td><td>Return the distance in memory (in number of elements) between adjacent elements in dimension k.</td></tr></table><p>A strided array is a subtype of <code>AbstractArray</code> whose entries are stored in memory with fixed strides. Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines for more efficient linear algebra routines.  A typical example of a user-defined strided array is one that wraps a standard <code>Array</code> with additional structure.</p><p>Warning: do not implement these methods if the underlying storage is not actually strided, as it may lead to incorrect results or segmentation faults.</p><p>Here are some examples to demonstrate which type of arrays are strided and which are not:</p><pre><code class="language-julia">1:5   # not strided (there is no storage associated with this array.)
+julia&gt; mean(A)
+5.0</code></pre><p>If you are defining an array type that allows non-traditional indexing (indices that start at something other than 1), you should specialize <code>indices</code>. You should also specialize <a href="../../base/arrays/#Base.similar-Tuple{AbstractArray}"><code>similar</code></a> so that the <code>dims</code> argument (ordinarily a <code>Dims</code> size-tuple) can accept <code>AbstractUnitRange</code> objects, perhaps range-types <code>Ind</code> of your own design. For more information, see <a href="../../devdocs/offset-arrays/#Arrays-with-custom-indices-1">Arrays with custom indices</a>.</p><h2><a class="nav-anchor" id="man-interface-strided-arrays-1" href="#man-interface-strided-arrays-1">Strided Arrays</a></h2><table><tr><th>Methods to implement</th><th> </th><th>Brief description</th></tr><tr><td><code>strides(A)</code></td><td> </td><td>Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If <code>A</code> is an <code>AbstractArray{T,0}</code>, this should return an empty tuple.</td></tr><tr><td><code>Base.unsafe_convert(::Type{Ptr{T}}, A)</code></td><td> </td><td>Return the native address of an array.</td></tr><tr><td><strong>Optional methods</strong></td><td><strong>Default definition</strong></td><td><strong>Brief description</strong></td></tr><tr><td><code>stride(A, i::Int)</code></td><td>    <code>strides(A)[i]</code></td><td>Return the distance in memory (in number of elements) between adjacent elements in dimension k.</td></tr></table><p>A strided array is a subtype of <code>AbstractArray</code> whose entries are stored in memory with fixed strides. Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines for more efficient linear algebra routines.  A typical example of a user-defined strided array is one that wraps a standard <code>Array</code> with additional structure.</p><p>Warning: do not implement these methods if the underlying storage is not actually strided, as it may lead to incorrect results or segmentation faults.</p><p>Here are some examples to demonstrate which type of arrays are strided and which are not:</p><pre><code class="language-julia">1:5   # not strided (there is no storage associated with this array.)
 Vector(1:5)  # is strided with strides (1,)
 A = [1 5; 2 6; 3 7; 4 8]  # is strided with strides (1,4)
 V = view(A, 1:2, :)   # is strided with strides (1,4)
