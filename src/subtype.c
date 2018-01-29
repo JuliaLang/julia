@@ -314,13 +314,11 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 0;
     if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
         return 0;
-    // TODO: this would be a nice fast-path to have, unfortuanately,
-    //       datatype allocation fails to correctly hash-cons them
-    //       and the subtyping tests include tests for this case
-    //if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
-    //    (((jl_datatype_t*)a)->name != jl_tuple_typename ||
-    //     ((jl_datatype_t*)b)->name != jl_tuple_typename))
-    //    return 1;
+    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
+        jl_type_equality_is_identity(a, b) &&
+        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
+         ((jl_datatype_t*)b)->name != jl_tuple_typename))
+        return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
