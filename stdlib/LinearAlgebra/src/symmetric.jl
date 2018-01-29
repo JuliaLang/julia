@@ -45,8 +45,27 @@ function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
     symmetric_type(typeof(A))(A, char_uplo(uplo))
 end
 
+"""
+    symmetric(A, uplo=:U)
+
+Construct a symmetric view of `A`. If `A` is a matrix, `uplo` controls whether the upper
+(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+other one. If `A` is a `Number`, it is returned as is.
+
+If a symmetric view of a matrix is to be constructed of which the elements are neither
+matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
+case, `symmetric_type` has to be implemented, too.
+"""
 symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
 symmetric(A::Number, ::Symbol) = A
+
+"""
+    symmetric_type(T::Type)
+
+The type of the object returned by `symmetric(::T, ::Symbol)`. For matrices, this is an
+appropriately typed `Symmetric`, for `Number`s, it is the original type. If `symmetric` is
+implemented for a custom type, so should be `symmetric_type`, and vice versa.
+"""
 function symmetric_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
     Symmetric{Union{S,promote_op(transpose, S),symmetric_type(S)},T}
 end
@@ -96,8 +115,28 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     hermitian_type(typeof(A))(A, char_uplo(uplo))
 end
 
+"""
+    hermitian(A, uplo=:U)
+
+Construct a hermitian view of `A`. If `A` is a matrix, `uplo` controls whether the upper
+(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+other one. If `A` is a `Number`, its real part is returned converted back to the input
+type.
+
+If a hermitian view of a matrix is to be constructed of which the elements are neither
+matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
+case, `hermitian_type` has to be implemented, too.
+"""
 hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
 hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+
+"""
+    hermitian_type(T::Type)
+
+The type of the object returned by `hermitian(::T, ::Symbol)`. For matrices, this is an
+appropriately typed `Hermitian`, for `Number`s, it is the original type. If `hermitian` is
+implemented for a custom type, so should be `hermitian_type`, and vice versa.
+"""
 function hermitian_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
     Hermitian{Union{S,promote_op(adjoint, S),hermitian_type(S)},T}
 end
