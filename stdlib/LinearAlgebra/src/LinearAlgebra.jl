@@ -221,8 +221,8 @@ In this case, one must implement the strided array interface, which requires
 overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`.
 """
 MemoryLayout(A::AbstractArray{T}) where {T} = UnknownLayout{T}()
-MemoryLayout(A::Vector{T}) where {T} = DenseLayout{T}()
-MemoryLayout(A::Matrix{T}) where {T} = DenseLayout{T}()
+MemoryLayout(A::DenseVector{T}) where {T} = DenseLayout{T}()
+MemoryLayout(A::DenseMatrix{T}) where {T} = DenseLayout{T}()
 
 
 MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))

@@ -845,6 +845,8 @@ end
     end
 end
 
+struct MyDenseArray{T,N} <: DenseArray{T,N} end
+
 @testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
     A = [1.0 2; 3 4]
 
@@ -865,6 +867,10 @@ end
     @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == LinearAlgebra.DenseLayout{Float64}()
 
     @test LinearAlgebra.MemoryLayout(reinterpret(ComplexF64,A)) == LinearAlgebra.DenseLayout{ComplexF64}()
+
+    # this checks that SharedArray knows its layout
+    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,1}()) == LinearAlgebra.DenseLayout{Float64}()
+    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,2}()) == LinearAlgebra.DenseLayout{Float64}()
 end
 
 end # module TestDense
