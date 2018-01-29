@@ -231,23 +231,6 @@ function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
     while isspace(c)
         c, i = next(s,i)
     end
-    return sign, c, i
-end
-
-function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
-    isempty(s) && throw(ArgumentError("Empty string!"))
-    c = ' '
-    sign = 1
-    while isspace(c)
-        c, i = next(s,i)
-    end
-    if c in ('-', '+')
-        sign = (c == '-') ? -1 : 1
-        c, i = next(s, i)
-    end
-    while isspace(c)
-        c, i = next(s,i)
-    end
     startpos = i-1
     return sign, startpos
 end
