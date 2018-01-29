@@ -642,6 +642,9 @@ end
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
+    g = (p1, p2) -> iseven(p1)
+    @test_warn "In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments." filter!(g, copy(d))
+    @test filter!(g, copy(d)) == filter!(f, copy(d))
 end
 
 struct MyString <: AbstractString
