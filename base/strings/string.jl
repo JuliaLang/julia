@@ -102,6 +102,7 @@ end
 
 thisind(s::String, i::Int) = _thisind_str(s, i)
 
+# s should be String or SubString{String}
 function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
@@ -122,6 +123,7 @@ end
 
 nextind(s::String, i::Int) = _nextind_str(s, i)
 
+# s should be String or SubString{String}
 function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
