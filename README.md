@@ -323,6 +323,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [patch]:        http://www.gnu.org/software/patch
 [wget]:         http://www.gnu.org/software/wget
 [m4]:           http://www.gnu.org/software/m4
+[awk]:          http://www.gnu.org/software/gawk
 [gcc]:          http://gcc.gnu.org
 [clang]:        http://clang.llvm.org
 [python]:       https://www.python.org/
