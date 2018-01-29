@@ -393,9 +393,12 @@ _replace(io, repl::Function, str, r, pattern) =
 
 replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
     replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}};
+
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},
+                                            AbstractVector{Char},Set{Char}}};
         count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count)
+    replace(str, occursin(first(pat_repl)) => last(pat_repl), count=count)
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
