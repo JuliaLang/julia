@@ -495,13 +495,13 @@ end
 end
 
 @testset "Iterators.Stateful" begin
-    let a = Iterators.Stateful("abcdef")
+    let a = @inferred(Iterators.Stateful("abcdef"))
         @test !isempty(a)
         @test popfirst!(a) == 'a'
         @test collect(Iterators.take(a, 3)) == ['b','c','d']
         @test collect(a) == ['e', 'f']
     end
-    let a = Iterators.Stateful([1, 1, 1, 2, 3, 4])
+    let a = @inferred(Iterators.Stateful([1, 1, 1, 2, 3, 4]))
         for x in a; x == 1 || break; end
         @test Base.peek(a) == 3
         @test sum(a) == 7
