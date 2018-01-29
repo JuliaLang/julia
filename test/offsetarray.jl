@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 using DelimitedFiles
 using Random
 using LinearAlgebra
@@ -314,7 +314,7 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 
 # other functions
 v = OffsetArray(v0, (-3,))
-@test endof(v) == 1
+@test lastindex(v) == 1
 @test v ≈ v
 @test axes(v') === (Base.OneTo(1),-2:1)
 @test parent(v) == collect(v)
@@ -328,6 +328,9 @@ cv = copy(v)
 @test reverse!(cv) == rv
 
 A = OffsetArray(rand(4,4), (-3,5))
+@test lastindex(A) == 16
+@test lastindex(A, 1) == 1
+@test lastindex(A, 2) == 9
 @test A ≈ A
 @test axes(A') === (6:9, -2:1)
 @test parent(copy(A')) == copy(parent(A)')
@@ -363,10 +366,6 @@ pmax, ipmax = findmax(parent(A))
 z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
 I = findall(!iszero, z)
 @test I == [CartesianIndex(-1, 0)]
-I,J,N = findnz(z)
-@test I == [-1]
-@test J == [0]
-@test N == [2]
 @test findall(!iszero,h) == [-2:1;]
 @test findall(x->x>0, h) == [-1,1]
 @test findall(x->x<0, h) == [-2,0]

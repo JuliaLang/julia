@@ -16,7 +16,7 @@ function character_codes(directives::SimpleVector)
     return letters
 end
 
-genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
+genvar(t::DataType) = Symbol(lowercase(string(nameof(t))))
 
 """
     tryparsenext_core(str::AbstractString, pos::Int, len::Int, df::DateFormat, raise=false)
@@ -46,41 +46,39 @@ Return a 3-element tuple `(values, pos, num_parsed)`:
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
-    assign_defaults = Expr[
-        quote
+    assign_defaults = Expr[]
+    for (name, default) in zip(value_names, value_defaults)
+        push!(assign_defaults, quote
             $name = $default
-        end
-        for (name, default) in zip(value_names, value_defaults)
-    ]
+        end)
+    end
 
     vi = 1
-    parsers = Expr[
-        begin
-            if directives[i] <: DatePart
-                name = value_names[vi]
-                val = Symbol(:val, name)
-                vi += 1
-                quote
-                    pos > len && @goto done
-                    $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    $val === nothing && @goto error
-                    $name = $val
-                    pos = next_pos
-                    num_parsed += 1
-                    directive_index += 1
-                end
-            else
-                quote
-                    pos > len && @goto done
-                    delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
-                    delim === nothing && @goto error
-                    pos = next_pos
-                    directive_index += 1
-                end
-            end
+    parsers = Expr[]
+    for i = 1:length(directives)
+        if directives[i] <: DatePart
+            name = value_names[vi]
+            val = Symbol(:val, name)
+            vi += 1
+            push!(parsers, quote
+                pos > len && @goto done
+                $val, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                $val === nothing && @goto error
+                $name = $val
+                pos = next_pos
+                num_parsed += 1
+                directive_index += 1
+            end)
+        else
+            push!(parsers, quote
+                pos > len && @goto done
+                delim, next_pos = tryparsenext(directives[$i], str, pos, len, locale)
+                delim === nothing && @goto error
+                pos = next_pos
+                directive_index += 1
+            end)
         end
-        for i in 1:length(directives)
-    ]
+    end
 
     quote
         directives = df.tokens
@@ -198,7 +196,7 @@ end
 end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
-    i, end_pos = start(s), endof(s)
+    i, end_pos = start(s), lastindex(s)
 
     dm = dd = Int64(1)
     th = tm = ts = tms = Int64(0)
@@ -265,13 +263,13 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
 end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
-    pos, len = start(str), endof(str)
+    pos, len = start(str), lastindex(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, true)
     T(values...)
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
-    pos, len = start(str), endof(str)
+    pos, len = start(str), lastindex(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if values === nothing
         nothing
@@ -296,7 +294,7 @@ number of components may be less than the total number of `DatePart`.
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
 
     quote
-        pos, len = start(str), endof(str)
+        pos, len = start(str), lastindex(str)
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
         t = values
         types = $(Expr(:tuple, tokens...))

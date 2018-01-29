@@ -2,7 +2,7 @@
 
 using Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
-    handle_message, shouldlog, min_enabled_level
+    handle_message, shouldlog, min_enabled_level, catch_exceptions
 
 import Test: collect_test_logs, TestLogger
 using Base.Printf: @sprintf
@@ -231,6 +231,7 @@ end
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Info, Base, :group, :asdf) === false
+    @test catch_exceptions(logger) === false
 
     # Log formatting
     function genmsg(level, message, _module, filepath, line; kws...)
@@ -238,18 +239,14 @@ end
         logger = SimpleLogger(io, Debug)
         handle_message(logger, level, message, _module, :group, :id,
                        filepath, line; kws...)
-        s = String(take!(io))
-        # Remove the small amount of color, as `Base.print_with_color` can't be
-        # simply controlled.
-        s = replace(s, r"^\e\[1m\e\[..m(.*)\e\[39m\e\[22m"m => s"\1")
-        # println(s)
-        s
+        String(take!(io))
     end
 
     # Simple
     @test genmsg(Info, "msg", Main, "some/path.jl", 101) ==
     """
-    [ Info: msg @ Main path.jl:101
+    ┌ Info: msg
+    └ @ Main some/path.jl:101
     """
 
     # Multiline message
@@ -257,7 +254,7 @@ end
     """
     ┌ Warning: line1
     │ line2
-    └ @ Main path.jl:101
+    └ @ Main some/path.jl:101
     """
 
     # Keywords

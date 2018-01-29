@@ -46,13 +46,13 @@ function choosetests(choices = [])
         "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
+        "euler", "show",
+        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "libgit2", "docs",
-        "markdown", "misc", "threads",
+        "misc", "threads",
         "enums", "cmdlineargs", "i18n", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
-        "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
+        "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
@@ -145,6 +145,20 @@ function choosetests(choices = [])
         filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
         prepend!(tests, STDLIBS)
     end
+
+    new_tests = String[]
+    for test in tests
+        if test in STDLIBS
+            testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
+            if isfile(testfile)
+                prepend!(new_tests, (test * "/") .* readlines(testfile))
+            else
+                push!(new_tests, test)
+            end
+        end
+    end
+    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    prepend!(tests, new_tests)
 
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     if "ambiguous" in skip_tests

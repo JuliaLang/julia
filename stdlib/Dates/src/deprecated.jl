@@ -41,3 +41,7 @@ import Base.range
 @deprecate range(start::DateTime, len::Integer)  range(start, Day(1), len) false
 @deprecate range(start::Date, len::Integer)      range(start, Day(1), len) false
 
+# PR #23724
+@deprecate DateTime() DateTime(1)
+@deprecate Date() Date(1)
+@deprecate Time() Time(0)

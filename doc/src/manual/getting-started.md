@@ -71,8 +71,8 @@ The `--` delimiter can be used to separate command-line args to the scriptfile f
 $ julia --color=yes -O -- foo.jl arg1 arg2..
 ```
 
-Julia can be started in parallel mode with either the `-p` or the `--machinefile` options. `-p n`
-will launch an additional `n` worker processes, while `--machinefile file` will launch a worker
+Julia can be started in parallel mode with either the `-p` or the `--machine-file` options. `-p n`
+will launch an additional `n` worker processes, while `--machine-file file` will launch a worker
 for each line in file `file`. The machines defined in `file` must be accessible via a passwordless
 `ssh` login, with Julia installed at the same location as the current host. Each machine definition
 takes the form `[count*][user@]host[:port] [bind_addr[:port]]` . `user` defaults to current user,
@@ -113,12 +113,12 @@ julia [switches] -- [programfile] [args...]
 
  -p, --procs {N|auto}      Integer value N launches N additional local worker processes
                            "auto" launches as many workers as the number of local cores
- --machinefile <file>      Run processes on hosts listed in <file>
+ --machine-file <file>     Run processes on hosts listed in <file>
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
  -q, --quiet               Quiet startup: no banner, suppress REPL warnings
- --banner={yes|no}         Enable or disable startup banner
- --color={yes|no}          Enable or disable color text
+ --banner={yes|no|auto}    Enable or disable startup banner
+ --color={yes|no|auto}     Enable or disable color text
  --history-file={yes|no}   Load or save history
 
  --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)

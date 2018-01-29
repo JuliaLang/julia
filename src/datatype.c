@@ -61,7 +61,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->cache = jl_emptysvec;
     tn->linearcache = jl_emptysvec;
     tn->names = NULL;
-    tn->hash = bitmix(bitmix(module ? module->uuid : 0, name->hash), 0xa1ada1da);
+    tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
     return tn;
 }
@@ -848,6 +848,15 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
             return ((jl_datatype_t*)ty)->instance;
     }
     return jl_new_bits(ty, (char*)v + offs);
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(i < jl_datatype_nfields(st));
+    size_t offs = jl_field_offset(st,i);
+    assert(jl_field_isptr(st,i));
+    return *(jl_value_t**)((char*)v + offs);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)

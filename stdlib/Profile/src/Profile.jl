@@ -9,7 +9,7 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 using Base: iszero
-using Base.Printf.@sprintf
+using Printf: @sprintf
 
 export @profile
 

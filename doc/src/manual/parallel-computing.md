@@ -203,7 +203,7 @@ like a process providing an interactive prompt.
 The base Julia installation has in-built support for two types of clusters:
 
   * A local cluster specified with the `-p` option as shown above.
-  * A cluster spanning machines using the `--machinefile` option. This uses a passwordless `ssh` login
+  * A cluster spanning machines using the `--machine-file` option. This uses a passwordless `ssh` login
     to start Julia worker processes (from the same path as the current host) on the specified machines.
 
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
@@ -284,15 +284,12 @@ snippet:
 
 ```julia-repl
 A = rand(10,10)
-remotecall_fetch(()->norm(A), 2)
+remotecall_fetch(()->sum(A), 2)
 ```
 
-In this case [`norm`](@ref) is a function that takes 2D array as a parameter, and MUST be defined in
-the remote process.  You could use any function other than `norm` as long as it is defined in the remote
-process and accepts the appropriate parameter.
-
+In this case [`sum`](@ref) MUST be defined in the remote process.
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
-`A` under `Main`. The act of shipping the closure `()->norm(A)` to worker 2 results in `Main.A` being defined
+`A` under `Main`. The act of shipping the closure `()->sum(A)` to worker 2 results in `Main.A` being defined
 on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
@@ -306,9 +303,9 @@ with embedded global references (under `Main` module only) manage globals as fol
 
   ```julia
   A = rand(10,10)
-  remotecall_fetch(()->norm(A), 2) # worker 2
+  remotecall_fetch(()->sum(A), 2) # worker 2
   A = rand(10,10)
-  remotecall_fetch(()->norm(A), 3) # worker 3
+  remotecall_fetch(()->sum(A), 3) # worker 3
   A = nothing
   ```
 
@@ -1083,7 +1080,7 @@ manner:
   * In this way a mesh network is established, wherein every worker is directly connected with every
     other worker.
 
-While the default transport layer uses plain `TCPSocket`, it is possible for a Julia cluster to
+While the default transport layer uses plain [`TCPSocket`](@ref), it is possible for a Julia cluster to
 provide its own transport.
 
 Julia provides two in-built cluster managers:
@@ -1225,7 +1222,7 @@ connected to. For example, consider a Julia cluster of 32 processes in an all-to
 
   * Each Julia process thus has 31 communication tasks.
   * Each task handles all incoming messages from a single remote worker in a message-processing loop.
-  * The message-processing loop waits on an `IO` object (for example, a `TCPSocket` in the default
+  * The message-processing loop waits on an `IO` object (for example, a [`TCPSocket`](@ref) in the default
     implementation), reads an entire message, processes it and waits for the next one.
   * Sending messages to a process is done directly from any Julia task--not just communication tasks--again,
     via the appropriate `IO` object.

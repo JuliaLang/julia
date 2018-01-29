@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra: mul!, ldiv!, rdiv!
+module SparseTests
+
+using Test
+using SparseArrays
+using LinearAlgebra
 using Base.Printf: @printf
 using Random
 
@@ -322,31 +326,31 @@ sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
 
-@testset "scale and scale!" begin
+@testset "scaling with * and mul!, mul1!, and mul2!" begin
     b = randn(7)
     @test dA * Diagonal(b) == sA * Diagonal(b)
-    @test dA * Diagonal(b) == scale!(sC, sA, b)
-    @test dA * Diagonal(b) == scale!(copy(sA), b)
+    @test dA * Diagonal(b) == mul!(sC, sA, Diagonal(b))
+    @test dA * Diagonal(b) == mul1!(copy(sA), Diagonal(b))
     b = randn(3)
     @test Diagonal(b) * dA == Diagonal(b) * sA
-    @test Diagonal(b) * dA == scale!(sC, b, sA)
-    @test Diagonal(b) * dA == scale!(b, copy(sA))
+    @test Diagonal(b) * dA == mul!(sC, Diagonal(b), sA)
+    @test Diagonal(b) * dA == mul2!(Diagonal(b), copy(sA))
 
     @test dA * 0.5            == sA * 0.5
-    @test dA * 0.5            == scale!(sC, sA, 0.5)
-    @test dA * 0.5            == scale!(copy(sA), 0.5)
+    @test dA * 0.5            == mul!(sC, sA, 0.5)
+    @test dA * 0.5            == mul1!(copy(sA), 0.5)
     @test 0.5 * dA            == 0.5 * sA
-    @test 0.5 * dA            == scale!(sC, sA, 0.5)
-    @test 0.5 * dA            == scale!(0.5, copy(sA))
-    @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
+    @test 0.5 * dA            == mul!(sC, sA, 0.5)
+    @test 0.5 * dA            == mul2!(0.5, copy(sA))
+    @test mul!(sC, 0.5, sA)   == mul!(sC, sA, 0.5)
 
-    @testset "inverse scale!" begin
+    @testset "inverse scaling with mul!" begin
         bi = inv.(b)
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
-        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
+        @test mul1!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
@@ -1023,11 +1027,11 @@ end
     @test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
 end
 
-@testset "indmax, indmin, findmax, findmin" begin
+@testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test indmax(S) == indmax(A)
-    @test indmin(S) == indmin(A)
+    @test argmax(S) == argmax(A)
+    @test argmin(S) == argmin(A)
     @test findmin(S) == findmin(A)
     @test findmax(S) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
@@ -1036,16 +1040,16 @@ end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
-    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
+    @test argmax(S) == argmax(A) == CartesianIndex(1,1)
+    @test argmin(S) == argmin(A) == CartesianIndex(1,1)
 
     A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
-    iA = try indmax(A) end
-    iS = try indmax(S) end
+    iA = try argmax(A) end
+    iS = try argmax(S) end
     @test iA === iS === nothing
-    iA = try indmin(A) end
-    iS = try indmin(S) end
+    iA = try argmin(A) end
+    iS = try argmin(S) end
     @test iA === iS === nothing
 end
 
@@ -1417,15 +1421,15 @@ end
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), false) == A
+            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, false) == A
+            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
             @test length(dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
-            @test length(dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
-            @test length(dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
+            @test length(dropzeros!(copy(Awithzeros), trim = false).nzval) == length(Awithzeros.nzval)
+            @test length(dropzeros!(copy(Awithzeros), trim = false).rowval) == length(Awithzeros.rowval)
         end
     end
     # original lone dropzeros test
@@ -2204,3 +2208,10 @@ end
     v[1] = 2
     @test A[1,1] == 2
 end
+
+@testset "findnz on non-sparse arrays" begin
+    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
+    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
+end
+
+end # module

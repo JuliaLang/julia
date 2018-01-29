@@ -61,7 +61,7 @@ Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Ta
 creates a task, and does not run it.
 
 ```jldoctest
-julia> a1() = det(rand(1000, 1000));
+julia> a1() = sum(i for i in 1:1000);
 
 julia> b = @task a1();
 
@@ -93,7 +93,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 Determine whether a task has exited.
 
 ```jldoctest
-julia> a2() = det(rand(1000, 1000));
+julia> a2() = sum(i for i in 1:1000);
 
 julia> b = Task(a2);
 
@@ -116,7 +116,7 @@ istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 Determine whether a task has started executing.
 
 ```jldoctest
-julia> a3() = det(rand(1000, 1000));
+julia> a3() = sum(i for i in 1:1000);
 
 julia> b = Task(a3);
 
@@ -357,7 +357,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = Timer(timercb, pollint, pollint)
+        t = Timer(timercb, pollint, interval = pollint)
         ret = fetch(done)
         close(t)
     else

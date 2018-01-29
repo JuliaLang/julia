@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Serialization: serialize_cycle, deserialize_cycle, writetag,
-                     __deserialized_types__, serialize_typename, deserialize_typename,
+                     serialize_typename, deserialize_typename,
                      TYPENAME_TAG, reset_state, serialize_type
+using Serialization.__deserialized_types__
 
 import Serialization: object_number, lookup_object_number, remember_object
 

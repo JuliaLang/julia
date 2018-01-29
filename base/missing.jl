@@ -23,12 +23,18 @@ nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
-promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
-promote_rule(::Type{Any}, ::Type{Missing}) = Any
-promote_rule(::Type{Missing}, ::Type{Any}) = Any
-promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
+for U in (:Nothing, :Missing)
+    @eval begin
+        promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
+        promote_rule(::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::Type{$U}, ::Type{$U}) = U
+    end
+end
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
@@ -57,7 +63,7 @@ isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
 
 # Unary operators/functions
-for f in (:(!), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(abs), :(abs2), :(sign),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
@@ -166,7 +172,7 @@ struct SkipMissing{T}
 end
 IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
-eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
+eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
 # Fallback implementation for general iterables: we cannot access a value twice,
 # so after finding the next non-missing element in start() or next(), we have to
 # pass it in the iterator state, which introduces a type instability since the value

@@ -907,7 +907,7 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 ### Named Tuple Types
 
-Named tuples are instances of the `NamedTuple` type, which has two parameters: a tuple of
+Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
 
 ```jldoctest

@@ -125,7 +125,7 @@ function verify_ntasks(iterable, ntasks)
 
     if ntasks == 0
         chklen = IteratorSize(iterable)
-        if (chklen == HasLength()) || (chklen == HasShape())
+        if (chklen isa HasLength) || (chklen isa HasShape)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100
@@ -401,7 +401,7 @@ end
 
 # pass-through iterator traits to the iterable
 # on which the mapping function is being applied
-IteratorSize(itr::AsyncGenerator) = IteratorSize(itr.collector.enumerator)
+IteratorSize(itr::AsyncGenerator) = SizeUnknown()
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 

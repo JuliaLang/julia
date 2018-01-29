@@ -378,7 +378,7 @@ end
 
 LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
 
-_global_logstate = LogState(NullLogger()) # See __init__
+_global_logstate = LogState(NullLogger())
 
 function current_logstate()
     logstate = current_task().logstate
@@ -479,39 +479,27 @@ shouldlog(logger::SimpleLogger, level, _module, group, id) =
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
+catch_exceptions(logger::SimpleLogger) = false
+
 function handle_message(logger::SimpleLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
-    # TODO: Factor out more complex things here into a separate logger in
-    # stdlib: in particular maxlog support + colorization.
     if maxlog != nothing && maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
-    levelstr, color = level < Info  ? ("Debug", Base.debug_color()) :
-                      level < Warn  ? ("Info", Base.info_color()) :
-                      level < Error ? ("Warning", Base.warn_color()) :
-                                      ("Error", Base.error_color())
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
+    levelstr = level == Warn ? "Warning" : string(level)
     msglines = split(chomp(string(message)), '\n')
-    if length(msglines) + length(kwargs) == 1
-        print_with_color(color, iob, "[ ", levelstr, ": ", bold=true)
-        print(iob, msglines[1], " ")
-    else
-        print_with_color(color, iob, "┌ ", levelstr, ": ", bold=true)
-        println(iob, msglines[1])
-        for i in 2:length(msglines)
-            print_with_color(color, iob, "│ ", bold=true)
-            println(iob, msglines[i])
-        end
-        for (key,val) in pairs(kwargs)
-            print_with_color(color, iob, "│ ", bold=true)
-            println(iob, "  ", key, " = ", val)
-        end
-        print_with_color(color, iob, "└ ", bold=true)
+    println(iob, "┌ ", levelstr, ": ", msglines[1])
+    for i in 2:length(msglines)
+        println(iob, "│ ", msglines[i])
     end
-    print_with_color(:light_black, iob, "@ ", _module, " ", basename(filepath), ":", line, "\n")
+    for (key,val) in pairs(kwargs)
+        println(iob, "│   ", key, " = ", val)
+    end
+    println(iob, "└ @ ", _module, " ", filepath, ":", line)
     write(logger.stream, take!(buf))
     nothing
 end

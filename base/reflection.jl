@@ -3,17 +3,17 @@
 # name and module reflection
 
 """
-    module_name(m::Module) -> Symbol
+    nameof(m::Module) -> Symbol
 
 Get the name of a `Module` as a `Symbol`.
 
 # Examples
 ```jldoctest
-julia> module_name(Base)
-:Base
+julia> nameof(Base.Broadcast)
+:Broadcast
 ```
 """
-module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 """
     parentmodule(m::Module) -> Module
@@ -25,7 +25,7 @@ Get a module's enclosing `Module`. `Main` is its own parent.
 julia> parentmodule(Main)
 Main
 
-julia> parentmodule(Base.Sys)
+julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
@@ -56,7 +56,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
-    mn = module_name(m)
+    mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
     end
@@ -68,7 +68,7 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module, all::Bool=false, imported::Bool=false)
+    names(x::Module; all::Bool = false, imported::Bool = false)
 
 Get an array of the names exported by a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-exported names defined in the module,
@@ -79,7 +79,8 @@ are also included.
 As a special case, all names defined in `Main` are considered \"exported\",
 since it is not idiomatic to explicitly export names from `Main`.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+names(m::Module; all::Bool = false, imported::Bool = false) =
+    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -105,11 +106,11 @@ Get the name of field `i` of a `DataType`.
 
 # Examples
 ```jldoctest
-julia> fieldname(SparseMatrixCSC, 1)
-:m
+julia> fieldname(Rational, 1)
+:num
 
-julia> fieldname(SparseMatrixCSC, 5)
-:nzval
+julia> fieldname(Rational, 2)
+:den
 ```
 """
 function fieldname(t::DataType, i::Integer)
@@ -132,10 +133,10 @@ Get an array of the fields of a `DataType`.
 
 # Examples
 ```jldoctest
-julia> fieldnames(Hermitian)
+julia> fieldnames(Rational)
 2-element Array{Symbol,1}:
- :data
- :uplo
+ :num
+ :den
 ```
 """
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]
@@ -143,9 +144,10 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
 
 """
-    Base.datatype_name(t) -> Symbol
+    nameof(t::DataType) -> Symbol
 
-Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
+as a symbol.
 
 # Examples
 ```jldoctest
@@ -155,12 +157,12 @@ julia> module Foo
        end
 Foo
 
-julia> Base.datatype_name(Foo.S{T} where T)
+julia> nameof(Foo.S{T} where T)
 :S
 ```
 """
-datatype_name(t::DataType) = t.name.name
-datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
+nameof(t::DataType) = t.name.name
+nameof(t::UnionAll) = nameof(unwrap_unionall(t))
 
 """
     parentmodule(t::DataType) -> Module
@@ -582,74 +584,6 @@ julia> instances(Color)
 """
 function instances end
 
-# subtypes
-function _subtypes(m::Module, x::Union{DataType,UnionAll},
-                   sts=Set{Union{DataType,UnionAll}}(), visited=Set{Module}())
-    push!(visited, m)
-    xt = unwrap_unionall(x)
-    if !isa(xt, DataType)
-        return sts
-    end
-    xt = xt::DataType
-    for s in names(m, true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if isa(t, DataType)
-                t = t::DataType
-                if t.name.name === s && supertype(t).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, UnionAll)
-                t = t::UnionAll
-                tt = unwrap_unionall(t)
-                isa(tt, DataType) || continue
-                tt = tt::DataType
-                if tt.name.name === s && supertype(tt).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, Module)
-                t = t::Module
-                in(t, visited) || _subtypes(t, x, sts, visited)
-            end
-        end
-    end
-    return sts
-end
-
-function _subtypes_in(mods::Array, x::Union{DataType,UnionAll})
-    if !isabstracttype(x)
-        # Fast path
-        return Union{DataType,UnionAll}[]
-    end
-    sts = Set{Union{DataType,UnionAll}}()
-    visited = Set{Module}()
-    for m in mods
-        _subtypes(m, x, sts, visited)
-    end
-    return sort!(collect(sts), by=string)
-end
-
-subtypes(m::Module, x::Union{DataType,UnionAll}) = _subtypes_in([m], x)
-
-"""
-    subtypes(T::DataType)
-
-Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
-are included, including those not visible in the current module.
-
-# Examples
-```jldoctest
-julia> subtypes(Integer)
-3-element Array{Union{DataType, UnionAll},1}:
- Bool
- Signed
- Unsigned
-```
-"""
-subtypes(x::Union{DataType,UnionAll}) = _subtypes_in(loaded_modules_array(), x)
-
 function to_tuple_type(@nospecialize(t))
     @_pure_meta
     if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
@@ -672,28 +606,28 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types, expand_generated = true)
+    code_lowered(f, types; generated = true)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
 
-If `expand_generated` is `false`, the returned `CodeInfo` instances will correspond to fallback
+If `generated` is `false`, the returned `CodeInfo` instances will correspond to fallback
 implementations. An error is thrown if no fallback implementation exists.
-If `expand_generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
+If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
-Note that an error will be thrown if `types` are not leaf types when `expand_generated` is
+Note that an error will be thrown if `types` are not leaf types when `generated` is
 `true` and the corresponding method is a `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Bool = true)
     return map(method_instances(f, t)) do m
-        if expand_generated && isgenerated(m)
+        if generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
                 return Core.Compiler.get_staged(m)
             else # isa(m, Method)
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
-                      "not leaf types, but the `expand_generated` argument is `true`.")
+                      "not leaf types, but the `generated` argument is `true`.")
             end
         end
         return uncompressed_ast(m)
@@ -856,79 +790,6 @@ struct CodegenParams
             module_setup, module_activation, raise_exception)
 end
 
-# Printing code representations in IR and assembly
-function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
-                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
-                        optimize::Bool=true, params::CodegenParams=CodegenParams())
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
-    # get the MethodInstance for the method match
-    world = typemax(UInt)
-    meth = which(f, t)
-    t = to_tuple_type(t)
-    tt = signature_type(f, t)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::SimpleVector
-    meth = func_for_method_checked(meth, ti)
-    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
-    # get the code for it
-    return _dump_function_linfo(linfo, world, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, params)
-end
-
-function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::Bool, wrapper::Bool,
-                              strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
-                              optimize::Bool=true, params::CodegenParams=CodegenParams())
-    if syntax != :att && syntax != :intel
-        throw(ArgumentError("'syntax' must be either :intel or :att"))
-    end
-    if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, CodegenParams), linfo, world, wrapper, params)
-    else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    end
-    if llvmf == C_NULL
-        error("could not compile the specified method")
-    end
-
-    if native
-        str = ccall(:jl_dump_function_asm, Ref{String},
-                    (Ptr{Cvoid}, Cint, Ptr{UInt8}), llvmf, 0, syntax)
-    else
-        str = ccall(:jl_dump_function_ir, Ref{String},
-                    (Ptr{Cvoid}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
-    end
-
-    # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-    isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
-    return str
-end
-
-"""
-    code_llvm([io=STDOUT,], f, types)
-
-Prints the LLVM bitcodes generated for running the method matching the given generic
-function and type signature to `io`.
-
-All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
-"""
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
-    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types)
-code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
-
-"""
-    code_native([io=STDOUT,], f, types, syntax=:att)
-
-Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `io`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
-"""
-code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
-    print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(@nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
-code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
-
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize types)
     if isdefined(m, :generator) && !isdispatchtuple(types)
@@ -1002,13 +863,11 @@ function which(@nospecialize(f), @nospecialize(t))
 end
 
 """
-    which(symbol)
+    which(module, symbol)
 
-Return the module in which the binding for the variable referenced by `symbol` in module `Main` was created.
+Return the module in which the binding for the variable referenced by `symbol` in `module` was created.
 """
-which(s::Symbol) = which_module(Main, s)
-# TODO: making this a method of which() causes a strange error
-function which_module(m::Module, s::Symbol)
+function which(m::Module, s::Symbol)
     if !isdefined(m, s)
         error("\"$s\" is not defined in module $m")
     end
@@ -1017,11 +876,11 @@ end
 
 # function reflection
 """
-    Base.function_name(f::Function) -> Symbol
+    nameof(f::Function) -> Symbol
 
 Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
-function_name(f::Function) = typeof(f).name.mt.name
+nameof(f::Function) = typeof(f).name.mt.name
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
@@ -1082,7 +941,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    hasmethod(f, Tuple type, world=typemax(UInt)) -> Bool
+    hasmethod(f, Tuple type; world = typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1093,7 +952,7 @@ julia> hasmethod(length, Tuple{Array})
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
+function hasmethod(@nospecialize(f), @nospecialize(t); world = typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
@@ -1176,7 +1035,7 @@ function has_bottom_parameter(t::Type)
 end
 has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
 has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
-has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
+has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
 min_world(m::Method) = reinterpret(UInt, m.min_world)

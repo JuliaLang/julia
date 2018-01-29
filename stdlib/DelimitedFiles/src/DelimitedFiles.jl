@@ -381,7 +381,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, lastindex(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -400,7 +400,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, lastindex(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end
@@ -749,7 +749,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
             writedlm_cell(pb, a[i, j], dlm, quotes)
             j == lastc ? write(pb,'\n') : print(pb,dlm)
         end
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing
@@ -783,7 +783,7 @@ function writedlm(io::IO, itr, dlm; opts...)
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing

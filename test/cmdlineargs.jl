@@ -3,6 +3,7 @@
 import Libdl
 
 catcmd = `cat`
+echocmd = `echo`
 if Sys.iswindows()
     busybox = joinpath(Sys.BINDIR, "busybox.exe")
     havebb = try # use busybox-w32 on windows
@@ -13,6 +14,7 @@ if Sys.iswindows()
     end
     if havebb
         catcmd = `$busybox cat`
+        echocmd = `$busybox echo`
     end
 end
 
@@ -106,15 +108,15 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
-    # --machinefile
-    # this does not check that machinefile works,
+    # --machine-file
+    # this does not check that machine file works,
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e
-                "println(unsafe_string(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machine-file $fname -e
+                "println(unsafe_string(Base.JLOptions().machine_file))"`) == fname
         finally
             rm(fname)
         end
@@ -164,19 +166,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = read(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
+    let code = read(`$exename -g0 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
+    let code = read(`$exename -g1 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
+    let code = read(`$exename -g2 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -482,5 +484,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         exit(0)
         """
         run(`$exename $flag -e $str`)
+    end
+end
+
+# issue #6310
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    @test read(pipeline(`$echocmd $"2+2"`, exename), String) == "4\n"
+    @test read(pipeline(`$echocmd $"2+2\n3+3\n4+4"`, exename), String) == "4\n6\n8\n"
+    @test read(pipeline(`$echocmd $""`, exename), String) == ""
+    @test read(pipeline(`$echocmd $"print(2)"`, exename), String) == "2"
+    @test read(pipeline(`$echocmd $"print(2)\nprint(3)"`, exename), String) == "23"
+    let infile = tempname()
+        touch(infile)
+        try
+            @test read(pipeline(exename, stdin=infile), String) == ""
+            write(infile, "(1, 2+3)")
+            @test read(pipeline(exename, stdin=infile), String) == "(1, 5)\n"
+            write(infile, "1+2\n2+2\n1-2\n")
+            @test read(pipeline(exename, stdin=infile), String) == "3\n4\n-1\n"
+            write(infile, "print(2)")
+            @test read(pipeline(exename, stdin=infile), String) == "2"
+            write(infile, "print(2)\nprint(3)")
+            @test read(pipeline(exename, stdin=infile), String) == "23"
+        finally
+            rm(infile)
+        end
     end
 end

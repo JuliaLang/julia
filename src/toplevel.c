@@ -57,6 +57,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     jl_main_module->parent = jl_main_module;
     if (old_main) { // don't block continued loading of incremental caches
         jl_main_module->primary_world = old_main->primary_world;
+        jl_main_module->build_id = old_main->build_id;
         jl_main_module->uuid = old_main->uuid;
     }
     ptls->current_module = jl_main_module;
@@ -121,15 +122,17 @@ static void jl_module_load_time_initialize(jl_module_t *m)
     }
 }
 
-void jl_register_root_module(jl_value_t *key, jl_module_t *m)
+void jl_register_root_module(jl_module_t *m)
 {
     static jl_value_t *register_module_func = NULL;
     assert(jl_base_module);
     if (register_module_func == NULL)
         register_module_func = jl_get_global(jl_base_module, jl_symbol("register_root_module"));
     assert(register_module_func);
-    jl_value_t *rmargs[3] = {register_module_func, key, (jl_value_t*)m};
-    jl_apply(rmargs, 3);
+    jl_value_t *args[2];
+    args[0] = register_module_func;
+    args[1] = (jl_value_t*)m;
+    jl_apply(args, 2);
 }
 
 jl_array_t *jl_get_loaded_modules(void)
@@ -165,11 +168,12 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH4(&last_module, &defaultdefs, &form, &newm);
+    // copy parent environment info into submodule
+    newm->uuid = parent_module->uuid;
     if (jl_base_module &&
-        (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
+            (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
         newm->parent = newm;
-        // TODO: pass through correct key somehow
-        jl_register_root_module((jl_value_t*)name, newm);
+        jl_register_root_module(newm);
     }
     else {
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
@@ -401,15 +405,18 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     }
 }
 
-static jl_module_t *call_require(jl_sym_t *var)
+static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
 {
     static jl_value_t *require_func = NULL;
     jl_module_t *m = NULL;
     if (require_func == NULL && jl_base_module != NULL)
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     if (require_func != NULL) {
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)var};
-        m = (jl_module_t*)jl_apply(reqargs, 2);
+        jl_value_t *reqargs[3];
+        reqargs[0] = require_func;
+        reqargs[1] = (jl_value_t*)mod;
+        reqargs[2] = (jl_value_t*)var;
+        m = (jl_module_t*)jl_apply(reqargs, 3);
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -442,7 +449,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_a
             m = jl_base_module;
         }
         else {
-            m = call_require(var);
+            m = call_require(where, var);
         }
         if (i == jl_array_len(args))
             return m;
@@ -523,7 +530,7 @@ static jl_module_t *deprecation_replacement_module(jl_module_t *parent, jl_sym_t
 {
     if (parent == jl_base_module) {
         if (name == jl_symbol("Test") || name == jl_symbol("Mmap"))
-            return call_require(name);
+            return call_require(jl_base_module, name);
     }
     return NULL;
 }

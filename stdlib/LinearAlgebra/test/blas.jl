@@ -71,10 +71,10 @@ srand(100)
         @testset "iamax" begin
             if elty <: Real
                 x = convert(Vector{elty}, randn(n))
-                @test BLAS.iamax(x) == indmax(abs.(x))
+                @test BLAS.iamax(x) == argmax(abs.(x))
             else
                 z = convert(Vector{elty}, complex.(randn(n),randn(n)))
-                @test BLAS.iamax(z) == indmax(map(x -> abs(real(x)) + abs(imag(x)), z))
+                @test BLAS.iamax(z) == argmax(map(x -> abs(real(x)) + abs(imag(x)), z))
             end
         end
         @testset "axp(b)y" begin
@@ -109,10 +109,10 @@ srand(100)
             @test BLAS.nrm2(b) ≈ norm(b)
             if elty <: Real
                 @test BLAS.asum(b) ≈ sum(abs.(b))
-                @test BLAS.iamax(b) ≈ indmax(abs.(b))
+                @test BLAS.iamax(b) ≈ argmax(abs.(b))
             else
                 @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag(b)))
-                @test BLAS.iamax(b) == indmax(map(x -> abs(real(x)) + abs(imag(x)), b))
+                @test BLAS.iamax(b) == argmax(map(x -> abs(real(x)) + abs(imag(x)), b))
             end
         end
         # scal

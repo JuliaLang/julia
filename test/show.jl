@@ -8,6 +8,19 @@ include("testenv.jl")
 replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
 
+@testset "IOContext" begin
+    io = IOBuffer()
+    ioc = IOContext(io)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict{Symbol, Any}()
+    ioc = IOContext(io, :x => 1)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict{Symbol, Any}(:x, 1)
+    ioc = IOContext(io, :x => 1, :y => 2)
+    @test ioc.io == io
+    @test ioc.dict == Base.ImmutableDict(Base.ImmutableDict{Symbol, Any}(:x, 1),
+                                         :y => 2)
+end
 
 @test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -577,9 +590,9 @@ let repr = sprint(show, "text/html", methods(f16580))
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
-    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/missing.jl#L")
+    @test contains(Base.url(which(sin, (Float64,))), "https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L")
 else
-    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/missing.jl#L")
+    @test contains(Base.url(which(sin, (Float64,))), "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L")
 end
 
 # print_matrix should be able to handle small and large objects easily, test by
@@ -977,7 +990,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base._display(IOContext(buf, :displaysize => (rows, 80), :limit => true), A)
+            show(IOContext(buf, :displaysize => (rows, 80), :limit => true), "text/plain", A)
             String(take!(buf))
         end
     end
@@ -1044,7 +1057,7 @@ end
 end
 
 @testset "Methods" begin
-    m = @which sin(1.0)
+    m = which(sin, (Float64,))
     io = IOBuffer()
     show(io, "text/html", m)
     s = String(take!(io))
@@ -1096,4 +1109,33 @@ end
     # Issue #25038
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
+end
+
+@testset "#14684: `display` should print associative types in full" begin
+    d = Dict(1 => 2, 3 => 45)
+    buf = IOBuffer()
+    td = TextDisplay(buf)
+
+    display(td, d)
+    result = String(take!(td.io))
+    @test contains(result, summary(d))
+
+    # Is every pair in the string?
+    for el in d
+        @test contains(result, string(el))
+    end
+end
+
+@testset "#20111 show for function" begin
+    K20111(x) = y -> x
+    buf = IOBuffer()
+    show(buf, methods(K20111(1)))
+    @test contains(String(take!(buf)), " 1 method for generic function")
+end
+
+@generated f22798(x::Integer, y) = :x
+@testset "#22798" begin
+    buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
 end

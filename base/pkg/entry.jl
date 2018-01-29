@@ -182,12 +182,12 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
-            print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
+            printstyled(io, " broken-repo (unregistered)", color=Base.error_color())
         finally
             close(prepo)
         end
     else
-        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
+        printstyled(io, "non-repo (unregistered)", color=Base.warn_color())
     end
     println(io)
 end
@@ -549,8 +549,7 @@ function resolve(
                 up = ver1 <= ver2 ? "Up" : "Down"
                 @info "$(up)grading $pkg: v$ver1 => v$ver2"
                 Write.update(pkg, Read.sha1(pkg,ver2))
-                pkgsym = Symbol(pkg)
-                if Base.root_module_exists(pkgsym)
+                if Base.root_module_exists(Base.PkgId(pkg))
                     push!(imported, "- $pkg")
                 end
             end
@@ -582,10 +581,11 @@ end
 function build(pkg::AbstractString, build_file::AbstractString, errfile::AbstractString)
     # To isolate the build from the running Julia process, we execute each build.jl file in
     # a separate process. Errors are written to errfile for later reporting.
-    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        empty!(Base.DEPOT_PATH)
+        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.LOAD_CACHE_PATH)
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
@@ -635,8 +635,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     mktemp() do errfile, f
         build!(pkgs, seen, errfile)
         while !eof(f)
-            pkg = chop(readuntil(f, '\0'))
-            err = chop(readuntil(f, '\0'))
+            pkg = readuntil(f, '\0')
+            err = readuntil(f, '\0')
             errs[pkg] = err
         end
     end
@@ -745,7 +745,7 @@ struct PkgTestError <: Exception
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
+    printstyled(io, ex.msg, color=Base.error_color())
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)

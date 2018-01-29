@@ -298,7 +298,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
     end
 end
 
-# print_array: main helper functions for _display
+# print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
 
 # 0-dimensional arrays
@@ -312,7 +312,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
-function _display(io::IO, X::AbstractArray)
+function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 0) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
@@ -344,7 +344,6 @@ function _display(io::IO, X::AbstractArray)
     # 2) show actual content
     print_array(io, X)
 end
-
 
 ## printing with `show`
 

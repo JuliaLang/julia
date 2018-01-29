@@ -410,9 +410,6 @@ end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-macro doc_str(s)
-    Expr(:escape, s)
-end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 

@@ -13,7 +13,7 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
@@ -22,7 +22,7 @@ to generically build upon those behaviors.
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
-| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 
@@ -115,9 +115,12 @@ Now, when we ask Julia to [`collect`](@ref) all the elements into an array it ca
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
-julia> collect(Squares(10))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 1  4  9  16  25  36  49  64  81  100
+julia> collect(Squares(4))
+4-element Array{Int64,1}:
+  1
+  4
+  9
+ 16
 ```
 
 While we can rely upon generic implementations, we can also extend specific methods where we know
@@ -150,9 +153,12 @@ julia> Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1)
 
 julia> Base.done(::Iterators.Reverse{Squares}, state) = state < 1
 
-julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 100  81  64  49  36  25  16  9  4  1
+julia> collect(Iterators.reverse(Squares(4)))
+4-element Array{Int64,1}:
+ 16
+  9
+  4
+  1
 ```
 
 ## Indexing
@@ -161,7 +167,8 @@ julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
 |:-------------------- |:-------------------------------- |
 | `getindex(X, i)`     | `X[i]`, indexed element access   |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `endof(X)`           | The last index, used in `X[end]` |
+| `firstindex(X)`      | The first index                  |
+| `lastindex(X)`        | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -177,11 +184,12 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`endof`](@ref) to specify the last valid
-index:
+Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
+valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
 
 ```jldoctest squaretype
-julia> Base.endof(S::Squares) = length(S)
+julia> Base.firstindex(S::Squares) = 1
+julia> Base.lastindex(S::Squares) = length(S)
 
 julia> Squares(23)[end]
 529
@@ -250,8 +258,8 @@ arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
-`ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
-supports two dimensions, so it just defines
+`ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
+library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
@@ -275,28 +283,31 @@ methods are all it takes for `SquaresVector` to be an iterable, indexable, and c
 array:
 
 ```jldoctest squarevectype
-julia> s = SquaresVector(7)
-7-element SquaresVector:
+julia> s = SquaresVector(4)
+4-element SquaresVector:
   1
   4
   9
  16
- 25
- 36
- 49
 
-julia> s[s .> 20]
-3-element Array{Int64,1}:
- 25
- 36
- 49
+julia> s[s .> 8]
+2-element Array{Int64,1}:
+  9
+ 16
 
-julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 RowVector{Float64,Array{Float64,1}}:
- 0.305389  0.335329
+julia> s + s
+4-element Array{Int64,1}:
+  2
+  8
+ 18
+ 32
 
-julia> s ⋅ s # dot(s, s)
-4676
+julia> sin.(s)
+4-element Array{Float64,1}:
+  0.8414709848078965
+ -0.7568024953079282
+  0.4121184852417566
+ -0.2879033166650653
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built
@@ -382,8 +393,8 @@ julia> A[SquaresVector(3)]
  4.0
  9.0
 
-julia> dot(A[:,1],A[:,2])
-32.0
+julia> mean(A)
+5.0
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at

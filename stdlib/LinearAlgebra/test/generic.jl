@@ -6,7 +6,7 @@ using Test, LinearAlgebra, Random
 import Base: -, *, /, \
 
 # A custom Quaternion type with minimal defined interface and methods.
-# Used to test scale and scale! methods to show non-commutativity.
+# Used to test mul and mul! methods to show non-commutativity.
 struct Quaternion{T<:Real} <: Number
     s::T
     v1::T
@@ -182,37 +182,37 @@ end
     aa = reshape([1.:6;], (2,3))
     for a in (aa, view(aa, 1:2, 1:2))
         am, an = size(a)
-        @testset "2-argument version of scale!" begin
-            @test scale!(copy(a), 5.) == a*5
-            @test scale!(5., copy(a)) == a*5
+        @testset "Scaling with mul1! and mul2" begin
+            @test mul1!(copy(a), 5.) == a*5
+            @test mul2!(5., copy(a)) == a*5
             b = randn(LinearAlgebra.SCAL_CUTOFF) # make sure we try BLAS path
             subB = view(b, :, :)
-            @test scale!(copy(b), 5.) == b*5
-            @test scale!(copy(subB), 5.) == subB*5
-            @test scale!([1.; 2.], copy(a)) == a.*[1; 2]
-            @test scale!([1; 2], copy(a)) == a.*[1; 2]
-            @test scale!(copy(a), Vector(1.:an)) == a.*Vector(1:an)'
-            @test scale!(copy(a), Vector(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch scale!(Vector{Float64}(uninitialized,am+1), a)
-            @test_throws DimensionMismatch scale!(a, Vector{Float64}(uninitialized,an+1))
+            @test mul1!(copy(b), 5.) == b*5
+            @test mul1!(copy(subB), 5.) == subB*5
+            @test mul2!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
+            @test mul2!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
+            @test mul1!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
+            @test mul1!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
+            @test_throws DimensionMismatch mul2!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
+            @test_throws DimensionMismatch mul1!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
         end
 
-        @testset "3-argument version of scale!" begin
-            @test scale!(similar(a), 5., a) == a*5
-            @test scale!(similar(a), a, 5.) == a*5
-            @test scale!(similar(a), [1.; 2.], a) == a.*[1; 2]
-            @test scale!(similar(a), [1; 2], a) == a.*[1; 2]
-            @test_throws DimensionMismatch scale!(similar(a), Vector{Float64}(uninitialized, am+1), a)
-            @test_throws DimensionMismatch scale!(Matrix{Float64}(uninitialized, 3, 2), a, Vector{Float64}(uninitialized, an+1))
-            @test_throws DimensionMismatch scale!(similar(a), a, Vector{Float64}(uninitialized, an+1))
-            @test scale!(similar(a), a, Vector(1.:an)) == a.*Vector(1:an)'
-            @test scale!(similar(a), a, Vector(1:an)) == a.*Vector(1:an)'
+        @testset "Scaling with 3-argument mul!" begin
+            @test mul!(similar(a), 5., a) == a*5
+            @test mul!(similar(a), a, 5.) == a*5
+            @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
+            @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
+            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(uninitialized, am+1)), a)
+            @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized, 3, 2), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
+            @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
+            @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
         end
     end
 end
 
 @testset "scale real matrix by complex type" begin
-    @test_throws InexactError scale!([1.0], 2.0im)
+    @test_throws InexactError mul1!([1.0], 2.0im)
     @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
     @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
     @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
@@ -223,11 +223,10 @@ end
     @test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
     @test isequal(BigFloat[1.0] * 2.0f0im,   Complex{BigFloat}[2.0im])
 end
-@testset "scale and scale! for non-commutative multiplication" begin
+@testset "* and mul! for non-commutative scaling" begin
     q = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
     qmat = [Quaternion(0.015007, 0.355067, 0.418645, 0.318373)]
-    @test scale!(q, copy(qmat)) != scale!(copy(qmat), q)
-    ## Test * because it doesn't dispatch to scale!
+    @test mul2!(q, copy(qmat)) != mul1!(copy(qmat), q)
     @test q*qmat ≉ qmat*q
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q

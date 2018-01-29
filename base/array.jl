@@ -411,7 +411,7 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(uninitialized, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
@@ -456,8 +456,9 @@ _similar_for(c, T, itr, isz) = similar(c, T)
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
-trait, the result will have the same shape and number of dimensions as the argument.
+`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+and number of dimensions as the argument.
 
 # Examples
 ```jldoctest
@@ -577,7 +578,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             @inbounds dest[i] = el::T
             i += 1
         else
-            R = typejoin(T, S)
+            R = promote_typejoin(T, S)
             new = similar(dest, R)
             copyto!(new,1, dest,1, i-1)
             @inbounds new[i] = el
@@ -607,7 +608,7 @@ function grow_to!(dest, itr, st)
         if S === T || S <: T
             push!(dest, el::T)
         else
-            new = sizehint!(empty(dest, typejoin(T, S)), length(dest))
+            new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
             if new isa AbstractSet
                 # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
                 union!(new, dest)
@@ -1499,7 +1500,9 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 _pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
 _pairs(iter) = _pairs(IteratorSize(iter), iter)
-_pairs(::Union{HasLength, HasShape}, iter) = zip(1:length(iter), iter)
+# includes HasShape{1} for consistency with keys(::AbstractVector)
+_pairs(::Union{HasLength, HasShape{1}}, iter) = zip(1:length(iter), iter)
+_pairs(::HasShape, iter) = zip(CartesianIndices(size(iter)), iter)
 _pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
 
 """
@@ -1561,7 +1564,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1658,7 +1661,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1754,7 +1757,7 @@ Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1850,7 +1853,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1896,7 +1899,7 @@ If there are no such elements of `A`, return an empty array.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1952,7 +1955,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1993,44 +1996,6 @@ end
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
 findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
-
-"""
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
-
-# Examples
-```jldoctest
-julia> A = [1 2 0; 0 0 3; 0 4 0]
-3×3 Array{Int64,2}:
- 1  2  0
- 0  0  3
- 0  4  0
-
-julia> findnz(A)
-([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
-```
-"""
-function findnz(A::AbstractMatrix{T}) where T
-    nnzA = count(t -> t != 0, A)
-    I = zeros(Int, nnzA)
-    J = zeros(Int, nnzA)
-    NZs = Vector{T}(uninitialized, nnzA)
-    cnt = 1
-    if nnzA > 0
-        for j=axes(A,2), i=axes(A,1)
-            Aij = A[i,j]
-            if Aij != 0
-                I[cnt] = i
-                J[cnt] = j
-                NZs[cnt] = Aij
-                cnt += 1
-            end
-        end
-    end
-    return (I, J, NZs)
-end
 
 """
     findmax(itr) -> (x, index)
@@ -2115,7 +2080,7 @@ function findmin(a)
 end
 
 """
-    indmax(itr) -> Integer
+    argmax(itr) -> Integer
 
 Return the index of the maximum element in a collection. If there are multiple maximal
 elements, then the first one will be returned.
@@ -2124,20 +2089,20 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmax([8,0.1,-9,pi])
+julia> argmax([8,0.1,-9,pi])
 1
 
-julia> indmax([1,7,7,6])
+julia> argmax([1,7,7,6])
 2
 
-julia> indmax([1,7,7,NaN])
+julia> argmax([1,7,7,NaN])
 4
 ```
 """
-indmax(a) = findmax(a)[2]
+argmax(a) = findmax(a)[2]
 
 """
-    indmin(itr) -> Integer
+    argmin(itr) -> Integer
 
 Return the index of the minimum element in a collection. If there are multiple minimal
 elements, then the first one will be returned.
@@ -2146,51 +2111,54 @@ The collection must not be empty.
 
 # Examples
 ```jldoctest
-julia> indmin([8,0.1,-9,pi])
+julia> argmin([8,0.1,-9,pi])
 3
 
-julia> indmin([7,1,1,6])
+julia> argmin([7,1,1,6])
 2
 
-julia> indmin([7,1,1,NaN])
+julia> argmin([7,1,1,NaN])
 4
 ```
 """
-indmin(a) = findmin(a)[2]
+argmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
 """
     indexin(a, b)
 
-Return a vector containing the highest index in `b` for
-each value in `a` that is a member of `b` . The output
-vector contains 0 wherever `a` is not a member of `b`.
+Return an array containing the highest index in `b` for
+each value in `a` that is a member of `b`. The output
+array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
 
-julia> b = ['a','b','c'];
+julia> b = ['a', 'b', 'c']
 
-julia> indexin(a,b)
-6-element Array{Int64,1}:
+julia> indexin(a, b)
+6-element Array{Union{Nothing, Int64},1}:
  1
  2
  3
  2
- 0
+  nothing
  1
 
-julia> indexin(b,a)
-3-element Array{Int64,1}:
+julia> indexin(b, a)
+3-element Array{Union{Nothing, Int64},1}:
  6
  4
  3
 ```
 """
-function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(zip(b, 1:length(b)))
-    [get(bdict, i, 0) for i in a]
+function indexin(a, b::AbstractArray)
+    indexes = keys(b)
+    bdict = Dict(zip(b, indexes))
+    return Union{eltype(indexes), Nothing}[
+        get(bdict, i, nothing) for i in a
+    ]
 end
 
 function _findin(a, b)

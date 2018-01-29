@@ -500,28 +500,32 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
-    jl_value_t *elt;
-    if (!a->flags.ptrarray) {
-        jl_value_t *eltype = (jl_value_t*)jl_tparam0(jl_typeof(a));
-        if (jl_is_uniontype(eltype)) {
-            // isbits union selector bytes are always stored directly after the last array element
-            uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
-            eltype = jl_nth_union_component(eltype, sel);
-            if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
-                return ((jl_datatype_t*)eltype)->instance;
-        }
-        elt = jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
-    }
-    else {
-        elt = ((jl_value_t**)a->data)[i];
-        if (elt == NULL) {
-            jl_throw(jl_undefref_exception);
-        }
+    assert(a->flags.ptrarray);
+    jl_value_t *elt = ((jl_value_t**)a->data)[i];
+    if (elt == NULL) {
+        jl_throw(jl_undefref_exception);
     }
     return elt;
+}
+
+
+JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+{
+    if (a->flags.ptrarray)
+        return jl_ptrarrayref(a, i);
+    assert(i < jl_array_len(a));
+    jl_value_t *eltype = (jl_value_t*)jl_tparam0(jl_typeof(a));
+    if (jl_is_uniontype(eltype)) {
+        // isbits union selector bytes are always stored directly after the last array element
+        uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
+        eltype = jl_nth_union_component(eltype, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
+            return ((jl_datatype_t*)eltype)->instance;
+    }
+    return jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
 }
 
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)

@@ -309,7 +309,7 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 ##### Specific reduction functions #####
 """
-    sum(A, dims)
+    sum(A::AbstractArray, dims)
 
 Sum elements of an array over the given dimensions.
 
@@ -330,7 +330,7 @@ julia> sum(A, 2)
  7
 ```
 """
-sum(A, dims)
+sum(A::AbstractArray, dims)
 
 """
     sum!(r, A)
@@ -357,7 +357,7 @@ julia> sum!([1 1], A)
 sum!(r, A)
 
 """
-    prod(A, dims)
+    prod(A::AbstractArray, dims)
 
 Multiply elements of an array over the given dimensions.
 
@@ -378,7 +378,7 @@ julia> prod(A, 2)
  12
 ```
 """
-prod(A, dims)
+prod(A::AbstractArray, dims)
 
 """
     prod!(r, A)
@@ -667,7 +667,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
 end
 
 """
-    findmin!(rval, rind, A, [init=true]) -> (minval, index)
+    findmin!(rval, rind, A) -> (minval, index)
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
@@ -714,7 +714,7 @@ end
 isgreater(a, b) = isless(b,a)
 
 """
-    findmax!(rval, rind, A, [init=true]) -> (maxval, index)
+    findmax!(rval, rind, A) -> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.

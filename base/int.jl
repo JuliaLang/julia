@@ -450,7 +450,7 @@ end
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documention two function signatures at the same time
 # doesn't work either at this point.
-if module_name(@__MODULE__) === :Base
+if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
         @eval @doc ("""
             rem(x::Integer, T::Type{<:Integer}) -> T
@@ -539,9 +539,9 @@ end
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
-        bf = IOBuffer(endof(s))
+        bf = IOBuffer(lastindex(s))
         print(bf, s[1])
-        for c in SubString(s, 2, endof(s)-1)
+        for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)
         end
         print(bf, s[end])

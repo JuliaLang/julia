@@ -191,9 +191,7 @@ let gf_err2
         return nothing
     end
     @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
+    @test gf_err_ref[] == 4
     @test gf_err2(code_lowered) === nothing
 end
 
@@ -278,7 +276,7 @@ let a = Any[]
     @test a == [1, 6, 3]
     @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
     @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), false)), "2 * x")
+    @test contains(string(code_lowered(f23168, (Vector{Any},Int), generated=false)), "2 * x")
     @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
 end
 

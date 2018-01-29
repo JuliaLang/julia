@@ -19,7 +19,7 @@ haskey(d::AbstractDict, k) = in(k, keys(d))
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if v !== secret_table_token
-        valcmp(v, p[2]) && return true
+        return valcmp(v, p[2])
     end
     return false
 end
@@ -467,13 +467,17 @@ function ==(l::AbstractDict, r::AbstractDict)
     if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
-    if length(l) != length(r) return false end
+    length(l) != length(r) && return false
+    anymissing = false
     for pair in l
-        if !in(pair, r, ==)
+        isin = in(pair, r, ==)
+        if ismissing(isin)
+            anymissing = true
+        elseif !isin
             return false
         end
     end
-    true
+    return anymissing ? missing : true
 end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539

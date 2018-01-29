@@ -204,6 +204,7 @@ SparseArrays.sparse
 SparseArrays.sparsevec
 SparseArrays.issparse
 SparseArrays.nnz
+SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
 SparseArrays.blkdiag
@@ -212,10 +213,8 @@ SparseArrays.sprandn
 SparseArrays.nonzeros
 SparseArrays.rowvals
 SparseArrays.nzrange
-SparseArrays.dropzeros!(::SparseMatrixCSC, ::Bool)
-SparseArrays.dropzeros(::SparseMatrixCSC, ::Bool)
-SparseArrays.dropzeros!(::SparseVector, ::Bool)
-SparseArrays.dropzeros(::SparseVector, ::Bool)
+SparseArrays.dropzeros!
+SparseArrays.dropzeros
 SparseArrays.permute
 permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})
 ```

@@ -4,7 +4,7 @@ module UMFPACK
 
 export UmfpackLU
 
-import Base: (\), findnz, getproperty, show, size
+import Base: (\), getproperty, show, size
 using LinearAlgebra
 import LinearAlgebra: Factorization, det, lufact, ldiv!
 

@@ -1,5 +1,158 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# first a few multiline show functions for types defined before the MIME type:
+
+show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
+
+function show(io::IO, ::MIME"text/plain", r::LinSpace)
+    # show for linspace, e.g.
+    # linspace(1,3,7)
+    # 7-element LinSpace{Float64}:
+    #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
+    print(io, summary(r))
+    if !isempty(r)
+        println(io, ":")
+        print_range(io, r)
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", f::Function)
+    ft = typeof(f)
+    mt = ft.name.mt
+    if isa(f, Core.IntrinsicFunction)
+        show(io, f)
+        id = Core.Intrinsics.bitcast(Int32, f)
+        print(io, " (intrinsic function #$id)")
+    elseif isa(f, Core.Builtin)
+        print(io, mt.name, " (built-in function)")
+    else
+        name = mt.name
+        isself = isdefined(ft.name.module, name) &&
+                 ft == typeof(getfield(ft.name.module, name))
+        n = length(methods(f))
+        m = n==1 ? "method" : "methods"
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, ns, " (", what, " with $n $m)")
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
+    print(io, summary(iter))
+    isempty(iter) && return
+    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
+    limit::Bool = get(io, :limit, false)
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2 && (print(io, " …"); return)
+        cols < 4 && (cols = 4)
+        cols -= 2 # For prefix "  "
+        rows -= 1 # For summary
+    else
+        rows = cols = typemax(Int)
+    end
+
+    for (i, v) in enumerate(iter)
+        print(io, "\n  ")
+        i == rows < length(iter) && (print(io, "⋮"); break)
+
+        if limit
+            str = sprint(show, v, context=io, sizehint=0)
+            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            print(io, str)
+        else
+            show(io, v)
+        end
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
+    # show more descriptively, with one line per key/value pair
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = get(io, :limit, false)
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, :compact => true)
+    end
+
+    print(io, summary(t))
+    isempty(t) && return
+    print(io, ":")
+    show_circular(io, t) && return
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 1 # Subtract the summary
+
+        # determine max key width to align the output, caching the strings
+        ks = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        keylen = 0
+        vallen = 0
+        for (i, (k, v)) in enumerate(t)
+            i > rows && break
+            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
+            keylen = clamp(length(ks[i]), keylen, cols)
+            vallen = clamp(length(vs[i]), vallen, cols)
+        end
+        if keylen > max(div(cols, 2), cols - vallen)
+            keylen = max(cld(cols, 3), cols - vallen)
+        end
+    else
+        rows = cols = typemax(Int)
+    end
+
+    for (i, (k, v)) in enumerate(t)
+        print(io, "\n  ")
+        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
+        if limit
+            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        else
+            key = sprint(show, k, context=recur_io, sizehint=0)
+        end
+        print(recur_io, key)
+        print(io, " => ")
+
+        if limit
+            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(recur_io, v)
+        end
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", opt::JLOptions)
+    println(io, "JLOptions(")
+    fields = fieldnames(JLOptions)
+    nfields = length(fields)
+    for (i, f) in enumerate(fields)
+        v = getfield(opt, i)
+        if isa(v, Ptr{UInt8})
+            v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
+        end
+        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+    end
+    print(io, ")")
+end
+
+function show(io::IO, ::MIME"text/plain", t::Task)
+    show(io, t)
+    if t.state == :failed
+        println(io)
+        showerror(io, CapturedException(t.result, t.backtrace))
+    end
+end
+
+
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
 """
@@ -30,6 +183,9 @@ function IOContext(io::IO, dict::ImmutableDict)
 end
 
 convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
+
+# rename to IOContext when deprecation of `IOContext(io::IO; kws...)` is removed
+_IOContext(io::IO) = convert(IOContext, io)
 
 function IOContext(io::IO, KV::Pair)
     io0, d = unwrapcontext(io)
@@ -77,12 +233,12 @@ The following properties are in common use:
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> print_with_color(:red, IOContext(io, :color => true), "string")
+julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
 julia> String(take!(io))
 "\e[31mstring\e[39m"
 
-julia> print_with_color(:red, io, "string")
+julia> printstyled(io, "string", color=:red)
 
 julia> String(take!(io))
 "string"
@@ -428,7 +584,7 @@ end
 
 function show(io::IO, m::Module)
     if is_root_module(m)
-        print(io, module_name(m))
+        print(io, nameof(m))
     else
         print(io, join(fullname(m),"."))
     end
@@ -752,7 +908,7 @@ end
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
-    print_with_color(col, io, str; bold = true) :
+    printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
@@ -1354,7 +1510,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        Base.print_with_color(color, io, name, "(...)")
+        Base.printstyled(io, name, "(...)", color=color)
         return
     end
     sig = unwrap_unionall(sig).parameters
@@ -1374,13 +1530,13 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
-    print_with_color(print_style, io, "(")
+    printstyled(io, "(", color=print_style)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print_with_color(print_style, io, ")")
+    printstyled(io, ")", color=print_style)
     nothing
 end
 
@@ -1555,78 +1711,8 @@ function dump(io::IO, x::DataType, n::Int, indent)
     nothing
 end
 
-# dumptype is for displaying abstract type hierarchies,
-# based on Jameson Nash's examples/typetree.jl
-function dumptype(io::IO, @nospecialize(x), n::Int, indent)
-    print(io, x)
-    n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
-    nothing
-end
-
-directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
-directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.b, b)
-# Fallback to handle TypeVar's
-directsubtype(a, b::DataType) = false
-function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
-    for s in names(m, true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if t === x || t === m
-                continue
-            elseif isa(t, Module) && module_name(t) === s && parentmodule(t) === m
-                # recurse into primary module bindings
-                dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
-                dt = unwrap_unionall(t)
-                println(io)
-                if isa(dt, DataType) && dt.name.wrapper === t
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, dt, n - 1, string(indent, "  "))
-                else
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, "{")
-                    tvar_io::IOContext = io
-                    tp = t
-                    while true
-                        show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
-                        tp = tp.body
-                        if isa(tp, UnionAll)
-                            print(io, ", ")
-                        else
-                            print(io, "} = ")
-                            break
-                        end
-                    end
-                    show(tvar_io, tp)
-                end
-            elseif isa(t, Union) && directsubtype(t::Union, x)
-                println(io)
-                print(io, indent, "  ", m, ".", s, " = ", t)
-            elseif isa(t, DataType) && directsubtype(t::DataType, x)
-                println(io)
-                if t.name.module !== m || t.name.name != s
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, " = ")
-                    show(io, t)
-                else
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, t, n - 1, string(indent, "  "))
-                end
-            end
-        end
-    end
-    nothing
-end
-
-
 const DUMP_DEFAULT_MAXDEPTH = 8
-# For abstract types, use _dumptype only if it's a form that will be called
-# interactively.
+
 dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """

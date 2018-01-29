@@ -492,22 +492,6 @@ rvtranspose(x) = transpose(x)
 parent(rowvec::RowVector) = rowvec.vec
 vec(rowvec::RowVector) = rowvec.vec
 
-"""
-    conj(v::RowVector)
-
-Return a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
-
-# Examples
-```jldoctest
-julia> v = RowVector([1+im, 1-im])
-1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:
- 1+1im  1-1im
-
-julia> conj(v)
-1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
- 1-1im  1+1im
-```
-"""
 @inline conj(rowvec::RowVector) = RowVector(_conj(rowvec.vec))
 @inline conj(rowvec::RowVector{<:Real}) = rowvec
 
@@ -1268,3 +1252,11 @@ function getindex(F::Factorization, s::Symbol)
     return getproperty(F, s)
 end
 @deprecate getq(F::Factorization) F.Q
+
+# Deprecate scaling
+@deprecate scale!(A::AbstractArray, b::Number)                             mul1!(A, b)
+@deprecate scale!(a::Number, B::AbstractArray)                             mul2!(a, B)
+@deprecate scale!(A::AbstractMatrix, b::AbstractVector)                    mul1!(A, Diagonal(b))
+@deprecate scale!(a::AbstractVector, B::AbstractMatrix)                    mul2!(Diagonal(a), B)
+@deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(C, A, Diagonal(b))
+@deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)

@@ -36,7 +36,7 @@ function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C:
     nzv = A.nzval
     rv = A.rowval
     if β != 1
-        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
+        β != 0 ? mul1!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
         for col = 1:A.n
@@ -61,7 +61,7 @@ function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecO
     nzv = A.nzval
     rv = A.rowval
     if β != 1
-        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
+        β != 0 ? mul1!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
         for col = 1:A.n
@@ -87,7 +87,7 @@ function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Strided
     nzv = A.nzval
     rv = A.rowval
     if β != 1
-        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
+        β != 0 ? mul1!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
         for col = 1:A.n
@@ -128,11 +128,11 @@ end
 
 function (*)(D::Diagonal, A::SparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
-    scale!(LinearAlgebra.copy_oftype(A, T), D.diag, A)
+    mul!(LinearAlgebra.copy_oftype(A, T), D, A)
 end
 function (*)(A::SparseMatrixCSC, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
-    scale!(LinearAlgebra.copy_oftype(A, T), A, D.diag)
+    mul!(LinearAlgebra.copy_oftype(A, T), A, D)
 end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
@@ -628,7 +628,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
             end
         end
     end
-    scale!(X, 1 ./ n)
+    mul1!(X, inv(n))
 
     iter = 0
     local est
@@ -868,8 +868,9 @@ function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
 end
 
 # multiply by diagonal matrix as vector
-function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Vector)
+function mul!(C::SparseMatrixCSC, A::SparseMatrixCSC, D::Diagonal{<:Vector})
     m, n = size(A)
+    b    = D.diag
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
     Cnzval = C.nzval
@@ -881,8 +882,9 @@ function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Vector)
     C
 end
 
-function scale!(C::SparseMatrixCSC, b::Vector, A::SparseMatrixCSC)
+function mul!(C::SparseMatrixCSC, D::Diagonal{<:Vector}, A::SparseMatrixCSC)
     m, n = size(A)
+    b    = D.diag
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     copyinds!(C, A)
     Cnzval = C.nzval
@@ -895,24 +897,30 @@ function scale!(C::SparseMatrixCSC, b::Vector, A::SparseMatrixCSC)
     C
 end
 
-function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
+function mul!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
     resize!(C.nzval, length(A.nzval))
-    scale!(C.nzval, A.nzval, b)
+    mul!(C.nzval, A.nzval, b)
     C
 end
 
-function scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
+function mul!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
     size(A)==size(C) || throw(DimensionMismatch())
     copyinds!(C, A)
     resize!(C.nzval, length(A.nzval))
-    scale!(C.nzval, b, A.nzval)
+    mul!(C.nzval, b, A.nzval)
     C
 end
 
-scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
-scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
+function mul1!(A::SparseMatrixCSC, b::Number)
+    mul1!(A.nzval, b)
+    return A
+end
+function mul2!(b::Number, A::SparseMatrixCSC)
+    mul2!(b, A.nzval)
+    return A
+end
 
 function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
     m, n = size(A)
@@ -1024,5 +1032,5 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     end
 
     # scale with the sample size n or the corrected sample size n - 1
-    return scale!(out, inv(n - corrected))
+    return mul1!(out, inv(n - corrected))
 end

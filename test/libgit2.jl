@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
-import Main.TestHelpers: challenge_prompt
+import .Main.TestHelpers: challenge_prompt
 
 using Random, Serialization
 
@@ -426,7 +426,8 @@ mktempdir() do dir
     cache_repo = joinpath(dir, "Example")
     test_repo = joinpath(dir, "Example.Test")
     test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
-    test_file = "testfile"
+    test_dir = "testdir"
+    test_file = "$(test_dir)/testfile"
     config_file = "testconfig"
     commit_msg1 = randstring(10)
     commit_msg2 = randstring(10)
@@ -636,6 +637,8 @@ mktempdir() do dir
 
         @testset "with commits" begin
             repo = LibGit2.GitRepo(cache_repo)
+            repo_dir = joinpath(cache_repo,test_dir)
+            mkdir(repo_dir)
             repo_file = open(joinpath(cache_repo,test_file), "a")
             try
                 # create commits
@@ -904,6 +907,8 @@ mktempdir() do dir
                 blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
                 @test LibGit2.isbinary(blob2)
                 @test length(blob2) == len1
+                @test blob  == blob2
+                @test blob !== blob2
             end
         end
         @testset "trees" begin
@@ -921,6 +926,10 @@ mktempdir() do dir
                 @test_throws BoundsError tree[0]
                 @test_throws BoundsError tree[2]
                 tree_entry = tree[1]
+                subtree = LibGit2.GitTree(tree_entry)
+                @test_throws BoundsError subtree[0]
+                @test_throws BoundsError subtree[2]
+                tree_entry = subtree[1]
                 @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
                 ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: "
@@ -929,6 +938,14 @@ mktempdir() do dir
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
                 @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
+
+                # tests for walking the tree and accessing objects
+                @test tree[""] == tree
+                @test tree["/"] == tree
+                @test isa(tree[test_dir], LibGit2.GitTree)
+                @test tree["$test_dir/"] == tree[test_dir]
+                @test isa(tree[test_file], LibGit2.GitBlob)
+                @test_throws KeyError tree["nonexistent"]
             end
         end
 

@@ -4,7 +4,7 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
-             next, done, convert, isvalid, MalformedCharError, ismalformed
+             next, done, convert, isvalid, ismalformed, isoverlong
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -43,7 +43,7 @@ true
 """
 isvalid(T,value)
 
-isvalid(c::Char) = !ismalformed(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(c::Char) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{Char}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
 isvalid(::Type{Char}, c::Integer)  = isvalid(Char, Unsigned(c))
 isvalid(::Type{Char}, c::Char)     = isvalid(c)
@@ -295,9 +295,11 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
-    ismalformed(c) && return Cint(31)
-    c ≤ '\U10ffff' || return Cint(30)
-    ccall(:utf8proc_category, Cint, (UInt32,), c)
+    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
+end
+
+function category_code(x::Integer)
+    x ≤ 0x10ffff ? ccall(:utf8proc_category, Cint, (UInt32,), x) : Cint(30)
 end
 
 # more human-readable representations of the category code
@@ -318,10 +320,10 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 ```jldoctest
 julia> using Unicode
 
-julia> isassigned(101)
+julia> Unicode.isassigned(101)
 true
 
-julia> isassigned('\\x01')
+julia> Unicode.isassigned('\\x01')
 true
 ```
 """

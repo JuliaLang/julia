@@ -431,7 +431,7 @@ end
 
 function copyto!(dest::BitArray, src::Array)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    length(src) == 0 && return det
+    length(src) == 0 && return dest
     return unsafe_copyto!(dest, 1, src, 1, length(src))
 end
 
@@ -498,7 +498,7 @@ end
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
 reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)
 end
 
@@ -1593,21 +1593,6 @@ end
 
 # For performance
 findall(::typeof(!iszero), B::BitArray) = findall(B)
-
-function findnz(B::BitMatrix)
-    nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
-    J = Vector{Int}(uninitialized, nnzB)
-    cnt = 1
-    for j = 1:size(B,2), i = 1:size(B,1)
-        if B[i,j]
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return I, J, trues(length(I))
-end
 
 ## Reductions ##
 

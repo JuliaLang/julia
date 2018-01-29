@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
 using Test
 using Printf
 
@@ -20,7 +21,7 @@ function parseintperf(t)
     for i=1:t
         n = rand(UInt32)
         s = hex(n)
-        m = UInt32(parse(Int64,s,16))
+        m = UInt32(parse(Int64,s, base = 16))
     end
     @test m == n
     return n
