@@ -871,11 +871,11 @@ struct FloatWrapper <: Real
     x::Float64
 end
 
-import Base: +, -, *, /, ^, <, ==,
-    sqrt, sin, cos, sinh, cosh, atan2,
+import Base: +, -, *, /, ^, <, <=, ==, ≈,
+    sqrt, sin, cos, tan, sinh, cosh, tanh,
     exp, expm1, exp2, exp10,
     log, log1p, log2, log10,
-    asin, acos, atan,
+    asin, acos, atan, atan2,
     asinh, acosh, atanh,
     convert, isfinite, float, promote_rule
 
@@ -883,7 +883,8 @@ for op in (:+, :-, :*, :/, :^, :atan2)
     @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
 end
 
-for op in (:-, :sqrt, :sin, :cos, :sinh, :cosh,
+for op in (:-, :sqrt, :sin, :cos, 
+        :sinh, :cosh,
         :exp, :exp2, :exp10, :expm1,
         :log, :log1p, :log2, :log10,
         :asin, :acos, :atan,
@@ -907,27 +908,16 @@ float(x::FloatWrapper) = x
 
 <(x::FloatWrapper, y::FloatWrapper) = (x.x < y.x)
 ==(x::FloatWrapper, y::FloatWrapper) = (x.x == y.x)
+<=(x::FloatWrapper, y::FloatWrapper) = (x.x <= y.x)
 ≈(x::FloatWrapper, y::FloatWrapper) = (x.x ≈ y.x)
 
-## Tests for f(a+ib):
-@testset "sqrt(a+ib) for a, b that are not AbstractFloats" begin
-
-    x = FloatWrapper(3)
-    y = FloatWrapper(4)
-
-    z = Complex(x, y)
-
-    z2 = sqrt(z)
-
-    @test z2 == Complex(FloatWrapper(2), FloatWrapper(1))
-end
+Base.rtoldefault(::Type{FloatWrapper}) where {T<:AbstractFloat} = Base.rtoldefault(Float64)
 
 @testset "f(a+ib) for a, b that are not AbstractFloats; #25292" begin
 
     x, y = 3.1, 4.1
     z = x + im*y
     wrapped_z = FloatWrapper(x) + im * FloatWrapper(y)
-    z2 = x + im*y
 
     @test sincos(x) == (sin(x), cos(x))
 
@@ -938,9 +928,10 @@ end
               asin, acos,
               asinh, acosh)
 
-        z3 = f(z2)
+        z2 = f(wrapped_z)
+        z3 = f(z)
 
-        @test isa(f(z), Complex)
-        @test f(z) ≈ FloatWrapper(z3.re) + im*FloatWrapper(z3.im)
+        @test isa(z2, Complex)
+        @test z2 ≈ FloatWrapper(z3.re) + im*FloatWrapper(z3.im)
     end
 end
