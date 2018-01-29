@@ -883,8 +883,8 @@ for op in (:+, :-, :*, :/, :^, :atan2)
     @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
 end
 
-for op in (:-, :sqrt, :sin, :cos, 
-        :sinh, :cosh,
+for op in (:-, :sqrt, :sin, :cos, :tan,
+        :sinh, :cosh, :tanh,
         :exp, :exp2, :exp10, :expm1,
         :log, :log1p, :log2, :log10,
         :asin, :acos, :atan,
@@ -923,7 +923,8 @@ Base.rtoldefault(::Type{FloatWrapper}) where {T<:AbstractFloat} = Base.rtoldefau
 
     for f in (inv,
               exp, expm1,
-              sin, cos, sinh, cosh,
+              sin, cos, tan,
+              sinh, cosh, tanh,
               log, log2, log10, log1p,
               asin, acos,
               asinh, acosh)
