@@ -3,19 +3,11 @@
 module Broadcast
 
 using Base.Cartesian
-<<<<<<< HEAD
 using Base: Indices, OneTo, TupleLL, TupleLLEnd, make_TupleLL, mapTupleLL,
             linearindices, tail, to_shape, isoperator,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: broadcast, broadcast!, copy, copyto!
 export BroadcastStyle, broadcast_indices, broadcast_similar, broadcast_skip_axes_instantiation,
-=======
-using Base: Indices, OneTo, linearindices, tail, to_shape,
-            _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            isoperator, promote_typejoin
-import Base: broadcast, broadcast!
-export BroadcastStyle, broadcast_indices, broadcast_similar,
->>>>>>> origin/master
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
