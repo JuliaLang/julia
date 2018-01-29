@@ -285,7 +285,7 @@ precompile(Tuple{getfield(Base, Symbol("#kw##spawn")), Array{Any, 1}, typeof(Bas
 precompile(Tuple{typeof(Core.Compiler.isbits), Tuple{Tuple{String}, Tuple{String}, Tuple{String}}})
 precompile(Tuple{typeof(Base.cmd_gen), Tuple{Tuple{String}, Tuple{String}, Tuple{String}}})
 precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{Any, 1}})
-precompile(Tuple{typeof(Base.process_options), Base.JLOptions})
+precompile(Tuple{typeof(Base.exec_options), Base.JLOptions})
 precompile(Tuple{typeof(Base.close), Base.IOStream})
 precompile(Tuple{typeof(Base._atexit)})
 precompile(Tuple{getfield(Base, Symbol("#kw##notify")), Array{Any, 1}, typeof(Base.notify), Base.Condition, Nothing})

@@ -209,6 +209,7 @@ let r, t, sock
     close(sock)
     @test wait(t)
 end
+
 # issue #4535
 exename = Base.julia_cmd()
 if valgrind_off
@@ -221,9 +222,6 @@ if valgrind_off
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
-
-# issue #6310
-@test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
 # setup_stdio for AbstractPipe
 let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
