@@ -21,8 +21,8 @@ Compute the amount of memory used by all unique objects reachable from the argum
   fields, even if those fields would normally be excluded.
 """
 function summarysize(obj;
-                     exclude = Union{DataType, TypeName, Core.MethodInstance},
-                     chargeall = Union{TypeMapEntry, Method})
+                     exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
+                     chargeall = Union{Core.TypeMapEntry, Method})
     @nospecialize obj exclude chargeall
     ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall)
     size::Int = ss(obj)
@@ -94,7 +94,7 @@ function (ss::SummarySize)(obj::DataType)
     return size
 end
 
-function (ss::SummarySize)(obj::TypeName)
+function (ss::SummarySize)(obj::Core.TypeName)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)

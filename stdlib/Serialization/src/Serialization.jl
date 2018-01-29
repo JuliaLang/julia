@@ -8,8 +8,9 @@ Provide serialization of Julia objects via the functions
 module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
-import Core: svec
+import Core: svec, SimpleVector
 using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
+using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
 
@@ -36,7 +37,7 @@ const n_reserved_tags = 12
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
-    Float16, Float32, Float64, Char, DataType, Union, UnionAll, TypeName, Tuple,
+    Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
     Array, Expr, LineNumberNode, LabelNode, GotoNode, QuoteNode, CodeInfo, TypeVar,
     Core.Box, Core.MethodInstance, Module, Task, String, SimpleVector, Method,
     GlobalRef, SlotNumber, TypedSlot, NewvarNode, SSAValue,
@@ -110,7 +111,7 @@ const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
 const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
-const TYPENAME_TAG = sertag(TypeName)
+const TYPENAME_TAG = sertag(Core.TypeName)
 const INT32_TAG = sertag(Int32)
 const INT64_TAG = sertag(Int64)
 const GLOBALREF_TAG = sertag(GlobalRef)
@@ -478,14 +479,14 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     serialize(s, g.name)
 end
 
-function serialize(s::AbstractSerializer, t::TypeName)
+function serialize(s::AbstractSerializer, t::Core.TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
     write(s.io, object_number(s, t))
     serialize_typename(s, t)
 end
 
-function serialize_typename(s::AbstractSerializer, t::TypeName)
+function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
     primary = unwrap_unionall(t.wrapper)
@@ -760,7 +761,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == FULL_DATATYPE_TAG
         return deserialize_datatype(s, true)
     elseif b == WRAPPER_DATATYPE_TAG
-        tname = deserialize(s)::TypeName
+        tname = deserialize(s)::Core.TypeName
         return unwrap_unionall(tname.wrapper)
     elseif b == OBJECT_TAG
         t = deserialize(s)
@@ -986,7 +987,7 @@ end
 
 module __deserialized_types__ end
 
-function deserialize(s::AbstractSerializer, ::Type{TypeName})
+function deserialize(s::AbstractSerializer, ::Type{Core.TypeName})
     number = read(s.io, UInt64)
     return deserialize_typename(s, number)
 end
@@ -999,7 +1000,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any),
+        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any),
                    tn_name, __deserialized_types__)
         makenew = true
     end
@@ -1055,13 +1056,13 @@ function deserialize_typename(s::AbstractSerializer, number)
             end
         end
     end
-    return tn::TypeName
+    return tn::Core.TypeName
 end
 
 function deserialize_datatype(s::AbstractSerializer, full::Bool)
     slot = s.counter; s.counter += 1
     if full
-        tname = deserialize(s)::TypeName
+        tname = deserialize(s)::Core.TypeName
         ty = tname.wrapper
     else
         name = deserialize(s)::Symbol

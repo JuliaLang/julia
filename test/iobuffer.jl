@@ -232,7 +232,7 @@ let io = IOBuffer(maxsize=0)
 end
 
 @testset "BufferStream" begin
-    bstream = BufferStream()
+    bstream = Base.BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)

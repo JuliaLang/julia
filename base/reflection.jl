@@ -663,7 +663,7 @@ end
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList
     ms::Array{Method,1}
-    mt::MethodTable
+    mt::Core.MethodTable
 end
 
 length(m::MethodList) = length(m.ms)
@@ -672,7 +672,7 @@ start(m::MethodList) = start(m.ms)
 done(m::MethodList, s) = done(m.ms, s)
 next(m::MethodList, s) = next(m.ms, s)
 
-function MethodList(mt::MethodTable)
+function MethodList(mt::Core.MethodTable)
     ms = Method[]
     visit(mt) do m
         push!(ms, m)
@@ -711,11 +711,11 @@ function methods(@nospecialize(f))
     return methods(f, Tuple{Vararg{Any}})
 end
 
-function visit(f, mt::MethodTable)
+function visit(f, mt::Core.MethodTable)
     mt.defs !== nothing && visit(f, mt.defs)
     nothing
 end
-function visit(f, mc::TypeMapLevel)
+function visit(f, mc::Core.TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 1:length(e)
@@ -732,7 +732,7 @@ function visit(f, mc::TypeMapLevel)
     mc.any !== nothing && visit(f, mc.any)
     nothing
 end
-function visit(f, d::TypeMapEntry)
+function visit(f, d::Core.TypeMapEntry)
     while d !== nothing
         f(d.func)
         d = d.next
@@ -740,14 +740,14 @@ function visit(f, d::TypeMapEntry)
     nothing
 end
 
-function length(mt::MethodTable)
+function length(mt::Core.MethodTable)
     n = 0
     visit(mt) do m
         n += 1
     end
     return n::Int
 end
-isempty(mt::MethodTable) = (mt.defs === nothing)
+isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
                               isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :

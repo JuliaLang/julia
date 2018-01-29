@@ -2,7 +2,7 @@
 
 baremodule Base
 
-using Core.Intrinsics
+using Core.Intrinsics, Core.IR
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 getproperty(x, f::Symbol) = getfield(x, f)

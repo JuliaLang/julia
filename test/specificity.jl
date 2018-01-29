@@ -20,8 +20,8 @@ end
 
 # issue #11534
 let
-    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
+    t1 = Tuple{AbstractArray, Tuple{Vararg{Base.RangeIndex}}}
+    t2 = Tuple{Array, T} where T<:Tuple{Vararg{Base.RangeIndex}}
     @test !args_morespecific(t1, t2)
     @test  args_morespecific(t2, t1)
 end

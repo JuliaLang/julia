@@ -23,9 +23,9 @@ const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
 
-const TYPENAME_NAME_FIELDINDEX = fieldindex(TypeName, :name)
-const TYPENAME_MODULE_FIELDINDEX = fieldindex(TypeName, :module)
-const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(TypeName, :wrapper)
+const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
+const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
+const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
 
 ##########
 # tfuncs #
@@ -463,8 +463,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 t = const_datatype_getfield_tfunc(sv, isa(nv, Symbol) ?
                       fieldindex(DataType, nv, false) : nv)
                 t !== nothing && return t
-            elseif isa(sv, TypeName)
-                fld = isa(nv, Symbol) ? fieldindex(TypeName, nv, false) : nv
+            elseif isa(sv, Core.TypeName)
+                fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX)

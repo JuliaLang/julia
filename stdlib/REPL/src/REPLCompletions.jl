@@ -343,7 +343,7 @@ function try_get_type(sym::Expr, fn::Module)
         return get_type_call(sym)
     elseif sym.head === :thunk
         thk = sym.args[1]
-        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::Core.CodeInfo, fn)
         rt !== Any && return (rt, true)
     elseif sym.head === :ref
         # some simple cases of `expand`

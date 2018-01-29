@@ -166,8 +166,8 @@ struct StructInfo
 end
 
 struct InvokeData
-    mt::MethodTable
-    entry::TypeMapEntry
+    mt::Core.MethodTable
+    entry::Core.TypeMapEntry
     types0
     fexpr
     texpr

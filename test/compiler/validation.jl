@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Core.IR
 
 function f22938(a, b, x...)
     d = 1
