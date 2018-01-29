@@ -267,14 +267,14 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         all(inf) && return sign*T(Inf)
     end
 
-    baseunder16 = base < 16
+    baseunder15 = base < 15 # only interpret 'e' as scientific notation if unambiguous
     b = T(base)
     res = zero(T)
     while !done(s, i)
         c, i = next(s, i)
         isspace(c) && break
         c == '.' && break
-        if baseunder16 && c == 'e'
+        if baseunder15 && c == 'e'
             i -= 1
             break
         end
@@ -288,7 +288,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         n -= 1
         c, i = next(s, i)
         isspace(c) && break
-        baseunder16 && c == 'e' && break
+        baseunder15 && c == 'e' && break
         tmp = parse(Int, c, base=base)
 
         res += tmp * b^n
@@ -296,7 +296,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
 
     expsign = 1
     exponent = 0
-    while baseunder16 && !done(s, i)
+    while baseunder15 && !done(s, i)
         c, i = next(s, i)
         isspace(c) && break
         if c == '-'
