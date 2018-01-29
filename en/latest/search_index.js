@@ -2965,7 +2965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "Environment Variables",
     "category": "section",
-    "text": "Julia may be configured with a number of environment variables, either in the usual way of the operating system, or in a portable way from within Julia. Suppose you want to set the environment variable JULIA_EDITOR to vim, then either type ENV[\"JULIA_EDITOR\"] = \"vim\" for instance in the REPL to make this change on a case by case basis, or add the same to the user configuration file .juliarc.jl in the user's home directory to have a permanent effect. The current value of the same environment variable is determined by evaluating ENV[\"JULIA_EDITOR\"].The environment variables that Julia uses generally start with JULIA. If Base.versioninfo is called with verbose equal to true, then the output will list defined environment variables relevant for Julia, including those for which JULIA appears in the name."
+    "text": "Julia may be configured with a number of environment variables, either in the usual way of the operating system, or in a portable way from within Julia. Suppose you want to set the environment variable JULIA_EDITOR to vim, then either type ENV[\"JULIA_EDITOR\"] = \"vim\" for instance in the REPL to make this change on a case by case basis, or add the same to the user configuration file .juliarc.jl in the user's home directory to have a permanent effect. The current value of the same environment variable is determined by evaluating ENV[\"JULIA_EDITOR\"].The environment variables that Julia uses generally start with JULIA. If InteractiveUtils.versioninfo is called with verbose equal to true, then the output will list defined environment variables relevant for Julia, including those for which JULIA appears in the name."
 },
 
 {
@@ -3037,7 +3037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "JULIA_EDITOR",
     "category": "section",
-    "text": "The editor returned by Base.editor() and used in, e.g., Base.edit, referring to the command of the preferred editor, for instance vim.$JULIA_EDITOR takes precedence over $VISUAL, which in turn takes precedence over $EDITOR. If none of these environment variables is set, then the editor is taken to be open on Windows and OS X, or /etc/alternatives/editor if it exists, or emacs otherwise.note: Note\n$JULIA_EDITOR is not used in the determination of the editor for Base.Pkg.edit: this function checks $VISUAL and $EDITOR alone."
+    "text": "The editor returned by InteractiveUtils.editor() and used in, e.g., InteractiveUtils.edit, referring to the command of the preferred editor, for instance vim.$JULIA_EDITOR takes precedence over $VISUAL, which in turn takes precedence over $EDITOR. If none of these environment variables is set, then the editor is taken to be open on Windows and OS X, or /etc/alternatives/editor if it exists, or emacs otherwise.note: Note\n$JULIA_EDITOR is not used in the determination of the editor for Base.Pkg.edit: this function checks $VISUAL and $EDITOR alone."
 },
 
 {
@@ -4481,67 +4481,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.varinfo",
-    "page": "Essentials",
-    "title": "Base.varinfo",
-    "category": "Function",
-    "text": "varinfo(m::Module=Main, pattern::Regex=r\"\")\n\nReturn a markdown table giving information about exported global variables in a module, optionally restricted to those matching pattern.\n\nThe memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.summarysize",
     "page": "Essentials",
     "title": "Base.summarysize",
     "category": "Function",
     "text": "Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int\n\nCompute the amount of memory used by all unique objects reachable from the argument.\n\nKeyword Arguments\n\nexclude: specifies the types of objects to exclude from the traversal.\nchargeall: specifies the types of objects to always charge the size of all of their fields, even if those fields would normally be excluded.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.edit-Tuple{AbstractString,Integer}",
-    "page": "Essentials",
-    "title": "Base.edit",
-    "category": "Method",
-    "text": "edit(path::AbstractString, line::Integer=0)\n\nEdit a file or directory optionally providing a line number to edit the file at. Return to the julia prompt when you quit the editor. The editor can be changed by setting JULIA_EDITOR, VISUAL or EDITOR as an environment variable.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.edit-Tuple{Any}",
-    "page": "Essentials",
-    "title": "Base.edit",
-    "category": "Method",
-    "text": "edit(function, [types])\n\nEdit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. The editor can be changed by setting JULIA_EDITOR, VISUAL or EDITOR as an environment variable.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@edit",
-    "page": "Essentials",
-    "title": "Base.@edit",
-    "category": "Macro",
-    "text": "@edit\n\nEvaluates the arguments to the function or macro call, determines their types, and calls the edit function on the resulting expression.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.less-Tuple{AbstractString}",
-    "page": "Essentials",
-    "title": "Base.less",
-    "category": "Method",
-    "text": "less(file::AbstractString, [line::Integer])\n\nShow a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.less-Tuple{Any}",
-    "page": "Essentials",
-    "title": "Base.less",
-    "category": "Method",
-    "text": "less(function, [types])\n\nShow the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@less",
-    "page": "Essentials",
-    "title": "Base.@less",
-    "category": "Macro",
-    "text": "@less\n\nEvaluates the arguments to the function or macro call, determines their types, and calls the less function on the resulting expression.\n\n\n\n\n\n"
 },
 
 {
@@ -4609,35 +4553,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.Docs.apropos",
-    "page": "Essentials",
-    "title": "Base.Docs.apropos",
-    "category": "Function",
-    "text": "apropos(string)\n\nSearch through all documentation for a string, ignoring case.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.which-Tuple{Any,Any}",
     "page": "Essentials",
     "title": "Base.which",
     "category": "Method",
     "text": "which(f, types)\n\nReturns the method of f (a Method object) that would be called for arguments of the given types.\n\nIf types is an abstract type, then the method that would be called by invoke is returned.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.which-Tuple{Symbol}",
-    "page": "Essentials",
-    "title": "Base.which",
-    "category": "Method",
-    "text": "which(symbol)\n\nReturn the module in which the binding for the variable referenced by symbol in module Main was created.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@which",
-    "page": "Essentials",
-    "title": "Base.@which",
-    "category": "Macro",
-    "text": "@which\n\nApplied to a function or macro call, it evaluates the arguments to the specified call, and returns the Method object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the which function.\n\n\n\n\n\n"
 },
 
 {
@@ -4649,27 +4569,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.methodswith",
-    "page": "Essentials",
-    "title": "Base.methodswith",
-    "category": "Function",
-    "text": "methodswith(typ[, module or function]; supertypes::Bool=false])\n\nReturn an array of methods with an argument of type typ.\n\nThe optional second argument restricts the search to a particular module or function (the default is all top-level modules).\n\nIf keyword supertypes is true, also return arguments with a parent type of typ, excluding type Any.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.@show",
     "page": "Essentials",
     "title": "Base.@show",
     "category": "Macro",
     "text": "@show\n\nShow an expression and result, returning the result.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.versioninfo",
-    "page": "Essentials",
-    "title": "Base.versioninfo",
-    "category": "Function",
-    "text": "versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)\n\nPrint information about the version of Julia in use. The output is controlled with boolean keyword arguments:\n\npackages: print information about installed packages\nverbose: print all additional information\n\n\n\n\n\n"
 },
 
 {
@@ -4685,7 +4589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Getting Around",
     "category": "section",
-    "text": "Base.exit\nBase.atexit\nBase.isinteractive\nBase.varinfo\nBase.summarysize\nBase.edit(::AbstractString, ::Integer)\nBase.edit(::Any)\nBase.@edit\nBase.less(::AbstractString)\nBase.less(::Any)\nBase.@less\nBase.clipboard(::Any)\nBase.clipboard()\nBase.require\nBase.compilecache\nBase.__precompile__\nBase.include\nBase.include_string\nBase.include_dependency\nBase.Docs.apropos\nBase.which(::Any, ::Any)\nBase.which(::Symbol)\nBase.@which\nBase.methods\nBase.methodswith\nBase.@show\nBase.versioninfo\nans"
+    "text": "Base.exit\nBase.atexit\nBase.isinteractive\nBase.summarysize\nBase.clipboard(::Any)\nBase.clipboard()\nBase.require\nBase.compilecache\nBase.__precompile__\nBase.include\nBase.include_string\nBase.include_dependency\nBase.which(::Any, ::Any)\nBase.methods\nBase.@show\nans"
 },
 
 {
@@ -5265,14 +5169,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.subtypes",
-    "page": "Essentials",
-    "title": "Base.subtypes",
-    "category": "Function",
-    "text": "subtypes(T::DataType)\n\nReturn a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.\n\nExamples\n\njulia> subtypes(Integer)\n3-element Array{Union{DataType, UnionAll},1}:\n Bool\n Signed\n Unsigned\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.typejoin",
     "page": "Essentials",
     "title": "Base.typejoin",
@@ -5317,7 +5213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Type relations",
     "category": "section",
-    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typejoin\nBase.typeintersect\nBase.promote_type\nBase.promote_rule\nBase.isdispatchtuple"
+    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.typejoin\nBase.typeintersect\nBase.promote_type\nBase.promote_rule\nBase.isdispatchtuple"
 },
 
 {
@@ -6569,19 +6465,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.@functionloc",
-    "page": "Essentials",
-    "title": "Base.@functionloc",
-    "category": "Macro",
-    "text": "@functionloc\n\nApplied to a function or macro call, it evaluates the arguments to the specified call, and returns a tuple (filename,line) giving the location for the method that would be called for those arguments. It calls out to the functionloc function.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Reflection-1",
     "page": "Essentials",
     "title": "Reflection",
     "category": "section",
-    "text": "Base.nameof(::Module)\nBase.parentmodule\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.isconst\nBase.nameof(::Function)\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)\nBase.@functionloc"
+    "text": "Base.nameof(::Module)\nBase.parentmodule\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.isconst\nBase.nameof(::Function)\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)"
 },
 
 {
@@ -6665,75 +6553,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.@code_lowered",
-    "page": "Essentials",
-    "title": "Base.@code_lowered",
-    "category": "Macro",
-    "text": "@code_lowered\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_lowered on the resulting expression.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.code_typed",
     "page": "Essentials",
     "title": "Base.code_typed",
     "category": "Function",
     "text": "code_typed(f, types; optimize=true)\n\nReturns an array of type-inferred lowered form (IR) for the methods matching the given generic function and type signature. The keyword argument optimize controls whether additional optimizations, such as inlining, are also applied.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@code_typed",
-    "page": "Essentials",
-    "title": "Base.@code_typed",
-    "category": "Macro",
-    "text": "@code_typed\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_typed on the resulting expression.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.code_warntype",
-    "page": "Essentials",
-    "title": "Base.code_warntype",
-    "category": "Function",
-    "text": "code_warntype([io::IO], f, types)\n\nPrints lowered and type-inferred ASTs for the methods matching the given generic function and type signature to io which defaults to STDOUT. The ASTs are annotated in such a way as to cause \"non-leaf\" types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. In particular, unions containing either missing or nothing are displayed in yellow, since these are often intentional. See @code_warntype for more information.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@code_warntype",
-    "page": "Essentials",
-    "title": "Base.@code_warntype",
-    "category": "Macro",
-    "text": "@code_warntype\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_warntype on the resulting expression.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.code_llvm",
-    "page": "Essentials",
-    "title": "Base.code_llvm",
-    "category": "Function",
-    "text": "code_llvm([io=STDOUT,], f, types)\n\nPrints the LLVM bitcodes generated for running the method matching the given generic function and type signature to io.\n\nAll metadata and dbg.* calls are removed from the printed bitcode. Use codellvmraw for the full IR.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@code_llvm",
-    "page": "Essentials",
-    "title": "Base.@code_llvm",
-    "category": "Macro",
-    "text": "@code_llvm\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_llvm on the resulting expression.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.code_native",
-    "page": "Essentials",
-    "title": "Base.code_native",
-    "category": "Function",
-    "text": "code_native([io=STDOUT,], f, types; syntax = :att)\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/base/#Base.@code_native",
-    "page": "Essentials",
-    "title": "Base.@code_native",
-    "category": "Macro",
-    "text": "@code_native\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_native on the resulting expression.\n\n\n\n\n\n"
 },
 
 {
@@ -6749,7 +6573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Internals",
     "category": "section",
-    "text": "Base.GC.gc\nBase.GC.enable\nMeta.lower\nMeta.@lower\nMeta.parse(::AbstractString, ::Int)\nMeta.parse(::AbstractString)\nBase.macroexpand\nBase.@macroexpand\nBase.@macroexpand1\nBase.code_lowered\nBase.@code_lowered\nBase.code_typed\nBase.@code_typed\nBase.code_warntype\nBase.@code_warntype\nBase.code_llvm\nBase.@code_llvm\nBase.code_native\nBase.@code_native\nBase.precompile"
+    "text": "Base.GC.gc\nBase.GC.enable\nMeta.lower\nMeta.@lower\nMeta.parse(::AbstractString, ::Int)\nMeta.parse(::AbstractString)\nBase.macroexpand\nBase.@macroexpand\nBase.@macroexpand1\nBase.code_lowered\nBase.code_typed\nBase.precompile"
 },
 
 {
@@ -16246,6 +16070,190 @@ var documenterSearchIndex = {"docs": [
     "title": "File Events",
     "category": "section",
     "text": "FileWatching.poll_fd\nFileWatching.poll_file\nFileWatching.watch_file"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#",
+    "page": "Interactive Utilities",
+    "title": "Interactive Utilities",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#Base.Docs.apropos",
+    "page": "Interactive Utilities",
+    "title": "Base.Docs.apropos",
+    "category": "Function",
+    "text": "apropos(string)\n\nSearch through all documentation for a string, ignoring case.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.varinfo",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.varinfo",
+    "category": "Function",
+    "text": "varinfo(m::Module=Main, pattern::Regex=r\"\")\n\nReturn a markdown table giving information about exported global variables in a module, optionally restricted to those matching pattern.\n\nThe memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.versioninfo",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.versioninfo",
+    "category": "Function",
+    "text": "versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)\n\nPrint information about the version of Julia in use. The output is controlled with boolean keyword arguments:\n\npackages: print information about installed packages\nverbose: print all additional information\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.methodswith",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.methodswith",
+    "category": "Function",
+    "text": "methodswith(typ[, module or function]; supertypes::Bool=false])\n\nReturn an array of methods with an argument of type typ.\n\nThe optional second argument restricts the search to a particular module or function (the default is all top-level modules).\n\nIf keyword supertypes is true, also return arguments with a parent type of typ, excluding type Any.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.subtypes",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.subtypes",
+    "category": "Function",
+    "text": "subtypes(T::DataType)\n\nReturn a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.\n\nExamples\n\njulia> subtypes(Integer)\n3-element Array{Union{DataType, UnionAll},1}:\n Bool\n Signed\n Unsigned\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.edit-Tuple{AbstractString,Integer}",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.edit",
+    "category": "Method",
+    "text": "edit(path::AbstractString, line::Integer=0)\n\nEdit a file or directory optionally providing a line number to edit the file at. Return to the julia prompt when you quit the editor. The editor can be changed by setting JULIA_EDITOR, VISUAL or EDITOR as an environment variable.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.edit-Tuple{Any}",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.edit",
+    "category": "Method",
+    "text": "edit(function, [types])\n\nEdit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. The editor can be changed by setting JULIA_EDITOR, VISUAL or EDITOR as an environment variable.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@edit",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@edit",
+    "category": "Macro",
+    "text": "@edit\n\nEvaluates the arguments to the function or macro call, determines their types, and calls the edit function on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.less-Tuple{AbstractString}",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.less",
+    "category": "Method",
+    "text": "less(file::AbstractString, [line::Integer])\n\nShow a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.less-Tuple{Any}",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.less",
+    "category": "Method",
+    "text": "less(function, [types])\n\nShow the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@less",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@less",
+    "category": "Macro",
+    "text": "@less\n\nEvaluates the arguments to the function or macro call, determines their types, and calls the less function on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@which",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@which",
+    "category": "Macro",
+    "text": "@which\n\nApplied to a function or macro call, it evaluates the arguments to the specified call, and returns the Method object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the which function.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@functionloc",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@functionloc",
+    "category": "Macro",
+    "text": "@functionloc\n\nApplied to a function or macro call, it evaluates the arguments to the specified call, and returns a tuple (filename,line) giving the location for the method that would be called for those arguments. It calls out to the functionloc function.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_lowered",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@code_lowered",
+    "category": "Macro",
+    "text": "@code_lowered\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_lowered on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_typed",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@code_typed",
+    "category": "Macro",
+    "text": "@code_typed\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_typed on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_warntype",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.code_warntype",
+    "category": "Function",
+    "text": "code_warntype([io::IO], f, types)\n\nPrints lowered and type-inferred ASTs for the methods matching the given generic function and type signature to io which defaults to STDOUT. The ASTs are annotated in such a way as to cause \"non-leaf\" types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. In particular, unions containing either missing or nothing are displayed in yellow, since these are often intentional. See @code_warntype for more information.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_warntype",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@code_warntype",
+    "category": "Macro",
+    "text": "@code_warntype\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_warntype on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_llvm",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.code_llvm",
+    "category": "Function",
+    "text": "code_llvm([io=STDOUT,], f, types)\n\nPrints the LLVM bitcodes generated for running the method matching the given generic function and type signature to io.\n\nAll metadata and dbg.* calls are removed from the printed bitcode. Use codellvmraw for the full IR.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_llvm",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@code_llvm",
+    "category": "Macro",
+    "text": "@code_llvm\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_llvm on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_native",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.code_native",
+    "category": "Function",
+    "text": "code_native([io=STDOUT,], f, types; syntax = :att)\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_native",
+    "page": "Interactive Utilities",
+    "title": "InteractiveUtils.@code_native",
+    "category": "Macro",
+    "text": "@code_native\n\nEvaluates the arguments to the function or macro call, determines their types, and calls code_native on the resulting expression.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/InteractiveUtils/#Interactive-Utilities-1",
+    "page": "Interactive Utilities",
+    "title": "Interactive Utilities",
+    "category": "section",
+    "text": "InteractiveUtils.apropos\nInteractiveUtils.varinfo\nInteractiveUtils.versioninfo\nInteractiveUtils.methodswith\nInteractiveUtils.subtypes\nInteractiveUtils.edit(::AbstractString, ::Integer)\nInteractiveUtils.edit(::Any)\nInteractiveUtils.@edit\nInteractiveUtils.less(::AbstractString)\nInteractiveUtils.less(::Any)\nInteractiveUtils.@less\nInteractiveUtils.@which\nInteractiveUtils.@functionloc\nInteractiveUtils.@code_lowered\nInteractiveUtils.@code_typed\nInteractiveUtils.code_warntype\nInteractiveUtils.@code_warntype\nInteractiveUtils.code_llvm\nInteractiveUtils.@code_llvm\nInteractiveUtils.code_native\nInteractiveUtils.@code_native"
 },
 
 {
