@@ -234,52 +234,75 @@ function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
     return sign, c, i
 end
 
+function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
+    isempty(s) && throw(ArgumentError("Empty string!"))
+    c = ' '
+    sign = 1
+    while isspace(c)
+        c, i = next(s,i)
+    end
+    if c in ('-', '+')
+        sign = (c == '-') ? -1 : 1
+        c, i = next(s, i)
+    end
+    while isspace(c)
+        c, i = next(s,i)
+    end
+    startpos = i-1
+    return sign, startpos
+end
+
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
-    sign, c, i = parsefloat_preamble(s, base)
+    sign, i = parsefloat_preamble(s, base)
 
-    lowercase(c) == 'n' && return T(NaN)
-    lowercase(c) == 'i' && return sign*T(Inf)
+    if !done(s, i+2)
+        lowercase(s[i:i+2]) == "nan" && return T(NaN)
+        lowercase(s[i:i+2]) == "inf" && return sign*T(Inf)
+    end
 
-    res = zero(T)
+    baseunder16 = base < 16
     b = T(base)
-    exponent = 0
-    tmpexp = 0
-    while true
+    res = zero(T)
+    while !done(s, i)
+        c, i = next(s, i)
         isspace(c) && break
         c == '.' && break
-        d = parse(Int, c, base)
-        res = res*b + d
-        done(s, i) && break
-        c, i = next(s, i)
+        if baseunder16 && c == 'e'
+            i -= 1
+            break
+        end
+        tmp = parse(Int, c, base=base)
+        
+        res = res * b + tmp
     end
-
-    n = -1
+    
+    n = 0
     while !done(s, i)
+        n -= 1
         c, i = next(s, i)
         isspace(c) && break
-        c == 'e' && break
-        d = parse(Int, c, base)
-        res += d*b^n
-        n -= 1
+        baseunder16 && c == 'e' && break
+        tmp = parse(Int, c, base=base)
+        
+        res += tmp * b^n
     end
-
+    
     expsign = 1
-    while !done(s, i)
+    exponent = 0
+    while baseunder16 && !done(s, i)
         c, i = next(s, i)
         isspace(c) && break
         if c == '-'
             expsign = -1
             continue
         end
-        d = parse(Int, c, base)
-        exponent = exponent*b + d
+        tmp = parse(Int, c, base=base)
+
+        exponent = exponent * base + tmp
     end
 
-    sign*res*b^(expsign*exponent)
+    return sign*res*b^(expsign*exponent)
 end
-
-float(s::AbstractString, base::Integer) = parse(Float64,s,base)
-
 
 function tryparse(::Type{Float64}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
