@@ -1358,6 +1358,10 @@ let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
 
+# issue #25430
+@test Vector{Tuple{Any}}() isa Vector{Tuple{>:Int}}
+@test Vector{Tuple{>:Int}}() isa Vector{Tuple{Any}}
+
 # issue #24521
 g24521(::T, ::T) where {T} = T
 @test_throws MethodError g24521(Tuple{Any}, Tuple{T} where T)

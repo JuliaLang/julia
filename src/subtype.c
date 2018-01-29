@@ -2115,7 +2115,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_concrete_type(t))
+    if (jl_is_concrete_type(t) && jl_type_equality_is_identity(jl_typeof(x), t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
