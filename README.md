@@ -246,6 +246,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `codeunits(s)` returns an array-like view of the `UInt8` code units of
   a string and `ncodeunits(s)` returns the number of code units ([#25241]).
 
+* `Dates.Period` rounding (e.g., `round(Dates.Hour(36), Dates.Day, RoundNearestTiesUp) == Dates.Day(2)` ([#24182]).
+
+
 ## Renaming
 
 
@@ -495,3 +498,4 @@ includes this fix. Find the minimum version from there.
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
+[#24182]: https://github.com/JuliaLang/julia/issues/24182
