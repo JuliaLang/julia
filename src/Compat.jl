@@ -956,6 +956,15 @@ else
     import REPL
 end
 
+if VERSION < v"0.7.0-DEV.3476"
+    @eval module Serialization
+        import Base.Serializer: serialize, deserialize, SerializationState
+        export serialize, deserialize, SerializationState
+    end
+else
+    import Serialization
+end
+
 # 0.7.0-DEV.1993
 @static if !isdefined(Base, :EqualTo)
     if VERSION >= v"0.6.0"
