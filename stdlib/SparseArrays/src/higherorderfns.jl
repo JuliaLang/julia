@@ -955,6 +955,8 @@ end
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
 @inline copy(bc::Broadcasted{<:SPVM}) = _copy(bc.args, bc)
 
+# Incorporate types into the function in the common f(::Type{T}, ::SparseVecOrMat) case
+# This prevents losing the type information within a tuple or unspecialized argument
 const Args2{S,T} = Base.TupleLL{S,Base.TupleLL{T,Base.TupleLLEnd}}
 function _copy(::Args2{Type{T},S}, bc::Broadcasted{<:SPVM}) where {T,S<:SparseVecOrMat}
     BC = Broadcasted{typeof(BroadcastStyle(typeof(bc))),eltype(bc)}
@@ -963,39 +965,47 @@ end
 
 function _copy(::Any, bc::Broadcasted{<:SPVM})
     bcf = flatten(bc)
-    _all_args_isa(bcf.args, SparseVector) && return _shapecheckbc(bcf)
-    _all_args_isa(bcf.args, SparseMatrixCSC) && return _shapecheckbc(bcf)
-    args = Tuple(bcf.args)
-    _all_args_isa(bcf.args, SparseVecOrMat) && return _diffshape_broadcast(bcf.f, args...)
-    parevalf, passedargstup = capturescalars(bcf.f, args)
-    return broadcast(parevalf, passedargstup...)
+    return __copy(bcf.f, Tuple(bcf.args)...)
 end
 
-function _shapecheckbc(bc::Broadcasted)
-    args = Tuple(bc.args)
-    _aresameshape(bc.args) ? _noshapecheck_map(bc.f, args...) : _diffshape_broadcast(bc.f, args...)
+__copy(f, args::SparseVector...) = _shapecheckbc(f, args...)
+__copy(f, args::SparseMatrixCSC...) = _shapecheckbc(f, args...)
+__copy(f, args::SparseVecOrMat...) = _diffshape_broadcast(f, args...)
+# Otherwise, we incorporate scalars into the function and re-dispatch
+function __copy(f, args...)
+    parevalf, passedargstup = capturescalars(f, args)
+    return __copy(parevalf, passedargstup...)
 end
+
+function _shapecheckbc(f, args...)
+    _aresameshape(args...) ? _noshapecheck_map(f, args...) : _diffshape_broadcast(f, args...)
+end
+
 
 function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
     if bc.f === identity && bc isa SpBroadcasted1 && Base.axes(dest) == (A = bc.args.head; Base.axes(A))
         return copyto!(dest, A)
     end
     bcf = flatten(bc)
-    As = Tuple(bcf.args)
-    if _all_args_isa(bcf.args, SparseVecOrMat)
-        _aresameshape(dest, As...) && return _noshapecheck_map!(bcf.f, dest, As...)
-        Base.Broadcast.check_broadcast_indices(axes(dest), As...)
-        fofzeros = bcf.f(_zeros_eltypes(As...)...)
-        fpreszeros = _iszero(fofzeros)
-        fpreszeros ? _broadcast_zeropres!(bcf.f, dest, As...) :
-                     _broadcast_notzeropres!(bcf.f, fofzeros, dest, As...)
+    return _copyto!(bcf.f, dest, Tuple(bcf.args)...)
+end
+
+function _copyto!(f, dest, As::SparseVecOrMat...)
+    _aresameshape(dest, As...) && return _noshapecheck_map!(f, dest, As...)
+    Base.Broadcast.check_broadcast_indices(axes(dest), As...)
+    fofzeros = f(_zeros_eltypes(As...)...)
+    if _iszero(fofzeros)
+        return _broadcast_zeropres!(f, dest, As...)
     else
-        # As contains nothing but SparseVecOrMat and scalars
-        # See below for capturescalars
-        parevalf, passedsrcargstup = capturescalars(bcf.f, As)
-        broadcast!(parevalf, dest, passedsrcargstup...)
+        return _broadcast_notzeropres!(f, fofzeros, dest, As...)
     end
-    return dest
+end
+
+function _copyto!(f, dest, args...)
+    # As contains nothing but SparseVecOrMat and scalars
+    # See below for capturescalars
+    parevalf, passedsrcargstup = capturescalars(f, args)
+    _copyto!(parevalf, dest, passedsrcargstup...)
 end
 
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and

@@ -394,6 +394,7 @@ This is an optional operation that may make custom implementation of broadcastin
 some cases.
 """
 function flatten(bc::Broadcasted{Style,ElType}) where {Style,ElType}
+    isflat(bc.args) && return bc
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(x->x.args, bc)
     # build a function `makeargs` that takes a "flat" argument list and
@@ -413,6 +414,7 @@ function flatten(bc::Broadcasted{Style,ElType}) where {Style,ElType}
 end
 
 function flatten(bc::BroadcastedF{Style,ElType}) where {Style,ElType}
+    isflat(bc.args) && return bc
     # Since bc is instantiated, let's preserve the instatiation in the result
     args, indexing = cat_nested(x->x.args, bc), cat_nested(x->x.indexing, bc)
     let makeargs = make_makeargs(bc)
@@ -422,6 +424,10 @@ function flatten(bc::BroadcastedF{Style,ElType}) where {Style,ElType}
         return Broadcasted{Style,ElType}(newf, args, axes(bc), indexing)
     end
 end
+
+isflat(args::TupleLL{<:Broadcasted}) = false
+isflat(args::TupleLL{<:Any}) = isflat(args.rest)
+isflat(args::TupleLLEnd) = true
 
 cat_nested(fieldextractor, bc::Broadcasted) = cat_nested(fieldextractor, fieldextractor(bc), TupleLLEnd())
 
@@ -779,6 +785,23 @@ arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
 broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = materialize!(dest, make(f, As...))
+
+"""
+    Broadcast.materialize(bc)
+
+Take a lazy `Broadcasted` object and compute the result
+"""
+materialize(bc::Broadcasted) = copy(instantiate(bc))
+materialize(x) = x
+function materialize!(dest, bc::Broadcasted)
+    args = instantiate(bc.args)
+    axs = combine_indices(dest, convert(Tuple, args)...)
+    return copyto!(dest, instantiate(Broadcasted(bc.f, args), axs))
+end
+function materialize!(dest, x)
+    axs = combine_indices(dest, x)
+    return copyto!(dest, instantiate(Broadcasted(identity, make_TupleLL(x)), axs))
+end
 
 ## general `copy` methods
 copy(bc::Broadcasted{Scalar, ElType}) where ElType = _broadcast_getindex(bc, 1)
@@ -1235,17 +1258,5 @@ function make_kwsyntax(f, args...; kwargs...)
 end
 make(f, args...) = make(combine_styles(args...), f, args...)
 make(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, make_TupleLL(args...))
-
-materialize(bc::Broadcasted) = copy(instantiate(bc))
-materialize(x) = x
-function materialize!(dest, bc::Broadcasted)
-    args = instantiate(bc.args)
-    axs = combine_indices(dest, convert(Tuple, args)...)
-    return copyto!(dest, instantiate(Broadcasted(bc.f, args), axs))
-end
-function materialize!(dest, x)
-    axs = combine_indices(dest, x)
-    return copyto!(dest, instantiate(Broadcasted(identity, make_TupleLL(x)), axs))
-end
 
 end # module
