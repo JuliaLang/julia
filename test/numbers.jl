@@ -2858,7 +2858,7 @@ end
     @test !isinteger(π)
     @test size(1) == ()
     @test length(1) == 1
-    @test endof(1) == 1
+    @test lastindex(1) == 1
     @test eltype(Integer) == Integer
 end
 # issue #15920

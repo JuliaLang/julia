@@ -284,15 +284,12 @@ snippet:
 
 ```julia-repl
 A = rand(10,10)
-remotecall_fetch(()->norm(A), 2)
+remotecall_fetch(()->sum(A), 2)
 ```
 
-In this case [`norm`](@ref) is a function that takes 2D array as a parameter, and MUST be defined in
-the remote process.  You could use any function other than `norm` as long as it is defined in the remote
-process and accepts the appropriate parameter.
-
+In this case [`sum`](@ref) MUST be defined in the remote process.
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
-`A` under `Main`. The act of shipping the closure `()->norm(A)` to worker 2 results in `Main.A` being defined
+`A` under `Main`. The act of shipping the closure `()->sum(A)` to worker 2 results in `Main.A` being defined
 on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
@@ -306,9 +303,9 @@ with embedded global references (under `Main` module only) manage globals as fol
 
   ```julia
   A = rand(10,10)
-  remotecall_fetch(()->norm(A), 2) # worker 2
+  remotecall_fetch(()->sum(A), 2) # worker 2
   A = rand(10,10)
-  remotecall_fetch(()->norm(A), 3) # worker 3
+  remotecall_fetch(()->sum(A), 3) # worker 3
   A = nothing
   ```
 

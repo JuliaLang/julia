@@ -3,6 +3,7 @@ using Test
 using REPL
 using Random
 import REPL.LineEdit
+using Markdown
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -157,23 +158,32 @@ fake_repl() do stdin_write, stdout_read, repl
     # issue #10120
     # ensure that command quoting works correctly
     let s, old_stdout = STDOUT
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
         try
-            write(stdin_write, ";")
-            readuntil(stdout_read, "shell> ")
-            Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-            write(stdin_write, """ -e "println(\\"HI\\")"\n""")
-            while true
+            write(stdin_write, '\n')
+            s = readuntil(stdout_read, "\n", keep=true)
+            if s == "\n"
+                # if shell width is precisely the text width,
+                # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
-                s == "\e[0m\n" && break # the child has exited
-                @test contains(s, "shell> ") # check for the echo of the prompt
+                @test contains(s, "shell> ")
+                s = readuntil(stdout_read, "\n", keep=true)
+                @test s == "\r\r\n"
+            else
+                @test contains(s, "shell> ")
             end
+            s = readuntil(stdout_read, "\n", keep=true)
+            @test s == "\e[0m\n" # the child has exited
         finally
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
-        @test contains(wait(get_stdout), "HI\n")
         @test wait(get_stdout) == "HI\n"
     end
 
@@ -665,18 +675,18 @@ let exename = Base.julia_cmd()
                 # valgrind banner here, not just the prompt.
                 @test output == "julia> "
             end
-            write(master,"1\nquit()\n")
+            write(master,"1\nexit()\n")
 
             wait(p)
             output = readuntil(master,' ',keep=true)
-            @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
             @test bytesavailable(master) == 0
         end
     end
 
     # Test stream mode
     p = open(`$exename --startup-file=no -q`, "r+")
-    write(p, "1\nquit()\n")
+    write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
 end # let exename
 
@@ -876,4 +886,25 @@ fake_repl() do stdin_write, stdout_read, repl
     # Close REPL ^D
     write(stdin_write, '\x04')
     wait(repltask)
+end
+
+# Docs.helpmode tests: we test whether the correct expressions are being generated here,
+# rather than complete integration with Julia's REPL mode system.
+for (line, expr) in Pair[
+    "sin"          => :sin,
+    "Base.sin"     => :(Base.sin),
+    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
+    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
+    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
+    "ccall"        => :ccall, # keyword
+    "while       " => :while, # keyword, trailing spaces should be stripped.
+    "0"            => 0,
+    "\"...\""      => "...",
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    ]
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
+    buf = IOBuffer()
+    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

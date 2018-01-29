@@ -74,7 +74,7 @@ convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
-import Core: @doc, @__doc__, @doc_str, WrappedException
+import Core: @doc, @__doc__, WrappedException
 if isdefined(Core, :Compiler)
     import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
@@ -416,9 +416,10 @@ using .Enums
 # concurrency and parallelism
 include("channels.jl")
 
-# utilities - timing, help, edit
+# utilities
 include("deepcopy.jl")
-include("interactiveutil.jl")
+include("clipboard.jl")
+include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
 include("i18n.jl")
@@ -477,9 +478,8 @@ include("deprecated.jl")
 include("docs/basedocs.jl")
 
 # Documentation -- should always be included last in sysimg.
-include("markdown/Markdown.jl")
 include("docs/Docs.jl")
-using .Docs, .Markdown
+using .Docs
 isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
 function __init__()
@@ -527,6 +527,7 @@ Base.require(Base, :SuiteSparse)
 Base.require(Base, :Test)
 Base.require(Base, :Unicode)
 Base.require(Base, :REPL)
+Base.require(Base, :Markdown)
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -537,6 +538,7 @@ Base.require(Base, :REPL)
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
     @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
+    @deprecate_binding Markdown root_module(Base, :Markdown) true ", run `using Markdown` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
@@ -564,6 +566,8 @@ Base.require(Base, :REPL)
     @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
     @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
+
+    @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
     @deprecate_stdlib readdlm  DelimitedFiles true
     @deprecate_stdlib writedlm DelimitedFiles true
@@ -832,6 +836,27 @@ Base.require(Base, :REPL)
     @deprecate_stdlib normalize_string Unicode true
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
+
+    @deprecate_stdlib whos          InteractiveUtils true
+    @deprecate_stdlib subtypes      InteractiveUtils true
+    @deprecate_stdlib apropos       InteractiveUtils true
+    @deprecate_stdlib edit          InteractiveUtils true
+    @deprecate_stdlib less          InteractiveUtils true
+    @deprecate_stdlib code_llvm     InteractiveUtils true
+    @deprecate_stdlib code_native   InteractiveUtils true
+    @deprecate_stdlib code_warntype InteractiveUtils true
+    @deprecate_stdlib methodswith   InteractiveUtils true
+    @deprecate_stdlib varinfo       InteractiveUtils true
+    @deprecate_stdlib versioninfo   InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@functionloc"))   InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_typed"))    InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_warntype")) InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
 
 empty!(DEPOT_PATH)

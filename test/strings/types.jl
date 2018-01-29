@@ -55,7 +55,7 @@ for idx in [0, 1, 4]
     @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
 end
 
-# index beyond endof("∀∀")
+# index beyond lastindex("∀∀")
 for idx in [2:3; 5:6]
     @test_throws StringIndexError SubString("∀∀", 1, idx)
 end
@@ -64,10 +64,10 @@ for idx in 7:8
 end
 
 let str="tempus fugit"              #length(str)==12
-    ss=SubString(str,1,endof(str)) #match source string
+    ss=SubString(str,1,lastindex(str)) #match source string
     @test length(ss)==length(str)
 
-    ss=SubString(str,1:endof(str))
+    ss=SubString(str,1:lastindex(str))
     @test length(ss)==length(str)
 
     ss=SubString(str,1,0)    #empty SubString
@@ -241,8 +241,8 @@ end
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
-                sb = SubString(s, nextind(pre, endof(pre)),
-                               endof(convert(T, string(prefix, prefix, c, suffix))))
+                sb = SubString(s, nextind(pre, lastindex(pre)),
+                               lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
                 ri = findfirst(equalto(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]

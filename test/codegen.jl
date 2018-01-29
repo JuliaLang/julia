@@ -3,6 +3,7 @@
 # tests for codegen and optimizations
 
 using Random
+using InteractiveUtils
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -13,7 +14,7 @@ get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
 get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    Base._dump_function(f, t,
+    InteractiveUtils._dump_function(f, t,
                 #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
                 #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
 

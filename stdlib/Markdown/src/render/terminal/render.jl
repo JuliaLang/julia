@@ -41,19 +41,19 @@ function term(io::IO, md::Admonition, columns)
     elseif lowercase(md.title) == "tip"
         col = :green
     end
-    print_with_color(col, io, " "^margin, "│ "; bold = true)
-    print_with_color(col, io, isempty(md.title) ? md.category : md.title; bold = true)
-    print_with_color(col, io, "\n", " "^margin, "│", "\n"; bold = true)
+    printstyled(io, " "^margin, "│ "; color=col, bold=true)
+    printstyled(io, isempty(md.title) ? md.category : md.title; color=col, bold=true)
+    printstyled(io, "\n", " "^margin, "│", "\n"; color=col, bold=true)
     s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
-        print_with_color(col, io, " "^margin, "│"; bold = true)
+        printstyled(io, " "^margin, "│"; color=col, bold=true)
         println(io, line)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "│ ")
-    print_with_color(:bold, io, "[^$(f.id)]")
+    printstyled(io, "[^$(f.id)]", bold=true)
     println(io, "\n", " "^margin, "│")
     s = sprint(term, f.text, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
@@ -153,7 +153,7 @@ function terminline(io::IO, md::Link)
 end
 
 function terminline(io::IO, code::Code)
-    print_with_color(:cyan, io, code.code)
+    printstyled(io, code.code, color=:cyan)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

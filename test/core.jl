@@ -2,8 +2,7 @@
 
 # test core language features
 
-using Random
-using SparseArrays
+using Random, SparseArrays, InteractiveUtils
 
 const Bottom = Union{}
 
@@ -127,6 +126,19 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+# promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
+for T in (Nothing, Missing)
+    @test Base.promote_typejoin(Int, Float64) === Real
+    @test Base.promote_typejoin(Int, T) === Union{Int, T}
+    @test Base.promote_typejoin(T, String) === Union{T, String}
+    @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
+    @test Base.promote_typejoin(Vector, T) === Any
+    @test Base.promote_typejoin(Real, T) === Any
+    @test Base.promote_typejoin(Int, String) === Any
+    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
+    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+end
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -2541,8 +2553,10 @@ const N10281 = 1000
     end
 end === nothing
 
+
 # issue #10221
 module GCbrokentype
+using InteractiveUtils
 OLD_STDOUT = STDOUT
 fname = tempname()
 file = open(fname, "w")
@@ -4336,7 +4350,7 @@ end
 # with verifier on (but should still pass on release build).
 module TestSSA16244
 
-using Test
+using Test, InteractiveUtils
 @noinline k(a) = a
 
 # unreachable branch due to `ccall(:jl_throw)`
@@ -4775,14 +4789,6 @@ function f18173()
 end
 @test f18173() == false
 
-let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
-    @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f())
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
-    @test g() == 0
-end
-
 fVararg(x) = Vararg{x}
 gVararg(a::fVararg(Int)) = length(a)
 @test gVararg(1,2,3,4,5) == 5
@@ -4849,7 +4855,7 @@ GC.enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
-@test isa(@which(bad_tvars()), Method)
+@test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
 bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
@@ -4944,12 +4950,12 @@ function let_Box5()
         return g
     end
 end
-@test any(contains_Box, (@code_lowered let_Box1()).code)
-@test any(contains_Box, (@code_lowered let_Box2()).code)
-@test any(contains_Box, (@code_lowered let_Box3()).code)
-@test any(contains_Box, (@code_lowered let_Box4()).code)
-@test any(contains_Box, (@code_lowered let_Box5()).code)
-@test !any(contains_Box, (@code_lowered let_noBox()).code)
+@test any(contains_Box, code_lowered(let_Box1,())[1].code)
+@test any(contains_Box, code_lowered(let_Box2,())[1].code)
+@test any(contains_Box, code_lowered(let_Box3,())[1].code)
+@test any(contains_Box, code_lowered(let_Box4,())[1].code)
+@test any(contains_Box, code_lowered(let_Box5,())[1].code)
+@test !any(contains_Box, code_lowered(let_noBox,())[1].code)
 @test let_Box1()() == 22
 @test let_Box2()() == 23
 @test let_Box3()() == 24
@@ -5525,7 +5531,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test @which(sincos) === Base.Math
+    @test which(Main, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end

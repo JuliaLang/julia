@@ -109,14 +109,35 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
-show(io::IO, info::CPUinfo) = Base._show_cpuinfo(io, info, true, "    ")
+function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
+    tck = SC_CLK_TCK
+    if header
+        println(io, info.model, ": ")
+        print(io, " "^length(prefix))
+        println(io, "    ", lpad("speed", 5), "    ", lpad("user", 9), "    ", lpad("nice", 9), "    ",
+                lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
+    end
+    print(io, prefix)
+    unit = tck > 0 ? " s  " : "    "
+    tc = max(tck, 1)
+    d(i, unit=unit) = lpad(string(round(Int,i)), 9) * unit
+    print(io,
+          lpad(string(info.speed), 5), " MHz  ",
+          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
+          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
+    if tck <= 0
+        print(io, "ticks")
+    end
+end
+
+show(io::IO, info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
 
 function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
             header || println(io)
-            Base._show_cpuinfo(io, cpu[x], header, "#$(x-i+1) ")
+            _show_cpuinfo(io, cpu[x], header, "#$(x-i+1) ")
             header = false
         end
     else
@@ -131,7 +152,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
             summary.cpu_times!irq += cpu[x].cpu_times!irq
         end
         summary.speed = div(summary.speed,count)
-        Base._show_cpuinfo(io, summary, true, "#1-$(count) ")
+        _show_cpuinfo(io, summary, true, "#1-$(count) ")
     end
     println(io)
 end

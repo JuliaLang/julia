@@ -88,9 +88,9 @@ let
         @test length(x) == 1
     end
 
-    #endof(c::Char) = 1
+    #lastindex(c::Char) = 1
     for x in testarrays
-        @test endof(x) == 1
+        @test lastindex(x) == 1
     end
 
     #getindex(c::Char) = c

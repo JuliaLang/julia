@@ -29,6 +29,7 @@ export guardsrand, TestSetException
 import Distributed: myid
 
 using Random: srand, AbstractRNG, GLOBAL_RNG
+using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
 
@@ -70,7 +71,7 @@ struct Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed"; bold = true)
+    printstyled(io, "Test Passed"; bold = true, color=:green)
     if !(t.orig_expr === nothing)
         print(io, "\n  Expression: ", t.orig_expr)
     end
@@ -98,9 +99,9 @@ mutable struct Fail <: Result
     source::LineNumberNode
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(Base.error_color(), io, "Test Failed"; bold = true)
+    printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -134,12 +135,12 @@ mutable struct Error <: Result
 end
 function Base.show(io::IO, t::Error)
     if t.test_type == :test_interrupted
-        print_with_color(Base.error_color(), io, "Interrupted")
+        printstyled(io, "Interrupted", color=Base.error_color())
         return
     end
-    print_with_color(Base.error_color(), io, "Error During Test"; bold = true)
+    printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -177,7 +178,7 @@ mutable struct Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
+    printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
@@ -615,7 +616,7 @@ function Base.show(io::IO, ex::TestSetException)
 end
 
 function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, string(ex))
+    printstyled(io, string(ex), color=Base.error_color())
 end
 
 #-----------------------------------------------------------------------
@@ -633,7 +634,7 @@ struct FallbackTestSetException <: Exception
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
+    printstyled(io, ex.msg, color=Base.error_color())
 end
 
 # Records nothing, and throws an error immediately whenever a Fail or
@@ -672,7 +673,7 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
-        print_with_color(:white, ts.description, ": ")
+        printstyled(ts.description, ": ", color=:white)
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type != :test_interrupted
             print(t)
@@ -731,21 +732,21 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
     pad = total == 0 ? "" : " "
-    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
+    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true, color=:white)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
+        printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
     if fail_width > 0
-        print_with_color(Base.error_color(), lpad("Fail",fail_width," "), "  "; bold = true)
+        printstyled(lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if error_width > 0
-        print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
+        printstyled(lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if broken_width > 0
-        print_with_color(Base.warn_color(), lpad("Broken",broken_width," "), "  "; bold = true)
+        printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
     if total_width > 0
-        print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
+        printstyled(lpad("Total", total_width, " "); bold=true, color=Base.info_color())
     end
     println()
     # Recursively print a summary at every level
@@ -855,7 +856,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     np = passes + c_passes
     if np > 0
-        print_with_color(:green, lpad(string(np), pass_width, " "), "  ")
+        printstyled(lpad(string(np), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
         print(lpad(" ", pass_width), "  ")
@@ -863,7 +864,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(Base.error_color(), lpad(string(nf), fail_width, " "), "  ")
+        printstyled(lpad(string(nf), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -871,7 +872,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(Base.error_color(), lpad(string(ne), error_width, " "), "  ")
+        printstyled(lpad(string(ne), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -879,16 +880,16 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(Base.warn_color(), lpad(string(nb), broken_width, " "), "  ")
+        printstyled(lpad(string(nb), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(Base.info_color(), "No tests")
+        printstyled("No tests", color=Base.info_color())
     else
-        print_with_color(Base.info_color(), lpad(string(subtotal), total_width, " "))
+        printstyled(lpad(string(subtotal), total_width, " "), color=Base.info_color())
     end
     println()
 
@@ -1237,7 +1238,7 @@ macro inferred(ex)
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(Base.gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1497,6 +1498,20 @@ then restoring the state of the global RNG as it was before."
 guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
     srand(seed)
     f()
+end
+
+function _check_bitarray_consistency(B::BitArray{N}) where N
+    n = length(B)
+    if N ≠ 1
+        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
+        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+    end
+    Bc = B.chunks
+    nc = length(Bc)
+    nc == Base.num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(Base.num_bit_chunks(n)) actual=$nc"); return false)
+    n == 0 && return true
+    Bc[end] & Base._msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
+    return true
 end
 
 # 0.7 deprecations

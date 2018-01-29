@@ -161,12 +161,16 @@ for (name, f) in l
             ("αααβγ", "αβ", "αα", "αααβ"),
             ("αααβγ", "ααβ", "α", "αααβ"),
             ("αααβγ", "αγ", "αααβγ", "αααβγ"),
-            ("barbarbarians", "barbarian", "bar", "barbarbarian")]
+            ("barbarbarians", "barbarian", "bar", "barbarbarian"),
+            ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
+            ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
+            ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+           ]
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
-        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
-        @test readuntil(io(t), SubString(s, start(s), endof(s)), keep=true) == kept
+        @test readuntil(io(t), SubString(s, start(s), lastindex(s))) == m
+        @test readuntil(io(t), SubString(s, start(s), lastindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
         @test readuntil(io(t), GenericString(s), keep=true) == kept
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)

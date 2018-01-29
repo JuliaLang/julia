@@ -18,7 +18,8 @@ import .Base:
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
-    getindex, setindex!, get
+    getindex, setindex!, get, popfirst!,
+    peek
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -957,5 +958,106 @@ function next(itr::PartitionIterator, state)
     end
     return resize!(v, i), state
 end
+
+"""
+    Stateful(itr)
+
+There are several different ways to think about this iterator wrapper:
+    1. It provides a mutable wrapper around an iterator and
+       its iteration state.
+    2. It turns an iterator-like abstraction into a Channel-like
+       abstraction.
+    3. It's an iterator that mutates to become its own rest iterator
+       whenever an item is produced.
+
+`Stateful` provides the regular iterator interface. Like other mutable iterators
+(e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+iteration can be resumed from the same spot by continuing to iterate over the
+same iterator object (in contrast, an immutable iterator would restart from the
+beginning).
+
+# Example:
+```jldoctest
+julia> a = Iterators.Stateful("abcdef");
+
+julia> isempty(a)
+false
+
+julia> popfirst!(a)
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> collect(Iterators.take(a, 3))
+3-element Array{Char,1}:
+ 'b'
+ 'c'
+ 'd'
+
+julia> collect(a)
+2-element Array{Char,1}:
+ 'e'
+ 'f'
+```
+
+```jldoctest
+julia> a = Iterators.Stateful([1,1,1,2,3,4]);
+
+julia> for x in a; x == 1 || break; end
+
+julia> Base.peek(a)
+3
+
+# Sum the remaining elements
+julia> sum(a)
+7
+````
+"""
+mutable struct Stateful{T, VS}
+    itr::T
+    # A bit awkward right now, but adapted to the new iteration protocol
+    nextvalstate::Union{VS, Nothing}
+    taken::Int
+    # Try to find an appropriate type for the (value, state tuple),
+    # by doing a recursive unrolling of the iteration protocol up to
+    # fixpoint.
+    function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
+        nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
+        nextvalstate <: Tuple{Any, Any} || return Any
+        nextvalstate = Tuple{
+            typejoin(valT, fieldtype(nextvalstate, 1)),
+            typejoin(stateT, fieldtype(nextvalstate, 2))}
+        return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
+            fixpoint_iter_type(itrT,
+                fieldtype(nextvalstate, 1),
+                fieldtype(nextvalstate, 2)))
+    end
+    function Stateful(itr::T) where {T}
+        state = start(itr)
+        VS = fixpoint_iter_type(T, Union{}, typeof(state))
+        vs = done(itr, state) ? nothing : next(itr, state)::VS
+        new{T, VS}(itr, vs, 0)
+    end
+end
+
+convert(::Type{Stateful}, itr) = Stateful(itr)
+
+isempty(s::Stateful) = s.nextvalstate === nothing
+
+function popfirst!(s::Stateful)
+    isempty(s) && throw(EOFError())
+    val, state = s.nextvalstate
+    s.nextvalstate = done(s.itr, state) ? nothing : next(s.itr, state)
+    s.taken += 1
+    val
+end
+
+peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
+start(s::Stateful) = nothing
+next(s::Stateful, state) = popfirst!(s), nothing
+done(s::Stateful, state) = isempty(s)
+IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
+    isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
+eltype(::Type{Stateful{VS, T}} where VS) where {T} = eltype(T)
+IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
+length(s::Stateful) = length(s.itr) - s.taken
 
 end

@@ -40,6 +40,16 @@ end
     @test_broken promote_type(Union{Nothing, Missing, Int}, Float64) == Any
 end
 
+@testset "promotion in various contexts" for T in (Nothing, Missing)
+    @test collect(v for v in (1, T())) isa Vector{Union{Int,T}}
+    @test map(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test broadcast(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test unique((1, T())) isa Vector{Union{Int,T}}
+
+    @test map(ismissing, Any[1, missing]) isa Vector{Bool}
+    @test broadcast(ismissing, Any[1, missing]) isa BitVector
+end
+
 @testset "comparison operators" begin
     @test (missing == missing) === missing
     @test (1 == missing) === missing

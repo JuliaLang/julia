@@ -49,10 +49,10 @@ function choosetests(choices = [])
         "euler", "show",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "libgit2", "docs",
-        "markdown", "misc", "threads",
+        "misc", "threads",
         "enums", "cmdlineargs", "i18n", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
-        "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
+        "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]

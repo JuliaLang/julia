@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
-using Random, LinearAlgebra
+using Random, LinearAlgebra, Test
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
@@ -9,7 +9,7 @@ tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{
 tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
-bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
+bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
 
 function check_bitop_call(ret_type, func, args...)

@@ -126,7 +126,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, lastindex(itr))
 
 """
     mapfoldr(f, op, itr)
@@ -137,7 +137,7 @@ Specifically, `mapfoldr(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldr(f, op, itr)
-    i = endof(itr)
+    i = lastindex(itr)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end

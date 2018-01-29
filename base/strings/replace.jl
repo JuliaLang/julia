@@ -64,7 +64,7 @@ function gen_pattern(pri::Int, ::Type{<:Pair{String}})
     :(  let j = $(getpr(1, pri)), k = $(getpr(2, pri));
         if j < MAX
             if j < pos
-                k = endof($(getpa(pri)))
+                k = lastindex($(getpa(pri)))
                 if k > 0
                     j = Base._searchindex(cstr, $(getpavec(pri)), pos)
                     if j == 0
@@ -199,7 +199,7 @@ function replace_gen_impl(str::Type{String}, count::Type{Int}, pat_repls...)
             $(setprall(2, n)...)            # next end of match
             cstr = unsafe_wrap(Vector{UInt8}, str)  # vector form of input string
             MAX = typemax(Int)
-            eos = endof(str)
+            eos = lastindex(str)
             pos = 1  # start position for next findnext
             wpos = 1 # start of write out in original string
             # buffer size hint greater than original size - empirical value

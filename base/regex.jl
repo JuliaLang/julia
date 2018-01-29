@@ -267,7 +267,7 @@ matchall(re::Regex, str::SubString; overlap::Bool = false) =
 
 # TODO: return only start index and update deprecation
 function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
-    if idx > nextind(str,endof(str))
+    if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end
     opts = re.match_options
@@ -315,7 +315,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     RBRACKET = '>'
     repl = repl_s.string
     i = start(repl)
-    e = endof(repl)
+    e = lastindex(repl)
     while i <= e
         if repl[i] == SUB_CHAR
             next_i = nextind(repl, i)
@@ -393,7 +393,7 @@ function next(itr::RegexMatchIterator, prev_match)
             offset = prev_match.offset
         end
     else
-        offset = prev_match.offset + endof(prev_match.match)
+        offset = prev_match.offset + lastindex(prev_match.match)
     end
 
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)

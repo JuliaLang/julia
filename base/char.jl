@@ -82,7 +82,8 @@ size(c::Char,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
 ndims(c::Char) = 0
 ndims(::Type{Char}) = 0
 length(c::Char) = 1
-endof(c::Char) = 1
+firstindex(c::Char) = 1
+lastindex(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
 getindex(c::Char, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())

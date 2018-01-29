@@ -13,7 +13,7 @@ Message formatting can be controlled by setting keyword arguments:
 
 * `meta_formatter` is a function which takes the log event metadata
   `(level, _module, group, id, file, line)` and returns a color (as would be
-  passed to print_with_color), prefix and suffix for the log message.  The
+  passed to printstyled), prefix and suffix for the log message.  The
   default is to prefix with the log level and a suffix containing the module,
   file and line location.
 * `show_limited` limits the printing of large data structures to something
@@ -126,7 +126,7 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
                   msglines[end].indent + termlength(msglines[end].msg) +
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
-	justify_width = min(logger.right_justify, dsize[2])
+    justify_width = min(logger.right_justify, dsize[2])
     if nonpadwidth > justify_width && !isempty(suffix)
         push!(msglines, (indent=0,msg=SubString("")))
         minsuffixpad = 0
@@ -137,15 +137,15 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
                  i == 1                ? "┌ " :
                  i < length(msglines)  ? "│ " :
                                          "└ "
-        print_with_color(color, iob, boxstr, bold=true)
+        printstyled(iob, boxstr, bold=true, color=color)
         if i == 1 && !isempty(prefix)
-            print_with_color(color, iob, prefix, " ", bold=true)
+            printstyled(iob, prefix, " ", bold=true, color=color)
         end
         print(iob, " "^indent, msg)
         if i == length(msglines) && !isempty(suffix)
             npad = max(0, justify_width - nonpadwidth) + minsuffixpad
             print(iob, " "^npad)
-            print_with_color(:light_black, iob, suffix)
+            printstyled(iob, suffix, color=:light_black)
         end
         println(iob)
     end

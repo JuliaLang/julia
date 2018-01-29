@@ -990,7 +990,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base._display(IOContext(buf, :displaysize => (rows, 80), :limit => true), A)
+            show(IOContext(buf, :displaysize => (rows, 80), :limit => true), "text/plain", A)
             String(take!(buf))
         end
     end
@@ -1057,7 +1057,7 @@ end
 end
 
 @testset "Methods" begin
-    m = @which sin(1.0)
+    m = which(sin, (Float64,))
     io = IOBuffer()
     show(io, "text/html", m)
     s = String(take!(io))
@@ -1139,4 +1139,3 @@ end
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
 end
-

@@ -453,7 +453,16 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     B = T(A)
 
     # last(a)
-    @test last(B) == B[length(B)]
+    @test last(B) == B[lastindex(B)] == B[end] == A[end]
+    @test lastindex(B) == lastindex(A) == last(linearindices(B))
+    @test lastindex(B, 1) == lastindex(A, 1) == last(axes(B, 1))
+    @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
+
+    # first(a)
+    @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
+    @test firstindex(B) == firstindex(A) == first(linearindices(B))
+    @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
+    @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
@@ -866,4 +875,10 @@ end
 
     @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
+end
+
+@testset "issue #25770" begin
+    @test vcat(1:3, fill(1, (2,1))) == vcat([1:3;], fill(1, (2,1))) == reshape([1,2,3,1,1], 5,1)
+    @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
+    @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end

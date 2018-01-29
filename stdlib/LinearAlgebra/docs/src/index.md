@@ -409,8 +409,6 @@ LinearAlgebra.istril
 LinearAlgebra.istriu
 LinearAlgebra.isdiag
 LinearAlgebra.ishermitian
-LinearAlgebra.RowVector
-LinearAlgebra.ConjArray
 Base.transpose
 LinearAlgebra.transpose!
 Base.adjoint

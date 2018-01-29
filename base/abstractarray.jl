@@ -146,7 +146,7 @@ ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
 Return the number of elements in the collection.
 
-Use [`endof`](@ref) to get the last valid index of an indexable collection.
+Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
 
 # Examples
 ```jldoctest
@@ -165,17 +165,32 @@ _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) #
 _length(A) = (@_inline_meta; length(A))
 
 """
-    endof(collection) -> Integer
+    lastindex(collection) -> Integer
 
 Return the last index of the collection.
 
 # Examples
 ```jldoctest
-julia> endof([1,2,4])
+julia> lastindex([1,2,4])
 3
 ```
 """
-endof(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray, n) = (@_inline_meta; last(axes(a, n)))
+
+"""
+    firstindex(collection) -> Integer
+
+Return the first index of the collection.
+
+# Examples
+```jldoctest
+julia> firstindex([1,2,4])
+1
+```
+"""
+firstindex(a::AbstractArray) = (@_inline_meta; first(linearindices(a)))
+firstindex(a::AbstractArray, n) = (@_inline_meta; first(axes(a, n)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -204,7 +219,7 @@ end
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`endof`](@ref) to get the last index. Return the end
+accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
 point of an `AbstractRange` even if it is empty.
 
 # Examples
@@ -1159,10 +1174,10 @@ function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
     return B
 end
 
-vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat(A::AbstractMatrix{T}...) where {T} = typed_vcat(T, A...)
+vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
+vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
-function typed_vcat(::Type{T}, A::AbstractMatrix...) where T
+function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)

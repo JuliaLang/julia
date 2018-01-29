@@ -820,7 +820,7 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :endof, :start, :keys, :first, :last)
+for f in (:length, :firstindex, :lastindex, :start, :keys, :first, :last)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))

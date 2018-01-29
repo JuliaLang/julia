@@ -233,12 +233,12 @@ The following properties are in common use:
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> print_with_color(:red, IOContext(io, :color => true), "string")
+julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
 julia> String(take!(io))
 "\e[31mstring\e[39m"
 
-julia> print_with_color(:red, io, "string")
+julia> printstyled(io, "string", color=:red)
 
 julia> String(take!(io))
 "string"
@@ -907,7 +907,7 @@ end
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
-    print_with_color(col, io, str; bold = true) :
+    printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
@@ -1509,7 +1509,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        Base.print_with_color(color, io, name, "(...)")
+        Base.printstyled(io, name, "(...)", color=color)
         return
     end
     sig = unwrap_unionall(sig).parameters
@@ -1529,13 +1529,13 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     end
     first = true
     print_style = get(io, :color, false) && get(io, :backtrace, false) ? :bold : :nothing
-    print_with_color(print_style, io, "(")
+    printstyled(io, "(", color=print_style)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print_with_color(print_style, io, ")")
+    printstyled(io, ")", color=print_style)
     nothing
 end
 
@@ -1710,78 +1710,8 @@ function dump(io::IO, x::DataType, n::Int, indent)
     nothing
 end
 
-# dumptype is for displaying abstract type hierarchies,
-# based on Jameson Nash's examples/typetree.jl
-function dumptype(io::IO, @nospecialize(x), n::Int, indent)
-    print(io, x)
-    n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
-    nothing
-end
-
-directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
-directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.b, b)
-# Fallback to handle TypeVar's
-directsubtype(a, b::DataType) = false
-function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
-    for s in names(m, all = true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if t === x || t === m
-                continue
-            elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m
-                # recurse into primary module bindings
-                dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
-                dt = unwrap_unionall(t)
-                println(io)
-                if isa(dt, DataType) && dt.name.wrapper === t
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, dt, n - 1, string(indent, "  "))
-                else
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, "{")
-                    tvar_io::IOContext = io
-                    tp = t
-                    while true
-                        show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
-                        tp = tp.body
-                        if isa(tp, UnionAll)
-                            print(io, ", ")
-                        else
-                            print(io, "} = ")
-                            break
-                        end
-                    end
-                    show(tvar_io, tp)
-                end
-            elseif isa(t, Union) && directsubtype(t::Union, x)
-                println(io)
-                print(io, indent, "  ", m, ".", s, " = ", t)
-            elseif isa(t, DataType) && directsubtype(t::DataType, x)
-                println(io)
-                if t.name.module !== m || t.name.name != s
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, " = ")
-                    show(io, t)
-                else
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, t, n - 1, string(indent, "  "))
-                end
-            end
-        end
-    end
-    nothing
-end
-
-
 const DUMP_DEFAULT_MAXDEPTH = 8
-# For abstract types, use _dumptype only if it's a form that will be called
-# interactively.
+
 dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """

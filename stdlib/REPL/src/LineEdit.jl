@@ -261,10 +261,10 @@ function common_prefix(completions)
     cc, nexti = next(c1, i)
     while true
         for c in completions
-            (i > endof(c) || c[i] != cc) && return ret
+            (i > lastindex(c) || c[i] != cc) && return ret
         end
         ret = string(ret, cc)
-        i >= endof(c1) && return ret
+        i >= lastindex(c1) && return ret
         i = nexti
         cc, nexti = next(c1, i)
     end
@@ -729,7 +729,7 @@ _notspace(c) = c != _space
 
 beginofline(buf, pos=position(buf)) = coalesce(findprev(equalto(_newline), buf.data, pos), 0)
 
-function endofline(buf, pos=position(buf))
+function lastindexline(buf, pos=position(buf))
     eol = findnext(equalto(_newline), buf.data[pos+1:buf.size], 1)
     eol === nothing ? buf.size : pos + eol - 1
 end
@@ -870,7 +870,7 @@ function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=
         push!(s.kill_ring, killed)
         length(s.kill_ring) > options(s).kill_ring_max && popfirst!(s.kill_ring)
     end
-    s.kill_idx = endof(s.kill_ring)
+    s.kill_idx = lastindex(s.kill_ring)
     true
 end
 
@@ -884,7 +884,7 @@ function edit_kill_line(s::MIState, backwards::Bool=false)
     else
         set_action!(s, :edit_kill_line_forwards)
         pos = position(buf)
-        endpos = endofline(buf)
+        endpos = lastindexline(buf)
         endpos == pos && buf.size > pos && (endpos += 1)
     end
     push_undo(s)
@@ -978,7 +978,7 @@ function edit_transpose_lines_up!(buf::IOBuffer, reg::Region)
     line1 = edit_splice!(buf, b1 => b2) # delete whole previous line
     line1 = '\n'*line1[1:end-1] # don't include the final '\n'
     pos = position(buf) # save pos in case it's at the end of line
-    b = endofline(buf, last(reg) - b2 + b1) # b2-b1 is the size of the removed line1
+    b = lastindexline(buf, last(reg) - b2 + b1) # b2-b1 is the size of the removed line1
     edit_splice!(buf, b => b, line1)
     seek(buf, pos)
     true
@@ -986,9 +986,9 @@ end
 
 # swap all lines intersecting the region with line below
 function edit_transpose_lines_down!(buf::IOBuffer, reg::Region)
-    e1 = endofline(buf, last(reg))
+    e1 = lastindexline(buf, last(reg))
     e1 == buf.size && return false
-    e2 = endofline(buf, e1+1)
+    e2 = lastindexline(buf, e1+1)
     line2 = edit_splice!(buf, e1 => e2) # delete whole next line
     line2 = line2[2:end]*'\n' # don't include leading '\n'
     b = beginofline(buf, first(reg))
@@ -1096,7 +1096,7 @@ function get_lines_in_region(s)::Vector{Int}
     b, e = region(buf)
     bol = Int[beginofline(buf, b)] # begin of lines
     while true
-        b = endofline(buf, b)
+        b = lastindexline(buf, b)
         b >= e && break
         # b < e ==> b+1 <= e <= buf.size
         push!(bol, b += 1)

@@ -48,6 +48,7 @@ Fully implemented by:
   * `AbstractString`
   * [`Set`](@ref)
   * [`Pair`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## General Collections
 
@@ -70,6 +71,7 @@ Fully implemented by:
   * [`WeakKeyDict`](@ref)
   * `AbstractString`
   * [`Set`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Iterable Collections
 
@@ -143,7 +145,8 @@ Base.replace!
 ```@docs
 Base.getindex
 Base.setindex!
-Base.endof
+Base.firstindex
+Base.lastindex
 ```
 
 Fully implemented by:
@@ -162,6 +165,7 @@ Partially implemented by:
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Dictionaries
 

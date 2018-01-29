@@ -9,7 +9,6 @@ export
     Sys,
     Libc,
     Docs,
-    Markdown,
     Threads,
     Iterators,
     Broadcast,
@@ -505,6 +504,7 @@ export
     allunique,
     any!,
     any,
+    firstindex,
     collect,
     count,
     delete!,
@@ -512,7 +512,7 @@ export
     eltype,
     empty!,
     empty,
-    endof,
+    lastindex,
     filter!,
     filter,
     foldl,
@@ -615,8 +615,8 @@ export
     prevind,
     print,
     print_shortest,
-    print_with_color,
     println,
+    printstyled,
     repeat,
     replace,
     replace!,
@@ -761,7 +761,6 @@ export
     promote,
     promote_rule,
     promote_type,
-    subtypes,
     instances,
     supertype,
     typeintersect,
@@ -777,26 +776,17 @@ export
     parse,
 
 # help and reflection
-    apropos,
-    edit,
     code_typed,
-    code_warntype,
     code_lowered,
-    code_llvm,
-    code_native,
     fullname,
     functionloc,
     isconst,
     isinteractive,
-    less,
     hasmethod,
     methods,
-    methodswith,
     nameof,
     parentmodule,
     names,
-    varinfo,
-    versioninfo,
     which,
     @isdefined,
 
@@ -818,7 +808,6 @@ export
     clipboard,
     exit,
     ntuple,
-    quit,
 
 # IP address stuff
     @ip_str,
@@ -1022,7 +1011,6 @@ export
     @text_str,
     @html_str,
     @doc,
-    @doc_str,
 
     # output
     @show,
@@ -1033,17 +1021,6 @@ export
     @timev,
     @elapsed,
     @allocated,
-
-    # reflection
-    @which,
-    @edit,
-    @functionloc,
-    @less,
-    @code_typed,
-    @code_warntype,
-    @code_lowered,
-    @code_llvm,
-    @code_native,
 
     # tasks
     @schedule,

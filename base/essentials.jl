@@ -525,7 +525,8 @@ function length(v::SimpleVector)
     @_gc_preserve_end t
     return l
 end
-endof(v::SimpleVector) = length(v)
+firstindex(v::SimpleVector) = 1
+lastindex(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
@@ -764,3 +765,7 @@ Indicate whether `x` is [`missing`](@ref).
 """
 ismissing(::Any) = false
 ismissing(::Missing) = true
+
+function popfirst! end
+function peek end
+

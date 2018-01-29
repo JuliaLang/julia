@@ -203,10 +203,6 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
     return i == 1 ? getfield(p, p.openstream) : p
 end
 
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
-
 # also remove all support machinery in src for current_module when removing this deprecation
 # and make Base.include an error
 _current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
@@ -744,14 +740,6 @@ Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getinde
     nothing
 end
 
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
-
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
     depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
@@ -1023,8 +1011,8 @@ function info(io::IO, msg...; prefix="INFO: ")
     depwarn("`info()` is deprecated, use `@info` instead.", :info)
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_info_to, :info)
-    print_with_color(info_color(), iob, prefix; bold = true)
-    println_with_color(info_color(), iob, chomp(string(msg...)))
+    printstyled(iob, prefix; bold=true, color=info_color())
+    printstyled(iob, chomp(string(msg...)), '\n', color=info_color())
     print(io, String(take!(buf)))
     return
 end
@@ -1061,8 +1049,8 @@ function warn(io::IO, msg...;
     end
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_warn_to, :warn)
-    print_with_color(warn_color(), iob, prefix; bold = true)
-    print_with_color(warn_color(), iob, str)
+    printstyled(iob, prefix; bold=true, color=warn_color())
+    printstyled(iob, str, color=warn_color())
     if bt !== nothing
         show_backtrace(iob, bt)
     end
@@ -1298,9 +1286,9 @@ end
 @deprecate rsearch(s::AbstractString, r::Regex) findlast(r, s)
 @deprecate rsearch(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 @deprecate rsearch(s::AbstractString, c::Char) findlast(equalto(c), s)
-@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(b), a, i)
-@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(Char(b)), a, i)
-@deprecate rsearch(a::ByteArray, b::Char, i::Integer = endof(a)) findprev(equalto(UInt8(b)), a, i)
+@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(b), a, i)
+@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(Char(b)), a, i)
+@deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) findprev(equalto(UInt8(b)), a, i)
 
 @deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
 @deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
@@ -1377,20 +1365,32 @@ export readandwrite
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
+@deprecate quit() exit()
+
 # PR #25654
 @deprecate indmin argmin
 @deprecate indmax argmax
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
+
+# PR 25458
+@deprecate endof(a) lastindex(a)
+function firstindex(a)
+    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :beginof)
+    1
+end
+
+# PR 25763
+function lastindex(a, n)
+    depwarn("if appropriate you should implement `lastindex(a, n)` for type $(typeof(a))`, which might just return `last(axes(a, n))`", :lastindex)
+    last(axes(a, n))
+end
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
 @deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
 @deprecate chop(s, head) chop(s, head = head)
@@ -1402,6 +1402,10 @@ export readandwrite
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
+
+@deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
+
+@deprecate which(s::Symbol) which(Main, s)
 
 # END 0.7 deprecations
 

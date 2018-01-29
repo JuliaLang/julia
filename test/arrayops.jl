@@ -1222,6 +1222,9 @@ end
     @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
     @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
+    @test [s for s in Union{String, Nothing}["a", nothing]] isa Vector{Union{String, Nothing}}
+    @test [s for s in Union{String, Missing}["a", missing]] isa Vector{Union{String, Missing}}
+
     @testset "comprehension in let-bound function" begin
         let x⊙y = sum([x[i]*y[i] for i=1:length(x)])
             @test [1,2] ⊙ [3,4] == 11
@@ -1393,13 +1396,14 @@ function i7197()
 end
 @test i7197() == (2,2)
 
-# PR #8622 and general indexin test
-function pr8622()
-    x=[1,3,5,7]
-    y=[5,4,3]
-    return indexin(x,y)
-end
-@test pr8622() == [0,3,1,0]
+# PR #8622 and general indexin tests
+@test indexin([1,3,5,7], [5,4,3]) == [nothing,3,1,nothing]
+@test indexin([1 3; 5 7], [5 4; 3 2]) == [nothing CartesianIndex(2, 1); CartesianIndex(1, 1) nothing]
+@test indexin((2 * x + 1 for x in 0:3), [5,4,3,5,6]) == [nothing,3,4,nothing]
+@test indexin(6, [1,3,6,6,2]) == fill(4, ())
+@test indexin([6], [1,3,6,6,2]) == [4]
+@test indexin([3], 2:5) == [2]
+@test indexin([3.0], 2:5) == [2]
 
 #6828 - size of specific dimensions
 let a = Array{Float64}(uninitialized, 10)
@@ -2282,4 +2286,16 @@ end
 
 @testset "inference hash array 22740" begin
     @inferred hash([1,2,3])
+end
+
+@testset "indices-related shape promotion errors" begin
+    @test_throws DimensionMismatch Base.promote_shape((2,), (3,))
+    @test_throws DimensionMismatch Base.promote_shape((2, 3), (2, 4))
+    @test_throws DimensionMismatch Base.promote_shape((3, 2), (2, 2))
+    inds_a = Base.Indices{2}([1:3, 1:2])
+    inds_b = Base.Indices{2}([1:3, 1:6])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    inds_a = Base.Indices{2}([1:3, 1:2])
+    inds_b = Base.Indices{2}([1:4, 1:2])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
 end
