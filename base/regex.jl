@@ -200,7 +200,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
-match(r::Regex, s::AbstractString) = match(r, s, start(s))
+match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
@@ -278,7 +278,7 @@ end
 findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
-findfirst(r::Regex, s::AbstractString) = findnext(r,s,start(s))
+findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
@@ -314,7 +314,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
     repl = repl_s.string
-    i = start(repl)
+    i = firstindex(repl)
     e = lastindex(repl)
     while i <= e
         if repl[i] == SUB_CHAR
