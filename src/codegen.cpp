@@ -1093,7 +1093,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         else if (!src) {
             // If the caller didn't provide the source,
             // try to infer it for ourself, but first, re-check if it's already compiled.
-            assert(li->min_world <= world && li->max_world >= world);
+            // assert(li->min_world <= world && li->max_world >= world); TODO: Re-enable at some point
             if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == JL_API_CONST)
                 goto locked_out;
 
