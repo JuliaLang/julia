@@ -75,7 +75,7 @@ for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32,
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, start(s), lastindex(s), 0, true))
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 

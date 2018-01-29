@@ -8,7 +8,7 @@ using Random
 
     @test isempty(string())
     @test eltype(GenericString) == Char
-    @test start("abc") == 1
+    @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
     @test "abc" === "abc"
     @test "ab"  !== "abc"

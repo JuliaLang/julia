@@ -93,11 +93,11 @@ julia> chop(a, head = 5, tail = 5)
 ```
 """
 function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
-    SubString(s, nextind(s, start(s), head), prevind(s, lastindex(s), tail))
+    SubString(s, nextind(s, firstindex(s), head), prevind(s, lastindex(s), tail))
 end
 
 # TODO: optimization for the default case based on
-# chop(s::AbstractString) = SubString(s, start(s), prevind(s, lastindex(s)))
+# chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
     chomp(s::AbstractString)
@@ -402,7 +402,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
     e = lastindex(str)
-    i = a = start(str)
+    i = a = firstindex(str)
     r = coalesce(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
