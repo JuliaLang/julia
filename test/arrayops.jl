@@ -2287,3 +2287,15 @@ end
 @testset "inference hash array 22740" begin
     @inferred hash([1,2,3])
 end
+
+@testset "indices-related shape promotion errors" begin
+    @test_throws DimensionMismatch Base.promote_shape((2,), (3,))
+    @test_throws DimensionMismatch Base.promote_shape((2, 3), (2, 4))
+    @test_throws DimensionMismatch Base.promote_shape((3, 2), (2, 2))
+    inds_a = Base.Indices{2}([1:3, 1:2])
+    inds_b = Base.Indices{2}([1:3, 1:6])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    inds_a = Base.Indices{2}([1:3, 1:2])
+    inds_b = Base.Indices{2}([1:4, 1:2])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+end
