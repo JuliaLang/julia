@@ -247,7 +247,8 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
             if (ad->name != bd->name)
                 return 1;
             int istuple = (ad->name == jl_tuple_typename);
-            if (jl_is_concrete_type(a) || jl_is_concrete_type(b)) {
+            if ((jl_is_concrete_type(a) || jl_is_concrete_type(b)) &&
+                jl_type_equality_is_identity(a, b)) {
                 if (!istuple && ad->name != jl_type_typename) // HACK: can't properly normalize Tuple{Float64} == Tuple{<:Float64} like types or Type{T} types
                     return 1;
             }
