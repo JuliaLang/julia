@@ -911,7 +911,7 @@ float(x::FloatWrapper) = x
 <=(x::FloatWrapper, y::FloatWrapper) = (x.x <= y.x)
 ≈(x::FloatWrapper, y::FloatWrapper) = (x.x ≈ y.x)
 
-Base.rtoldefault(::Type{FloatWrapper}) where {T<:AbstractFloat} = Base.rtoldefault(Float64)
+Base.rtoldefault(::Type{FloatWrapper})  = Base.rtoldefault(Float64)
 
 @testset "f(a+ib) for a, b that are not AbstractFloats; #25292" begin
 

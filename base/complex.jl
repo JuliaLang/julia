@@ -872,7 +872,7 @@ function cosh(z::Complex)
     cos(Complex(zi,-zr))
 end
 
-function tanh(z::Complex{<:AbstractFloat})
+function tanh(z::Complex{T}) where {T<:AbstractFloat}
     Ω = prevfloat(typemax(T))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
