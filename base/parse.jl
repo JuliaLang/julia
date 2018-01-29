@@ -256,8 +256,15 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     sign, i = parsefloat_preamble(s, base)
 
     if !done(s, i+2)
-        lowercase(s[i:i+2]) == "nan" && return T(NaN)
-        lowercase(s[i:i+2]) == "inf" && return sign*T(Inf)
+        nan = [false, false, false]
+        inf = [false, false, false]
+        for j in 1:3
+            c, _ = next(s, i+j-1)
+            nan[j] = lowercase(c) == "nan"[j]
+            inf[j] = lowercase(c) == "inf"[j]
+        end
+        all(nan) && return T(NaN)
+        all(inf) && return sign*T(Inf)
     end
 
     baseunder16 = base < 16
@@ -272,10 +279,10 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
             break
         end
         tmp = parse(Int, c, base=base)
-        
+
         res = res * b + tmp
     end
-    
+
     n = 0
     while !done(s, i)
         n -= 1
@@ -283,10 +290,10 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         isspace(c) && break
         baseunder16 && c == 'e' && break
         tmp = parse(Int, c, base=base)
-        
+
         res += tmp * b^n
     end
-    
+
     expsign = 1
     exponent = 0
     while baseunder16 && !done(s, i)
