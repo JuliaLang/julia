@@ -2127,35 +2127,38 @@ argmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Return a vector containing the highest index in `b` for
-each value in `a` that is a member of `b` . The output
-vector contains 0 wherever `a` is not a member of `b`.
+Return an array containing the highest index in `b` for
+each value in `a` that is a member of `b`. The output
+array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
 
-julia> b = ['a','b','c'];
+julia> b = ['a', 'b', 'c']
 
-julia> indexin(a,b)
-6-element Array{Int64,1}:
+julia> indexin(a, b)
+6-element Array{Union{Nothing, Int64},1}:
  1
  2
  3
  2
- 0
+  nothing
  1
 
-julia> indexin(b,a)
-3-element Array{Int64,1}:
+julia> indexin(b, a)
+3-element Array{Union{Nothing, Int64},1}:
  6
  4
  3
 ```
 """
-function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(zip(b, 1:length(b)))
-    [get(bdict, i, 0) for i in a]
+function indexin(a, b::AbstractArray)
+    indexes = keys(b)
+    bdict = Dict(zip(b, indexes))
+    return Union{eltype(indexes), Nothing}[
+        get(bdict, i, nothing) for i in a
+    ]
 end
 
 function _findin(a, b)
