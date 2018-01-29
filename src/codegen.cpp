@@ -5048,6 +5048,10 @@ static std::unique_ptr<Module> emit_function(
     }
 #endif
 
+    if (jl_has_meta(stmts, noinline_sym)) {
+        f->addFnAttr(Attribute::NoInline);
+    }
+
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif

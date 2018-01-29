@@ -241,7 +241,7 @@ peekmeta(body, sym) = _getmeta(body, sym, false)
 
 function _getmeta(body::Expr, sym::Symbol, delete::Bool)
     body.head == :block || return false, []
-    _getmeta(body.args, sym; delete=delete)
+    _getmeta(body.args, sym, delete)
 end
 _getmeta(arg, sym, delete::Bool) = (false, [])
 function _getmeta(body::Array{Any,1}, sym::Symbol, delete::Bool)
