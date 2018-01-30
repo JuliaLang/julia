@@ -1064,8 +1064,8 @@ end
 # 0.7.0-DEV.3017
 @test isa(Some(1), Some{Int})
 @test convert(Some{Float64}, Some(1)) == Some(1.0)
-@test convert(Void, nothing) == nothing
-@test_throws MethodError convert(Void, 1)
+@test convert(Nothing, nothing) == nothing
+@test_throws MethodError convert(Nothing, 1)
 @test Some(nothing) != nothing
 @test coalesce(Some(1)) == 1
 @test coalesce(nothing) == nothing
