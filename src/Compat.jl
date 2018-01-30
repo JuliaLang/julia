@@ -1485,6 +1485,12 @@ end
     export GC
 end
 
+if VERSION < v"0.7.0-DEV.2954"
+    const Distributed = Base.Distributed
+else
+    import Distributed
+end
+
 include("deprecated.jl")
 
 end # module Compat

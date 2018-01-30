@@ -125,6 +125,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Serialization` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#25628]).
 
+* `using Compat.Distributed` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#24443]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -474,6 +477,7 @@ includes this fix. Find the minimum version from there.
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24361]: https://github.com/JuliaLang/julia/issues/24361
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
+[#24443]: https://github.com/JuliaLang/julia/issues/24443
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24490]: https://github.com/JuliaLang/julia/issues/24490
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
