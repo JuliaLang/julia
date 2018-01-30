@@ -57,3 +57,32 @@ struct RangeStepRegular   <: RangeStepStyle end # range with regular step
 struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
 
 RangeStepStyle(instance) = RangeStepStyle(typeof(instance))
+
+# trait for diff-based hashing, O(1) for ranges with regular step
+"""
+    ArrayHashingStyle(instance)
+    ArrayHashingStyle(T::Type)
+
+Indicate whether an instance or a type supports hashing an `AbstractArray`
+by computing the difference between subsequent elements (`ArrayHashingDiff`)
+or not (`ArrayHashingDefault`). This allows [`hash](@ref) to use an O(1)
+hashing algorithm for [`RangeStepRegular`](@ref RangeStepStyle) ranges,
+but requires `T` to implement [`widen`](@ref) in order to compute
+the difference without any risk of overflow (only needed for hashing
+heterogeneous arrays).
+
+Note that all types `S` and `T` for which `isequal(::S, ::T)` can return `true`
+are required to use the same `ArrayHashingStyle`: else, equal arrays containing
+such elements would not hash to the same value.
+
+By default, only `Number` types are assumed to be `ArrayHashingDiff`, and
+therefore need to implement `widen` to support arrays hashing in all cases.
+"""
+abstract type ArrayHashingStyle end
+struct ArrayHashingDefault <: RangeStepStyle end # range with regular step
+struct ArrayHashingDiff    <: RangeStepStyle end # range with rounding error
+
+ArrayHashingStyle(instance) = ArrayHashingStyle(typeof(instance))
+
+ArrayHashingStyle(::Type{<:Number}) = ArrayHashingDiff()
+ArrayHashingStyle(::Type) = ArrayHashingDefault()
