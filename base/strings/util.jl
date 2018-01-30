@@ -390,6 +390,8 @@ end
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
+_replace(io, repl::Function, str, r, pattern::Function) =
+    print(io, repl(getindex(str, first(r))))
 
 replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
     replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
@@ -438,8 +440,11 @@ end
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
-or a regular expression. If `r`
+or a regular expression.
+If `pat` is a `Regex` or `AbstractString` and `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
+If `pat` is a `Char`, a collection of `Char` or a predicate function and `r`
+is a function, each occurrence is replaced with `r(s)` where `s` is the matched character.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).

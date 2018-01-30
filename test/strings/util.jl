@@ -261,6 +261,15 @@ end
 
     # Issue 25741
     @test replace("abc", ['a', 'd'] => 'A') == "Abc"
+
+    # for Char pattern call Char replacement function
+    @test replace("a", "a" => sizeof) == "1"
+    @test replace("a", r"a" => sizeof) == "1"
+    @test replace("a", 'a' => sizeof) == "4"
+    @test replace("a", occursin("a") => sizeof) == "4"
+    @test replace("a", ['a'] => sizeof) == "4"
+
+
 end
 
 @testset "chomp/chop" begin
