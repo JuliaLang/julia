@@ -97,6 +97,8 @@ Dates.dayofquarter
 
 ```@docs
 Base.trunc(::Dates.TimeType, ::Type{Dates.Period})
+Base.replace(::Dates.TimeType, ::Dates.Period)
+Base.replace(::Dates.DateTime, ::Dates.Time)
 Dates.firstdayofweek
 Dates.lastdayofweek
 Dates.firstdayofmonth

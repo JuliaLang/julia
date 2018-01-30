@@ -33,6 +33,42 @@ julia> trunc(Dates.DateTime("1996-01-01T12:30:00"), Dates.Day)
 """
 Dates.trunc(::Dates.TimeType, ::Type{Dates.Period})
 
+
+"""
+    replace(dt::TimeType, p::Period) -> TimeType
+
+Replaces the `Period` field of the `dt` with the value of `p`.
+
+# Examples
+```jldoctest
+julia> replace(Dates.DateTime("1996-09-02T12:04:00"), Dates.Month(3))
+1996-03-02T12:04:00
+```
+"""
+function Base.replace(dt::TimeType, p::P) where P <: Period
+    dt = dt + (p - P(dt))
+    P(dt) == p || throw(ArgumentError("$(nameof(P)): $(value(p)) out of range"))
+    return dt
+end
+
+"""
+    replace(dt::DateTime, t::Time) -> DateTime
+
+Replaces the time of the `dt` with the time of `t`.
+
+# Examples
+```jldoctest
+julia> replace(Dates.DateTime("1996-09-02T12:04:00"), Time(11, 30))
+1996-09-02T11:30:00
+```
+"""
+function Base.replace(dt::DateTime, t::Time)
+    dt = dt + (t - Time(dt))
+    Time(dt) == t || throw(ArgumentError("Time contains sub-millisecond fields which cannot be represented in a DateTime"))
+    return dt
+end
+
+
 # Adjusters
 """
     firstdayofweek(dt::TimeType) -> TimeType

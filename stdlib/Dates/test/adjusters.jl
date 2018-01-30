@@ -27,6 +27,44 @@ using Dates
     @test trunc(t, Dates.Nanosecond) == Dates.Time(1, 2, 3, 4, 5, 6)
 end
 
+@testset "replace" begin
+    @testset "periods" begin
+        dt = Dates.Date(2012, 12, 21)
+        @test replace(dt, Dates.Year(1000)) == Dates.Date(1000, 12, 21)
+        @test replace(dt, Dates.Month(4)) == Dates.Date(2012, 4, 21)
+        @test replace(dt, Dates.Day(25)) == Dates.Date(2012, 12, 25)
+        dt = Dates.DateTime(2012, 12, 21, 16, 30, 20, 200)
+        @test replace(dt, Dates.Year(-1000)) == Dates.DateTime(-1000, 12, 21, 16, 30, 20, 200)
+        @test replace(dt, Dates.Month(3)) == Dates.DateTime(2012, 3, 21, 16, 30, 20, 200)
+        @test replace(dt, Dates.Day(6)) == Dates.DateTime(2012, 12, 6, 16, 30, 20, 200)
+        @test replace(dt, Dates.Hour(0)) == Dates.DateTime(2012, 12, 21, 0, 30, 20, 200)
+        @test replace(dt, Dates.Minute(15)) == Dates.DateTime(2012, 12, 21, 16, 15, 20, 200)
+        @test replace(dt, Dates.Second(59)) == Dates.DateTime(2012, 12, 21, 16, 30, 59, 200)
+        @test replace(dt, Dates.Millisecond(999)) == Dates.DateTime(2012, 12, 21, 16, 30, 20, 999)
+    end
+
+    @testset "time" begin
+        dt = Dates.DateTime(2012, 12, 21, 16, 30, 20, 200)
+        @test replace(dt, Dates.Time(11, 30, 43, 667)) == Dates.DateTime(2012, 12, 21, 11, 30, 43, 667)
+    end
+
+    @testset "out of range" begin
+        dt = Dates.Date(2012, 12, 21)
+        @test_throws ArgumentError replace(dt, Dates.Month(0))
+        @test_throws ArgumentError replace(dt, Dates.Day(32))
+        dt = Dates.DateTime(2012, 12, 21, 16, 30, 20, 200)
+        @test_throws ArgumentError replace(dt, Dates.Month(13))
+        @test_throws ArgumentError replace(dt, Dates.Day(32))
+        @test_throws ArgumentError replace(dt, Dates.Hour(24))
+        @test_throws ArgumentError replace(dt, Dates.Minute(60))
+        @test_throws ArgumentError replace(dt, Dates.Second(60))
+        @test_throws ArgumentError replace(dt, Dates.Millisecond(1000))
+        @test_throws ArgumentError replace(dt, Dates.Time(1, 2, 3, 4, 5))
+
+        @test_throws MethodError replace(dt, Dates.Nanosecond(999))
+    end
+end
+
 Jan = Dates.DateTime(2013, 1, 1) #Tuesday
 Feb = Dates.DateTime(2013, 2, 2) #Saturday
 Mar = Dates.DateTime(2013, 3, 3) #Sunday
