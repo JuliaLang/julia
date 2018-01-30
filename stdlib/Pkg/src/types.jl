@@ -2,6 +2,8 @@
 
 module Types
 
+import Pkg
+
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies,
        ResolveBacktraceItem, ResolveBacktrace
 import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal, push!
