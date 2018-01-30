@@ -21,6 +21,12 @@ integers are promoted to `Int`/`UInt`.
 add_sum(x,y) = x + y
 add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
 add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(X::AbstractArray,Y::AbstractArray) = (promote_shape(X,Y); broadcast(add_sum, X, Y))
+
+add_sum(x) = +(x)
+add_sum(x::SmallSigned) = Int(x)
+add_sum(x::SmallUnsigned) = UInt(x)
+add_sum(X::AbstractArray) = broadcast(add_sum, X)
 
 """
     Base.mul_prod(x,y)
@@ -31,6 +37,10 @@ integers are promoted to `Int`/`UInt`.
 mul_prod(x,y) = x * y
 mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
 mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+
+mul_prod(x) = *(x)
+mul_prod(x::SmallSigned) = Int(x)
+mul_prod(x::SmallUnsigned) = UInt(x)
 
 ## foldl && mapfoldl
 
@@ -301,20 +311,21 @@ The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
 `x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
 
-The default is `x` for most types. The main purpose is to ensure type stability, so
+The default is `x` for most operators. The main purpose is to ensure type stability, so
 additional methods should only be defined for cases where `op` gives a result with
 different types than its inputs.
 """
 reduce_first(op, x) = x
-reduce_first(::typeof(+), x::Bool) = Int(x)
-reduce_first(::typeof(*), x::Char) = string(x)
 
-reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
-reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+# for existing operators we can use unary forms which already handle promotion correctly
+reduce_first(::typeof(+), x) = +(x)
+reduce_first(::typeof(*), x) = *(x)
+reduce_first(::typeof(add_sum), x) = add_sum(x)
+reduce_first(::typeof(mul_prod), x) = mul_prod(x)
+
+# called by accumulate, which uses `uninitialized` as a sentinel value
+reduce_first(op, v0, x) = op(v0,x)
+reduce_first(op, ::Uninitialized, x) = reduce_first(op, x)
 
 """
     Base.mapreduce_first(f, op, x)

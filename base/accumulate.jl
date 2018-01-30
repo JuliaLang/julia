@@ -38,83 +38,367 @@ function next(acc::Accumulate, accstate)
     @_inline_meta
     itrstate, accval = accstate
     val, itrstate = next(acc.iter, itrstate)
-    if accval === uninitialized
-        accval = reduce_first(acc.op, val)
-        return accval, (itrstate, accval)
+
+    accval2 = reduce_first(acc.op, accval, val)
+    return accval2, (itrstate, accval2)
+end
+
+
+"""
+    accumulate(op[, v0], itr)
+
+Cumulative apply binary operation `op` on an iterable `itr`. If an initial `v0` value is
+provided, then the first value of the iterator will be
+
+    op(v0, first(iter))
+
+Otherwise it will use
+
+    Base.reduce_first(op, first(iter))
+
+See also: [`accumulate!`](@ref) to use a preallocated output array, and [`cumsum`](@ref),
+[`cumprod`](@ref) for specialized versions.
+
+# Examples
+```jldoctest
+julia> accumulate(+, [1,2,3])
+3-element Array{Int64,1}:
+ 1
+ 3
+ 6
+
+julia> accumulate(*, [1,2,3])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+
+julia> accumulate(+, 100, [1,2,3])
+3-element Array{Int64,1}:
+ 101
+ 103
+ 106
+
+julia> accumulate(min, 0, [1,2,-1])
+3-element Array{Int64,1}:
+  0
+  0
+ -1
+```
+"""
+accumulate(op, itr) = accumulate(op, uninitialized, itr)
+accumulate(op, v0, itr) = accumulate(op, v0, itr, IteratorSize(itr))
+accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}) =
+    collect(Accumulate(op, v0, itr))
+
+
+"""
+    accumulate!(dest, op[, v0] itr)
+
+Cumulative operation `op` on an iterator `itr`, storing the result in `dest`.
+See also [`accumulate`](@ref).
+
+# Examples
+``jldoctest
+julia> x = [1, 0, 2, 0, 3];
+
+julia> y = [0, 0, 0, 0, 0];
+
+julia> accumulate!(+, y, x);
+
+julia> y
+5-element Array{Int64,1}:
+ 1
+ 1
+ 3
+ 3
+ 6
+```
+"""
+accumulate!(dest, op, x) = accumulate!(dest, op, uninitialized, x)
+function accumulate!(dest, op, v0, x)
+    length(dest) == length(x) || throw(DimensionMismatch("input and output array sizes and indices must match"))
+    copyto!(dest, Accumulate(op, v0, x))
+end
+
+
+"""
+    accumulate(op[, v0], A, dim::Integer)
+
+Cumulative operation `op` along the dimension `dim`. See also
+[`accumulate!`](@ref) to use a preallocated output array. For common operations
+there are specialized variants of `accumulate`, see:
+[`cumsum`](@ref), [`cumprod`](@ref)
+
+# Examples
+```jldoctest
+julia> accumulate(+, fill(1, 3, 3), 1)
+3×3 Array{Int64,2}:
+ 1  1  1
+ 2  2  2
+ 3  3  3
+
+julia> accumulate(+, fill(1, 3, 3), 2)
+3×3 Array{Int64,2}:
+ 1  2  3
+ 1  2  3
+ 1  2  3
+```
+"""
+accumulate(op, X, dim::Int) = accumulate(op, uninitialized, X, dim)
+
+# split into (head, slice, tail) dimension iterators
+@inline function split_dimensions(X,dim::Integer)
+    inds = axes(X)
+    if dim > length(inds)
+        (CartesianIndices(inds), CartesianIndices(), CartesianIndices())
     else
-        accval = acc.op(accval, val)
-        return accval, (itrstate, accval)
+        (CartesianIndices(inds[1:dim-1]), inds[dim], CartesianIndices(inds[dim+1:end]))
     end
 end
 
-accumulate(op, itr) = collect(Accumulate(op, itr))
-accumulate(op, v0, itr) = collect(Accumulate(op, v0, itr))
+function accumulate(op, v0, X, dim::Integer)
+    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
+    if length(X) == 0
+        # fallback on collect machinery
+        return collect(Accumulate(op, v0, X))
+    end
+    indH, indD, indT = split_dimensions(X,dim)
+
+    # TODO: this could be much nicer with the new iteration protocol
+    # unroll loops to get first element
+    sH = start(indH)
+    @assert !done(indH, sH)
+    iH,sH = next(indH, sH)
+
+    sD = start(indD)
+    @assert !done(indD, sD)
+    iD,sD = next(indD, sD)
+    pD = iD
+
+    sT = start(indT)
+    @assert !done(indT, sT)
+    iT,sT = next(indT, sT)
+
+    # first element
+    accv = reduce_first(op, v0, X[iH, iD, iT])
+    dest = similar(X, typeof(accv))
+    i = first(linearindices(dest))
+    dest[i] = accv
+
+    return _accumulate!(dest, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+end
 
 
-# TODO
-# below was copied directly from old code in multidimensional.jl
+"""
+    accumulate!(dest, op, A, dim::Integer)
 
-# see discussion in #18364 ... we try not to widen type of the resulting array
-# from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
-rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
-rcum_promote_type(op, ::Type{T}) where {T} = T
+Cumulative operation `op` on `A` along the dimension `dim`, storing the result in `B`.
+See also [`accumulate`](@ref).
 
-# handle sums of Vector{Bool} and similar.   it would be nice to handle
-# any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
 
-# accumulate_pairwise slightly slower then accumulate, but more numerically
-# stable in certain situations (e.g. sums).
-# it does double the number of operations compared to accumulate,
-# though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
-    @inbounds if n < 128
-        s_ = v[i1]
-        c[i1] = op(s, s_)
-        for i = i1+1:i1+n-1
-            s_ = op(s_, v[i])
-            c[i] = op(s, s_)
+julia> B = [0 0; 0 0];
+
+julia> accumulate!(-, B, A, 1);
+
+julia> B
+2×2 Array{Int64,2}:
+  1   2
+ -2  -2
+
+julia> accumulate!(-, B, A, 2);
+
+julia> B
+2×2 Array{Int64,2}:
+ 1  -1
+ 3  -1
+```
+"""
+accumulate!(dest, op, X, dim::Integer) = accumulate!(dest, op, uninitialized, X, dim::Integer)
+
+function accumulate!(dest, op, v0, X, dim::Integer)
+    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
+    axes(A) == axes(B) || throw(DimensionMismatch("shape of source and destination must match"))
+    indH, indD, indT = split_dimensions(X,dim)
+
+    sH = start(indH)
+    @assert !done(indH, sH)
+    iH,sH = next(indH, sH)
+
+    sD = start(indD)
+    @assert !done(indD, sD)
+    iD,sD = next(indD, sD)
+    pD = iD
+
+    sT = start(indT)
+    @assert !done(indT, sT)
+    iT,sT = next(indT, sT)
+
+    return _accumulate!(dest, first(linearindices(dest))-1, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
+end
+
+function _accumulate!(dest::AbstractArray{T}, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {T}
+    while true
+        if done(indH,sH)
+            if done(indD, sD)
+                if done(indT,sT)
+                    return dest
+                else
+                    iT, sT = next(indT, sT)
+                end
+                iD, sD = next(indD, start(indD))
+                pD = iD
+            else
+                pD = iD
+                iD, sD = next(indD, sD)
+            end
+            iH, sH = next(indH, start(indH))
+        else
+            iH, sH = next(indH, sH)
+        end
+
+        if iD == pD
+            accv = reduce_first(op, v0, X[iH, iD, iT])
+        else
+            paccv = isempty(indH) ? accv : @inbounds dest[iH,pD,iT]
+            accv = op(paccv, X[iH,iD,iT])
+        end
+
+        S = typeof(accv)
+        if !widen || S === T || S <: T
+            @inbounds dest[i+=1] = accv
+        else
+            R = promote_typejoin(T, S)
+            new = similar(dest, R)
+            copyto!(new,1,dest,1,i)
+            @inbounds new[i+=1] = accv
+            return _accumulate!(dest, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+        end
+    end
+end
+
+"""
+    accumulate_pairwise(op[, v0], itr)
+
+Similar to [`accumulate`](@ref), but performs accumulation using a divide-and-conquer
+approach, which can be more numerically accurate for certain operations, such as
+[`+`](@ref).
+
+It involves roughly double the number of `op` calls, but for cheap operations like `+`
+this does not have much impact (approximately 20%).
+"""
+accumulate_pairwise(op, itr) = accumulate_pairwise(op, uninitialized, itr)
+accumulate_pairwise(op, v0, itr) =  accumulate_pairwise(op, v0, itr, IteratorSize(itr))
+function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
+    i = start(itr)
+    if done(itr, i)
+        return collect(Accumulate(op, v0, itr))
+    end
+    v1, i = next(itr, i)
+    accv = reduce_first(op, v0, v1)
+
+    dest = _similar_for(1:1, typeof(accv), itr, IteratorSize(itr))
+    ld = linearindices(dest)
+    j = first(ld)
+    dest[j] = accv
+    m = last(ld) - j
+    if done(itr, i)
+        return dest
+    end
+    out, _ = _accumulate_pairwise!(dest, op, itr, accv, i, j, m, true)
+    return out
+end
+
+accumulate_pairwise!(dest, op, itr) = accumulate_pairwise!(dest, op, uninitialized, itr)
+function accumulate_pairwise!(dest, op, v0, itr)
+    linearindices(dest) == linearindices(itr) || throw(DimensionMismatch("length of source and destination must match"))
+
+    i = start(itr)
+    if done(itr, i)
+        return dest
+    end
+    v1, i = next(itr, i)
+    accv = reduce_first(op, v0, v1)
+
+    ld = linearindices(dest)
+    j = first(ld)
+    dest[j] = accv
+    m = last(ld) - j
+    if done(itr, i)
+        return dest
+    end
+    out, _ = _accumulate_pairwise!(dest, op, itr, accv, i, j, m, false)
+    return out
+end
+
+# TODO figure out promotion machinery
+# collect_pairwise
+function _accumulate_pairwise!(dest::AbstractArray{T}, op, itr, accv, i, j, m, widen) where {T}
+    if m < 128
+        # m >= 1
+        w, i = next(itr, i)
+        y = op(accv, w)
+        S = typeof(y)
+        if !widen || S === T || S<:T
+            @inbounds dest[j+=1] = y
+            return _accumulate_pairwise_small!(dest, op, itr, accv, w, i, j, m-1, widen)
+        else
+            R = promote_typejoin(T, S)
+            new = similar(dest, R)
+            copyto!(new,1,dest,1,j)
+            @inbounds new[j+=1] = y
+            return _accumulate_pairwise_small!(new, op, itr, accv, w, i, j, m-1, widen)
         end
     else
-        n2 = n >> 1
-        s_ = _accumulate_pairwise!(op, c, v, s, i1, n2)
-        s_ = op(s_, _accumulate_pairwise!(op, c, v, op(s, s_), i1+n2, n-n2))
+        m1 = m >> 1
+        m2 = m - m1
+        dest, taccv1, i, j = _accumulate_pairwise!(dest, op, itr, accv, i, j, m1, widen)
+        dest, taccv2, i, j = _accumulate_pairwise!(dest, op, itr, op(accv, taccv1), i, j, m2, widen)
+        taccv = op(taccv1, taccv2)
     end
-    return s_
+    return dest, taccv, i, j
 end
 
-function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
-    li = linearindices(v)
-    li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
-    n = length(li)
-    n == 0 && return result
-    i1 = first(li)
-    @inbounds result[i1] = v1 = v[i1]
-    n == 1 && return result
-    _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
-    return result
+function _accumulate_pairwise_small!(dest::AbstractArray{T}, op, itr, accv, w, i, j, m, widen) where T
+    if m == 0
+        return dest, reduce_first(op, w), i, j
+    end
+    v, i = next(itr, i)
+    x = op(w, v)
+    while true
+        y = op(accv, x)
+        S = typeof(y)
+        if !widen || S === T || S<:T
+            @inbounds dest[j+=1] = y
+            m -= 1
+        else
+            R = promote_typejoin(T, S)
+            new = similar(dest, R)
+            copyto!(new,1,dest,1,j)
+            @inbounds new[j+=1] = y
+            return _accumulate_pairwise_small!(new, op, itr, accv, x, i, j, m-1, widen)
+        end
+        if m == 0
+            return dest, x, i, j
+        end
+
+        v, i = next(itr, i)
+        x = op(x, v)
+    end
 end
 
-function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, rcum_promote_type(op, T))
-    return accumulate_pairwise!(op, out, v)
-end
 
-function cumsum!(out, v::AbstractVector, dim::Integer)
-    # we dispatch on the possibility of numerical stability issues
-    _cumsum!(out, v, dim, ArithmeticStyle(eltype(out)))
-end
 
-function _cumsum!(out, v, dim, ::ArithmeticRounds)
-    dim == 1 ? accumulate_pairwise!(+, out, v) : copyto!(out, v)
+function cumsum!(out, v::AbstractVector{T}) where T
+    # we dispatch on the possibility of numerical accuracy issues
+    cumsum!(out, v, ArithmeticStyle(T))
 end
-function _cumsum!(out, v, dim, ::ArithmeticUnknown)
-    _cumsum!(out, v, dim, ArithmeticRounds())
-end
-function _cumsum!(out, v, dim, ::ArithmeticStyle)
-    dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
-end
+cumsum!(out, v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise!(out, +, v)
+cumsum!(out, v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise!(out, +, v)
+cumsum!(out, v::AbstractVector, ::ArithmeticStyle)   = accumulate!(out, +, v)
 
 """
     cumsum(A, dim::Integer)
@@ -141,10 +425,7 @@ julia> cumsum(a,2)
  4  9  15
 ```
 """
-function cumsum(A::AbstractArray{T}, dim::Integer) where T
-    out = similar(A, rcum_promote_type(+, T))
-    cumsum!(out, A, dim)
-end
+cumsum(A, dim::Integer) = accumulate(add_sum, A, dim)
 
 """
     cumsum(x::AbstractVector)
@@ -168,21 +449,27 @@ julia> cumsum([fill(1, 2) for i in 1:3])
  [3, 3]
 ```
 """
-cumsum(x::AbstractVector) = cumsum(x, 1)
+function cumsum(v::AbstractVector{T}) where T
+    # we dispatch on the possibility of numerical accuracy issues
+    cumsum(v, ArithmeticStyle(T))
+end
+cumsum(v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise(add_sum, v)
+cumsum(v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise(add_sum, v)
+cumsum(v::AbstractVector, ::ArithmeticStyle)   = accumulate(add_sum, v)
 
 """
     cumsum!(B, A, dim::Integer)
 
 Cumulative sum of `A` along the dimension `dim`, storing the result in `B`. See also [`cumsum`](@ref).
 """
-cumsum!(B, A, dim::Integer) = accumulate!(+, B, A, dim)
+cumsum!(dest, A, dim::Integer) = accumulate!(dest, +, A, dim)
 
 """
     cumsum!(y::AbstractVector, x::AbstractVector)
 
 Cumulative sum of a vector `x`, storing the result in `y`. See also [`cumsum`](@ref).
 """
-cumsum!(y::AbstractVector, x::AbstractVector) = cumsum!(y, x, 1)
+cumsum!(dest, itr) = accumulate!(dest, +, src)
 
 """
     cumprod(A, dim::Integer)
@@ -209,7 +496,7 @@ julia> cumprod(a,2)
  4  20  120
 ```
 """
-cumprod(A::AbstractArray, dim::Integer) = accumulate(*, A, dim)
+cumprod(A, dim::Integer) = accumulate(mul_prod, A, dim)
 
 """
     cumprod(x::AbstractVector)
@@ -233,7 +520,8 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  Rational{Int64}[4//27 4//27; 4//27 4//27]
 ```
 """
-cumprod(x::AbstractVector) = cumprod(x, 1)
+cumprod(x) = accumulate(mul_prod, x)
+cumprod(x::AbstractVector) = accumulate(mul_prod, x)
 
 """
     cumprod!(B, A, dim::Integer)
@@ -241,7 +529,7 @@ cumprod(x::AbstractVector) = cumprod(x, 1)
 Cumulative product of `A` along the dimension `dim`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
-cumprod!(B, A, dim::Integer) = accumulate!(*, B, A, dim)
+cumprod!(dest, A, dim::Integer) = accumulate!(dest, *, A, dim)
 
 """
     cumprod!(y::AbstractVector, x::AbstractVector)
@@ -249,202 +537,4 @@ cumprod!(B, A, dim::Integer) = accumulate!(*, B, A, dim)
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 """
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, 1)
-
-"""
-    accumulate(op, A, dim::Integer)
-
-Cumulative operation `op` along the dimension `dim`. See also
-[`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see:
-[`cumsum`](@ref), [`cumprod`](@ref)
-
-# Examples
-```jldoctest
-julia> accumulate(+, fill(1, 3, 3), 1)
-3×3 Array{Int64,2}:
- 1  1  1
- 2  2  2
- 3  3  3
-
-julia> accumulate(+, fill(1, 3, 3), 2)
-3×3 Array{Int64,2}:
- 1  2  3
- 1  2  3
- 1  2  3
-```
-"""
-function accumulate(op, A, dim::Integer)
-    out = similar(A, rcum_promote_type(op, eltype(A)))
-    accumulate!(op, out, A, dim)
-end
-
-"""
-    accumulate(op, x::AbstractVector)
-
-Cumulative operation `op` on a vector. See also
-[`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see:
-[`cumsum`](@ref), [`cumprod`](@ref)
-
-# Examples
-```jldoctest
-julia> accumulate(+, [1,2,3])
-3-element Array{Int64,1}:
- 1
- 3
- 6
-
-julia> accumulate(*, [1,2,3])
-3-element Array{Int64,1}:
- 1
- 2
- 6
-```
-"""
-accumulate(op, x::AbstractVector) = accumulate(op, x, 1)
-
-"""
-    accumulate!(op, B, A, dim::Integer)
-
-Cumulative operation `op` on `A` along the dimension `dim`, storing the result in `B`.
-See also [`accumulate`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> B = [0 0; 0 0];
-
-julia> accumulate!(-, B, A, 1);
-
-julia> B
-2×2 Array{Int64,2}:
-  1   2
- -2  -2
-
-julia> accumulate!(-, B, A, 2);
-
-julia> B
-2×2 Array{Int64,2}:
- 1  -1
- 3  -1
-```
-"""
-function accumulate!(op, B, A, dim::Integer)
-    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds_t = axes(A)
-    axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
-    dim > ndims(A) && return copyto!(B, A)
-    isempty(inds_t[dim]) && return B
-    if dim == 1
-        # We can accumulate to a temporary variable, which allows
-        # register usage and will be slightly faster
-        ind1 = inds_t[1]
-        @inbounds for I in CartesianIndices(tail(inds_t))
-            tmp = convert(eltype(B), A[first(ind1), I])
-            B[first(ind1), I] = tmp
-            for i_1 = first(ind1)+1:last(ind1)
-                tmp = op(tmp, A[i_1, I])
-                B[i_1, I] = tmp
-            end
-        end
-    else
-        R1 = CartesianIndices(axes(A)[1:dim-1])   # not type-stable
-        R2 = CartesianIndices(axes(A)[dim+1:end])
-        _accumulate!(op, B, A, R1, inds_t[dim], R2) # use function barrier
-    end
-    return B
-end
-
-"""
-    accumulate!(op, y, x::AbstractVector)
-
-Cumulative operation `op` on a vector `x`, storing the result in `y`.
-See also [`accumulate`](@ref).
-
-# Examples
-``jldoctest
-julia> x = [1, 0, 2, 0, 3];
-
-julia> y = [0, 0, 0, 0, 0];
-
-julia> accumulate!(+, y, x);
-
-julia> y
-5-element Array{Int64,1}:
- 1
- 1
- 3
- 3
- 6
-```
-"""
-function accumulate!(op::Op, y, x::AbstractVector) where Op
-    isempty(x) && return y
-    v1 = first(x)
-    _accumulate1!(op, y, v1, x, 1)
-end
-
-@noinline function _accumulate!(op, B, A, R1, ind, R2)
-    # Copy the initial element in each 1d vector along dimension `dim`
-    ii = first(ind)
-    @inbounds for J in R2, I in R1
-        B[I, ii, J] = A[I, ii, J]
-    end
-    # Accumulate
-    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
-        B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
-    end
-    B
-end
-
-"""
-    accumulate(op, v0, x::AbstractVector)
-
-Like `accumulate`, but using a starting element `v0`. The first entry of the result will be
-`op(v0, first(A))`.
-
-# Examples
-```jldoctest
-julia> accumulate(+, 100, [1,2,3])
-3-element Array{Int64,1}:
- 101
- 103
- 106
-
-julia> accumulate(min, 0, [1,2,-1])
-3-element Array{Int64,1}:
-  0
-  0
- -1
-```
-"""
-function accumulate(op, v0, x::AbstractVector)
-    T = rcum_promote_type(op, typeof(v0), eltype(x))
-    out = similar(x, T)
-    accumulate!(op, out, v0, x)
-end
-
-function accumulate!(op, y, v0, x::AbstractVector)
-    isempty(x) && return y
-    v1 = op(v0, first(x))
-    _accumulate1!(op, y, v1, x, 1)
-end
-
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
-    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds = linearindices(A)
-    inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
-    dim > 1 && return copyto!(B, A)
-    i1 = inds[1]
-    cur_val = v1
-    B[i1] = cur_val
-    @inbounds for i in inds[2:end]
-        cur_val = op(cur_val, A[i])
-        B[i] = cur_val
-    end
-    return B
-end
+cumprod!(dest, itr) = accumulate!(dest, *, itr)

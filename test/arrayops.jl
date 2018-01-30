@@ -1984,9 +1984,10 @@ end
 # issue #18363
 @test_throws DimensionMismatch cumsum!([0,0], 1:4)
 @test cumsum(Any[])::Vector{Any} == Any[]
-@test cumsum(Any[1, 2.3])::Vector{Any} == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
+@test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
 @test cumsum([true,true,true]) == [1,2,3]
-@test cumsum(0x00:0xff)[end] === 0x80 # overflow
+@test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
+@test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
 @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
 
 #issue #18336
@@ -2169,7 +2170,7 @@ end
 
             if eltype(arr) in [Int, Float64] # eltype of out easy
                 out = similar(arr)
-                @test accumulate!(op, out, arr) ≈ accumulate_arr
+                @test accumulate!(out, op, arr) ≈ accumulate_arr
                 @test out ≈ accumulate_arr
             end
         end
@@ -2195,6 +2196,8 @@ end
 
 Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+Base.:+(x::F) where {F <: F21666} = x
+
 Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
@@ -2306,4 +2309,12 @@ end
     inds_a = Base.Indices{2}([1:3, 1:1])
     inds_b = Base.Indices{1}([1:3])
     @test Base.promote_shape(inds_a, inds_b) == Base.promote_shape(inds_b, inds_a)
+end
+
+@testset "accumulate on non-numeric types" begin
+    @test accumulate((acc, x) -> acc+x[1], 0, [(1,2), (3,4), (5,6)]) == [1, 4, 9]
+    @test accumulate(*, ['a', 'b']) == ["a", "ab"]
+    @inferred accumulate(*, String[])
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], 1) == ["a" "b"; "ac" "bd"]
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], 2) == ["a" "ab"; "c" "cd"]
 end
