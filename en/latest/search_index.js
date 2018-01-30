@@ -3349,7 +3349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Packages",
     "title": "Packages",
     "category": "section",
-    "text": "Julia has a built-in package manager for installing add-on functionality written in Julia. It can also install external libraries using your operating system's standard system for doing so, or by compiling from source. The list of registered Julia packages can be found at http://pkg.julialang.org. All package manager commands are found in the Pkg module, included in Julia's Base install.First we'll go over the mechanics of the Pkg family of commands and then we'll provide some guidance on how to get your package registered. Be sure to read the section below on package naming conventions, tagging versions and the importance of a REQUIRE file for when you're ready to add your code to the curated METADATA repository."
+    "text": "Julia has a built-in package manager for installing add-on functionality written in Julia. It can also install external libraries using your operating system's standard system for doing so, or by compiling from source. The list of registered Julia packages can be found at http://pkg.julialang.org. All package manager commands are found in the Pkg standard library which becomes available after using import Pkg.First we'll go over the mechanics of the Pkg family of commands and then we'll provide some guidance on how to get your package registered. Be sure to read the section below on package naming conventions, tagging versions and the importance of a REQUIRE file for when you're ready to add your code to the curated METADATA repository."
 },
 
 {
@@ -4873,14 +4873,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.Pkg",
-    "page": "Essentials",
-    "title": "Base.Pkg",
-    "category": "Module",
-    "text": "Pkg\n\nThe Pkg module provides package management for Julia. Use Pkg.status() for a list of installed packages, Pkg.add(\"<pkg name>\") to add a package, Pkg.update() to update the installed packages.\n\nPlease see the manual section on packages for more information.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.StackTraces",
     "page": "Essentials",
     "title": "Base.StackTraces",
@@ -4909,7 +4901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base Modules",
     "category": "section",
-    "text": "Base.Docs\nBase.Iterators\nBase.LibGit2\nBase.Libc\nBase.Meta\nBase.Pkg\nBase.StackTraces\nBase.Sys\nBase.Threads"
+    "text": "Base.Docs\nBase.Iterators\nBase.LibGit2\nBase.Libc\nBase.Meta\nBase.StackTraces\nBase.Sys\nBase.Threads"
 },
 
 {
@@ -5021,7 +5013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
 },
 
 {
@@ -6413,7 +6405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.fullname",
     "category": "Function",
-    "text": "fullname(m::Module)\n\nGet the fully-qualified name of a module as a tuple of symbols. For example,\n\nExamples\n\njulia> fullname(Base.Pkg)\n(:Base, :Pkg)\n\njulia> fullname(Main)\n(:Main,)\n\n\n\n\n\n"
+    "text": "fullname(m::Module)\n\nGet the fully-qualified name of a module as a tuple of symbols. For example,\n\nExamples\n\njulia> fullname(Base.Iterators)\n(:Base, :Iterators)\n\njulia> fullname(Main)\n(:Main,)\n\n\n\n\n\n"
 },
 
 {
@@ -6981,7 +6973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
 },
 
 {
@@ -7013,7 +7005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
 },
 
 {
@@ -7629,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -13705,166 +13697,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/pkg/#",
-    "page": "Package Manager Functions",
-    "title": "Package Manager Functions",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.dir",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.dir",
-    "category": "Function",
-    "text": "dir() -> AbstractString\n\nReturns the absolute path of the package directory. This defaults to joinpath(homedir(),\".julia\",\"v$(VERSION.major).$(VERSION.minor)\") on all platforms (i.e. ~/.julia/v0.7 in UNIX shell syntax). If the JULIA_PKGDIR environment variable is set, then that path is used in the returned value as joinpath(ENV[\"JULIA_PKGDIR\"],\"v$(VERSION.major).$(VERSION.minor)\"). If JULIA_PKGDIR is a relative path, it is interpreted relative to whatever the current working directory is.\n\n\n\n\n\ndir(names...) -> AbstractString\n\nEquivalent to normpath(Pkg.dir(),names...) – i.e. it appends path components to the package directory and normalizes the resulting path. In particular, Pkg.dir(pkg) returns the path to the package pkg.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.init",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.init",
-    "category": "Function",
-    "text": "init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)\n\nInitialize Pkg.dir() as a package directory. This will be done automatically when the JULIA_PKGDIR is not set and Pkg.dir() uses its default value. As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which are typically not provided. Explicit (non-default) arguments can be used to support a custom METADATA setup.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.resolve",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.resolve",
-    "category": "Function",
-    "text": "resolve()\n\nDetermines an optimal, consistent set of package versions to install or upgrade to. The optimal set of package versions is based on the contents of Pkg.dir(\"REQUIRE\") and the state of installed packages in Pkg.dir(), Packages that are no longer required are moved into Pkg.dir(\".trash\").\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.edit",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.edit",
-    "category": "Function",
-    "text": "edit()\n\nOpens Pkg.dir(\"REQUIRE\") in the editor specified by the VISUAL or EDITOR environment variables; when the editor command returns, it runs Pkg.resolve() to determine and install a new optimal set of installed package versions.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.add",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.add",
-    "category": "Function",
-    "text": "add(pkg, vers...)\n\nAdd a requirement entry for pkg to Pkg.dir(\"REQUIRE\") and call Pkg.resolve(). If vers are given, they must be VersionNumber objects and they specify acceptable version intervals for pkg.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.rm",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.rm",
-    "category": "Function",
-    "text": "rm(pkg)\n\nRemove all requirement entries for pkg from Pkg.dir(\"REQUIRE\") and call Pkg.resolve().\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.clone",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.clone",
-    "category": "Function",
-    "text": "clone(pkg)\n\nIf pkg has a URL registered in Pkg.dir(\"METADATA\"), clone it from that URL on the default branch. The package does not need to have any registered versions.\n\n\n\n\n\nclone(url, [pkg])\n\nClone a package directly from the git URL url. The package does not need to be registered in Pkg.dir(\"METADATA\"). The package repo is cloned by the name pkg if provided; if not provided, pkg is determined automatically from url.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.setprotocol!",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.setprotocol!",
-    "category": "Function",
-    "text": "setprotocol!(proto)\n\nSet the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank proto delegating the choice to the package developer.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.available",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.available",
-    "category": "Function",
-    "text": "available() -> Vector{String}\n\nReturns the names of available packages.\n\n\n\n\n\navailable(pkg) -> Vector{VersionNumber}\n\nReturns the version numbers available for package pkg.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.installed",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.installed",
-    "category": "Function",
-    "text": "installed() -> Dict{String,VersionNumber}\n\nReturns a dictionary mapping installed package names to the installed version number of each package.\n\n\n\n\n\ninstalled(pkg) -> Nothing | VersionNumber\n\nIf pkg is installed, return the installed version number. If pkg is registered, but not installed, return nothing.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.status",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.status",
-    "category": "Function",
-    "text": "status()\n\nPrints out a summary of what packages are installed and what version and state they're in.\n\n\n\n\n\nstatus(pkg)\n\nPrints out a summary of what version and state pkg, specifically, is in.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.update",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.update",
-    "category": "Function",
-    "text": "update(pkgs...)\n\nUpdate the metadata repo – kept in Pkg.dir(\"METADATA\") – then update any fixed packages that can safely be pulled from their origin; then call Pkg.resolve() to determine a new optimal set of packages versions.\n\nWithout arguments, updates all installed packages. When one or more package names are provided as arguments, only those packages and their dependencies are updated.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.checkout",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.checkout",
-    "category": "Function",
-    "text": "checkout(pkg, [branch=\"master\"]; merge=true, pull=true)\n\nCheckout the Pkg.dir(pkg) repo to the branch branch. Defaults to checking out the \"master\" branch. To go back to using the newest compatible released version, use Pkg.free(pkg). Changes are merged (fast-forward only) if the keyword argument merge == true, and the latest version is pulled from the upstream repo if pull == true.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.pin",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.pin",
-    "category": "Function",
-    "text": "pin(pkg)\n\nPin pkg at the current version. To go back to using the newest compatible released version, use Pkg.free(pkg)\n\n\n\n\n\npin(pkg, version)\n\nPin pkg at registered version version.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.free",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.free",
-    "category": "Function",
-    "text": "free(pkg)\n\nFree the package pkg to be managed by the package manager again. It calls Pkg.resolve() to determine optimal package versions after. This is an inverse for both Pkg.checkout and Pkg.pin.\n\nYou can also supply an iterable collection of package names, e.g., Pkg.free((\"Pkg1\", \"Pkg2\")) to free multiple packages at once.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.build",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.build",
-    "category": "Function",
-    "text": "build()\n\nRun the build scripts for all installed packages in depth-first recursive order.\n\n\n\n\n\nbuild(pkgs...)\n\nRun the build script in deps/build.jl for each package in pkgs and all of their dependencies in depth-first recursive order. This is called automatically by Pkg.resolve() on all installed or updated packages.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.test",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.test",
-    "category": "Function",
-    "text": "test(; coverage=false)\n\nRun the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its test/runtests.jl file and test dependencies are specified in test/REQUIRE. Coverage statistics for the packages may be generated by passing coverage=true. The default behavior is not to run coverage.\n\n\n\n\n\ntest(pkgs...; coverage=false)\n\nRun the tests for each package in pkgs ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its test/runtests.jl file and test dependencies are specified in test/REQUIRE. Coverage statistics for the packages may be generated by passing coverage=true. The default behavior is not to run coverage.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Base.Pkg.dependents",
-    "page": "Package Manager Functions",
-    "title": "Base.Pkg.dependents",
-    "category": "Function",
-    "text": "dependents(pkg)\n\nList the packages that have pkg as a dependency.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/pkg/#Package-Manager-Functions-1",
-    "page": "Package Manager Functions",
-    "title": "Package Manager Functions",
-    "category": "section",
-    "text": "All package manager functions are defined in the Pkg module. None of the Pkg module's functions are exported; to use them, you'll need to prefix each function call with an explicit Pkg., e.g. Pkg.status() or Pkg.dir().Functions for package development (e.g. tag, publish, etc.) have been moved to the PkgDev package. See PkgDev README for the documentation of those functions.Base.Pkg.dir\nBase.Pkg.init\nBase.Pkg.resolve\nBase.Pkg.edit\nBase.Pkg.add\nBase.Pkg.rm\nBase.Pkg.clone\nBase.Pkg.setprotocol!\nBase.Pkg.available\nBase.Pkg.installed\nBase.Pkg.status\nBase.Pkg.update\nBase.Pkg.checkout\nBase.Pkg.pin\nBase.Pkg.free\nBase.Pkg.build\nBase.Pkg.test\nBase.Pkg.dependents"
-},
-
-{
     "location": "base/iterators/#",
     "page": "Iteration utilities",
     "title": "Iteration utilities",
@@ -18654,6 +18486,166 @@ var documenterSearchIndex = {"docs": [
     "title": "Memory-mapped I/O",
     "category": "section",
     "text": "Mmap.Anonymous\nMmap.mmap\nMmap.sync!"
+},
+
+{
+    "location": "stdlib/Pkg/#",
+    "page": "Package Manager Functions",
+    "title": "Package Manager Functions",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.dir",
+    "page": "Package Manager Functions",
+    "title": "Pkg.dir",
+    "category": "Function",
+    "text": "dir() -> AbstractString\n\nReturns the absolute path of the package directory. This defaults to joinpath(homedir(),\".julia\",\"v$(VERSION.major).$(VERSION.minor)\") on all platforms (i.e. ~/.julia/v0.7 in UNIX shell syntax). If the JULIA_PKGDIR environment variable is set, then that path is used in the returned value as joinpath(ENV[\"JULIA_PKGDIR\"],\"v$(VERSION.major).$(VERSION.minor)\"). If JULIA_PKGDIR is a relative path, it is interpreted relative to whatever the current working directory is.\n\n\n\n\n\ndir(names...) -> AbstractString\n\nEquivalent to normpath(Pkg.dir(),names...) – i.e. it appends path components to the package directory and normalizes the resulting path. In particular, Pkg.dir(pkg) returns the path to the package pkg.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.init",
+    "page": "Package Manager Functions",
+    "title": "Pkg.init",
+    "category": "Function",
+    "text": "init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)\n\nInitialize Pkg.dir() as a package directory. This will be done automatically when the JULIA_PKGDIR is not set and Pkg.dir() uses its default value. As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which are typically not provided. Explicit (non-default) arguments can be used to support a custom METADATA setup.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.resolve",
+    "page": "Package Manager Functions",
+    "title": "Pkg.resolve",
+    "category": "Function",
+    "text": "resolve()\n\nDetermines an optimal, consistent set of package versions to install or upgrade to. The optimal set of package versions is based on the contents of Pkg.dir(\"REQUIRE\") and the state of installed packages in Pkg.dir(), Packages that are no longer required are moved into Pkg.dir(\".trash\").\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.edit",
+    "page": "Package Manager Functions",
+    "title": "Pkg.edit",
+    "category": "Function",
+    "text": "edit()\n\nOpens Pkg.dir(\"REQUIRE\") in the editor specified by the VISUAL or EDITOR environment variables; when the editor command returns, it runs Pkg.resolve() to determine and install a new optimal set of installed package versions.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.add",
+    "page": "Package Manager Functions",
+    "title": "Pkg.add",
+    "category": "Function",
+    "text": "add(pkg, vers...)\n\nAdd a requirement entry for pkg to Pkg.dir(\"REQUIRE\") and call Pkg.resolve(). If vers are given, they must be VersionNumber objects and they specify acceptable version intervals for pkg.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.rm",
+    "page": "Package Manager Functions",
+    "title": "Pkg.rm",
+    "category": "Function",
+    "text": "rm(pkg)\n\nRemove all requirement entries for pkg from Pkg.dir(\"REQUIRE\") and call Pkg.resolve().\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.clone",
+    "page": "Package Manager Functions",
+    "title": "Pkg.clone",
+    "category": "Function",
+    "text": "clone(pkg)\n\nIf pkg has a URL registered in Pkg.dir(\"METADATA\"), clone it from that URL on the default branch. The package does not need to have any registered versions.\n\n\n\n\n\nclone(url, [pkg])\n\nClone a package directly from the git URL url. The package does not need to be registered in Pkg.dir(\"METADATA\"). The package repo is cloned by the name pkg if provided; if not provided, pkg is determined automatically from url.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.setprotocol!",
+    "page": "Package Manager Functions",
+    "title": "Pkg.setprotocol!",
+    "category": "Function",
+    "text": "setprotocol!(proto)\n\nSet the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank proto delegating the choice to the package developer.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.available",
+    "page": "Package Manager Functions",
+    "title": "Pkg.available",
+    "category": "Function",
+    "text": "available() -> Vector{String}\n\nReturns the names of available packages.\n\n\n\n\n\navailable(pkg) -> Vector{VersionNumber}\n\nReturns the version numbers available for package pkg.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.installed",
+    "page": "Package Manager Functions",
+    "title": "Pkg.installed",
+    "category": "Function",
+    "text": "installed() -> Dict{String,VersionNumber}\n\nReturns a dictionary mapping installed package names to the installed version number of each package.\n\n\n\n\n\ninstalled(pkg) -> Nothing | VersionNumber\n\nIf pkg is installed, return the installed version number. If pkg is registered, but not installed, return nothing.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.status",
+    "page": "Package Manager Functions",
+    "title": "Pkg.status",
+    "category": "Function",
+    "text": "status()\n\nPrints out a summary of what packages are installed and what version and state they're in.\n\n\n\n\n\nstatus(pkg)\n\nPrints out a summary of what version and state pkg, specifically, is in.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.update",
+    "page": "Package Manager Functions",
+    "title": "Pkg.update",
+    "category": "Function",
+    "text": "update(pkgs...)\n\nUpdate the metadata repo – kept in Pkg.dir(\"METADATA\") – then update any fixed packages that can safely be pulled from their origin; then call Pkg.resolve() to determine a new optimal set of packages versions.\n\nWithout arguments, updates all installed packages. When one or more package names are provided as arguments, only those packages and their dependencies are updated.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.checkout",
+    "page": "Package Manager Functions",
+    "title": "Pkg.checkout",
+    "category": "Function",
+    "text": "checkout(pkg, [branch=\"master\"]; merge=true, pull=true)\n\nCheckout the Pkg.dir(pkg) repo to the branch branch. Defaults to checking out the \"master\" branch. To go back to using the newest compatible released version, use Pkg.free(pkg). Changes are merged (fast-forward only) if the keyword argument merge == true, and the latest version is pulled from the upstream repo if pull == true.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.pin",
+    "page": "Package Manager Functions",
+    "title": "Pkg.pin",
+    "category": "Function",
+    "text": "pin(pkg)\n\nPin pkg at the current version. To go back to using the newest compatible released version, use Pkg.free(pkg)\n\n\n\n\n\npin(pkg, version)\n\nPin pkg at registered version version.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.free",
+    "page": "Package Manager Functions",
+    "title": "Pkg.free",
+    "category": "Function",
+    "text": "free(pkg)\n\nFree the package pkg to be managed by the package manager again. It calls Pkg.resolve() to determine optimal package versions after. This is an inverse for both Pkg.checkout and Pkg.pin.\n\nYou can also supply an iterable collection of package names, e.g., Pkg.free((\"Pkg1\", \"Pkg2\")) to free multiple packages at once.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.build",
+    "page": "Package Manager Functions",
+    "title": "Pkg.build",
+    "category": "Function",
+    "text": "build()\n\nRun the build scripts for all installed packages in depth-first recursive order.\n\n\n\n\n\nbuild(pkgs...)\n\nRun the build script in deps/build.jl for each package in pkgs and all of their dependencies in depth-first recursive order. This is called automatically by Pkg.resolve() on all installed or updated packages.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.test",
+    "page": "Package Manager Functions",
+    "title": "Pkg.test",
+    "category": "Function",
+    "text": "test(; coverage=false)\n\nRun the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its test/runtests.jl file and test dependencies are specified in test/REQUIRE. Coverage statistics for the packages may be generated by passing coverage=true. The default behavior is not to run coverage.\n\n\n\n\n\ntest(pkgs...; coverage=false)\n\nRun the tests for each package in pkgs ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its test/runtests.jl file and test dependencies are specified in test/REQUIRE. Coverage statistics for the packages may be generated by passing coverage=true. The default behavior is not to run coverage.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Pkg.dependents",
+    "page": "Package Manager Functions",
+    "title": "Pkg.dependents",
+    "category": "Function",
+    "text": "dependents(pkg)\n\nList the packages that have pkg as a dependency.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Pkg/#Package-Manager-Functions-1",
+    "page": "Package Manager Functions",
+    "title": "Package Manager Functions",
+    "category": "section",
+    "text": "All package manager functions are defined in the Pkg module. None of the Pkg module's functions are exported; to use them, you'll need to prefix each function call with an explicit Pkg., e.g. Pkg.status() or Pkg.dir().Functions for package development (e.g. tag, publish, etc.) have been moved to the PkgDev package. See PkgDev README for the documentation of those functions.Pkg.dir\nPkg.init\nPkg.resolve\nPkg.edit\nPkg.add\nPkg.rm\nPkg.clone\nPkg.setprotocol!\nPkg.available\nPkg.installed\nPkg.status\nPkg.update\nPkg.checkout\nPkg.pin\nPkg.free\nPkg.build\nPkg.test\nPkg.dependents"
 },
 
 {
