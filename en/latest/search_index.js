@@ -5013,7 +5013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
 },
 
 {
@@ -7325,7 +7325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
@@ -7621,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -9029,7 +9029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.mean",
     "category": "Function",
-    "text": "mean(f::Function, v)\n\nApply the function f to each element of v and take the mean.\n\njulia> mean(√, [1, 2, 3])\n1.3820881233139908\n\njulia> mean([√1, √2, √3])\n1.3820881233139908\n\n\n\n\n\nmean(v[, region])\n\nCompute the mean of whole array v, or optionally along the dimensions in region.\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "mean(f::Function, v)\n\nApply the function f to each element of v and take the mean.\n\njulia> mean(√, [1, 2, 3])\n1.3820881233139908\n\njulia> mean([√1, √2, √3])\n1.3820881233139908\n\n\n\n\n\nmean(v[, region])\n\nCompute the mean of whole array v, or optionally along the dimensions in region.\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9045,7 +9045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.std",
     "category": "Function",
-    "text": "std(v[, region]; corrected::Bool=true, mean=nothing)\n\nCompute the sample standard deviation of a vector or array v, optionally along dimensions in region. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of v is an IID drawn from that generative distribution. This computation is equivalent to calculating sqrt(sum((v - mean(v)).^2) / (length(v) - 1)). A pre-computed mean may be provided. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "std(v[, region]; corrected::Bool=true, mean=nothing)\n\nCompute the sample standard deviation of a vector or array v, optionally along dimensions in region. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of v is an IID drawn from that generative distribution. This computation is equivalent to calculating sqrt(sum((v - mean(v)).^2) / (length(v) - 1)). A pre-computed mean may be provided. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9053,7 +9053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.stdm",
     "category": "Function",
-    "text": "stdm(v, m; corrected::Bool=true)\n\nCompute the sample standard deviation of a vector v with known mean m. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "stdm(v, m; corrected::Bool=true)\n\nCompute the sample standard deviation of a vector v with known mean m. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9061,7 +9061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.var",
     "category": "Function",
-    "text": "var(v[, region]; corrected::Bool=true, mean=nothing)\n\nCompute the sample variance of a vector or array v, optionally along dimensions in region. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of v is an IID drawn from that generative distribution. This computation is equivalent to calculating sum(abs2, v - mean(v)) / (length(v) - 1). If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x). The mean mean over the region may be provided.\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "var(v[, region]; corrected::Bool=true, mean=nothing)\n\nCompute the sample variance of a vector or array v, optionally along dimensions in region. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of v is an IID drawn from that generative distribution. This computation is equivalent to calculating sum(abs2, v - mean(v)) / (length(v) - 1). If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x). The mean mean over the region may be provided.\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9069,7 +9069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.varm",
     "category": "Function",
-    "text": "varm(v, m[, region]; corrected::Bool=true)\n\nCompute the sample variance of a collection v with known mean(s) m, optionally over region. m may contain means for each dimension of v. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "varm(v, m[, region]; corrected::Bool=true)\n\nCompute the sample variance of a collection v with known mean(s) m, optionally over region. m may contain means for each dimension of v. If corrected is true, then the sum is scaled with n-1, whereas the sum is scaled with n if corrected is false where n = length(x).\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9085,7 +9085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.median",
     "category": "Function",
-    "text": "median(v[, region])\n\nCompute the median of an entire array v, or, optionally, along the dimensions in region. For an even number of elements no exact median element exists, so the result is equivalent to calculating mean of two median elements.\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended.\n\n\n\n\n\n"
+    "text": "median(v[, region])\n\nCompute the median of an entire array v, or, optionally, along the dimensions in region. For an even number of elements no exact median element exists, so the result is equivalent to calculating mean of two median elements.\n\nnote: Note\nJulia does not ignore NaN values in the computation. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\n\n\n\n\n"
 },
 
 {
@@ -9101,7 +9101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.quantile",
     "category": "Function",
-    "text": "quantile(v, p; sorted=false)\n\nCompute the quantile(s) of a vector v at a specified probability or vector or tuple of probabilities p. The keyword argument sorted indicates whether v can be assumed to be sorted.\n\nThe p should be on the interval [0,1], and v should not have any NaN values.\n\nQuantiles are computed via linear interpolation between the points ((k-1)/(n-1), v[k]), for k = 1:n where n = length(v). This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended. quantile will throw an ArgumentError in the presence of NaN values in the data array.\n\nHyndman, R.J and Fan, Y. (1996) \"Sample Quantiles in Statistical Packages\", The American Statistician, Vol. 50, No. 4, pp. 361-365\n\n\n\n\n\n"
+    "text": "quantile(v, p; sorted=false)\n\nCompute the quantile(s) of a vector v at a specified probability or vector or tuple of probabilities p. The keyword argument sorted indicates whether v can be assumed to be sorted.\n\nThe p should be on the interval [0,1], and v should not have any NaN values.\n\nQuantiles are computed via linear interpolation between the points ((k-1)/(n-1), v[k]), for k = 1:n where n = length(v). This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.\n\nnote: Note\nJulia does not ignore NaN values in the computation: quantile will throw an ArgumentError in the presence of NaN values in the data array. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\nHyndman, R.J and Fan, Y. (1996) \"Sample Quantiles in Statistical Packages\", The American Statistician, Vol. 50, No. 4, pp. 361-365\n\n\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.quantile!",
     "category": "Function",
-    "text": "quantile!([q, ] v, p; sorted=false)\n\nCompute the quantile(s) of a vector v at the probability or probabilities p, which can be given as a single value, a vector, or a tuple. If p is a vector, an optional output array q may also be specified. (If not provided, a new output array is created.) The keyword argument sorted indicates whether v can be assumed to be sorted; if false (the default), then the elements of v may be partially sorted.\n\nThe elements of p should be on the interval [0,1], and v should not have any NaN values.\n\nQuantiles are computed via linear interpolation between the points ((k-1)/(n-1), v[k]), for k = 1:n where n = length(v). This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.\n\nnote: Note\nJulia does not ignore NaN values in the computation. For applications requiring the handling of missing data, the DataArrays.jl package is recommended. quantile! will throw an ArgumentError in the presence of NaN values in the data array.\n\nHyndman, R.J and Fan, Y. (1996) \"Sample Quantiles in Statistical Packages\", The American Statistician, Vol. 50, No. 4, pp. 361-365\n\n\n\n\n\n"
+    "text": "quantile!([q, ] v, p; sorted=false)\n\nCompute the quantile(s) of a vector v at the probability or probabilities p, which can be given as a single value, a vector, or a tuple. If p is a vector, an optional output array q may also be specified. (If not provided, a new output array is created.) The keyword argument sorted indicates whether v can be assumed to be sorted; if false (the default), then the elements of v may be partially sorted.\n\nThe elements of p should be on the interval [0,1], and v should not have any NaN values.\n\nQuantiles are computed via linear interpolation between the points ((k-1)/(n-1), v[k]), for k = 1:n where n = length(v). This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.\n\nnote: Note\nJulia does not ignore NaN values in the computation: quantile! will throw an ArgumentError in the presence of NaN values in the data array. Use the missing type to represent missing values, and the skipmissing function to omit them.\n\nHyndman, R.J and Fan, Y. (1996) \"Sample Quantiles in Statistical Packages\", The American Statistician, Vol. 50, No. 4, pp. 361-365\n\n\n\n\n\n"
 },
 
 {
@@ -15517,7 +15517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
