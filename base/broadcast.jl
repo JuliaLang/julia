@@ -4,7 +4,7 @@ module Broadcast
 
 using Base.Cartesian
 using Base: Indices, OneTo, TupleLL, TupleLLEnd, make_TupleLL, mapTupleLL,
-            linearindices, tail, to_shape, isoperator,
+            linearindices, tail, to_shape, isoperator, promote_typejoin,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: broadcast, broadcast!, copy, copyto!
 export BroadcastStyle, broadcast_indices, broadcast_similar, broadcast_skip_axes_instantiation,
@@ -514,6 +514,7 @@ longest(t1::Tuple, ::Tuple{}) = (true, longest(Base.tail(t1), ())...)
 longest(::Tuple{}, ::Tuple{}) = ()
 
 # combine_styles operates on values (arbitrarily many)
+combine_styles() = Scalar()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
@@ -651,6 +652,8 @@ Base.@propagate_inbounds _getindex(args::TupleLL, I, indexing::TupleLL) =
     (_getidx(args.head, I, indexing.head), _getindex(args.rest, I, indexing.rest)...)
 Base.@propagate_inbounds _getindex(args::TupleLL{<:Any, TupleLLEnd}, I, indexing::TupleLL{<:Any, TupleLLEnd}) =
     (_getidx(args.head, I, indexing.head),)
+Base.@propagate_inbounds _getindex(args::TupleLL{TupleLLEnd, TupleLLEnd}, I, ::TupleLL) = ()
+Base.@propagate_inbounds _getindex(args::TupleLL{TupleLLEnd, TupleLLEnd}, I, ::TupleLL{<:Any, TupleLLEnd}) = ()
 # For styles that bypass construction of indexing
 Base.@propagate_inbounds _getindex(args::TupleLL, I, ::Nothing) =
     (_broadcast_getindex(args.head, I), _getindex(args.rest, I, nothing)...)
@@ -952,7 +955,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, typejoin(T, S))
+            newdest = Base.similar(dest, promote_typejoin(T, S))
             for II in Iterators.take(iter, count)
                 newdest[II] = dest[II]
             end
