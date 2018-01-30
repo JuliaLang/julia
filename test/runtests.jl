@@ -1015,7 +1015,7 @@ let A = [1]
     finalize(A)
     @test x == 1
     A = 0
-    gc(); gc()
+    GC.gc(); GC.gc()
     @test x == 1
 end
 
@@ -1284,6 +1284,13 @@ module TestSerialization
     @test isdefined(@__MODULE__, :deserialize)
     @test isdefined(@__MODULE__, :SerializationState)
 end
+
+# 0.7.0-DEV.3469
+@test GC.enable(true)
+@test GC.enable(false)
+@test !GC.enable(false)
+@test !GC.enable(true)
+@test GC.enable(true)
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")

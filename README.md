@@ -319,6 +319,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `isabstract` and `isleaftype` are now `isabstracttype` and `isconcretetype`, respectively
   ([#23666], [#25496]).
 
+* `gc` and `gc_enable` are now `GC.gc` and `GC.enable`, respectively ([#25616]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -503,6 +505,7 @@ includes this fix. Find the minimum version from there.
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
+[#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
