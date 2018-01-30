@@ -34,6 +34,7 @@ for T = types[2:end],
     x = vals,
     a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
 for T = types,
