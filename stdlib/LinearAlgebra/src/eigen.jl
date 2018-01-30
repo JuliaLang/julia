@@ -516,6 +516,14 @@ julia> eigvecs(A, B)
 """
 eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigfact(A, B))
 
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
+    println(io, summary(F))
+    println(io, "eigenvalues:")
+    show(io, mime, F.values)
+    println(io, "\neigenvectors:")
+    show(io, mime, F.vectors)
+end
+
 # Conversion methods
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
