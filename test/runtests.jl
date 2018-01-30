@@ -595,8 +595,8 @@ end
 
 # PR 20203
 @test Compat.readline(IOBuffer("Hello, World!\n")) == "Hello, World!"
-@test Compat.readline(IOBuffer("x\n"), chomp=true) == "x"
-@test Compat.readline(IOBuffer("x\n"), chomp=false) == "x\n"
+@test Compat.readline(IOBuffer("x\n"), keep=false) == "x"
+@test Compat.readline(IOBuffer("x\n"), keep=true) == "x\n"
 
 # PR 18727
 let

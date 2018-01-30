@@ -446,16 +446,11 @@ if VERSION < v"0.6.0-dev.1653"
     end
 end
 
-# https://github.com/JuliaLang/julia/pull/20203
-@static if VERSION < v"0.6.0-dev.2283"
+# https://github.com/JuliaLang/julia/pull/25646
+@static if VERSION < v"0.7.0-DEV.3510"
     # not exported
-    function readline(s::IO=STDIN; chomp::Bool=true)
-        if chomp
-            Base.chomp!(Base.readline(s))
-        else
-            Base.readline(s)
-        end
-    end
+    # chomp parameter preserved for compatibility with earliear Compat versions
+    readline(s::IO=STDIN; chomp::Bool=true, keep::Bool=!chomp) = Base.readline(s; chomp=!keep)
 end
 
 # https://github.com/JuliaLang/julia/pull/18727

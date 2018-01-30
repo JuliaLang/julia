@@ -159,7 +159,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Compat.isapprox` with `nans` keyword argument ([#20022])
 
-* `Compat.readline` with `chomp` keyword argument ([#20203])
+* `Compat.readline` with `keep` keyword argument ([#25646])
 
 * `take!` method for `Task`s since some functions now return `Channel`s instead of `Task`s ([#19841])
 
@@ -432,7 +432,6 @@ includes this fix. Find the minimum version from there.
 [#20005]: https://github.com/JuliaLang/julia/issues/20005
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
-[#20203]: https://github.com/JuliaLang/julia/issues/20203
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20407]: https://github.com/JuliaLang/julia/issues/20407
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
@@ -507,5 +506,6 @@ includes this fix. Find the minimum version from there.
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
+[#25646]: https://github.com/JuliaLang/julia/issues/25646
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#24182]: https://github.com/JuliaLang/julia/issues/24182
