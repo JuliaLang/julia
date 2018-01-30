@@ -87,7 +87,7 @@ end
     findfirst(pattern::Regex, string::String)
 
 Find the first occurrence of `pattern` in `string`. Equivalent to
-[`findnext(pattern, string, start(s))`](@ref).
+[`findnext(pattern, string, firstindex(s))`](@ref).
 
 # Examples
 ```jldoctest
@@ -99,7 +99,7 @@ julia> findfirst("Julia", "JuliaLang")
 ```
 """
 findfirst(pattern::AbstractString, string::AbstractString) =
-    findnext(pattern, string, start(string))
+    findnext(pattern, string, firstindex(string))
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
@@ -475,6 +475,6 @@ false
 function contains end
 
 contains(haystack::AbstractString, needle::Union{AbstractString,Char}) =
-    _searchindex(haystack, needle, start(haystack)) != 0
+    _searchindex(haystack, needle, firstindex(haystack)) != 0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")

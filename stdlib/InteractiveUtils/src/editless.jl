@@ -3,6 +3,7 @@
 # editing and paging files
 
 import Base.shell_split
+using Base: find_source_file
 
 """
     editor()

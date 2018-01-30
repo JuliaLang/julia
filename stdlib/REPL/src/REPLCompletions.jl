@@ -14,7 +14,7 @@ end
 function appendmacro!(syms, macros, needle, endchar)
     for s in macros
         if endswith(s, needle)
-            from = nextind(s, start(s))
+            from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
             push!(syms, s[from:to]*endchar)
         end

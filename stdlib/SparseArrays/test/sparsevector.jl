@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module SparseVectorTests
+
+using Test
+using SparseArrays
 using LinearAlgebra
 using Random
 
@@ -1264,3 +1268,5 @@ end
               LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
     end
 end
+
+end # module
