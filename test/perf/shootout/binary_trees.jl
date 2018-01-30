@@ -44,9 +44,9 @@ function loop_depths(d, min_depth, max_depth)
 end
 
 function binary_trees(N::Int=10)
-    const min_depth = 4
-    const max_depth = N
-    const stretch_depth = max_depth + 1
+    min_depth = 4
+    max_depth = N
+    stretch_depth = max_depth + 1
 
     # create and check stretch tree
     let c = check(make(0, stretch_depth))

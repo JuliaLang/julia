@@ -61,7 +61,7 @@ Return the current user's home directory.
 """
 function homedir()
     path_max = 1024
-    buf = Vector{UInt8}(path_max)
+    buf = Vector{UInt8}(uninitialized, path_max)
     sz = Ref{Csize_t}(path_max + 1)
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
@@ -78,7 +78,7 @@ end
 
 
 if Sys.iswindows()
-    isabspath(path::String) = ismatch(path_absolute_re, path)
+    isabspath(path::String) = contains(path, path_absolute_re)
 else
     isabspath(path::String) = startswith(path, '/')
 end
@@ -88,6 +88,7 @@ end
 
 Determines whether a path is absolute (begins at the root directory).
 
+# Examples
 ```jldoctest
 julia> isabspath("/home")
 true
@@ -103,6 +104,7 @@ isabspath(path::AbstractString)
 
 Determines whether a path refers to a directory (for example, ends with a path separator).
 
+# Examples
 ```jldoctest
 julia> isdirpath("/home")
 false
@@ -111,13 +113,14 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
+isdirpath(path::String) = contains(splitdrive(path)[2], path_directory_re)
 
 """
     splitdir(path::AbstractString) -> (AbstractString, AbstractString)
 
 Split a path into a tuple of the directory name and file name.
 
+# Examples
 ```jldoctest
 julia> splitdir("/home/myuser")
 ("/home", "myuser")
@@ -136,6 +139,7 @@ end
 
 Get the directory part of a path.
 
+# Examples
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
@@ -150,6 +154,7 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+# Examples
  ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
@@ -166,6 +171,7 @@ If the last component of a path contains a dot, split the path into everything b
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
 unmodified and the empty string.
 
+# Examples
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
@@ -194,11 +200,13 @@ joinpath(a::AbstractString) = a
 """
     joinpath(parts...) -> AbstractString
 
-Join path components into a full path. If some argument is an absolute path, then prior
-components are dropped.
+Join path components into a full path. If some argument is an absolute path or
+(on Windows) has a drive specification that doesn't match the drive computed for
+the join of the preceding paths, then prior components are dropped.
 
+# Examples
 ```jldoctest
-julia> joinpath("/home/myuser","example.jl")
+julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
@@ -208,11 +216,11 @@ function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && throw(ArgumentError("drive mismatch: $A$a $B$b"))
+    !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
-    isempty(a)                             ? string(C,b) :
-    ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
-                                             string(C,a,pathsep(a,b),b)
+    isempty(a)                              ? string(C,b) :
+    contains(a[end:end], path_separator_re) ? string(C,a,b) :
+                                              string(C,a,pathsep(a,b),b)
 end
 joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
@@ -221,6 +229,7 @@ joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
 Normalize a path, removing "." and ".." entries.
 
+# Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
@@ -245,7 +254,7 @@ function normpath(path::String)
     end
     if isabs
         while !isempty(parts) && parts[1] == ".."
-            shift!(parts)
+            popfirst!(parts)
         end
     elseif isempty(parts)
         push!(parts, ".")
@@ -282,7 +291,7 @@ function realpath(path::AbstractString)
     buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
-            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Cvoid}),
             p, length(buf), buf, C_NULL)
         systemerror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
@@ -329,6 +338,7 @@ expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
     i = start(path)
+    if done(path,i) return path end
     c, i = next(path,i)
     if c != '~' return path end
     if done(path,i) return homedir() end
@@ -370,8 +380,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:findlast(x -> !isempty(x), path_arr)], path_separator)
-    prefix_num = findlast(x -> !isempty(x), start_arr) - i - 1
+    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

@@ -2,65 +2,78 @@
 
 ## type join (closest common ancestor, or least upper bound) ##
 
+"""
+    typejoin(T, S)
+
+
+Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
+they both inherit.
+"""
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+typejoin(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; join_types(a, b, typejoin))
+
+function join_types(@nospecialize(a), @nospecialize(b), f::Function)
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        return UnionAll(a.var, join_types(a.body, b, f))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return UnionAll(b.var, join_types(a, b.body, f))
     elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
+        return f(a.ub, b)
     elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
+        return f(a, b.ub)
     elseif isa(a,Union)
-        return typejoin(typejoin(a.a,a.b), b)
+        a′ = f(a.a,a.b)
+        return a′ === a ? typejoin(a, b) : f(a′, b)
     elseif isa(b,Union)
-        return typejoin(a, typejoin(b.a,b.b))
+        b′ = f(b.a,b.b)
+        return b′ === b ? typejoin(a, b) : f(a, b′)
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
+        if lar == 0
+            return Tuple{Vararg{tailjoin(bp,1,f)}}
+        end
+        if lbr == 0
+            return Tuple{Vararg{tailjoin(ap,1,f)}}
+        end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
-        if lar==0 || lbr==0
-            return Tuple
-        end
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = Vector{Any}(laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
+                c = Vector{Any}(uninitialized, laf)
+                c[laf] = Vararg{f(unwrapva(ap[lar]), tailjoin(bp,laf,f))}
                 n = laf-1
             else
-                c = Vector{Any}(laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                c = Vector{Any}(uninitialized, laf+1)
+                c[laf+1] = Vararg{tailjoin(bp,laf+1,f)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = Vector{Any}(lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
+                c = Vector{Any}(uninitialized, lbf)
+                c[lbf] = Vararg{f(unwrapva(bp[lbr]), tailjoin(ap,lbf,f))}
                 n = lbf-1
             else
-                c = Vector{Any}(lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                c = Vector{Any}(uninitialized, lbf+1)
+                c[lbf+1] = Vararg{tailjoin(ap,lbf+1,f)}
                 n = lbf
             end
         else
-            c = Vector{Any}(laf)
+            c = Vector{Any}(uninitialized, laf)
             n = laf
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            ci = f(unwrapva(ai),unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -78,7 +91,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(n)
+            p = Vector{Any}(uninitialized, n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
@@ -94,6 +107,28 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     return Any
 end
 
+"""
+    promote_typejoin(T, S)
+
+Compute a type that contains both `T` and `S`, which could be
+either a parent of both types, or a `Union` if appropriate.
+Falls back to [`typejoin`](@ref).
+"""
+promote_typejoin(@nospecialize(a), @nospecialize(b)) =
+    (@_pure_meta; join_types(a, b, promote_typejoin))
+promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+    isconcretetype(T) ? Union{T, Nothing} : Any
+promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+    isconcretetype(T) ? Union{T, Nothing} : Any
+promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+    isconcretetype(T) ? Union{T, Missing} : Any
+promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+    isconcretetype(T) ? Union{T, Missing} : Any
+promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+
 # Returns length, isfixed
 function full_va_len(p)
     isempty(p) && return 0, true
@@ -108,14 +143,14 @@ function full_va_len(p)
     return length(p)::Int, true
 end
 
-# reduce typejoin over A[i:end]
-function tailjoin(A, i)
+# reduce join_types over A[i:end]
+function tailjoin(A, i, f::Function)
     if i > length(A)
         return unwrapva(A[end])
     end
     t = Bottom
     for j = i:length(A)
-        t = typejoin(t, unwrapva(A[j]))
+        t = f(t, unwrapva(A[j]))
     end
     return t
 end
@@ -125,11 +160,14 @@ end
 """
     promote_type(type1, type2)
 
-Determine a type big enough to hold values of each argument type without loss, whenever
-possible. In some cases, where no type exists to which both types can be promoted
-losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be represented
-exactly as `Float64` values.
+Promotion refers to converting values of mixed types to a single common type.
+`promote_type` represents the default promotion behavior in Julia when
+operators (usually mathematical) are given arguments of differing types.
+`promote_type` generally tries to return a type which can at least approximate
+most values of either input type without excessively widening.  Some loss is
+tolerated; for example, `promote_type(Int64, Float64)` returns
+[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
+represented exactly as `Float64` values.
 
 ```jldoctest
 julia> promote_type(Int64, Float64)
@@ -140,6 +178,15 @@ Int64
 
 julia> promote_type(Float32, BigInt)
 BigFloat
+
+julia> promote_type(Int16, Float16)
+Float16
+
+julia> promote_type(Int64, Float16)
+Float16
+
+julia> promote_type(Int8, UInt16)
+UInt16
 ```
 """
 function promote_type end
@@ -163,32 +210,56 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 end
 
+"""
+    promote_rule(type1, type2)
+
+Specifies what type should be used by [`promote`](@ref) when given values of types `type1` and
+`type2`. This function should not be called directly, but should have definitions added to
+it for new types as appropriate.
+"""
+function promote_rule end
+
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+# To fix ambiguities
+promote_rule(::Type{Any}, ::Type{<:Any}) = Any
+promote_rule(::Type{<:Any}, ::Type{Any}) = Any
+promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
 
-promote() = ()
-promote(x) = (x,)
-function promote(x::T, y::S) where {T,S}
+"""
+    promote(xs...)
+
+Convert all arguments to a common type, and return them all (as a tuple).
+If no arguments can be converted, an error is raised.
+
+# Examples
+```jldoctest
+julia> promote(Int8(1), Float16(4.5), Float32(4.1))
+(1.0f0, 4.5f0, 4.1f0)
+```
+"""
+function promote end
+
+function _promote(x::T, y::S) where {T,S}
     @_inline_meta
-    (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
+    R = promote_type(T, S)
+    return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
 promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
-function promote(x, y, z)
+function _promote(x, y, z)
     @_inline_meta
-    (convert(promote_typeof(x,y,z), x),
-     convert(promote_typeof(x,y,z), y),
-     convert(promote_typeof(x,y,z), z))
+    R = promote_typeof(x, y, z)
+    return (convert(R, x), convert(R, y), convert(R, z))
 end
-function promote(x, y, zs...)
+function _promote(x, y, zs...)
     @_inline_meta
-    (convert(promote_typeof(x,y,zs...), x),
-     convert(promote_typeof(x,y,zs...), y),
-     convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
+    R = promote_typeof(x, y, zs...)
+    return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
 # TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 
@@ -213,39 +284,38 @@ promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number
 promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
-# promotion with a check for circularity. Can be used to catch what
-# would otherwise become StackOverflowErrors.
-function promote_noncircular(x, y)
+promote() = ()
+promote(x) = (x,)
+
+function promote(x, y)
     @_inline_meta
-    px, py = promote(x, y)
-    not_all_sametype((x,px), (y,py))
+    px, py = _promote(x, y)
+    not_sametype((x,y), (px,py))
     px, py
 end
-function promote_noncircular(x, y, z)
+function promote(x, y, z)
     @_inline_meta
-    px, py, pz = promote(x, y, z)
-    not_all_sametype((x,px), (y,py), (z,pz))
+    px, py, pz = _promote(x, y, z)
+    not_sametype((x,y,z), (px,py,pz))
     px, py, pz
 end
-function promote_noncircular(x, y, z, a...)
-    p = promote(x, y, z, a...)
-    not_all_sametype(map(identity, (x, y, z, a...), p))
+function promote(x, y, z, a...)
+    p = _promote(x, y, z, a...)
+    not_sametype((x, y, z, a...), p)
     p
 end
-not_all_sametype(x, y) = nothing
-not_all_sametype(x, y, z) = nothing
-not_all_sametype(x::Tuple{S,S}, y::Tuple{T,T}) where {S,T} = sametype_error(x[1], y[1])
-not_all_sametype(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) where {R,S,T} = sametype_error(x[1], y[1], z[1])
-function not_all_sametype(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...) where {R,S,T}
-    @_inline_meta
-    not_all_sametype(y, z, args...)
-end
-not_all_sametype() = error("promotion failed to change any input types")
-function sametype_error(input...)
+
+promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
+
+not_sametype(x::T, y::T) where {T} = sametype_error(x)
+
+not_sametype(x, y) = nothing
+
+function sametype_error(input)
     @_noinline_meta
-    error("circular method definition: promotion of types ",
+    error("promotion of types ",
           join(map(x->string(typeof(x)), input), ", ", " and "),
-          " failed to change any input types")
+          " failed to change any arguments")
 end
 
 +(x::Number, y::Number) = +(promote(x,y)...)
@@ -285,10 +355,6 @@ julia> A^3
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
 muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
-(&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
-(|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-xor(x::Integer, y::Integer) = xor(promote(x,y)...)
-
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
@@ -311,23 +377,41 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_inline_meta; T)
 
-if isdefined(Core, :Inference)
-    const _return_type = Core.Inference.return_type
+if isdefined(Core, :Compiler)
+    const _return_type = Core.Compiler.return_type
 else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+"""
+    promote_op(f, argtypes...)
+
+Guess what an appropriate container eltype would be for storing results of
+`f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
+
+!!! warning
+    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
+    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
+    should _not_ be used e.g. in the preallocation of an output array.
+
+!!! warning
+    Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
+    the container eltype on the type of the actual elements. Only in the absence of any
+    elements (for an empty result container), it may be unavoidable to call `promote_op`.
+"""
 promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(S)})
-    isleaftype(S) && return isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(R), _default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(R, S, T)
 end
 
@@ -362,3 +446,5 @@ minmax(x::Real) = (x, x)
 max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
 min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
+
+flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)

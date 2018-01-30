@@ -4,10 +4,10 @@ println("""
 %jl_value_t = type opaque
 declare %jl_value_t addrspace(10)* @alloc()
 declare void @one_arg_boxed(%jl_value_t addrspace(10)*)
-declare %jl_value_t*** @jl_get_ptls_states()
+declare %jl_value_t*** @julia.ptls_states()
 
 define void @stress(i64 %a, i64 %b) {
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
 """)
 
 # CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 10002

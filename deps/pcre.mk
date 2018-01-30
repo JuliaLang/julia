@@ -13,12 +13,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure # old target
 	echo $1 > $@
 
-# patch for mingw build https://bugs.exim.org/show_bug.cgi?id=2067
-$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre-mingw.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/pcre-mingw.patch
-	echo 1 > $@
-
-$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre-mingw.patch-applied
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"

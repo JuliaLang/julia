@@ -38,7 +38,7 @@ ARPACK_FLAGS := --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" \
 
 # ARPACK-NG upstream keeps changing their download filenames
 $(SRCCACHE)/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/arpack-ng-$(ARPACK_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://julialang-s3.julialang.org/src/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 $(SRCCACHE)/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx

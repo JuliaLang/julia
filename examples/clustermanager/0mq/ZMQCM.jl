@@ -1,8 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using ZMQ
+# the 0mq clustermanager depends on package ZMQ. For testing purposes, at least
+# make sure the code loads without it.
+try
+    using ZMQ
+end
 
-import Base: launch, manage, connect, kill
+using Distributed
+import Distributed: launch, manage, connect, kill
 
 const BROKER_SUB_PORT = 8100
 const BROKER_PUB_PORT = 8101
@@ -122,7 +127,7 @@ function start_broker()
     ZMQ.bind(xsub, "tcp://127.0.0.1:$(BROKER_SUB_PORT)")
     ZMQ.bind(xpub, "tcp://127.0.0.1:$(BROKER_PUB_PORT)")
 
-    ccall((:zmq_proxy, :libzmq), Cint,  (Ptr{Void}, Ptr{Void}, Ptr{Void}), xsub.data, xpub.data, C_NULL)
+    ccall((:zmq_proxy, :libzmq), Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), xsub.data, xpub.data, C_NULL)
 #    proxy(xsub, xpub)
 
     # control never comes here
@@ -197,7 +202,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open(`$(params[:exename]) worker.jl $i $(Base.cluster_cookie())`, "r")
+        io, pobj = open(`$(params[:exename]) worker.jl $i $(cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -209,19 +214,19 @@ end
 function connect(manager::ZMQCMan, pid::Int, config::WorkerConfig)
     #println("connect_m2w")
     if myid() == 1
-        zid = get(config.userdata)[:zid]
+        zid = config.userdata[:zid]
         config.connect_at = zid # This will be useful in the worker-to-worker connection setup.
 
-        print_worker_stdout(get(config.userdata)[:io], pid)
+        print_worker_stdout(config.userdata[:io], pid)
     else
         #println("connect_w2w")
-        zid = get(config.connect_at)
+        zid = config.connect_at
         config.userdata = Dict{Symbol, Any}(:zid=>zid)
     end
 
     streams = setup_connection(zid, SELF_INITIATED)
 
-    udata = get(config.userdata)
+    udata = config.userdata
     udata[:streams] = streams
 
     streams
@@ -230,7 +235,7 @@ end
 # WORKER
 function start_worker(zid, cookie)
     #println("start_worker")
-    Base.init_worker(cookie, ZMQCMan())
+    init_worker(cookie, ZMQCMan())
     init_node(zid)
 
     while true
@@ -242,7 +247,7 @@ function start_worker(zid, cookie)
         if streams === nothing
             # First time..
             (r_s, w_s) = setup_connection(from_zid, REMOTE_INITIATED)
-            Base.process_messages(r_s, w_s)
+            process_messages(r_s, w_s)
         else
             (r_s, w_s, t_r) = streams
         end
@@ -256,13 +261,13 @@ function manage(manager::ZMQCMan, id::Int, config::WorkerConfig, op)
 end
 
 function kill(manager::ZMQCMan, pid::Int, config::WorkerConfig)
-    send_data(get(config.userdata)[:zid], CONTROL_MSG, KILL_MSG)
-    (r_s, w_s) = get(config.userdata)[:streams]
+    send_data(config.userdata[:zid], CONTROL_MSG, KILL_MSG)
+    (r_s, w_s) = config.userdata[:streams]
     close(r_s)
     close(w_s)
 
     # remove from our map
-    delete!(manager.map_zmq_julia, get(config.userdata)[:zid])
+    delete!(manager.map_zmq_julia, config.userdata[:zid])
 
     nothing
 end
@@ -271,7 +276,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        println("\tFrom worker $(pid):\t$line")
+        println("      From worker $(pid):\t$line")
     end
 end
 

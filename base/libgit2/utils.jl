@@ -10,36 +10,68 @@ const URL_REGEX = r"""
 )?
 (?<host>[A-Za-z0-9\-\.]+)
 (?(<scheme>)
-    (?:\:(?<port>\d+))?  # only parse port when not using scp-like syntax
+    # Only parse port when not using scp-like syntax
+    (?:\:(?<port>\d+))?
+    /?
     |
     :?
 )
 (?<path>
-    (?(<scheme>)/|(?<=:))  # scp-like syntax must be preceeded by a colon
+    # Require path to be preceeded by '/'. Alternatively, ':' when using scp-like syntax.
+    (?<=(?(<scheme>)/|:))
     .*
 )?
 $
 """x
 
+"""
+    version() -> VersionNumber
+
+Return the version of libgit2 in use, as a [`VersionNumber`](@ref man-version-number-literals).
+"""
 function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
     patch = Ref{Cint}(0)
-    ccall((:git_libgit2_version, :libgit2), Void,
-          (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}), major, minor, patch)
+    ccall((:git_libgit2_version, :libgit2), Cvoid,
+          (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
 const VERSION = version()
 
+"""
+    isset(val::Integer, flag::Integer)
+
+Test whether the bits of `val` indexed by `flag` are set (`1`) or unset (`0`).
+"""
 isset(val::Integer, flag::Integer) = (val & flag == flag)
+
+"""
+    reset(val::Integer, flag::Integer)
+
+Unset the bits of `val` indexed by `flag`, returning them to `0`.
+"""
 reset(val::Integer, flag::Integer) = (val &= ~flag)
+
+"""
+    toggle(val::Integer, flag::Integer)
+
+Flip the bits of `val` indexed by `flag`, so that if a bit is `0` it
+will be `1` after the toggle, and vice-versa.
+"""
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
+"""
+    features()
+
+Return a list of git features the current version of libgit2 supports, such as
+threading or using HTTPS or SSH.
+"""
 function features()
     feat = ccall((:git_libgit2_features, :libgit2), Cint, ())
     res = Consts.GIT_FEATURE[]
     for f in instances(Consts.GIT_FEATURE)
-        isset(feat, Cuint(f)) && push!(res, f)
+        isset(feat, Cuint(f)) && Base.push!(res, f)
     end
     return res
 end
@@ -51,8 +83,8 @@ Standardise the path string `path` to use POSIX separators.
 """
 function posixpath end
 if Sys.iswindows()
-    posixpath(path) = replace(path,'\\','/')
-else Sys.isunix()
+    posixpath(path) = replace(path,'\\' => '/')
+elseif Sys.isunix()
     posixpath(path) = path
 end
 
@@ -123,4 +155,15 @@ function git_url(;
     end
 
     return String(take!(io))
+end
+
+function credential_identifier(scheme::AbstractString, host::AbstractString)
+    string(isempty(scheme) ? "ssh" : scheme, "://", host)
+end
+
+function credential_identifier(url::AbstractString)
+    m = match(URL_REGEX, url)
+    scheme = coalesce(m[:scheme], "")
+    host = m[:host]
+    credential_identifier(scheme, host)
 end

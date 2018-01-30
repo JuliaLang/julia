@@ -10,6 +10,12 @@
               (string.join (map deparse (cdar l)) ", "))
       (string.join (map deparse l) sep)))
 
+(define (deparse-prefix-call head args opn cls)
+  (string (if (decl? head)
+              (string "(" (deparse head) ")")
+              (deparse head))
+          opn (deparse-arglist args) cls))
+
 (define (deparse e)
   (define (block-stmts e)
     (if (and (pair? e) (eq? (car e) 'block))
@@ -48,7 +54,9 @@
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
         ((memq (car e) '($ &))
-         (string (car e) (deparse (cadr e))))
+         (if (pair? (cadr e))
+             (string (car e) "(" (deparse (cadr e)) ")")
+             (string (car e) (deparse (cadr e)))))
         ((eq? (car e) '|::|)
          (if (length> e 2)
              (string (deparse (cadr e)) (car e) (deparse (caddr e)))
@@ -58,9 +66,9 @@
                  (string #\( (deparse-arglist (cdr e))
                          (if (length= e 2) #\, "")
                          #\)))
-                ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
-                ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
-                ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
+                ((call)  (deparse-prefix-call (cadr e) (cddr e) #\( #\)))
+                ((curly) (deparse-prefix-call (cadr e) (cddr e) #\{ #\}))
+                ((ref)   (deparse-prefix-call (cadr e) (cddr e) #\[ #\]))
                 ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
                 ((quote inert)
                  (if (and (symbol? (cadr e))
@@ -147,6 +155,7 @@
 ;; predicates and accessors
 
 (define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
+(define (quotify e) `',e)
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -228,7 +237,9 @@
       (ssavalue? e)))
 
 (define (simple-atom? x)
-  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
+  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)
+      (and (pair? x) (memq (car x) '(ssavalue null)))
+      (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)
@@ -305,6 +316,13 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
+(define (blockify e)
+  (if (and (pair? e) (eq? (car e) 'block))
+      (if (null? (cdr e))
+          `(block (null))
+          e)
+      `(block ,e)))
+
 (define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
@@ -344,6 +362,20 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+
+(define (if-generated? e)
+  (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
+
+(define (generated-meta? e)
+  (and (length= e 3) (eq? (car e) 'meta) (eq? (cadr e) 'generated)))
+
+(define (generated_only-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'generated_only)))
+
+(define (function-def? e)
+  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
+                     (and (eq? (car e) '=) (length= e 3)
+                          (eventually-call? (cadr e))))))
 
 ;; flatten nested expressions with the given head
 ;; (op (op a b) c) => (op a b c)

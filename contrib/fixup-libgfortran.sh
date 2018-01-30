@@ -52,7 +52,7 @@ private_libname()
 }
 
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
-for lib in arpack openspecfun lapack; do
+for lib in arpack lapack; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
@@ -125,13 +125,13 @@ change_linkage()
 }
 
 # For every library that remotely touches libgfortran stuff (the libraries we
-# have copied in ourselves as well as arpack, openspecfun, etc...) we must
+# have copied in ourselves as well as arpack, etc...) we must
 # update the linkage to point to @rpath (on OSX) or $ORIGIN (on Linux) so
 # that direct links to the old libgfortran directories are instead directed
 # to the proper location, which is our $private_libdir.
-for lib in libopenblas libarpack libcholmod liblapack libopenspecfun $SONAMES; do
+for lib in libopenblas libarpack libcholmod liblapack $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
-    # (e.g. "libopenspecfun.so", and "libopenspecfun.so.0", etc...)
+    # (e.g. "libopenblas.so", and "libopenblas.so.0", etc...)
     for lib_path in $private_libdir/$lib*; do
         # Iterate over dependency names that need to be changed
         for soname in $SONAMES; do

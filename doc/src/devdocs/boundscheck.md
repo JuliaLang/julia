@@ -5,17 +5,15 @@ accessing arrays. In tight inner loops or other performance critical situations,
 to skip these bounds checks to improve runtime performance. For instance, in order to emit vectorized
 (SIMD) instructions, your loop body cannot contain branches, and thus cannot contain bounds checks.
 Consequently, Julia includes an `@inbounds(...)` macro to tell the compiler to skip such bounds
-checks within the given block. For the built-in `Array` type, the magic happens inside the `arrayref`
-and `arrayset` intrinsics. User-defined array types instead use the `@boundscheck(...)` macro
+checks within the given block. User-defined array types can use the `@boundscheck(...)` macro
 to achieve context-sensitive code selection.
 
 ## Eliding bounds checks
 
-The `@boundscheck(...)` macro marks blocks of code that perform bounds checking. When such blocks
-appear inside of an `@inbounds(...)` block, the compiler removes these blocks. When the `@boundscheck(...)`
-is nested inside of a calling function containing an `@inbounds(...)`, the compiler will remove
-the `@boundscheck` block *only if it is inlined* into the calling function. For example, you might
-write the method `sum` as:
+The `@boundscheck(...)` macro marks blocks of code that perform bounds checking.
+When such blocks are inlined into an `@inbounds(...)` block, the compiler may remove these blocks.
+The compiler removes the `@boundscheck` block *only if it is inlined* into the calling function.
+For example, you might write the method `sum` as:
 
 ```julia
 function sum(A::AbstractArray)
@@ -56,11 +54,11 @@ The overall hierarchy is:
 
       * `checkbounds(Bool, A, I...)` which calls
 
-          * `checkbounds_indices(Bool, indices(A), I)` which recursively calls
+          * `checkbounds_indices(Bool, axes(A), I)` which recursively calls
 
               * `checkindex` for each dimension
 
-Here `A` is the array, and `I` contains the "requested" indices. `indices(A)` returns a tuple
+Here `A` is the array, and `I` contains the "requested" indices. `axes(A)` returns a tuple
 of "permitted" indices of `A`.
 
 `checkbounds(A, I...)` throws an error if the indices are invalid, whereas `checkbounds(Bool, A, I...)`

@@ -8,7 +8,7 @@ function default_sysimg_path(debug=false)
     if Sys.isunix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
-        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
+        joinpath(dirname(Sys.BINDIR), "lib", "julia", debug ? "sys-debug" : "sys")
     end
 end
 
@@ -17,7 +17,7 @@ end
 
 Rebuild the system image. Store it in `sysimg_path`, which defaults to a file named `sys.ji`
 that sits in the same folder as `libjulia.{so,dylib}`, except on Windows where it defaults
-to `JULIA_HOME/../lib/julia/sys.ji`.  Use the cpu instruction set given by `cpu_target`.
+to `Sys.BINDIR/../lib/julia/sys.ji`.  Use the cpu instruction set given by `cpu_target`.
 Valid CPU targets are the same as for the `-C` option to `julia`, or the `-march` option to
 `gcc`.  Defaults to `native`, which means to use all CPU instructions available on the
 current processor. Include the user image file given by `userimg_path`, which should contain
@@ -46,7 +46,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
-        julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
+        julia = joinpath(Sys.BINDIR, debug ? "julia-debug" : "julia")
         cc, warn_msg = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to
@@ -69,16 +69,16 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             cp(userimg_path, "userimg.jl")
         end
         try
-            # Start by building inference.{ji,o}
-            inference_path = joinpath(dirname(sysimg_path), "inference")
-            info("Building inference.o")
-            info("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
-            run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
+            # Start by building basecompiler.{ji,o}
+            basecompiler_path = joinpath(dirname(sysimg_path), "basecompiler")
+            info("Building basecompiler.o")
+            info("$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl")
+            run(`$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
             info("Building sys.o")
-            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
-            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
+            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl")
+            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)

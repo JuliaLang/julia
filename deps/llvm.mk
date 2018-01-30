@@ -50,7 +50,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX
+LLVM_TARGETS := host;NVPTX;AMDGPU
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -439,10 +439,10 @@ $(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf)) # modified version appli
 $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 $(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
-# patches for NVPTX
-$(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D23597_sdag_names)) # Dep for D24300, remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
+$(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # NVPTX, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D23597_sdag_names))     # NVPTX, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # NVPTX, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27389)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
@@ -459,6 +459,14 @@ $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D32593))
 $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-3.9.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-D37939-Mem2Reg-Also-handle-memcpy))
+$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
+$(eval $(call LLVM_PATCH,llvm-3.9-c_api_nullptr))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
+endif
 else ifeq ($(LLVM_VER_SHORT),4.0)
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-4.0.0_threads))
@@ -479,7 +487,37 @@ $(eval $(call LLVM_PATCH,llvm-D32208-coerce-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
+$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
+$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
+$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
+endif
+else ifeq ($(LLVM_VER_SHORT),5.0)
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-5.0.0_threads))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
+$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_5.0))
+$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-5.0-NVPTX-addrspaces)) # NVPTX
+$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-D38765-gvn_5.0)) # Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
 endif # LLVM_VER
+
+# Remove hardcoded OS X requirements in compilter-rt cmake build
+ifeq ($(LLVM_VER_SHORT),3.9)
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-3.9-osx-10.12))
+endif
+endif
+
+# Independent to the llvm version add a JL prefix to the version map
+# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
+
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 

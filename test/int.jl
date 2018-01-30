@@ -2,6 +2,7 @@
 
 # Test integer conversion routines from int.jl
 
+using Random
 
 for y in (-4, Float32(-4), -4.0, big(-4.0))
     @test flipsign(3, y)  == -3
@@ -126,9 +127,9 @@ for T in (Int8, Int16, Int32, Int64)
     @test convert(T, max_val) == max_val
     @test_throws InexactError convert(T, max_val+1)
 
-    m = Int128(typemin(T))
-    @test convert(T, m) == m
-    @test_throws InexactError convert(T, m-1)
+    min_val = Int128(typemin(T))
+    @test convert(T, min_val) == min_val
+    @test_throws InexactError convert(T, min_val-1)
 end
 
 for T in (UInt8, UInt16, UInt32, UInt64)
@@ -223,9 +224,44 @@ for T in [Base.BitInteger_types..., BigInt],
     @test typeof(rand(U(0):U(127)) % T) === T
 end
 
+# issue #15489
+@test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
+@test UInt64(1) * Int64(-1) === typemax(UInt64)
+@test UInt(1) - (-1) == 2
+@test UInt64(15) & -4 === UInt64(12)
+@test UInt64(15) | -4 === typemax(UInt64)
+@test UInt64(15) ⊻ -4 === 0xfffffffffffffff3
+
 
 @testset "left shift with Vector{Int} on BigInt-scalar #13832" begin
     x = BigInt(1) .<< [1:70;]
     @test x[end] == 1180591620717411303424
     @test eltype(x) == BigInt
 end
+
+# issue #9292
+@testset "mixed signedness arithmetic" begin
+    for T in Base.BitInteger_types
+        for S in Base.BitInteger_types
+            a, b = one(T), one(S)
+            for c in (a+b, a-b, a*b)
+                if T === S
+                    @test c isa T
+                elseif sizeof(T) > sizeof(S)
+                    # larger type wins
+                    @test c isa T
+                elseif sizeof(S) > sizeof(T)
+                    @test c isa S
+                else
+                    # otherwise Unsigned wins
+                    @test c isa (T <: Unsigned ? T : S)
+                end
+            end
+        end
+    end
+end
+
+# issue #21092
+@test big"1_0_0_0" == BigInt(1000)
+@test_throws ArgumentError big"1_0_0_0_"
+@test_throws ArgumentError big"_1_0_0_0"

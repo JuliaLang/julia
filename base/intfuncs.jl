@@ -79,8 +79,18 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
-lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,one(eltype(abc)),abc)
+
+function gcd(abc::AbstractArray{<:Integer})
+    a = zero(eltype(abc))
+    for b in abc
+        a = gcd(a,b)
+        if a == 1
+            return a
+        end
+    end
+    return a
+end
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
@@ -159,12 +169,19 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x::Number) = oftype(x*x, x)
-to_power_type(x) = x
-@noinline throw_domerr_powbysq(p) = throw(DomainError(p,
+to_power_type(x) = convert(promote_op(*, typeof(x), typeof(x)), x)
+@noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
-           "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
-           "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+           "\nConvert input to float.")))
+@noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p,
+   string("Cannot raise an integer x to a negative power ", p, '.',
+          "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
+          "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+@noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p,
+   string("Cannot raise an integer matrix x to a negative power ", p, '.',
+          "\nMake x a float matrix by adding a zero decimal ",
+          "(e.g., [2.0 1.0;1.0 0.0]^$p instead ",
+          "of [2 1;1 0]^$p), or write float(x)^$p or Rational.(x)^$p")))
 function power_by_squaring(x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
@@ -174,9 +191,9 @@ function power_by_squaring(x_, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
-        x == 1 && return copy(x)
-        x == -1 && return iseven(p) ? one(x) : copy(x)
-        throw_domerr_powbysq(p)
+        isone(x) && return copy(x)
+        isone(-x) && return iseven(p) ? one(x) : copy(x)
+        throw_domerr_powbysq(x, p)
     end
     t = trailing_zeros(p) + 1
     p >>= t
@@ -196,7 +213,7 @@ function power_by_squaring(x_, p::Integer)
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
-    p < 0 && !x && throw_domerr_powbysq(p)
+    p < 0 && !x && throw_domerr_powbysq(x, p)
     return (p==0) | x
 end
 
@@ -218,7 +235,7 @@ end
 const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
-# inference.jl has complicated logic to inline x^2 and x^3 for
+# Core.Compiler has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply.
 # (The first argument prevents unexpected behavior if a function ^
 # is defined that is not equal to Base.^)
@@ -226,6 +243,24 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+
+# don't use the inv(x) transformation here since float^p is slightly more accurate
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
+@inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{-1}) = inv(x)
+
+# for other types, define x^-n as inv(x)^n so that negative literal powers can
+# be computed in a type-stable way even for e.g. integers.
+@inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
+    if p < 0
+        :(literal_pow(^, inv(x), $(Val{-p}())))
+    else
+        :(f(x,$p))
+    end
+end
+
+# note: it is tempting to add optimized literal_pow(::typeof(^), x, ::Val{n})
+#       methods here for various n, but this easily leads to method ambiguities
+#       if anyone has defined literal_pow(::typeof(^), x::T, ::Val).
 
 # b^p mod m
 
@@ -259,8 +294,7 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
-    local r::T
-    r = 1
+    r::T = 1
     while true
         if p >= t
             r = mod(widemul(r,b),m)
@@ -417,7 +451,7 @@ function ndigits0z(x::UInt128)
     return n + ndigits0z(UInt64(x))
 end
 
-ndigits0z(x::Signed) = ndigits0z(unsigned(abs(x)))
+ndigits0z(x::BitSigned) = ndigits0z(unsigned(abs(x)))
 
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
@@ -629,8 +663,8 @@ for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Char, p::Int)     = ($sym)(unsigned(x),p,false)
-        ($sym)(x::Char)             = ($sym)(unsigned(x),1,false)
+        ($sym)(x::Char, p::Int)     = ($sym)(UInt32(x),p,false)
+        ($sym)(x::Char)             = ($sym)(UInt32(x),1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
         ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end
@@ -700,34 +734,50 @@ julia> dec(20, 3)
 """
 dec
 
-bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
-bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
-bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
-bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
-bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
-
 """
-    digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)
+    bitstring(n)
 
-Returns an array with element type `T` (default `Int`) of the digits of `n` in the given
-base, optionally padded with zeros to a specified size. More significant digits are at
-higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+A string giving the literal bit representation of a number.
 
 # Examples
 ```jldoctest
-julia> digits(10, 10)
+julia> bitstring(4)
+"0000000000000000000000000000000000000000000000000000000000000100"
+
+julia> bitstring(2.2)
+"0100000000000001100110011001100110011001100110011001100110011010"
+```
+"""
+function bitstring end
+
+bitstring(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bitstring(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bitstring(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bitstring(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bitstring(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+
+"""
+    digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)
+
+Return an array with element type `T` (default `Int`) of the digits of `n` in the given
+base, optionally padded with zeros to a specified size. More significant digits are at
+higher indices, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+
+# Examples
+```jldoctest
+julia> digits(10, base = 10)
 2-element Array{Int64,1}:
  0
  1
 
-julia> digits(10, 2)
+julia> digits(10, base = 2)
 4-element Array{Int64,1}:
  0
  1
  0
  1
 
-julia> digits(10, 2, 6)
+julia> digits(10, base = 2, pad = 6)
 6-element Array{Int64,1}:
  0
  1
@@ -737,10 +787,11 @@ julia> digits(10, 2, 6)
  0
 ```
 """
-digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
+digits(n::Integer; base = base::Integer = 10, pad = pad::Integer = 1) =
+    digits(typeof(base), n, base = base, pad = pad)
 
-function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1)
-    digits!(zeros(T, ndigits(n, base, pad)), n, base)
+function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer = 1)
+    digits!(zeros(T, ndigits(n, base, pad)), n, base = base)
 end
 
 """
@@ -752,22 +803,22 @@ hastypemax(::Base.BitIntegerType) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T)
 
 """
-    digits!(array, n::Integer, base::Integer=10)
+    digits!(array, n::Integer; base::Integer = 10)
 
 Fills an array of the digits of `n` in the given base. More significant digits are at higher
-indexes. If the array length is insufficient, the least significant digits are filled up to
+indices. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 
 # Examples
 ```jldoctest
-julia> digits!([2,2,2,2], 10, 2)
+julia> digits!([2,2,2,2], 10, base = 2)
 4-element Array{Int64,1}:
  0
  1
  0
  1
 
-julia> digits!([2,2,2,2,2,2], 10, 2)
+julia> digits!([2,2,2,2,2,2], 10, base = 2)
 6-element Array{Int64,1}:
  0
  1
@@ -777,8 +828,8 @@ julia> digits!([2,2,2,2,2,2], 10, 2)
  0
 ```
 """
-function digits!(a::AbstractVector{T}, n::Integer, base::Integer=10) where T<:Integer
-    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base)
+function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
+    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base = base)
     2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
         throw(ArgumentError("type $T too small for base $base"))
@@ -817,9 +868,8 @@ end
 
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
-    local f::typeof(n*n), i::typeof(n*n)
-    f = 1
-    for i = 2:n
+    f::typeof(n*n) = 1
+    for i::typeof(n*n) = 2:n
         f *= i
     end
     return f
@@ -860,7 +910,7 @@ function binomial(n::T, k::T) where T<:Integer
     rr = 2
     while rr <= k
         xt = div(widemul(x, nn), rr)
-        x = xt
+        x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
         rr += 1
         nn += 1

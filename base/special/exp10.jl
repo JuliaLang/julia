@@ -67,6 +67,20 @@ MIN_EXP10(::Type{Float32}) = -45.15449934959718f0         # log10 2^-150
 @eval exp10_small_thres(::Type{Float64}) = $(2.0^-29)
 @eval exp10_small_thres(::Type{Float32}) = $(2.0f0^-14)
 
+"""
+    exp10(x)
+
+Compute ``10^x``.
+
+# Examples
+```jldoctest
+julia> exp10(2)
+100.0
+
+julia> exp10(0.2)
+1.5848931924611136
+```
+"""
 function exp10(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)
@@ -105,11 +119,11 @@ function exp10(x::T) where T<:Union{Float32,Float64}
         if k > -significand_bits(T)
             # multiply by 2.0 first to prevent overflow, extending the range
             k == exponent_max(T) && return y * T(2.0) * T(2.0)^(exponent_max(T) - 1)
-            twopk = reinterpret(T, rem(exponent_bias(T) + k, fpinttype(T)) << significand_bits(T))
+            twopk = reinterpret(T, rem(exponent_bias(T) + k, uinttype(T)) << significand_bits(T))
             return y*twopk
         else
             # add significand_bits(T) + 1 to lift the range outside the subnormals
-            twopk = reinterpret(T, rem(exponent_bias(T) + significand_bits(T) + 1 + k, fpinttype(T)) << significand_bits(T))
+            twopk = reinterpret(T, rem(exponent_bias(T) + significand_bits(T) + 1 + k, uinttype(T)) << significand_bits(T))
             return y * twopk * T(2.0)^(-significand_bits(T) - 1)
         end
     elseif xa < reinterpret(Unsigned, exp10_small_thres(T))  # |x| < exp10_small_thres

@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.copy, Base.==
+using Random
+using InteractiveUtils: code_llvm
+
+import Libdl
 
 const libccalltest = "libccalltest"
 
 const verbose = false
-ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
+ccall((:set_verbose, libccalltest), Cvoid, (Int32,), verbose)
 
 
 # Test for proper argument register truncation
@@ -82,20 +86,20 @@ let a, ci_ary, x
     @test x == a + 1 - 2im
     @test a == 20 + 51im
 
-    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &a)
+    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ref{Complex{Int}},), a)
     @test unsafe_load(x) == a
-    Libc.free(convert(Ptr{Void}, x))
+    Libc.free(convert(Ptr{Cvoid}, x))
 end
 
 let a, b, x
     a = 2.84 + 5.2im
 
-    x = ccall((:cgtest, libccalltest), Complex128, (Complex128,), a)
+    x = ccall((:cgtest, libccalltest), ComplexF64, (ComplexF64,), a)
 
     @test x == a + 1 - 2im
 
     b = [a] # Make sure the array is alive during unsafe_load
-    x = unsafe_load(ccall((:cgptest, libccalltest), Ptr{Complex128}, (Ptr{Complex128},), b))
+    x = unsafe_load(ccall((:cgptest, libccalltest), Ptr{ComplexF64}, (Ptr{ComplexF64},), b))
 
     @test x == a + 1 - 2im
     @test a == 2.84 + 5.2im
@@ -104,12 +108,12 @@ end
 let a, b, x
     a = 3.34f0 + 53.2f0im
 
-    x = ccall((:cftest, libccalltest), Complex64, (Complex64,), a)
+    x = ccall((:cftest, libccalltest), ComplexF32, (ComplexF32,), a)
 
     @test x == a + 1 - 2im
 
     b = [a] # Make sure the array is alive during unsafe_load
-    x = unsafe_load(ccall((:cfptest, libccalltest), Ptr{Complex64}, (Ptr{Complex64},), b))
+    x = unsafe_load(ccall((:cfptest, libccalltest), Ptr{ComplexF32}, (Ptr{ComplexF32},), b))
 
     @test x == a + 1 - 2im
     @test a == 3.34f0 + 53.2f0im
@@ -122,7 +126,6 @@ let a
     a = 2.84 + 5.2im
 
     @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), a)
-    @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &a)
 end
 
 
@@ -406,10 +409,10 @@ test_struct10(Struct10)
 test_struct10(Struct10I)
 
 mutable struct Struct11
-    x::Complex64
+    x::ComplexF32
 end
 struct Struct11I
-    x::Complex64
+    x::ComplexF32
 end
 
 function test_struct11(::Type{Struct}) where {Struct}
@@ -428,12 +431,12 @@ test_struct11(Struct11)
 test_struct11(Struct11I)
 
 mutable struct Struct12
-    x::Complex64
-    y::Complex64
+    x::ComplexF32
+    y::ComplexF32
 end
 struct Struct12I
-    x::Complex64
-    y::Complex64
+    x::ComplexF32
+    y::ComplexF32
 end
 
 function test_struct12(::Type{Struct}) where {Struct}
@@ -453,10 +456,10 @@ test_struct12(Struct12)
 test_struct12(Struct12I)
 
 mutable struct Struct13
-    x::Complex128
+    x::ComplexF64
 end
 struct Struct13I
-    x::Complex128
+    x::ComplexF64
 end
 
 function test_struct13(::Type{Struct}) where {Struct}
@@ -762,7 +765,7 @@ s1 = Struct1(352.39422f23, 19.287577)
 ==(a::Struct1,b::Struct1) = a.x == b.x && a.y == b.y
 
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
-              (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
+              (ComplexF32,:cf32),(ComplexF64,:cf64),(Struct1,:s1))
     fname = Symbol("foo",v)
     fname1 = Symbol("foo1",v)
     @eval begin
@@ -791,61 +794,61 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         function $fname(s)
             @assert false
         end
-        b = ccall(cfunction($fname1,Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),a)
+        b = ccall(cfunction($fname1, Ref{$t}, Tuple{Ref{$t}}), Ref{$t}, (Ref{$t},), a)
         verbose && println("C: ",b)
         @test b == $v
         @test b === a
         @test b === c
-        b = ccall(cfunction($fname,$t,($t,)),$t,($t,),a)
+        b = ccall(cfunction($fname, $t, Tuple{$t}), $t, ($t,), a)
         verbose && println("C: ",b)
         @test b == $v
         if ($(t).mutable)
             @test !(b === c)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname1,$t,(Ref{$t},)),$t,(Ref{$t},),a)
+        b = ccall(cfunction($fname1, $t, Tuple{Ref{$t}}), $t, (Ref{$t},), a)
         verbose && println("C: ",b)
         @test b == $v
         if ($(t).mutable)
             @test !(b === c)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Ref{$t},($t,)),Ref{$t},($t,),a)
+        b = ccall(cfunction($fname, Ref{$t}, Tuple{$t}), Ref{$t}, ($t,), a)
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Any,(Ref{$t},)),Any,(Ref{$t},),$v)
+        b = ccall(cfunction($fname, Any, Tuple{Ref{$t}}), Any, (Ref{$t},), $v)
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v)
+        b = ccall(cfunction($fname, Any, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        @test_throws TypeError ccall(cfunction($fname,Ref{AbstractString},(Ref{Any},)),Any,(Ref{Any},),$v)
-        @test_throws TypeError ccall(cfunction($fname,AbstractString,(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test_throws TypeError ccall(cfunction($fname, Ref{AbstractString}, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
+        @test_throws TypeError ccall(cfunction($fname, AbstractString, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
     end
 end
 
 # issue 13031
 foo13031(x) = Cint(1)
-foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},))
+foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}})
 ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
 
 foo13031(x,y,z) = z
-foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
+foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}, Ref{Tuple{}}, Cint})
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
 # issue 17219
-function ccall_reassigned_ptr(ptr::Ptr{Void})
+function ccall_reassigned_ptr(ptr::Ptr{Cvoid})
     ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
     ccall(ptr, Any, (Any,), "foo")
 end
@@ -880,15 +883,15 @@ end
 
 # Pointer finalizer (issue #15408)
 let A = [1]
-    ccall((:set_c_int, libccalltest), Void, (Cint,), 1)
+    ccall((:set_c_int, libccalltest), Cvoid, (Cint,), 1)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == 1
-    finalizer(A, cglobal((:finalizer_cptr, libccalltest), Void))
+    finalizer(cglobal((:finalizer_cptr, libccalltest), Cvoid), A)
     finalize(A)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == -1
 end
 
 # Pointer finalizer at exit (PR #19911)
-let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(A, cglobal((:c_exit_finalizer, \"$libccalltest\"), Void))"`, String)
+let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(cglobal((:c_exit_finalizer, \"$libccalltest\"), Cvoid), A)"`, String)
     @test result == "c_exit_finalizer: 42, 0"
 end
 
@@ -993,7 +996,7 @@ if Sys.ARCH === :x86_64
         T = NTuple{4, VecElement{s}}
         @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
             return ccall(
-                cfunction(foo_ams, $T, ($T, $T, $T, $T)),
+                cfunction(foo_ams, $T, Tuple{$T, $T, $T, $T}),
                 $T,
                 ($T, $T, $T, $T),
                 a1,  a2,  a3, a4)
@@ -1131,7 +1134,7 @@ elseif Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     (1024, 1023, 1022, 1021), (1025, 1024, 1023, 1022), (1026, 1025, 1024, 1023), (1027, 1026, 1025, 1024), (10028, 10027, 10026, 10025))
 
 elseif Sys.ARCH !== :i686 && Sys.ARCH !== :arm # TODO
-warn("ccall: no VecReg tests run for this platform")
+@warn "ccall: no VecReg tests run for this platform"
 
 end
 
@@ -1151,9 +1154,9 @@ end
 # Do not put these in a function.
 @noinline g17413() = rand()
 @inline f17413() = (g17413(); g17413())
-ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 for i in 1:3
-    ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+    ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
 struct SpillPint
@@ -1239,12 +1242,12 @@ end
 
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
-             eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x))))
+             eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
 @test_throws(UndefVarError(:Something_not_defined_20835),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 
-@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Nullable{T},), 0)
-@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Nullable{T}, ())
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0))
+@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
 @test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
 @test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
@@ -1253,18 +1256,18 @@ end
              f21104rt(Float64))
 
 # test for malformed syntax errors
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (), x)))
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
-@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C), x, y, z)))
-@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,),)))
-@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C), )))
-@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
-@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
+@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), x, y, z)))
+@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),)))
+@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), )))
+@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
+@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
+@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
+@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
 # cfunction on non-function singleton
 struct CallableSingleton
@@ -1281,7 +1284,7 @@ end
 evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
 
 evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = cfunction(
-    evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
+    evalf_callback_19805, Float64, Tuple{callinfos_19805{FUNC_FT}})
 
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
              evalf_callback_c_19805( callinfos_19805(sin) ))
@@ -1292,12 +1295,12 @@ struct Bits22734 <: Abstract22734
     x::Int
     y::Float64
 end
-function cb22734(ptr::Ptr{Void})
-    gc()
+function cb22734(ptr::Ptr{Cvoid})
+    GC.gc()
     obj = unsafe_pointer_to_objref(ptr)::Bits22734
     obj.x + obj.y
 end
-ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Void}})
+ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Cvoid}})
 function caller22734(ptr)
     obj = Bits22734(12, 20)
     ccall(ptr, Float64, (Ref{Abstract22734},), obj)

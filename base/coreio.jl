@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-show(x) = show(STDOUT::IO, x)
 print(xs...)   = print(STDOUT::IO, xs...)
 println(xs...) = println(STDOUT::IO, xs...)
 println(io::IO) = print(io, '\n')

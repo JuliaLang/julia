@@ -5,7 +5,7 @@ LLVM for Julia.
 
 ## Overview of Julia to LLVM Interface
 
-Julia statically links in LLVM by default. Build with `USE_LLVM_SHLIB=1` to link dynamically.
+Julia dynamically links against LLVM by default. Build with `USE_LLVM_SHLIB=0` to link statically.
 
 The code for lowering Julia AST to LLVM IR or interpreting it directly is in directory `src/`.
 
@@ -259,14 +259,14 @@ One important aspect missing from the discussion so far is the handling of
 do not coincide. As an example consider:
 ```julia
 A = randn(1024)
-ccall(:foo, Void, (Ptr{Float64},), A)
+ccall(:foo, Cvoid, (Ptr{Float64},), A)
 ```
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the `ccall`.
 To understand how this is done, first recall the lowering of the above code:
 ```julia
-return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
+return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the
@@ -297,3 +297,24 @@ for the function. As a result, the external rooting must be arranged while the
 value is still tracked by the system. I.e. it is not valid to attempt to use the
 result of this operation to establish a global root - the optimizer may have
 already dropped the value.
+
+### Keeping values alive in the absence of uses
+
+In certain cases it is necessary to keep an object alive, even though there is
+no compiler-visible use of said object. This may be case for low level code
+that operates on the memory-representation of an object directly or code that
+needs to interface with C code. In order to allow this, we provide the following
+intrinsics at the LLVM level:
+```
+token @llvm.julia.gc_preserve_begin(...)
+void @llvm.julia.gc_preserve_end(token)
+```
+(The `llvm.` in the name is required in order to be able to use the `token`
+type). The semantics of these intrinsics are as follows:
+At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not
+not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
+is the token returned by a `gc_preserve_begin` call), the values passed as
+arguments to that `gc_preserve_begin` will be kept live. Note that the
+`gc_preserve_begin` still counts as a regular use of those values, so the
+standard lifetime semantics will ensure that the values will be kept alive
+before entering the preserve region.

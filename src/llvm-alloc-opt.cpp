@@ -4,6 +4,8 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm/ADT/SmallSet.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Dominators.h>
@@ -16,14 +18,14 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "fix_llvm_assert.h"
-
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #include <map>
 #include <set>
+
+#include "julia_assert.h"
 
 using namespace llvm;
 
@@ -56,12 +58,32 @@ static bool isBundleOperand(CallInst *call, unsigned idx)
 #endif
 }
 
+static void removeGCPreserve(CallInst *call, Instruction *val)
+{
+    auto replace = ConstantPointerNull::get(cast<PointerType>(val->getType()));
+    call->replaceUsesOfWith(val, replace);
+    for (auto &arg: call->arg_operands()) {
+        if (!isa<Constant>(arg.get())) {
+            return;
+        }
+    }
+    while (!call->use_empty()) {
+        auto end = cast<Instruction>(*call->user_begin());
+        // gc_preserve_end returns void.
+        assert(end->use_empty());
+        end->eraseFromParent();
+    }
+    call->eraseFromParent();
+}
+
 /**
  * Promote `julia.gc_alloc_obj` which do not have escaping root to a alloca.
  * Uses that are not considered to escape the object (i.e. heap address) includes,
  *
  * * load
  * * `pointer_from_objref`
+ * * Any real llvm intrinsics
+ * * gc preserve intrinsics
  * * `ccall` gcroot array (`jl_roots` operand bundle)
  * * store (as address)
  * * addrspacecast, bitcast, getelementptr
@@ -88,6 +110,8 @@ private:
     Function *ptr_from_objref;
     Function *lifetime_start;
     Function *lifetime_end;
+    Function *gc_preserve_begin;
+    Function *typeof_func;
 
     Type *T_int8;
     Type *T_int32;
@@ -125,8 +149,9 @@ private:
         {}
         // insert llvm.lifetime.* calls for `ptr` with size `sz`
         // based on the use of `orig` given in `alloc_uses`.
-        void insert(Instruction *ptr, Constant *sz, Instruction *orig,
-                    const std::set<Instruction*> &alloc_uses);
+        void insert(Function &F, Instruction *ptr, Constant *sz, Instruction *orig,
+                    const std::set<Instruction*> &alloc_uses,
+                    const std::set<CallInst*> &preserves);
     private:
         Instruction *getFirstSafepoint(BasicBlock *bb);
         void insertEnd(Instruction *ptr, Constant *sz, Instruction *insert);
@@ -148,8 +173,11 @@ private:
     bool doInitialization(Module &m) override;
     bool runOnFunction(Function &F) override;
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
-                   bool &ignore_tag);
-    void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
+                   std::set<CallInst*> &preserves, bool &ignore_tag);
+    void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack,
+                         Value *tag);
+    void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID, Instruction *orig_i,
+                                 Instruction *new_i);
     bool isSafepoint(Instruction *inst);
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
@@ -198,8 +226,9 @@ void AllocOpt::LifetimeMarker::insertEnd(Instruction *ptr, Constant *sz, Instruc
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
 }
 
-void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instruction *orig,
-                                      const std::set<Instruction*> &alloc_uses)
+void AllocOpt::LifetimeMarker::insert(Function &F, Instruction *ptr, Constant *sz,
+                                      Instruction *orig, const std::set<Instruction*> &alloc_uses,
+                                      const std::set<CallInst*> &preserves)
 {
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
     BasicBlock *def_bb = orig->getParent();
@@ -243,6 +272,34 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
         abort();
     }
 #endif
+    // Record extra BBs that contain invisible uses.
+    SmallSet<BasicBlock*, 8> extra_use;
+    SmallVector<DomTreeNodeBase<BasicBlock>*, 8> dominated;
+    for (auto preserve: preserves) {
+        for (auto RN = DT.getNode(preserve->getParent()); RN;
+             RN = dominated.empty() ? nullptr : dominated.pop_back_val()) {
+            for (auto N: *RN) {
+                auto bb = N->getBlock();
+                if (extra_use.count(bb))
+                    continue;
+                bool ended = false;
+                for (auto end: preserve->users()) {
+                    auto end_bb = cast<Instruction>(end)->getParent();
+                    auto end_node = DT.getNode(end_bb);
+                    if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
+                        ended = true;
+                        break;
+                    }
+                }
+                if (ended)
+                    continue;
+                bbs.insert(bb);
+                extra_use.insert(bb);
+                dominated.push_back(N);
+            }
+        }
+        assert(dominated.empty());
+    }
     // For each BB, find the first instruction(s) where the allocation is possibly dead.
     // If all successors are live, then there isn't one.
     // If all successors are dead, then it's the first instruction after the last use
@@ -265,6 +322,9 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
                     first_dead.push_back(&*succ->begin());
                 }
             }
+        }
+        else if (extra_use.count(bb)) {
+            first_dead.push_back(bb->getTerminator());
         }
         else {
             for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
@@ -297,6 +357,7 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
             }
             else if (auto insert = getFirstSafepoint(bb)) {
                 insertEnd(ptr, sz, insert);
+                continue;
             }
         }
         else {
@@ -332,6 +393,8 @@ bool AllocOpt::doInitialization(Module &M)
         return false;
 
     ptr_from_objref = M.getFunction("julia.pointer_from_objref");
+    gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
+    typeof_func = M.getFunction("julia.typeof");
 
     T_prjlvalue = alloc_obj->getReturnType();
     T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
@@ -360,7 +423,7 @@ bool AllocOpt::doInitialization(Module &M)
 }
 
 bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
-                         bool &ignore_tag)
+                         std::set<CallInst*> &preserves, bool &ignore_tag)
 {
     uses.clear();
     if (I->use_empty())
@@ -381,10 +444,23 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
         if (isa<LoadInst>(inst))
             return true;
         if (auto call = dyn_cast<CallInst>(inst)) {
-            // TODO: on LLVM 5.0 we may need to handle certain llvm intrinsics
-            // including `memcpy`, `memset` etc. We might also need to handle
-            // `memcmp` by coverting to our own intrinsic and lower it after the gc root pass.
-            if (ptr_from_objref && ptr_from_objref == call->getCalledFunction())
+            // TODO handle `memcmp`
+            // None of the intrinsics should care if the memory is stack or heap allocated.
+            auto callee = call->getCalledFunction();
+            if (auto II = dyn_cast<IntrinsicInst>(call)) {
+                if (II->getIntrinsicID()) {
+                    return true;
+                }
+                if (gc_preserve_begin && gc_preserve_begin == callee) {
+                    for (auto user: call->users())
+                        uses.insert(cast<Instruction>(user));
+                    preserves.insert(call);
+                    return true;
+                }
+            }
+            if (ptr_from_objref && ptr_from_objref == callee)
+                return true;
+            if (typeof_func && typeof_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
@@ -443,11 +519,59 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
     }
 }
 
+void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
+                                       Instruction *orig_i, Instruction *new_i)
+{
+    auto nargs = call->getNumArgOperands();
+    SmallVector<Value*, 8> args(nargs);
+    SmallVector<Type*, 8> argTys(nargs);
+    for (unsigned i = 0; i < nargs; i++) {
+        auto arg = call->getArgOperand(i);
+        args[i] = arg == orig_i ? new_i : arg;
+        argTys[i] = args[i]->getType();
+    }
+
+    // Accumulate an array of overloaded types for the given intrinsic
+    SmallVector<Type*, 4> overloadTys;
+    {
+        SmallVector<Intrinsic::IITDescriptor, 8> Table;
+        getIntrinsicInfoTableEntries(ID, Table);
+        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+        auto oldfType = call->getFunctionType();
+        bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
+        assert(!res);
+        for (auto Ty : argTys) {
+            res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
+            assert(!res);
+        }
+        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
+        assert(!res);
+        (void)res;
+    }
+    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    newF->setCallingConv(call->getCallingConv());
+    auto newCall = CallInst::Create(newF, args, "", call);
+    newCall->setTailCallKind(call->getTailCallKind());
+    auto old_attrs = call->getAttributes();
+#if JL_LLVM_VERSION >= 50000
+    newCall->setAttributes(AttributeList::get(*ctx, old_attrs.getFnAttributes(),
+                                              old_attrs.getRetAttributes(), {}));
+#else
+    AttributeSet attr;
+    attr = attr.addAttributes(*ctx, AttributeSet::ReturnIndex, old_attrs.getRetAttributes())
+        .addAttributes(*ctx, AttributeSet::FunctionIndex, old_attrs.getFnAttributes());
+    newCall->setAttributes(attr);
+#endif
+    newCall->setDebugLoc(call->getDebugLoc());
+    call->replaceAllUsesWith(newCall);
+    call->eraseFromParent();
+}
+
 // This function needs to handle all cases `AllocOpt::checkInst` can handle.
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
 void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
-                               ReplaceUsesStack &stack)
+                               ReplaceUsesStack &stack, Value *tag)
 {
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
         if (orig_i->user_empty()) {
@@ -495,9 +619,25 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
                 call->eraseFromParent();
                 return;
             }
+            if (typeof_func && typeof_func == call->getCalledFunction()) {
+                call->replaceAllUsesWith(tag);
+                call->eraseFromParent();
+                return;
+            }
+            // Also remove the preserve intrinsics so that it can be better optimized.
+            if (gc_preserve_begin && gc_preserve_begin == call->getCalledFunction()) {
+                removeGCPreserve(call, orig_i);
+                return;
+            }
+            if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
+                if (Intrinsic::ID ID = intrinsic->getIntrinsicID()) {
+                    replaceIntrinsicUseWith(intrinsic, ID, orig_i, new_i);
+                    return;
+                }
+            }
             // remove from operand bundle
-            Type *new_t = new_i->getType();
-            user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(new_t)));
+            Type *orig_t = orig_i->getType();
+            user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(orig_t)));
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
             auto cast_t = PointerType::get(cast<PointerType>(user->getType())->getElementType(),
@@ -585,12 +725,15 @@ bool AllocOpt::runOnFunction(Function &F)
     CheckInstStack check_stack;
     ReplaceUsesStack replace_stack;
     std::set<Instruction*> alloc_uses;
+    std::set<CallInst*> preserves;
     LifetimeMarker lifetime(*this);
     for (auto &it: allocs) {
+        // TODO, this should not be needed anymore now that we've hide the tag access completely.
         bool ignore_tag = true;
         auto orig = it.first;
         size_t &sz = it.second;
-        if (!checkInst(orig, check_stack, alloc_uses, ignore_tag)) {
+        preserves.clear();
+        if (!checkInst(orig, check_stack, alloc_uses, preserves, ignore_tag)) {
             sz = UINT32_MAX;
             continue;
         }
@@ -605,10 +748,7 @@ bool AllocOpt::runOnFunction(Function &F)
             sz += align;
         }
         else if (sz > 1) {
-            align = JL_SMALL_BYTE_ALIGNMENT;
-            while (sz < align) {
-                align = align / 2;
-            }
+            align = llvm::MinAlign(JL_SMALL_BYTE_ALIGNMENT, llvm::NextPowerOf2(sz));
         }
         // No debug info for prolog instructions
         IRBuilder<> prolog_builder(&entry.front());
@@ -623,7 +763,8 @@ bool AllocOpt::runOnFunction(Function &F)
             buff->setAlignment(align);
             ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, T_pint8));
         }
-        lifetime.insert(ptr, ConstantInt::get(T_int64, sz), orig, alloc_uses);
+        lifetime.insert(F, ptr, ConstantInt::get(T_int64, sz), orig, alloc_uses, preserves);
+        auto tag = orig->getArgOperand(2);
         // Someone might be reading the tag, initialize it.
         if (!ignore_tag) {
             ptr = cast<Instruction>(prolog_builder.CreateConstGEP1_32(T_int8, ptr, align));
@@ -631,13 +772,13 @@ bool AllocOpt::runOnFunction(Function &F)
             auto tagaddr = prolog_builder.CreateGEP(T_prjlvalue, casti,
                                                     ConstantInt::get(T_size, -1));
             // Store should be created at the callsite and not in the prolog
-            auto store = new StoreInst(orig->getArgOperand(2), tagaddr, orig);
+            auto store = new StoreInst(tag, tagaddr, orig);
             store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
             store->setDebugLoc(orig->getDebugLoc());
         }
         auto casti = cast<Instruction>(prolog_builder.CreateBitCast(ptr, T_pjlvalue));
         casti->takeName(orig);
-        replaceUsesWith(orig, cast<Instruction>(casti), replace_stack);
+        replaceUsesWith(orig, cast<Instruction>(casti), replace_stack, tag);
     }
     for (auto it: allocs) {
         if (it.second == UINT32_MAX)

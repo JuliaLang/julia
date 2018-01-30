@@ -40,9 +40,10 @@ export File,
 
 import Base:
     UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
-    nb_available, position, read, read!, readavailable, seek, seekend, show,
+    bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
+using Base: coalesce
 
 if Sys.iswindows()
     import Base: cwstring
@@ -51,7 +52,6 @@ end
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include("poll.jl")
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
@@ -65,7 +65,7 @@ mutable struct File <: AbstractFile
 end
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
-uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
+uvhandle(file::File) = convert(Ptr{Cvoid}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
 # Filesystem.open, not Base.open
@@ -74,10 +74,10 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     local handle
     try
         ret = ccall(:uv_fs_open, Int32,
-                    (Ptr{Void}, Ptr{Void}, Cstring, Int32, Int32, Ptr{Void}),
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
                     eventloop(), req, path, flags, mode, C_NULL)
-        handle = ccall(:jl_uv_fs_result, Int32, (Ptr{Void},), req)
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+        handle = ccall(:jl_uv_fs_result, Int32, (Ptr{Cvoid},), req)
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         uv_error("open", ret)
     finally # conversion to Cstring could cause an exception
         Libc.free(req)
@@ -125,7 +125,7 @@ function truncate(f::File, n::Integer)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_ftruncate, Int32,
-                (Ptr{Void}, Ptr{Void}, Int32, Int64, Ptr{Void}),
+                (Ptr{Cvoid}, Ptr{Cvoid}, Int32, Int64, Ptr{Cvoid}),
                 eventloop(), req, f.handle, n, C_NULL)
     Libc.free(req)
     uv_error("ftruncate", err)
@@ -136,7 +136,7 @@ function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_futime, Int32,
-                (Ptr{Void}, Ptr{Void}, Int32, Float64, Float64, Ptr{Void}),
+                (Ptr{Cvoid}, Ptr{Cvoid}, Int32, Float64, Float64, Ptr{Cvoid}),
                 eventloop(), req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)
     uv_error("futime", err)
@@ -150,32 +150,52 @@ function read(f::File, ::Type{UInt8})
     return ret % UInt8
 end
 
+function read(f::File, ::Type{Char})
+    b0 = read(f, UInt8)
+    l = 8(4-leading_ones(b0))
+    c = UInt32(b0) << 24
+    if l < 24
+        s = 16
+        while s ≥ l && !eof(f)
+            p = position(f)
+            b = read(f, UInt8)
+            if b & 0xc0 != 0x80
+                seek(f, p)
+                break
+            end
+            c |= UInt32(b) << s
+            s -= 8
+        end
+    end
+    return reinterpret(Char, c)
+end
+
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
-    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Cvoid}, Csize_t),
                 f.handle, p, nel)
     uv_error("read",ret)
     ret == nel || throw(EOFError())
     nothing
 end
 
-nb_available(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
+bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
 
-eof(f::File) = nb_available(f) == 0
+eof(f::File) = bytesavailable(f) == 0
 
 function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
-    nr = min(nb, nb_available(f))
+    nr = min(nb, bytesavailable(f))
     if length(b) < nr
         resize!(b, nr)
     end
-    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Cvoid}, Csize_t),
                 f.handle, b, nr)
     uv_error("read",ret)
     return ret
 end
-read(io::File) = read!(io, Base.StringVector(nb_available(io)))
+read(io::File) = read!(io, Base.StringVector(bytesavailable(io)))
 readavailable(io::File) = read(io)
-read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, nb_available(io))))
+read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, bytesavailable(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)

@@ -16,7 +16,9 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
 #endif
 }
 
-typedef struct _jl_tls_states_t *jl_ptls_t;
+typedef struct _jl_tls_states_t jl_tls_states_t;
+
+typedef jl_tls_states_t *jl_ptls_t;
 
 #ifdef __cplusplus
 extern "C" {

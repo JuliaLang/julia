@@ -9,8 +9,8 @@ function basetype end
 
 abstract type Enum{T<:Integer} end
 
-Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
-Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+(::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
@@ -29,10 +29,10 @@ end
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """
-    @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
+    @enum EnumName[::BaseType] value1[=x] value2[=y]
 
 Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
-`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`value1` and `value2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
@@ -44,6 +44,15 @@ f (generic function with 1 method)
 
 julia> f(apple)
 "I'm a Fruit with value: 1"
+```
+
+Values can also be specified inside a `begin` block, e.g.
+
+```julia
+@enum EnumName begin
+    value1
+    value2
+end
 ```
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
@@ -65,11 +74,16 @@ macro enum(T, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Vector{Tuple{Symbol,Integer}}(0)
+    vals = Vector{Tuple{Symbol,Integer}}()
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
+
+    if length(syms) == 1 && syms[1] isa Expr && syms[1].head == :block
+        syms = syms[1].args
+    end
     for s in syms
+        s isa LineNumberNode && continue
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
@@ -106,7 +120,7 @@ macro enum(T, syms...)
     blk = quote
         # enum definition
         Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
-        function Base.convert(::Type{$(esc(typename))}, x::Integer)
+        function $(esc(typename))(x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end

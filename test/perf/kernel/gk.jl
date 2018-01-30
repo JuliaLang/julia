@@ -52,7 +52,7 @@ function gk(n, myeps)
 
         eps = myeps[KK]
 
-        e = ones(n)
+        e = fill(1., n)
         X = zeros(n)
         U = zeros(n)
         p = e./n
@@ -65,7 +65,6 @@ function gk(n, myeps)
 
         csum = zeros(n)
 
-#        tic()
         while(stop != 1)
             t=t+1
             iter=t
@@ -115,7 +114,7 @@ function gk(n, myeps)
 
         end
 
-        times[KK] = 0#toc()
+        times[KK] = 0
         iteration[KK] = iter
 
         x = X/t

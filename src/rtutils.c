@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -23,6 +22,7 @@
 #include <ctype.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -122,6 +122,11 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
                                             jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_type_error_new_expr(jl_value_t *ty, jl_value_t *got)
+{
+    jl_type_error_rt("Type", "new", ty, got);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
@@ -241,9 +246,12 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *exc = ptls->exception_in_transit;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&exc, &bt);
-    if (ptls->bt_size > 0)
-        bt = (jl_array_t*)jl_get_backtrace();
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&exc, &bt, &bt2);
+    if (ptls->bt_size > 0) {
+        jl_get_backtrace(&bt, &bt2);
+        ptls->bt_size = 0;
+    }
     jl_value_t *v;
     JL_TRY {
         v = jl_apply(args, nargs);
@@ -259,8 +267,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     }
     ptls->exception_in_transit = exc;
     if (bt != NULL) {
+        // This is sufficient because bt2 roots the gc-managed values
+        memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
         ptls->bt_size = jl_array_len(bt);
-        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
     }
     JL_GC_POP();
     return v;
@@ -304,6 +313,10 @@ JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
+}
+JL_DLLEXPORT void jl_gc_use(jl_value_t *a)
+{
+    (void)a;
 }
 
 // parsing --------------------------------------------------------------------
@@ -534,14 +547,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
-            jl_method_t *m = li->def.method;
-            n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
             if (li->specTypes) {
-                n += jl_printf(out, ".");
-                n += jl_show_svec(out, ((jl_datatype_t*)jl_unwrap_unionall(li->specTypes))->parameters,
-                                  jl_symbol_name(m->name), "(", ")");
+                n += jl_static_show_func_sig(out, li->specTypes);
             }
             else {
+                jl_method_t *m = li->def.method;
+                n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
                 n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
             }
         }
@@ -553,6 +564,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
+    }
+    else if (v == (jl_value_t*)jl_unionall_type) {
+        // avoid printing `typeof(Type)` for `UnionAll`.
+        n += jl_printf(out, "UnionAll");
     }
     else if (vt == jl_datatype_type) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
@@ -749,7 +764,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
-        n += jl_printf(out, ".%s", jl_symbol_name(jl_globalref_name(v)));
+        char *name = jl_symbol_name(jl_globalref_name(v));
+        n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
     }
     else if (vt == jl_labelnode_type) {
         n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));
@@ -856,8 +872,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")");
     }
     else if (jl_is_datatype(vt)) {
-        int istuple = jl_is_tuple_type(vt);
-        if (!istuple)
+        int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
+        if (!istuple && !isnamedtuple)
             n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
@@ -883,18 +899,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
                 }
                 else {
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr,
-                                           (jl_datatype_t*)jl_field_type(vt, i),
-                                           depth);
+                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(vt, i);
+                    if (jl_is_uniontype(ft)) {
+                        uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
+                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                    }
+                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth);
                 }
-                if (istuple && tlen == 1)
+                if ((istuple || isnamedtuple) && tlen == 1)
                     n += jl_printf(out, ",");
                 else if (i != tlen - 1)
                     n += jl_printf(out, ", ");
             }
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
-                n += jl_static_show_x(out, jl_fieldref(v, 0), depth);
+                n += jl_static_show_x(out, jl_fieldref_noalloc(v, 0), depth);
             }
         }
         n += jl_printf(out, ")");
@@ -938,7 +957,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
     if (ftype == NULL)
         return jl_static_show(s, type);
     size_t n = 0;
-    if (jl_nparams(ftype)==0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) {
+    if (jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) {
         n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)ftype)->name->mt->name));
     }
     else {
@@ -946,7 +965,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         n += jl_static_show(s, ftype);
         n += jl_printf(s, ")");
     }
-    // TODO: better way to show method parameters
+    jl_unionall_t *tvars = (jl_unionall_t*)type;
     type = jl_unwrap_unionall(type);
     if (!jl_is_datatype(type)) {
         n += jl_printf(s, " ");
@@ -973,6 +992,19 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         }
     }
     n += jl_printf(s, ")");
+    if (jl_is_unionall(tvars)) {
+        int first = 1;
+        n += jl_printf(s, " where {");
+        while (jl_is_unionall(tvars)) {
+            if (first)
+                first = 0;
+            else
+                n += jl_printf(s, ", ");
+            n += jl_static_show(s, (jl_value_t*)tvars->var);
+            tvars = (jl_unionall_t*)tvars->body;
+        }
+        n += jl_printf(s, "}");
+    }
     return n;
 }
 
@@ -995,6 +1027,63 @@ JL_DLLEXPORT void jl_(void *jl_value)
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in your debugger here
+}
+
+// logging tools --------------------------------------------------------------
+
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg)
+{
+    static jl_value_t *logmsg_func = NULL;
+    if (!logmsg_func && jl_base_module) {
+        jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
+        if (corelogging && jl_is_module(corelogging)) {
+            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
+        }
+    }
+    if (!logmsg_func) {
+        ios_t str_;
+        ios_mem(&str_, 300);
+        uv_stream_t* str = (uv_stream_t*)&str_;
+        if (jl_is_string(msg)) {
+            jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
+        }
+        else if (jl_is_symbol(msg)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)msg));
+        }
+        jl_printf(str, "\n@ ");
+        if (jl_is_string(file)) {
+            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+        }
+        else if (jl_is_symbol(file)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)file));
+        }
+        jl_printf(str, ":");
+        jl_static_show(str, line);
+        jl_safe_printf("%s [Fallback logging]: %.*s\n",
+                       level < JL_LOGLEVEL_INFO ? "Debug" :
+                       level < JL_LOGLEVEL_WARN ? "Info" :
+                       level < JL_LOGLEVEL_ERROR ? "Warning" : "Error",
+                       (int)str_.size, str_.buf);
+        ios_close(&str_);
+        return;
+    }
+    jl_value_t **args;
+    const int nargs = 9;
+    JL_GC_PUSHARGS(args, nargs);
+    args[0] = logmsg_func;
+    args[1] = jl_box_long(level);
+    args[2] = msg;
+    // Would some of the jl_nothing here be better as `missing` instead?
+    args[3] = module ? module  : jl_nothing;
+    args[4] = group  ? group   : jl_nothing;
+    args[5] = id     ? id      : jl_nothing;
+    args[6] = file   ? file    : jl_nothing;
+    args[7] = line   ? line    : jl_nothing;
+    args[8] = kwargs ? kwargs  : (jl_value_t*)jl_alloc_vec_any(0);
+    jl_apply(args, nargs);
+    JL_GC_POP();
 }
 
 void jl_depwarn(const char *msg, jl_value_t *sym)
@@ -1020,11 +1109,11 @@ JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("partial_linear_indexing_warning"));
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("_depwarn_for_trailing_indices"));
     }
     if (!depwarn_func) {
-        jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
+        jl_safe_printf("WARNING: omitting indices for non-singleton trailing dimensions is deprecated. Use "
+            "`reshape(A, Val(%zd))` or add trailing `1` indices to make the dimensionality of the array match "
             "the number of indices\n", n);
         return;
     }

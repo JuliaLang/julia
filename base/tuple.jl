@@ -16,12 +16,13 @@ NTuple
 ## indexing ##
 
 length(t::Tuple) = nfields(t)
-endof(t::Tuple) = length(t)
-size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-getindex(t::Tuple, i::Int) = getfield(t, i)
-getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
+firstindex(t::Tuple) = 1
+lastindex(t::Tuple) = length(t)
+size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+@eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
+@eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -38,9 +39,12 @@ start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
 
-eachindex(t::Tuple) = 1:length(t)
+keys(t::Tuple) = 1:length(t)
 
-function eachindex(t::Tuple, t2::Tuple...)
+prevind(t::Tuple, i::Integer) = Int(i)-1
+nextind(t::Tuple, i::Integer) = Int(i)+1
+
+function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
     1:_maxlength(t, t2...)
 end
@@ -54,7 +58,7 @@ end
 # while reducing to plain next() for arbitrary iterables.
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
-indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
+indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -63,7 +67,6 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     if @isdefined(E)
         return E
@@ -76,11 +79,11 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
-    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
-        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
     end
     return r
 end
@@ -134,7 +137,7 @@ end
 function _ntuple(f, n)
     @_noinline_meta
     (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
-    ([f(i) for i = 1:n]...)
+    ([f(i) for i = 1:n]...,)
 end
 
 # inferrable ntuple (enough for bootstrapping)
@@ -156,11 +159,11 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...)
+    (A...,)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -172,11 +175,11 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
-    (A...)
+    (A...,)
 end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
@@ -188,11 +191,11 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
 end
 function map(f, t1::Any16, t2::Any16, ts::Any16...)
     n = length(t1)
-    A = Array{Any,1}(n)
+    A = Vector{Any}(uninitialized, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
-    (A...)
+    (A...,)
 end
 
 
@@ -209,8 +212,8 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Inference!
-if module_name(@__MODULE__) === :Base
+# NOTE: this means this constructor must be avoided in Core.Compiler!
+if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
@@ -266,12 +269,16 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
+    anymissing = false
     for i = 1:length(t1)
-        if !(t1[i] == t2[i])
-            return false
-        end
+        eq = (t1[i] == t2[i])
+        if ismissing(eq)
+            anymissing = true
+        elseif !eq
+           return false
+       end
     end
-    return true
+    return anymissing ? missing : true
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
@@ -279,6 +286,20 @@ hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
 hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
 hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
+
+function <(t1::Tuple, t2::Tuple)
+    n1, n2 = length(t1), length(t2)
+    for i = 1:min(n1, n2)
+        a, b = t1[i], t2[i]
+        eq = (a == b)
+        if ismissing(eq)
+            return missing
+        elseif !eq
+           return a < b
+        end
+    end
+    return n1 < n2
+end
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
@@ -305,9 +326,13 @@ reverse(t::Tuple) = revargs(t...)
 
 # TODO: these definitions cannot yet be combined, since +(x...)
 # where x might be any tuple matches too many methods.
+# TODO: this is inconsistent with the regular sum in cases where the arguments
+# require size promotion to system size.
 sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
 
 # NOTE: should remove, but often used on array sizes
+# TODO: this is inconsistent with the regular prod in cases where the arguments
+# require size promotion to system size.
 prod(x::Tuple{}) = 1
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 
@@ -321,3 +346,10 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+"""
+    empty(x::Tuple)
+
+Returns an empty tuple, `()`.
+"""
+empty(x::Tuple) = ()

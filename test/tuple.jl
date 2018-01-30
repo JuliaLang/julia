@@ -3,21 +3,11 @@
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
-        sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
+        sort(collect(p)) != 0:7 && error("$p is not a permutation of 0:7")
         new(p)
     end
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
-
-# ntuples
-nttest1(x::NTuple{n, Int}) where {n} = n
-@test nttest1(()) == 0
-@test nttest1((1, 2)) == 2
-@test NTuple <: Tuple
-@test (NTuple{T, Int32} where T) <: Tuple{Vararg{Int32}}
-@test !((NTuple{T, Int32} where T) <: Tuple{Int32, Vararg{Int32}})
-@test Tuple{Vararg{Int32}} <: (NTuple{T, Int32} where T)
-@test Tuple{Int32, Vararg{Int32}} <: (NTuple{T, Int32} where T)
 
 # #17198
 @test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
@@ -74,8 +64,8 @@ nttest1(x::NTuple{n, Int}) where {n} = n
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
-    @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
-    @test_throws MethodError convert(Tuple, ones(5))
+    @test Tuple(fill(1.,5)) === (1.0,1.0,1.0,1.0,1.0)
+    @test_throws MethodError convert(Tuple, fill(1.,5))
 
     @testset "ambiguity between tuple constructors #20990" begin
         Tuple16Int = Tuple{Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int}
@@ -93,6 +83,8 @@ nttest1(x::NTuple{n, Int}) where {n} = n
         @test Tuple{Int,Vararg{Any}}.ninitialized == 1
         @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
     end
+
+    @test empty((1, 2.0, "c")) === ()
 end
 
 @testset "size" begin
@@ -103,9 +95,9 @@ end
     @test_throws ArgumentError Base.front(())
     @test_throws ArgumentError first(())
 
-    @test endof(()) === 0
-    @test endof((1,)) === 1
-    @test endof((1,2)) === 2
+    @test lastindex(()) === 0
+    @test lastindex((1,)) === 1
+    @test lastindex((1,2)) === 2
 
     @test size((), 1) === 0
     @test size((1,), 1) === 1
@@ -171,8 +163,8 @@ end
     @test_throws BoundsError next((5,6,7), 0)
     @test_throws BoundsError next((), 1)
 
-    @test collect(eachindex((2,5,"foo"))) == collect(1:3)
-    @test collect(eachindex((2,5,"foo"), (1,2,5,7))) == collect(1:4)
+    @test eachindex((2,5,"foo")) === 1:3
+    @test eachindex((2,5,"foo"), (1,2,5,7)) === 1:4
 end
 
 
@@ -189,6 +181,20 @@ end
         typejoin(Int, AbstractFloat, Bool)
     @test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) ===
         typejoin(Int, Float64, Bool)
+    @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+end
+
+@testset "map with Nothing and Missing" begin
+    for T in (Nothing, Missing)
+        x = [(1, T()), (1, 2)]
+        y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
+        @test y isa Vector{Tuple{Int,Union{T,Int}}}
+        @test isequal(x, y)
+    end
+    y = map(v -> (v[1], v[1] + v[2]), [(1, missing), (1, 2)])
+    @test y isa Vector{Tuple{Int,Union{Missing,Int}}}
+    @test isequal(y, [(1, missing), (1, 3)])
 end
 
 @testset "mapping" begin
@@ -237,6 +243,11 @@ end
     @test ==((1,2,3), (1,2,3))
     @test !==((1,2,3), (1,2,4))
     @test !==((1,2,3), (1,2))
+
+    @test (1,2) < (1,3)
+    @test (1,) < (1,2)
+    @test !((1,2) < (1,2))
+    @test (2,1) > (1,2)
 
     @test isless((1,2), (1,3))
     @test isless((1,), (1,2))
@@ -290,6 +301,14 @@ end
 end
 
 @testset "ntuple" begin
+    nttest1(x::NTuple{n, Int}) where {n} = n
+    @test nttest1(()) == 0
+    @test nttest1((1, 2)) == 2
+    @test NTuple <: Tuple
+    @test (NTuple{T, Int32} where T) <: Tuple{Vararg{Int32}}
+    @test !((NTuple{T, Int32} where T) <: Tuple{Int32, Vararg{Int32}})
+    @test Tuple{Vararg{Int32}} <: (NTuple{T, Int32} where T)
+    @test Tuple{Int32, Vararg{Int32}} <: (NTuple{T, Int32} where T)
     @test @inferred(ntuple(abs2, Val(0))) == ()
     @test @inferred(ntuple(abs2, Val(2))) == (1, 4)
     @test @inferred(ntuple(abs2, Val(3))) == (1, 4, 9)
@@ -318,16 +337,14 @@ end
     end
 end
 
-# issue #15703
-let
-    struct A_15703{N}
-        keys::NTuple{N, Int}
-    end
+struct A_15703{N}
+    keys::NTuple{N, Int}
+end
 
-    struct B_15703
-        x::A_15703
-    end
-
+struct B_15703
+    x::A_15703
+end
+@testset "issue #15703" begin
     function bug_15703(xs...)
         [x for x in xs]
     end
@@ -343,15 +360,44 @@ let
     test_15703()
 end
 
-# https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
-const VecTuple21026{T} = Tuple{VecElement{T}}
-@test convert(VecTuple21026, (1,)) === (VecElement(1),)
+@testset "#21026" begin
+    # https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
+    VecTuple21026{T} = Tuple{VecElement{T}}
+    @test convert(VecTuple21026, (1,)) === (VecElement(1),)
 
-@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2)) ===
-    (Complex(1), Complex(2))
-@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2.0)) ===
-    (Complex(1), Complex(2.0))
-@test convert(Tuple{Complex, Complex}, (1, 2)) ===
-    (Complex(1), Complex(2))
-@test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
-    (Complex(1), Complex(2.0))
+    @test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2)) ===
+        (Complex(1), Complex(2))
+    @test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2.0)) ===
+        (Complex(1), Complex(2.0))
+    @test convert(Tuple{Complex, Complex}, (1, 2)) ===
+        (Complex(1), Complex(2))
+    @test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
+        (Complex(1), Complex(2.0))
+end
+
+@testset "issue 24707" begin
+    @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
+end
+
+@testset "find" begin
+    @test findall(equalto(1), (1, 2)) == [1]
+    @test findall(equalto(1), (1, 1)) == [1, 2]
+    @test isempty(findall(equalto(1), ()))
+    @test isempty(findall(equalto(1), (2, 3)))
+
+    @test findfirst(equalto(1), (1, 2)) == 1
+    @test findlast(equalto(1), (1, 2)) == 1
+    @test findfirst(equalto(1), (1, 1)) == 1
+    @test findlast(equalto(1), (1, 1)) == 2
+    @test findfirst(equalto(1), ()) === nothing
+    @test findlast(equalto(1), ()) === nothing
+    @test findfirst(equalto(1), (2, 3)) === nothing
+    @test findlast(equalto(1), (2, 3)) === nothing
+
+    @test findnext(equalto(1), (1, 2), 1) == 1
+    @test findprev(equalto(1), (1, 2), 2) == 1
+    @test findnext(equalto(1), (1, 1), 2) == 2
+    @test findprev(equalto(1), (1, 1), 1) == 1
+    @test findnext(equalto(1), (2, 3), 1) === nothing
+    @test findprev(equalto(1), (2, 3), 2) === nothing
+end

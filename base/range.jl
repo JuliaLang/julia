@@ -26,12 +26,12 @@ julia> colon(1, 2, 5)
 ```
 """
 colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 colon(start::T, step::T, stop::T) where {T<:Real} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-_colon(::HasOrder, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
+_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
-_colon(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
+_colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
@@ -57,8 +57,8 @@ end
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range(a::T, step, len::Integer) where {T} = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
-_range(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) where {T,S} =
+range(a::T, step, len::Integer) where {T} = _range(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+_range(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 _range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
@@ -77,11 +77,14 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 
 ## 1-dimensional ranges ##
 
-abstract type Range{T} <: AbstractArray{T,1} end
+abstract type AbstractRange{T} <: AbstractArray{T,1} end
+
+RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
+RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 ## ordinal ranges
 
-abstract type OrdinalRange{T,S} <: Range{T} end
+abstract type OrdinalRange{T,S} <: AbstractRange{T} end
 abstract type AbstractUnitRange{T} <: OrdinalRange{T,Int} end
 
 struct StepRange{T,S} <: OrdinalRange{T,S}
@@ -190,7 +193,7 @@ value `r[1]`, but alternatively you can supply it as the value of
 with `TwicePrecision` this can be used to implement ranges that are
 free of roundoff error.
 """
-struct StepRangeLen{T,R,S} <: Range{T}
+struct StepRangeLen{T,R,S} <: AbstractRange{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
     step::S      # step value
     len::Int     # length of the range
@@ -205,10 +208,12 @@ end
 
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
     StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
+StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
+    StepRangeLen{T,R,S}(ref, step, len, offset)
 
 ## linspace and logspace
 
-struct LinSpace{T} <: Range{T}
+struct LinSpace{T} <: AbstractRange{T}
     start::T
     stop::T
     len::Int
@@ -230,7 +235,7 @@ function LinSpace(start, stop, len::Integer)
 end
 
 """
-    linspace(start, stop, n=50)
+    linspace(start, stop, n)
 
 Construct a range of `n` linearly spaced elements from `start` to `stop`.
 
@@ -239,8 +244,8 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(promote_noncircular(start, stop)..., Int(len))
-linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
+linspace(start, stop, len::Real) = linspace(promote(start, stop)..., Int(len))
+linspace(start::T, stop::T, len::Real) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
@@ -271,7 +276,7 @@ parameters `pre` and `post` characters for each printed row,
 `sep` separator string between printed elements,
 `hdots` string for the horizontal ellipsis.
 """
-function print_range(io::IO, r::Range,
+function print_range(io::IO, r::AbstractRange,
                      pre::AbstractString = " ",
                      sep::AbstractString = ",",
                      post::AbstractString = "",
@@ -316,33 +321,33 @@ function print_range(io::IO, r::Range,
 end
 
 """
-    logspace(start::Real, stop::Real, n::Integer=50; base=10)
+    logspace(start::Real, stop::Real, n::Integer; base=10)
 
 Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
 
 ```jldoctest
 julia> logspace(1.,10.,5)
 5-element Array{Float64,1}:
-   10.0
- 1778.28
-    3.16228e5
-    5.62341e7
-    1.0e10
+     10.0
+   1778.2794100389228
+ 316227.7660168379
+      5.623413251903491e7
+      1.0e10
 
 julia> logspace(1.,10.,5,base=2)
 5-element Array{Float64,1}:
     2.0
-    9.51366
-   45.2548
-  215.269
+    9.513656920021768
+   45.254833995939045
+  215.2694823049509
  1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer=50; base=10) = base.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer; base=10) = base.^linspace(start, stop, n)
 
 ## interface implementations
 
-size(r::Range) = (length(r),)
+size(r::AbstractRange) = (length(r),)
 
 isempty(r::StepRange) =
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
@@ -353,7 +358,7 @@ isempty(r::LinSpace) = length(r) == 0
 """
     step(r)
 
-Get the step size of a `Range` object.
+Get the step size of an `AbstractRange` object.
 ```jldoctest
 julia> step(1:10)
 1
@@ -370,10 +375,13 @@ julia> step(linspace(2.5,10.9,85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange) = 1
-step(r::StepRangeLen) = r.step
+step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinSpace) = (last(r)-first(r))/r.lendiv
 
-unsafe_length(r::Range) = length(r)  # generic fallback
+step_hp(r::StepRangeLen) = r.step
+step_hp(r::AbstractRange) = step(r)
+
+unsafe_length(r::AbstractRange) = length(r)  # generic fallback
 
 function unsafe_length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
@@ -433,11 +441,11 @@ last(r::LinSpace) = r.stop
 
 minimum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
 maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
-minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
-maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
+minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
+maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
 # Ranges are immutable
-copy(r::Range) = r
+copy(r::AbstractRange) = r
 
 
 ## iteration
@@ -455,10 +463,9 @@ done(r::StepRange, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.sta
 done(r::StepRange, i::Integer) =
     isempty(r) | (i == oftype(i, r.stop) + r.step)
 
-# see also twiceprecision.jl
-start(r::StepRangeLen) = (unsafe_getindex(r, 1), 1)
-next(r::StepRangeLen{T}, s) where {T} = s[1], (T(s[1]+r.step), s[2]+1)
-done(r::StepRangeLen, s) = s[2] > length(r)
+start(r::StepRangeLen) = 1
+next(r::StepRangeLen{T}, i) where {T} = unsafe_getindex(r, i), i+1
+done(r::StepRangeLen, i) = i > length(r)
 
 start(r::UnitRange{T}) where {T} = oftype(r.start + oneunit(T), r.start)
 next(r::AbstractUnitRange{T}, i) where {T} = (convert(T, i), i + oneunit(T))
@@ -494,9 +501,9 @@ function getindex(v::OneTo{T}, i::Integer) where T
     convert(T, i)
 end
 
-function getindex(v::Range{T}, i::Integer) where T
+function getindex(v::AbstractRange{T}, i::Integer) where T
     @_inline_meta
-    ret = convert(T, first(v) + (i - 1)*step(v))
+    ret = convert(T, first(v) + (i - 1)*step_hp(v))
     ok = ifelse(step(v) > zero(step(v)),
                 (ret <= v.stop) & (ret >= v.start),
                 (ret <= v.start) & (ret >= v.stop))
@@ -516,6 +523,11 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     T(r.ref + u*r.step)
 end
 
+function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
+    u = i - r.offset
+    r.ref + u*r.step
+end
+
 function unsafe_getindex(r::LinSpace, i::Integer)
     lerpi.(i-1, r.lendiv, r.start, r.stop)
 end
@@ -526,7 +538,7 @@ function lerpi(j::Integer, d::Integer, a::T, b::T) where T
     T((1-t)*a + t*b)
 end
 
-getindex(r::Range, ::Colon) = copy(r)
+getindex(r::AbstractRange, ::Colon) = copy(r)
 
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{<:Integer})
     @_inline_meta
@@ -549,18 +561,21 @@ function getindex(r::AbstractUnitRange, s::StepRange{<:Integer})
     range(st, step(s), length(s))
 end
 
-function getindex(r::StepRange, s::Range{<:Integer})
+function getindex(r::StepRange, s::AbstractRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step(r)*step(s), length(s))
 end
 
-function getindex(r::StepRangeLen, s::OrdinalRange{<:Integer})
+function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    vfirst = unsafe_getindex(r, first(s))
-    return StepRangeLen(vfirst, r.step*step(s), length(s))
+    # Find closest approach to offset by s
+    ind = linearindices(s)
+    offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
+    ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
+    return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
 end
 
 function getindex(r::LinSpace, s::OrdinalRange{<:Integer})
@@ -571,11 +586,11 @@ function getindex(r::LinSpace, s::OrdinalRange{<:Integer})
     return LinSpace(vfirst, vlast, length(s))
 end
 
-show(io::IO, r::Range) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
-==(r::T, s::T) where {T<:Range} =
+==(r::T, s::T) where {T<:AbstractRange} =
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 ==(r::OrdinalRange, s::OrdinalRange) =
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
@@ -584,7 +599,7 @@ show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T} =
     (first(r) == first(s)) & (last(r) == last(s)) & (step(r) == step(s))
 
-function ==(r::Range, s::Range)
+function ==(r::AbstractRange, s::AbstractRange)
     lr = length(r)
     if lr != length(s)
         return false
@@ -657,11 +672,11 @@ function intersect(r::StepRange, s::StepRange)
     # if a == 0
     #     # One or both ranges have step 0.
     #     if step1 == 0 && step2 == 0
-    #         return start1 == start2 ? r : Range(start1, 0, 0)
+    #         return start1 == start2 ? r : AbstractRange(start1, 0, 0)
     #     elseif step1 == 0
-    #         return start2 <= start1 <= stop2 && rem(start1 - start2, step2) == 0 ? r : Range(start1, 0, 0)
+    #         return start2 <= start1 <= stop2 && rem(start1 - start2, step2) == 0 ? r : AbstractRange(start1, 0, 0)
     #     else
-    #         return start1 <= start2 <= stop1 && rem(start2 - start1, step1) == 0 ? (start2:step1:start2) : Range(start1, step1, 0)
+    #         return start1 <= start2 <= stop1 && rem(start2 - start1, step1) == 0 ? (start2:step1:start2) : AbstractRange(start1, step1, 0)
     #     end
     # end
 
@@ -682,7 +697,7 @@ function intersect(r::StepRange, s::StepRange)
     m:a:n
 end
 
-function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
+function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::AbstractRange...)
     i = intersect(intersect(r1, r2), r3)
     for t in r
         i = intersect(i, t)
@@ -690,8 +705,8 @@ function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
     i
 end
 
-# findin (the index of intersection)
-function _findin(r::Range{<:Integer}, span::AbstractUnitRange{<:Integer})
+# _findin (the index of intersection)
+function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
     local ifirst
     local ilast
     fspan = first(span)
@@ -709,126 +724,141 @@ function _findin(r::Range{<:Integer}, span::AbstractUnitRange{<:Integer})
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
-    ifirst, ilast
-end
-
-function findin(r::AbstractUnitRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:ilast
-end
-
-function findin(r::Range{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:1:ilast
+    r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
 ## linear operations on ranges ##
 
 -(r::OrdinalRange) = range(-first(r), -step(r), length(r))
--(r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
+-(r::StepRangeLen{T,R,S}) where {T,R,S} =
+    StepRangeLen{T,R,S}(-r.ref, -r.step, length(r), r.offset)
 -(r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
 
-+(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
+*(x::Number, r::AbstractRange) = range(x*first(r), x*step(r), length(r))
+*(x::Number, r::StepRangeLen{T}) where {T} =
+    StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
+*(x::Number, r::LinSpace) = LinSpace(x * r.start, x * r.stop, r.len)
+# separate in case of noncommutative multiplication
+*(r::AbstractRange, x::Number) = range(first(r)*x, step(r)*x, length(r))
+*(r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
+*(r::LinSpace, x::Number) = LinSpace(r.start * x, r.stop * x, r.len)
+
+/(r::AbstractRange, x::Number) = range(first(r)/x, step(r)/x, length(r))
+/(r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)
+/(r::LinSpace, x::Number) = LinSpace(r.start / x, r.stop / x, r.len)
+# also, separate in case of noncommutative multiplication (division)
+\(x::Number, r::AbstractRange) = range(x\first(r), x\step(r), x\length(r))
+\(x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
+\(x::Number, r::LinSpace) = LinSpace(x \ r.start, x \ r.stop, r.len)
+
+## scalar-range broadcast operations ##
+
+broadcast(::typeof(-), r::OrdinalRange) = range(-first(r), -step(r), length(r))
+broadcast(::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
+broadcast(::typeof(-), r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
+
+broadcast(::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
 # For #18336 we need to prevent promotion of the step type:
-+(x::Number, r::AbstractUnitRange) = range(x + first(r), step(r), length(r))
-+(x::Number, r::Range) = (x+first(r)):step(r):(x+last(r))
-function +(x::Number, r::StepRangeLen)
+broadcast(::typeof(+), x::Number, r::AbstractUnitRange) = range(x + first(r), step(r), length(r))
+broadcast(::typeof(+), x::Number, r::AbstractRange) = (x+first(r)):step(r):(x+last(r))
+function broadcast(::typeof(+), x::Number, r::StepRangeLen{T}) where T
     newref = x + r.ref
-    StepRangeLen{eltype(newref),typeof(newref),typeof(r.step)}(newref, r.step, length(r), r.offset)
+    StepRangeLen{typeof(T(r.ref) + x)}(newref, r.step, length(r), r.offset)
 end
-function +(x::Number, r::LinSpace)
+function broadcast(::typeof(+), x::Number, r::LinSpace)
     LinSpace(x + r.start, x + r.stop, r.len)
 end
-+(r::Range, x::Number) = x + r  # assumes addition is commutative
+broadcast(::typeof(+), r::AbstractRange, x::Number) = broadcast(+, x, r)  # assumes addition is commutative
 
--(x::Number, r::Range)      = (x-first(r)):-step(r):(x-last(r))
--(x::Number, r::StepRangeLen) = +(x, -r)
-function -(x::Number, r::LinSpace)
+broadcast(::typeof(-), x::Number, r::AbstractRange) = (x-first(r)):-step(r):(x-last(r))
+broadcast(::typeof(-), x::Number, r::StepRangeLen) = broadcast(+, x, -r)
+function broadcast(::typeof(-), x::Number, r::LinSpace)
     LinSpace(x - r.start, x - r.stop, r.len)
 end
 
--(r::Range, x::Number) = +(-x, r)
+broadcast(::typeof(-), r::AbstractRange, x::Number) = broadcast(+, -x, r)  # assumes addition is commutative
 
-*(x::Number, r::Range)        = range(x*first(r), x*step(r), length(r))
-*(x::Number, r::StepRangeLen) = StepRangeLen(x*r.ref, x*r.step, length(r), r.offset)
-*(x::Number, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len)
+broadcast(::typeof(*), x::Number, r::AbstractRange) = range(x*first(r), x*step(r), length(r))
+broadcast(::typeof(*), x::Number, r::StepRangeLen)  = StepRangeLen(x*r.ref, x*r.step, length(r), r.offset)
+broadcast(::typeof(*), x::Number, r::LinSpace)      = LinSpace(x * r.start, x * r.stop, r.len)
 # separate in case of noncommutative multiplication
-*(r::Range, x::Number)        = range(first(r)*x, step(r)*x, length(r))
-*(r::StepRangeLen, x::Number) = StepRangeLen(r.ref*x, r.step*x, length(r), r.offset)
-*(r::LinSpace, x::Number)     = LinSpace(r.start * x, r.stop * x, r.len)
+broadcast(::typeof(*), r::AbstractRange, x::Number) = range(first(r)*x, step(r)*x, length(r))
+broadcast(::typeof(*), r::StepRangeLen, x::Number)  = StepRangeLen(r.ref*x, r.step*x, length(r), r.offset)
+broadcast(::typeof(*), r::LinSpace, x::Number)      = LinSpace(r.start * x, r.stop * x, r.len)
 
-/(r::Range, x::Number)        = range(first(r)/x, step(r)/x, length(r))
-/(r::StepRangeLen, x::Number) = StepRangeLen(r.ref/x, r.step/x, length(r), r.offset)
-/(r::LinSpace, x::Number)     = LinSpace(r.start / x, r.stop / x, r.len)
-
-/(x::Number, r::Range) = [ x/y for y=r ]
+broadcast(::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step(r)/x, length(r))
+broadcast(::typeof(/), r::StepRangeLen, x::Number)  = StepRangeLen(r.ref/x, r.step/x, length(r), r.offset)
+broadcast(::typeof(/), r::LinSpace, x::Number)      = LinSpace(r.start / x, r.stop / x, r.len)
+# also, separate in case of noncommutative multiplication (division)
+broadcast(::typeof(\), x::Number, r::AbstractRange) = range(x\first(r), x\step(r), x\length(r))
+broadcast(::typeof(\), x::Number, r::StepRangeLen)  = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
+broadcast(::typeof(\), x::Number, r::LinSpace)      = LinSpace(x \ r.start, x \ r.stop, r.len)
 
 # promote eltype if at least one container wouldn't change, otherwise join container types.
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
-el_same(::Type, a, b) = typejoin(a, b)
+el_same(::Type, a, b) = promote_typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
-convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
+UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
+UnitRange{T}(r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
 promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
-convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
+OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
+OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
 promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     promote_rule(a, UnitRange{eltype(UR)})
-convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
-convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
+UnitRange{T}(r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
+UnitRange(r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
-convert(::Type{AbstractUnitRange{T}}, r::AbstractUnitRange{T}) where {T} = r
-convert(::Type{AbstractUnitRange{T}}, r::UnitRange) where {T} = convert(UnitRange{T}, r)
-convert(::Type{AbstractUnitRange{T}}, r::OneTo) where {T} = convert(OneTo{T}, r)
+AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
+AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
+AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),
             # el_same only operates on array element type, so just promote second type parameter
             StepRange{T1a, promote_type(T1b,T2b)},
             StepRange{T2a, promote_type(T1b,T2b)})
-convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
+StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
-convert(::Type{StepRange{T1,T2}}, r::Range) where {T1,T2} =
+StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
+StepRange(r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
-convert(::Type{StepRange{T1,T2} where T1}, r::Range) where {T2} =
-    convert(StepRange{eltype(r),T2}, r)
+(::Type{StepRange{T1,T2} where T1})(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 
 promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
     el_same(promote_type(T1,T2),
             StepRangeLen{T1,promote_type(R1,R2),promote_type(S1,S2)},
             StepRangeLen{T2,promote_type(R1,R2),promote_type(S1,S2)})
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
+StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T,R,S} = r
+StepRangeLen{T,R,S}(r::StepRangeLen) where {T,R,S} =
     StepRangeLen{T,R,S}(convert(R, r.ref), convert(S, r.step), length(r), r.offset)
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
+StepRangeLen{T}(r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
-promote_rule(a::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:Range} =
+promote_rule(a::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:AbstractRange} =
     promote_rule(a, StepRangeLen{eltype(OR), eltype(OR), eltype(OR)})
-convert(::Type{StepRangeLen{T,R,S}}, r::Range) where {T,R,S} =
+StepRangeLen{T,R,S}(r::AbstractRange) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
-convert(::Type{StepRangeLen{T}}, r::Range) where {T} =
+StepRangeLen{T}(r::AbstractRange) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
-convert(::Type{StepRangeLen}, r::Range) = convert(StepRangeLen{eltype(r)}, r)
+StepRangeLen(r::AbstractRange) = StepRangeLen{eltype(r)}(r)
 
 promote_rule(a::Type{LinSpace{T1}}, b::Type{LinSpace{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)
-convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
-convert(::Type{LinSpace{T}}, r::Range) where {T} =
-    LinSpace{T}(first(r), last(r), length(r))
-convert(::Type{LinSpace}, r::Range{T}) where {T} =
-    convert(LinSpace{T}, r)
+LinSpace{T}(r::LinSpace{T}) where {T} = r
+LinSpace{T}(r::AbstractRange) where {T} = LinSpace{T}(first(r), last(r), length(r))
+LinSpace(r::AbstractRange{T}) where {T} = LinSpace{T}(r)
 
 promote_rule(a::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
     promote_rule(a, LinSpace{eltype(OR)})
@@ -840,12 +870,12 @@ promote_rule(::Type{LinSpace{L}}, b::Type{StepRangeLen{T,R,S}}) where {L,T,R,S} 
 
 ## concatenation ##
 
-function vcat(rs::Range{T}...) where T
+function vcat(rs::AbstractRange{T}...) where T
     n::Int = 0
     for ra in rs
         n += length(ra)
     end
-    a = Vector{T}(n)
+    a = Vector{T}(uninitialized, n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x
@@ -854,8 +884,8 @@ function vcat(rs::Range{T}...) where T
     return a
 end
 
-convert(::Type{Array{T,1}}, r::Range{T}) where {T} = vcat(r)
-collect(r::Range) = vcat(r)
+Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
+collect(r::AbstractRange) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::StepRangeLen) = StepRangeLen(r.ref, -r.step, length(r), length(r)-r.offset+1)
@@ -864,31 +894,31 @@ reverse(r::LinSpace)     = LinSpace(r.stop, r.start, length(r))
 ## sorting ##
 
 issorted(r::AbstractUnitRange) = true
-issorted(r::Range) = length(r) <= 1 || step(r) >= zero(step(r))
+issorted(r::AbstractRange) = length(r) <= 1 || step(r) >= zero(step(r))
 
 sort(r::AbstractUnitRange) = r
 sort!(r::AbstractUnitRange) = r
 
-sort(r::Range) = issorted(r) ? r : reverse(r)
+sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
 
 sortperm(r::AbstractUnitRange) = 1:length(r)
-sortperm(r::Range) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::AbstractRange) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
-function sum(r::Range{<:Real})
+function sum(r::AbstractRange{<:Real})
     l = length(r)
     # note that a little care is required to avoid overflow in l*(l-1)/2
     return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
                                      : (step(r) * l) * ((l-1)>>1))
 end
 
-function mean(r::Range{<:Real})
+function mean(r::AbstractRange{<:Real})
     isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
     (first(r) + last(r)) / 2
 end
 
-median(r::Range{<:Real}) = mean(r)
+median(r::AbstractRange{<:Real}) = mean(r)
 
-function _in_range(x, r::Range)
+function _in_range(x, r::AbstractRange)
     if step(r) == 0
         return !isempty(r) && first(r) == x
     else
@@ -896,17 +926,17 @@ function _in_range(x, r::Range)
         return n >= 1 && n <= length(r) && r[n] == x
     end
 end
-in(x::Real, r::Range{<:Real}) = _in_range(x, r)
+in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
 # This method needs to be defined separately since -(::T, ::T) can be implemented
 # even if -(::T, ::Real) is not
-in(x::T, r::Range{T}) where {T} = _in_range(x, r)
+in(x::T, r::AbstractRange{T}) where {T} = _in_range(x, r)
 
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
 
-in(x::Real, r::Range{T}) where {T<:Integer} =
+in(x::Real, r::AbstractRange{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
-in(x::Char, r::Range{Char}) =
+in(x::Char, r::AbstractRange{Char}) =
     !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(Int(x) - Int(first(r)), step(r)) == 0)
 
@@ -931,7 +961,7 @@ function _define_range_op(@nospecialize f)
 
         $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},
            r2::Union{StepRangeLen, OrdinalRange, LinSpace}) =
-               $f(promote_noncircular(r1, r2)...)
+               $f(promote(r1, r2)...)
     end
 end
 _define_range_op(:+)
@@ -945,3 +975,6 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+broadcast(::typeof(+), r1::AbstractRange, r2::AbstractRange) = r1 + r2
+broadcast(::typeof(-), r1::AbstractRange, r2::AbstractRange) = r1 - r2

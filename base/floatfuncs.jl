@@ -226,6 +226,11 @@ function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y
 end
 
 const ≈ = isapprox
+"""
+    x ≉ y
+
+This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
+"""
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
@@ -237,6 +242,16 @@ function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where
 end
 
 # fused multiply-add
+
+"""
+    fma(x, y, z)
+
+Computes `x*y+z` without rounding the intermediate result `x*y`. On some systems this is
+significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in certain
+algorithms. See [`muladd`](@ref).
+"""
+function fma end
+
 fma_libm(x::Float32, y::Float32, z::Float32) =
     ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
 fma_libm(x::Float64, y::Float64, z::Float64) =

@@ -13,7 +13,7 @@ mkdir -Force $cyginstall | Out-Null
 foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
     "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
   & "$cyginstall\\$setup" -q -n -R $cyginstall -l $cyginstall\\packages `
-    -s http://mirrors.mit.edu/cygwin -g -P $pkg | Where-Object `
+    -s http://mirrors.kernel.org/sourceware/cygwin -g -P $pkg | Where-Object `
     -FilterScript {$_ -notlike "Installing file *"} | Write-Output
 }
 & "$cyginstall\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\

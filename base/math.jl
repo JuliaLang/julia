@@ -21,11 +21,11 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              exp10, expm1, log1p
 
 using Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, fpinttype, significand_mask
+            exponent_half, uinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-const IEEEFloat = Union{Float16, Float32, Float64}
+using Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -59,8 +59,8 @@ are promoted to a common type.
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
 3-element Array{BigFloat,1}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
- 2.000000000000000000000000000000000000000000000000000000000000000000000000000000
- 9.000000000000000000000000000000000000000000000000000000000000000000000000000000
+ 2.0
+ 9.0
 ```
 """
 clamp(x::X, lo::L, hi::H) where {X,L,H} =
@@ -201,7 +201,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 # type specific math functions
 
 const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 """
@@ -209,35 +208,35 @@ const openspecfun = "libopenspecfun"
 
 Compute hyperbolic sine of `x`.
 """
-sinh(x)
+sinh(x::Number)
 
 """
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
 """
-cosh(x)
+cosh(x::Number)
 
 """
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
 """
-tanh(x)
+tanh(x::Number)
 
 """
     atan(x)
 
 Compute the inverse tangent of `x`, where the output is in radians.
 """
-atan(x)
+atan(x::Number)
 
 """
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
 """
-asinh(x)
+asinh(x::Number)
 
 """
     expm1(x)
@@ -245,7 +244,7 @@ asinh(x)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
+for f in (:cbrt, :sinh, :cosh, :tanh, :asinh, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -254,7 +253,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
 end
 exp(x::Real) = exp(float(x))
 exp10(x::Real) = exp10(float(x))
-
+atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -267,7 +266,7 @@ The prefix operator `∛` is equivalent to `cbrt`.
 
 ```jldoctest
 julia> cbrt(big(27))
-3.000000000000000000000000000000000000000000000000000000000000000000000000000000
+3.0
 ```
 """
 cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
@@ -328,49 +327,49 @@ end
 
 Compute sine of `x`, where `x` is in radians.
 """
-sin(x)
+sin(x::Number)
 
 """
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
 """
-cos(x)
+cos(x::Number)
 
 """
     tan(x)
 
 Compute tangent of `x`, where `x` is in radians.
 """
-tan(x)
+tan(x::Number)
 
 """
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
 """
-asin(x)
+asin(x::Number)
 
 """
     acos(x)
 
 Compute the inverse cosine of `x`, where the output is in radians
 """
-acos(x)
+acos(x::Number)
 
 """
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
 """
-acosh(x)
+acosh(x::Number)
 
 """
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
 """
-atanh(x)
+atanh(x::Number)
 
 """
     log(x)
@@ -381,7 +380,7 @@ Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
 """
-log(x)
+log(x::Number)
 
 """
     log2(x)
@@ -436,26 +435,12 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :log1p)
+for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
         @inline ($f)(x::Real) = ($f)(float(x))
     end
-end
-
-"""
-    sincos(x)
-
-Compute sine and cosine of `x`, where `x` is in radians.
-"""
-@inline function sincos(x)
-    res = Base.FastMath.sincos_fast(x)
-    if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
-        throw(DomainError(x, "NaN result for non-NaN input."))
-    end
-    return res
 end
 
 @inline function sqrt(x::Union{Float32,Float64})
@@ -487,9 +472,7 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
@@ -523,7 +506,7 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = vecnorm(x)
+hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
 """
     atan2(y, x)
@@ -533,9 +516,6 @@ quadrant of the return value.
 """
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
-
-atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
-atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
 
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
@@ -588,7 +568,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -598,7 +578,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
@@ -752,15 +732,15 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
-@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 function angle_restrict_symm(theta)
-    const P1 = 4 * 7.8539812564849853515625e-01
-    const P2 = 4 * 3.7748947079307981766760e-08
-    const P3 = 4 * 2.6951514290790594840552e-15
+    P1 = 4 * 7.8539812564849853515625e-01
+    P2 = 4 * 3.7748947079307981766760e-08
+    P3 = 4 * 2.6951514290790594840552e-15
 
     y = 2*floor(theta/(2*pi))
     r = ((theta - y*P1) - y*P2) - y*P3
@@ -989,7 +969,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
              :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::Complex32) = Complex32($func(Complex64(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 
@@ -1000,6 +980,7 @@ for func in (:atan2,:hypot)
 end
 
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
+sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # More special functions
 include(joinpath("special", "exp.jl"))

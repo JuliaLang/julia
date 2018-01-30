@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using LinearAlgebra
+using Test
+using Printf
+
 
 include("../perfutil.jl")
 
@@ -9,7 +12,7 @@ include("../perfutil.jl")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 @test fib(20) == 6765
-@timeit fib(20) "fib" "Recursive fibonacci"
+@timeit fib(20) "recursion_fibonacci" "Recursive fibonacci"
 
 ## parse integer ##
 
@@ -18,32 +21,35 @@ function parseintperf(t)
     for i=1:t
         n = rand(UInt32)
         s = hex(n)
-        m = UInt32(parse(Int64,s,16))
+        m = UInt32(parse(Int64,s, base = 16))
     end
     @test m == n
     return n
 end
 
-@timeit parseintperf(1000) "parse_int" "Integer parsing"
+@timeit parseintperf(1000) "parse_integers" "Integer parsing"
 
 ## array constructors ##
 
-@test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones" "description"
+@test all(fill(1.,200,200) .== 1)
 
 ## matmul and transpose ##
 
-A = ones(200,200)
+A = fill(1.,200,200)
 @test all(A*A' .== 200)
 # @timeit A*A' "AtA" "description"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
+function myabs2(z)
+    return real(z)*real(z) + imag(z)*imag(z)
+end
+
 function mandel(z)
     c = z
     maxiter = 80
     for n = 1:maxiter
-        if abs(z) > 2
+        if myabs2(z) > 4
             return n-1
         end
         z = z^2 + c
@@ -53,7 +59,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
 @test sum(mandelperf()) == 14791
-@timeit mandelperf() "mandel" "Calculation of mandelbrot set"
+@timeit mandelperf() "userfunc_mandelbrot" "Calculation of mandelbrot set"
 
 ## numeric vector sort ##
 
@@ -77,7 +83,7 @@ end
 
 sortperf(n) = qsort!(rand(n), 1, n)
 @test issorted(sortperf(5000))
-@timeit sortperf(5000) "quicksort" "Sorting of random numbers using quicksort"
+@timeit sortperf(5000) "recursion_quicksort" "Sorting of random numbers using quicksort"
 
 ## slow pi series ##
 
@@ -93,7 +99,7 @@ function pisum()
 end
 
 @test abs(pisum()-1.644834071848065) < 1e-12
-@timeit pisum() "pi_sum" "Summation of a power series"
+@timeit pisum() "iteration_pi_sum" "Summation of a power series"
 
 ## slow pi series, vectorized ##
 
@@ -122,19 +128,19 @@ function randmatstat(t)
         d = randn(n,n)
         P = [a b c d]
         Q = [a b; c d]
-        v[i] = trace((P.'*P)^4)
-        w[i] = trace((Q.'*Q)^4)
+        v[i] = trace((P'*P)^4)
+        w[i] = trace((Q'*Q)^4)
     end
     return (std(v)/mean(v), std(w)/mean(w))
 end
 
 (s1, s2) = randmatstat(1000)
 @test 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
-@timeit randmatstat(1000) "rand_mat_stat" "Statistics on a random matrix"
+@timeit randmatstat(1000) "matrix_statistics" "Statistics on a random matrix"
 
 ## largish random number gen & matmul ##
 
-@timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul" "Multiplication of random matrices"
+@timeit rand(1000,1000)*rand(1000,1000) "matrix_multiply" "Multiplication of random matrices"
 
 ## printfd ##
 
@@ -148,7 +154,7 @@ if Sys.isunix()
     end
 
     printfd(1)
-    @timeit printfd(100000) "printfd" "Printing to a file descriptor"
+    @timeit printfd(100000) "print_to_file" "Printing to a file descriptor"
 end
 
-maxrss("micro")
+#maxrss("micro")

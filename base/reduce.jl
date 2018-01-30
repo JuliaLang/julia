@@ -5,31 +5,32 @@
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-const SmallSigned = Union{Int8,Int16}
-const SmallUnsigned = Union{UInt8,UInt16}
+    const SmallSigned = Union{Int8,Int16}
+    const SmallUnsigned = Union{UInt8,UInt16}
 else
-const SmallSigned = Union{Int8,Int16,Int32}
-const SmallUnsigned = Union{UInt8,UInt16,UInt32}
+    const SmallSigned = Union{Int8,Int16,Int32}
+    const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
+"""
+    Base.add_sum(x,y)
 
-# r_promote_type: promote T to the type of reduce(op, ::Array{T})
-# (some "extra" methods are required here to avoid ambiguity warnings)
-r_promote_type(op, ::Type{T}) where {T} = T
-r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:Number} = typeof(zero(T)+zero(T))
-r_promote_type(::typeof(*), ::Type{T}) where {T<:Number} = typeof(one(T)*one(T))
-r_promote_type(::typeof(scalarmax), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(scalarmin), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(max), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(min), ::Type{T}) where {T<:WidenReduceResult} = T
+The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+add_sum(x,y) = x + y
+add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
 
-# r_promote: promote x to the type of reduce(op, [x])
-r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
+"""
+    Base.mul_prod(x,y)
+
+The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+mul_prod(x,y) = x * y
+mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
@@ -37,10 +38,10 @@ r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if done(itr, i)
-        return r_promote(op, v0)
+        return v0
     else
         (x, i) = next(itr, i)
-        v = op(r_promote(op, v0), f(x))
+        v = op(v0, f(x))
         while !done(itr, i)
             @inbounds (x, i) = next(itr, i)
             v = op(v, f(x))
@@ -60,16 +61,18 @@ mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 """
     mapfoldl(f, op, itr)
 
-Like `mapfoldl(f, op, v0, itr)`, but using the first element of `itr` as `v0`. In general,
-this cannot be used with empty collections (see `reduce(op, itr)`).
+Like `mapfoldl(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
+Specifically, `mapfoldl(f, op, itr)` produces the same result as
+`mapfoldl(f, op, f(first(itr)), drop(itr, 1))`.
+In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
-        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = next(itr, i)
-    v0 = f(x)
+    v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
@@ -80,8 +83,8 @@ Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
 ```jldoctest
-julia> foldl(-, 1, 2:5)
--13
+julia> foldl(=>, 0, 1:4)
+(((0=>1)=>2)=>3) => 4
 ```
 """
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
@@ -90,11 +93,11 @@ foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
     foldl(op, itr)
 
 Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see `reduce(op, itr)`).
+cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldl(-, 2:5)
--10
+julia> foldl(=>, 1:4)
+((1=>2)=>3) => 4
 ```
 """
 foldl(op, itr) = mapfoldl(identity, op, itr)
@@ -105,10 +108,10 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if isempty(itr) || i == 0
-        return r_promote(op, v0)
+        return v0
     else
         x = itr[i]
-        v  = op(f(x), r_promote(op, v0))
+        v  = op(f(x), v0)
         while i > 1
             x = itr[i -= 1]
             v = op(f(x), v)
@@ -123,20 +126,22 @@ end
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, lastindex(itr))
 
 """
     mapfoldr(f, op, itr)
 
-Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` as `v0`. In general,
-this cannot be used with empty collections (see `reduce(op, itr)`).
+Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
+Specifically, `mapfoldr(f, op, itr)` produces the same result as
+`mapfoldr(f, op, f(last(itr)), take(itr, length(itr)-1))`.
+In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldr(f, op, itr)
-    i = endof(itr)
+    i = lastindex(itr)
     if isempty(itr)
-        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
+    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
 end
 
 """
@@ -146,8 +151,8 @@ Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be use
 exactly once.
 
 ```jldoctest
-julia> foldr(-, 1, 2:5)
--1
+julia> foldr(=>, 0, 1:4)
+1 => (2=>(3=>(4=>0)))
 ```
 """
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
@@ -156,11 +161,11 @@ foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
     foldr(op, itr)
 
 Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see `reduce(op, itr)`).
+cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
 ```jldoctest
-julia> foldr(-, 2:5)
--2
+julia> foldr(=>, 1:4)
+1 => (2=>(3=>4))
 ```
 """
 foldr(op, itr) = mapfoldr(identity, op, itr)
@@ -177,12 +182,12 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 @noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
-        return r_promote(op, f(a1))
+        return mapreduce_first(f, op, a1)
     elseif ifirst + blksize > ilast
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        v = op(f(a1), f(a2))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
@@ -241,23 +246,87 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
-mr_empty(f, op, T) = _empty_reduce_error()
-# use zero(T)::T to improve type information when zero(T) is not defined
-mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
-mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
-mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
-mr_empty(::typeof(identity), op::typeof(*), T) = r_promote(op, one(T)::T)
-mr_empty(::typeof(abs), op::typeof(scalarmax), T) = abs(zero(T)::T)
-mr_empty(::typeof(abs2), op::typeof(scalarmax), T) = abs2(zero(T)::T)
-mr_empty(::typeof(abs), op::typeof(max), T) = mr_empty(abs, scalarmax, T)
-mr_empty(::typeof(abs2), op::typeof(max), T) = mr_empty(abs2, scalarmax, T)
-mr_empty(f, op::typeof(&), T) = true
-mr_empty(f, op::typeof(|), T) = false
 
-mr_empty_iter(f, op, itr, ::HasEltype) = mr_empty(f, op, eltype(itr))
-mr_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
-mr_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
-mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+"""
+    Base.reduce_empty(op, T)
+
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or [`foldr`](@ref)
+with reduction `op` over an empty array with element type of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
+reduce_empty(op, T) = _empty_reduce_error()
+reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
+reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(*), ::Type{Char}) = ""
+reduce_empty(::typeof(&), ::Type{Bool}) = true
+reduce_empty(::typeof(|), ::Type{Bool}) = false
+
+reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+
+"""
+    Base.mapreduce_empty(f, op, T)
+
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
+of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
+mapreduce_empty(f, op, T) = _empty_reduce_error()
+mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
+mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
+
+mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+
+mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
+mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
+mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
+mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+
+# handling of single-element iterators
+"""
+    Base.reduce_first(op, x)
+
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
+[`foldr`](@ref) with reduction `op` over an iterator which contains a single element
+`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+may call `op(reduce_first(op, x), y)`.
+
+The default is `x` for most types. The main purpose is to ensure type stability, so
+additional methods should only be defined for cases where `op` gives a result with
+different types than its inputs.
+"""
+reduce_first(op, x) = x
+reduce_first(::typeof(+), x::Bool) = Int(x)
+reduce_first(::typeof(*), x::Char) = string(x)
+
+reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
+reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
+reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+
+"""
+    Base.mapreduce_first(f, op, x)
+
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
+single element `x`. This value may also used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+
+The default is `reduce_first(op, f(x))`.
+"""
+mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -265,15 +334,15 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     inds = linearindices(A)
     n = length(inds)
     if n == 0
-        return mr_empty(f, op, T)
+        return mapreduce_empty(f, op, T)
     elseif n == 1
         @inbounds a1 = A[inds[1]]
-        return r_promote(op, f(a1))
+        return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = inds[1]
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
-        s = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        s = op(f(a1), f(a2))
         while i < last(inds)
             @inbounds Ai = A[i+=1]
             s = op(s, f(Ai))
@@ -287,26 +356,26 @@ end
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
-mapreduce(f, op, a::Number) = f(a)
+mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
 """
     reduce(op, v0, itr)
 
-Reduce the given collection `ìtr` with the given binary operator `op`. `v0` must be a
+Reduce the given collection `itr` with the given binary operator `op`. `v0` must be a
 neutral element for `op` that will be returned for empty collections. It is unspecified
 whether `v0` is used for non-empty collections.
 
-Reductions for certain commonly-used operators have special implementations which should be
-used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`, `any(itr)`,
-`all(itr)`.
+Reductions for certain commonly-used operators may have special implementations, and
+should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
+ `any(itr)`, `all(itr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
 should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
 [`foldr`](@ref) instead for guaranteed left or right associativity.
 
-Some operations accumulate error, and parallelism will also be easier if the reduction can
-be executed in groups. Future versions of Julia might change the algorithm. Note that the
+Some operations accumulate error. Parallelism will be easier if the reduction can be
+executed in groups. Future versions of Julia might change the algorithm. Note that the
 elements are not reordered if you use an ordered collection.
 
 # Examples
@@ -341,57 +410,48 @@ reduce(op, a::Number) = a
 
 Sum the results of calling function `f` on each element of `itr`.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
 ```
+
+Note the important difference between `sum(A)` and `reduce(+, A)` for arrays
+with small integer eltype:
+
+```jldoctest
+julia> sum(Int8[100, 28])
+128
+
+julia> reduce(+, Int8[100, 28])
+-128
+```
+
+In the former case, the integers are widened to system word size and therefore
+the result is 128. In the latter case, no such widening happens and integer
+overflow results in -128.
 """
-sum(f::Callable, a) = mapreduce(f, +, a)
+sum(f, a) = mapreduce(f, add_sum, a)
 
 """
     sum(itr)
 
 Returns the sum of all elements in a collection.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> sum(1:20)
 210
 ```
 """
-sum(a) = mapreduce(identity, +, a)
-sum(a::AbstractArray{Bool}) = countnz(a)
-
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-
-"""
-    sum_kbn(A)
-
-Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
-summation algorithm for additional accuracy.
-"""
-function sum_kbn(A)
-    T = _default_eltype(typeof(A))
-    c = r_promote(+, zero(T)::T)
-    i = start(A)
-    if done(A, i)
-        return c
-    end
-    Ai, i = next(A, i)
-    s = Ai - c
-    while !(done(A, i))
-        Ai, i = next(A, i)
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c -= ((s-t) + Ai)
-        else
-            c -= ((Ai-t) + s)
-        end
-        s = t
-    end
-    s - c
-end
+sum(a) = sum(identity, a)
+sum(a::AbstractArray{Bool}) = count(a)
 
 ## prod
 """
@@ -399,35 +459,40 @@ end
 
 Returns the product of `f` applied to each element of `itr`.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(f, *, a)
+prod(f, a) = mapreduce(f, mul_prod, a)
 
 """
     prod(itr)
 
 Returns the product of all elements of a collection.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(identity, *, a)
+prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::Union{typeof(scalarmax),
-                                     typeof(scalarmin),
-                                     typeof(max),
-                                     typeof(min)},
+function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     @inbounds a1 = A[first]
-    v = f(a1)
+    v = mapreduce_first(f, op, a1)
     i = first + 1
     while (v == v) && (i <= last)
         @inbounds ai = A[i]
@@ -437,8 +502,8 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
-minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
+maximum(f::Callable, a) = mapreduce(f, max, a)
+minimum(f::Callable, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
@@ -453,7 +518,7 @@ julia> maximum([1,2,3])
 3
 ```
 """
-maximum(a) = mapreduce(identity, scalarmax, a)
+maximum(a) = mapreduce(identity, max, a)
 
 """
     minimum(itr)
@@ -468,11 +533,11 @@ julia> minimum([1,2,3])
 1
 ```
 """
-minimum(a) = mapreduce(identity, scalarmin, a)
+minimum(a) = mapreduce(identity, min, a)
 
 ## extrema
 
-extrema(r::Range) = (minimum(r), maximum(r))
+extrema(r::AbstractRange) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
 """
@@ -559,6 +624,9 @@ Determine whether predicate `p` returns `true` for any elements of `itr`, return
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
 (short-circuiting).
 
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `false` (or equivalently, if the input contains no `true` value).
+
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -572,10 +640,16 @@ true
 ```
 """
 function any(f, itr)
+    anymissing = false
     for x in itr
-        f(x) && return true
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
+        end
     end
-    return false
+    return anymissing ? missing : false
 end
 
 """
@@ -584,6 +658,9 @@ end
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
 (short-circuiting).
+
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `true` (or equivalently, if the input contains no `false` value).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
@@ -597,11 +674,21 @@ false
 ```
 """
 function all(f, itr)
+    anymissing = false
     for x in itr
-        f(x) || return false
+        v = f(x)
+        if ismissing(v)
+            anymissing = true
+        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+        elseif v
+            continue
+        else
+            return false
+        end
     end
-    return true
+    return anymissing ? missing : true
 end
+
 
 ## in & contains
 
@@ -614,7 +701,7 @@ end
 
 Determine whether an item is in the given collection, in the sense that it is `==` to one of
 the values generated by iterating over the collection. Some collections need a slightly
-different definition; for example [`Set`](@ref)s check whether the item
+different definition; for example, [`Set`](@ref)s check whether the item
 [`isequal`](@ref) to one of the elements. [`Dict`](@ref)s look for
 `(key,value)` pairs, and the key is compared using [`isequal`](@ref). To test for
 the presence of a key in a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.
@@ -637,40 +724,8 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
-"""
-    contains(fun, itr, x) -> Bool
 
-Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
-
-```jldoctest
-julia> vec = [10, 100, 200]
-3-element Array{Int64,1}:
-  10
- 100
- 200
-
-julia> contains(==, vec, 200)
-true
-
-julia> contains(==, vec, 300)
-false
-
-julia> contains(>, vec, 100)
-true
-
-julia> contains(>, vec, 200)
-false
-```
-"""
-function contains(eq::Function, itr, x)
-    for y in itr
-        eq(y, x) && return true
-    end
-    return false
-end
-
-
-## countnz & count
+## count
 
 """
     count(p, itr) -> Integer
@@ -703,22 +758,3 @@ function count(pred, a::AbstractArray)
     return n
 end
 count(itr) = count(identity, itr)
-
-"""
-    countnz(A) -> Integer
-
-Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
-For sparse matrices, one should usually use [`nnz`](@ref), which returns the number of stored values.
-
-```jldoctest
-julia> A = [1 2 4; 0 0 1; 1 1 0]
-3×3 Array{Int64,2}:
- 1  2  4
- 0  0  1
- 1  1  0
-
-julia> countnz(A)
-6
-```
-"""
-countnz(a) = count(x -> x != 0, a)

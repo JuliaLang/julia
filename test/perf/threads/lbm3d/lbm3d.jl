@@ -46,7 +46,7 @@ function relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid,
                 for l = 1:size(F,4)
                     density = density + F[i,j,k,l]
                 end
-                fs = Array{Float64}(6)
+                fs = Vector{Float64}(uninitialized, 6)
                 for l = 1:6
                     fs[l] = 0.0
                     for m = 1:5
@@ -119,11 +119,11 @@ end
 precompile(calc_equi!, (Array{Float64,4}, Array{Float64,4}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Array{Float64,2}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Int64, Int64, Int64, Float64))
 
 function lbm3d(n)
-    const nx = n
-    const ny = nx
-    const nz = nx
-    const omega = 1.0
-    const density = 1.0
+    nx = n
+    ny = nx
+    nz = nx
+    omega = 1.0
+    density = 1.0
 
     # Implementation note: setting nchunk to nthreads() is a hack
     # to simulate the previous implementation's use of parallel regions.
@@ -139,7 +139,7 @@ function lbm3d(n)
 
     CI = [0:matsize:matsize*19;]'
 
-    BOUND = Array{Float64}(nx,ny,nz)
+    BOUND = Array{Float64}(uninitialized, nx,ny,nz)
 
     for i=1:nx, j=1:ny, k=1:nz
         BOUND[i,j,k] = ((i-5)^2 + (j-6)^2 + (k-7)^2) < 6
@@ -148,19 +148,19 @@ function lbm3d(n)
     BOUND[:,:,1] = 1
     BOUND[:,1,:] = 1
 
-    ON = find(BOUND); # matrix offset of each Occupied Node
+    ON = findall(BOUND); # matrix offset of each Occupied Node
 
     TO_REFLECT = [ON+CI[2] ON+CI[3] ON+CI[4] ON+CI[5] ON+CI[6] ON+CI[7] ON+CI[8] ON+CI[9] ON+CI[10] ON+CI[11] ON+CI[12] ON+CI[13] ON+CI[14] ON+CI[15] ON+CI[16] ON+CI[17] ON+CI[18] ON+CI[19]]
     REFLECTED = [ON+CI[3] ON+CI[2] ON+CI[5] ON+CI[4] ON+CI[7] ON+CI[6] ON+CI[11] ON+CI[10] ON+CI[9] ON+CI[8] ON+CI[15] ON+CI[14] ON+CI[13] ON+CI[12] ON+CI[19] ON+CI[18] ON+CI[17] ON+CI[16]]
 
-    UX = Array{Float64}(nx,ny,nz)
-    UY = Array{Float64}(nx,ny,nz)
-    UZ = Array{Float64}(nx,ny,nz)
-    U  = Array{Float64}(12,nchunk)
-    t1D = Array{Float64}(nx,ny,nz)
-    t2D = Array{Float64}(nx,ny,nz)
-    t3D = Array{Float64}(nx,ny,nz)
-    sSQU = Array{Float64}(nx,ny,nz)
+    UX = Array{Float64}(uninitialized, nx,ny,nz)
+    UY = Array{Float64}(uninitialized, nx,ny,nz)
+    UZ = Array{Float64}(uninitialized, nx,ny,nz)
+    U  = Array{Float64}(uninitialized, 12,nchunk)
+    t1D = Array{Float64}(uninitialized, nx,ny,nz)
+    t2D = Array{Float64}(uninitialized, nx,ny,nz)
+    t3D = Array{Float64}(uninitialized, nx,ny,nz)
+    sSQU = Array{Float64}(uninitialized, nx,ny,nz)
 
     avu = 1
     prevavu = 1
@@ -169,35 +169,32 @@ function lbm3d(n)
     numactivenodes = sum(1-BOUND)
 
     @time while (ts < 4000  &&  (1e-10 < abs((prevavu-avu)/avu)))  ||  ts < 100
-        tic()
-        # Propagate -- nearest and next-nearest neighbors
-        for i = 2:19
-            circshift3d1!(F, i, prop_shifts[i-1])
+        tprop += @elapsed begin
+            # Propagate -- nearest and next-nearest neighbors
+            for i = 2:19
+                circshift3d1!(F, i, prop_shifts[i-1])
+            end
         end
-        tprop = tprop + toq()
 
         # Densities bouncing back at next timestep
         BOUNCEDBACK = F[TO_REFLECT]
 
-        tic()
-
-        # Relax; calculate equilibrium state (FEQ) with equivalent speed and density to F
-        @threads for chunk=1:nchunk
-            relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid, nchunk)
-        end
-        for o in ON
-            UX[o] = UY[o] = UZ[o] = t1D[o] = t2D[o] = t3D[o] = sSQU[o] = 0.0
-        end
-
-        trelax = trelax + toq()
-        tic()
-
-        # Calculate equilibrium distribution: stationary
-        @threads for chunk=1:nchunk
-            calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega)
+        trelax += @elapsed begin
+            # Relax; calculate equilibrium state (FEQ) with equivalent speed and density to F
+            @threads for chunk=1:nchunk
+                relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid, nchunk)
+            end
+            for o in ON
+                UX[o] = UY[o] = UZ[o] = t1D[o] = t2D[o] = t3D[o] = sSQU[o] = 0.0
+            end
         end
 
-        tequi = tequi + toq()
+        tequi += @elapsed begin
+            # Calculate equilibrium distribution: stationary
+            @threads for chunk=1:nchunk
+                calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega)
+            end
+        end
 
         F[REFLECTED] = BOUNCEDBACK
 
@@ -219,4 +216,4 @@ function lbm3d(n)
 end
 
 @time lbm3d(36)
-#ccall(:jl_threading_profile, Void, ())
+#ccall(:jl_threading_profile, Cvoid, ())
