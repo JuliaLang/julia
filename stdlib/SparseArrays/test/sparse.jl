@@ -326,31 +326,31 @@ sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
 
-@testset "scaling with * and mul!, mul1!, and mul2!" begin
+@testset "scaling with * and mul!, rmul!, and lmul!" begin
     b = randn(7)
     @test dA * Diagonal(b) == sA * Diagonal(b)
     @test dA * Diagonal(b) == mul!(sC, sA, Diagonal(b))
-    @test dA * Diagonal(b) == mul1!(copy(sA), Diagonal(b))
+    @test dA * Diagonal(b) == rmul!(copy(sA), Diagonal(b))
     b = randn(3)
     @test Diagonal(b) * dA == Diagonal(b) * sA
     @test Diagonal(b) * dA == mul!(sC, Diagonal(b), sA)
-    @test Diagonal(b) * dA == mul2!(Diagonal(b), copy(sA))
+    @test Diagonal(b) * dA == lmul!(Diagonal(b), copy(sA))
 
     @test dA * 0.5            == sA * 0.5
     @test dA * 0.5            == mul!(sC, sA, 0.5)
-    @test dA * 0.5            == mul1!(copy(sA), 0.5)
+    @test dA * 0.5            == rmul!(copy(sA), 0.5)
     @test 0.5 * dA            == 0.5 * sA
     @test 0.5 * dA            == mul!(sC, sA, 0.5)
-    @test 0.5 * dA            == mul2!(0.5, copy(sA))
+    @test 0.5 * dA            == lmul!(0.5, copy(sA))
     @test mul!(sC, 0.5, sA)   == mul!(sC, sA, 0.5)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
-        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test mul1!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
-        @test mul1!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
+        @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end

@@ -158,18 +158,18 @@ julia> Y
 mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
 
 """
-    mul1!(A, B)
+    rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
-mul1!(A, B)
+rmul!(A, B)
 
 """
-    mul2!(A, B)
+    lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
 """
-mul2!(A, B)
+lmul!(A, B)
 
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, B::AbstractMatrix)
     A = transA.parent

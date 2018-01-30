@@ -151,49 +151,49 @@ end
 (*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
-(*)(A::AbstractTriangular, D::Diagonal) = mul1!(copy(A), D)
-(*)(D::Diagonal, B::AbstractTriangular) = mul2!(D, copy(B))
+(*)(A::AbstractTriangular, D::Diagonal) = rmul!(copy(A), D)
+(*)(D::Diagonal, B::AbstractTriangular) = lmul!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
-function mul1!(A::AbstractMatrix, D::Diagonal)
+function rmul!(A::AbstractMatrix, D::Diagonal)
     A .= A .* transpose(D.diag)
     return A
 end
 
-function mul2!(D::Diagonal, B::AbstractMatrix)
+function lmul!(D::Diagonal, B::AbstractMatrix)
     B .= D.diag .* B
     return B
 end
 
-mul1!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(mul1!(A.data, D))
-function mul1!(A::UnitLowerTriangular, D::Diagonal)
-    mul1!(A.data, D)
+rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(A.data, D))
+function rmul!(A::UnitLowerTriangular, D::Diagonal)
+    rmul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     LowerTriangular(A.data)
 end
-function mul1!(A::UnitUpperTriangular, D::Diagonal)
-    mul1!(A.data, D)
+function rmul!(A::UnitUpperTriangular, D::Diagonal)
+    rmul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     UpperTriangular(A.data)
 end
 
-function mul2!(D::Diagonal, B::UnitLowerTriangular)
-    mul2!(D, B.data)
+function lmul!(D::Diagonal, B::UnitLowerTriangular)
+    lmul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
     LowerTriangular(B.data)
 end
-function mul2!(D::Diagonal, B::UnitUpperTriangular)
-    mul2!(D, B.data)
+function lmul!(D::Diagonal, B::UnitUpperTriangular)
+    lmul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
@@ -201,40 +201,40 @@ function mul2!(D::Diagonal, B::UnitUpperTriangular)
 end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(adjoint.(D.parent.diag) .* B.diag)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = mul1!(copy(A), D)
+*(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = rmul!(copy(A), D)
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    mul1!(Ac, D)
+    rmul!(Ac, D)
 end
 
 *(D::Transpose{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(transpose.(D.parent.diag) .* B.diag)
-*(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = mul1!(copy(A), D)
+*(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = rmul!(copy(A), D)
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    mul1!(At, D)
+    rmul!(At, D)
 end
 
 *(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* adjoint.(B.parent.diag))
-*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) = mul2!(D, collect(B))
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; mul1!(Array(D), adjoint(Q)))
+*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) = lmul!(D, collect(B))
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; rmul!(Array(D), adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    mul2!(D, Ac)
+    lmul!(D, Ac)
 end
 
 *(D::Diagonal, B::Transpose{<:Any,<:Diagonal}) = Diagonal(D.diag .* transpose.(B.parent.diag))
-*(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) = mul2!(D, copy(B))
+*(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) = lmul!(D, copy(B))
 function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    mul2!(D, At)
+    lmul!(D, At)
 end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) =
@@ -242,25 +242,25 @@ end
 *(D::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) =
     Diagonal(transpose.(D.parent.diag) .* transpose.(B.parent.diag))
 
-mul1!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
-mul2!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
+rmul!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
+lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
 
-function mul2!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
+function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = adjA.parent
-    return mul2!(conj(A.diag), B)
+    return lmul!(conj(A.diag), B)
 end
-function mul2!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
+function lmul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = transA.parent
-    return mul2!(A.diag, B)
+    return lmul!(A.diag, B)
 end
 
-function mul1!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
     B = adjB.parent
-    return mul1!(A, conj(B.diag))
+    return rmul!(A, conj(B.diag))
 end
-function mul1!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     B = transB.parent
-    return mul1!(A, B.diag)
+    return rmul!(A, B.diag)
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
