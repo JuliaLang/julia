@@ -390,6 +390,11 @@ eval(Expr(
 @test !Compat.TypeUtils.isabstract(StridedArray)
 @test Compat.TypeUtils.parameter_upper_bound(ConcreteFoo20006, 1) == Int
 @test isa(Compat.TypeUtils.typename(Array), TypeName)
+@test isabstracttype(AbstractFoo20006)
+@test !isabstracttype(ConcreteFoo20006)
+@test !isabstracttype(ConcreteFoo20006N)
+@test !isabstracttype(ConcreteFoo200061)
+@test !isabstracttype(StridedArray)
 
 # @view and @views tests copied from Base
 let X = reshape(1:24,2,3,4), Y = 4:-1:1
@@ -888,7 +893,7 @@ if VERSION >= v"0.6"
 end
 
 # 0.7
-@test isconcrete(Int)
+@test isconcretetype(Int)
 
 # 0.7
 module Test23876

@@ -391,18 +391,15 @@ else
     import Base.isapprox
 end
 
+@static if !isdefined(Base, :isabstracttype) # VERSION < v"0.7.0-DEV.3475"
+    const isabstracttype = Base.isabstract
+    export isabstracttype
+end
+
 module TypeUtils
-    @static if isdefined(Base, :isabstract)
-        using Base: isabstract, parameter_upper_bound, typename
-    else
-        isabstract(t::DataType) = t.abstract
-        if isdefined(Base, :TypeConstructor)
-            isabstract(t::TypeConstructor) = isabstract(t.body)
-        end
-        isabstract(t::ANY) = false
-        parameter_upper_bound(t::DataType, idx) = t.parameters[idx].ub
-        typename(t::DataType) = t.name
-    end
+    using Base: parameter_upper_bound, typename
+    using Compat: isabstracttype
+    const isabstract = isabstracttype
     export isabstract, parameter_upper_bound, typename
 end # module TypeUtils
 
@@ -740,10 +737,18 @@ if VERSION < v"0.7.0-DEV.1325"
     end
 end
 
-# 0.7.0-DEV.1775
-@static if !isdefined(Base, :isconcrete)
-    const isconcrete = isleaftype
-    export isconcrete
+
+# 0.7.0-DEV.3475
+@static if !isdefined(Base, :isconcretetype)
+    # 0.7.0-DEV.1775
+    @static if !isdefined(Base, :isconcrete)
+        const isconcretetype = isleaftype
+        const isconcrete = isleaftype # for compatibility with earlier Compat versions
+        export isconcrete
+    else
+        const isconcretetype = isconcrete
+    end
+    export isconcretetype
 end
 
 # 0.7.0-DEV.2005

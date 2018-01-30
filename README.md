@@ -281,8 +281,6 @@ Currently, the `@compat` macro supports the following syntaxes:
   `MathConstants` module (available as `Compat.MathConstants`).
   The name exported from `Base` for `e` is changed to `ℯ`. ([#23427])
 
-* `isleaftype` is now `isconcrete` ([#23666])
-
 * `IntSet` is now `BitSet` ([#24282])
 
 * `Complex32`, `Complex64`, and `Complex128` are now `ComplexF16`, `ComplexF32`, and
@@ -317,6 +315,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `find` is now `findall` ([#25545]).
 
 * `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
+
+* `isabstract` and `isleaftype` are now `isabstracttype` and `isconcretetype`, respectively
+  ([#23666], [#25496]).
 
 ## New macros
 
@@ -499,6 +500,7 @@ includes this fix. Find the minimum version from there.
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
