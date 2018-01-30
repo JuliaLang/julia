@@ -81,6 +81,15 @@ aimg  = randn(n,n)/2
             @test istriu(f.S) || eltype(a)<:Real
             @test istriu(f.T) || eltype(a)<:Real
             @test_throws ErrorException f.A
+
+            sstring = sprint((t, s) -> show(t, "text/plain", s), f.S)
+            tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
+            qstring = sprint((t, s) -> show(t, "text/plain", s), f.Q)
+            zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)
+            αstring = sprint((t, s) -> show(t, "text/plain", s), f.α)
+            βstring = sprint((t, s) -> show(t, "text/plain", s), f.β)
+            fstring = sprint((t, s) -> show(t, "text/plain", s), f)
+            @test fstring == "$(summary(f))\nS factor:\n$sstring\nT factor:\n$(tstring)\nQ factor:\n$(qstring)\nZ factor:\n$(zstring)\nα:\n$αstring\nβ:\n$βstring"
         end
         @testset "Reorder Generalized Schur" begin
             NS = schurfact(a1_sf, a2_sf)

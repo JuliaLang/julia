@@ -178,8 +178,8 @@ ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
     T::M
-    alpha::Vector
-    beta::Vector{Ty}
+    α::Vector
+    β::Vector{Ty}
     Q::M
     Z::M
     function GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
@@ -208,7 +208,7 @@ Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`
 and `F.T`, the left unitary/orthogonal Schur vectors can be obtained with `F.left` or
 `F.Q` and the right unitary/orthogonal Schur vectors can be obtained with `F.right` or
 `F.Z` such that `A=F.left*F.S*F.right'` and `B=F.left*F.T*F.right'`. The
-generalized eigenvalues of `A` and `B` can be obtained with `F.alpha./F.beta`.
+generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
 """
 schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
 function schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
@@ -223,8 +223,8 @@ Same as `ordschur` but overwrites the factorization `F`.
 """
 function ordschur!(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})
     _, _, α, β, _, _ = ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
-    gschur.alpha[:] = α
-    gschur.beta[:] = β
+    gschur.α[:] = α
+    gschur.β[:] = β
     return gschur
 end
 
@@ -236,7 +236,7 @@ according to the logical array `select` and returns a GeneralizedSchur object `F
 selected eigenvalues appear in the leading diagonal of both `F.S` and `F.T`, and the
 left and right orthogonal/unitary Schur vectors are also reordered such that
 `(A, B) = F.Q*(F.S, F.T)*F.Z'` still holds and the generalized eigenvalues of `A`
-and `B` can still be obtained with `F.alpha./F.beta`.
+and `B` can still be obtained with `F.α./F.β`.
 """
 ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
     GeneralizedSchur(ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
@@ -266,7 +266,11 @@ ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
 
 function getproperty(F::GeneralizedSchur, d::Symbol)
     if d == :values
-        return getfield(F, :alpha) ./ getfield(F, :beta)
+        return getfield(F, :α) ./ getfield(F, :β)
+    elseif d == :alpha
+        return getfield(F, :α)
+    elseif d == :beta
+        return getfield(F, :β)
     elseif d == :left
         return getfield(F, :Q)
     elseif d == :right
@@ -285,7 +289,23 @@ See [`schurfact`](@ref).
 """
 function schur(A::StridedMatrix, B::StridedMatrix)
     SchurF = schurfact(A, B)
-    SchurF.S, SchurF.T, SchurF.Q, SchurF.Z, SchurF.alpha, SchurF.beta
+    SchurF.S, SchurF.T, SchurF.Q, SchurF.Z, SchurF.α, SchurF.β
+end
+
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSchur)
+    println(io, summary(F))
+    println(io, "S factor:")
+    show(io, mime, F.S)
+    println(io, "\nT factor:")
+    show(io, mime, F.T)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
+    println(io, "\nZ factor:")
+    show(io, mime, F.Z)
+    println(io, "\nα:")
+    show(io, mime, F.α)
+    println(io, "\nβ:")
+    show(io, mime, F.β)
 end
 
 # Conversion
@@ -295,4 +315,4 @@ Matrix(F::Schur) = Array(AbstractArray(F))
 Array(F::Schur) = Matrix(F)
 
 copy(F::Schur) = Schur(copy(F.T), copy(F.Z), copy(F.values))
-copy(F::GeneralizedSchur) = GeneralizedSchur(copy(F.S), copy(F.T), copy(F.alpha), copy(F.beta), copy(F.Q), copy(F.Z))
+copy(F::GeneralizedSchur) = GeneralizedSchur(copy(F.S), copy(F.T), copy(F.α), copy(F.β), copy(F.Q), copy(F.Z))
