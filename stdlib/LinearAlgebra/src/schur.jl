@@ -79,14 +79,14 @@ end
 
 Base.propertynames(F::Schur) = append!([:Schur,:vectors], fieldnames(typeof(F)))
 
-function show(io::IO, F::Schur)
-    println(io, "$(typeof(F)) with factors T and Z:")
-    show(io, F.T)
-    println(io)
-    show(io, F.Z)
-    println(io)
-    println(io, "and values:")
-    show(io, F.values)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
+    println(io, summary(F))
+    println(io, "T factor:")
+    show(io, mime, F.T)
+    println(io, "\nZ factor:")
+    show(io, mime, F.Z)
+    println(io, "\neigenvalues:")
+    show(io, mime, F.values)
 end
 
 """
