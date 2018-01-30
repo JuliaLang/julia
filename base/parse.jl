@@ -235,19 +235,28 @@ function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
     return sign, startpos
 end
 
-function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
+function _rest_is_space(s, i, T)
+    while !done(s, i)
+        c, i = next(s,i)
+        isspace(c) || throw(ArgumentError("cannot parse $s as $T"))
+    end
+    true
+end
+
+function _represents_nan_or_inf(s, i, case, T)
+    for j in 1:3
+        c,_ = next(s,i+j-1)
+        lowercase(c) == case[j] || return false
+    end
+    _rest_is_space(s, i+3, T)
+end
+
+function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     sign, i = parsefloat_preamble(s, base)
 
     if !done(s, i+2)
-        nan = [false, false, false]
-        inf = [false, false, false]
-        for j in 1:3
-            c, _ = next(s, i+j-1)
-            nan[j] = lowercase(c) == "nan"[j]
-            inf[j] = lowercase(c) == "inf"[j]
-        end
-        all(nan) && return T(NaN)
-        all(inf) && return sign*T(Inf)
+        _represents_nan_or_inf(s, i, "nan", T) && return T(NaN)
+        _represents_nan_or_inf(s, i, "inf", T) && return sign*T(Inf)
     end
 
     baseunder15 = base < 15 # only interpret 'e' as scientific notation if unambiguous
@@ -290,6 +299,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
 
         exponent = exponent * base + tmp
     end
+    _rest_is_space(s, i, T)
 
     return sign*res*b^(expsign*exponent)
 end
