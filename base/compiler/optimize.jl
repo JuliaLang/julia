@@ -298,7 +298,7 @@ function optimize(me::InferenceState)
         let code = opt.src.code::Array{Any,1}
             meta_elim_pass!(code, coverage_enabled())
             filter!(x -> x !== nothing, code)
-            force_noinline = popmeta!(code, :noinline)[1]
+            force_noinline = peekmeta(code, :noinline)[1]
         end
         reindex_labels!(opt)
         me.min_valid = opt.min_valid
