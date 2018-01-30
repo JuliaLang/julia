@@ -23,46 +23,6 @@ using LinearAlgebra: mul!
     @test Matrix{ComplexF64}(uninitialized, 5, 0) |> t -> t't == zeros(0,0)
     @test Matrix{ComplexF64}(uninitialized, 5, 0) |> t -> t*t' == zeros(5,5)
 end
-@testset "2x2 matmul" begin
-    AA = [1 2; 3 4]
-    BB = [5 6; 7 8]
-    AAi = AA+(0.5*im).*BB
-    BBi = BB+(2.5*im).*AA[[2,1],[2,1]]
-    for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
-        @test A*B == [19 22; 43 50]
-        @test *(transpose(A), B) == [26 30; 38 44]
-        @test *(A, transpose(B)) == [17 23; 39 53]
-        @test *(transpose(A), transpose(B)) == [23 31; 34 46]
-    end
-    for Ai in (copy(AAi), view(AAi, 1:2, 1:2)), Bi in (copy(BBi), view(BBi, 1:2, 1:2))
-        @test Ai*Bi == [-21+53.5im -4.25+51.5im; -12+95.5im 13.75+85.5im]
-        @test *(adjoint(Ai), Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
-        @test *(Ai, adjoint(Bi)) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
-        @test *(adjoint(Ai), adjoint(Bi)) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
-        @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
-    end
-    @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized,3,3), AA, BB)
-end
-@testset "3x3 matmul" begin
-    AA = [1 2 3; 4 5 6; 7 8 9].-5
-    BB = [1 0 5; 6 -10 3; 2 -4 -1]
-    AAi = AA+(0.5*im).*BB
-    BBi = BB+(2.5*im).*AA[[2,1,3],[2,3,1]]
-    for A in (copy(AA), view(AA, 1:3, 1:3)), B in (copy(BB), view(BB, 1:3, 1:3))
-        @test A*B == [-26 38 -27; 1 -4 -6; 28 -46 15]
-        @test *(adjoint(A), B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
-        @test *(A, adjoint(B)) == [-14 0 6; 4 -3 -3; 22 -6 -12]
-        @test *(adjoint(A), adjoint(B)) == [6 -8 -6; 12 -9 -9; 18 -10 -12]
-    end
-    for Ai in (copy(AAi), view(AAi, 1:3, 1:3)), Bi in (copy(BBi), view(BBi, 1:3, 1:3))
-        @test Ai*Bi == [-44.75+13im 11.75-25im -38.25+30im; -47.75-16.5im -51.5+51.5im -56+6im; 16.75-4.5im -53.5+52im -15.5im]
-        @test *(adjoint(Ai), Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
-        @test *(Ai, adjoint(Bi)) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
-        @test *(adjoint(Ai), adjoint(Bi)) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
-        @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
-    end
-    @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized,4,4), AA, BB)
-end
 
 # Generic AbstractArrays
 module MyArray15367
@@ -277,9 +237,6 @@ end
     @test LinearAlgebra.gemm_wrapper('N','N', I10x10, I10x10) == I10x10
     @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10,'N','N', I10x11, I10x10)
     @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10,'N','N', I0x0, I0x0)
-
-    A = rand(elty,3,3)
-    @test LinearAlgebra.matmul3x3('T','N',A, Matrix{elty}(I, 3, 3)) == transpose(A)
 end
 
 @testset "#13593, #13488" begin

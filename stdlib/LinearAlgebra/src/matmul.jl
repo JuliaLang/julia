@@ -310,12 +310,6 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T}) whe
     if mA == 0 || nA == 0
         return fill!(C,0)
     end
-    if mA == 2 && nA == 2
-        return matmul2x2!(C,tA,tAt,A,A)
-    end
-    if mA == 3 && nA == 3
-        return matmul3x3!(C,tA,tAt,A,A)
-    end
 
     if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
         return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
@@ -337,12 +331,6 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     end
     if mA == 0 || nA == 0
         return fill!(C,0)
-    end
-    if mA == 2 && nA == 2
-        return matmul2x2!(C,tA,tAt,A,A)
-    end
-    if mA == 3 && nA == 3
-        return matmul3x3!(C,tA,tAt,A,A)
     end
 
     # Result array does not need to be initialized as long as beta==0
@@ -382,13 +370,6 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Char, tB::Char,
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return fill!(C,0)
-    end
-
-    if mA == 2 && nA == 2 && nB == 2
-        return matmul2x2!(C,tA,tB,A,B)
-    end
-    if mA == 3 && nA == 3 && nB == 3
-        return matmul3x3!(C,tA,tB,A,B)
     end
 
     if stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && stride(C, 2) >= size(C, 1)
@@ -502,12 +483,6 @@ function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Abs
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
 
-    if mA == nA == mB == nB == mC == nC == 2
-        return matmul2x2!(C, tA, tB, A, B)
-    end
-    if mA == nA == mB == nB == mC == nC == 3
-        return matmul3x3!(C, tA, tB, A, B)
-    end
     _generic_matmatmul!(C, tA, tB, A, B)
 end
 
@@ -678,104 +653,5 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         end
     end
     end # @inbounds
-    C
-end
-
-
-# multiply 2x2 matrices
-function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
-    matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
-end
-
-function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    if !(size(A) == size(B) == size(C) == (2,2))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
-    end
-    @inbounds begin
-    if tA == 'T'
-        # TODO making these lazy could improve perf
-        A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1]))
-        A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2]))
-    elseif tA == 'C'
-        # TODO making these lazy could improve perf
-        A11 = copy(A[1,1]'); A12 = copy(A[2,1]')
-        A21 = copy(A[1,2]'); A22 = copy(A[2,2]')
-    else
-        A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
-    end
-    if tB == 'T'
-        # TODO making these lazy could improve perf
-        B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1]))
-        B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2]))
-    elseif tB == 'C'
-        # TODO making these lazy could improve perf
-        B11 = copy(B[1,1]'); B12 = copy(B[2,1]')
-        B21 = copy(B[1,2]'); B22 = copy(B[2,2]')
-    else
-        B11 = B[1,1]; B12 = B[1,2];
-        B21 = B[2,1]; B22 = B[2,2]
-    end
-    C[1,1] = A11*B11 + A12*B21
-    C[1,2] = A11*B12 + A12*B22
-    C[2,1] = A21*B11 + A22*B21
-    C[2,2] = A21*B12 + A22*B22
-    end # inbounds
-    C
-end
-
-# Multiply 3x3 matrices
-function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
-    matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
-end
-
-function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
-    if !(size(A) == size(B) == size(C) == (3,3))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
-    end
-    @inbounds begin
-    if tA == 'T'
-        # TODO making these lazy could improve perf
-        A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
-        A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2])); A23 = copy(transpose(A[3,2]))
-        A31 = copy(transpose(A[1,3])); A32 = copy(transpose(A[2,3])); A33 = copy(transpose(A[3,3]))
-    elseif tA == 'C'
-        # TODO making these lazy could improve perf
-        A11 = copy(A[1,1]'); A12 = copy(A[2,1]'); A13 = copy(A[3,1]')
-        A21 = copy(A[1,2]'); A22 = copy(A[2,2]'); A23 = copy(A[3,2]')
-        A31 = copy(A[1,3]'); A32 = copy(A[2,3]'); A33 = copy(A[3,3]')
-    else
-        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
-        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
-        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3]
-    end
-
-    if tB == 'T'
-        # TODO making these lazy could improve perf
-        B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1])); B13 = copy(transpose(B[3,1]))
-        B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2])); B23 = copy(transpose(B[3,2]))
-        B31 = copy(transpose(B[1,3])); B32 = copy(transpose(B[2,3])); B33 = copy(transpose(B[3,3]))
-    elseif tB == 'C'
-        # TODO making these lazy could improve perf
-        B11 = copy(B[1,1]'); B12 = copy(B[2,1]'); B13 = copy(B[3,1]')
-        B21 = copy(B[1,2]'); B22 = copy(B[2,2]'); B23 = copy(B[3,2]')
-        B31 = copy(B[1,3]'); B32 = copy(B[2,3]'); B33 = copy(B[3,3]')
-    else
-        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
-        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]
-        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
-    end
-
-    C[1,1] = A11*B11 + A12*B21 + A13*B31
-    C[1,2] = A11*B12 + A12*B22 + A13*B32
-    C[1,3] = A11*B13 + A12*B23 + A13*B33
-
-    C[2,1] = A21*B11 + A22*B21 + A23*B31
-    C[2,2] = A21*B12 + A22*B22 + A23*B32
-    C[2,3] = A21*B13 + A22*B23 + A23*B33
-
-    C[3,1] = A31*B11 + A32*B21 + A33*B31
-    C[3,2] = A31*B12 + A32*B22 + A33*B32
-    C[3,3] = A31*B13 + A32*B23 + A33*B33
-    end # inbounds
     C
 end
