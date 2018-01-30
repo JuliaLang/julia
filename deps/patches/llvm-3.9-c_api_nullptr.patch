@@ -1,11 +1,3 @@
-commit b1cfc87891b4cb41ec94457a0d42d8c1fd57faf6
-Author: whitequark <whitequark@whitequark.org>
-Date:   Sat Nov 12 03:38:23 2016 +0000
-
-    [C API] Fix several null pointer dereferences.
-    
-    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@286704 91177308-0d34-0410-b5e6-96231b3b80d8
-
 diff --git a/lib/IR/Core.cpp b/lib/IR/Core.cpp
 index 1cf17b1f311..a969e08cabc 100644
 --- a/lib/IR/Core.cpp
