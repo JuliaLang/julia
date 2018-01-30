@@ -437,9 +437,9 @@ end
 """
     nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int
 
-If `i` is in bounds in `s` return the index of the start of the character whose
-encoding starts after index `i`. If `i` is out of bounds in `s` return `i + 1`.
-If `n == 0` return `i`.
+If `i` is in bounds in `s`, return the index of the start of the character whose
+encoding starts `n` characters after index `i`. If `i` is out of bounds in `s`, throw
+an error. If `n == 0`, return `i`.
 
 # Examples
 ```jldoctest
