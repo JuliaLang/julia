@@ -6,17 +6,17 @@ matprod(x, y) = x*y + x*y
 
 # Dot products
 
-_vecdot(x::AbstractMatrix{T}, y::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractMatrix{T}, ::AbstractStridedLayout, ::DenseLayout) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractMatrix{T}, y::AbstractVector{T}, ::DenseLayout, ::AbstractStridedLayout) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasReal} = BLAS.dot(x, y)
+_vecdot(x::AbstractMatrix{T}, y::AbstractMatrix{T}, ::DenseColumnMajor, ::DenseColumnMajor) where {T<:BlasReal} = BLAS.dot(x, y)
+_vecdot(x::AbstractVector{T}, y::AbstractMatrix{T}, ::DenseLayout, ::DenseColumnMajor) where {T<:BlasReal} = BLAS.dot(x, y)
+_vecdot(x::AbstractMatrix{T}, y::AbstractVector{T}, ::DenseColumnMajor, ::DenseLayout) where {T<:BlasReal} = BLAS.dot(x, y)
+_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::DenseLayout, ::DenseLayout) where {T<:BlasReal} = BLAS.dot(x, y)
 
-_vecdot(x::AbstractMatrix{T}, y::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractMatrix{T}, ::AbstractStridedLayout, ::DenseLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractMatrix{T}, y::AbstractVector{T}, ::DenseLayout, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
+_vecdot(x::AbstractMatrix{T}, y::AbstractMatrix{T}, ::DenseColumnMajor, ::DenseColumnMajor) where {T<:BlasComplex} = BLAS.dotc(x, y)
+_vecdot(x::AbstractVector{T}, y::AbstractMatrix{T}, ::DenseLayout, ::DenseColumnMajor) where {T<:BlasComplex} = BLAS.dotc(x, y)
+_vecdot(x::AbstractMatrix{T}, y::AbstractVector{T}, ::DenseColumnMajor, ::DenseLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
+_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::DenseLayout, ::DenseLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-_dotu(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotu(x, y)
+_dotu(x::AbstractVector{T}, y::AbstractVector{T}, ::DenseLayout, ::DenseLayout) where {T<:BlasComplex} = BLAS.dotu(x, y)
 
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
@@ -75,12 +75,12 @@ julia> Y
 mul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat) = _mul!(C, A, B, MemoryLayout(C), MemoryLayout(A), MemoryLayout(B))
 
 _mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector, _1, _2, _3) = generic_matvecmul!(y, 'N', A, x)
-_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::AbstractStridedLayout, ::AbstractStridedLayout, _) where {T<:BlasFloat} =
+_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::DenseLayout, ::DenseLayout, _) where {T<:BlasFloat} =
     mul!(y, A, convert(Vector{T}, x))
-_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::DenseLayout, ::DenseLayout, ::DenseLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
 for elty in (Float32,Float64)
     @eval begin
-        function _mul!(y::AbstractVector{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, x::AbstractVector{$elty}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout)
+        function _mul!(y::AbstractVector{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, x::AbstractVector{$elty}, ::DenseLayout, ::DenseLayout, ::DenseLayout)
             Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
             gemv!(yfl,'N',Afl,x)
@@ -89,13 +89,13 @@ for elty in (Float32,Float64)
     end
 end
 
-_mul!(y::AbstractVector, transA::AbstractMatrix, x::AbstractVector, ::AbstractStridedLayout, ::TransposeLayout, ::AbstractStridedLayout) =
-    (A = transA.parent; generic_matvecmul!(y, 'T', A, x))
-_mul!(y::AbstractVector, adjA::AbstractMatrix, x::AbstractVector, ::AbstractStridedLayout, ::CTransposeLayout, ::AbstractStridedLayout) =
-    (A = adjA.parent; generic_matvecmul!(y, 'C', A, x))
-_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::TransposeLayout, ::AbstractStridedLayout) where {T<:BlasComplex} =
+_mul!(y::AbstractVector, transA::AbstractMatrix, x::AbstractVector, ::DenseLayout, ::DenseRowsStridedColumns, ::DenseLayout) =
+    (A = transpose(transA); generic_matvecmul!(y, 'T', A, x))
+_mul!(y::AbstractVector, adjA::AbstractMatrix, x::AbstractVector, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::DenseLayout) =
+    (A = adjoint(adjA); generic_matvecmul!(y, 'C', A, x))
+_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::DenseLayout, ::DenseRowsStridedColumns, ::DenseLayout) where {T<:BlasComplex} =
     gemv!(y, 'T', transpose(adjA), x)
-_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::CTransposeLayout, ::AbstractStridedLayout) where {T<:BlasComplex} =
+_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::DenseLayout) where {T<:BlasComplex} =
     gemv!(y, 'C', adjoint(adjA), x)
 
 # Vector-matrix multiplication
@@ -147,11 +147,11 @@ mul2!(A, B) = _mul2!(A, B, MemoryLayout(A), MemoryLayout(B))
 
 _mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, _1, _2, _3) = generic_matmatmul!(C, 'N', 'N', A, B)
 
-_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasFloat} =
+_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout, ::DenseLayout) where {T<:BlasFloat} =
     gemm_wrapper!(C, 'N', 'N', A, B)
 for elty in (Float32,Float64)
     @eval begin
-        function _mul!(C::AbstractMatrix{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, B::AbstractMatrix{$elty}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout)
+        function _mul!(C::AbstractMatrix{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, B::AbstractMatrix{$elty}, ::DenseLayout, ::DenseLayout, ::DenseLayout)
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
             gemm_wrapper!(Cfl, 'N', 'N', Afl, B)
@@ -160,16 +160,16 @@ for elty in (Float32,Float64)
     end
 end
 
-_mul!(C::AbstractMatrix{T}, transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::TransposeLayout, ::AbstractStridedLayout) where {T<:BlasFloat} =
+_mul!(C::AbstractMatrix{T}, transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseLayout, ::DenseRowsStridedColumns, ::DenseLayout) where {T<:BlasFloat} =
     (A = transpose(transA); A === B ? syrk_wrapper!(C, 'T', A) : gemm_wrapper!(C, 'T', 'N', A, B))
-_mul!(C::AbstractMatrix, transA::AbstractMatrix, B::AbstractMatrix, _, ::TransposeLayout, ::AbstractStridedLayout) =
+_mul!(C::AbstractMatrix, transA::AbstractMatrix, B::AbstractMatrix, _, ::DenseRowsStridedColumns, ::DenseLayout) =
     (A = transpose(transA); generic_matmatmul!(C, 'T', 'N', A, B))
-_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::TransposeLayout) where {T<:BlasFloat} =
+_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout, ::DenseRowsStridedColumns) where {T<:BlasFloat} =
     (B = transpose(transB); A === B ? syrk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'T', A, B))
 
 for elty in (Float32,Float64)
     @eval begin
-        function _mul!(C::AbstractMatrix{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, transB::AbstractMatrix{$elty}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::TransposeLayout)
+        function _mul!(C::AbstractMatrix{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, transB::AbstractMatrix{$elty}, ::DenseLayout, ::DenseLayout, ::DenseRowsStridedColumns)
             B = transpose(transB)
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
@@ -179,26 +179,26 @@ for elty in (Float32,Float64)
     end
 end
 
-_mul!(C::AbstractMatrix{T}, transA::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::AbstractStridedLayout, ::TransposeLayout, ::TransposeLayout) where {T<:BlasFloat} =
+_mul!(C::AbstractMatrix{T}, transA::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseLayout, ::DenseRowsStridedColumns, ::DenseRowsStridedColumns) where {T<:BlasFloat} =
     (A = transpose(transA); B = transpose(transB); gemm_wrapper!(C, 'T', 'T', A, B))
-_mul!(C::AbstractMatrix, transA::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::TransposeLayout, ::TransposeLayout) =
+_mul!(C::AbstractMatrix, transA::AbstractMatrix, transB::AbstractMatrix, ::DenseLayout, ::DenseRowsStridedColumns, ::DenseRowsStridedColumns) =
     (A = transpose(transA); B = transpose(transB); generic_matmatmul!(C, 'T', 'T', A, B))
 
-_mul!(C::AbstractMatrix{T}, adjA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::CTransposeLayout, ::AbstractStridedLayout) where {T<:BlasComplex} =
+_mul!(C::AbstractMatrix{T}, adjA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::DenseLayout) where {T<:BlasComplex} =
     (A = adjoint(adjA); A===B ? herk_wrapper!(C,'C',A) : gemm_wrapper!(C,'C', 'N', A, B))
-_mul!(C::AbstractMatrix, adjA::AbstractMatrix, B::AbstractMatrix, ::AbstractStridedLayout, ::CTransposeLayout, ::AbstractStridedLayout) =
+_mul!(C::AbstractMatrix, adjA::AbstractMatrix, B::AbstractMatrix, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::DenseLayout) =
     (A = adjoint(adjA); generic_matmatmul!(C, 'C', 'N', A, B))
 
-_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::CTransposeLayout) where {T<:BlasComplex} =
+_mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout, ::ConjDenseRowsStridedColumns) where {T<:BlasComplex} =
     (B = adjoint(adjB); A===B ? herk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'C', A, B))
-_mul!(C::AbstractMatrix, A::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::AbstractStridedLayout, ::CTransposeLayout) =
+_mul!(C::AbstractMatrix, A::AbstractMatrix, adjB::AbstractMatrix, ::DenseLayout, ::DenseLayout, ::ConjDenseRowsStridedColumns) =
     (B = adjoint(adjB); generic_matmatmul!(C, 'N', 'C', A, B))
 
-_mul!(C::AbstractMatrix{T}, adjA::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::AbstractStridedLayout, ::CTransposeLayout, ::CTransposeLayout) where {T<:BlasFloat} =
+_mul!(C::AbstractMatrix{T}, adjA::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::ConjDenseRowsStridedColumns) where {T<:BlasFloat} =
     (A = adjoint(adjA); B = adjoint(adjB); gemm_wrapper!(C, 'C', 'C', A, B))
-_mul!(C::AbstractMatrix, adjA::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::CTransposeLayout, ::CTransposeLayout) =
+_mul!(C::AbstractMatrix, adjA::AbstractMatrix, adjB::AbstractMatrix, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::ConjDenseRowsStridedColumns) =
     (A = adjoint(adjA); B = adjoint(adjB); generic_matmatmul!(C, 'C', 'C', A, B))
-_mul!(C::AbstractMatrix, adjA::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::CTransposeLayout, ::TransposeLayout) =
+_mul!(C::AbstractMatrix, adjA::AbstractMatrix, transB::AbstractMatrix, ::DenseLayout, ::ConjDenseRowsStridedColumns, ::DenseRowsStridedColumns) =
     (A = adjoint(adjA); B = transpose(transB); generic_matmatmul!(C, 'C', 'T', A, B))
 
 # Supporting functions for matrix multiplication
@@ -219,7 +219,7 @@ function copytri!(A::AbstractMatrix, uplo::Char, conjugate::Bool=false)
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedVector{T}) where T<:BlasFloat
+function gemv!(y::AbstractVector{T}, tA::Char, A::AbstractVecOrMat{T}, x::AbstractVector{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
         throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -297,17 +297,18 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
 end
 
 function gemm_wrapper(tA::Char, tB::Char,
-                      A::StridedVecOrMat{T},
-                      B::StridedVecOrMat{T}) where T<:BlasFloat
+                      A::AbstractVecOrMat{T},
+                      B::AbstractVecOrMat{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = similar(B, T, mA, nB)
     gemm_wrapper!(C, tA, tB, A, B)
 end
 
-function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Char, tB::Char,
-                       A::StridedVecOrMat{T},
-                       B::StridedVecOrMat{T}) where T<:BlasFloat
+#gemm_wrapper! requires A, B, and C to conform to the strided array interface
+function gemm_wrapper!(C::AbstractVecOrMat{T}, tA::Char, tB::Char,
+                       A::AbstractVecOrMat{T},
+                       B::AbstractVecOrMat{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 

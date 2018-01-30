@@ -167,12 +167,17 @@ else
 end
 
 ## Traits for memory layouts ##
-
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
-abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
-struct DenseLayout{T} <: AbstractStridedLayout{T} end
-struct StridedLayout{T} <: AbstractStridedLayout{T} end
+abstract type DenseLayout{T} <: MemoryLayout{T} end
+abstract type BlasMatrixLayout{T} <: DenseLayout{T} end
+abstract type DenseColumns{T} <: BlasMatrixLayout{T} end
+struct DenseColumnMajor{T} <: DenseColumns{T} end
+struct DenseColumnsStridedRows{T} <: DenseColumns{T} end
+abstract type DenseRows{T} <: BlasMatrixLayout{T} end
+struct DenseRowMajor{T} <: DenseRows{T} end
+struct DenseRowsStridedColumns{T} <: DenseRows{T} end
+struct StridedLayout{T} <: DenseLayout{T} end
 
 """
     UnknownLayout{T}()
@@ -183,21 +188,64 @@ are stored in memory.
 UnknownLayout
 
 """
-    DenseLayout{T}()
+    DenseLayout{T}
 
-is returned by `MemoryLayout(A)` if a matrix or vector `A` have the same storage as an
-`Array`. In other words, the entries are stored consecutively in memory, ordered by column.
+is an abstract type whose subtypes are returned by `MemoryLayout(A)`
+if a matrix or vector `A` have storage laid out at regular offsets in memory,
+and which can therefore be passed to external C and Fortran functions expecting
+this memory layout.
 """
 DenseLayout
 
 """
+    DenseColumnMajor{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
+equivalent to an `Array`, so that `stride(A,1) == 1` and `stride(A,2) == size(A,1)`.
+Arrays with `DenseColumnMajor` must conform to the `DenseArray` interface.
+"""
+DenseColumnMajor
+
+"""
+    DenseColumnsStridedRows{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
+as a column major matrix. In other words, the columns are stored in memory with
+offsets of one, while the rows are stored with offsets given by `stride(A,2)`.
+Arrays with `DenseColumnsStridedRows` must conform to the `DenseArray` interface.
+"""
+DenseColumnsStridedRows
+
+"""
+    DenseRowMajor{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
+equivalent to the transpose of an `Array`, so that `stride(A,1) == size(A,1)` and
+`stride(A,2) == 1`. Arrays with `DenseRowMajor` must conform to the
+`DenseArray` interface.
+"""
+DenseRowMajor
+
+"""
+    DenseRowsStridedColumns{T}()
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+as a row major matrix. In other words, the rows are stored in memory with
+offsets of one, while the columns are stored with offsets given by `stride(A,1)`.
+`Array`s with `DenseRowsStridedColumns` must conform to the `DenseArray` interface,
+and `transpose(A)` should return a matrix whose layout is `DenseColumnsStridedRows{T}()`.
+"""
+DenseRowsStridedColumns
+
+"""
     StridedLayout{T}()
 
-is returned by `MemoryLayout(A)` if a matrix or vector `A` have the same storage as a
-strided array.
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage laid out at regular
+offsets in memory. In other words, the columns are stored with offsets given
+by `stride(A,1)` and for matrices the rows are stored in memory with offsets
+of `stride(A,2)`. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
 """
 StridedLayout
-
 
 """
     MemoryLayout(A)
@@ -220,38 +268,40 @@ the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
 In this case, one must implement the strided array interface, which requires
 overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`.
 """
-MemoryLayout(A::AbstractArray{T}) where {T} = UnknownLayout{T}()
-MemoryLayout(A::DenseVector{T}) where {T} = DenseLayout{T}()
-MemoryLayout(A::DenseMatrix{T}) where {T} = DenseLayout{T}()
+MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout{T}()
 
+MemoryLayout(A::Vector{T}) where T = DenseColumnMajor{T}()
+MemoryLayout(A::Matrix{T}) where T = DenseColumnMajor{T}()
+MemoryLayout(A::DenseArray{T}) where T = StridedLayout{T}()
 
 MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
 submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-submemorylayout(::DenseLayout{T}, ::Tuple{I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseLayout{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex,AbstractCartesianIndex}} =
+submemorylayout(::DenseColumns{T}, ::Tuple{I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor{T}()
+submemorylayout(::DenseLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex,AbstractCartesianIndex}} =
     StridedLayout{T}()
-submemorylayout(::DenseLayout{T}, ::Tuple{I1,Int}) where {T,I1<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseLayout{T}()
-submemorylayout(::DenseLayout{T}, ::Tuple{I1,Int}) where {T,I1<:Slice} =
-    DenseLayout{T}()
-submemorylayout(::DenseLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Slice,I2<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseLayout{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
+submemorylayout(::DenseColumns{T}, ::Tuple{I,Int}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor{T}()
+submemorylayout(::DenseColumns{T}, ::Tuple{I,Int}) where {T,I<:Slice} =
+    DenseColumnMajor{T}()
+submemorylayout(::DenseRows{T}, ::Tuple{Int,I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor{T}()
+submemorylayout(::DenseRows{T}, ::Tuple{Int,I}) where {T,I<:Slice} =
+    DenseColumnMajor{T}()
+submemorylayout(::DenseColumns{T}, ::Tuple{I1,I2}) where {T,I1<:Slice,I2<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnsStridedRows{T}()
+submemorylayout(::DenseRows{T}, ::Tuple{I1,I2}) where {T,I1<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex},I2<:Slice} =
+    DenseRowsStridedColumns{T}()
+submemorylayout(::DenseLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
     StridedLayout{T}()
 
 MemoryLayout(A::ReshapedArray) = reshapedmemorylayout(MemoryLayout(parent(A)))
 reshapedmemorylayout(::MemoryLayout{T}) where T = UnknownLayout{T}()
-reshapedmemorylayout(::DenseLayout{T}) where T = DenseLayout{T}()
+reshapedmemorylayout(::DenseColumnMajor{T}) where T = DenseColumnMajor{T}()
 
 MemoryLayout(A::ReinterpretArray{V}) where V = reinterpretedmemorylayout(MemoryLayout(parent(A)), V)
 reinterpretedmemorylayout(::MemoryLayout{T}, ::Type{V}) where {T,V} = UnknownLayout{V}()
-reinterpretedmemorylayout(::DenseLayout{T}, ::Type{V}) where {T,V} = DenseLayout{V}()
-
-
-
-
-# MemoryLayout(A::ReinterpretArray{T}) where T =
+reinterpretedmemorylayout(::DenseColumnMajor{T}, ::Type{V}) where {T,V} = DenseColumnMajor{V}()
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
@@ -284,8 +334,9 @@ julia> LinearAlgebra.stride1(B)
 ```
 """
 stride1(x) = stride(x,1)
-stride1(x::Array) = 1
-stride1(x::DenseArray) = stride(x, 1)::Int
+stride1(x::AbstractArray) = _stride1(x, MemoryLayout(x))
+_stride1(x, _) = stride(x, 1)::Int
+_stride1(x, ::DenseColumns) = 1
 
 @inline chkstride1(A...) = _chkstride1(true, A...)
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")

@@ -850,27 +850,29 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
 @testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
     A = [1.0 2; 3 4]
 
-    @test LinearAlgebra.MemoryLayout(A)                   == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,:,:))         == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,:))           == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,:,1))         == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,:,1:1))       == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,1:1,1))       == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,1:1,1:2))     == LinearAlgebra.StridedLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,1:1,:))       == LinearAlgebra.StridedLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(A)                   == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,:,:))         == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,:))           == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,:,1))         == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,:,1:1))       == LinearAlgebra.DenseColumnsStridedRows{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,1:1,1))       == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,1,1:1))       == LinearAlgebra.StridedLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,1,:))         == LinearAlgebra.StridedLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,1:1,1:2))     == LinearAlgebra.DenseColumnsStridedRows{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,1:1,:))       == LinearAlgebra.DenseColumnsStridedRows{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,1:2:1,1:2:1)) == LinearAlgebra.StridedLayout{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,1:2:1,:))     == LinearAlgebra.StridedLayout{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,[1,2],:))     == LinearAlgebra.UnknownLayout{Float64}()
 
-    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == LinearAlgebra.DenseLayout{Float64}()
-    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == LinearAlgebra.DenseLayout{Float64}()
+    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == LinearAlgebra.DenseColumnMajor{Float64}()
+    @test LinearAlgebra.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == LinearAlgebra.DenseColumnMajor{Float64}()
 
-    @test LinearAlgebra.MemoryLayout(reinterpret(ComplexF64,A)) == LinearAlgebra.DenseLayout{ComplexF64}()
+    @test LinearAlgebra.MemoryLayout(reinterpret(ComplexF64,A)) == LinearAlgebra.DenseColumnMajor{ComplexF64}()
 
     # this checks that SharedArray knows its layout
-    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,1}()) == LinearAlgebra.DenseLayout{Float64}()
-    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,2}()) == LinearAlgebra.DenseLayout{Float64}()
+    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,1}()) == LinearAlgebra.StridedLayout{Float64}()
+    LinearAlgebra.MemoryLayout(MyDenseArray{Float64,2}()) == LinearAlgebra.StridedLayout{Float64}()
 end
 
 end # module TestDense

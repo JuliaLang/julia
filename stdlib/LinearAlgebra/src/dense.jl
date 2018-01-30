@@ -116,7 +116,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 # a tuple containing 1 and a cumulative product of the first N-1 sizes
 # this definition is also used for StridedReshapedArray and StridedReinterpretedArray
 # which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+function stride(a::Union{Array,StridedReshapedArray,StridedReinterpretArray}, i::Int)
     if i > ndims(a)
         return length(a)
     end
@@ -126,7 +126,10 @@ function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray
     end
     return s
 end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+strides(a::Array) = size_to_strides(1, size(a)...)
+strides(a::ReshapedArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
+strides(a::ReinterpretArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
+_dense_strides(sz, ::DenseColumnMajor) = size_to_strides(1, sz...)
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
@@ -508,7 +511,7 @@ function exp!(A::AbstractMatrix{T}, _) where T<:BlasFloat
     A .= exp!(Matrix{T}(A))
     A
 end
-function _exp!(A::AbstractMatrix{T}, ::AbstractStridedLayout{T}) where T<:BlasFloat
+function _exp!(A::AbstractMatrix{T}, ::DenseColumns{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)

@@ -373,9 +373,9 @@ MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, Unit
 MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, UpperTriangularLayout, MemoryLayout(parent(A)))
 MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, UnitUpperTriangularLayout, MemoryLayout(parent(A)))
 trilayout(_1, _2, ::MemoryLayout{T}) where T = UnknownLayout{T}()
-trilayout(::Type{Tri}, _, ::AbstractStridedLayout{T}) where {Tri,T} = Tri{'N',T}()
-trilayout(_, ::Type{TriT}, ::TransposeLayout{T}) where {TriT,T} = TriT{'T',T}()
-trilayout(_, ::Type{TriT}, ::CTransposeLayout{T}) where {TriT,T} = TriT{'C',T}()
+trilayout(::Type{Tri}, _, ::DenseColumns{T}) where {Tri,T} = Tri{'N',T}()
+trilayout(_, ::Type{TriT}, ::DenseRows{T}) where {TriT,T} = TriT{'T',T}()
+trilayout(_, ::Type{TriT}, ::ConjDenseRowsStridedColumns{T}) where {TriT,T} = TriT{'C',T}()
 
 transpose(::UpperTriangularLayout{'N',T}) where {T} = LowerTriangularLayout{'T',T}()
 transpose(::UnitUpperTriangularLayout{'N',T}) where {T} = UnitLowerTriangularLayout{'T',T}()
@@ -553,35 +553,35 @@ for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, '
                                     (:UnitUpperTriangular, :UnitUpperTriangularLayout, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
+        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::DenseLayout, ::$memlay, ::DenseLayout) where {T<:BlasFloat} =
             mul2!(A, copyto!(y, b))
 
-        _mul2!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
+        _mul2!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::DenseLayout) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        _mul2!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::StridedLayout) where {T<:BlasFloat} =
+        _mul2!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::DenseLayout) where {T<:BlasFloat} =
             (A = transpose(transA); BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        _mul2!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::StridedLayout) where {T<:BlasComplex} =
+        _mul2!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::DenseLayout) where {T<:BlasComplex} =
             (A = adjoint(adjA); BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
 
         # Matrix multiplication
-        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::$memlay, ::StridedLayout) where {T<:BlasFloat} =
+        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseLayout, ::$memlay, ::DenseLayout) where {T<:BlasFloat} =
             mul2!(A, copyto!(C, B))
-        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::StridedLayout, ::$memlay) where {T<:BlasFloat}  =
+        _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseLayout, ::DenseLayout, ::$memlay) where {T<:BlasFloat}  =
             mul1!(copyto!(C, A), B)
 
-        _mul2!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::StridedLayout) where {T<:BlasFloat} =
+        _mul2!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::DenseColumns) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        _mul1!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'N'}) where {T<:BlasFloat} =
+        _mul1!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'N'}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        _mul2!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::StridedLayout) where {T<:BlasFloat} =
+        _mul2!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::DenseColumns) where {T<:BlasFloat} =
             (A = transpose(transA); BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        _mul2!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::StridedLayout) where {T<:BlasComplex} =
+        _mul2!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::DenseColumns) where {T<:BlasComplex} =
             (A = adjoint(adjA); BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
 
-        _mul1!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'T'}) where {T<:BlasFloat} =
+        _mul1!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'T'}) where {T<:BlasFloat} =
             (B = transpose(transB); BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        _mul1!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::StridedLayout, ::$memlay{'C'}) where {T<:BlasComplex} =
+        _mul1!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'C'}) where {T<:BlasComplex} =
             (B = adjoint(adjB); BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
 
         # Left division

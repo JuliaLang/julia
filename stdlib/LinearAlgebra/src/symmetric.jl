@@ -190,13 +190,13 @@ end
 MemoryLayout(A::Hermitian) = hermitianmemorylayout(MemoryLayout(parent(A)), A.uplo)
 MemoryLayout(A::Symmetric) = symmetricmemorylayout(MemoryLayout(parent(A)), A.uplo)
 hermitianmemorylayout(::MemoryLayout{T}, _2) where T = UnknownLayout{T}()
-hermitianmemorylayout(::AbstractStridedLayout{T}, uplo) where T<:Complex = HermitianLayout{T}(uplo)
-hermitianmemorylayout(::AbstractStridedLayout{T}, uplo) where T<:Real = SymmetricLayout{T}(uplo)
-hermitianmemorylayout(::TransposeLayout{T}, uplo) where T<:Complex = HermitianLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
-hermitianmemorylayout(::TransposeLayout{T}, uplo) where T<:Real = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+hermitianmemorylayout(::DenseColumns{T}, uplo) where T<:Complex = HermitianLayout{T}(uplo)
+hermitianmemorylayout(::DenseColumns{T}, uplo) where T<:Real = SymmetricLayout{T}(uplo)
+hermitianmemorylayout(::DenseRows{T}, uplo) where T<:Complex = HermitianLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+hermitianmemorylayout(::DenseRows{T}, uplo) where T<:Real = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
 symmetricmemorylayout(::MemoryLayout{T}, _2) where T = UnknownLayout{T}()
-symmetricmemorylayout(::AbstractStridedLayout{T}, uplo) where T = SymmetricLayout{T}(uplo)
-symmetricmemorylayout(::TransposeLayout{T}, uplo) where T = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
+symmetricmemorylayout(::DenseColumns{T}, uplo) where T = SymmetricLayout{T}(uplo)
+symmetricmemorylayout(::DenseRows{T}, uplo) where T = SymmetricLayout{T}(ifelse(uplo == 'U', 'L', 'U'))
 
 adjoint(H::HermitianLayout) = H
 adjoint(H::SymmetricLayout{<:Real}) = H
@@ -342,27 +342,27 @@ end
 
 ## Matrix-vector product
 _mul!(y::AbstractVector{T},    A::AbstractMatrix{T}, x::AbstractVector{T},
-      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
+      ::DenseLayout, AL::SymmetricLayout,  ::DenseLayout) where {T<:BlasFloat} =
     BLAS.symv!(AL.uplo, one(T), parent(A), x, zero(T), y)
 _mul!(y::AbstractVector{T},     A::AbstractMatrix{T}, x::AbstractVector{T},
-      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
+      ::DenseLayout,  AL::HermitianLayout,  ::DenseLayout) where {T<:BlasComplex} =
     BLAS.hemv!(A.uplo, one(T), parent(A), x, zero(T), y)
 ## Matrix-matrix product
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
+      ::DenseLayout, AL::SymmetricLayout,  ::DenseLayout) where {T<:BlasFloat} =
     BLAS.symm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::SymmetricLayout) where {T<:BlasFloat} =
+      ::DenseLayout, ::DenseLayout, BL::SymmetricLayout) where {T<:BlasFloat} =
     BLAS.symm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
+      ::DenseLayout,  AL::HermitianLayout,  ::DenseLayout) where {T<:BlasComplex} =
     BLAS.hemm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout) where {T<:BlasComplex} =
+      ::DenseLayout, ::DenseLayout, BL::HermitianLayout) where {T<:BlasComplex} =
     BLAS.hemm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
+      ::DenseLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
     mul!(C, A, Matrix{T}(B))
 
 
