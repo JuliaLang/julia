@@ -2298,4 +2298,12 @@ end
     inds_a = Base.Indices{2}([1:3, 1:2])
     inds_b = Base.Indices{2}([1:4, 1:2])
     @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    # fails because ranges 3, 4 of inds_a are not 1:1
+    inds_a = Base.Indices{4}([1:3, 1:2, 1:3, 1:2])
+    inds_b = Base.Indices{2}([1:3, 1:2])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    # succeeds for converse reason
+    inds_a = Base.Indices{2}([1:3, 1:1])
+    inds_b = Base.Indices{1}([1:3])
+    @test Base.promote_shape(inds_a, inds_b) == Base.promote_shape(inds_b, inds_a)
 end
