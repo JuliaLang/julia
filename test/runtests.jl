@@ -722,9 +722,9 @@ for T in (Float64, ComplexF32, BigFloat, Int)
 end
 
 let
-    @compat cr(::CartesianRange{2}) = 2
-    @test cr(CartesianRange((5, 3))) == 2
-    @test_throws MethodError cr(CartesianRange((5, 3, 2)))
+    @compat cr(::CartesianIndices{2}) = 2
+    @test cr(CartesianIndices((5, 3))) == 2
+    @test_throws MethodError cr(CartesianIndices((5, 3, 2)))
 end
 if VERSION < v"0.7.0-DEV.880"
     # ensure we don't bork any non-updated expressions
@@ -776,7 +776,7 @@ end
 
 let
     A14 = [11 13; 12 14]
-    R = CartesianRange(Compat.axes(A14))
+    R = CartesianIndices(Compat.axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
