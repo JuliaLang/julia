@@ -326,8 +326,8 @@ end
 # julia#17155, tests from Base Julia
 @test (Compat.Unicode.uppercase∘hex)(239487) == "3A77F"
 let str = "aBcDeFgHiJ"
-    @test filter(!Compat.Unicode.isupper, str) == replace(str, r"[A-Z]", "")
-    @test filter(!Compat.Unicode.islower, str) == replace(str, r"[a-z]", "")
+    @test filter(!Compat.Unicode.isupper, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!Compat.Unicode.islower, str) == replace(str, r"[a-z]" => "")
 end
 
 # julia#19950, tests from Base (#20028)
