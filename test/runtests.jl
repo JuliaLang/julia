@@ -1236,6 +1236,12 @@ end
 @test codeunits("foo") == [0x66,0x6f,0x6f] == codeunits(SubString("fooαβγ",1,3))
 @test ncodeunits("αβγ") == 6 == ncodeunits(SubString("fooαβγ",4,8))
 
+# 0.7.0-DEV.3539
+@test nameof(Compat.Sys) == :Sys
+@test nameof(sin) == :sin
+@test nameof(Float64) == :Float64
+@test nameof(Array) == :Array
+
 # 0.7.0-DEV.3382
 module TestLibdl
     using Compat

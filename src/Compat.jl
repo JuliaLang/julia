@@ -1469,6 +1469,13 @@ end
     export codeunits, ncodeunits
 end
 
+@static if !isdefined(Base, :nameof)
+    nameof(m::Module) = Base.module_name(m)
+    nameof(f::Function) = Base.function_name(f)
+    nameof(t::Union{DataType,UnionAll}) = Base.datatype_name(t)
+    export nameof
+end
+
 include("deprecated.jl")
 
 end # module Compat

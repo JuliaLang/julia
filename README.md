@@ -311,6 +311,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `module_parent`, `Base.function_module`, and `Base.datatype_module` are now methods of
   a new function called `parentmodule` ([#25629]).
 
+* `module_name`, `Base.function_name`, and `Base.datatype_name` are now methods of a
+  new function called `nameof` ([#25622]).
+
 * `find` is now `findall` ([#25545]).
 
 * `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
@@ -499,6 +502,7 @@ includes this fix. Find the minimum version from there.
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
+[#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
