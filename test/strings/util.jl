@@ -263,12 +263,11 @@ end
     @test replace("abc", ['a', 'd'] => 'A') == "Abc"
 
     # for Char pattern call Char replacement function
-    @test replace("a", "a" => sizeof) == "1"
-    @test replace("a", r"a" => sizeof) == "1"
-    @test replace("a", 'a' => sizeof) == "4"
-    @test replace("a", occursin("a") => sizeof) == "4"
-    @test replace("a", ['a'] => sizeof) == "4"
-
+    @test replace("a", "a" => typeof) == "SubString{String}"
+    @test replace("a", r"a" => typeof) == "SubString{String}"
+    @test replace("a", 'a' => typeof) == "Char"
+    @test replace("a", occursin("a") => typeof) == "Char"
+    @test replace("a", ['a'] => typeof) == "Char"
 
 end
 
