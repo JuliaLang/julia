@@ -979,6 +979,40 @@ let a = []
     @test length(a) == 1
 end
 
+function test23260()
+    res = []
+    function value(val)
+        push!(res, "value")
+        val
+    end
+    # loop returning a value through `break`
+    val = for i=1:10
+        push!(res, "loop$i")
+        try
+            i == 2 && break value(42)
+        finally
+            push!(res, "finally")
+        end
+    end
+    push!(res, val)
+
+    # same, but now in tail position
+    for i=1:10
+        push!(res, "loop$i")
+        try
+            i == 2 && break value(res)
+        finally
+            push!(res, "finally")
+        end
+    end
+end
+@test test23260() == [
+    # first for loop
+    "loop1", "finally", "loop2", "value", "finally", 42,
+    # second for loop (in tail position)
+    "loop1", "finally", "loop2", "value", "finally",
+]
+
 # chained and multiple assignment behavior (issue #2913)
 let
     local x, a, b, c, d, e
