@@ -925,6 +925,24 @@ let fname = tempname()
     end
 end
 
+# Test @show only prints for defined variables
+let fname = tempname()
+    try
+        open(fname, "w") do fout
+            redirect_stdout(fout) do
+                try
+                  @show 0 undefvar
+                catch e
+                  isa(e, UndefVarError) || rethrow()
+                end
+            end
+        end
+        @test read(fname, String) == "0 = 0\n"
+    finally
+        rm(fname, force=true)
+    end
+end
+
 struct f_with_params{t} <: Function
 end
 

@@ -539,8 +539,10 @@ Show an expression and result, returning the result.
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
+        sym = gensym()
+        push!(blk.args, :($(sym) = begin value=$(esc(ex)) end))
         push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
-        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
+        push!(blk.args, :(show(STDOUT, "text/plain", $(sym))))
         push!(blk.args, :(println()))
     end
     isempty(exs) || push!(blk.args, :value)
