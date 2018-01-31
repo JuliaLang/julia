@@ -1407,8 +1407,6 @@ end
 
 @deprecate which(s::Symbol) which(Main, s)
 
-@deprecate accumulate!(op, dest::AbstractArray, args...) accumulate!(dest, op, args...)
-
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

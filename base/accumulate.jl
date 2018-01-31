@@ -93,7 +93,7 @@ accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}) =
 
 
 """
-    accumulate!(dest, op[, v0] itr)
+    accumulate!(op, dest,[, v0] itr)
 
 Cumulative operation `op` on an iterator `itr`, storing the result in `dest`.
 See also [`accumulate`](@ref).
@@ -115,8 +115,8 @@ julia> y
  6
 ```
 """
-accumulate!(dest, op, x) = accumulate!(dest, op, uninitialized, x)
-function accumulate!(dest, op, v0, x)
+accumulate!(op, dest, x) = accumulate!(op, dest, uninitialized, x)
+function accumulate!(op, dest, v0, x)
     src = Accumulate(op, v0, x)
 
     # this is essentially `copyto!`, but unrolled to deal with potential type instability in first state
@@ -212,12 +212,12 @@ function accumulate(op, v0, X, dim::Integer)
     i = first(linearindices(dest))
     dest[i] = accv
 
-    return _accumulate!(dest, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+    return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
 end
 
 
 """
-    accumulate!(dest, op, A, dim::Integer)
+    accumulate!(op, dest, A, dim::Integer)
 
 Cumulative operation `op` on `A` along the dimension `dim`, storing the result in `B`.
 See also [`accumulate`](@ref).
@@ -228,7 +228,7 @@ julia> A = [1 2; 3 4];
 
 julia> B = [0 0; 0 0];
 
-julia> accumulate!(-, B, A, 1);
+julia> accumulate!(B, -, A, 1);
 
 julia> B
 2×2 Array{Int64,2}:
@@ -243,9 +243,9 @@ julia> B
  3  -1
 ```
 """
-accumulate!(dest, op, X, dim::Integer) = accumulate!(dest, op, uninitialized, X, dim::Integer)
+accumulate!(op, dest, X, dim::Integer) = accumulate!(op, dest, uninitialized, X, dim::Integer)
 
-function accumulate!(dest, op, v0, X, dim::Integer)
+function accumulate!(op, dest, v0, X, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     axes(A) == axes(B) || throw(DimensionMismatch("shape of source and destination must match"))
     indH, indD, indT = split_dimensions(X,dim)
@@ -263,10 +263,10 @@ function accumulate!(dest, op, v0, X, dim::Integer)
     @assert !done(indT, sT)
     iT,sT = next(indT, sT)
 
-    return _accumulate!(dest, first(linearindices(dest))-1, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
+    return _accumulate!(op, dest, first(linearindices(dest))-1, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
 end
 
-function _accumulate!(dest::AbstractArray{T}, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {T}
+function _accumulate!(op, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {T}
     while true
         if done(indH,sH)
             if done(indD, sD)
@@ -301,7 +301,7 @@ function _accumulate!(dest::AbstractArray{T}, i, op, v0, X, indH, indD, indT, sH
             new = similar(dest, R)
             copyto!(new,1,dest,1,i)
             @inbounds new[i+=1] = accv
-            return _accumulate!(dest, i, op, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+            return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
         end
     end
 end
@@ -334,12 +334,12 @@ function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
     if done(itr, i)
         return dest
     end
-    out, _ = _accumulate_pairwise!(dest, op, itr, accv, i, j, m, true)
+    out, _ = _accumulate_pairwise!(op, dest, itr, accv, i, j, m, true)
     return out
 end
 
-accumulate_pairwise!(dest, op, itr) = accumulate_pairwise!(dest, op, uninitialized, itr)
-function accumulate_pairwise!(dest, op, v0, itr)
+accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, uninitialized, itr)
+function accumulate_pairwise!(op, dest, v0, itr)
     linearindices(dest) == linearindices(itr) || throw(DimensionMismatch("length of source and destination must match"))
 
     i = start(itr)
@@ -356,13 +356,13 @@ function accumulate_pairwise!(dest, op, v0, itr)
     if done(itr, i)
         return dest
     end
-    out, _ = _accumulate_pairwise!(dest, op, itr, accv, i, j, m, false)
+    out, _ = _accumulate_pairwise!(op, dest, itr, accv, i, j, m, false)
     return out
 end
 
 # TODO figure out promotion machinery
 # collect_pairwise
-function _accumulate_pairwise!(dest::AbstractArray{T}, op, itr, accv, i, j, m, widen) where {T}
+function _accumulate_pairwise!(op, dest::AbstractArray{T}, itr, accv, i, j, m, widen) where {T}
     if m < 128
         # m >= 1
         w, i = next(itr, i)
@@ -370,25 +370,25 @@ function _accumulate_pairwise!(dest::AbstractArray{T}, op, itr, accv, i, j, m, w
         S = typeof(y)
         if !widen || S === T || S<:T
             @inbounds dest[j+=1] = y
-            return _accumulate_pairwise_small!(dest, op, itr, accv, w, i, j, m-1, widen)
+            return _accumulate_pairwise_small!(op, dest, itr, accv, w, i, j, m-1, widen)
         else
             R = promote_typejoin(T, S)
             new = similar(dest, R)
             copyto!(new,1,dest,1,j)
             @inbounds new[j+=1] = y
-            return _accumulate_pairwise_small!(new, op, itr, accv, w, i, j, m-1, widen)
+            return _accumulate_pairwise_small!(op, new, itr, accv, w, i, j, m-1, widen)
         end
     else
         m1 = m >> 1
         m2 = m - m1
-        dest, taccv1, i, j = _accumulate_pairwise!(dest, op, itr, accv, i, j, m1, widen)
-        dest, taccv2, i, j = _accumulate_pairwise!(dest, op, itr, op(accv, taccv1), i, j, m2, widen)
+        dest, taccv1, i, j = _accumulate_pairwise!(op, dest, itr, accv, i, j, m1, widen)
+        dest, taccv2, i, j = _accumulate_pairwise!(op, dest, itr, op(accv, taccv1), i, j, m2, widen)
         taccv = op(taccv1, taccv2)
     end
     return dest, taccv, i, j
 end
 
-function _accumulate_pairwise_small!(dest::AbstractArray{T}, op, itr, accv, w, i, j, m, widen) where T
+function _accumulate_pairwise_small!(op, dest::AbstractArray{T}, itr, accv, w, i, j, m, widen) where T
     if m == 0
         return dest, reduce_first(op, w), i, j
     end
@@ -405,7 +405,7 @@ function _accumulate_pairwise_small!(dest::AbstractArray{T}, op, itr, accv, w, i
             new = similar(dest, R)
             copyto!(new,1,dest,1,j)
             @inbounds new[j+=1] = y
-            return _accumulate_pairwise_small!(new, op, itr, accv, x, i, j, m-1, widen)
+            return _accumulate_pairwise_small!(op, new, itr, accv, x, i, j, m-1, widen)
         end
         if m == 0
             return dest, x, i, j
@@ -422,9 +422,9 @@ function cumsum!(out, v::AbstractVector{T}) where T
     # we dispatch on the possibility of numerical accuracy issues
     cumsum!(out, v, ArithmeticStyle(T))
 end
-cumsum!(out, v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise!(out, +, v)
-cumsum!(out, v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise!(out, +, v)
-cumsum!(out, v::AbstractVector, ::ArithmeticStyle)   = accumulate!(out, +, v)
+cumsum!(out, v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise!(+, out, v)
+cumsum!(out, v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise!(+, out, v)
+cumsum!(out, v::AbstractVector, ::ArithmeticStyle)   = accumulate!(+, out, v)
 
 """
     cumsum(A, dim::Integer)
@@ -488,14 +488,14 @@ cumsum(v::AbstractVector, ::ArithmeticStyle)   = accumulate(add_sum, v)
 
 Cumulative sum of `A` along the dimension `dim`, storing the result in `B`. See also [`cumsum`](@ref).
 """
-cumsum!(dest, A, dim::Integer) = accumulate!(dest, +, A, dim)
+cumsum!(dest, A, dim::Integer) = accumulate!(+, dest, A, dim)
 
 """
     cumsum!(y::AbstractVector, x::AbstractVector)
 
 Cumulative sum of a vector `x`, storing the result in `y`. See also [`cumsum`](@ref).
 """
-cumsum!(dest, itr) = accumulate!(dest, +, src)
+cumsum!(dest, itr) = accumulate!(+, dest, src)
 
 """
     cumprod(A, dim::Integer)
@@ -555,7 +555,7 @@ cumprod(x::AbstractVector) = accumulate(mul_prod, x)
 Cumulative product of `A` along the dimension `dim`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
-cumprod!(dest, A, dim::Integer) = accumulate!(dest, *, A, dim)
+cumprod!(dest, A, dim::Integer) = accumulate!(*, dest, A, dim)
 
 """
     cumprod!(y::AbstractVector, x::AbstractVector)
@@ -563,4 +563,4 @@ cumprod!(dest, A, dim::Integer) = accumulate!(dest, *, A, dim)
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 """
-cumprod!(dest, itr) = accumulate!(dest, *, itr)
+cumprod!(dest, itr) = accumulate!(*, dest, itr)

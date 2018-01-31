@@ -2170,7 +2170,7 @@ end
 
             if eltype(arr) in [Int, Float64] # eltype of out easy
                 out = similar(arr)
-                @test accumulate!(out, op, arr) ≈ accumulate_arr
+                @test accumulate!(op, out, arr) ≈ accumulate_arr
                 @test out ≈ accumulate_arr
             end
         end
