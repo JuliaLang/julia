@@ -854,7 +854,6 @@ function acos(z::Complex)
     if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
 end
-acos(z::Complex) = acos(float(z))
 
 function atan(z::Complex)
     w = atanh(Complex(-imag(z),real(z)))
