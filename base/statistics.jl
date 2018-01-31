@@ -474,11 +474,11 @@ function corzm(x::AbstractMatrix, vardim::Int=1)
     return cov2cor!(c, collect(sqrt(c[i,i]) for i in 1:min(size(c)...)))
 end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, dims=vardim)))
 corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt(sum(abs2, y)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, dims=vardim)), sqrt(sum(abs2, y)))
 corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt!(sum(abs2, y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, dims=vardim)), sqrt!(sum(abs2, y, dims=vardim)))
 
 # corm
 

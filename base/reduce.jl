@@ -403,88 +403,142 @@ reduce(op, a::Number) = a
 
 ###### Specific reduction functions ######
 
+for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum),
+                            (:prod,    :_prod,    :mul_prod),
+                            (:maximum, :_maximum, :max),
+                            (:minimum, :_minimum, :min)]
+    @eval begin
+        # User-facing methods with keyword arguments
+        @inline ($fname)(a; dims=:) = ($_fname)(a, dims)
+        @inline ($fname)(f, a; dims=:) = ($_fname)(f, a, dims)
+
+        # Underlying implementations using dispatch
+        ($_fname)(a, ::Colon) = ($_fname)(identity, a, :)
+        ($_fname)(f, a, ::Colon) = mapreduce(f, $op, a)
+
+        # This method and the one below it are to avoid ambiguities with the dimension
+        # reducing methods defined in base/reducedim.jl.
+        ($_fname)(f::Function, A::AbstractArray, ::Colon) = mapreduce(f, $op, A)
+        ($_fname)(A::AbstractArray, ::Colon) = ($_fname)(identity, A, :)
+    end
+end
+
 ## sum
 
-"""
-    sum(f, itr)
+#if nameof(@__MODULE__) == :Base
+#
+#"""
+#    sum(f, itr)
+#
+#Sum the results of calling function `f` on each element of `itr`.
+#
+#The return type is `Int` for signed integers of less than system word size, and
+#`UInt` for unsigned integers of less than system word size.  For all other
+#arguments, a common return type is found to which all arguments are promoted.
+#
+#```jldoctest
+#julia> sum(abs2, [2; 3; 4])
+#29
+#```
+#
+#Note the important difference between `sum(A)` and `reduce(+, A)` for arrays
+#with small integer eltype:
+#
+#```jldoctest
+#julia> sum(Int8[100, 28])
+#128
+#
+#julia> reduce(+, Int8[100, 28])
+#-128
+#```
+#
+#In the former case, the integers are widened to system word size and therefore
+#the result is 128. In the latter case, no such widening happens and integer
+#overflow results in -128.
+#"""
+#sum(f, a)
+#
+#"""
+#    sum(itr)
+#
+#Returns the sum of all elements in a collection.
+#
+#The return type is `Int` for signed integers of less than system word size, and
+#`UInt` for unsigned integers of less than system word size.  For all other
+#arguments, a common return type is found to which all arguments are promoted.
+#
+#```jldoctest
+#julia> sum(1:20)
+#210
+#```
+#"""
+#sum(x)
+#
+### prod
+#"""
+#    prod(f, itr)
+#
+#Returns the product of `f` applied to each element of `itr`.
+#
+#The return type is `Int` for signed integers of less than system word size, and
+#`UInt` for unsigned integers of less than system word size.  For all other
+#arguments, a common return type is found to which all arguments are promoted.
+#
+#```jldoctest
+#julia> prod(abs2, [2; 3; 4])
+#576
+#```
+#"""
+#prod(f, a)
+#
+#"""
+#    prod(itr)
+#
+#Returns the product of all elements of a collection.
+#
+#The return type is `Int` for signed integers of less than system word size, and
+#`UInt` for unsigned integers of less than system word size.  For all other
+#arguments, a common return type is found to which all arguments are promoted.
+#
+#```jldoctest
+#julia> prod(1:20)
+#2432902008176640000
+#```
+#"""
+#prod(a)
+#
+#"""
+#    maximum(itr)
+#
+#Returns the largest element in a collection.
+#
+#```jldoctest
+#julia> maximum(-20.5:10)
+#9.5
+#
+#julia> maximum([1,2,3])
+#3
+#```
+#"""
+#maximum(a)
+#
+#"""
+#    minimum(itr)
+#
+#Returns the smallest element in a collection.
+#
+#```jldoctest
+#julia> minimum(-20.5:10)
+#-20.5
+#
+#julia> minimum([1,2,3])
+#1
+#```
+#"""
+#minimum(a)
+#
+#end
 
-Sum the results of calling function `f` on each element of `itr`.
-
-The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
-arguments, a common return type is found to which all arguments are promoted.
-
-```jldoctest
-julia> sum(abs2, [2; 3; 4])
-29
-```
-
-Note the important difference between `sum(A)` and `reduce(+, A)` for arrays
-with small integer eltype:
-
-```jldoctest
-julia> sum(Int8[100, 28])
-128
-
-julia> reduce(+, Int8[100, 28])
--128
-```
-
-In the former case, the integers are widened to system word size and therefore
-the result is 128. In the latter case, no such widening happens and integer
-overflow results in -128.
-"""
-sum(f, a) = mapreduce(f, add_sum, a)
-
-"""
-    sum(itr)
-
-Returns the sum of all elements in a collection.
-
-The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
-arguments, a common return type is found to which all arguments are promoted.
-
-```jldoctest
-julia> sum(1:20)
-210
-```
-"""
-sum(a) = sum(identity, a)
-sum(a::AbstractArray{Bool}) = count(a)
-
-## prod
-"""
-    prod(f, itr)
-
-Returns the product of `f` applied to each element of `itr`.
-
-The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
-arguments, a common return type is found to which all arguments are promoted.
-
-```jldoctest
-julia> prod(abs2, [2; 3; 4])
-576
-```
-"""
-prod(f, a) = mapreduce(f, mul_prod, a)
-
-"""
-    prod(itr)
-
-Returns the product of all elements of a collection.
-
-The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
-arguments, a common return type is found to which all arguments are promoted.
-
-```jldoctest
-julia> prod(1:20)
-2432902008176640000
-```
-"""
-prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
 
@@ -502,38 +556,6 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, max, a)
-minimum(f::Callable, a) = mapreduce(f, min, a)
-
-"""
-    maximum(itr)
-
-Returns the largest element in a collection.
-
-```jldoctest
-julia> maximum(-20.5:10)
-9.5
-
-julia> maximum([1,2,3])
-3
-```
-"""
-maximum(a) = mapreduce(identity, max, a)
-
-"""
-    minimum(itr)
-
-Returns the smallest element in a collection.
-
-```jldoctest
-julia> minimum(-20.5:10)
--20.5
-
-julia> minimum([1,2,3])
-1
-```
-"""
-minimum(a) = mapreduce(identity, min, a)
 
 ## extrema
 

@@ -486,11 +486,19 @@ end
     for arr in (se33, sA, pA)
         for f in (sum, prod, minimum, maximum, var)
             farr = Array(arr)
-            @test f(arr) ≈ f(farr)
-            @test f(arr, 1) ≈ f(farr, 1)
-            @test f(arr, 2) ≈ f(farr, 2)
-            @test f(arr, (1, 2)) ≈ [f(farr)]
-            @test isequal(f(arr, 3), f(farr, 3))
+            if f !== var
+                @test f(arr) ≈ f(farr)
+                @test f(arr, dims=1) ≈ f(farr, dims=1)
+                @test f(arr, dims=2) ≈ f(farr, dims=2)
+                @test f(arr, dims=(1, 2)) ≈ [f(farr)]
+                @test isequal(f(arr, dims=3), f(farr, dims=3))
+            else
+                @test f(arr) ≈ f(farr)
+                @test f(arr, 1) ≈ f(farr, 1)
+                @test f(arr, 2) ≈ f(farr, 2)
+                @test f(arr, (1, 2)) ≈ [f(farr)]
+                @test isequal(f(arr, 3), f(farr, 3))
+            end
         end
     end
 
@@ -503,9 +511,9 @@ end
         # case where f(0) would throw
         @test f(x->sqrt(x-1), pA .+ 1) ≈ f(sqrt.(pA))
         # these actually throw due to #10533
-        # @test f(x->sqrt(x-1), pA .+ 1, 1) ≈ f(sqrt(pA), 1)
-        # @test f(x->sqrt(x-1), pA .+ 1, 2) ≈ f(sqrt(pA), 2)
-        # @test f(x->sqrt(x-1), pA .+ 1, 3) ≈ f(pA)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=1) ≈ f(sqrt(pA), dims=1)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=2) ≈ f(sqrt(pA), dims=2)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=3) ≈ f(pA)
     end
 
     @testset "empty cases" begin
@@ -515,13 +523,26 @@ end
         @test_throws ArgumentError maximum(sparse(Int[]))
         @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, var)
+        # TODO: Revert all of this and recombine
+        for f in (sum, prod)
+            @test isequal(f(spzeros(0, 1), dims=1), f(Matrix{Int}(I, 0, 1), dims=1))
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test isequal(f(spzeros(0, 1), dims=(1, 2)), f(Matrix{Int}(I, 0, 1), dims=(1, 2)))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
+        end
+        let f = var
             @test isequal(f(spzeros(0, 1), 1), f(Matrix{Int}(I, 0, 1), 1))
             @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
             @test isequal(f(spzeros(0, 1), (1, 2)), f(Matrix{Int}(I, 0, 1), (1, 2)))
             @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
         end
-        for f in (minimum, maximum, findmin, findmax)
+        for f in (minimum, maximum)
+            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
+        end
+        for f in (findmin, findmax)
             @test_throws ArgumentError f(spzeros(0, 1), 1)
             @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
             @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
@@ -582,9 +603,9 @@ end
     @test minimum(-P) === -3.0
     @test maximum(-P) === 0.0
 
-    @test maximum(P, (1,)) == [1.0 2.0 3.0]
-    @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
-    @test maximum(P, (1,2)) == reshape([3.0],1,1)
+    @test maximum(P, dims=(1,)) == [1.0 2.0 3.0]
+    @test maximum(P, dims=(2,)) == reshape([1.0,2.0,3.0],3,1)
+    @test maximum(P, dims=(1,2)) == reshape([3.0],1,1)
 
     @test maximum(sparse(fill(-1,3,3))) == -1
     @test minimum(sparse(fill(1,3,3))) == 1

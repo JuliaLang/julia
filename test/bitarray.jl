@@ -1229,9 +1229,9 @@ end
     b1 = bitrand(s1, s2, s3, s4)
     m1 = 1
     m2 = 3
-    @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
+    @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
     @check_bit_operation minimum(b1) Bool
