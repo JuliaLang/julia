@@ -247,7 +247,7 @@ accumulate!(op, dest, X, dim::Integer) = accumulate!(op, dest, uninitialized, X,
 
 function accumulate!(op, dest, v0, X, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    axes(A) == axes(B) || throw(DimensionMismatch("shape of source and destination must match"))
+    axes(dest) == axes(X) || throw(DimensionMismatch("shape of source and destination must match"))
     indH, indD, indT = split_dimensions(X,dim)
 
     sH = start(indH)
