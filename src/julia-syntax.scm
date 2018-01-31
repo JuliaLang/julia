@@ -650,7 +650,7 @@
 ; replace unassigned kw args with assignment to throw() call (forcing the caller to assign the keyword)
 (define (throw-unassigned-kw-args argl)
   (define (throw-unassigned argname)
-    `(call (core throw) (call (core UnassignedKeyword) (inert ,argname))))
+    `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
   (if (has-parameters? argl)
       (cons (cons 'parameters
                   (map (lambda (x)

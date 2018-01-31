@@ -1020,11 +1020,11 @@ A symbol in the current scope is not defined.
 UndefVarError
 
 """
-    UnassignedKeyword(var::Symbol)
+    UndefKeywordError(var::Symbol)
 
 The required keyword argument `var` was not assigned in a function call.
 """
-UnassignedKeyword
+UndefKeywordError
 
 """
     OverflowError(msg)

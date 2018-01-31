@@ -298,7 +298,7 @@ Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
-Core.UnassignedKeyword
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
 Base.InitError

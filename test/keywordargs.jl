@@ -312,11 +312,11 @@ end
 @testset "required keyword arguments" begin
     f(x; y, z=3) = x + 2y + 3z
     @test f(1, y=2) === 14 === f(10, y=2, z=0)
-    @test_throws UnassignedKeyword f(1)
-    @test_throws UnassignedKeyword f(1, z=2)
+    @test_throws UndefKeywordError f(1)
+    @test_throws UndefKeywordError f(1, z=2)
     g(x; y::Int, z=3) = x + 2y + 3z
     @test g(1, y=2) === 14 === g(10, y=2, z=0)
     @test_throws TypeError g(1, y=2.3)
-    @test_throws UnassignedKeyword g(1)
-    @test_throws UnassignedKeyword g(1, z=2)
+    @test_throws UndefKeywordError g(1)
+    @test_throws UndefKeywordError g(1, z=2)
 end
