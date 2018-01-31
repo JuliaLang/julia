@@ -3,7 +3,7 @@
 module TestLQ
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, mul1!, mul2!
+using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, rmul!, lmul!
 
 n = 10
 
@@ -21,7 +21,7 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an LQPackedQ
-squareQ(Q::LinearAlgebra.LQPackedQ) = (n = size(Q.factors, 2); mul2!(Q, Matrix{eltype(Q)}(I, n, n)))
+squareQ(Q::LinearAlgebra.LQPackedQ) = (n = size(Q.factors, 2); lmul!(Q, Matrix{eltype(Q)}(I, n, n)))
 rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
@@ -97,9 +97,9 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
             l,q = lqa.L, lqa.Q
             @test rectangularQ(q)*rectangularQ(q)' ≈ Matrix(I, n1, n1)
             @test squareQ(q)'*squareQ(q) ≈ Matrix(I, n1, n1)
-            @test_throws DimensionMismatch mul1!(Matrix{eltya}(I, n+1, n+1),q)
-            @test mul2!(adjoint(q), rectangularQ(q)) ≈ Matrix(I, n1, n1)
-            @test_throws DimensionMismatch mul1!(Matrix{eltya}(I, n+1, n+1), adjoint(q))
+            @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),q)
+            @test lmul!(adjoint(q), rectangularQ(q)) ≈ Matrix(I, n1, n1)
+            @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1), adjoint(q))
             @test_throws BoundsError size(q,-1)
         end
     end
@@ -147,7 +147,7 @@ end
     function getqs(F::LinearAlgebra.LQ)
         implicitQ = F.Q
         sq = size(implicitQ.factors, 2)
-        explicitQ = mul2!(implicitQ, Matrix{eltype(implicitQ)}(I, sq, sq))
+        explicitQ = lmul!(implicitQ, Matrix{eltype(implicitQ)}(I, sq, sq))
         return implicitQ, explicitQ
     end
 
@@ -188,7 +188,7 @@ end
 @testset "postmultiplication with / right-application of LQPackedQ (#23779)" begin
     function getqs(F::LinearAlgebra.LQ)
         implicitQ = F.Q
-        explicitQ = mul2!(implicitQ, Matrix{eltype(implicitQ)}(I, size(implicitQ)...))
+        explicitQ = lmul!(implicitQ, Matrix{eltype(implicitQ)}(I, size(implicitQ)...))
         return implicitQ, explicitQ
     end
     # for any shape m-by-n of LQ-factored matrix, where Q is an LQPackedQ

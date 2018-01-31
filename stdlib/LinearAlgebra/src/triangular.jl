@@ -478,8 +478,8 @@ function mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular)
     return A
 end
 
-mul1!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
-mul2!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
+rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
+lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
 
 fillstored!(A::LowerTriangular, x)     = (fillband!(A.data, x, 1-size(A,1), 0); A)
 fillstored!(A::UnitLowerTriangular, x) = (fillband!(A.data, x, 1-size(A,1), -1); A)
@@ -511,35 +511,35 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # BlasFloat routines #
 ######################
 
-mul2!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
+lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
 mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
 mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; mul2!(A, transpose!(C, B)))
+    (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; mul2!(A, transpose!(C, B)))
+    (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; mul2!(A, adjoint!(C, B)))
+    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
 mul!(C::AbstractVecOrMat, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; mul2!(A, adjoint!(C, B)))
+    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
 
 # The three methods for each op are neceesary to avoid ambiguities with definitions in matmul.jl
-mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = mul2!(A, copyto!(C, B))
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = mul2!(A, copyto!(C, B))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul2!(A, copyto!(C, B))
+mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = lmul!(A, copyto!(C, B))
+mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
+mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
 mul!(C::AbstractVector  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = adjA.parent; mul2!(adjoint(A), copyto!(C, B)))
+    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
 mul!(C::AbstractMatrix  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; mul2!(adjoint(A), copyto!(C, B)))
+    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
 mul!(C::AbstractVecOrMat, adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; mul2!(adjoint(A), copyto!(C, B)))
+    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
 mul!(C::AbstractVector  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = transA.parent; mul2!(transpose(A), copyto!(C, B)))
+    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; mul2!(transpose(A), copyto!(C, B)))
+    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; mul2!(transpose(A), copyto!(C, B)))
+    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
@@ -553,33 +553,33 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        mul2!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
+        lmul!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        mul2!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasFloat} =
+        lmul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasFloat} =
             (A = transA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        mul2!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasReal} =
+        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasReal} =
             (A = adjA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        mul2!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasComplex} =
+        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasComplex} =
             (A = adjA.parent; BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
 
         # Matrix multiplication
-        mul2!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+        lmul!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        mul1!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
+        rmul!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        mul2!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+        lmul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasFloat} =
             (A = transA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        mul2!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasComplex} =
+        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasComplex} =
             (A = adjA.parent; BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
-        mul2!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasReal} =
+        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasReal} =
             (A = adjA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
 
-        mul1!(A::StridedMatrix{T}, transB::Transpose{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasFloat} =
+        rmul!(A::StridedMatrix{T}, transB::Transpose{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasFloat} =
             (B = transB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        mul1!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasComplex} =
+        rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasComplex} =
             (B = adjB.parent; BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
-        mul1!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasReal} =
+        rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasReal} =
             (B = adjB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
 
         # Left division
@@ -715,7 +715,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function mul2!(A::UpperTriangular, B::StridedVecOrMat)
+function lmul!(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -732,7 +732,7 @@ function mul2!(A::UpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function mul2!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function lmul!(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -749,7 +749,7 @@ function mul2!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function mul2!(A::LowerTriangular, B::StridedVecOrMat)
+function lmul!(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -765,7 +765,7 @@ function mul2!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function mul2!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -782,7 +782,7 @@ function mul2!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function mul2!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -800,7 +800,7 @@ function mul2!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function mul2!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -818,7 +818,7 @@ function mul2!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function mul2!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -835,7 +835,7 @@ function mul2!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function mul2!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -853,7 +853,7 @@ function mul2!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
     B
 end
 
-function mul2!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -870,7 +870,7 @@ function mul2!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function mul2!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -888,7 +888,7 @@ function mul2!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMa
     B
 end
 
-function mul2!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -905,7 +905,7 @@ function mul2!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function mul2!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -923,7 +923,7 @@ function mul2!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMa
     B
 end
 
-function mul1!(A::StridedMatrix, B::UpperTriangular)
+function rmul!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -939,7 +939,7 @@ function mul1!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function mul1!(A::StridedMatrix, B::UnitUpperTriangular)
+function rmul!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -956,7 +956,7 @@ function mul1!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function mul1!(A::StridedMatrix, B::LowerTriangular)
+function rmul!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -972,7 +972,7 @@ function mul1!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function mul1!(A::StridedMatrix, B::UnitLowerTriangular)
+function rmul!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -989,7 +989,7 @@ function mul1!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
+function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1007,7 +1007,7 @@ function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
+function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1025,7 +1025,7 @@ function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
+function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1043,7 +1043,7 @@ function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
+function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     B = adjB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1061,7 +1061,7 @@ function mul1!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
+function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1078,7 +1078,7 @@ function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     end
     A
 end
-function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
+function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1096,7 +1096,7 @@ function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
+function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1114,7 +1114,7 @@ function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     A
 end
 
-function mul1!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
+function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1542,14 +1542,14 @@ function rdiv!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
     A
 end
 
-mul2!(adjA::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular) =
-    (A = adjA.parent; UpperTriangular(mul2!(adjoint(A), triu!(B.data))))
-mul2!(adjA::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular) =
-    (A = adjA.parent; LowerTriangular(mul2!(adjoint(A), tril!(B.data))))
-mul2!(transA::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular) =
-    (A = transA.parent; UpperTriangular(mul2!(transpose(A), triu!(B.data))))
-mul2!(transA::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular) =
-    (A = transA.parent; LowerTriangular(mul2!(transpose(A), tril!(B.data))))
+lmul!(adjA::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular) =
+    (A = adjA.parent; UpperTriangular(lmul!(adjoint(A), triu!(B.data))))
+lmul!(adjA::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular) =
+    (A = adjA.parent; LowerTriangular(lmul!(adjoint(A), tril!(B.data))))
+lmul!(transA::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular) =
+    (A = transA.parent; UpperTriangular(lmul!(transpose(A), triu!(B.data))))
+lmul!(transA::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular) =
+    (A = transA.parent; LowerTriangular(lmul!(transpose(A), tril!(B.data))))
 ldiv!(adjA::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}, B::UpperTriangular) =
     (A = adjA.parent; UpperTriangular(ldiv!(adjoint(A), triu!(B.data))))
 ldiv!(adjA::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}, B::LowerTriangular) =
@@ -1564,14 +1564,14 @@ rdiv!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
 rdiv!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
     LowerTriangular(rdiv!(tril!(A.data), B))
 
-mul1!(A::UpperTriangular, adjB::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}) =
-    (B = adjB.parent; UpperTriangular(mul1!(triu!(A.data), adjoint(B))))
-mul1!(A::LowerTriangular, adjB::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}) =
-    (B = adjB.parent; LowerTriangular(mul1!(tril!(A.data), adjoint(B))))
-mul1!(A::UpperTriangular, transB::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}) =
-    (B = transB.parent; UpperTriangular(mul1!(triu!(A.data), transpose(B))))
-mul1!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}) =
-    (B = transB.parent; LowerTriangular(mul1!(tril!(A.data), transpose(B))))
+rmul!(A::UpperTriangular, adjB::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}) =
+    (B = adjB.parent; UpperTriangular(rmul!(triu!(A.data), adjoint(B))))
+rmul!(A::LowerTriangular, adjB::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}) =
+    (B = adjB.parent; LowerTriangular(rmul!(tril!(A.data), adjoint(B))))
+rmul!(A::UpperTriangular, transB::Transpose{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}) =
+    (B = transB.parent; UpperTriangular(rmul!(triu!(A.data), transpose(B))))
+rmul!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}) =
+    (B = transB.parent; LowerTriangular(rmul!(tril!(A.data), transpose(B))))
 rdiv!(A::UpperTriangular, adjB::Adjoint{<:Any,<:Union{LowerTriangular,UnitLowerTriangular}}) =
     (B = adjB.parent; UpperTriangular(rdiv!(triu!(A.data), adjoint(B))))
 rdiv!(A::LowerTriangular, adjB::Adjoint{<:Any,<:Union{UpperTriangular,UnitUpperTriangular}}) =
@@ -1590,9 +1590,9 @@ rdiv!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUp
 
 ## Some Triangular-Triangular cases. We might want to write taylored methods
 ## for these cases, but I'm not sure it is worth it.
-(*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = mul1!(Matrix(A), B)
+(*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = rmul!(Matrix(A), B)
 
-for (f, f2!) in ((:*, :mul2!), (:\, :ldiv!))
+for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
     @eval begin
         function ($f)(A::LowerTriangular, B::LowerTriangular)
             TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
@@ -1629,8 +1629,8 @@ for (f, f2!) in ((:*, :mul2!), (:\, :ldiv!))
 end
 
 for (ipop, op, xformtype, xformop) in (
-        (:mul2!, :*, :Adjoint, :adjoint),
-        (:mul2!, :*, :Transpose, :transpose),
+        (:lmul!, :*, :Adjoint, :adjoint),
+        (:lmul!, :*, :Transpose, :transpose),
         (:ldiv!, :\, :Adjoint, :adjoint),
         (:ldiv!, :\, :Transpose, :transpose))
     @eval begin
@@ -1702,8 +1702,8 @@ function (/)(A::UpperTriangular, B::UnitUpperTriangular)
 end
 
 for (ipop, op, xformtype, xformop) in (
-        (:mul1!, :*, :Adjoint, :adjoint),
-        (:mul1!, :*, :Transpose, :transpose),
+        (:rmul!, :*, :Adjoint, :adjoint),
+        (:rmul!, :*, :Transpose, :transpose),
         (:rdiv!, :/, :Adjoint, :adjoint),
         (:rdiv!, :/, :Transpose, :transpose))
     @eval begin
@@ -1750,21 +1750,21 @@ function *(A::AbstractTriangular, B::AbstractTriangular)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
-    mul2!(convert(AbstractArray{TAB}, A), BB)
+    lmul!(convert(AbstractArray{TAB}, A), BB)
 end
 function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = adjA.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
-    mul2!(adjoint(convert(AbstractArray{TAB}, A)), BB)
+    lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
 end
 function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = transA.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
-    mul2!(transpose(convert(AbstractArray{TAB}, A)), BB)
+    lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
 end
 
 function *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractTriangular})
@@ -1772,14 +1772,14 @@ function *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractTriangular})
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    mul1!(AA, adjoint(convert(AbstractArray{TAB}, B)))
+    rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractTriangular})
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    mul1!(AA, transpose(convert(AbstractArray{TAB}, B)))
+    rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
 end
 
 for mat in (:AbstractVector, :AbstractMatrix)
@@ -1789,21 +1789,21 @@ for mat in (:AbstractVector, :AbstractMatrix)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            mul2!(convert(AbstractArray{TAB}, A), BB)
+            lmul!(convert(AbstractArray{TAB}, A), BB)
         end
         function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            mul2!(adjoint(convert(AbstractArray{TAB}, A)), BB)
+            lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            mul2!(transpose(convert(AbstractArray{TAB}, A)), BB)
+            lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
         end
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
@@ -1905,21 +1905,21 @@ function *(A::AbstractMatrix, B::AbstractTriangular)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    mul1!(AA, convert(AbstractArray{TAB}, B))
+    rmul!(AA, convert(AbstractArray{TAB}, B))
 end
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
     B = adjB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    mul1!(AA, adjoint(convert(AbstractArray{TAB}, B)))
+    rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    mul1!(AA, transpose(convert(AbstractArray{TAB}, B)))
+    rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
 end
 # ambiguity resolution with definitions in linalg/rowvector.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
@@ -1956,7 +1956,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
     end
 
     normA0 = norm(A0, 1)
-    mul1!(A0, 1/normA0)
+    rmul!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
     n = checksquare(A0)
@@ -2008,7 +2008,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         copyto!(S, Stmp)
         blockpower!(A0, S, p/(2^(s-m)))
     end
-    mul1!(S, normA0^p)
+    rmul!(S, normA0^p)
     return S
 end
 powm(A::LowerTriangular, p::Real) = copy(transpose(powm(copy(transpose(A)), p::Real)))
@@ -2173,7 +2173,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     # Scale back
-    mul2!(2^s, Y)
+    lmul!(2^s, Y)
 
     # Compute accurate diagonal and superdiagonal of log(T)
     for k = 1:n-1
