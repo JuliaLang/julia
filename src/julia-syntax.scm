@@ -644,12 +644,8 @@
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
             (error "more than one semicolon in argument list")
-            (cond ((symbol? (car invalid))
-                   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
-                  (else
-                   (error (string "invalid keyword argument syntax \""
-                                  (deparse (car invalid))
-                                  "\" (expected assignment)"))))))))
+            (error (string "invalid keyword argument syntax \""
+                           (deparse (car invalid)) "\""))))))
 
 ; replace unassigned kw args with assignment to throw() call (forcing the caller to assign the keyword)
 (define (throw-unassigned-kw-args argl)
