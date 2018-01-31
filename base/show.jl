@@ -385,8 +385,13 @@ end
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
-    print(io, "Union")
-    show_comma_array(io, uniontypes(x), '{', '}')
+    types = uniontypes(x)
+    print(io, "Union{")
+    for i in 1:length(types)
+        print(io, types[i])
+        i == length(types) || print(io, ',')
+    end
+    print(io, '}')
 end
 
 function print_without_params(@nospecialize(x))
@@ -702,7 +707,6 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     print(io, cl)
 end
 
-show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 

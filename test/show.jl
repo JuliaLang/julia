@@ -338,7 +338,7 @@ end
 @test sprint(show, :end) == ":end"
 
 # issue #12477
-@test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
+@test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64,Int16,Int32,Int64,Int8}"
 
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
@@ -782,7 +782,7 @@ let repr = sprint(dump, Integer)
     @test !contains(repr, "Any")
 end
 let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+    @test repr == "Union{Integer,Float32}\n" || repr == "Union{Float32,Integer}\n"
 end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
