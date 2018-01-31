@@ -500,14 +500,13 @@ end
             @nexprs $nargs i->(@inbounds val_i = _broadcast_getindex(A_i, I_i))
             # call the function
             V = @ncall $nargs f val
-            S = typeof(V)
             # store the result
-            if S <: eltype(B)
+            if V isa eltype(B)
                 @inbounds B[I] = V
             else
                 # This element type doesn't fit in B. Allocate a new B with wider eltype,
                 # copy over old values, and continue
-                newB = Base.similar(B, promote_typejoin(eltype(B), S))
+                newB = Base.similar(B, promote_typejoin(eltype(B), typeof(V)))
                 for II in Iterators.take(iter, count)
                     newB[II] = B[II]
                 end

@@ -573,12 +573,11 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     i = offs
     while !done(itr, st)
         el, st = next(itr, st)
-        S = typeof(el)
-        if S === T || S <: T
+        if el isa T || typeof(el) === T
             @inbounds dest[i] = el::T
             i += 1
         else
-            R = promote_typejoin(T, S)
+            R = promote_typejoin(T, typeof(el))
             new = similar(dest, R)
             copyto!(new,1, dest,1, i-1)
             @inbounds new[i] = el
