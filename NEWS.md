@@ -45,7 +45,7 @@ New language features
     `@enum` macro ([#25424]).
 
   * Keyword arguments can be required: if a default value is omitted, then an
-    exception is thrown if the caller does not assign the keyword a value ([#5111]).
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
 
 Language changes
 ----------------
