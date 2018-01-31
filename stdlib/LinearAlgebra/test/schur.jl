@@ -46,10 +46,11 @@ aimg  = randn(n,n)/2
         sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
 
-        tstring = sprint(show,f.T)
-        zstring = sprint(show,f.Z)
-        vstring = sprint(show,f.values)
-        @test sprint(show,f) == "$(typeof(f)) with factors T and Z:\n$tstring\n$(zstring)\nand values:\n$vstring"
+        tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
+        zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)
+        vstring = sprint((t, s) -> show(t, "text/plain", s), f.values)
+        fstring = sprint((t, s) -> show(t, "text/plain", s), f)
+        @test fstring == "$(summary(f))\nT factor:\n$tstring\nZ factor:\n$(zstring)\neigenvalues:\n$vstring"
         @testset "Reorder Schur" begin
             # use asym for real schur to enforce tridiag structure
             # avoiding partly selection of conj. eigenvalues
@@ -80,6 +81,15 @@ aimg  = randn(n,n)/2
             @test istriu(f.S) || eltype(a)<:Real
             @test istriu(f.T) || eltype(a)<:Real
             @test_throws ErrorException f.A
+
+            sstring = sprint((t, s) -> show(t, "text/plain", s), f.S)
+            tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
+            qstring = sprint((t, s) -> show(t, "text/plain", s), f.Q)
+            zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)
+            αstring = sprint((t, s) -> show(t, "text/plain", s), f.α)
+            βstring = sprint((t, s) -> show(t, "text/plain", s), f.β)
+            fstring = sprint((t, s) -> show(t, "text/plain", s), f)
+            @test fstring == "$(summary(f))\nS factor:\n$sstring\nT factor:\n$(tstring)\nQ factor:\n$(qstring)\nZ factor:\n$(zstring)\nα:\n$αstring\nβ:\n$βstring"
         end
         @testset "Reorder Generalized Schur" begin
             NS = schurfact(a1_sf, a2_sf)

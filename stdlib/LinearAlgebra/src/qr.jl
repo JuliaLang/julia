@@ -422,11 +422,16 @@ AbstractArray(F::QRPivoted) = AbstractMatrix(F)
 Matrix(F::QRPivoted) = Array(AbstractArray(F))
 Array(F::QRPivoted) = Matrix(F)
 
-function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
-    println(io, "$(typeof(F)) with factors Q and R:")
-    show(io, F.Q)
-    println(io)
-    show(io, F.R)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
+    println(io, summary(F))
+    println(io, "Q factor:")
+    show(io, mime, F.Q)
+    println(io, "\nR factor:")
+    show(io, mime, F.R)
+    if F isa QRPivoted
+        println(io, "\npermutation:")
+        show(io, mime, F.p)
+    end
 end
 
 function getproperty(F::QR, d::Symbol)

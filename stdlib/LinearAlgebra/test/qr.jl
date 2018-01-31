@@ -67,9 +67,10 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                     ac = copy(a)
                     @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
-                rstring = sprint(show, r)
-                qstring = sprint(show, q)
-                @test sprint(show, qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
+                qrstring = sprint((t, s) -> show(t, "text/plain", s), qra)
+                rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
+                qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
+                @test qrstring == "$(summary(qra))\nQ factor:\n$qstring\nR factor:\n$rstring"
             end
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qrfact(a[:, 1:n1], Val(false))
@@ -129,6 +130,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 if eltya != Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
+                qrstring = sprint((t, s) -> show(t, "text/plain", s), qrpa)
+                rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
+                qstring  = sprint((t, s) -> show(t, "text/plain", s), q)
+                pstring  = sprint((t, s) -> show(t, "text/plain", s), p)
+                @test qrstring == "$(summary(qrpa))\nQ factor:\n$qstring\nR factor:\n$rstring\npermutation:\n$pstring"
             end
         end
         if eltya != Int
