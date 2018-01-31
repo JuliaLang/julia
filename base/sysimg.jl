@@ -500,31 +500,52 @@ using Base
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
+macro stdlib(name)
+    println(name)
+    Base.require(Base, name)
+end
+
 # load some stdlib packages but don't put their names in Main
-Base.require(Base, :Base64)
-Base.require(Base, :CRC32c)
-Base.require(Base, :Dates)
-Base.require(Base, :DelimitedFiles)
-Base.require(Base, :Serialization)
-Base.require(Base, :Distributed)
-Base.require(Base, :FileWatching)
-Base.require(Base, :Future)
-Base.require(Base, :IterativeEigensolvers)
-Base.require(Base, :Libdl)
-Base.require(Base, :LinearAlgebra)
-Base.require(Base, :Logging)
-Base.require(Base, :Mmap)
-Base.require(Base, :Printf)
-Base.require(Base, :Profile)
-Base.require(Base, :Random)
-Base.require(Base, :SharedArrays)
-Base.require(Base, :SparseArrays)
-Base.require(Base, :SuiteSparse)
-Base.require(Base, :Test)
-Base.require(Base, :Unicode)
-Base.require(Base, :Pkg)
-Base.require(Base, :REPL)
-Base.require(Base, :Markdown)
+# We need to add their files to Base._included_files
+# First evict them, otherwise their dependencies won't be tracked correctly.
+for (modid, mod) in Base.loaded_modules
+    if mod === Core || mod === Base || mod === Main
+        continue
+    end
+    Base.unreference_module(modid)
+end
+Base._track_dependencies[] = true
+@stdlib Base64
+@stdlib CRC32c
+@stdlib Dates
+@stdlib DelimitedFiles
+@stdlib Serialization
+@stdlib Distributed
+@stdlib FileWatching
+@stdlib Future
+@stdlib IterativeEigensolvers
+@stdlib Libdl
+@stdlib LinearAlgebra
+@stdlib Logging
+@stdlib Mmap
+@stdlib Printf
+@stdlib Profile
+@stdlib Random
+@stdlib SharedArrays
+@stdlib SparseArrays
+@stdlib SuiteSparse
+@stdlib Test
+@stdlib Unicode
+@stdlib Pkg
+@stdlib REPL
+@stdlib Markdown
+# Add files and cleanup
+let files = Base._require_dependencies
+    filter!(t-> t[1] !== Main, files)
+    append!(Base._included_files, map(v -> (v[1], v[2]), files))
+end
+Base._track_dependencies[] = false
+empty!(Base._require_dependencies)
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
