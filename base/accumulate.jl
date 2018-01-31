@@ -117,8 +117,34 @@ julia> y
 """
 accumulate!(dest, op, x) = accumulate!(dest, op, uninitialized, x)
 function accumulate!(dest, op, v0, x)
-    length(dest) == length(x) || throw(DimensionMismatch("input and output array sizes and indices must match"))
-    copyto!(dest, Accumulate(op, v0, x))
+    src = Accumulate(op, v0, x)
+
+    # this is essentially `copyto!`, but unrolled to deal with potential type instability in first state
+    # hopefully won't be necessary with better Union splitting
+    destiter = eachindex(dest)
+
+    sstate0 = start(src)
+    dstate = start(destiter)
+    sdone = done(src, sstate0)
+    ddone = done(destiter, dstate)
+
+    sdone && ddone && return dest
+    (sdone || ddone) && throw(DimensionMismatch("input and output array sizes and indices must match"))
+
+    i, dstate = next(destiter, dstate)
+    s, sstate = next(src, sstate0)
+    while true
+        @inbounds dest[i] = s
+
+        sdone = done(src, sstate)
+        ddone = done(destiter, dstate)
+
+        sdone && ddone && return dest
+        (sdone || ddone) && throw(DimensionMismatch("input and output array sizes and indices must match"))
+
+        i, dstate = next(destiter, dstate)
+        s, sstate = next(src, sstate)
+    end
 end
 
 
