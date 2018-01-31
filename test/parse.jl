@@ -315,5 +315,6 @@ end
 
 @test parse(Float64, "1e3", base=16) === Float64(16^2 + 14*16^1 + 3*16^0)
 @test parse(Float64, "1e3", base=10)  === 1000.0
+@test parse(Float64, "1E3", base=10)  === 1000.0
 
 @test_throws ArgumentError parse(Float64, "14.0", base=3)
