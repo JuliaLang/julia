@@ -688,17 +688,6 @@ _iterable(v) = Iterators.repeated(v)
     end
 end
 
-##
-
-# see discussion in #18364 ... we try not to widen type of the resulting array
-# from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
-rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
-rcum_promote_type(op, ::Type{T}) where {T} = T
-
-# handle sums of Vector{Bool} and similar.   it would be nice to handle
-# any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
 
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
@@ -726,14 +715,14 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     n = length(li)
     n == 0 && return result
     i1 = first(li)
-    @inbounds result[i1] = v1 = v[i1]
+    @inbounds result[i1] = v1 = reduce_first(op,v[i1])
     n == 1 && return result
     _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
     return result
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, rcum_promote_type(op, T))
+    out = similar(v, promote_op(op, T, T))
     return accumulate_pairwise!(op, out, v)
 end
 
@@ -778,7 +767,7 @@ julia> cumsum(a,2)
 ```
 """
 function cumsum(A::AbstractArray{T}, dim::Integer) where T
-    out = similar(A, rcum_promote_type(+, T))
+    out = similar(A, promote_op(+, T, T))
     cumsum!(out, A, dim)
 end
 
@@ -912,7 +901,7 @@ julia> accumulate(+, fill(1, 3, 3), 2)
 ```
 """
 function accumulate(op, A, dim::Integer)
-    out = similar(A, rcum_promote_type(op, eltype(A)))
+    out = similar(A, promote_op(op, eltype(A), eltype(A)))
     accumulate!(op, out, A, dim)
 end
 
@@ -980,7 +969,7 @@ function accumulate!(op, B, A, dim::Integer)
         # register usage and will be slightly faster
         ind1 = inds_t[1]
         @inbounds for I in CartesianIndices(tail(inds_t))
-            tmp = convert(eltype(B), A[first(ind1), I])
+            tmp = reduce_first(op, A[first(ind1), I])
             B[first(ind1), I] = tmp
             for i_1 = first(ind1)+1:last(ind1)
                 tmp = op(tmp, A[i_1, I])
@@ -1028,7 +1017,7 @@ end
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
     @inbounds for J in R2, I in R1
-        B[I, ii, J] = A[I, ii, J]
+        B[I, ii, J] = reduce_first(op, A[I, ii, J])
     end
     # Accumulate
     @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
@@ -1059,7 +1048,7 @@ julia> accumulate(min, 0, [1,2,-1])
 ```
 """
 function accumulate(op, v0, x::AbstractVector)
-    T = rcum_promote_type(op, typeof(v0), eltype(x))
+    T = promote_op(op, typeof(v0), eltype(x))
     out = similar(x, T)
     accumulate!(op, out, v0, x)
 end
@@ -1076,7 +1065,7 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
     i1 = inds[1]
-    cur_val = v1
+    cur_val = reduce_first(op, v1)
     B[i1] = cur_val
     @inbounds for i in inds[2:end]
         cur_val = op(cur_val, A[i])
