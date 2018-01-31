@@ -308,3 +308,15 @@ end
                 ((1, 3, 5, 6, 7),
                  (a = 2, b = 4, c = 8, d = 9, f = 10))
 end
+
+@testset "required keyword arguments" begin
+    f(x; y, z=3) = x + 2y + 3z
+    @test f(1, y=2) === 14 === f(10, y=2, z=0)
+    @test_throws UnassignedKeyword f(1)
+    @test_throws UnassignedKeyword f(1, z=2)
+    g(x; y::Int, z=3) = x + 2y + 3z
+    @test g(1, y=2) === 14 === g(10, y=2, z=0)
+    @test_throws TypeError g(1, y=2.3)
+    @test_throws UnassignedKeyword g(1)
+    @test_throws UnassignedKeyword g(1, z=2)
+end

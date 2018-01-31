@@ -518,6 +518,17 @@ function f(x; y=0, kwargs...)
 end
 ```
 
+If a keyword argument is not assigned a default value in the method definition,
+then it is *required*: an [`UnassignedKeyword`](@ref) exception will be thrown
+if the caller does not assign it a value:
+```julia
+function f(x; y)
+    ###
+end
+f(3, y=5) # ok, y is assigned
+f(3)      # throws UnassignedKeyword(:y)
+```
+
 Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
 keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 

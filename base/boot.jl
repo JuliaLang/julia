@@ -139,6 +139,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UnassignedKeyword,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -252,6 +253,9 @@ end
 
 struct ArgumentError <: Exception
     msg::AbstractString
+end
+struct UnassignedKeyword <: Exception
+    var::Symbol
 end
 
 struct MethodError <: Exception

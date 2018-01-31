@@ -134,6 +134,9 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
 
+showerror(io::IO, ex::UnassignedKeyword) =
+    print(io, "UnassignedKeyword: keyword argument $(ex.var) not assigned")
+
 function showerror(io::IO, ex::UndefVarError)
     if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
         return showerror(io, ErrorException("""
