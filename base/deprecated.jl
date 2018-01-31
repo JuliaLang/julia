@@ -496,6 +496,9 @@ end
 # related items to remove in: abstractarray.jl, dates/periods.jl, compiler.jl
 # also remove all uses of is_default_method
 
+@deprecate convert(::Type{UInt128},     u::UUID)     UInt128(u)
+@deprecate convert(::Type{UUID}, s::AbstractString)  UUID(s)
+
 # Issue #19923
 @deprecate ror                  circshift
 @deprecate ror!                 circshift!
