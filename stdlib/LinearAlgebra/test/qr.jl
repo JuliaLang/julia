@@ -164,12 +164,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
 end
 
 @testset "transpose errors" begin
-    @test_throws ErrorException transpose(qrfact(randn(3,3)))
-    @test_throws ErrorException adjoint(qrfact(randn(3,3)))
-    @test_throws ErrorException transpose(qrfact(randn(3,3), Val(false)))
-    @test_throws ErrorException adjoint(qrfact(randn(3,3), Val(false)))
-    @test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
-    @test_throws ErrorException adjoint(qrfact(big.(randn(3,3))))
+    @test_throws MethodError transpose(qrfact(randn(3,3)))
+    @test_throws MethodError adjoint(qrfact(randn(3,3)))
+    @test_throws MethodError transpose(qrfact(randn(3,3), Val(false)))
+    @test_throws MethodError adjoint(qrfact(randn(3,3), Val(false)))
+    @test_throws MethodError transpose(qrfact(big.(randn(3,3))))
+    @test_throws MethodError adjoint(qrfact(big.(randn(3,3))))
 end
 
 @testset "Issue 7304" begin
