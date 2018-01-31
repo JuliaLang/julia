@@ -1845,7 +1845,9 @@
                  (error "invalid comprehension syntax")))
             (else
              (if (and (pair? vec) (not (ts:space? s)))
-                 (error (string "expected separator between arguments to \"[ ]\"; got \""
+                 (error (string "expected \"" closer "\" or separator in arguments to \""
+                                (if (eqv? closer #\]) #\[ #\{) " " closer
+                                "\"; got \""
                                 (deparse (car vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer))))))))
 
