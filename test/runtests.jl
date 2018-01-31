@@ -318,16 +318,16 @@ let s = "Koala test: 🐨"
     @test transcode(UInt32, s) == UInt32[75,111,97,108,97,32,116,101,115,116,58,32,128040]
     for T in (UInt8,UInt16,UInt32,Cwchar_t)
         @test transcode(Compat.String, transcode(T, s)) == s
-        @test transcode(UInt8, transcode(T, s)) == Vector{UInt8}(s)
-        @test transcode(T, s) == transcode(T, Vector{UInt8}(s)) == transcode(T, transcode(T, s))
+        @test transcode(UInt8, transcode(T, s)) == codeunits(s)
+        @test transcode(T, s) == transcode(T, codeunits(s)) == transcode(T, transcode(T, s))
     end
 end
 
 # julia#17155, tests from Base Julia
 @test (Compat.Unicode.uppercase∘hex)(239487) == "3A77F"
 let str = "aBcDeFgHiJ"
-    @test filter(!Compat.Unicode.isupper, str) == replace(str, r"[A-Z]", "")
-    @test filter(!Compat.Unicode.islower, str) == replace(str, r"[a-z]", "")
+    @test filter(!Compat.Unicode.isupper, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!Compat.Unicode.islower, str) == replace(str, r"[a-z]" => "")
 end
 
 # julia#19950, tests from Base (#20028)
@@ -390,6 +390,11 @@ eval(Expr(
 @test !Compat.TypeUtils.isabstract(StridedArray)
 @test Compat.TypeUtils.parameter_upper_bound(ConcreteFoo20006, 1) == Int
 @test isa(Compat.TypeUtils.typename(Array), TypeName)
+@test isabstracttype(AbstractFoo20006)
+@test !isabstracttype(ConcreteFoo20006)
+@test !isabstracttype(ConcreteFoo20006N)
+@test !isabstracttype(ConcreteFoo200061)
+@test !isabstracttype(StridedArray)
 
 # @view and @views tests copied from Base
 let X = reshape(1:24,2,3,4), Y = 4:-1:1
@@ -590,8 +595,8 @@ end
 
 # PR 20203
 @test Compat.readline(IOBuffer("Hello, World!\n")) == "Hello, World!"
-@test Compat.readline(IOBuffer("x\n"), chomp=true) == "x"
-@test Compat.readline(IOBuffer("x\n"), chomp=false) == "x\n"
+@test Compat.readline(IOBuffer("x\n"), keep=false) == "x"
+@test Compat.readline(IOBuffer("x\n"), keep=true) == "x\n"
 
 # PR 18727
 let
@@ -717,9 +722,9 @@ for T in (Float64, ComplexF32, BigFloat, Int)
 end
 
 let
-    @compat cr(::CartesianRange{2}) = 2
-    @test cr(CartesianRange((5, 3))) == 2
-    @test_throws MethodError cr(CartesianRange((5, 3, 2)))
+    @compat cr(::CartesianIndices{2}) = 2
+    @test cr(CartesianIndices((5, 3))) == 2
+    @test_throws MethodError cr(CartesianIndices((5, 3, 2)))
 end
 if VERSION < v"0.7.0-DEV.880"
     # ensure we don't bork any non-updated expressions
@@ -771,7 +776,7 @@ end
 
 let
     A14 = [11 13; 12 14]
-    R = CartesianRange(indices(A14))
+    R = CartesianIndices(Compat.axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
@@ -888,7 +893,7 @@ if VERSION >= v"0.6"
 end
 
 # 0.7
-@test isconcrete(Int)
+@test isconcretetype(Int)
 
 # 0.7
 module Test23876
@@ -896,10 +901,12 @@ module Test23876
     using Compat.Test
     import Compat.DelimitedFiles
     using Compat.Mmap, Compat.SharedArrays
+    using Compat.Distributed
     @test isdefined(@__MODULE__, :DelimitedFiles)
     @test isdefined(SharedArrays, :SharedArray)
     @test isdefined(@__MODULE__, :SharedArray)
     @test isdefined(@__MODULE__, :procs)
+    @test isdefined(@__MODULE__, :remote_do)
     @test isdefined(Mmap, :mmap)
 end
 
@@ -1010,7 +1017,7 @@ let A = [1]
     finalize(A)
     @test x == 1
     A = 0
-    gc(); gc()
+    GC.gc(); GC.gc()
     @test x == 1
 end
 
@@ -1059,8 +1066,8 @@ end
 # 0.7.0-DEV.3017
 @test isa(Some(1), Some{Int})
 @test convert(Some{Float64}, Some(1)) == Some(1.0)
-@test convert(Void, nothing) == nothing
-@test_throws MethodError convert(Void, 1)
+@test convert(Nothing, nothing) == nothing
+@test_throws MethodError convert(Nothing, 1)
 @test Some(nothing) != nothing
 @test coalesce(Some(1)) == 1
 @test coalesce(nothing) == nothing
@@ -1279,6 +1286,13 @@ module TestSerialization
     @test isdefined(@__MODULE__, :deserialize)
     @test isdefined(@__MODULE__, :SerializationState)
 end
+
+# 0.7.0-DEV.3469
+@test GC.enable(true)
+@test GC.enable(false)
+@test !GC.enable(false)
+@test !GC.enable(true)
+@test GC.enable(true)
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")

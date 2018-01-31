@@ -125,6 +125,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.Serialization` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#25628]).
 
+* `using Compat.Distributed` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#24443]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -159,7 +162,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Compat.isapprox` with `nans` keyword argument ([#20022])
 
-* `Compat.readline` with `chomp` keyword argument ([#20203])
+* `Compat.readline` with `keep` keyword argument ([#25646])
 
 * `take!` method for `Task`s since some functions now return `Channel`s instead of `Task`s ([#19841])
 
@@ -281,8 +284,6 @@ Currently, the `@compat` macro supports the following syntaxes:
   `MathConstants` module (available as `Compat.MathConstants`).
   The name exported from `Base` for `e` is changed to `ℯ`. ([#23427])
 
-* `isleaftype` is now `isconcrete` ([#23666])
-
 * `IntSet` is now `BitSet` ([#24282])
 
 * `Complex32`, `Complex64`, and `Complex128` are now `ComplexF16`, `ComplexF32`, and
@@ -317,6 +318,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `find` is now `findall` ([#25545]).
 
 * `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
+
+* `isabstract` and `isleaftype` are now `isabstracttype` and `isconcretetype`, respectively
+  ([#23666], [#25496]).
+
+* `gc` and `gc_enable` are now `GC.gc` and `GC.enable`, respectively ([#25616]).
 
 ## New macros
 
@@ -431,7 +437,6 @@ includes this fix. Find the minimum version from there.
 [#20005]: https://github.com/JuliaLang/julia/issues/20005
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
-[#20203]: https://github.com/JuliaLang/julia/issues/20203
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20407]: https://github.com/JuliaLang/julia/issues/20407
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
@@ -472,6 +477,7 @@ includes this fix. Find the minimum version from there.
 [#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24361]: https://github.com/JuliaLang/julia/issues/24361
 [#24372]: https://github.com/JuliaLang/julia/issues/24372
+[#24443]: https://github.com/JuliaLang/julia/issues/24443
 [#24459]: https://github.com/JuliaLang/julia/issues/24459
 [#24490]: https://github.com/JuliaLang/julia/issues/24490
 [#24605]: https://github.com/JuliaLang/julia/issues/24605
@@ -499,11 +505,14 @@ includes this fix. Find the minimum version from there.
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
+[#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
+[#25646]: https://github.com/JuliaLang/julia/issues/25646
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#24182]: https://github.com/JuliaLang/julia/issues/24182

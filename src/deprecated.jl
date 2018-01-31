@@ -170,7 +170,7 @@ end
     Base.@deprecate_binding UTF8String Core.String
     Base.@deprecate_binding ASCIIString Core.String
     Base.@deprecate_binding unsafe_convert Base.unsafe_convert
-    Base.@deprecate_binding remote_do Base.remote_do
+    Base.@deprecate_binding remote_do Distributed.remote_do
     Base.@deprecate_binding Filesystem Base.Filesystem
     Base.@deprecate_binding AsyncCondition Base.AsyncCondition
     Base.@deprecate_binding promote_eltype_op Base.promote_eltype_op

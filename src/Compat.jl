@@ -391,18 +391,15 @@ else
     import Base.isapprox
 end
 
+@static if !isdefined(Base, :isabstracttype) # VERSION < v"0.7.0-DEV.3475"
+    const isabstracttype = Base.isabstract
+    export isabstracttype
+end
+
 module TypeUtils
-    @static if isdefined(Base, :isabstract)
-        using Base: isabstract, parameter_upper_bound, typename
-    else
-        isabstract(t::DataType) = t.abstract
-        if isdefined(Base, :TypeConstructor)
-            isabstract(t::TypeConstructor) = isabstract(t.body)
-        end
-        isabstract(t::ANY) = false
-        parameter_upper_bound(t::DataType, idx) = t.parameters[idx].ub
-        typename(t::DataType) = t.name
-    end
+    using Base: parameter_upper_bound, typename
+    using Compat: isabstracttype
+    const isabstract = isabstracttype
     export isabstract, parameter_upper_bound, typename
 end # module TypeUtils
 
@@ -449,16 +446,11 @@ if VERSION < v"0.6.0-dev.1653"
     end
 end
 
-# https://github.com/JuliaLang/julia/pull/20203
-@static if VERSION < v"0.6.0-dev.2283"
+# https://github.com/JuliaLang/julia/pull/25646
+@static if VERSION < v"0.7.0-DEV.3510"
     # not exported
-    function readline(s::IO=STDIN; chomp::Bool=true)
-        if chomp
-            Base.chomp!(Base.readline(s))
-        else
-            Base.readline(s)
-        end
-    end
+    # chomp parameter preserved for compatibility with earliear Compat versions
+    readline(s::IO=STDIN; chomp::Bool=true, keep::Bool=!chomp) = Base.readline(s; chomp=!keep)
 end
 
 # https://github.com/JuliaLang/julia/pull/18727
@@ -740,10 +732,18 @@ if VERSION < v"0.7.0-DEV.1325"
     end
 end
 
-# 0.7.0-DEV.1775
-@static if !isdefined(Base, :isconcrete)
-    const isconcrete = isleaftype
-    export isconcrete
+
+# 0.7.0-DEV.3475
+@static if !isdefined(Base, :isconcretetype)
+    # 0.7.0-DEV.1775
+    @static if !isdefined(Base, :isconcrete)
+        const isconcretetype = isleaftype
+        const isconcrete = isleaftype # for compatibility with earlier Compat versions
+        export isconcrete
+    else
+        const isconcretetype = isconcrete
+    end
+    export isconcretetype
 end
 
 # 0.7.0-DEV.2005
@@ -1474,6 +1474,21 @@ end
     nameof(f::Function) = Base.function_name(f)
     nameof(t::Union{DataType,UnionAll}) = Base.datatype_name(t)
     export nameof
+end
+
+# 0.7.0-DEV.3469
+@static if !isdefined(Base, :GC)
+    @eval module GC
+        using Base: gc
+        const enable = Base.gc_enable
+    end
+    export GC
+end
+
+if VERSION < v"0.7.0-DEV.2954"
+    const Distributed = Base.Distributed
+else
+    import Distributed
 end
 
 include("deprecated.jl")
