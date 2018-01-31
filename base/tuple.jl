@@ -253,10 +253,11 @@ end
 
 ## comparison ##
 
-function isequal(t1::Tuple, t2::Tuple)
-    if length(t1) != length(t2)
-        return false
-    end
+isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
+_isequal(t1::Tuple{}, t2::Tuple{}) = true
+_isequal(t1::Tuple{Any}, t2::Tuple{Any}) = isequal(t1[1], t2[1])
+_isequal(t1::Tuple, t2::Tuple) = isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
+function _isequal(t1::Any16, t2::Any16)
     for i = 1:length(t1)
         if !isequal(t1[i], t2[i])
             return false
