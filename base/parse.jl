@@ -194,11 +194,11 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     return nothing
 end
 
-@inline function check_valid_base(base)
-    if 2 <= base <= 62
+@inline function check_valid_base(base, maxbase=62)
+    if 2 <= base <= maxbase
         return base
     end
-    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ $maxbase, got $base"))
 end
 
 """
@@ -252,6 +252,7 @@ function _represents_nan_or_inf(s, i, case, T)
 end
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
+    base = check_valid_base(base, 23) #do not allow base > 23: 'n' would be ambiguous
     sign, i = parsefloat_preamble(s, base)
 
     if !done(s, i+2)
@@ -266,7 +267,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
         c, i = next(s, i)
         isspace(c) && break
         c == '.' && break
-        if baseunder15 && c == 'e'
+        if baseunder15 && lowercase(c) == 'e'
             i -= 1
             break
         end
@@ -280,7 +281,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
         n -= 1
         c, i = next(s, i)
         isspace(c) && break
-        baseunder15 && c == 'e' && break
+        baseunder15 && lowercase(c) == 'e' && break
         tmp = parse(Int, c, base=base)
 
         res += tmp * b^n
