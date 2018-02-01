@@ -3124,89 +3124,90 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         # then we can use that decide the boolean just from the tag
         if isa(ty, Conditional) && isa(ty.var, Slot) && slot_id(ty.var) === key.first
             # TODO: this was the best I could do on short notice.
+            # TODO: using Conditional like this is bad,
+            #  since it is very unreliable, inaccurate, and usually not very powerful or useful
             let var
                 vtype = widenconst(ty.vtype)
                 elsetype = widenconst(ty.elsetype)
-                if haskey(alltypes, vtype)
-                    # TODO: using Conditional like this is wrong,
-                    # since we don't know that taking the vtype branch
-                    # proves that it couldn't have taken the elsetype branch
-                    v = alltypes[vtype]
-                    negate = false
-                elseif haskey(alltypes, elsetype)
-                    v = alltypes[elsetype]
-                    negate = true
-                end
-                exprs = []
-                if @isdefined v
-                    if v === false
-                        var = quoted(negate)
-                    else
-                        v = v::SlotNumber
-                        new_var = newvar!(ctx.sv, Bool)
-                        new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
-                        new_val.typ = Bool
-                        new_ex = :($new_var = $new_val)
-                        push!(exprs, new_ex)
-                        add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
-                        add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
-                        if negate
-                            neg_new_var = newvar!(ctx.sv, Bool)
-                            new_val = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), new_var)
-                            new_val.typ = Bool
-                            new_ex = :($neg_new_var = $new_val)
-                            push!(exprs, new_ex)
-                            add_def(ctx.infomap, neg_new_var, ValueDef(new_ex, exprs, length(exprs)))
-                            add_use(ctx.infomap, new_var, ValueUse(exprs, length(exprs), new_val, 2))
-                            new_var = neg_new_var
-                        end
-                        var = new_var
+                if typeintersect(vtype, elsetype) === Union{}
+                    if haskey(alltypes, vtype)
+                        v = alltypes[vtype]
+                        negate = false
+                    elseif haskey(alltypes, elsetype)
+                        v = alltypes[elsetype]
+                        negate = true
                     end
-                elseif get(alltypes, Any, false) !== false && typeintersect(vtype, elsetype) === Union{}
-                    vars = []
-                    for (t, v) in alltypes
-                        v === false && continue
-                        v = v::SlotNumber
-                        if t <: vtype && t <: usetyp
+                    exprs = []
+                    if @isdefined v
+                        if v === false
+                            var = quoted(negate)
+                        else
+                            v = v::SlotNumber
                             new_var = newvar!(ctx.sv, Bool)
                             new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
                             new_val.typ = Bool
                             new_ex = :($new_var = $new_val)
                             push!(exprs, new_ex)
-                            push!(vars, new_var)
                             add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
                             add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
-                        end
-                    end
-                    if isempty(vars)
-                        var = quoted(false)
-                    else
-                        var = vars[1]
-                        for var_i in 2:length(vars)
-                            new_val = Expr(:call, GlobalRef(Core.Intrinsics, :or_int), var, vars[var_i])
-                            new_val.typ = Bool
-                            new_var = newvar!(ctx.sv, Bool)
-                            new_ex = :($new_var = $new_val)
-                            push!(exprs, new_ex)
-                            add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
-                            add_use(ctx.infomap, var, ValueUse(exprs, length(exprs), new_val, 2))
-                            add_use(ctx.infomap, vars[var_i], ValueUse(exprs, length(exprs), new_val, 3))
+                            if negate
+                                neg_new_var = newvar!(ctx.sv, Bool)
+                                new_val = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), new_var)
+                                new_val.typ = Bool
+                                new_ex = :($neg_new_var = $new_val)
+                                push!(exprs, new_ex)
+                                add_def(ctx.infomap, neg_new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, new_var, ValueUse(exprs, length(exprs), new_val, 2))
+                                new_var = neg_new_var
+                            end
                             var = new_var
                         end
+                    elseif get(alltypes, Any, false) !== false
+                        vars = []
+                        for (t, v) in alltypes
+                            v === false && continue
+                            v = v::SlotNumber
+                            if t <: vtype && t <: usetyp
+                                new_var = newvar!(ctx.sv, Bool)
+                                new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                                new_val.typ = Bool
+                                new_ex = :($new_var = $new_val)
+                                push!(exprs, new_ex)
+                                push!(vars, new_var)
+                                add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                            end
+                        end
+                        if isempty(vars)
+                            var = quoted(false)
+                        else
+                            var = vars[1]
+                            for var_i in 2:length(vars)
+                                new_val = Expr(:call, GlobalRef(Core.Intrinsics, :or_int), var, vars[var_i])
+                                new_val.typ = Bool
+                                new_var = newvar!(ctx.sv, Bool)
+                                new_ex = :($new_var = $new_val)
+                                push!(exprs, new_ex)
+                                add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, var, ValueUse(exprs, length(exprs), new_val, 2))
+                                add_use(ctx.infomap, vars[var_i], ValueUse(exprs, length(exprs), new_val, 3))
+                                var = new_var
+                            end
+                        end
+                    else
+                        # TODO: handle this case explicitly?
                     end
-                else
-                    # TODO: handle this case explicitly?
-                end
-                if @isdefined var
-                    replace_use_expr_with!(ctx, use, var, false)
-                    if !isempty(exprs)
-                        old_expr = use.stmts[use.stmtidx]
-                        push!(exprs, old_expr)
-                        use.stmts[use.stmtidx] = exprs
-                        scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
-                        ctx.changes[use.stmts=>use.stmtidx] = nothing
+                    if @isdefined var
+                        replace_use_expr_with!(ctx, use, var, false)
+                        if !isempty(exprs)
+                            old_expr = use.stmts[use.stmtidx]
+                            push!(exprs, old_expr)
+                            use.stmts[use.stmtidx] = exprs
+                            scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+                            ctx.changes[use.stmts=>use.stmtidx] = nothing
+                        end
+                        continue
                     end
-                    continue
                 end
             end # let
         end # if Conditional
