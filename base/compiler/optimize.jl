@@ -2457,7 +2457,11 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+function check_valid(def::ValueDef, changes::IdDict)
+    haskey(changes, def.stmts=>def.stmtidx) && return false
+    isdefined(def, :assign) && haskey(changes, def.assign) && return false
+    return true
+end
 
 
 function remove_invalid!(info::ValueInfo, changes::IdDict)
