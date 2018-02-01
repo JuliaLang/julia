@@ -3338,7 +3338,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         end
                     end
                     if !@isdefined slot_var
-                        slot_var = quoted(false)
+                        slot_var = false
                     end
                     let v = get(alltypes, Any, false)
                         if v !== false && (!isconcretedispatch(T) || !haskey(alltypes, T))
@@ -3347,7 +3347,9 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                             new_ex = :($new_slot_var = $slot_var)
                             push!(exprs, new_ex)
                             add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
-                            add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs)))
+                            if !isa(slot_var, Bool)
+                                add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs)))
+                            end
                             new_test = newvar!(ctx.sv, Bool)
                             new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
                             new_val.typ = Bool
