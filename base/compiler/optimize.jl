@@ -3198,7 +3198,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         # TODO: handle this case explicitly?
                     end
                     if @isdefined var
-                        replace_use_expr_with!(ctx, use, var, false)
+                        replace_use_expr_with!(ctx, use, var, false, isempty(exprs))
                         if !isempty(exprs)
                             old_expr = use.stmts[use.stmtidx]
                             push!(exprs, old_expr)
@@ -3251,7 +3251,6 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         v = v::SlotNumber
                         if @isdefined slot_var
                             new_slot_var = add_slot!(ctx.sv.src, DataType, false, name)
-                            ctx.sv.src.slotflags[new_slot_var.id] = flags
                             new_ex = :($new_slot_var = $slot_var)
                             push!(exprs, new_ex)
                             add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
@@ -3270,6 +3269,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                             push!(exprs, new_ex)
                             add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
                             slot_val = Expr(:call, GlobalRef(Core, :typeof), v)
+                            slot_val.typ = DataType
                             new_ex = :($new_slot_var = $slot_val)
                             push!(exprs, new_ex)
                             add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
@@ -3291,7 +3291,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                     ctx.sv.src.slotflags[slot_var.id] = SLOT_USEDUNDEF | SLOT_STATICUNDEF
                 end
                 # replace old expression with new and update metadata
-                replace_use_expr_with!(ctx, use, slot_var, false)
+                replace_use_expr_with!(ctx, use, slot_var, false, isempty(exprs))
                 if !isempty(exprs)
                     old_expr = use.stmts[use.stmtidx]
                     push!(exprs, old_expr)
@@ -3344,7 +3344,6 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         if v !== false && (!isconcretedispatch(T) || !haskey(alltypes, T))
                             v = v::SlotNumber
                             new_slot_var = add_slot!(ctx.sv.src, Bool, false, name)
-                            ctx.sv.src.slotflags[new_slot_var.id] = flags
                             new_ex = :($new_slot_var = $slot_var)
                             push!(exprs, new_ex)
                             add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
@@ -3361,6 +3360,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                             push!(exprs, new_ex)
                             add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
                             slot_val = Expr(:call, GlobalRef(Core, :isa), v, T_expr)
+                            slot_val.typ = Bool
                             new_ex = :($new_slot_var = $slot_val)
                             push!(exprs, new_ex)
                             add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
@@ -3373,7 +3373,8 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         end
                     end
                     # replace old expression with new and update metadata
-                    replace_use_expr_with!(ctx, use, slot_var, false)
+                    slot_var = quoted(23431)
+                    replace_use_expr_with!(ctx, use, slot_var, false, isempty(exprs))
                     if !isempty(exprs)
                         old_expr = use.stmts[use.stmtidx]
                         push!(exprs, old_expr)
