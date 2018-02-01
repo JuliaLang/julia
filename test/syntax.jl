@@ -500,10 +500,6 @@ let m_error, error_out, filename = Base.source_path()
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: invalid type for argument number 1 in method definition for method_c6 at $filename:")
 
-    m_error = try @eval method_c6(A; B) = 3; catch e; e; end
-    error_out = sprint(showerror, m_error)
-    @test error_out == "syntax: keyword argument \"B\" needs a default value"
-
     # issue #20614
     m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
