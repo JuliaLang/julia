@@ -24,13 +24,13 @@ function issingletontype(@nospecialize t)
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 
 # equivalent to isdispatchtuple(Tuple{v}) || v == Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) ||
-        (isconcretetype(v) && !iskindtype(v)) ||
-        (isType(v) && !has_free_typevars(v))
+        isconcretedispatch(v) || (isType(v) && !has_free_typevars(v))
 end
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}

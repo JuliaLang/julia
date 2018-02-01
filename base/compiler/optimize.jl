@@ -878,8 +878,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            isconcretetype(typ) || return false
-            !iskindtype(typ) || return false
+            isconcretedispatch(typ) || return false
             typ = typ::DataType
             if !allow_volatile && typ.mutable
                 return false
@@ -2786,7 +2785,7 @@ function filter_defs!(ctx::AllocOptContext, info, key)
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
             usetyp === Union{} && continue
-            if isdispatchelem(usetyp)
+            if isconcretedispatch(usetyp)
                 alltypes[usetyp] = nothing
             else
                 nonleaf_slottype = tmerge(nonleaf_slottype, usetyp)
@@ -2796,7 +2795,7 @@ function filter_defs!(ctx::AllocOptContext, info, key)
             return false
         end
     end
-    if slottype == nonleaf_slottype
+    if slottype <: nonleaf_slottype
         return false
     end
     recomputed = false
@@ -2807,8 +2806,27 @@ function filter_defs!(ctx::AllocOptContext, info, key)
         assign = assign::Expr
         defex = assign.args[2]
         rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
-        if rhstyp === Union{} || (isdispatchelem(rhstyp) ? !haskey(alltypes, rhstyp) : typeintersect(rhstyp, nonleaf_slottype) === Union{})
-            # this def has no places it can be seen, so it can be dropped
+        rhstyp === Any && continue
+        if rhstyp === Union{}
+            unused = true
+        else
+            if isconcretedispatch(rhstyp)
+                unused = !haskey(alltypes, rhstyp)
+            else
+                unused = true
+                for (t, v) in alltypes
+                    if (t <: rhstyp)
+                        unused = false
+                        break
+                    end
+                end
+            end
+            if unused
+                unused = (typeintersect(rhstyp, nonleaf_slottype) === Union{})
+            end
+        end
+        if unused
+            # this def has no places it can be seen from a use, so it can be dropped
             recomputed = true
             def.stmts[def.stmtidx] = defex
             scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
@@ -2826,7 +2844,7 @@ function filter_defs!(ctx::AllocOptContext, info, key)
                 usex = use.expr
                 haskey(ctx.changes, usex) && continue
                 slot = use.expr.args[use.exidx]::TypedSlot
-                if new_slottype <: slot.typ
+                if new_slottype ⊑ slot.typ
                     use.expr.args[use.exidx] = SlotNumber(slot.id)
                 end
             end
@@ -2839,7 +2857,8 @@ end
 function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     key.second && return false # only split Slot (not SSAValue)
     slottype = widenconst(ctx.sv.src.slottypes[key.first])
-    isdispatchelem(slottype) && return false # no splitting can be necessary
+    isconcretetype(slottype) && return false # no splitting can be necessary
+    (slottype <: Type) && return false # no splitting can be done
     flags = ctx.sv.src.slotflags[key.first]
     (flags & SLOT_USEDUNDEF == 0) || return false # skip possibly-undef values
     alltypes = IdDict()
@@ -2851,13 +2870,13 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
             if isa(use_etyp, Conditional) && isa(use_etyp.var, Slot) && slot_id(use_etyp.var) === key.first
                 vtype = widenconst(use_etyp.vtype)
                 elsetype = widenconst(use_etyp.elsetype)
-                if isdispatchelem(vtype)
+                if isconcretedispatch(vtype)
                     alltypes[vtype] = false
                 end
-                if isdispatchelem(elsetype)
+                if isconcretedispatch(elsetype)
                     alltypes[elsetype] = false
                 end
-                if !isdispatchelem(vtype) || !isdispatchelem(elsetype)
+                if !isconcretedispatch(vtype) || !isconcretedispatch(elsetype)
                     alltypes[Any] = false
                 end
             else
@@ -2866,7 +2885,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                     usetyp = widenconst(slot.typ)
                     usetyp === Union{} && continue
                     splittable = true
-                    isdispatchelem(usetyp) || (usetyp = Any)
+                    isconcretedispatch(usetyp) || (usetyp = Any)
                 end
                 alltypes[usetyp] = false
             end
@@ -2879,21 +2898,25 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     let ndefs, deftypes
         ndefs = length(info.defs)
         deftypes = Vector{Any}(uninitialized, ndefs)
-        # see if all defs are splittable
+        # see if any defs are profitable to split
         # if there are any non-leaf elements, join them all into one bucket
-        # after checking that they are all disjoint from the leaftype defs
-        for i in 1:ndefs
-            def = info.defs[i]
-            assign = def.assign::Expr
-            defex = assign.args[2]
-            rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
-            deftypes[i] = rhstyp
-            rhstyp === Union{} && continue
-            isdispatchelem(rhstyp) || (rhstyp = Any)
-            alltypes[rhstyp] = true
-        end
-        if length(alltypes) <= 1
-            return false # odd: found nothing to split
+        let splittable = false
+            for i in 1:ndefs
+                def = info.defs[i]
+                assign = def.assign::Expr
+                defex = assign.args[2]
+                rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+                deftypes[i] = rhstyp
+                rhstyp === Union{} && continue
+                isconcretedispatch(rhstyp) || (rhstyp = Any)
+                alltypes[rhstyp] = true
+                if isconcretedispatch(rhstyp) #|| isa(defex, Slot)
+                    splittable = true
+                end
+            end
+            if !splittable || length(alltypes) <= 1
+                return false # odd: found nothing to split
+            end
         end
         # see if it's not obvious that all of the uses
         # won't need to look at the type tag, allocate it now
@@ -2902,7 +2925,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
             slot = use.expr.args[use.exidx]
             if isa(slot, TypedSlot)
                 usetyp = widenconst(slot.typ)
-                if !isdispatchelem(usetyp)
+                if !isconcretedispatch(usetyp)
                     need_tag = true
                     break
                 end
@@ -2918,7 +2941,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 for i in 1:ndefs
                     rhstyp = deftypes[i]
                     rhstyp === Union{} && continue
-                    if !isdispatchelem(rhstyp)
+                    if !isconcretedispatch(rhstyp)
                         nonleaf_slottype = tmerge(nonleaf_slottype, rhstyp)
                     end
                 end
@@ -2947,7 +2970,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
                 continue
             end
-            if isdispatchelem(rhstyp) # splittable def
+            if isconcretedispatch(rhstyp) # splittable def
                 new_slot = alltypes[rhstyp]
                 # update use and infomap
                 assign.args[1] = new_slot::SlotNumber
@@ -3043,7 +3066,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 # replace old def expression with new exprs list and update metadata
                 def.stmts[def.stmtidx] = exprs
                 ctx.changes[def.stmts=>def.stmtidx] = nothing
-            end # if isdispatchelem
+            end # if isconcretedispatch
         end # foreach defs
     end # let defs
     # update uses to load from the correct type slot
@@ -3063,7 +3086,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
             issplit = true
-            if !isdispatchelem(usetyp)
+            if !isconcretedispatch(usetyp)
                 # see if the usetyp must be in the Any bucket
                 # or could be one of the split assignments
                 for (t, v) in alltypes
@@ -3078,7 +3101,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
             if issplit
                 # if we know the load type precisely selects one bucket,
                 # select just that def
-                new_slot = alltypes[isdispatchelem(usetyp) ? usetyp : Any]
+                new_slot = alltypes[isconcretedispatch(usetyp) ? usetyp : Any]
                 if new_slot === false
                     # add an always-undef slot
                     new_slot = add_slot!(ctx.sv.src, usetyp, false, name)
@@ -3086,7 +3109,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                     # TODO: do we need to emit NewvarNode(new_slot) before the uses?
                 else
                     new_slot = new_slot::SlotNumber
-                    if !isdispatchelem(usetyp) && usetyp !== Any && usetyp != nonleaf_slottype
+                    if !isconcretedispatch(usetyp) && usetyp !== Any && usetyp != nonleaf_slottype
                         new_slot = TypedSlot(new_slot.id, usetyp)
                     end
                 end
@@ -3470,7 +3493,7 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
             elseif defex.head === :new
                 typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
                 # typ <: Tuple shouldn't happen but just in case someone generated invalid AST
-                if !isa(typ, DataType) || !isconcretetype(typ) || iskindtype(typ) || typ <: Tuple
+                if !isa(typ, DataType) || !isconcretedispatch(typ) || typ <: Tuple
                     return false
                 end
                 si = structinfo_new(ctx, defex, typ)
