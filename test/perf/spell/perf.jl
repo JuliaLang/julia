@@ -71,7 +71,7 @@ end
 ################ Testing code from here on ################
 
 function spelltest(tests; bias=0, verbose=false)
-    n, bad, unknown, start = 0, 0, 0, tic()
+    n, bad, unknown, start = 0, 0, 0, time_ns()
     if bias > 0
         for target in keys(tests)
             NWORDS[target] = get(NWORDS, target, 1) + bias
@@ -93,7 +93,7 @@ function spelltest(tests; bias=0, verbose=false)
     end
 
     return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100. * bad/n),
-                "unknown"=>unknown, "secs"=>toc())
+                "unknown"=>unknown, "secs"=>(time_ns() - start)/1e9)
 end
 
 const tests1 = Dict("access"=> "acess", "accessing"=> "accesing", "accommodation"=>

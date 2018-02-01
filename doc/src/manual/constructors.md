@@ -80,7 +80,7 @@ objects. For these problems, one needs *inner* constructor methods. An inner con
 is much like an outer constructor method, with two differences:
 
 1. It is declared inside the block of a type declaration, rather than outside of it like normal methods.
-2. It has access to a special locally existent function called `new` that creates objects of the
+2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
    block's type.
 
 For example, suppose one wants to declare a type that holds a pair of real numbers, subject to
@@ -93,7 +93,6 @@ julia> struct OrderedPair
            y::Real
            OrderedPair(x,y) = x > y ? error("out of order") : new(x,y)
        end
-
 ```
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
@@ -190,7 +189,7 @@ for its `obj` field? The only solution is to allow creating an incompletely init
 of `SelfReferential` with an unassigned `obj` field, and using that incomplete instance as a valid
 value for the `obj` field of another instance, such as, for example, itself.
 
-To allow for the creation of incompletely initialized objects, Julia allows the `new` function
+To allow for the creation of incompletely initialized objects, Julia allows the [`new`](@ref) function
 to be called with fewer than the number of fields that the type has, returning an object with
 the unspecified fields uninitialized. The inner constructor method can then use the incomplete
 object, finishing its initialization before returning it. Here, for example, we take another crack
@@ -301,7 +300,7 @@ Point{Int64}(1, 2)
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError: convert(Int64, 2.5)
 Stacktrace:
- [1] convert at ./float.jl:681 [inlined]
+ [1] convert at ./float.jl:703 [inlined]
  [2] Point{Int64}(::Float64, ::Float64) at ./none:2
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
@@ -354,7 +353,7 @@ following additional outer constructor method:
 julia> Point(x::Int64, y::Float64) = Point(convert(Float64,x),y);
 ```
 
-This method uses the [`convert()`](@ref) function to explicitly convert `x` to [`Float64`](@ref)
+This method uses the [`convert`](@ref) function to explicitly convert `x` to [`Float64`](@ref)
 and then delegates construction to the general constructor for the case where both arguments are
 [`Float64`](@ref). With this method definition what was previously a [`MethodError`](@ref) now
 successfully creates a point of type `Point{Float64}`:
@@ -504,29 +503,6 @@ Thus, although the [`//`](@ref) operator usually returns an instance of `OurRati
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
-
-## [Constructors and Conversion](@id constructors-and-conversion)
-
-Constructors `T(args...)` in Julia are implemented like other callable objects: methods are added
-to their types. The type of a type is `Type`, so all constructor methods are stored in the method
-table for the `Type` type. This means that you can declare more flexible constructors, e.g. constructors
-for abstract types, by explicitly defining methods for the appropriate types.
-
-However, in some cases you could consider adding methods to `Base.convert` *instead* of defining
-a constructor, because Julia falls back to calling [`convert()`](@ref) if no matching constructor
-is found. For example, if no constructor `T(args...) = ...` exists `Base.convert(::Type{T}, args...) = ...`
-is called.
-
-`convert` is used extensively throughout Julia whenever one type needs to be converted to another
-(e.g. in assignment, [`ccall`](@ref), etcetera), and should generally only be defined (or successful)
-if the conversion is lossless.  For example, `convert(Int, 3.0)` produces `3`, but `convert(Int, 3.2)`
-throws an `InexactError`.  If you want to define a constructor for a lossless conversion from
-one type to another, you should probably define a `convert` method instead.
-
-On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
-"conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
-For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
-but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors
 

@@ -15,6 +15,8 @@
 #include <sys/_structs.h>
 #endif
 
+#include "julia_assert.h"
+
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
 #ifdef JULIA_ENABLE_THREADING

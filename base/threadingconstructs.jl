@@ -25,7 +25,8 @@ function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
-        range = $(esc(range))
+        local threadsfor_fun
+        let range = $(esc(range))
         function threadsfor_fun(onethread=false)
             r = range # Load into local variable
             lenr = length(r)
@@ -63,6 +64,7 @@ function _threadsfor(iter,lbody)
                 $(esc(lbody))
             end
         end
+        end
         # Hack to make nested threaded loops kinda work
         if threadid() != 1 || in_threaded_loop[]
             # We are in a nested threaded loop
@@ -70,7 +72,7 @@ function _threadsfor(iter,lbody)
         else
             in_threaded_loop[] = true
             # the ccall is not expected to throw
-            ccall(:jl_threading_run, Ref{Void}, (Any,), threadsfor_fun)
+            ccall(:jl_threading_run, Ref{Cvoid}, (Any,), threadsfor_fun)
             in_threaded_loop[] = false
         end
         nothing

@@ -7,7 +7,7 @@ import ..esc, ..push!, ..getindex, ..unsafe_load, ..Csize_t
 function doc!(source::LineNumberNode, mod::Module, str, ex)
     push!(DOCS, (mod, ex, str, source.file, source.line))
 end
-const DOCS = Array{Any, 1}()
+const DOCS = Array{Any,1}()
 
 isexpr(x, h) = isa(x, Expr) && x.head === h
 

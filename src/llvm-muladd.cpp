@@ -13,9 +13,9 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
-#include "fix_llvm_assert.h"
 
 #include "julia.h"
+#include "julia_assert.h"
 
 using namespace llvm;
 

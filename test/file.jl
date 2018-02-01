@@ -52,6 +52,7 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
+@test !isfile(Base.Filesystem.StatStruct())
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
@@ -182,94 +183,6 @@ else
     @test chown(file, -2, -2) === nothing
 end
 
-#######################################################################
-# This section tests file watchers.                                   #
-#######################################################################
-function test_file_poll(channel,interval,timeout_s)
-    rc = poll_file(file, interval, timeout_s)
-    put!(channel,rc)
-end
-
-function test_timeout(tval)
-    tic()
-    channel = Channel(1)
-    @async test_file_poll(channel, 10, tval)
-    tr = take!(channel)
-    t_elapsed = toq()
-    @test !ispath(tr[1]) && !ispath(tr[2])
-    @test tval <= t_elapsed
-end
-
-function test_touch(slval)
-    tval = slval*1.1
-    channel = Channel(1)
-    @async test_file_poll(channel, tval/3, tval)
-    sleep(tval/3)  # one poll period
-    f = open(file,"a")
-    write(f,"Hello World\n")
-    close(f)
-    tr = take!(channel)
-    @test ispath(tr[1]) && ispath(tr[2])
-end
-
-function test_watch_file_timeout(tval)
-    watch = @async watch_file(file, tval)
-    @test wait(watch) == Base.Filesystem.FileEvent(false, false, true)
-end
-
-function test_watch_file_change(tval)
-    watch = @async watch_file(file, tval)
-    sleep(tval/3)
-    open(file, "a") do f
-        write(f, "small change\n")
-    end
-    @test wait(watch) == Base.Filesystem.FileEvent(false, true, false)
-end
-
-function test_monitor_wait(tval)
-    fm = FileMonitor(file)
-    @async begin
-        sleep(tval)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
-    end
-    fname, events = wait(fm)
-    close(fm)
-    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
-        @test fname == basename(file)
-    else
-        @test fname == ""  # platforms where F_GETPATH is not available
-    end
-    @test events.changed
-end
-
-function test_monitor_wait_poll()
-    pfw = PollingFileWatcher(file, 5.007)
-    @async begin
-        sleep(2.5)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
-    end
-    (old, new) = wait(pfw)
-    close(pfw)
-    @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
-end
-
-test_timeout(0.1)
-test_timeout(1)
-test_touch(6)
-test_monitor_wait(0.1)
-test_monitor_wait(0.1)
-test_monitor_wait_poll()
-test_monitor_wait_poll()
-test_watch_file_timeout(0.1)
-test_watch_file_change(6)
-
-@test_throws Base.UVError watch_file("____nonexistent_file", 10)
-@test_throws Base.UVError poll_file("____nonexistent_file", 2, 10)
-
 ##############
 # mark/reset #
 ##############
@@ -305,10 +218,10 @@ close(s)
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
-path = tempname()
-# Issue #9053.
-@test ispath(path) == Sys.iswindows()
-ispath(path) && rm(path)
+let path = tempname()
+    # issue #9053
+    @test !ispath(path)
+end
 
 (p, f) = mktemp()
 print(f, "Here is some text")
@@ -339,7 +252,7 @@ end
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
-@test isempty(readlines(emptyf, chomp=false))
+@test isempty(readlines(emptyf, keep=true))
 close(emptyf)
 rm(emptyfile)
 
@@ -903,8 +816,8 @@ end
 ###################
 
 function test_LibcFILE(FILEp)
-    buf = Array{UInt8}(8)
-    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
+    buf = Vector{UInt8}(uninitialized, 8)
+    str = ccall(:fread, Csize_t, (Ptr{Cvoid}, Csize_t, Csize_t, Ptr{Cvoid}), buf, 1, 8, FILEp)
     @test String(buf) == "Hello, w"
     @test position(FILEp) == 8
     seek(FILEp, 5)
@@ -916,7 +829,7 @@ let f = open(file, "w")
     write(f, "Hello, world!")
     close(f)
     f = open(file, "r")
-    test_LibcFILE(convert(Libc.FILE, f))
+    test_LibcFILE(Libc.FILE(f))
     close(f)
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
@@ -930,7 +843,8 @@ end
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
-        issetuid, issocket, issticky, realpath, watch_file, poll_file)
+        issetuid, issocket, issticky, realpath)
+    local f
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
@@ -1077,77 +991,66 @@ let n = tempname()
     rm(n)
 end
 
-#issue #12992
-function test_12992()
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    gc()
-    gc()
-end
-
-# Make sure multiple close is fine
-function test2_12992()
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    gc()
-    gc()
-end
-
-test_12992()
-test_12992()
-test_12992()
-
-test2_12992()
-test2_12992()
-test2_12992()
-
 # issue 13559
 if !Sys.iswindows()
 function test_13559()
     fn = tempname()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
-    writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
-    open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR))
-    #quickly read FIFO, draining it and blocking but not failing with EOFError yet
+    writer_cmds = """
+        using Test
+        x = open($(repr(fn)), "w")
+        for i in 1:120
+            write(x, 0xaa)
+        end
+        flush(x)
+        Test.@test read(STDIN, Int8) == 31
+        for i in 1:7
+            write(x, 0xaa)
+        end
+        close(x)
+    """
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR), "w")
+    # quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
-    for i=1:15
-        @test read(r, Int64) == -6148914691236517206
+    for i in 1:15
+        @test read(r, UInt64) === 0xaaaaaaaaaaaaaaaa
     end
-    # last read should throw EOFError when FIFO closes, since there are only 7 bytes available.
-    @test_throws EOFError read(r, Int64)
+    write(p, 0x1f)
+    # last read should throw EOFError when FIFO closes, since there are only 7 bytes (or less) available.
+    @test_throws EOFError read(r, UInt64)
     close(r)
+    @test success(p)
     rm(fn)
 end
 test_13559()
 end
-@test_throws ArgumentError mkpath("fakepath",-1)
+@test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 # issue #22566
-if !Sys.iswindows()
+# issue #24037 (disabling on FreeBSD)
+if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
     function test_22566()
         fn = tempname()
         run(`mkfifo $fn`)
 
-        script = "x = open(\"$fn\", \"w\"); close(x)"
+        script = """
+            using Test
+            x = open($(repr(fn)), "w")
+            write(x, 0x42)
+            flush(x)
+            Test.@test read(STDIN, Int8) == 21
+            close(x)
+        """
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        open(pipeline(cmd, stderr=STDERR))
+        p = open(pipeline(cmd, stderr=STDERR), "w")
 
         r = open(fn, "r")
+        @test read(r, Int8) == 66
+        write(p, 0x15)
         close(r)
-
+        @test success(p)
         rm(fn)
     end
 

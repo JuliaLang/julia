@@ -5,12 +5,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,7 +157,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
@@ -180,6 +180,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
@@ -435,11 +436,16 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
-         !(a->maxsize+sizeof(void*)+1 > GC_MAX_SZCLASS && jl_array_nrows(a)+sizeof(void*)+1 <= GC_MAX_SZCLASS))) {
+         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (jl_array_len(a) + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
             *(size_t*)o = jl_array_len(a);
+            a->nrows = 0;
+#ifdef STORE_ARRAY_LEN
+            a->length = 0;
+#endif
+            a->maxsize = 0;
             return o;
         }
     }
@@ -494,64 +500,36 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
-    jl_value_t *elt;
-    if (!a->flags.ptrarray) {
-        jl_value_t *eltype = (jl_value_t*)jl_tparam0(jl_typeof(a));
-        if (jl_is_uniontype(eltype)) {
-            // isbits union selector bytes are always stored directly after the last array element
-            uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
-            eltype = jl_nth_union_component(eltype, sel);
-            if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
-                return ((jl_datatype_t*)eltype)->instance;
-        }
-        elt = jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
-    }
-    else {
-        elt = ((jl_value_t**)a->data)[i];
-        if (elt == NULL) {
-            jl_throw(jl_undefref_exception);
-        }
+    assert(a->flags.ptrarray);
+    jl_value_t *elt = ((jl_value_t**)a->data)[i];
+    if (elt == NULL) {
+        jl_throw(jl_undefref_exception);
     }
     return elt;
 }
 
-JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
+
+JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray)
-        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
-    return 1;
+        return jl_ptrarrayref(a, i);
+    assert(i < jl_array_len(a));
+    jl_value_t *eltype = (jl_value_t*)jl_tparam0(jl_typeof(a));
+    if (jl_is_uniontype(eltype)) {
+        // isbits union selector bytes are always stored directly after the last array element
+        uint8_t sel = ((uint8_t*)a->data)[jl_array_len(a) * a->elsize + i];
+        eltype = jl_nth_union_component(eltype, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
+            return ((jl_datatype_t*)eltype)->instance;
+    }
+    return jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]);
 }
 
-int jl_array_isdefined(jl_value_t **args0, int nargs)
+JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
-    assert(jl_is_array(args0[0]));
-    jl_depwarn("`isdefined(a::Array, i::Int)` is deprecated, "
-               "use `isassigned(a, i)` instead", (jl_value_t*)jl_symbol("isdefined"));
-
-    jl_array_t *a = (jl_array_t*)args0[0];
-    jl_value_t **args = &args0[1];
-    size_t nidxs = nargs-1;
-    size_t i=0;
-    size_t k, stride=1;
-    size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
-        if (!jl_is_long(args[k]))
-            jl_type_error("isdefined", (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
-        i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
-            return 0;
-        stride *= d;
-    }
-    for(; k < nd; k++)
-        stride *= jl_array_dim(a, k);
-    if (i >= stride)
-        return 0;
-
     if (a->flags.ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
     return 1;
@@ -616,7 +594,8 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         nbytes++;
         oldnbytes++;
     }
-    if (!a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)))) {
+    int is_discriminated_union = !a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)));
+    if (is_discriminated_union) {
         nbytes += newlen;
         oldnbytes += oldlen;
     }
@@ -627,15 +606,15 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
                                         a->flags.isaligned, (jl_value_t*)a);
     }
-    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
+    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a)) && !is_discriminated_union) {
         // if data is in a String, keep it that way
         jl_value_t *s;
         if (a->flags.isshared) {
-            s = jl_alloc_string(nbytes);
+            s = jl_alloc_string(nbytes - (elsz == 1));
             newbuf = 1;
         }
         else {
-            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes);
+            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes - (elsz == 1));
         }
         jl_array_data_owner(a) = s;
         jl_gc_wb(a, s);
@@ -941,7 +920,9 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
                 memset(newdata + nbtotal + idx, 0, dec);
             }
         }
-        memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
+        // Move the rest of the data if the offset changed
+        if (newoffs != offset)
+            memmove(newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
         if (isbitsunion) {
             memmove(newdata + nbtotal + idx, olddata + n * elsz + idx + dec, n - idx);
         }
@@ -1091,14 +1072,6 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
 JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
                                     jl_array_t *src, void **src_p, ssize_t n)
 {
-    // need to intercept union isbits arrays here since they're unboxed
-    if (!src->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(src))) &&
-        !dest->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(dest)))) {
-        memcpy(dest_p, src_p, n * src->elsize);
-        memcpy((char*)dest->data + jl_array_len(dest) * dest->elsize,
-               (char*)src->data + jl_array_len(src) * src->elsize, n);
-        return;
-    }
     assert(dest->flags.ptrarray && src->flags.ptrarray);
     jl_value_t *owner = jl_array_owner(dest);
     // Destination is old and doesn't refer to any young object
@@ -1141,15 +1114,6 @@ JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
     for (i = 0; i < n2; i++) {
         jl_array_ptr_set(a, n + i, jl_array_ptr_ref(a2, i));
     }
-}
-
-JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
-{
-    assert(jl_typeis(a, jl_array_any_type));
-    jl_array_grow_end(a, 2);
-    size_t n = jl_array_nrows(a);
-    jl_array_ptr_set(a, n - 2, b);
-    jl_array_ptr_set(a, n - 1, c);
 }
 
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)

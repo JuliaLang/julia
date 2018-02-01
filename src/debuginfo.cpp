@@ -22,7 +22,6 @@
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
@@ -38,6 +37,7 @@ using llvm_file_magic = sys::fs::file_magic;
 #if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
+#include "processor.h"
 
 #include <string>
 #include <sstream>
@@ -46,7 +46,7 @@ using llvm_file_magic = sys::fs::file_magic;
 #include <vector>
 #include <set>
 #include <cstdio>
-#include <cassert>
+#include "julia_assert.h"
 
 typedef object::SymbolRef SymRef;
 
@@ -384,7 +384,7 @@ public:
                 const char *F = linfo->functionObjectsDecls.functionObject;
                 if (!linfo->fptr && F && sName.equals(F)) {
                     int jlcall_api = jl_jlcall_api(F);
-                    if (linfo->inferred || jlcall_api != 1) {
+                    if (linfo->inferred || jlcall_api != JL_API_GENERIC) {
                         linfo->jlcall_api = jlcall_api;
                         linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
                     }
@@ -707,20 +707,14 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 }
 
 static uint64_t jl_sysimage_base;
-static const char *sysimg_fvars_base = nullptr;
-static const int32_t *sysimg_fvars_offsets;
+static jl_sysimg_fptrs_t sysimg_fptrs;
 static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;
-static const void *sysimg_fvars(size_t idx)
-{
-    return sysimg_fvars_base + sysimg_fvars_offsets[idx];
-}
-void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+void jl_register_fptrs(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n)
 {
     jl_sysimage_base = (uintptr_t)sysimage_base;
-    sysimg_fvars_base = base;
-    sysimg_fvars_offsets = offsets;
+    sysimg_fptrs = *fptrs;
     sysimg_fvars_linfo = linfos;
     sysimg_fvars_n = n;
 }
@@ -739,7 +733,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
                                        int64_t slide, bool untrusted_dladdr)
 {
     // Assume we only need base address for sysimg for now
-    if (!insysimage || !sysimg_fvars_base)
+    if (!insysimage || !sysimg_fptrs.base)
         saddr = nullptr;
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
     bool needs_name = name && (!*name || untrusted_dladdr);
@@ -747,7 +741,9 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
     if (needs_saddr) {
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
-        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
+        // Seems that libunwind may return NULL IP depending on what info it finds...
+        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer,
+                                    &pip, NULL) == 0 && pip.start_ip) {
             *saddr = (void*)pip.start_ip;
             needs_saddr = false;
         }
@@ -1090,9 +1086,17 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         return 1;
     }
     frame0->fromC = !isSysImg;
-    if (isSysImg && sysimg_fvars_base && saddr) {
+    if (isSysImg && sysimg_fptrs.base && saddr) {
+        intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_fptrs.base;
+        for (size_t i = 0; i < sysimg_fptrs.nclones; i++) {
+            if (diff == sysimg_fptrs.clone_offsets[i]) {
+                uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
+                frame0->linfo = sysimg_fvars_linfo[idx];
+                break;
+            }
+        }
         for (size_t i = 0; i < sysimg_fvars_n; i++) {
-            if (saddr == sysimg_fvars(i)) {
+            if (diff == sysimg_fptrs.offsets[i]) {
                 frame0->linfo = sysimg_fvars_linfo[i];
                 break;
             }

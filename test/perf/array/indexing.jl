@@ -39,7 +39,7 @@ end
 function sumcartesian(A, n)
     s = zero(eltype(A)) + zero(eltype(A))
     for k = 1:n
-        for I in CartesianRange(size(A))
+        for I in CartesianIndices(size(A))
             val = unsafe_getindex(A, I)
             s += val
         end
@@ -112,7 +112,7 @@ end
 struct ArrayLSLS{T,N} <: MyArray{T,N}  # IndexCartesian with IndexCartesian similar
     data::Array{T,N}
 end
-Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(similar(A.data, T, dims))
+Base.similar(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) where {T} = ArrayLSLS(similar(A.data, T, dims))
 @inline Base.setindex!(A::ArrayLSLS, v, I::Int...) = A.data[I...] = v
 @inline Base.unsafe_setindex!(A::ArrayLSLS, v, I::Int...) = Base.unsafe_setindex!(A.data, v, I...)
 Base.first(A::ArrayLSLS) = first(A.data)
@@ -140,15 +140,15 @@ Base.size(A::MyArray) = size(A.data)
 @inline Base.unsafe_getindex(A::ArrayLF, indx::Int) = unsafe_getindex(A.data, indx)
 @inline Base.unsafe_getindex(A::Union{ArrayLS, ArrayLSLS}, i::Int, j::Int) = unsafe_getindex(A.data, i, j)
 
-@inline Base.getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
+@inline Base.getindex(A::ArrayStrides{T,2}, i::Real, j::Real) where {T} = getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.getindex(A::ArrayStrides1, i::Real, j::Real) = getindex(A.data, i + A.stride1*(j-1))
-@inline Base.unsafe_getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
+@inline Base.unsafe_getindex(A::ArrayStrides{T,2}, i::Real, j::Real) where {T} = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.unsafe_getindex(A::ArrayStrides1, i::Real, j::Real) = unsafe_getindex(A.data, i + A.stride1*(j-1))
 
 # Using the qualified Base.IndexLinear() in the IndexStyle definition
 # requires looking up the symbol in the module on each call.
 import Base: IndexLinear
-Base.IndexStyle{T<:ArrayLF}(::Type{T}) = IndexLinear()
+Base.IndexStyle(::Type{T}) where {T<:ArrayLF} = IndexLinear()
 
 if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::Array, I...) = @inbounds return A[I...]
@@ -157,7 +157,7 @@ if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::BitArray, I1::BitArray, I2::Int) = unsafe_getindex(A, Base.to_index(I1), I2)
 end
 
-function makearrays{T}(::Type{T}, sz)
+function makearrays(::Type{T}, sz) where T
     L = prod(sz)
     A = reshape(convert(Vector{T}, [1:L;]), sz)
     AS = ArrayLS(A)

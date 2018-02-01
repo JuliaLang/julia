@@ -20,7 +20,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 EXE := $(suffix $(abspath $(JULIA)))
 
 # get compiler and linker flags. (see: `contrib/julia-config.jl`)
-JULIA_CONFIG := $(JULIA) -e 'include(joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
+JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
@@ -38,8 +38,15 @@ $(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
 $(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
 
-check: $(BIN)/embedding$(EXE)
-	$(JULIA) $(SRCDIR)/embedding-test.jl $<
+ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
+# for demonstration purposes, our demo code is also installed
+# in $BIN, although this would likely not be typical
+$(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
+	cp $< $@
+endif
+
+check: $(BIN)/embedding$(EXE) $(BIN)/LocalModule.jl
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
 	@echo SUCCESS
 
 clean:

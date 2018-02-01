@@ -566,7 +566,7 @@ int ios_trunc(ios_t *s, size_t size)
 #if !defined(_OS_WINDOWS_)
         if (ftruncate(s->fd, size) == 0)
 #else
-        if (_chsize(s->fd, size) == 0)
+        if (_chsize_s(s->fd, size) == 0)
 #endif
             return 0;
     }
@@ -803,7 +803,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -822,11 +822,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
         }
         else {
             size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-            size_t nchomp = 0;
-            if (chomp) {
-                nchomp = ios_nchomp(from, ntowrite);
-            }
-            written = ios_write(to, from->buf+from->bpos, ntowrite - nchomp);
+            written = ios_write(to, from->buf+from->bpos, ntowrite);
             from->bpos += ntowrite;
             total += written;
             return total;
@@ -1167,7 +1163,7 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n', 0);
+    ios_copyuntil(&dest, s, '\n');
     size_t n;
     return ios_take_buffer(&dest, &n);
 }

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
+using Random
+
+dir = joinpath(Sys.BINDIR, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
 a = rand(1:100,100)
@@ -45,6 +47,7 @@ if Sys.isunix()
     end
 end
 
+using Distributed
 dc_path = joinpath(dir, "dictchannel.jl")
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
@@ -74,18 +77,5 @@ put!(dc, "Hello", "World")
 
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))
-
-# the 0mq clustermanager depends on package ZMQ. Just making sure the
-# code loads using a stub module definition for ZMQ.
-zmq_found=true
-try
-    using ZMQ
-catch
-    zmq_found=false
-end
-
-if !zmq_found
-    eval(Main, parse("module ZMQ end"))
-end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))

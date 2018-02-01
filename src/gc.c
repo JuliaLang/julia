@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -193,17 +194,22 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     // from jl_apply_with_saved_exception_state; to hoist state saving out of the loop
     jl_value_t *exc = ptls->exception_in_transit;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&exc, &bt);
-    if (ptls->bt_size > 0)
-        bt = (jl_array_t*)jl_get_backtrace();
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH3(&exc, &bt, &bt2);
+    if (ptls->bt_size > 0) {
+        jl_get_backtrace(&bt, &bt2);
+        ptls->bt_size = 0;
+    }
     for (size_t i = 2;i < len;i += 2)
         run_finalizer(ptls, items[i], items[i + 1]);
     ptls->exception_in_transit = exc;
     if (bt != NULL) {
+        // This is sufficient because bt2 roots the managed values
+        memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
         ptls->bt_size = jl_array_len(bt);
-        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
     }
     JL_GC_POP();
+    // matches the jl_gc_push_arraylist above
     JL_GC_POP();
 }
 
@@ -1380,12 +1386,12 @@ void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 // Double the mark stack (both pc and data) with the lock held.
 static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
 {
-    char *old_data = gc_cache->data_stack;
+    jl_gc_mark_data_t *old_data = gc_cache->data_stack;
     void **pc_stack = sp->pc_start;
     size_t stack_size = (char*)sp->pc_end - (char*)pc_stack;
     JL_LOCK_NOGC(&gc_cache->stack_lock);
-    gc_cache->data_stack = (char*)realloc(old_data, stack_size * 2 * sizeof(gc_mark_data_t));
-    sp->data += gc_cache->data_stack - old_data;
+    gc_cache->data_stack = (jl_gc_mark_data_t *)realloc(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
+    sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
 
     sp->pc_start = gc_cache->pc_stack = (void**)realloc(pc_stack, stack_size * 2 * sizeof(void*));
     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
@@ -1402,13 +1408,13 @@ static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, gc_mark_
 STATIC_INLINE void gc_mark_stack_push(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
                                       void *pc, void *data, size_t data_size, int inc)
 {
-    assert(data_size <= sizeof(gc_mark_data_t));
+    assert(data_size <= sizeof(jl_gc_mark_data_t));
     if (__unlikely(sp->pc == sp->pc_end))
         gc_mark_stack_resize(gc_cache, sp);
     *sp->pc = pc;
     memcpy(sp->data, data, data_size);
     if (inc) {
-        sp->data += data_size;
+        sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + data_size);
         sp->pc++;
     }
 }
@@ -1963,7 +1969,7 @@ module_binding: {
                 objary = (gc_mark_objarray_t*)sp.data;
                 goto objarray_loaded;
             }
-            sp.data += sizeof(data);
+            sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(data));
             sp.pc++;
         }
         else {
@@ -1977,7 +1983,7 @@ module_binding: {
     }
 
 finlist: {
-        // Scan a finalizer list. see `gc_mark_finlist_t`
+        // Scan a finalizer (or format compatible) list. see `gc_mark_finlist_t`
         gc_mark_finlist_t *finlist = gc_pop_markdata(&sp, gc_mark_finlist_t);
         jl_value_t **begin = finlist->begin;
         jl_value_t **end = finlist->end;
@@ -2105,7 +2111,7 @@ mark: {
             gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr, bits};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),
                                &markdata, sizeof(markdata), 0);
-            sp.data += sizeof(markdata);
+            sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
             goto module_binding;
         }
         else if (vt == jl_task_type) {
@@ -2225,7 +2231,7 @@ mark: {
                 gc_mark_obj32_t markdata = {new_obj, desc + first, desc + nfields, nptr};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj32),
                                    &markdata, sizeof(markdata), 0);
-                sp.data += sizeof(markdata);
+                sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
                 goto obj32;
             }
         }
@@ -2276,6 +2282,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
+
+    gc_mark_queue_finlist(gc_cache, sp, &partial_inst, 0);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -2431,6 +2439,18 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp, j
     ptls2->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
+static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp, jl_ptls_t ptls2)
+{
+    size_t n = 0;
+    while (n+2 < ptls2->bt_size) {
+        if (ptls2->bt_data[n] == (uintptr_t)-1) {
+            gc_mark_queue_obj(gc_cache, sp, (jl_value_t*)ptls2->bt_data[n+1]);
+            n += 2;
+        }
+        n++;
+    }
+}
+
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, int full)
 {
@@ -2451,6 +2471,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
+        // 2.3. mark any managed objects in the backtrace buffer
+        jl_gc_queue_bt_buf(gc_cache, &sp, ptls2);
     }
 
     // 3. walk roots
@@ -2690,7 +2712,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     size_t init_size = 1024;
     gc_cache->pc_stack = (void**)malloc(init_size * sizeof(void*));
     gc_cache->pc_stack_end = gc_cache->pc_stack + init_size;
-    gc_cache->data_stack = (char*)malloc(init_size * sizeof(gc_mark_data_t));
+    gc_cache->data_stack = (jl_gc_mark_data_t *)malloc(init_size * sizeof(jl_gc_mark_data_t));
 }
 
 // System-wide initializations

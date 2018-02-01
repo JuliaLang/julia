@@ -60,25 +60,23 @@ namespace llvm {
 #include <llvm/ADT/StringSet.h>
 #include <llvm/ADT/SmallSet.h>
 #include "codegen_shared.h"
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
+#include "julia_assert.h"
+
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
-static Type *T_void;
 static IntegerType *T_uint32;
 static IntegerType *T_uint64;
 static IntegerType *T_size;
 static Type *T_psize;
-static Type *T_pvoidfunc;
 static Type *T_pjlvalue;
 void jl_init_jit(Type *T_pjlvalue_)
 {
-    T_void = Type::getVoidTy(jl_LLVMContext);
     T_uint32 = Type::getInt32Ty(jl_LLVMContext);
     T_uint64 = Type::getInt64Ty(jl_LLVMContext);
     if (sizeof(size_t) == 8)
@@ -86,14 +84,20 @@ void jl_init_jit(Type *T_pjlvalue_)
     else
         T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
-    T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
     T_pjlvalue = T_pjlvalue_;
 }
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
-// this defines the set of optimization passes defined for Julia at various optimization levels
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
+void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+}
+
+// this defines the set of optimization passes defined for Julia at various optimization levels.
+// it assumes that the TLI and TTI wrapper passes have already been added.
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -113,7 +117,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(imaging_mode));
+        PM->add(createLowerPTLSPass(dump_native));
         PM->add(createBarrierNoopPass());
 #endif
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
@@ -127,14 +131,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(imaging_mode));
+        PM->add(createLowerPTLSPass(dump_native));
 #endif
+        if (dump_native)
+            PM->add(createMultiVersioningPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
-    PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
     PM->add(createTypeBasedAAWrapperPass());
-    if (jl_options.opt_level >= 3) {
+    if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
     }
     // list of passes from vmkit
@@ -151,7 +156,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(imaging_mode));
+    PM->add(createLowerPTLSPass(dump_native));
 #endif
 
     PM->add(createMemCpyOptPass());
@@ -169,6 +174,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createAllocOptPass());
 #endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    if (dump_native)
+        PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
@@ -207,6 +214,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
+    // Re-run SROA after loop-unrolling (useful for small loops that operate,
+    // over the structure of an aggregate)
+    PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Clean up after the unroller
     PM->add(createGVNPass());                  // Remove redundancies
     PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
@@ -228,12 +238,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createLoopDeletionPass());          // Delete dead loops
     PM->add(createJumpThreadingPass());         // Thread jumps
 
-    if (jl_options.opt_level >= 3) {
+    if (opt_level >= 3) {
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
-    if (jl_options.opt_level >= 3)
+    if (opt_level >= 3)
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
@@ -247,7 +257,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(imaging_mode));
+    PM->add(createLowerPTLSPass(dump_native));
+    // Clean up write barrier and ptls lowering
+    PM->add(createCFGSimplificationPass());
 #endif
     PM->add(createCombineMulAddPass());
 }
@@ -323,15 +335,15 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
-#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
-// Resolve non-lock free atomic functions in the libatomic library.
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+// Resolve non-lock free atomic functions in the libatomic1 library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
-#if defined(_OS_LINUX_)
-    static const char *const libatomic = "libatomic";
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    static const char *const libatomic = "libatomic.so.1";
 #elif defined(_OS_WINDOWS_)
-    static const char *const libatomic = "libatomic-1";
+    static const char *const libatomic = "libatomic-1.dll";
 #endif
     static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
                                                         JL_RTLD_LOCAL);
@@ -485,6 +497,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             CompilerT(this)
         )
 {
+    addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
@@ -566,7 +579,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
@@ -585,7 +598,13 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 #endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
+#if JL_LLVM_VERSION >= 50000
+    auto Err = CompileLayer.emitAndFinalize(modset);
+    // Check for errors to prevent LLVM from crashing the program.
+    assert(!Err);
+#else
     CompileLayer.emitAndFinalize(modset);
+#endif
 }
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
@@ -958,29 +977,6 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
     return slot;
 }
 
-// Emit a slot in the system image to be filled at sysimg init time.
-// Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
-// Use as an optimization for runtime constant addresses to have one less
-// load. (Used only by threading).
-GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                    uintptr_t init, size_t &idx)
-{
-    assert(imaging_mode);
-    // This is **NOT** a external variable or a normal global variable
-    // This is a special internal global slot with a special index
-    // in the global variable table.
-    GlobalVariable *gv = new GlobalVariable(*m, typ, false,
-                                            GlobalVariable::InternalLinkage,
-                                            Constant::getNullValue(typ), name);
-    addComdat(gv);
-    // make the pointer valid for this session
-    auto p = new uintptr_t(init);
-    jl_ExecutionEngine->addGlobalMapping(gv, (void*)p);
-    jl_sysimg_gvars.push_back(gv);
-    idx = jl_sysimg_gvars.size();
-    return gv;
-}
-
 void* jl_get_globalvar(GlobalVariable *gv)
 {
     void *p = (void*)(intptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(gv);
@@ -1007,28 +1003,20 @@ void jl_add_to_shadow(Module *m)
     jl_merge_module(shadow_output, std::move(clone));
 }
 
-#ifdef HAVE_CPUID
-extern "C" {
-    extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-}
-#endif
-
 static void emit_offset_table(Module *mod, const std::vector<GlobalValue*> &vars, StringRef name)
 {
+    // Emit a global variable with all the variable addresses.
+    // The cloning pass will convert them into offsets.
     assert(!vars.empty());
-    addComdat(GlobalAlias::create(GlobalVariable::ExternalLinkage, name + "_base", vars[0]));
-    auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
     size_t nvars = vars.size();
-    std::vector<Constant*> offsets(nvars);
-    for (size_t i = 0; i < nvars; i++) {
-        auto ptrdiff = ConstantExpr::getSub(ConstantExpr::getPtrToInt(vars[i], T_size), vbase);
-        offsets[i] = sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, T_uint32) : ptrdiff;
-    }
-    ArrayType *vars_type = ArrayType::get(T_uint32, nvars);
-    addComdat(new GlobalVariable(*mod, vars_type, true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantArray::get(vars_type, ArrayRef<Constant*>(offsets)),
-                                 name + "_offsets"));
+    std::vector<Constant*> addrs(nvars);
+    for (size_t i = 0; i < nvars; i++)
+        addrs[i] = ConstantExpr::getBitCast(vars[i], T_psize);
+    ArrayType *vars_type = ArrayType::get(T_psize, nvars);
+    new GlobalVariable(*mod, vars_type, true,
+                       GlobalVariable::ExternalLinkage,
+                       ConstantArray::get(vars_type, addrs),
+                       name);
 }
 
 
@@ -1042,28 +1030,6 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, globalUnique+1),
                                  "jl_globalUnique"));
-#ifdef JULIA_ENABLE_THREADING
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jltls_states_func_idx),
-                                 "jl_ptls_states_getter_idx"));
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jltls_offset_idx),
-                                 "jl_tls_offset_idx"));
-#endif
-
-    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
-    addComdat(new GlobalVariable(*mod,
-                                 feature_string->getType(),
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 feature_string,
-                                 "jl_sysimg_cpu_target"));
 
     // reflect the address of the jl_RTLD_DEFAULT_handle variable
     // back to the caller, so that we can check for consistency issues
@@ -1074,21 +1040,6 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
                                  GlobalVariable::ExternalLinkage,
                                  jlRTLD_DEFAULT_var,
                                  "jl_RTLD_DEFAULT_handle_pointer"));
-
-#ifdef HAVE_CPUID
-    // For native also store the cpuid
-    if (strcmp(jl_options.cpu_target,"native") == 0) {
-        uint32_t info[4];
-
-        jl_cpuid((int32_t*)info, 1);
-        addComdat(new GlobalVariable(*mod,
-                                     T_uint64,
-                                     true,
-                                     GlobalVariable::ExternalLinkage,
-                                     ConstantInt::get(T_uint64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                                     "jl_sysimg_cpu_cpuid"));
-    }
-#endif
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(jl_LLVMContext,
@@ -1137,7 +1088,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         ));
 
     legacy::PassManager PM;
-    PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+    addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
     std::unique_ptr<raw_fd_ostream> unopt_bc_OS;
@@ -1160,7 +1111,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     }
 
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM, jl_options.opt_level);
+        addOptimizationPasses(&PM, jl_options.opt_level, true);
 
     if (bc_fname) {
         // call output handler directly to avoid special case handling of `-` filename
@@ -1269,6 +1220,7 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
+        addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}

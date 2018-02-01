@@ -33,6 +33,8 @@
 // Should also be enough for parallel GC when we have it =)
 #define sig_stack_size (8 * 1024 * 1024)
 
+#include "julia_assert.h"
+
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
@@ -741,4 +743,9 @@ void jl_install_default_signal_handlers(void)
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     // TODO: ?
+}
+
+JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
+{
+    return raise(SIGTSTP);
 }

@@ -23,7 +23,7 @@ function mean(f::Callable, iterable)
     count = 1
     value, state = next(iterable, state)
     f_value = f(value)
-    total = f_value + zero(f_value)
+    total = reduce_first(add_sum, f_value)
     while !done(iterable, state)
         value, state = next(iterable, state)
         total += f(value)
@@ -59,7 +59,8 @@ julia> mean!([1. 1.], v)
 """
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
-    scale!(R, _length(R) / _length(A))
+    x = max(1, _length(R)) // _length(A)
+    R .= R .* x
     return R
 end
 
@@ -69,8 +70,8 @@ end
 Compute the mean of whole array `v`, or optionally along the dimensions in `region`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 mean(A::AbstractArray{T}, region) where {T} =
     mean!(reducedim_init(t -> t/2, +, A, region), A)
@@ -119,10 +120,10 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
 end
 
-centralizedabs2fun(m::Number) = x -> abs2(x - m)
-centralize_sumabs2(A::AbstractArray, m::Number) =
+centralizedabs2fun(m) = x -> abs2.(x - m)
+centralize_sumabs2(A::AbstractArray, m) =
     mapreduce(centralizedabs2fun(m), +, A)
-centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
+centralize_sumabs2(A::AbstractArray, m, ifirst::Int, ilast::Int) =
     mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
 function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray) where S
@@ -140,23 +141,23 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
         end
         return R
     end
-    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         i1 = first(indices1(R))
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             m = means[i1,IR]
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 r += abs2(A[i,IA] - m)
             end
             R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianRange(indsAt)
+        @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in indices(A, 1)
+            @simd for i in axes(A, 1)
                 R[i,IR] += abs2(A[i,IA] - means[i,IR])
             end
         end
@@ -164,7 +165,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     return R
 end
 
-function varm(A::AbstractArray{T}, m::Number; corrected::Bool=true) where T
+function varm(A::AbstractArray{T}, m; corrected::Bool=true) where T
     n = _length(A)
     n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
@@ -175,7 +176,8 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
         fill!(R, convert(S, NaN))
     else
         rn = div(_length(A), _length(R)) - Int(corrected)
-        scale!(centralize_sumabs2!(R, A, m), one(S)/rn)
+        centralize_sumabs2!(R, A, m)
+        R .= R .* (1 // rn)
     end
     return R
 end
@@ -189,16 +191,15 @@ optionally over `region`. `m` may contain means for each dimension of
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
     varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
 
 
 var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    real(varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
+    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
 
 """
     var(v[, region]; corrected::Bool=true, mean=nothing)
@@ -212,19 +213,18 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
 The mean `mean` over the region may be provided.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
-    varm(A, mean === nothing ? Base.mean(A, region) : mean, region; corrected=corrected)
+    varm(A, coalesce(mean, Base.mean(A, region)), region; corrected=corrected)
 
-varm(iterable, m::Number; corrected::Bool=true) =
+varm(iterable, m; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
 
 ## variances over ranges
 
-function varm(v::Range, m::Number)
+function varm(v::AbstractRange, m)
     f  = first(v) - m
     s  = step(v)
     l  = length(v)
@@ -235,7 +235,7 @@ function varm(v::Range, m::Number)
     return vv
 end
 
-function var(v::Range)
+function var(v::AbstractRange)
     s  = step(v)
     l  = length(v)
     vv = abs2(s) * (l + 1) * l / 12
@@ -255,11 +255,11 @@ function sqrt!(A::AbstractArray)
     A
 end
 
-stdm(A::AbstractArray, m::Number; corrected::Bool=true) =
-    sqrt(varm(A, m; corrected=corrected))
+stdm(A::AbstractArray, m; corrected::Bool=true) =
+    sqrt.(varm(A, m; corrected=corrected))
 
 std(A::AbstractArray; corrected::Bool=true, mean=nothing) =
-    sqrt(var(A; corrected=corrected, mean=mean))
+    sqrt.(var(A; corrected=corrected, mean=mean))
 
 """
     std(v[, region]; corrected::Bool=true, mean=nothing)
@@ -273,18 +273,20 @@ then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `correc
 `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
+    sqrt.(var(A, region; corrected=corrected, mean=mean))
+
+std(A::AbstractArray{<:AbstractFloat}, region; corrected::Bool=true, mean=nothing) =
     sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
 
 """
-    stdm(v, m::Number; corrected::Bool=true)
+    stdm(v, m; corrected::Bool=true)
 
 Compute the sample standard deviation of a vector `v`
 with known mean `m`. If `corrected` is `true`,
@@ -292,11 +294,10 @@ then the sum is scaled with `n-1`, whereas the sum is
 scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For
-    applications requiring the handling of missing data, the
-    `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-stdm(iterable, m::Number; corrected::Bool=true) =
+stdm(iterable, m; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
 
 
@@ -321,35 +322,49 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
 # core functions
 
-unscaled_covzm(x::AbstractVector) = sum(abs2, x)
+unscaled_covzm(x::AbstractVector{<:Number})    = sum(abs2, x)
+unscaled_covzm(x::AbstractVector)              = sum(t -> t*t', x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
-unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(y, x)
+unscaled_covzm(x::AbstractVector, y::AbstractVector) = sum(conj(y[i])*x[i] for i in eachindex(y, x))
 unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
-    (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
+    (vardim == 1 ? *(transpose(x), _conj(y)) : *(transpose(x), transpose(_conj(y))))
 unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
-    (c = vardim == 1 ? At_mul_B(x, _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
+    (c = vardim == 1 ? *(transpose(x), _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
 unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
-    (vardim == 1 ? At_mul_B(x, _conj(y)) : A_mul_Bc(x, y))
+    (vardim == 1 ? *(transpose(x), _conj(y)) : *(x, adjoint(y)))
 
 # covzm (with centered data)
 
 covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (_length(x) - Int(corrected))
-covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
-    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
+function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
+    C = unscaled_covzm(x, vardim)
+    T = promote_type(typeof(first(C) / 1), eltype(C))
+    A = convert(AbstractMatrix{T}, C)
+    b = 1//(size(x, vardim) - corrected)
+    A .= A .* b
+    return A
+end
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     unscaled_covzm(x, y) / (_length(x) - Int(corrected))
-covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true) =
-    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
+function covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true)
+    C = unscaled_covzm(x, y, vardim)
+    T = promote_type(typeof(first(C) / 1), eltype(C))
+    A = convert(AbstractArray{T}, C)
+    b = 1//(_getnobs(x, y, vardim) - corrected)
+    A .= A .* b
+    return A
+end
 
 # covm (with provided mean)
-
+## Use map(t -> t - xmean, x) instead of x .- xmean to allow for Vector{Vector}
+## which can't be handled by broadcast
 covm(x::AbstractVector, xmean; corrected::Bool=true) =
-    covzm(x .- xmean; corrected=corrected)
+    covzm(map(t -> t - xmean, x); corrected=corrected)
 covm(x::AbstractMatrix, xmean, vardim::Int=1; corrected::Bool=true) =
     covzm(x .- xmean, vardim; corrected=corrected)
 covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
-    covzm(x .- xmean, y .- ymean; corrected=corrected)
+    covzm(map(t -> t - xmean, x), map(t -> t - ymean, y); corrected=corrected)
 covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1; corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean, vardim; corrected=corrected)
 
@@ -410,7 +425,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] = C[j,i]'
+            C[i,j] = adjoint(C[j,i])
         end
         C[j,j] = oneunit(T)
         for i = j+1:nx
@@ -419,7 +434,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     end
     return C
 end
-function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
+function cov2cor!(C::AbstractMatrix, xsd, ysd::AbstractArray)
     nx, ny = size(C)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
@@ -429,7 +444,7 @@ function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     end
     return C
 end
-function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
+function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd)
     nx, ny = size(C)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
@@ -456,7 +471,7 @@ end
 corzm(x::AbstractVector{T}) where {T} = one(real(T))
 function corzm(x::AbstractMatrix, vardim::Int=1)
     c = unscaled_covzm(x, vardim)
-    return cov2cor!(c, sqrt!(diag(c)))
+    return cov2cor!(c, collect(sqrt(c[i,i]) for i in 1:min(size(c)...)))
 end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, vardim)))
@@ -469,7 +484,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 
 corm(x::AbstractVector{T}, xmean) where {T} = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
-function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
+function corm(x::AbstractVector, mx, y::AbstractVector, my)
     n = length(x)
     length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
     n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
@@ -555,7 +570,7 @@ julia> middle(1:10)
 5.5
 ```
 """
-middle(a::Range) = middle(a[1], a[end])
+middle(a::AbstractRange) = middle(a[1], a[end])
 
 """
     middle(a)
@@ -589,18 +604,18 @@ function median!(v::AbstractVector)
             isnan(x) && return x
         end
     end
-    inds = indices(v, 1)
+    inds = axes(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)
-        return middle(select!(v,mid))
+        return middle(partialsort!(v,mid))
     else
-        m = select!(v, mid:mid+1)
+        m = partialsort!(v, mid:mid+1)
         return middle(m[1], m[2])
     end
 end
 median!(v::AbstractArray) = median!(vec(v))
-median(v::AbstractArray{T}) where {T} = median!(copy!(Array{T,1}(_length(v)), v))
+median(v::AbstractArray{T}) where {T} = median!(copyto!(Array{T,1}(uninitialized, _length(v)), v))
 
 """
     median(v[, region])
@@ -611,8 +626,8 @@ elements no exact median element exists, so the result is
 equivalent to calculating mean of two median elements.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended.
+    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
+    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
 median(v::AbstractArray, region) = mapslices(median!, v, region)
 
@@ -635,9 +650,10 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended. `quantile!` will
+    Julia does not ignore `NaN` values in the computation: `quantile!` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
+    Use the [`missing`](@ref) type to represent missing values, and the
+    [`skipmissing`](@ref) function to omit them.
 
 * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
@@ -700,14 +716,14 @@ end
     T  = promote_type(eltype(v), typeof(v[1]*h))
 
     if h == 0
-        return T(v[i])
+        return convert(T, v[i])
     else
         a = v[i]
         b = v[i+1]
         if isfinite(a) && isfinite(b)
-            return T(a + h*(b-a))
+            return convert(T, a + h*(b-a))
         else
-            return T((1-h)*a + h*b)
+            return convert(T, (1-h)*a + h*b)
         end
     end
 end
@@ -727,9 +743,10 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. For applications requiring the
-    handling of missing data, the `DataArrays.jl` package is recommended. `quantile` will
+    Julia does not ignore `NaN` values in the computation: `quantile` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
+    Use the [`missing`](@ref) type to represent missing values, and the
+    [`skipmissing`](@ref) function to omit them.
 
 - Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365

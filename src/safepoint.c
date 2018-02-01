@@ -9,6 +9,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

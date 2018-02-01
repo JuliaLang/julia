@@ -229,24 +229,6 @@ CRC_TARGET static inline uint32_t crc32cb(uint32_t crc, uint32_t val)
     asm("crc32cb %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
     return res;
 }
-static inline uint64_t unaligned_i64(const char *ptr)
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-static inline uint32_t unaligned_i32(const char *ptr)
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-static inline uint16_t unaligned_i16(const char *ptr)
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
 
 // Modified from the SSE4.2 version.
 CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t len)
@@ -270,11 +252,11 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + LONG;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
-            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
             buf3 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_long, crc) ^ crc1;
@@ -292,11 +274,11 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + SHORT;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
-            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
             buf3 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
@@ -310,9 +292,9 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *end = buf + SHORT;
         const char *buf2 = end;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
@@ -324,15 +306,15 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
        block */
     const char *end = buf + len - 8;
     while (buf <= end) {
-        crc = crc32cx(crc, unaligned_i64(buf));
+        crc = crc32cx(crc, jl_load_unaligned_i64(buf));
         buf += 8;
     }
     if (len & 4) {
-        crc = crc32cw(crc, unaligned_i32(buf));
+        crc = crc32cw(crc, jl_load_unaligned_i32(buf));
         buf += 4;
     }
     if (len & 2) {
-        crc = crc32ch(crc, unaligned_i16(buf));
+        crc = crc32ch(crc, jl_load_unaligned_i16(buf));
         buf += 2;
     }
     if (len & 1)

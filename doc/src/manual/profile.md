@@ -53,6 +53,8 @@ julia> myfunc() # run once to force compilation
 Now we're ready to profile this function:
 
 ```julia-repl
+julia> using Profile
+
 julia> @profile myfunc()
 ```
 
@@ -205,7 +207,7 @@ be very useful, but sometimes you want to start fresh; you can do so with [`Prof
 
 ## Options for controlling the display of profile results
 
-[`Profile.print()`](@ref) has more options than we've described so far. Let's see the full declaration:
+[`Profile.print`](@ref) has more options than we've described so far. Let's see the full declaration:
 
 ```julia
 function print(io::IO = STDOUT, data = fetch(); kwargs...)

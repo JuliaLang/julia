@@ -80,8 +80,8 @@ The recommended way of compiling Julia from source on Windows is by cross
 compiling from [Cygwin](http://www.cygwin.com), using versions of the
 MinGW-w64 compilers available through Cygwin's package manager.
 
- 1. Download and run Cygwin setup for [32 bit](http://cygwin.com/setup-x86.exe)
-    or [64 bit](http://cygwin.com/setup-x86_64.exe). Note, that you can compile
+ 1. Download and run Cygwin setup for [32 bit](https://cygwin.com/setup-x86.exe)
+    or [64 bit](https://cygwin.com/setup-x86_64.exe). Note, that you can compile
     either 32 or 64 bit Julia from either 32 or 64 bit Cygwin. 64 bit Cygwin
     has a slightly smaller but often more up-to-date selection of packages.
 

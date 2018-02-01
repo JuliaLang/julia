@@ -11,7 +11,7 @@ struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
-    env::Union{Array{String},Void}
+    env::Union{Array{String},Nothing}
     dir::String
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "")
@@ -94,6 +94,8 @@ hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 
 shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
+shell_escape_posixly(cmd::Cmd) =
+    shell_escape_posixly(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
@@ -105,7 +107,7 @@ function show(io::IO, cmd::Cmd)
             with_output_color(:underline, io) do io
                 print_shell_word(io, arg, shell_special)
             end
-        end, '`', "\\`")
+        end, '`' => "\\`")
     end, ' '))
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))
@@ -137,7 +139,7 @@ struct FileRedirect
     append::Bool
     function FileRedirect(filename, append)
         if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            warn_once("for portability use DevNull instead of a file redirect")
+            @warn "For portability use DevNull instead of a file redirect" maxlog=1
         end
         new(filename, append)
     end
@@ -150,11 +152,11 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
-uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
+uvhandle(x::RawFD) = convert(Ptr{Cvoid}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
 const Redirectable = Union{IO, FileRedirect, RawFD}
-const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
+const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Cvoid}}} # XXX: remove Ptr{Cvoid} once libuv is refactored to use upstream release
 
 struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -205,9 +207,9 @@ end
 # convert various env representations into an array of "key=val" strings
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
-byteenv(env::Associative) =
+byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
-byteenv(env::Void) = nothing
+byteenv(env::Nothing) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
@@ -230,8 +232,6 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
-    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
@@ -286,7 +286,7 @@ pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(c
 Create a pipeline from a data source to a destination. The source and destination can be
 commands, I/O streams, strings, or results of other `pipeline` calls. At least one argument
 must be a command. Strings refer to filenames. When called with more than two arguments,
-they are chained together from left to right. For example `pipeline(a,b,c)` is equivalent to
+they are chained together from left to right. For example, `pipeline(a,b,c)` is equivalent to
 `pipeline(pipeline(a,b),c)`. This provides a more concise way to specify multi-stage
 pipelines.
 
@@ -302,7 +302,7 @@ pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
 mutable struct Process <: AbstractPipe
     cmd::Cmd
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     in::IO
     out::IO
     err::IO
@@ -311,10 +311,10 @@ mutable struct Process <: AbstractPipe
     exitnotify::Condition
     closenotify::Condition
     openstream::Symbol # for open(cmd) deprecation
-    function Process(cmd::Cmd, handle::Ptr{Void},
-                     in::Union{Redirectable, Ptr{Void}},
-                     out::Union{Redirectable, Ptr{Void}},
-                     err::Union{Redirectable, Ptr{Void}})
+    function Process(cmd::Cmd, handle::Ptr{Cvoid},
+                     in::Union{Redirectable, Ptr{Cvoid}},
+                     out::Union{Redirectable, Ptr{Cvoid}},
+                     err::Union{Redirectable, Ptr{Cvoid}})
         if !isa(in, IO)
             in = DevNull
         end
@@ -328,7 +328,7 @@ mutable struct Process <: AbstractPipe
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
                    Condition(), Condition())
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize, this)
         return this
     end
 end
@@ -347,19 +347,19 @@ end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
 
-function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
+function _jl_spawn(cmd, argv, loop::Ptr{Cvoid}, pp::Process,
                    in, out, err)
     proc = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
-        (Cstring, Ptr{Cstring}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Cstring}, Cstring, Ptr{Void}),
+        (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid}, Any, Int32,
+         Ptr{Cvoid}, Int32, Ptr{Cvoid}, Int32, Ptr{Cvoid}, Int32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
         cmd, argv, loop, proc, pp, uvtype(in),
         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
         pp.cmd.flags, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
-        uv_jl_return_spawn::Ptr{Void})
+        uv_jl_return_spawn::Ptr{Cvoid})
     if error != 0
-        ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
+        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end
     associate_julia_struct(proc, pp)
@@ -369,19 +369,19 @@ end
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
         disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
         proc.handle = C_NULL
     end
     nothing
 end
 
-function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
-    data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
+function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
+    data = ccall(:jl_uv_process_data, Ptr{Cvoid}, (Ptr{Cvoid},), p)
     data == C_NULL && return
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
+    ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     notify(proc.exitnotify)
     nothing
 end
@@ -391,7 +391,7 @@ function _uv_hook_close(proc::Process)
     notify(proc.closenotify)
 end
 
-function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     spawn(redirect.cmd,
           (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
            redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
@@ -399,12 +399,12 @@ function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Nullable{ProcessC
            chain=chain)
 end
 
-function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     try
         spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), chain=chain)
@@ -415,15 +415,15 @@ function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nul
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    get(chain)
+    chain
 end
 
-function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     try
         spawn(cmds.a, (stdios[1], stdios[2], out_pipe), chain=chain)
@@ -434,7 +434,7 @@ function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    get(chain)
+    chain
 end
 
 function setup_stdio(stdio::PipeEndpoint, readable::Bool)
@@ -457,6 +457,9 @@ function setup_stdio(stdio::Pipe, readable::Bool)
     io = readable ? stdio.out : stdio.in
     return (io, false)
 end
+
+setup_stdio(stdio::AbstractPipe, readable::Bool) =
+    setup_stdio(readable ? pipe_reader(stdio) : pipe_writer(stdio), readable)
 
 function setup_stdio(stdio::IOStream, readable::Bool)
     io = Filesystem.File(RawFD(fd(stdio)))
@@ -482,11 +485,11 @@ function setup_stdio(io, readable::Bool)
     return io, false
 end
 
-function setup_stdio(stdio::Ptr{Void}, readable::Bool)
+function setup_stdio(stdio::Ptr{Cvoid}, readable::Bool)
     return (stdio, false)
 end
 
-function close_stdio(stdio::Ptr{Void})
+function close_stdio(stdio::Ptr{Cvoid})
     close_pipe_sync(stdio)
     Libc.free(stdio)
 end
@@ -505,7 +508,7 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
     close_err && close_stdio(err)
 end
 
-function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmd::Cmd, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     if isempty(cmd.exec)
         throw(ArgumentError("cannot spawn empty command"))
     end
@@ -515,21 +518,21 @@ function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullabl
         pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                               in, out, err)
     end
-    if !isnull(chain)
-        push!(get(chain).processes, pp)
+    if chain !== nothing
+        push!(chain.processes, pp)
     end
     pp
 end
 
-function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
-    if isnull(chain)
-        chain = Nullable(ProcessChain(stdios))
+function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+    if chain === nothing
+        chain = ProcessChain(stdios)
     end
     setup_stdio(stdios) do in, out, err
         spawn(cmds.a, (in,out,err), chain=chain)
         spawn(cmds.b, (in,out,err), chain=chain)
     end
-    get(chain)
+    chain
 end
 
 # INTERNAL
@@ -555,16 +558,20 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 
 Run a command object asynchronously, returning the resulting `Process` object.
 """
-spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
+spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd; chomp::Bool=true)
+function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
     stdout = Pipe()
     processes = spawn(cmd, (DevNull,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, chomp=chomp,
+    return EachLine(out, keep=keep,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 
@@ -631,19 +638,6 @@ function open(f::Function, cmds::AbstractCmd, args...)
     end
     success(P) || pipeline_error(P)
     return ret
-end
-
-# TODO: deprecate this
-
-"""
-    readandwrite(command)
-
-Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
-output stream and input stream of the process, and the process object itself.
-"""
-function readandwrite(cmds::AbstractCmd)
-    processes = open(cmds, "r+")
-    return (processes.out, processes.in, processes)
 end
 
 function read(cmd::AbstractCmd)
@@ -726,21 +720,25 @@ end
     kill(p::Process, signum=SIGTERM)
 
 Send a signal to a process. The default is to terminate the process.
+Returns successfully if the process has already exited, but throws an
+error if killing the process failed for other reasons (e.g. insufficient
+permissions).
 """
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
-        ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
-    else
-        Int32(-1)
+        err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
+        if err != 0 && err != UV_ESRCH
+            throw(UVError("kill", err))
+        end
     end
 end
-kill(ps::Vector{Process}) = map(kill, ps)
-kill(ps::ProcessChain) = map(kill, ps.processes)
+kill(ps::Vector{Process}) = foreach(kill, ps)
+kill(ps::ProcessChain) = foreach(kill, ps.processes)
 kill(p::Process) = kill(p, SIGTERM)
 
-function _contains_newline(bufptr::Ptr{Void}, len::Int32)
-    return (ccall(:memchr, Ptr{Void}, (Ptr{Void},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
+function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
+    return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
 
 ## process status ##
@@ -822,9 +820,10 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :endof, :start, :eachindex, :eltype, :first, :last)
+for f in (:length, :firstindex, :lastindex, :start, :keys, :first, :last)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:next, :done, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
 end

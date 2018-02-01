@@ -121,9 +121,9 @@ values such as `NaN`.
 """
 function isless end
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
 
 function ==(T::Type, S::Type)
@@ -155,7 +155,7 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)::Bool
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
@@ -163,8 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. Compares mutable objects by address in memory, and compares immutable objects (such as
-numbers) by contents at the bit level. This function is sometimes called `egal`.
+them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
+objects by address in memory and immutable objects (such as numbers) by contents at the bit
+level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest
@@ -299,7 +300,6 @@ const ≥ = >=
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
-lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 """
     ifelse(condition::Bool, x, y)
@@ -321,8 +321,7 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
-respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
-but throws an error for unordered arguments.
+respectively. Uses the total order implemented by `isless`.
 
 # Examples
 ```jldoctest
@@ -334,41 +333,19 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+Stacktrace:
 [...]
 ```
 """
 cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
-    lexcmp(x, y)
+    cmp(<, x, y)
 
-Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
-less than, equal to, or greater than `y`, respectively. This function should be defined for
-lexicographically comparable types, and `lexless` will call `lexcmp` by default.
-
-# Examples
-```jldoctest
-julia> lexcmp("abc", "abd")
--1
-
-julia> lexcmp("abc", "abc")
-0
-```
+Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
+respectively. The first argument specifies a less-than comparison function to use.
 """
-lexcmp(x, y) = cmp(x, y)
-
-"""
-    lexless(x, y)
-
-Determine whether `x` is lexicographically less than `y`.
-
-# Examples
-```jldoctest
-julia> lexless("abc", "abd")
-true
-```
-"""
-lexless(x, y) = lexcmp(x,y) < 0
+cmp(<, x, y) = (x < y) ? -1 : ifelse(y < x, 1, 0)
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
@@ -413,16 +390,6 @@ julia> minmax('c','b')
 ```
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
-
-scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
-
-scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
-scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -498,7 +465,7 @@ julia> inv(A) * x
   4.5
 ```
 """
-\(x,y) = (y'/x')'
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -516,10 +483,10 @@ this is equivalent to `x >> -n`.
 julia> Int8(3) << 2
 12
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
-julia> bits(Int8(12))
+julia> bitstring(Int8(12))
 "00001100"
 ```
 See also [`>>`](@ref), [`>>>`](@ref).
@@ -546,19 +513,19 @@ right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
 julia> Int8(13) >> 2
 3
 
-julia> bits(Int8(13))
+julia> bitstring(Int8(13))
 "00001101"
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
 julia> Int8(-14) >> 2
 -4
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(-4))
+julia> bitstring(Int8(-4))
 "11111100"
 ```
 See also [`>>>`](@ref), [`<<`](@ref).
@@ -587,10 +554,10 @@ For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 julia> Int8(-14) >>> 2
 60
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(60))
+julia> bitstring(Int8(60))
 "00111100"
 ```
 
@@ -737,172 +704,17 @@ fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
-# transpose
-
-"""
-    ctranspose(A)
-
-The conjugate transposition operator (`'`).
-
-# Examples
-```jldoctest
-julia> A =  [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> ctranspose(A)
-2×2 Array{Complex{Int64},2}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
-ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
-# transposed multiply
-
-"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B(a,b)  = ctranspose(a)*b
-
-"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc(a,b)  = a*ctranspose(b)
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
-
-"""
-    At_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
-"""
-At_mul_B(a,b)  = transpose(a)*b
-
-"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
-"""
-A_mul_Bt(a,b)  = a*transpose(b)
-
-"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
-"""
-At_mul_Bt(a,b) = transpose(a)*transpose(b)
-
-# transposed divide
-
-"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B(a,b)  = ctranspose(a)/b
-
-"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc(a,b)  = a/ctranspose(b)
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
-
-"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
-"""
-At_rdiv_B(a,b)  = transpose(a)/b
-
-"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
-"""
-A_rdiv_Bt(a,b)  = a/transpose(b)
-
-"""
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
-"""
-At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
-
-"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B(a,b)  = ctranspose(a)\b
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc(a,b)  = a\ctranspose(b)
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
-
-"""
-    At_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
-"""
-At_ldiv_B(a,b)  = transpose(a)\b
-
-"""
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
-"""
-A_ldiv_Bt(a,b)  = a\transpose(b)
-
-"""
-    At_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
-"""
-At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
-
-"""
-    Ac_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
-"""
-Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 """
     widen(x)
 
-If `x` is a type, return a "larger" type (for numeric types, this will be
-a type with at least as much range and precision as the argument, and usually more).
-Otherwise `x` is converted to `widen(typeof(x))`.
+If `x` is a type, return a "larger" type, defined so that arithmetic operations
+`+` and `-` are guaranteed not to overflow nor lose precision for any combination
+of values that type `x` can hold.
+
+If `x` is a value, it is converted to `widen(typeof(x))`.
 
 # Examples
 ```jldoctest
@@ -913,7 +725,8 @@ julia> widen(1.5f0)
 1.5
 ```
 """
-widen(x::T) where {T<:Number} = convert(widen(T), x)
+widen(x::T) where {T} = convert(widen(T), x)
+widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 
 # function pipelining
 
@@ -972,3 +785,64 @@ julia> filter(!isalpha, str)
 ```
 """
 !(f::Function) = (x...)->!f(x...)
+
+struct EqualTo{T} <: Function
+    x::T
+
+    EqualTo(x::T) where {T} = new{T}(x)
+end
+
+(f::EqualTo)(y) = isequal(f.x, y)
+
+"""
+    equalto(x)
+
+Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
+`y->isequal(x,y)`.
+
+The returned function is of type `Base.EqualTo`. This allows dispatching to
+specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+"""
+const equalto = EqualTo
+
+struct OccursIn{T} <: Function
+    x::T
+
+    OccursIn(x::T) where {T} = new{T}(x)
+end
+
+(f::OccursIn)(y) = y in f.x
+
+"""
+    occursin(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
+`y -> y in x`.
+
+The returned function is of type `Base.OccursIn`. This allows dispatching to
+specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+"""
+const occursin = OccursIn
+
+"""
+    splat(f)
+
+Defined as
+```julia
+    splat(f) = args->f(args...)
+```
+i.e. given a function returns a new function that takes one argument and splats
+its argument into the original function. This is useful as an adaptor to pass
+a multi-argument function in a context that expects a single argument, but
+passes a tuple as that single argument.
+
+# Example usage:
+```jldoctest
+julia> map(splat(+), zip(1:3,4:6))
+3-element Array{Int64,1}:
+ 5
+ 7
+ 9
+```
+"""
+splat(f) = args->f(args...)

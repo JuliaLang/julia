@@ -141,10 +141,6 @@ All docstrings are written inline above the methods or types they are associated
 4. check the output in `doc/_build/html/` to make sure the changes are correct;
 5. commit your changes and open a pull request.
 
-> **Note**
->
-> Currently there are a large number of docstrings found in `base/docs/helpdb/Base.jl`. When any of these docstrings are modified please move them out of this file and place them above the most appropriate definition in one of the `base/` source files.
-
 #### Adding a new docstring to `base/`
 
 The steps required to add a new docstring are listed below:
@@ -196,7 +192,7 @@ The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issu
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
-Add new code to Julia's base libraries as follows:
+Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
  1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
 
@@ -217,6 +213,39 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
     ./usr/bin/julia test/runtests.jl bitarray math
 
 Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
+
+#### Modifying base more efficiently with Revise.jl
+
+[Revise](https://github.com/timholy/Revise.jl) is a package that
+tracks changes in source files and automatically updates function
+definitions in your running Julia session. Using it, you can make
+extensive changes to Base without needing to rebuild in order to test
+your changes.
+
+Here is the standard procedure:
+
+1. If you are planning changes to any types or macros, make those
+   changes and build julia using `make`. (This is
+   necessary because `Revise` cannot handle changes to type
+   definitions or macros.) Unless it's
+   required to get Julia to build, you do not have to add any
+   functionality based on the new types, just the type definitions
+   themselves.
+
+2. Start a Julia REPL session. Then issue the following commands:
+
+```julia
+using Revise    # if you aren't launching it in your .juliarc.jl
+Revise.track(Base)
+```
+
+3. Edit files in `base/`, save your edits, and test the
+   functionality.
+
+If you need to restart your Julia session, just start at step 2 above.
+`Revise.track(Base)` will note any changes from when Julia was last
+built and incorporate them automatically. You only need to rebuild
+Julia if you made code-changes that Revise cannot handle.
 
 ### Code Formatting Guidelines
 

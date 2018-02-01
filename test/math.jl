@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using LinearAlgebra
+
+function isnan_type(::Type{T}, x) where T
+    isa(x, T) && isnan(x)
+end
+
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
     @test clamp(1, 1, 3) == 1
@@ -23,20 +30,21 @@
 end
 
 @testset "constants" begin
-    @test pi != e
-    @test e != 1//2
-    @test 1//2 <= e
-    @test e <= 15//3
-    @test big(1//2) < e
-    @test e < big(20//6)
-    @test e^pi == exp(pi)
-    @test e^2 == exp(2)
-    @test e^2.4 == exp(2.4)
-    @test e^(2//3) == exp(2//3)
+    @test pi != ℯ
+    @test ℯ != 1//2
+    @test 1//2 <= ℯ
+    @test ℯ <= 15//3
+    @test big(1//2) < ℯ
+    @test ℯ < big(20//6)
+    @test ℯ^pi == exp(pi)
+    @test ℯ^2 == exp(2)
+    @test ℯ^2.4 == exp(2.4)
+    @test ℯ^(2//3) == exp(2//3)
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
     @test contains(sprint(show,π),"3.14159")
+    @test widen(pi) === pi
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -66,9 +74,9 @@ end
             @test exponent(-a) == n-1
         end
         @test_throws DomainError exponent(convert(T,NaN))
-        @test isnan(significand(convert(T,NaN)))
+        @test isnan_type(T, significand(convert(T,NaN)))
         x,y = frexp(convert(T,NaN))
-        @test isnan(x)
+        @test isnan_type(T, x)
         @test y == 0
 
         @testset "ldexp function" begin
@@ -77,7 +85,7 @@ end
             @test ldexp(T(Inf), 1) === T(Inf)
             @test ldexp(T(Inf), 10000) === T(Inf)
             @test ldexp(T(-Inf), 1) === T(-Inf)
-            @test ldexp(T(NaN), 10) === T(NaN)
+            @test isnan_type(T, ldexp(T(NaN), 10))
             @test ldexp(T(1.0), 0) === T(1.0)
             @test ldexp(T(0.8), 4) === T(12.8)
             @test ldexp(T(-0.854375), 5) === T(-27.34)
@@ -171,19 +179,19 @@ end
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(e) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(e)-1 atol=10*eps(T)
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
-            @test isequal(log(e,T(1)), T(0))
-            @test log(T(e)) ≈ T(1) atol=eps(T)
+            @test isequal(log(ℯ,T(1)), T(0))
+            @test log(T(ℯ)) ≈ T(1) atol=eps(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test log1p(T(e)-1) ≈ T(1) atol=eps(T)
+            @test log1p(T(ℯ)-1) ≈ T(1) atol=eps(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
@@ -233,16 +241,16 @@ end
         end
         @testset "Edge cases" begin
             @test isinf(log(zero(T)))
-            @test isnan(log(convert(T,NaN)))
+            @test isnan_type(T, log(convert(T,NaN)))
             @test_throws DomainError log(-one(T))
             @test isinf(log1p(-one(T)))
-            @test isnan(log1p(convert(T,NaN)))
+            @test isnan_type(T, log1p(convert(T,NaN)))
             @test_throws DomainError log1p(convert(T,-2.0))
             @test hypot(T(0), T(0)) === T(0)
             @test hypot(T(Inf), T(Inf)) === T(Inf)
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
-            @test isnan(hypot(T(x), T(NaN)))
+            @test isnan_type(T, hypot(T(x), T(NaN)))
         end
     end
 end
@@ -256,7 +264,7 @@ end
         end
     end
     @testset "$T edge cases" begin
-        @test isnan(exp(T(NaN)))
+        @test isnan_type(T, exp(T(NaN)))
         @test exp(T(-Inf)) === T(0.0)
         @test exp(T(Inf)) === T(Inf)
         @test exp(T(0.0)) === T(1.0) # exact
@@ -279,7 +287,7 @@ end
         end
     end
     @testset "$T edge cases" for T in (Float64, Float32)
-        @test isnan(exp10(T(NaN)))
+        @test isnan_type(T, exp10(T(NaN)))
         @test exp10(T(-Inf)) === T(0.0)
         @test exp10(T(Inf)) === T(Inf)
         @test exp10(T(0.0)) === T(1.0) # exact
@@ -292,13 +300,14 @@ end
 
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
-    TAA = (TAA + TAA.')/2.
+    TAA = (TAA + TAA')/2.
     STAA = Symmetric(TAA)
-    @test full(atanh.(STAA)) == atanh.(TAA)
-    @test full(asinh.(STAA)) == asinh.(TAA)
-    @test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
-    @test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
-    @test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
+    @test Array(atanh.(STAA)) == atanh.(TAA)
+    @test Array(asinh.(STAA)) == asinh.(TAA)
+    TAA .+= 1
+    @test Array(acosh.(STAA)) == acosh.(TAA)
+    @test Array(acsch.(STAA)) == acsch.(TAA)
+    @test Array(acoth.(STAA)) == acoth.(TAA)
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -402,7 +411,7 @@ end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin
-    for x in (pi, e, golden)
+    for x in (pi, ℯ, Base.MathConstants.golden)
         @test sinpi(x) ≈ Float64(sinpi(big(x)))
         @test cospi(x) ≈ Float64(cospi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
@@ -593,10 +602,10 @@ end
 
     for T in (Float32,Float64)
         @test log(zero(T)) == -Inf
-        @test isnan(log(NaN))
+        @test isnan_type(T, log(T(NaN)))
         @test_throws DomainError log(-one(T))
         @test log1p(-one(T)) == -Inf
-        @test isnan(log1p(NaN))
+        @test isnan_type(T, log1p(T(NaN)))
         @test_throws DomainError log1p(-2*one(T))
     end
 end
@@ -615,14 +624,18 @@ end
     end
 end
 
-@testset "issues #3024, #12822" begin
-    @test_throws DomainError 2 ^ -2
+@testset "issues #3024, #12822, #24240" begin
+    p2 = -2
+    p3 = -3
+    @test_throws DomainError 2 ^ p2
+    @test 2 ^ -2 == 0.25 == (2^-1)^2
     @test_throws DomainError (-2)^(2.2)
     @test_throws DomainError (-2.0)^(2.2)
-    @test_throws DomainError false ^ -2
-    @test 1 ^ -2 === (-1) ^ -2 === 1
-    @test (-1) ^ -3 === -1
-    @test true ^ -2 === true
+    @test_throws DomainError false ^ p2
+    @test false ^ -2 == Inf
+    @test 1 ^ -2 === (-1) ^ -2 == 1 ^ p2 === (-1) ^ p2 === 1
+    @test (-1) ^ -1 === (-1) ^ -3 == (-1) ^ p3 === -1
+    @test true ^ -2 == true ^ p2 === true
 end
 
 @testset "issue #13748" begin
@@ -657,13 +670,15 @@ end
     @test sincos(1) === (sin(1), cos(1))
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
+    @test sincos(NaN) === (NaN, NaN)
+    @test sincos(NaN32) === (NaN32, NaN32)
 end
 
 @testset "test fallback definitions" begin
     @test exp10(5) ≈ exp10(5.0)
     @test exp10(50//10) ≈ exp10(5.0)
-    @test log10(exp10(e)) ≈ e
-    @test log(e) === 1
+    @test log10(exp10(ℯ)) ≈ ℯ
+    @test log(ℯ) === 1
     @test exp2(Float16(2.0)) ≈ exp2(2.0)
     @test exp2(Float16(1.0)) === Float16(exp2(1.0))
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
@@ -682,4 +697,206 @@ Base.:^(x::Number, y::Float22716) = x^(y.x)
 let x = 2.0
     @test exp2(Float22716(x)) === 2^x
     @test exp10(Float22716(x)) === 10^x
+end
+
+@testset "asin #23088" begin
+    for T in (Float32, Float64)
+        @test asin(zero(T)) === zero(T)
+        @test asin(-zero(T)) === -zero(T)
+        @test asin(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asin(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test asin(one(T)) === T(pi)/2
+        @test asin(-one(T)) === -T(pi)/2
+        for x in (0.45, 0.6, 0.98)
+            by = asin(big(T(x)))
+            @test T(abs(asin(T(x)) - by))/eps(T(abs(by))) <= 1
+            bym = asin(big(T(-x)))
+            @test T(abs(asin(T(-x)) - bym))/eps(T(abs(bym))) <= 1
+        end
+        @test_throws DomainError asin(-T(Inf))
+        @test_throws DomainError asin(T(Inf))
+        @test isnan_type(T, asin(T(NaN)))
+    end
+end
+
+@testset "sin, cos, sincos, tan #23088" begin
+    for T in (Float32, Float64)
+        @test sin(zero(T)) === zero(T)
+        @test sin(-zero(T)) === -zero(T)
+        @test cos(zero(T)) === T(1.0)
+        @test cos(-zero(T)) === T(1.0)
+        @test sin(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test sin(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test cos(nextfloat(zero(T))) === T(1.0)
+        @test cos(prevfloat(zero(T))) === T(1.0)
+        for x in (0.1, 0.45, 0.6, 0.75, 0.79, 0.98)
+            for op in (sin, cos, tan)
+                by = T(op(big(x)))
+                @test abs(op(T(x)) - by)/eps(by) <= one(T)
+                bym = T(op(big(-x)))
+                @test abs(op(T(-x)) - bym)/eps(bym) <= one(T)
+            end
+        end
+        @test_throws DomainError sin(-T(Inf))
+        @test_throws DomainError sin(T(Inf))
+        @test_throws DomainError cos(-T(Inf))
+        @test_throws DomainError cos(T(Inf))
+        @test_throws DomainError tan(-T(Inf))
+        @test_throws DomainError tan(T(Inf))
+        @test sin(T(NaN)) === T(NaN)
+        @test cos(T(NaN)) === T(NaN)
+        @test tan(T(NaN)) === T(NaN)
+    end
+end
+
+@testset "rem_pio2 #23088" begin
+    vals = (2.356194490192345f0, 3.9269908169872414f0, 7.0685834705770345f0,
+              5.497787143782138f0, 4.216574282663131f8, 4.216574282663131f12)
+    for (i, x) in enumerate(vals)
+        for op in (prevfloat, nextfloat)
+            Ty = Float32(Base.Math.rem_pio2_kernel(op(vals[i]))[2].hi)
+            By = Float32(rem(big(op(x)), pi/2))
+            @test Ty ≈ By || Ty ≈ By-Float32(pi)/2
+        end
+    end
+end
+
+@testset "atan #23383" begin
+    for T in (Float32, Float64)
+        @test atan(T(NaN)) === T(NaN)
+        @test atan(-T(Inf)) === -T(pi)/2
+        @test atan(T(Inf)) === T(pi)/2
+        # no reduction needed |x| < 7/16
+        @test atan(zero(T)) === zero(T)
+        @test atan(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test atan(nextfloat(zero(T))) === nextfloat(zero(T))
+        for x in (T(7/16), (T(7/16)+T(11/16))/2, T(11/16),
+                  (T(11/16)+T(19/16))/2, T(19/16),
+                  (T(19/16)+T(39/16))/2, T(39/16),
+                  (T(39/16)+T(2)^23)/2, T(2)^23)
+            x = T(7/16)
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+            x = prevfloat(T(7/16))
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+            x = nextfloat(T(7/16))
+            by = T(atan(big(x)))
+            @test abs(atan(x) - by)/eps(by) <= one(T)
+        end
+        # This case was used to find a bug, but it isn't special in itself
+        @test atan(1.7581305072934137) ≈ 1.053644580517088
+    end
+end
+@testset "atan2" begin
+    for T in (Float32, Float64)
+        @test isnan_type(T, atan2(T(NaN), T(NaN)))
+        @test isnan_type(T, atan2(T(NaN), T(0.1)))
+        @test isnan_type(T, atan2(T(0.1), T(NaN)))
+        r = T(randn())
+        absr = abs(r)
+        # y zero
+        @test atan2(T(r), one(T)) === atan(T(r))
+        @test atan2(zero(T), absr) === zero(T)
+        @test atan2(-zero(T), absr) === -zero(T)
+        @test atan2(zero(T), -absr) === T(pi)
+        @test atan2(-zero(T), -absr) === -T(pi)
+        # x zero and y not zero
+        @test atan2(one(T), zero(T)) === T(pi)/2
+        @test atan2(-one(T), zero(T)) === -T(pi)/2
+        # isinf(x) == true && isinf(y) == true
+        @test atan2(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan2 code)
+        @test atan2(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
+        @test atan2(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
+        @test atan2(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
+        # isinf(x) == true && isinf(y) == false
+        @test atan2(absr, T(Inf)) === zero(T) # m == 0
+        @test atan2(-absr, T(Inf)) === -zero(T) # m == 1
+        @test atan2(absr, -T(Inf)) === T(pi) # m == 2
+        @test atan2(-absr, -T(Inf)) === -T(pi) # m == 3
+        # isinf(y) == true && isinf(x) == false
+        @test atan2(T(Inf), absr) === T(pi)/2
+        @test atan2(-T(Inf), absr) === -T(pi)/2
+        @test atan2(T(Inf), -absr) === T(pi)/2
+        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        # |y/x| above high threshold
+        atanpi = T(1.5707963267948966)
+        @test atan2(T(2.0^61), T(1.0)) === atanpi # m==0
+        @test atan2(-T(2.0^61), T(1.0)) === -atanpi # m==1
+        @test atan2(T(2.0^61), -T(1.0)) === atanpi # m==2
+        @test atan2(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        # |y|/x between 0 and low threshold
+        @test atan2(T(2.0^-61), -T(1.0)) === T(pi) # m==2
+        @test atan2(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
+        # y/x is "safe" ("arbitrary values", just need to hit the branch)
+        _ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
+        _ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
+        @test atan2(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
+        @test atan2(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
+        @test atan2(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
+        @test atan2(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
+        @test atan2(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN2_PI_LO(T)))
+    end
+end
+
+@testset "acos #23283" begin
+    for T in (Float32, Float64)
+        @test acos(zero(T)) === T(pi)/2
+        @test acos(-zero(T)) === T(pi)/2
+        @test acos(nextfloat(zero(T))) === T(pi)/2
+        @test acos(prevfloat(zero(T))) === T(pi)/2
+        @test acos(one(T)) === T(0.0)
+        @test acos(-one(T)) === T(pi)
+        for x in (0.45, 0.6, 0.98)
+            by = acos(big(T(x)))
+            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
+            bym = acos(big(T(-x)))
+            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
+        end
+        @test_throws DomainError acos(-T(Inf))
+        @test_throws DomainError acos(T(Inf))
+        @test isnan_type(T, acos(T(NaN)))
+    end
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper <: Real
+    x::Float64
+end
+
+import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+
+for op in (:+, :-, :*, :/, :^)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
+end
+
+for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
+    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
+end
+
+for op in (:isfinite,)
+    @eval $op(x::FloatWrapper) = $op(x.x)
+end
+
+convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
+promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
+
+float(x::FloatWrapper) = x
+
+@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+
+    x = FloatWrapper(3.1)
+    y = FloatWrapper(4.1)
+
+    @test sincos(x) == (sin(x), cos(x))
+
+    z = Complex(x, y)
+
+    @test isa(exp(z), Complex)
+    @test isa(sin(z), Complex)
+    @test isa(cos(z), Complex)
 end

@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,6 +21,8 @@
 
 #include "uv.h"
 #include "../src/julia.h"
+#include "../src/julia_assert.h"
+
 JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus
@@ -71,13 +72,6 @@ static int exec_program(char *program)
 }
 
 void jl_lisp_prompt();
-
-#ifndef _WIN32
-JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
-{
-    return raise(SIGTSTP);
-}
-#endif
 
 #ifdef JL_GF_PROFILE
 static void print_profile(void)
@@ -164,8 +158,6 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
-extern JL_DLLEXPORT uint64_t jl_cpuid_tag();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -230,11 +222,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         argv[i] = (wchar_t*)arg;
     }
 #endif
-    if (argc >= 2 && strcmp((char *)argv[1], "--cpuid") == 0) {
-        /* Used by the build system to name CPUID-specific binaries */
-        printf("%" PRIx64, jl_cpuid_tag());
-        return 0;
-    }
     libsupport_init();
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
     if (lisp_prompt) {
@@ -244,6 +231,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     jl_parse_opts(&argc, (char***)&argv);
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_lisp_prompt();
         return 0;
     }

@@ -7,7 +7,6 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "dtypes.h"
 #include "utils.h"
 #include "utf8.h"

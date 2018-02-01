@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include <assert.h>
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
@@ -14,6 +13,7 @@
 
 #include "llvm-version.h"
 #include "julia.h"
+#include "julia_assert.h"
 
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG

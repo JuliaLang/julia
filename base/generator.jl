@@ -37,6 +37,8 @@ Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
 
 Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
+Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
+
 start(g::Generator) = (@_inline_meta; start(g.iter))
 done(g::Generator, s) = (@_inline_meta; done(g.iter, s))
 function next(g::Generator, s)
@@ -51,18 +53,19 @@ end
 abstract type IteratorSize end
 struct SizeUnknown <: IteratorSize end
 struct HasLength <: IteratorSize end
-struct HasShape <: IteratorSize end
+struct HasShape{N} <: IteratorSize end
 struct IsInfinite <: IteratorSize end
 
 """
-    iteratorsize(itertype::Type) -> IteratorSize
+    IteratorSize(itertype::Type) -> IteratorSize
 
-Given the type of an iterator, returns one of the following values:
+Given the type of an iterator, return one of the following values:
 
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
-* `HasShape()` if there is a known length plus a notion of multidimensional shape (as for an array).
-   In this case the [`size`](@ref) function is valid for the iterator.
+* `HasShape{N}()` if there is a known length plus a notion of multidimensional shape (as for an array).
+   In this case `N` should give the number of dimensions, and the [`size`](@ref) function is valid
+   for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 
 The default value (for iterators that do not define this function) is `HasLength()`.
@@ -72,24 +75,24 @@ This trait is generally used to select between algorithms that pre-allocate spac
 result, and algorithms that resize their result incrementally.
 
 ```jldoctest
-julia> Base.iteratorsize(1:5)
-Base.HasShape()
+julia> Base.IteratorSize(1:5)
+Base.HasShape{1}()
 
-julia> Base.iteratorsize((2,3))
+julia> Base.IteratorSize((2,3))
 Base.HasLength()
 ```
 """
-iteratorsize(x) = iteratorsize(typeof(x))
-iteratorsize(::Type) = HasLength()  # HasLength is the default
+IteratorSize(x) = IteratorSize(typeof(x))
+IteratorSize(::Type) = HasLength()  # HasLength is the default
 
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
 
 """
-    iteratoreltype(itertype::Type) -> IteratorEltype
+    IteratorEltype(itertype::Type) -> IteratorEltype
 
-Given the type of an iterator, returns one of the following values:
+Given the type of an iterator, return one of the following values:
 
 * `EltypeUnknown()` if the type of elements yielded by the iterator is not known in advance.
 * `HasEltype()` if the element type is known, and [`eltype`](@ref) would return a meaningful value.
@@ -101,20 +104,20 @@ type of result, and algorithms that pick a result type based on the types of yie
 values.
 
 ```jldoctest
-julia> Base.iteratoreltype(1:5)
+julia> Base.IteratorEltype(1:5)
 Base.HasEltype()
 ```
 """
-iteratoreltype(x) = iteratoreltype(typeof(x))
-iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
+IteratorEltype(x) = IteratorEltype(typeof(x))
+IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize(::Type{<:AbstractArray}) = HasShape()
-iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
+IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
+IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
-indices(g::Generator) = indices(g.iter)
+axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
-iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
+IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
-haslength(iter) = iteratorsize(iter) isa Union{HasShape, HasLength}
+haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}

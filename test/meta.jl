@@ -40,12 +40,10 @@ function foundfunc(bt, funcname)
     end
     false
 end
-if inlining_on
-    @test !foundfunc(h_inlined(), :g_inlined)
-end
+@test foundfunc(h_inlined(), :g_inlined)
 @test foundfunc(h_noinlined(), :g_noinlined)
 
-using Base.pushmeta!, Base.popmeta!
+using Base: pushmeta!, popmeta!
 
 macro attach(val, ex)
     esc(_attach(val, ex))
@@ -130,9 +128,6 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-@test Base.Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
-      [:Foo, :Bar, :Baz]
-
 # test base/expr.jl
 baremodule B
     eval = 0
@@ -187,4 +182,31 @@ let oldout = STDOUT
     finally
         redirect_stdout(oldout)
     end
+end
+
+macro is_dollar_expr(ex)
+    return Meta.isexpr(ex, :$)
+end
+
+module TestExpandModule
+macro is_in_def_module()
+    return __module__ === @__MODULE__
+end
+end
+
+let a = 1
+    @test @is_dollar_expr $a
+    @test !TestExpandModule.@is_in_def_module
+    @test @eval TestExpandModule @is_in_def_module
+
+    @test Meta.lower(@__MODULE__, :($a)) === 1
+    @test !Meta.lower(@__MODULE__, :(@is_dollar_expr $a))
+    @test Meta.@lower @is_dollar_expr $a
+    @test Meta.@lower @__MODULE__() @is_dollar_expr $a
+    @test !Meta.@lower TestExpandModule.@is_in_def_module
+    @test Meta.@lower TestExpandModule @is_in_def_module
+
+    @test macroexpand(@__MODULE__, :($a)) === 1
+    @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
+    @test @macroexpand @is_dollar_expr $a
 end

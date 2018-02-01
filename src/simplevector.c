@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 {

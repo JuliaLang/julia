@@ -6,9 +6,9 @@
 Load the index file for the repository `repo`.
 """
 function GitIndex(repo::GitRepo)
-    idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    idx_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}), idx_ptr_ptr, repo.ptr)
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), idx_ptr_ptr, repo.ptr)
     return GitIndex(repo, idx_ptr_ptr[])
 end
 
@@ -23,7 +23,7 @@ If `force` is `false`, the index data is only updated from disk if the data on d
 has changed since the last time it was loaded into `idx`.
 """
 function read!(idx::GitIndex, force::Bool = false)
-    @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Void}, Cint), idx.ptr, Cint(force))
+    @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Cvoid}, Cint), idx.ptr, Cint(force))
     return idx
 end
 
@@ -33,7 +33,7 @@ end
 Write the state of index `idx` to disk using a file lock.
 """
 function write!(idx::GitIndex)
-    @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Void},), idx.ptr)
+    @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Cvoid},), idx.ptr)
     return idx
 end
 
@@ -48,15 +48,15 @@ repository cannot be bare. `idx` must not contain any files with conflicts.
 function write_tree!(idx::GitIndex)
     oid_ptr = Ref(GitHash())
     @check ccall((:git_index_write_tree, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Void}), oid_ptr, idx.ptr)
+                 (Ptr{GitHash}, Ptr{Cvoid}), oid_ptr, idx.ptr)
     return oid_ptr[]
 end
 
 function repository(idx::GitIndex)
-    if isnull(idx.owner)
+    if idx.owner === nothing
         throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
     else
-        return Base.get(idx.owner)
+        return idx.owner
     end
 end
 
@@ -69,27 +69,65 @@ Read the tree `tree` (or the tree pointed to by `treehash` in the repository own
 """
 function read_tree!(idx::GitIndex, tree::GitTree)
     @check ccall((:git_index_read_tree, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
+                 (Ptr{Cvoid}, Ptr{Cvoid}), idx.ptr, tree.ptr)
 end
 read_tree!(idx::GitIndex, hash::AbstractGitHash) =
     read_tree!(idx, GitTree(repository(idx), hash))
 
+"""
+    add!(repo::GitRepo, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+    add!(idx::GitIndex, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+
+Add all the files with paths specified by `files` to the index `idx` (or the index
+of the `repo`). If the file already exists, the index entry will be updated.
+If the file does not exist already, it will be newly added into the index.
+`files` may contain glob patterns which will be expanded and any matching files will
+be added (unless `INDEX_ADD_DISABLE_PATHSPEC_MATCH` is set, see below).
+If a file has been ignored (in `.gitignore` or in the config), it *will not* be
+added, *unless* it is already being tracked in the index, in which case it *will* be
+updated. The keyword argument `flags` is a set of bit-flags which control the behavior
+with respect to ignored files:
+  * `Consts.INDEX_ADD_DEFAULT` - default, described above.
+  * `Consts.INDEX_ADD_FORCE` - disregard the existing ignore rules and force addition of
+    the file to the index even if it is already ignored.
+  * `Consts.INDEX_ADD_CHECK_PATHSPEC` - cannot be used at the same time as `INDEX_ADD_FORCE`.
+    Check that each file in `files` which exists on disk is not in the ignore list. If one
+    of the files *is* ignored, the function will return `EINVALIDSPEC`.
+  * `Consts.INDEX_ADD_DISABLE_PATHSPEC_MATCH` - turn off glob matching, and only add files
+    to the index which exactly match the paths specified in `files`.
+"""
 function add!(idx::GitIndex, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     @check ccall((:git_index_add_all, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
+                 (Ptr{Cvoid}, Ptr{StrArrayStruct}, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
+"""
+    update!(repo::GitRepo, files::AbstractString...)
+    update!(idx::GitIndex, files::AbstractString...)
+
+Update all the files with paths specified by `files` in the index `idx` (or the index
+of the `repo`). Match the state of each file in the index with the current state on
+disk, removing it if it has been removed on disk, or updating its entry in the object
+database.
+"""
 function update!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_update_all, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
+"""
+    remove!(repo::GitRepo, files::AbstractString...)
+    remove!(idx::GitIndex, files::AbstractString...)
+
+Remove all the files with paths specified by `files` in the index `idx` (or the index
+of the `repo`).
+"""
 function remove!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_remove_all, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
@@ -126,23 +164,26 @@ function read!(repo::GitRepo, force::Bool = false)
 end
 
 function Base.count(idx::GitIndex)
-    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
+    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), idx.ptr)
 end
 
 function Base.getindex(idx::GitIndex, i::Integer)
-    ie_ptr = ccall((:git_index_get_byindex, :libgit2),
-                   Ptr{IndexEntry},
-                   (Ptr{Void}, Csize_t), idx.ptr, i-1)
-    ie_ptr == C_NULL && return nothing
-    return unsafe_load(ie_ptr)
+    GC.@preserve idx begin
+        ie_ptr = ccall((:git_index_get_byindex, :libgit2),
+                       Ptr{IndexEntry},
+                       (Ptr{Cvoid}, Csize_t), idx.ptr, i-1)
+        ie_ptr == C_NULL && return nothing
+        elem = unsafe_load(ie_ptr)
+    end
+    return elem
 end
 
-function Base.find(path::String, idx::GitIndex)
+function Base.findall(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)
     ret = ccall((:git_index_find, :libgit2), Cint,
-                  (Ref{Csize_t}, Ptr{Void}, Cstring), pos_ref, idx.ptr, path)
-    ret == Cint(Error.ENOTFOUND) && return Nullable{Csize_t}()
-    return Nullable(pos_ref[]+1)
+                  (Ref{Csize_t}, Ptr{Cvoid}, Cstring), pos_ref, idx.ptr, path)
+    ret == Cint(Error.ENOTFOUND) && return nothing
+    return pos_ref[]+1
 end
 
 """

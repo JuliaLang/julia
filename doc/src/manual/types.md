@@ -41,7 +41,7 @@ up front are:
     where the combination of static compilation with polymorphism makes this distinction significant.
   * Only values, not variables, have types -- variables are simply names bound to values.
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
-    by symbols, by values of any type for which [`isbits()`](@ref) returns true (essentially, things
+    by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
     like numbers and bools that are stored like C types or structs with no pointers to other objects),
     and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
     or restricted.
@@ -69,7 +69,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
 
 julia> (1+2)::Int
 3
@@ -80,7 +80,7 @@ This allows a type assertion to be attached to any expression in-place.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
 the `::` operator means something a bit different: it declares the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
-assigned to the variable will be converted to the declared type using [`convert()`](@ref):
+assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
 ```jldoctest
 julia> function foo()
@@ -334,7 +334,7 @@ Foo
 
 When a type is applied like a function it is called a *constructor*. Two constructors are generated
 automatically (these are called *default constructors*). One accepts any arguments and calls
-[`convert()`](@ref) to convert them to the types of the fields, and the other accepts arguments
+[`convert`](@ref) to convert them to the types of the fields, and the other accepts arguments
 that match the field types exactly. The reason both of these are generated is that this makes
 it easier to add new definitions without inadvertently replacing a default constructor.
 
@@ -345,7 +345,7 @@ must be convertible to `Int`:
 julia> Foo((), 23.5, 1)
 ERROR: InexactError: convert(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:681 [inlined]
+ [1] convert at ./float.jl:703 [inlined]
  [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
 ```
 
@@ -483,7 +483,7 @@ argument types, constructed using the special `Union` function:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString, Int64}
+Union{Int64, AbstractString}
 
 julia> 1 :: IntOrString
 1
@@ -492,7 +492,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -651,7 +651,7 @@ ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of t
 This may have arisen from a call to the constructor Point{Float64}(...),
 since type constructors fall back to convert methods.
 Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:102
+ [1] Point{Float64}(::Float64) at ./sysimg.jl:114
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
@@ -801,10 +801,10 @@ julia> Pointy{Real}
 Pointy{Real}
 
 julia> Pointy{AbstractString}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -904,6 +904,31 @@ used to represent the arguments accepted by varargs methods (see [Varargs Functi
 
 The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
+
+### Named Tuple Types
+
+Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
+symbols giving the field names, and a tuple type giving the field types.
+
+```jldoctest
+julia> typeof((a=1,b="hello"))
+NamedTuple{(:a, :b),Tuple{Int64,String}}
+```
+
+A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
+The constructed `NamedTuple` type can be either a concrete type, with both parameters specified,
+or a type that specifies only field names:
+
+```jldoctest
+julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+(a = 1.0f0, b = "")
+
+julia> NamedTuple{(:a, :b)}((1,""))
+(a = 1, b = "")
+```
+
+If field types are specified, the arguments are converted. Otherwise the types of the arguments
+are used directly.
 
 #### [Singleton Types](@id man-singleton-types)
 
@@ -1111,7 +1136,7 @@ julia> isa(1, AbstractFloat)
 false
 ```
 
-The [`typeof()`](@ref) function, already used throughout the manual in examples, returns the type
+The [`typeof`](@ref) function, already used throughout the manual in examples, returns the type
 of its argument. Since, as noted above, types are objects, they also have types, and we can ask
 what their types are:
 
@@ -1139,7 +1164,7 @@ DataType
 
 `DataType` is its own type.
 
-Another operation that applies to some types is [`supertype()`](@ref), which reveals a type's
+Another operation that applies to some types is [`supertype`](@ref), which reveals a type's
 supertype. Only declared types (`DataType`) have unambiguous supertypes:
 
 ```jldoctest
@@ -1156,21 +1181,21 @@ julia> supertype(Any)
 Any
 ```
 
-If you apply [`supertype()`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
+If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
 ```jldoctest
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:41
-  supertype(!Matched::UnionAll) at operators.jl:46
+  supertype(!Matched::DataType) at operators.jl:42
+  supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
 ## Custom pretty-printing
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
-overloading the [`show()`](@ref) function.  For example, suppose we define a type to represent
+overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
 complex numbers in polar form:
 
 ```jldoctest polartype
@@ -1202,7 +1227,7 @@ julia> Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
 More fine-grained control over display of `Polar` objects is possible. In particular, sometimes
 one wants both a verbose multi-line printing format, used for displaying a single object in the
 REPL and other interactive environments, and also a more compact single-line format used for
-[`print()`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
+[`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
 format for displaying an object by overloading a three-argument form of `show` that takes the
 `text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
@@ -1227,7 +1252,7 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
 the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display()`](@ref)
+which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1267,7 +1292,7 @@ julia> print(:($a^2))
 3.0 * exp(4.0im) ^ 2
 ```
 
-Because the operator `^` has higher precedence than `*` (see [Operator Precedence](@ref)), this
+Because the operator `^` has higher precedence than `*` (see [Operator Precedence and Associativity](@ref)), this
 output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
 exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
 z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
@@ -1348,190 +1373,3 @@ It's worth noting that it's extremely easy to mis-use parametric "value" types, 
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
-
-## [Nullable Types: Representing Missing Values](@id man-nullable-types)
-
-In many settings, you need to interact with a value of type `T` that may or may not exist. To
-handle these settings, Julia provides a parametric type called [`Nullable{T}`](@ref), which can be thought
-of as a specialized container type that can contain either zero or one values. `Nullable{T}` provides
-a minimal interface designed to ensure that interactions with missing values are safe. At present,
-the interface consists of several possible interactions:
-
-  * Construct a `Nullable` object.
-  * Check if a `Nullable` object has a missing value.
-  * Access the value of a `Nullable` object with a guarantee that a [`NullException`](@ref)
-    will be thrown if the object's value is missing.
-  * Access the value of a `Nullable` object with a guarantee that a default value of type
-    `T` will be returned if the object's value is missing.
-  * Perform an operation on the value (if it exists) of a `Nullable` object, getting a
-    `Nullable` result. The result will be missing if the original value was missing.
-  * Performing a test on the value (if it exists) of a `Nullable`
-    object, getting a result that is missing if either the `Nullable`
-    itself was missing, or the test failed.
-  * Perform general operations on single `Nullable` objects, propagating the missing data.
-
-### Constructing [`Nullable`](@ref) objects
-
-To construct an object representing a missing value of type `T`, use the `Nullable{T}()` function:
-
-```jldoctest
-julia> x1 = Nullable{Int64}()
-Nullable{Int64}()
-
-julia> x2 = Nullable{Float64}()
-Nullable{Float64}()
-
-julia> x3 = Nullable{Vector{Int64}}()
-Nullable{Array{Int64,1}}()
-```
-
-To construct an object representing a non-missing value of type `T`, use the `Nullable(x::T)`
-function:
-
-```jldoctest
-julia> x1 = Nullable(1)
-Nullable{Int64}(1)
-
-julia> x2 = Nullable(1.0)
-Nullable{Float64}(1.0)
-
-julia> x3 = Nullable([1, 2, 3])
-Nullable{Array{Int64,1}}([1, 2, 3])
-```
-
-Note the core distinction between these two ways of constructing a `Nullable` object:
-in one style, you provide a type, `T`, as a function parameter; in the other style, you provide
-a single value of type `T` as an argument.
-
-### Checking if a `Nullable` object has a value
-
-You can check if a `Nullable` object has any value using [`isnull()`](@ref):
-
-```jldoctest
-julia> isnull(Nullable{Float64}())
-true
-
-julia> isnull(Nullable(0.0))
-false
-```
-
-### Safely accessing the value of a `Nullable` object
-
-You can safely access the value of a `Nullable` object using [`get()`](@ref):
-
-```jldoctest
-julia> get(Nullable{Float64}())
-ERROR: NullException()
-Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:92
-
-julia> get(Nullable(1.0))
-1.0
-```
-
-If the value is not present, as it would be for `Nullable{Float64}`, a [`NullException`](@ref)
-error will be thrown. The error-throwing nature of the `get()` function ensures that any
-attempt to access a missing value immediately fails.
-
-In cases for which a reasonable default value exists that could be used when a `Nullable`
-object's value turns out to be missing, you can provide this default value as a second argument
-to `get()`:
-
-```jldoctest
-julia> get(Nullable{Float64}(), 0.0)
-0.0
-
-julia> get(Nullable(1.0), 0.0)
-1.0
-```
-
-!!! tip
-    Make sure the type of the default value passed to `get()` and that of the `Nullable`
-    object match to avoid type instability, which could hurt performance. Use [`convert()`](@ref)
-    manually if needed.
-
-### Performing operations on `Nullable` objects
-
-`Nullable` objects represent values that are possibly missing, and it
-is possible to write all code using these objects by first testing to see if
-the value is missing with [`isnull()`](@ref), and then doing an appropriate
-action. However, there are some common use cases where the code could be more
-concise or clear by using a higher-order function.
-
-The [`map`](@ref) function takes as arguments a function `f` and a `Nullable` value
-`x`. It produces a `Nullable`:
-
- - If `x` is a missing value, then it produces a missing value;
- - If `x` has a value, then it produces a `Nullable` containing
-   `f(get(x))` as value.
-
-This is useful for performing simple operations on values that might be missing
-if the desired behaviour is to simply propagate the missing values forward.
-
-The [`filter`](@ref) function takes as arguments a predicate function `p`
-(that is, a function returning a boolean) and a `Nullable` value `x`.
-It produces a `Nullable` value:
-
- - If `x` is a missing value, then it produces a missing value;
- - If `p(get(x))` is true, then it produces the original value `x`;
- - If `p(get(x))` is false, then it produces a missing value.
-
-In this way, `filter` can be thought of as selecting only allowable
-values, and converting non-allowable values to missing values.
-
-While `map` and `filter` are useful in specific cases, by far the most useful
-higher-order function is [`broadcast`](@ref), which can handle a wide variety of cases,
-including making existing operations work and propagate `Nullable`s. An example
-will motivate the need for `broadcast`. Suppose we have a function that computes the
-greater of two real roots of a quadratic equation, using the quadratic formula:
-
-```jldoctest nullableroot
-julia> root(a::Real, b::Real, c::Real) = (-b + √(b^2 - 4a*c)) / 2a
-root (generic function with 1 method)
-```
-
-We may verify that the result of `root(1, -9, 20)` is `5.0`, as we expect,
-since `5.0` is the greater of two real roots of the quadratic equation.
-
-Suppose now that we want to find the greatest real root of a quadratic
-equations where the coefficients might be missing values. Having missing values
-in datasets is a common occurrence in real-world data, and so it is important
-to be able to deal with them. But we cannot find the roots of an equation if we
-do not know all the coefficients. The best solution to this will depend on the
-particular use case; perhaps we should throw an error. However, for this
-example, we will assume that the best solution is to propagate the missing
-values forward; that is, if any input is missing, we simply produce a missing
-output.
-
-The `broadcast()` function makes this task easy; we can simply pass the
-`root` function we wrote to `broadcast`:
-
-```jldoctest nullableroot
-julia> broadcast(root, Nullable(1), Nullable(-9), Nullable(20))
-Nullable{Float64}(5.0)
-
-julia> broadcast(root, Nullable(1), Nullable{Int}(), Nullable{Int}())
-Nullable{Float64}()
-
-julia> broadcast(root, Nullable{Int}(), Nullable(-9), Nullable(20))
-Nullable{Float64}()
-```
-
-If one or more of the inputs is missing, then the output of
-`broadcast()` will be missing.
-
-There exists special syntactic sugar for the `broadcast()` function
-using a dot notation:
-
-```jldoctest nullableroot
-julia> root.(Nullable(1), Nullable(-9), Nullable(20))
-Nullable{Float64}(5.0)
-```
-
-In particular, the regular arithmetic operators can be `broadcast()`
-conveniently using `.`-prefixed operators:
-
-```jldoctest
-julia> Nullable(2) ./ Nullable(3) .+ Nullable(1.0)
-Nullable{Float64}(1.66667)
-```

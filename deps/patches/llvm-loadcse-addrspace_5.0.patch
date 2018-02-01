@@ -1,0 +1,104 @@
+From b252987fe34a314524428d27a85a87fdd746e0b5 Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Sun, 18 Jun 2017 16:45:38 -0400
+Subject: [PATCH 2/4] Disable LoadCSE and Store forwarding between different
+ address space or between non-integral pointer and integers.
+
+---
+ lib/Analysis/Loads.cpp                             | 30 +++++++++++++++++++
+ .../InstCombine/non-integral-pointers.ll           | 34 ++++++++++++++++++++++
+ 2 files changed, 64 insertions(+)
+
+diff --git a/lib/Analysis/Loads.cpp b/lib/Analysis/Loads.cpp
+index 591b0fc481d..e9c8be82b03 100644
+--- a/lib/Analysis/Loads.cpp
++++ b/lib/Analysis/Loads.cpp
+@@ -380,6 +380,21 @@ Value *llvm::FindAvailablePtrLoadStore(Value *Ptr, Type *AccessTy,
+         if (LI->isAtomic() < AtLeastAtomic)
+           return nullptr;
+ 
++        if (AccessTy->isPointerTy()) {
++          PointerType *Ty1 = cast<PointerType>(AccessTy);
++          if (PointerType *Ty2 = dyn_cast<PointerType>(LI->getType())) {
++            if (Ty1->getAddressSpace() != Ty2->getAddressSpace()) {
++              return nullptr;
++            }
++          }
++          else if (DL.isNonIntegralPointerType(Ty1)) {
++            return nullptr;
++          }
++        }
++        else if (DL.isNonIntegralPointerType(LI->getType())) {
++          return nullptr;
++        }
++
+         if (IsLoadCSE)
+             *IsLoadCSE = true;
+         return LI;
+@@ -399,6 +414,21 @@ Value *llvm::FindAvailablePtrLoadStore(Value *Ptr, Type *AccessTy,
+         if (SI->isAtomic() < AtLeastAtomic)
+           return nullptr;
+ 
++        if (AccessTy->isPointerTy()) {
++          PointerType *Ty1 = cast<PointerType>(AccessTy);
++          if (PointerType *Ty2 = dyn_cast<PointerType>(SI->getValueOperand()->getType())) {
++            if (Ty1->getAddressSpace() != Ty2->getAddressSpace()) {
++              return nullptr;
++            }
++          }
++          else if (DL.isNonIntegralPointerType(Ty1)) {
++            return nullptr;
++          }
++        }
++        else if (DL.isNonIntegralPointerType(SI->getValueOperand()->getType())) {
++          return nullptr;
++        }
++
+         if (IsLoadCSE)
+           *IsLoadCSE = false;
+         return SI->getOperand(0);
+diff --git a/test/Transforms/InstCombine/non-integral-pointers.ll b/test/Transforms/InstCombine/non-integral-pointers.ll
+index 4f54fe6737d..96a2b2edaf1 100644
+--- a/test/Transforms/InstCombine/non-integral-pointers.ll
++++ b/test/Transforms/InstCombine/non-integral-pointers.ll
+@@ -46,3 +46,37 @@ entry:
+   store i8 addrspace(3)* %val, i8 addrspace(3)** %ptr1
+   ret void
+ }
++
++define i64 @g(i8 addrspace(4)** %gp) {
++  ; CHECK-LABEL: @g(
++  ; CHECK: load
++  %.pre = load i8 addrspace(4)*, i8 addrspace(4)** %gp, align 8
++  %v74 = call i8 addrspace(4)* @alloc()
++  %v75 = addrspacecast i8 addrspace(4)* %v74 to i8*
++  %v76 = bitcast i8* %v75 to i8 addrspace(4)**
++  %v77 = getelementptr i8 addrspace(4)*, i8 addrspace(4)** %v76, i64 -1
++  ; CHECK: store
++  store i8 addrspace(4)* %.pre, i8 addrspace(4)** %v77, align 8
++  %v80 = bitcast i8 addrspace(4)** %v77 to i64*
++  ; CHECK: load
++  ; CHECK-NOT: ptrtoint
++  %v81 = load i64, i64* %v80, align 8
++  ret i64 %v81
++}
++
++define i64 @g2(i8* addrspace(4)* %gp) {
++  ; CHECK-LABEL: @g2(
++  ; CHECK: load
++  %.pre = load i8*, i8* addrspace(4)* %gp, align 8
++  %v74 = call i8 addrspace(4)* @alloc()
++  %v76 = bitcast i8 addrspace(4)* %v74 to i8* addrspace(4)*
++  %v77 = getelementptr i8*, i8* addrspace(4)* %v76, i64 -1
++  ; CHECK: store
++  store i8* %.pre, i8* addrspace(4)* %v77, align 8
++  %v80 = bitcast i8* addrspace(4)* %v77 to i64 addrspace(4)*
++  ; CHECK-NOT: store
++  %v81 = load i64, i64 addrspace(4)* %v80, align 8
++  ret i64 %v81
++}
++
++declare i8 addrspace(4)* @alloc()
+-- 
+2.14.1
+

@@ -81,7 +81,15 @@ As in the example above, we recommend following some simple conventions when wri
    ...
    """
    ```
-5. Include any code examples in an `# Examples` section.
+5. Provide hints to related functions.
+
+   Sometimes there are functions of related functionality. To increase discoverability please provide
+   a short list of these in a `See also:` paragraph.
+
+   ```
+   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   ```
+6. Include any code examples in an `# Examples` section.
 
    Examples should, whenever possible, be written as *doctests*. A *doctest* is a fenced code block
    (see [Code blocks](@ref)) starting with ````` ```jldoctest````` and contains any number of `julia>`
@@ -95,7 +103,6 @@ As in the example above, we recommend following some simple conventions when wri
    Some nice documentation here.
 
    # Examples
-
    ```jldoctest
    julia> a = [1 2; 3 4]
    2×2 Array{Int64,2}:
@@ -121,19 +128,33 @@ As in the example above, we recommend following some simple conventions when wri
    You can then run `make -C doc doctest` to run all the doctests in the Julia Manual, which will
    ensure that your example works.
 
+   To indicate that the output result is truncated, you may write
+   `[...]` at the line where checking should stop. This is useful to
+   hide a stacktrace (which contains non-permanent references to lines
+   of julia code) when the doctest shows that an exception is thrown,
+   for example:
+
+   ````julia
+   ```jldoctest
+   julia> div(1, 0)
+   ERROR: DivideError: integer division error
+   [...]
+   ```
+   ````
+
    Examples that are untestable should be written within fenced code blocks starting with ````` ```julia`````
    so that they are highlighted correctly in the generated documentation.
 
    !!! tip
        Wherever possible examples should be **self-contained** and **runnable** so that readers are able
        to try them out without having to include any dependencies.
-6. Use backticks to identify code and equations.
+7. Use backticks to identify code and equations.
 
    Julia identifiers and code excerpts should always appear between backticks ``` ` ``` to enable
    highlighting. Equations in the LaTeX syntax can be inserted between double backticks ``` `` ```.
    Use Unicode characters rather than their LaTeX escape sequence, i.e. ``` ``α = 1`` ``` rather
    than ``` ``\\alpha = 1`` ```.
-7. Place the starting and ending `"""` characters on lines by themselves.
+8. Place the starting and ending `"""` characters on lines by themselves.
 
    That is, write:
 
@@ -156,7 +177,7 @@ As in the example above, we recommend following some simple conventions when wri
    ```
 
    This makes it more clear where docstrings start and end.
-8. Respect the line length limit used in the surrounding code.
+9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It it advised to add line breaks after 92 characters.
@@ -254,13 +275,13 @@ Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and 
 added to the documentation system as blocks are evaluated. For example:
 
 ```julia
-if VERSION > v"0.5"
+if condition()
     "..."
     f(x) = x
 end
 ```
 
-will add documentation to `f(x)` when the condition is `true`. Note that even if `f(x)` goes
+will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
 ### Dynamic documentation
@@ -317,7 +338,7 @@ function f end
 f
 ```
 
-Adds docstring `"..."` to `Function``f`. The first version is the preferred syntax, however both
+Adds docstring `"..."` to function `f`. The first version is the preferred syntax, however both
 are equivalent.
 
 ```julia
@@ -333,7 +354,7 @@ end
 f(x)
 ```
 
-Adds docstring `"..."` to `Method``f(::Any)`.
+Adds docstring `"..."` to the `Method` `f(::Any)`.
 
 ```julia
 "..."
@@ -475,7 +496,7 @@ sym
 ```
 
 Adds docstring `"..."` to the value associated with `sym`. Users should prefer documenting `sym`
-at it's definition.
+at its definition.
 
 ### Multiple Objects
 
@@ -513,7 +534,7 @@ Macro authors should take note that only macros that generate a single expressio
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression
 that should be documented must be marked using the [`@__doc__`](@ref Core.@__doc__) macro.
 
-The `@enum` macro makes use of `@__doc__` to allow for documenting `Enum`s. Examining it's definition
+The `@enum` macro makes use of `@__doc__` to allow for documenting `Enum`s. Examining its definition
 should serve as an example of how to use `@__doc__` correctly.
 
 ```@docs
@@ -595,13 +616,13 @@ the Julia documentation itself. For example:
 
 ```julia
 """
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    accumulate!(op, y, x)
 
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+Cumulative operation `op` on a vector `x`, storing the result in `y`. See also [`accumulate`](@ref).
 """
 ```
 
-This will create a link in the generated docs to the `eigvals` documentation
+This will create a link in the generated docs to the `accumulate` documentation
 (which has more information about what this function actually does). It's good to include
 cross references to mutating/non-mutating versions of a function, or to highlight a difference
 between two similar-seeming functions.

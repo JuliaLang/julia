@@ -5,16 +5,16 @@
 # assemble the finite-difference laplacian
 function fdlaplacian(N)
     # create a 1D laplacian and a sparse identity
-    fdl1 = spdiagm((ones(N-1),-2*ones(N),ones(N-1)), [-1,0,1])
+    fdl1 = sparse(SymTridiagonal(fill(-2., N), fill(1., N-1)))
     # laplace operator on the full grid
-    return kron(speye(N), fdl1) + kron(fdl1, speye(N))
+    return kron(sparse(1.0I, N, N), fdl1) + kron(fdl1, sparse(1.0I, N, N))
 end
 
 # get the list of boundary dof-indices
 function get_free(N)
     L = zeros(Int, N, N)
     L[2:N-1, 2:N-1] = 1
-    return find(L)
+    return findall(L)
 end
 
 # timing of assembly, slice and solve

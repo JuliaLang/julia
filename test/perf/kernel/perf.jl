@@ -21,11 +21,11 @@ function listn1n2(n1::Int,n2::Int)
 end
 
 @timeit listn1n2(1,10^6) "cons" "List concatenation"
-gc()
+GC.gc()
 
 # issue #1211
 include("ziggurat.jl")
-a = Array{Float64}(1000000)
+a = Vector{Float64}(uninitialized, 1000000)
 @timeit randn_zig!(a) "randn_zig" "Ziggurat gaussian number generator"
 
 # issue #950
@@ -33,9 +33,9 @@ include("gk.jl")
 @timeit gk(350,[0.1]) "gk" "Grigoriadis Khachiyan matrix games"
 
 # issue #942
-s = sparse(ones(280,280))
+s = sparse(fill(1.,280,280))
 @timeit s*s "sparsemul" "Sparse matrix - sparse matrix multiplication"
-s2 = sparse(rand(1:2000,10^5), kron([1:10^4;],ones(Int,10)), ones(Int,10^5), 2000, 10^4)
+s2 = sparse(rand(1:2000,10^5), kron([1:10^4;],fill(1,10)), fill(1,10^5), 2000, 10^4)
 @timeit s2*s2' "sparsemul2" "Sparse matrix - matrix multiplication with fill-in"
 
 # issue #938
@@ -102,7 +102,7 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize" "Vectorized arithmetic"
 
-writecsv("random.csv", rand(100000,4))
+writedlm("random.csv", rand(100000, 4), ',')
 
 function parsecsv()
     for line in eachline("random.csv")

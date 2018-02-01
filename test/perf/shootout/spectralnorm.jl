@@ -27,7 +27,7 @@ function Atu(w,v)
 end
 
 function approximate(n)
-    u = ones(Float64,n)
+    u = fill(1., n)
     v = zeros(Float64,n)
     w = zeros(Float64,n)
     vv = vBv = 0
