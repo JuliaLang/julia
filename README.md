@@ -324,6 +324,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `gc` and `gc_enable` are now `GC.gc` and `GC.enable`, respectively ([#25616]).
 
+* `endof` is now `lastindex` ([#25458]). (Note that `lastindex(A, n)` is not supported.)
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -504,6 +506,7 @@ includes this fix. Find the minimum version from there.
 [#25241]: https://github.com/JuliaLang/julia/issues/25241
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
 [#25402]: https://github.com/JuliaLang/julia/issues/25402
+[#25458]: https://github.com/JuliaLang/julia/issues/25458
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
 [#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
