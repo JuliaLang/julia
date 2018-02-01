@@ -3375,7 +3375,6 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                         end
                     end
                     # replace old expression with new and update metadata
-                    slot_var = quoted(23431)
                     replace_use_expr_with!(ctx, use, slot_var, false, isempty(exprs))
                     if !isempty(exprs)
                         old_expr = use.stmts[use.stmtidx]
