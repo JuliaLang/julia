@@ -2860,24 +2860,18 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 if !isdispatchelem(vtype) || !isdispatchelem(elsetype)
                     alltypes[Any] = false
                 end
-                if isdispatchelem(vtype) || isdispatchelem(elsetype)
-                    splittable = true
-                end
             else
                 usetyp = Any
                 if isa(slot, TypedSlot)
                     usetyp = widenconst(slot.typ)
                     usetyp === Union{} && continue
-                    if isdispatchelem(usetyp)
-                        splittable = true
-                    else
-                        usetyp = Any
-                    end
+                    splittable = true
+                    isdispatchelem(usetyp) || (usetyp = Any)
                 end
                 alltypes[usetyp] = false
             end
         end
-        splittable || return false
+        (splittable && length(alltypes) > 1) || return false
     end
     name = ctx.sv.src.slotnames[key.first]
     local tag_var # lazy-init below, if needed
@@ -2967,23 +2961,22 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 else
                     add_def(ctx.infomap, new_slot, def)
                 end
-            else # splittable uses
+            else # splittable by uses
                 exprs = []
                 phi = genlabel(ctx.sv)
-                if defex isa SlotNumber || defex isa TypedSlot
-                    rhsval = defex
-                else
-                    rhsval = newvar!(ctx.sv, rhstyp)
-                    new_ex = :($rhsval = $defex)
-                    push!(exprs, new_ex)
-                    scan_expr_use!(ctx.infomap, exprs, 1, new_ex, ctx.sv.src)
-                    add_def(ctx.infomap, rhsval, ValueDef(new_ex, exprs, 1))
-                end
+                rhsval = defex
                 for (t, v) in alltypes
                     v === false && continue
                     t === Any && continue
                     v = v::SlotNumber
                     t <: rhstyp || continue
+                    if !(rhsval isa SlotNumber || rhsval isa TypedSlot || rhsval isa SSAValue)
+                        rhsval = newvar!(ctx.sv, rhstyp)
+                        new_ex = :($rhsval = $defex)
+                        push!(exprs, new_ex)
+                        scan_expr_use!(ctx.infomap, exprs, 1, new_ex, ctx.sv.src)
+                        add_def(ctx.infomap, rhsval, ValueDef(new_ex, exprs, 1))
+                    end
                     next = genlabel(ctx.sv)
                     new_test = newvar!(ctx.sv, Bool)
                     new_val = Expr(:call, GlobalRef(Core, :(isa)), rhsval, t)
@@ -3017,10 +3010,17 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 end
                 any_slot = alltypes[Any]
                 if any_slot isa SlotNumber
-                    new_ex = :($any_slot = $rhsval)
+                    if rhsval isa Slot && nonleaf_slottype <: rhstyp
+                        rhsval_typed = TypedSlot(slot_id(rhsval), nonleaf_slottype)
+                    else
+                        rhsval_typed = rhsval
+                    end
+                    new_ex = :($any_slot = $rhsval_typed)
                     push!(exprs, new_ex)
                     add_def(ctx.infomap, any_slot, ValueDef(new_ex, exprs, length(exprs)))
-                    add_use(ctx.infomap, rhsval, ValueUse(exprs, length(exprs), new_ex, 2))
+                    if rhsval_typed isa SlotNumber || rhsval_typed isa TypedSlot || rhsval_typed isa SSAValue
+                        add_use(ctx.infomap, rhsval_typed, ValueUse(exprs, length(exprs), new_ex, 2))
+                    end
                     if need_tag
                         new_ex = :($tag_var = $(any_slot.id))
                         push!(exprs, new_ex)
@@ -3031,6 +3031,8 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                     # err_ex = Expr(:call, GlobalRef(_topmod(ctx.sv), :error), "fatal error in type inference (type bound)")
                     # err_ex.typ = Union{}
                     # push!(exprs, err_ex)
+                    push!(exprs, rhsval)
+                    add_use(ctx.infomap, rhsval, ValueUse(exprs, length(exprs)))
                     if need_tag
                         new_ex = :($tag_var = 0)
                         push!(exprs, new_ex)
@@ -3090,6 +3092,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
                 end
                 usex.args[use.exidx] = new_slot
                 add_use(ctx.infomap, new_slot, use)
+                usex.head === :(=) && maybe_add_allocopt_todo(ctx, usex.args[1])
                 continue
             end
         end
@@ -3324,8 +3327,8 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
             add_use(ctx.infomap, dest_slot, use)
             push!(exprs, old_expr)
             scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
-            add_allocopt_todo(ctx, dest_slot)
         end
+        add_allocopt_todo(ctx, dest_slot)
         ctx.changes[use.stmts=>use.stmtidx] = nothing
     end
     delete_valueinfo!(ctx, key)
