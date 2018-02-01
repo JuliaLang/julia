@@ -4530,7 +4530,7 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-mutable struct A12238{T} end
+struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
@@ -5977,3 +5977,11 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue 17149
+mutable struct Foo17149
+end
+@test Foo17149() !== Foo17149()
+let a = Foo17149()
+    @test a === a
+end
