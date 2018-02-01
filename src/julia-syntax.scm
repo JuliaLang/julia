@@ -1191,11 +1191,21 @@
                      (eq? (caadar binds) 'tuple))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           ,@(map (lambda (v) `(local-def ,v)) vars)
-                           ,(car binds)
-                           ,blk)))))
+                        (if (expr-contains-p (lambda (x) (memq x vars)) (caddr (car binds)))
+                            ;; use more careful lowering if there are name conflicts. issue #25652
+                            (let ((temp (make-ssavalue)))
+                              `(block
+                                (= ,temp ,(caddr (car binds)))
+                                (scope-block
+                                 (block
+                                  ,@(map (lambda (v) `(local-def ,v)) vars)
+                                  (= ,(cadr (car binds)) ,temp)
+                                  ,blk))))
+                            `(scope-block
+                              (block
+                               ,@(map (lambda (v) `(local-def ,v)) vars)
+                               ,(car binds)
+                               ,blk))))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 

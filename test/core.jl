@@ -3939,6 +3939,15 @@ let ex = quote
     @test ex.args[2] == :test
 end
 
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
+
 # issue #15180
 function f15180(x::T) where T
     X = Vector{T}(uninitialized, 1)
