@@ -536,6 +536,17 @@ end
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
+
+    # test eltype promotion
+    x = @inferred replace([1, 2], 2=>2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+
+    x = @inferred replace([1, 2], 2=>missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace(x -> x > 1, [1, 2], missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

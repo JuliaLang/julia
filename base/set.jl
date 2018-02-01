@@ -564,6 +564,16 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 ## replace/replace! ##
 
+# TODO: use copy!, which is currently unavailable from here since it is defined in Future
+_copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
+# TODO: use similar() once deprecation is removed and it preserves keys
+_copy_oftype(x::AbstractDict, ::Type{T}) where {T} = merge!(empty(x, T), x)
+_copy_oftype(x::AbstractSet, ::Type{T}) where {T} = union!(empty(x, T), x)
+
+_copy_oftype(x::AbstractArray{T}, ::Type{T}) where {T} = copy(x)
+_copy_oftype(x::AbstractDict{K,V}, ::Type{Pair{K,V}}) where {K,V} = copy(x)
+_copy_oftype(x::AbstractSet{T}, ::Type{T}) where {T} = copy(x)
+
 # to make replace/replace! work for a new container type Cont, only
 # replace!(new::Callable, A::Cont; count::Integer=typemax(Int))
 # has to be implemented
@@ -589,9 +599,9 @@ julia> replace!(Set([1, 2, 3]), 1=>0)
 Set([0, 2, 3])
 ```
 """
-replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, eltype(A), count, old_new)
+replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, count, old_new)
 
-function _replace!(A, ::Type{K}, count::Integer, old_new::Tuple{Vararg{Pair}}) where K
+function _replace!(A, count::Integer, old_new::Tuple{Vararg{Pair}})
     @inline function new(x)
         for o_n in old_new
             first(o_n) == x && return last(o_n)
@@ -674,8 +684,15 @@ julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
  3
 ```
 """
-replace(A, old_new::Pair...; count::Integer=typemax(Int)) =
-    _replace!(copy(A), eltype(A), count, old_new)
+function replace(A, old_new::Pair...; count::Integer=typemax(Int))
+    V = promote_valuetype(old_new...)
+    T = promote_type(eltype(A), V)
+    _replace!(_copy_oftype(A, T), count, old_new)
+end
+
+promote_valuetype(x::Pair{K, V}) where {K, V} = V
+promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
+    promote_type(V, promote_valuetype(y...))
 
 """
     replace(pred::Function, A, new; [count::Integer])
@@ -693,8 +710,10 @@ julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
  1
 ```
 """
-replace(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(pred, copy(A), new, count=count)
+function replace(pred::Callable, A, new; count::Integer=typemax(Int))
+    T = promote_type(eltype(A), typeof(new))
+    replace!(pred, _copy_oftype(A, T), new, count=count)
+end
 
 """
     replace(new::Function, A; [count::Integer])
