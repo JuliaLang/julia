@@ -632,25 +632,28 @@ function type_annotate!(sv::InferenceState)
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
+function _widen_all_consts!(e::Expr, used::Vector{Bool}, untypedload::Vector{Bool}, slottypes::Vector{Any})
     e.typ = widenconst(e.typ)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload, slottypes)
+            _widen_all_consts!(x, used, untypedload, slottypes)
         elseif isa(x, TypedSlot)
             vt = widenconst(x.typ)
-            if !(vt === x.typ)
-                if slottypes[x.id] ⊑ vt
-                    x = SlotNumber(x.id)
-                    untypedload[x.id] = true
-                else
-                    x = TypedSlot(x.id, vt)
-                end
-                e.args[i] = x
+            st = slottypes[x.id]
+            if vt === st || st ⊑ vt
+                x = SlotNumber(x.id)
+                untypedload[x.id] = true
+            else
+                x = TypedSlot(x.id, vt)
             end
-        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
-            untypedload[x.id] = true
+            e.args[i] = x
+            used[x.id] = true
+        elseif isa(x, SlotNumber)
+            if i != 1 || e.head !== :(=)
+                untypedload[x.id] = true
+            end
+            used[x.id] = true
         end
     end
     nothing
@@ -666,11 +669,12 @@ function widen_all_consts!(src::CodeInfo)
 
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
+    used = fill(false, nslots)
     e = Expr(:body)
     e.args = src.code
-    _widen_all_consts!(e, untypedload, src.slottypes)
+    _widen_all_consts!(e, used, untypedload, src.slottypes)
     for i = 1:nslots
-        src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
+        src.slottypes[i] = used[i] ? widen_slot_type(src.slottypes[i], untypedload[i]) : Union{}
     end
     return src
 end
@@ -2770,6 +2774,68 @@ function propagate_const_def!(ctx::AllocOptContext, info, key)
     return true
 end
 
+function filter_defs!(ctx::AllocOptContext, info, key)
+    key.second && return false # only Slot could have multiple defs
+    # compute a better slottype from the uses
+    # (previously, inference computed this from the defs)
+    slottype = widenconst(ctx.sv.src.slottypes[key.first])
+    alltypes = IdDict()
+    nonleaf_slottype = Union{}
+    for use in info.uses
+        slot = use.expr.args[use.exidx]
+        if isa(slot, TypedSlot)
+            usetyp = widenconst(slot.typ)
+            usetyp === Union{} && continue
+            if isdispatchelem(usetyp)
+                alltypes[usetyp] = nothing
+            else
+                nonleaf_slottype = tmerge(nonleaf_slottype, usetyp)
+                nonleaf_slottype === Any && return false
+            end
+        else
+            return false
+        end
+    end
+    if slottype == nonleaf_slottype
+        return false
+    end
+    recomputed = false
+    new_slottype = Union{}
+    for def in info.defs
+        assign = def.assign
+        isa(assign, NewvarNode) && continue
+        assign = assign::Expr
+        defex = assign.args[2]
+        rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+        if rhstyp === Union{} || (isdispatchelem(rhstyp) ? !haskey(alltypes, rhstyp) : typeintersect(rhstyp, nonleaf_slottype) === Union{})
+            # this def has no places it can be seen, so it can be dropped
+            recomputed = true
+            def.stmts[def.stmtidx] = defex
+            scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
+            ctx.changes[assign] = nothing
+        elseif !(new_slottype === Any || new_slottype === rhstyp)
+            new_slottype = tmerge(new_slottype, rhstyp)
+        end
+    end
+    if recomputed
+        # removed some defs, see if that narrows the slottype also
+        if !(slottype <: new_slottype)
+            ctx.sv.src.slottypes[key.first] = new_slottype
+            # drop TypedSlot from the uses which no longer need it
+            for use in info.uses
+                usex = use.expr
+                haskey(ctx.changes, usex) && continue
+                slot = use.expr.args[use.exidx]::TypedSlot
+                if new_slottype <: slot.typ
+                    use.expr.args[use.exidx] = SlotNumber(slot.id)
+                end
+            end
+        end
+        add_allocopt_todo(ctx, key)
+    end
+    return recomputed
+end
+
 function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     key.second && return false # only split Slot (not SSAValue)
     slottype = widenconst(ctx.sv.src.slottypes[key.first])
@@ -4374,6 +4440,8 @@ function optimize_value!(ctx::AllocOptContext, key)
     elseif var_has_undef(ctx.sv.src, key.first, key.second)
         return
     end
+    # Remove defs with no uses (by type), and narrow slottype
+    filter_defs!(ctx, info, key) && return
     # Split assignments of leaftypes that do not have overlapping uses with each other
     split_disjoint_assign!(ctx, info, key) && return
     # If we've found SSAValue or Slot as def, no need to try other optimizations
