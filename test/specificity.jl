@@ -177,3 +177,11 @@ end
 f22908(::Union) = 2
 f22908(::Type{Union{Int, Float32}}) = 1
 @test f22908(Union{Int, Float32}) == 1
+
+let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
+    B = Tuple{Array, Int},
+    C = Tuple{AbstractArray, Int, Array}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
+end
