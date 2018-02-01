@@ -196,6 +196,11 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `replace(s::AbstractString, pat=>repl)` if repl is a function, now calls
+    `repl(s[pos]::Char)`, when pat is a `Char` or collection of `Char` or predicate,
+    to determine the replacement of a single character. `pos` is the index of the
+    matched character.
+
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
