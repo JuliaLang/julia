@@ -1265,3 +1265,6 @@ function bar16239()
     f()
 end
 @test bar16239() == 0
+
+# issue #25020
+@test_throws ParseError Meta.parse("using Colors()")
