@@ -16,19 +16,24 @@ const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 # String constructor docstring from boot.jl, workaround for #16730
 # and the unavailability of @doc in boot.jl context.
 """
-    String(v::Vector{UInt8})
+    String(v::AbstractVector{UInt8})
 
 Create a new `String` from a vector `v` of bytes containing
-UTF-8 encoded characters.   This function takes "ownership" of
-the array, which means that you should not subsequently modify
-`v` (since strings are supposed to be immutable in Julia) for
-as long as the string exists.
+UTF-8 encoded characters.
 
-If you need to subsequently modify `v`, use `String(copy(v))` instead.
+This function ordinarily makes a copy of the data in `v`.
+
+The exceptions to this rule are the `Vector{UInt8}` arrays returned by
+[`take!`](@ref) on an [`IOBuffer`](@ref) or by [`read(io, nb)`](@ref).
+In these cases, `String` takes "ownership" of `v` and the length of
+`v` is set to `0` to prevent you from subsequently modifying the data.
+If you need to subsequently modify `v` in such cases, use `String(copy(v))` instead.
 """
 function String(v::Array{UInt8,1})
     ccall(:jl_array_to_string, Ref{String}, (Any,), v)
 end
+
+String(v::AbstractVector{UInt8}) = String(copyto!(StringVector(length(v))), v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
