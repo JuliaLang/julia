@@ -76,7 +76,6 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
             Base.sigatomic_end()
             if iserr
                 put!(backend.response_channel, lasterr)
-                iserr, lasterr = false, ()
             else
                 backend.in_eval = true
                 value = eval(Main, ast)
