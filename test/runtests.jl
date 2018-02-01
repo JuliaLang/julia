@@ -1294,6 +1294,10 @@ end
 @test !GC.enable(true)
 @test GC.enable(true)
 
+# 0.7.0-DEV.3583
+@test lastindex(zeros(4)) == 4
+@test lastindex(zeros(4,4)) == 16
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

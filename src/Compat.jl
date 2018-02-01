@@ -1491,6 +1491,12 @@ else
     import Distributed
 end
 
+# 0.7.0-DEV.3583
+@static if !isdefined(Base, :lastindex)
+    const lastindex = endof
+    export lastindex
+end
+
 include("deprecated.jl")
 
 end # module Compat
