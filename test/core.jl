@@ -3185,6 +3185,23 @@ function f11065()
 end
 @test_throws UndefVarError f11065()
 
+# issue #25724
+a25724 = Any[]
+for i = 1:3
+    needX = false
+    try
+        X = X
+        X[1] = X[1] + 1
+    catch err
+        needX = true
+    end
+    if needX
+        X = [0]
+    end
+    push!(a25724, copy(X))
+end
+@test a25724 == [[0], [0], [0]]
+
 # for loop iterator expression should be evaluated in outer scope
 let
     for i in (local a = 1:2)

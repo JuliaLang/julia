@@ -4005,7 +4005,7 @@ f(x) = yt(x)
                      (if (has? vars (cadr e))
                          (begin (del! vars (cadr e))
                                 (put! di (cadr e) #t))))
-                    ((and (pair? e) (memq (car e) '(goto gotoifnot)))
+                    ((and (pair? e) (memq (car e) '(goto gotoifnot enter)))
                      (set! vars (table)))))
             (loop (cdr stmts)))))))
 
