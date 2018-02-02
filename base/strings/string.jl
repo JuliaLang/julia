@@ -30,10 +30,7 @@ In these cases, `String` takes "ownership" of `v` and the length of
 If you need to subsequently modify `v` in such cases, use `String(copy(v))` instead.
 """
 String(v::AbstractVector{UInt8}) = String(copyto!(StringVector(length(v)), v))
-
-function String(v::Array{UInt8,1})
-    ccall(:jl_array_to_string, Ref{String}, (Any,), v)
-end
+String(v::Vector{UInt8}) = ccall(:jl_array_to_string, Ref{String}, (Any,), v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
