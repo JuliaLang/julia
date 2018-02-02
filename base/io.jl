@@ -750,10 +750,9 @@ end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    i = start(target)
-    done(target, i) && return ""
-    c, i = next(target, start(target))
-    if done(target, i) && c <= '\x7f'
+    isempty(target) && return ""
+    c, rest = Iterators.peel(target)
+    if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
     # convert String to a utf8-byte-iterator
