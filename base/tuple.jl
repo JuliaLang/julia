@@ -270,12 +270,10 @@ end
 _eq(t1::Tuple{}, t2::Tuple{}, anymissing) = anymissing ? missing : true
 function _eq(t1::Tuple, t2::Tuple, anymissing)
     eq = t1[1] == t2[1]
-    if ismissing(eq)
-        return _eq(tail(t1), tail(t2), true)
-    elseif !eq
+    if eq === false
         return false
     else
-        return _eq(tail(t1), tail(t2), anymissing)
+        return _eq(tail(t1), tail(t2), anymissing | ismissing(eq))
     end
 end
 function _eq(t1::Any16, t2::Any16, anymissing)
