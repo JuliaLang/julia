@@ -260,6 +260,11 @@ function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
     return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
+## Alias detection
+using Base: dataids, unalias, mightalias
+@inline Base.dataids(S::SparseMatrixCSC) = (dataids(S.colptr)..., dataids(S.rowval)..., dataids(S.nzval)...)
+Base.unalias(dest, S::SparseMatrixCSC) = mightalias(dest, S) ? typeof(S)(S.m, S.n, unalias(dest, S.colptr), unalias(dest, S.rowval), unalias(dest, S.nzval)) : S
+
 ## Constructors
 
 copy(S::SparseMatrixCSC) =

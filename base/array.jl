@@ -693,22 +693,18 @@ function setindex! end
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
     @_propagate_inbounds_meta
-    A === I && (I = copy(I))
-    for i in I
+    J = unalias(A, I)
+    for i in J
         A[i] = x
     end
     return A
 end
-function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
+function setindex!(A::Array, Y::AbstractArray, J::AbstractVector{Int})
     @_propagate_inbounds_meta
-    @boundscheck setindex_shape_check(X, length(I))
+    @boundscheck setindex_shape_check(Y, length(J))
+    X = unalias(A, Y)
+    I = unalias(A, J)
     count = 1
-    if X === A
-        X = copy(X)
-        I===A && (I = X::typeof(I))
-    elseif I === A
-        I = copy(I)
-    end
     for i in I
         @inbounds x = X[count]
         A[i] = x

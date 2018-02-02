@@ -94,6 +94,13 @@ From an array view `A`, returns the corresponding indices in the parent.
 """
 parentindices(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
+## Aliasing detection
+unalias(dest, A::SubArray) = mightalias(dest, A) ? typeof(A)(unalias(dest, A.parent), unalias(dest, A.indices), A.offset1, A.stride1) : A
+dataids(A::SubArray) = (dataids(A.parent)..., _indicesids(A.indices...)...)
+_indicesids(x::AbstractArray, xs...) = (dataids(x)..., _indicesids(xs...)...)
+_indicesids(x, xs...) = _indicesids(xs...) # Skip non-array indices
+_indicesids() = ()
+
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of
 # indices that end up getting passed to it, so we store the parent as a
@@ -135,7 +142,7 @@ julia> A # Note A has changed even though we modified b
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     @_inline_meta
-    J = to_indices(A, I)
+    J = unalias(A, to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end

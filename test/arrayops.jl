@@ -1060,7 +1060,7 @@ end
     @test a == [8,3,8]
 end
 
-@testset "assigning an array into itself" begin
+@testset "assigning an array into itself and other aliasing issues" begin
     a = [1,3,5]
     b = [3,1,2]
     a[b] = a
@@ -1068,6 +1068,53 @@ end
     a = [3,2,1]
     a[a] = [4,5,6]
     @test a == [6,5,4]
+
+    A = [1,2,3,4]
+    V = view(A, A)
+    @test V == A
+    V[1] = 2
+    @test V == A == [2,2,3,4]
+    V[1] = 2^30
+    @test V == A == [2^30, 2, 3, 4]
+
+    A = [2,1,4,3]
+    V = view(A, :)
+    A[V] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = [2,1,4,3]
+    R = reshape(view(A, :), 2, 2)
+    A[R] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = [2,1,4,3]
+    R = reshape(A, 2, 2)
+    A[R] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    # And broadcasting
+    a = [1,3,5]
+    b = [3,1,2]
+    a[b] .= a
+    @test a == [3,5,1]
+    a = [3,2,1]
+    a[a] .= [4,5,6]
+    @test a == [6,5,4]
+
+    A = [2,1,4,3]
+    V = view(A, :)
+    A[V] .= (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = [2,1,4,3]
+    R = reshape(view(A, :), 2, 2)
+    A[R] .= reshape((1:4) .+ 2^30, 2, 2)
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = [2,1,4,3]
+    R = reshape(A, 2, 2)
+    A[R] .= reshape((1:4) .+ 2^30, 2, 2)
+    @test A == [2,1,4,3] .+ 2^30
 end
 
 @testset "lexicographic comparison" begin

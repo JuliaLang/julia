@@ -1048,6 +1048,50 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
+## rudimentary aliasing detection ##
+"""
+    unalias(dest, A)
+
+Return either A or a copy of A, in a rough effort to prevent modifications to `dest` from
+affecting the returned object. No guarantees are provided, and each custom array must
+opt-into aliasing detection by overloading this method by specializing on the second argument.
+
+This function must return an object of exactly the same type as A for performance and type-stability.
+
+See also `mightalias` and `dataids`.
+"""
+unalias(dest, A) = A
+unalias(dest, A::Array) = mightalias(dest, A) ? copy(A) : A
+@inline unalias(dest, As::Tuple) = (unalias(dest, As[1]), unalias(dest, tail(As))...)
+unalias(dest, As::Tuple{}) = ()
+
+"""
+    mightalias(A::AbstractArray, B::AbstractArray)
+
+Perform a rudimentary test to check if arrays A and B might share the same memory.
+
+Defaults to false unless `dataids` is specialized for both `A` and `B`.
+"""
+mightalias(A::AbstractArray, B::AbstractArray) = dataidsoverlap(dataids(A), dataids(B))
+mightalias(x, y) = false
+
+dataidsoverlap(a::AbstractRange, b::AbstractRange) = max(first(a),first(b)) <= min(last(a),last(b))
+dataidsoverlap(as::Tuple, bs::Tuple) = any(b->dataidsoverlap(as[1], b), bs) || dataidsoverlap(tail(as), bs)
+dataidsoverlap(as::Tuple{Any}, bs::Tuple{Any}) = dataidsoverlap(as[1], bs[1])
+dataidsoverlap(as::Tuple{Any,Any}, bs::Tuple{Any}) = dataidsoverlap(as[1], bs[1]) || dataidsoverlap(as[2], bs[1])
+dataidsoverlap(as::Tuple{Any}, bs::Tuple{Any,Any}) = dataidsoverlap(as[1], bs[1]) || dataidsoverlap(as[1], bs[2])
+dataidsoverlap(as::Tuple{}, bs::Tuple) = false
+dataidsoverlap(as::Tuple, bs::Tuple{}) = false
+dataidsoverlap(::Tuple{}, ::Tuple{}) = false
+
+"""
+    dataids(A::AbstractArray) -> Tuple{Vararg{AbstractRange}}
+
+Return a tuple containing rough information about the memory region(s) the array `A` references.
+"""
+dataids(A::AbstractArray) = ()
+dataids(A::Array) = (UInt(pointer(A, 1)):UInt(pointer(A, lastindex(A))),)
+
 ## get (getindex with a default value) ##
 
 RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange, AbstractVector{Int}}}},

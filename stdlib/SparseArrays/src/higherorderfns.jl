@@ -1004,10 +1004,12 @@ broadcast(f, ::PromoteToSparse, ::Nothing, ::Nothing, As::Vararg{Any,N}) where {
 # For broadcast! with ::Any inputs, we need a layer of indirection to determine whether
 # the inputs can be promoted to SparseVecOrMat. If it's just SparseVecOrMat and scalars,
 # we can handle it here, otherwise see below for the promotion machinery.
-function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(A)
-        return copyto!(dest, A)
+function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, _A::SparseVecOrMat, _Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
+    if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(_A)
+        return copyto!(dest, _A)
     end
+    A = Base.unalias(dest, _A)
+    Bs = Base.unalias(dest, _Bs)
     _aresameshape(dest, A, Bs...) && return _noshapecheck_map!(f, dest, A, Bs...)
     Base.Broadcast.check_broadcast_indices(axes(dest), A, Bs...)
     fofzeros = f(_zeros_eltypes(A, Bs...)...)

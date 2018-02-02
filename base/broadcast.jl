@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            isoperator, promote_typejoin
+            isoperator, promote_typejoin, unalias
 import Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
@@ -473,9 +473,11 @@ end
 end
 
 # This indirection allows size-dependent implementations.
-@inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
+@inline function _broadcast!(f, C, _A, _Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
-    @boundscheck check_broadcast_indices(shape, A, Bs...)
+    @boundscheck check_broadcast_indices(shape, _A, _Bs...)
+    A = unalias(C, _A)
+    Bs = unalias(C, _Bs)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
     iter = CartesianIndices(shape)
     _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)

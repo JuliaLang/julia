@@ -675,8 +675,8 @@ _iterable(v) = Iterators.repeated(v)
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        X = _iterable(x)
-        @nexprs $N d->(I_d = I[d])
+        X = _iterable(unalias(A, x))
+        @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check X (d->idxlens[d])
         Xs = start(X)
@@ -687,8 +687,6 @@ _iterable(v) = Iterators.repeated(v)
         A
     end
 end
-
-##
 
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
@@ -1156,8 +1154,9 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
-    @boundscheck checkbounds(dest, axes(src)...)
+function copyto!(dest::AbstractArray{T,N}, source::AbstractArray{T,N}) where {T,N}
+    checkbounds(dest, axes(source)...)
+    src = unalias(dest, source)
     for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
     end
@@ -1165,15 +1164,16 @@ function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
 end
 
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-               src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+               source::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
     end
-    @boundscheck checkbounds(dest, first(Rdest))
-    @boundscheck checkbounds(dest, last(Rdest))
-    @boundscheck checkbounds(src, first(Rsrc))
-    @boundscheck checkbounds(src, last(Rsrc))
+    checkbounds(dest, first(Rdest))
+    checkbounds(dest, last(Rdest))
+    checkbounds(source, first(Rsrc))
+    checkbounds(source, last(Rsrc))
+    src = unalias(dest, source)
     ΔI = first(Rdest) - first(Rsrc)
     if @generated
         quote
