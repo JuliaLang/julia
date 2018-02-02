@@ -919,7 +919,7 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = [0.0 0.0; 0.0 0.0]\n"
     finally
         rm(fname, force=true)
     end
