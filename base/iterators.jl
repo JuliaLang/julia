@@ -1034,7 +1034,7 @@ julia> Base.peek(a)
 # Sum the remaining elements
 julia> sum(a)
 7
-````
+```
 """
 mutable struct Stateful{T, VS}
     itr::T
