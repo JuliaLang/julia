@@ -2009,7 +2009,7 @@ end
 @test f15894(fill(1, 100)) == 100
 end
 
-@testset "sign, conj, ~" begin
+@testset "sign, conj[!], ~" begin
     local A, B, C
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
@@ -2021,6 +2021,7 @@ end
     @test typeof(sign.(B)) == Vector{Float64}
 
     @test conj(A) == A
+    @test conj!(copy(A)) == A
     @test conj(B) == A
     @test conj(C) == [1,-im,0]
     @test typeof(conj(A)) == Vector{Int}
