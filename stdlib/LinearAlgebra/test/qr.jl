@@ -164,12 +164,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
 end
 
 @testset "transpose errors" begin
-    @test_throws ErrorException transpose(qrfact(randn(3,3)))
-    @test_throws ErrorException adjoint(qrfact(randn(3,3)))
-    @test_throws ErrorException transpose(qrfact(randn(3,3), Val(false)))
-    @test_throws ErrorException adjoint(qrfact(randn(3,3), Val(false)))
-    @test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
-    @test_throws ErrorException adjoint(qrfact(big.(randn(3,3))))
+    @test_throws MethodError transpose(qrfact(randn(3,3)))
+    @test_throws MethodError adjoint(qrfact(randn(3,3)))
+    @test_throws MethodError transpose(qrfact(randn(3,3), Val(false)))
+    @test_throws MethodError adjoint(qrfact(randn(3,3), Val(false)))
+    @test_throws MethodError transpose(qrfact(big.(randn(3,3))))
+    @test_throws MethodError adjoint(qrfact(big.(randn(3,3))))
 end
 
 @testset "Issue 7304" begin
@@ -214,9 +214,18 @@ end
     @test A \ linspace(0,1,200) == A \ Vector(linspace(0,1,200))
 end
 
-@testset "Issue #24589. Promotion of rational matrices" begin
+@testset "Issue 24589. Promotion of rational matrices" begin
     A = rand(1//1:5//5, 4,3)
     @test first(qr(A)) == first(qr(float(A)))
+end
+
+@testset "Issue Test Factorization fallbacks for rectangular problems" begin
+    A = randn(3,2)
+    Ac = copy(A')
+    b = randn(3)
+    c = randn(2)
+    @test A \b ≈ ldiv!(c, qrfact(A ), b)
+    @test Ac\c ≈ ldiv!(b, qrfact(Ac, Val(true)), c)
 end
 
 end # module TestQR
