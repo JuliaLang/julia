@@ -60,6 +60,10 @@ Language changes
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
+
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
 
