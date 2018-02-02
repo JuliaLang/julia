@@ -1491,3 +1491,11 @@ end
 end
 
 timesofar("I/O")
+
+@testset "not strided" begin
+    @test_throws ErrorException pointer(trues(1))
+    @test_throws ErrorException pointer(trues(1),1)
+    b = falses(3)
+    b[:] = view(trues(10), [1,3,7])
+    @test b == trues(3)
+end
