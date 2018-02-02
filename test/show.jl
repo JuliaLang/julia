@@ -1146,3 +1146,13 @@ end
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
 end
+
+@testset "Intrinsic printing" begin
+    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    let io = IOBuffer()
+        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        str = String(take!(io))
+        @test contains(str, "arraylen")
+        @test contains(str, "(intrinsic function")
+    end
+end
