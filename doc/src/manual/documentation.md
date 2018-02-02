@@ -897,9 +897,13 @@ following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-Admonitions, like most other toplevel elements, can contain other toplevel elements. When no title
-text, specified after the admonition type in double quotes, is included then the title used will
-be the type of the block, i.e. `"Note"` in the case of the `note` admonition.
+If no title text is specified after the admonition type in double quotes,
+then the title used will be the title of the block, i.e. `"Note"` in the case of the `note` admonition.
+
+The full list of natively supported admonition types (which render into distinct colored boxes) can be seen
+[here](https://github.com/JuliaLang/julia/blob/c6f056b79/stdlib/Markdown/src/render/terminal/render.jl#L35-L43)
+
+Admonitions, like most other toplevel elements, can contain other toplevel elements.
 
 ## Markdown Syntax Extensions
 
