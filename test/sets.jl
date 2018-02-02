@@ -547,6 +547,10 @@ end
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
     x = @inferred replace(x -> x > 1, [1, 2], missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+
+    # test that isequal is used
+    @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]
+    @test replace([1, missing], missing=>0) == [1, 0]
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

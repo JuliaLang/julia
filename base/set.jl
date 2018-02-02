@@ -583,6 +583,7 @@ _copy_oftype(x::AbstractSet{T}, ::Type{T}) where {T} = copy(x)
 
 For each pair `old=>new` in `old_new`, replace all occurrences
 of `old` in collection `A` by `new`.
+Equality is determined using [`isequal`](@ref).
 If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
@@ -604,7 +605,7 @@ replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, count,
 function _replace!(A, count::Integer, old_new::Tuple{Vararg{Pair}})
     @inline function new(x)
         for o_n in old_new
-            first(o_n) == x && return last(o_n)
+            isequal(first(o_n), x) && return last(o_n)
         end
         return x # no replace
     end
@@ -671,6 +672,7 @@ end
 
 Return a copy of collection `A` where, for each pair `old=>new` in `old_new`,
 all occurrences of `old` are replaced by `new`.
+Equality is determined using [`isequal`](@ref).
 If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace!`](@ref).
 
@@ -699,6 +701,7 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
 
 Return a copy of collection `A` where all occurrences `x` for which
 `pred(x)` is true are replaced by `new`.
+If `count` is specified, then replace at most `count` occurrences in total.
 
 # Examples
 ```jldoctest
@@ -719,6 +722,8 @@ end
     replace(new::Function, A; [count::Integer])
 
 Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+If `count` is specified, then replace at most `count` values in total
+(replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
