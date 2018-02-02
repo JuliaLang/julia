@@ -213,7 +213,8 @@ function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = n
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
+                                 base===nothing ? 0 : check_valid_base(base), true))
 end
 
 ## string to float functions ##
@@ -322,7 +323,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
@@ -339,4 +340,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+
+tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
+    convert(Union{T, Nothing}, tryparse_internal(T, s, firstindex(s), lastindex(s), false))
