@@ -410,6 +410,9 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
+
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
 
@@ -1001,6 +1004,9 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
   * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
@@ -1267,3 +1273,4 @@ Command-line option changes
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25745]: https://github.com/JuliaLang/julia/issues/25745

@@ -613,7 +613,6 @@ export
     oct,
     prevind,
     print,
-    print_shortest,
     println,
     printstyled,
     repeat,
