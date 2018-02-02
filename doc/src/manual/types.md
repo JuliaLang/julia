@@ -387,7 +387,7 @@ to point to different objects.
 Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
 discussed in the next section.
 
-Composite types with no fields are singletons; there can be only one instance of such types:
+Immutable composite types with no fields are singletons; there can be only one instance of such types:
 
 ```jldoctest
 julia> struct NoFields
