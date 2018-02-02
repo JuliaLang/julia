@@ -431,7 +431,7 @@ end
     @test eltype(arr) == Int
 end
 
-@testset "IndexValue type" begin
+@testset "Pairs type" begin
     for A in ([4.0 5.0 6.0],
               [],
               (4.0, 5.0, 6.0),

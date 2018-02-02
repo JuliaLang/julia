@@ -153,15 +153,15 @@ end
 @inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
 
 """
-    Iterators.IndexValue(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into an Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
-struct IndexValue{K, V, I, A} <: AbstractDict{K, V}
+struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
-    IndexValue(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
+    Pairs(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
 end
 
 """
@@ -210,42 +210,42 @@ CartesianIndex(2, 2) e
 
 See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
-pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianIndices(axes(A)))
+pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, linearindices(A))
+pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
-pairs(tuple::Tuple) = IndexValue(tuple, keys(tuple))
-pairs(nt::NamedTuple) = IndexValue(nt, keys(nt))
-# pairs(v::IndexValue) = v # listed for reference, but already defined from being an AbstractDict
+pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
+pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+# pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-length(v::IndexValue)  = length(v.itr)
-axes(v::IndexValue) = axes(v.itr)
-size(v::IndexValue)    = size(v.itr)
-@inline start(v::IndexValue) = start(v.itr)
-@propagate_inbounds function next(v::IndexValue, state)
+length(v::Pairs)  = length(v.itr)
+axes(v::Pairs) = axes(v.itr)
+size(v::Pairs)    = size(v.itr)
+@inline start(v::Pairs) = start(v.itr)
+@propagate_inbounds function next(v::Pairs, state)
     indx, n = next(v.itr, state)
     item = v.data[indx]
     return (Pair(indx, item), n)
 end
-@inline done(v::IndexValue, state) = done(v.itr, state)
+@inline done(v::Pairs, state) = done(v.itr, state)
 
-eltype(::Type{IndexValue{K, V}}) where {K, V} = Pair{K, V}
+eltype(::Type{Pairs{K, V}}) where {K, V} = Pair{K, V}
 
-IteratorSize(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
+IteratorSize(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
 
-reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
+reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 
-haskey(v::IndexValue, key) = (key in v.itr)
-keys(v::IndexValue) = v.itr
-values(v::IndexValue) = v.data
-getindex(v::IndexValue, key) = v.data[key]
-setindex!(v::IndexValue, value, key) = (v.data[key] = value; v)
-get(v::IndexValue, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::IndexValue, key) = get(f, v.data, key)
+haskey(v::Pairs, key) = (key in v.itr)
+keys(v::Pairs) = v.itr
+values(v::Pairs) = v.data
+getindex(v::Pairs, key) = v.data[key]
+setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
+get(v::Pairs, key, default) = get(v.data, key, default)
+get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
 
 # zip
 

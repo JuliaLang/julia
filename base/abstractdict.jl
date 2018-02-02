@@ -30,9 +30,10 @@ function in(p, a::AbstractDict)
              function if you are looking for a key or value respectively.""")
 end
 
-function summary(t::AbstractDict)
+function summary(io::IO, t::AbstractDict)
     n = length(t)
-    return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+    showarg(io, t, true)
+    print(io, " with ", n, (n==1 ? " entry" : " entries"))
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
