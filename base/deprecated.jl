@@ -1156,6 +1156,8 @@ end
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
 
+@deprecate_binding KeyIterator KeySet false
+
 # issue #25016
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
