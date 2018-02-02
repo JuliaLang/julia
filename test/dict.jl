@@ -91,6 +91,8 @@ end
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
+    # test rethrow of error in ctor
+    @test_throws DomainError Dict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
@@ -323,6 +325,13 @@ end
         @test !isempty(summary(keys(d)))
         @test !isempty(summary(values(d)))
     end
+    # show on empty Dict
+    io = IOBuffer()
+    d = Dict{Int, String}()
+    show(io, d)
+    str = String(take!(io))
+    @test str == "Dict{$(Int),String}()"
+    close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
