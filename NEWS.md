@@ -263,7 +263,7 @@ This section lists changes that do not have deprecation warnings.
     respectively ([#22718], [#22925], [#23035], [#23154]).
 
   * The immediate supertype of `BitArray` is now simply `AbstractArray`. `BitArray` is no longer
-    considered a subtype of `DenseArray` and `StridedArray` ([#25857]).
+    considered a subtype of `DenseArray` and `StridedArray` ([#25858]).
 
   * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
     first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
