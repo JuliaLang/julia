@@ -29,7 +29,7 @@ In these cases, `String` takes "ownership" of `v` and the length of
 `v` is set to `0` to prevent you from subsequently modifying the data.
 If you need to subsequently modify `v` in such cases, use `String(copy(v))` instead.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringVector(length(v))), v)
+String(v::AbstractVector{UInt8}) = String(copyto!(StringVector(length(v)), v))
 
 function String(v::Array{UInt8,1})
     ccall(:jl_array_to_string, Ref{String}, (Any,), v)
