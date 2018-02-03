@@ -1286,6 +1286,22 @@ module TestSerialization
     @test isdefined(@__MODULE__, :SerializationState)
 end
 
+module TestPkg
+    using Compat
+    using Compat.Pkg
+    using Compat.Test
+    @test isdefined(@__MODULE__, :Pkg)
+    @test isdefined(@__MODULE__, :add)
+end
+
+module TestInteractiveUtils
+    using Compat
+    using Compat.InteractiveUtils
+    using Compat.Test
+    @test isdefined(@__MODULE__, :InteractiveUtils)
+    @test isdefined(@__MODULE__, :varinfo)
+end
+
 # 0.7.0-DEV.3469
 @test GC.enable(true)
 @test GC.enable(false)

@@ -1491,6 +1491,35 @@ else
     import Distributed
 end
 
+@static if VERSION < v"0.7.0-DEV.3656"
+    const Pkg = Base.Pkg
+else
+    import Pkg
+end
+
+@static if VERSION < v"0.7.0-DEV.3630"
+    @eval module InteractiveUtils
+        using Base: @code_llvm, @code_lowered, @code_native, @code_typed,
+                    @code_warntype, @edit, @functionloc, @less, @which,
+                    apropos, code_llvm, code_native, code_warntype, edit,
+                    less, methodswith, subtypes, versioninfo
+        export @code_llvm, @code_lowered, @code_native, @code_typed,
+               @code_warntype, @edit, @functionloc, @less, @which,
+               apropos, code_llvm, code_native, code_warntype, edit,
+               less, methodswith, subtypes, versioninfo
+
+        @static if VERSION >= v"0.7.0-DEV.2582"
+            using Base: varinfo
+            export varinfo
+        else
+            const varinfo = whos
+            export varinfo
+        end
+    end
+else
+    import InteractiveUtils
+end
+
 # 0.7.0-DEV.2695
 @static if !isdefined(Base, :AbstractDisplay)
     const AbstractDisplay = Display
