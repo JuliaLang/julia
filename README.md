@@ -328,6 +328,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `endof` is now `lastindex` ([#25458]). (Note that `lastindex(A, n)` is not supported.)
 
+* `nb_available` is now `bytesavailable` ([#25634]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -518,6 +520,7 @@ includes this fix. Find the minimum version from there.
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
 [#25629]: https://github.com/JuliaLang/julia/issues/25629
+[#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25646]: https://github.com/JuliaLang/julia/issues/25646
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#24182]: https://github.com/JuliaLang/julia/issues/24182
