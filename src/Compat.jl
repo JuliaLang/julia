@@ -1558,9 +1558,12 @@ end
     export objectid
 end
 
-@static if VERSION < v"0.7.0-DEV.3272"
-    import Base: in, findfirst, findnext, findlast, findprev
-
+@static if VERSION >= v"0.7.0-DEV.3272"
+    findnext(xs...) = Base.findnext(xs...)
+    findfirst(xs...) = Base.findfirst(xs...)
+    findprev(xs...) = Base.findprev(xs...)
+    findlast(xs...) = Base.findlast(xs...)
+else
     struct OccursIn{T} <: Function
         x::T
 
@@ -1570,41 +1573,47 @@ end
     const occursin = OccursIn
     export occursin
 
-    zero2nothing(x) = x == 0 ? nothing : x
+    zero2nothing(x::Integer) = x == 0 ? nothing : x
+    zero2nothing(x) = x
 
-    findnext(r::Regex, s::AbstractString, idx::Integer) = search(s, r, idx)
-    findfirst(r::Regex, s::AbstractString) = search(s, r)
-    findnext(c::EqualTo{Char}, s::AbstractString, i::Integer) = zero2nothing(search(s, c.x, i))
-    findfirst(c::EqualTo{Char}, s::AbstractString) = zero2nothing(search(s, c.x))
-    findnext(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}, i::Integer) =
-        zero2nothing(search(a, b.x, i))
-    findfirst(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}) =
-        zero2nothing(search(a, b.x))
+    findnext(xs...) = zero2nothing(Base.findnext(xs...))
+    findfirst(xs...) = zero2nothing(Base.findfirst(xs...))
+    findprev(xs...) = zero2nothing(Base.findprev(xs...))
+    findlast(xs...) = zero2nothing(Base.findlast(xs...))
 
-    findnext(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
+    Base.findnext(r::Regex, s::AbstractString, idx::Integer) = search(s, r, idx)
+    Base.findfirst(r::Regex, s::AbstractString) = search(s, r)
+    Base.findnext(c::EqualTo{Char}, s::AbstractString, i::Integer) = search(s, c.x, i)
+    Base.findfirst(c::EqualTo{Char}, s::AbstractString) = search(s, c.x)
+    Base.findnext(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}, i::Integer) =
+        search(a, b.x, i)
+    Base.findfirst(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}) =
+        search(a, b.x)
+
+    Base.findnext(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
              s::AbstractString, i::Integer) =
-        zero2nothing(search(s, c.x, i))
-    findfirst(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
+        search(s, c.x, i)
+    Base.findfirst(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
               s::AbstractString) =
-        zero2nothing(search(s, c.x))
-    findnext(t::AbstractString, s::AbstractString, i::Integer) = search(s, t, i)
-    findfirst(t::AbstractString, s::AbstractString) = search(s, t)
+        search(s, c.x)
+    Base.findnext(t::AbstractString, s::AbstractString, i::Integer) = search(s, t, i)
+    Base.findfirst(t::AbstractString, s::AbstractString) = search(s, t)
 
-    findfirst(delim::EqualTo{UInt8}, buf::IOBuffer) = zero2nothing(search(buf, delim.x))
+    Base.findfirst(delim::EqualTo{UInt8}, buf::IOBuffer) = search(buf, delim.x)
 
-    findprev(c::EqualTo{Char}, s::AbstractString, i::Integer) = zero2nothing(rsearch(s, c.x, i))
-    findlast(c::EqualTo{Char}, s::AbstractString) = zero2nothing(rsearch(s, c.x))
-    findprev(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}, i::Integer) =
-        zero2nothing(rsearch(a, b.x, i))
-    findlast(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}) =
-        zero2nothing(rsearch(a, b.x))
+    Base.findprev(c::EqualTo{Char}, s::AbstractString, i::Integer) = rsearch(s, c.x, i)
+    Base.findlast(c::EqualTo{Char}, s::AbstractString) = rsearch(s, c.x)
+    Base.findprev(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}, i::Integer) =
+        rsearch(a, b.x, i)
+    Base.findlast(b::EqualTo{<:Union{Int8,UInt8}}, a::Vector{<:Union{Int8,UInt8}}) =
+        rsearch(a, b.x)
 
-    findprev(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
-             s::AbstractString, i::Integer) = zero2nothing(rsearch(s, c.x, i))
-    findlast(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
-             s::AbstractString) = zero2nothing(rsearch(s, c.x))
-    findprev(t::AbstractString, s::AbstractString, i::Integer) = rsearch(s, t, i)
-    findlast(t::AbstractString, s::AbstractString) = rsearch(s, t)
+    Base.findprev(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
+             s::AbstractString, i::Integer) = rsearch(s, c.x, i)
+    Base.findlast(c::OccursIn{<:Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}},
+             s::AbstractString) = rsearch(s, c.x)
+    Base.findprev(t::AbstractString, s::AbstractString, i::Integer) = rsearch(s, t, i)
+    Base.findlast(t::AbstractString, s::AbstractString) = rsearch(s, t)
 
     findall(b::OccursIn, a) = findin(a, b.x)
     # To fix ambiguity

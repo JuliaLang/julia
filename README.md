@@ -330,6 +330,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `search` is now `findfirst`/`findnext` and `rsearch` is now `findlast`/`findprev`,
   sometimes combined with `equalto` or `occursin` ([#24673]).
 
+* `Compat.findfirst`, `Compat.findnext`, `Compat.findlast` and `Compat.findprev`,
+  return `nothing` when no match is found (rather than `0`) as on Julia 0.7 ([#24673]).
+
 * `findin(a, b)` is now `findall(occursin(b), a)` ([#24673]).
 
 * `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
