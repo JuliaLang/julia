@@ -340,7 +340,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+    tryparse_internal(T, s, firstindex(s), lastindex(s), true)::T
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
-    convert(Union{T, Nothing}, tryparse_internal(T, s, firstindex(s), lastindex(s), false))
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false)::Union{T, Nothing}
