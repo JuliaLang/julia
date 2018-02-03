@@ -253,6 +253,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `codeunits(s)` returns an array-like view of the `UInt8` code units of
   a string and `ncodeunits(s)` returns the number of code units ([#25241]).
 
+* `printstyled` prints to a given stream optionally in color and/or bolded ([#25522]).
+
 * `Dates.Period` rounding (e.g., `round(Dates.Hour(36), Dates.Day, RoundNearestTiesUp) == Dates.Day(2)` ([#24182]).
 
 
@@ -513,6 +515,7 @@ includes this fix. Find the minimum version from there.
 [#25458]: https://github.com/JuliaLang/julia/issues/25458
 [#25459]: https://github.com/JuliaLang/julia/issues/25459
 [#25496]: https://github.com/JuliaLang/julia/issues/25496
+[#25522]: https://github.com/JuliaLang/julia/issues/25522
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571

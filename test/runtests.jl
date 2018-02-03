@@ -1305,4 +1305,17 @@ end
 @test lastindex(zeros(4)) == 4
 @test lastindex(zeros(4,4)) == 16
 
+# 0.7.0-DEV.3585
+let buf = IOBuffer()
+    if VERSION < v"0.7.0-DEV.3077"
+        col = Base.have_color
+        eval(Base, :(have_color = true))
+        printstyled(buf, "foo", color=:red)
+        eval(Base, :(have_color = $col))
+    else
+        printstyled(IOContext(buf, :color=>true), "foo", color=:red)
+    end
+    @test startswith(String(take!(buf)), Base.text_colors[:red])
+end
+
 nothing
