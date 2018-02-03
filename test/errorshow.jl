@@ -64,6 +64,9 @@ Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cfile$c5line"
 
+showerror(buf, ErrorException("type String has no field data"))
+@test String(take!(buf)) == "type String has no field data\nUse `codeunits(str)` instead."
+
 mutable struct Test_type end
 test_type = Test_type()
 for f in [getindex, setindex!]
