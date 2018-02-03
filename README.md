@@ -327,6 +327,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `find` is now `findall` ([#25545]).
 
+* `search` is now `findfirst`/`findnext` and `rsearch` is now `findlast`/`findprev`,
+  sometimes combined with `equalto` or `occursin` ([#24673]).
+
+* `findin(a, b)` is now `findall(occursin(b), a)` ([#24673]).
+
 * `indmin` and `indmax` are now `argmin` and `argmax`, respectively ([#25654]).
 
 * `isabstract` and `isleaftype` are now `isabstracttype` and `isconcretetype`, respectively
@@ -540,3 +545,4 @@ includes this fix. Find the minimum version from there.
 [#25705]: https://github.com/JuliaLang/julia/issues/25705
 [#25780]: https://github.com/JuliaLang/julia/issues/25780
 [#24182]: https://github.com/JuliaLang/julia/issues/24182
+[#24673]: https://github.com/JuliaLang/julia/issues/24673
