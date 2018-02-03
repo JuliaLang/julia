@@ -1491,6 +1491,12 @@ else
     import Distributed
 end
 
+# 0.7.0-DEV.2695
+@static if !isdefined(Base, :AbstractDisplay)
+    const AbstractDisplay = Display
+    export AbstractDisplay
+end
+
 # 0.7.0-DEV.3583
 @static if !isdefined(Base, :lastindex)
     const lastindex = endof

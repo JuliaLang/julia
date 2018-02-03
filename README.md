@@ -258,6 +258,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Renaming
 
+* `Display` is now `AbstractDisplay` ([#24831]).
 
 * `$` is now `xor` or `⊻` ([#18977])
 

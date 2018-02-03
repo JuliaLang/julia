@@ -1293,6 +1293,8 @@ end
 @test !GC.enable(true)
 @test GC.enable(true)
 
+@test eltype(Base.Multimedia.displays) <: AbstractDisplay
+
 # 0.7.0-DEV.3583
 @test lastindex(zeros(4)) == 4
 @test lastindex(zeros(4,4)) == 16
