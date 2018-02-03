@@ -1994,8 +1994,8 @@ function findall(A)
 end
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
-findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
-findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
+findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
+findall(p::OccursIn, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
     findmax(itr) -> (x, index)

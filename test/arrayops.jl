@@ -295,6 +295,9 @@ end
         @test findall(occursin(a), a)       == [1,2]
     end
 
+    @test findall(occursin([1, 2]), 2) == [1]
+    @test findall(occursin([1, 2]), 3) == []
+
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 end
