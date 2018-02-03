@@ -1393,7 +1393,7 @@ function lastindex(a, n)
 end
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
-@deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
+@deprecate Timer(callback, delay, repeat) Timer(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
