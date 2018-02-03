@@ -1518,6 +1518,16 @@ end
     export printstyled
 end
 
+# 0.7.0-DEV.3455
+@static if !isdefined(Base, :hasmethod)
+    const hasmethod = method_exists
+    export hasmethod
+end
+@static if !isdefined(Base, :objectid)
+    const objectid = object_id
+    export objectid
+end
+
 include("deprecated.jl")
 
 end # module Compat

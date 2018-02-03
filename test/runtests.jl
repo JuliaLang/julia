@@ -1318,4 +1318,10 @@ let buf = IOBuffer()
     @test startswith(String(take!(buf)), Base.text_colors[:red])
 end
 
+# 0.7.0-DEV.3455
+@test hasmethod(sin, Tuple{Float64})
+let x = y = 1
+    @test objectid(x) == objectid(y)
+end
+
 nothing

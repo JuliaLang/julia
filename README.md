@@ -332,6 +332,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `nb_available` is now `bytesavailable` ([#25634]).
 
+* `method_exists` is now `hasmethod` ([#25615]).
+
+* `object_id` is now `objectid` ([#25615]).
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -519,6 +523,7 @@ includes this fix. Find the minimum version from there.
 [#25544]: https://github.com/JuliaLang/julia/issues/25544
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
+[#25615]: https://github.com/JuliaLang/julia/issues/25615
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
 [#25628]: https://github.com/JuliaLang/julia/issues/25628
