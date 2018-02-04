@@ -10,6 +10,8 @@ using Random
     @test eltype(GenericString) == Char
     @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test typemin(String) === ""
+    @test typemin("abc") === ""
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
