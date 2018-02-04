@@ -130,6 +130,7 @@ strides(a::Array) = size_to_strides(1, size(a)...)
 strides(a::ReshapedArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 strides(a::ReinterpretArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 _dense_strides(sz, ::DenseColumnMajor) = size_to_strides(1, sz...)
+_dense_strides(sz, ::DenseRowMajor) = reverse(size_to_strides(1, sz...))
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)

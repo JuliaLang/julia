@@ -110,7 +110,7 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 struct ConjLayout{T<:Complex, ML<:MemoryLayout} <: MemoryLayout{T}
     layout::ML
 end
-ConjLayout(layout::MemoryLayout{T}) where T<:Complex = ConjLayout{T, typeof(layout)}(layout)
+ConjLayout(layout::ML) where ML<:MemoryLayout{T} where T<:Complex = ConjLayout{T,ML}(layout)
 conj(::UnknownLayout{T}) where T = UnknownLayout{T}()
 conj(c::ConjLayout) = c.layout
 conj(layout::MemoryLayout{T}) where T<:Complex = ConjLayout(layout)
