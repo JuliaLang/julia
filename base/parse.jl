@@ -302,7 +302,9 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
-            return Complex{T}(tryparse_internal(T, s, i, e, raise))
+            x = tryparse_internal(T, s, i, e, raise)
+            x === nothing && return nothing
+            return Complex{T}(x)
         end
     end
 
@@ -340,7 +342,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), true)::T
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), false)::Union{T, Nothing}
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false)
