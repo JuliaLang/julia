@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Sort: QuickSort, MergeSort, InsertionSort
+import Pkg
 
 Pkg.add("SortingAlgorithms")
 using SortingAlgorithms #Provides the other sorting algorithms

@@ -77,7 +77,6 @@ Base.Iterators
 Base.LibGit2
 Base.Libc
 Base.Meta
-Base.Pkg
 Base.StackTraces
 Base.Sys
 Base.Threads
@@ -299,6 +298,7 @@ Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
 Base.InitError

@@ -1058,7 +1058,9 @@
            (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
                 (not (eqv? t #\@))   ;; disallow "x@time"
                 ;; issue #16427, disallow juxtaposition with block forms
-                (not (and (pair? expr) (block-form? (car expr)))))
+                (not (and (pair? expr) (or (block-form? (car expr))
+                                           (syntactic-unary-op? (car expr))
+                                           (initial-reserved-word? (car expr))))))
            ;; to allow x'y as a special case
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
@@ -1071,7 +1073,6 @@
            ;; issue #20575
            (error "cannot juxtapose string literal"))
        (not (initial-reserved-word? t))
-       (not (and (pair? expr) (syntactic-unary-op? (car expr))))
        ;; TODO: this would disallow juxtaposition with 0, which is ambiguous
        ;; with e.g. hex literals `0x...`. however this is used for `0im`, which
        ;; we might not want to break.
@@ -1845,7 +1846,9 @@
                  (error "invalid comprehension syntax")))
             (else
              (if (and (pair? vec) (not (ts:space? s)))
-                 (error (string "expected separator between arguments to \"[ ]\"; got \""
+                 (error (string "expected \"" closer "\" or separator in arguments to \""
+                                (if (eqv? closer #\]) #\[ #\{) " " closer
+                                "\"; got \""
                                 (deparse (car vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer))))))))
 

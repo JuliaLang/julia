@@ -539,9 +539,8 @@ Show an expression and result, returning the result.
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
-        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
-        push!(blk.args, :(println()))
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
+                                  repr(begin value=$(esc(ex)) end))))
     end
     isempty(exs) || push!(blk.args, :value)
     return blk
@@ -1932,6 +1931,19 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret($T, ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+# pretty printing for Iterators.Pairs
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
+    print(io, "pairs(IndexLinear(), ::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+    print(io, "pairs(::NamedTuple)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
+    print(io, "Iterators.Pairs(::$D, ::$I)")
 end
 
 """

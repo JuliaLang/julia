@@ -6,6 +6,7 @@ export completions, shell_completions, bslash_completions
 
 using Base.Meta
 using Base: propertynames, coalesce
+import Pkg
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -557,7 +558,8 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [Pkg.dir(); LOAD_PATH; pwd()]
+            for dir in [LOAD_PATH; pwd()]
+                dir isa Function && (dir = dir())
                 dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&

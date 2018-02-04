@@ -14,6 +14,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
     to_tuple_type, signature_type, format_bytes
 
 using Markdown
+import Pkg
 
 include("editless.jl")
 include("codeview.jl")

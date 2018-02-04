@@ -19,14 +19,8 @@ true
 ```
 """
 function startswith(a::AbstractString, b::AbstractString)
-    i = start(a)
-    j = start(b)
-    while !done(a,i) && !done(b,i)
-        c, i = next(a,i)
-        d, j = next(b,j)
-        (c != d) && (return false)
-    end
-    done(b,i)
+    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    all(splat(==), zip(a, b)) && isempty(b)
 end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
 
@@ -45,18 +39,9 @@ true
 ```
 """
 function endswith(a::AbstractString, b::AbstractString)
-    i = lastindex(a)
-    j = lastindex(b)
-    a1 = start(a)
-    b1 = start(b)
-    while a1 <= i && b1 <= j
-        c = a[i]
-        d = b[j]
-        (c != d) && (return false)
-        i = prevind(a,i)
-        j = prevind(b,j)
-    end
-    j < b1
+    a = Iterators.Stateful(Iterators.reverse(a))
+    b = Iterators.Stateful(Iterators.reverse(b))
+    all(splat(==), zip(a, b)) && isempty(b)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
@@ -150,13 +135,8 @@ julia> lstrip(a)
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
     e = lastindex(s)
-    i = start(s)
-    while !done(s,i)
-        c, j = next(s,i)
-        if !(c in chars)
-            return SubString(s, i, e)
-        end
-        i = j
+    for (i, c) in pairs(s)
+        !(c in chars) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
@@ -180,13 +160,8 @@ julia> rstrip(a)
 ```
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
-    a = firstindex(s)
-    i = lastindex(s)
-    while a ≤ i
-        c = s[i]
-        j = prevind(s, i)
-        c in chars || return SubString(s, 1:i)
-        i = j
+    for (i, c) in Iterators.reverse(pairs(s))
+        c in chars || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end

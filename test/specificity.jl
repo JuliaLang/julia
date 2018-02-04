@@ -183,3 +183,11 @@ let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
     @test !args_morespecific(x.parameters[1], y.parameters[1])
     @test !args_morespecific(y.parameters[1], x.parameters[1])
 end
+
+let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
+    B = Tuple{Array, Int},
+    C = Tuple{AbstractArray, Int, Array}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
+end

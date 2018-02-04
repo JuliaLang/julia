@@ -295,6 +295,9 @@ end
         @test findall(occursin(a), a)       == [1,2]
     end
 
+    @test findall(occursin([1, 2]), 2) == [1]
+    @test findall(occursin([1, 2]), 3) == []
+
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 end
@@ -2009,7 +2012,7 @@ end
 @test f15894(fill(1, 100)) == 100
 end
 
-@testset "sign, conj, ~" begin
+@testset "sign, conj[!], ~" begin
     local A, B, C
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
@@ -2021,6 +2024,7 @@ end
     @test typeof(sign.(B)) == Vector{Float64}
 
     @test conj(A) == A
+    @test conj!(copy(A)) == A
     @test conj(B) == A
     @test conj(C) == [1,-im,0]
     @test typeof(conj(A)) == Vector{Int}
@@ -2298,4 +2302,12 @@ end
     inds_a = Base.Indices{2}([1:3, 1:2])
     inds_b = Base.Indices{2}([1:4, 1:2])
     @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    # fails because ranges 3, 4 of inds_a are not 1:1
+    inds_a = Base.Indices{4}([1:3, 1:2, 1:3, 1:2])
+    inds_b = Base.Indices{2}([1:3, 1:2])
+    @test_throws DimensionMismatch Base.promote_shape(inds_a, inds_b)
+    # succeeds for converse reason
+    inds_a = Base.Indices{2}([1:3, 1:1])
+    inds_b = Base.Indices{1}([1:3])
+    @test Base.promote_shape(inds_a, inds_b) == Base.promote_shape(inds_b, inds_a)
 end

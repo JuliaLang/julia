@@ -346,7 +346,6 @@ include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
@@ -443,9 +442,6 @@ include("missing.jl")
 # libgit2 support
 include("libgit2/libgit2.jl")
 
-# package manager
-include("pkg/pkg.jl")
-
 # worker threads
 include("threadcall.jl")
 
@@ -525,6 +521,7 @@ Base.require(Base, :SparseArrays)
 Base.require(Base, :SuiteSparse)
 Base.require(Base, :Test)
 Base.require(Base, :Unicode)
+Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
 
@@ -565,6 +562,8 @@ Base.require(Base, :Markdown)
     @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
     @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
+
+    @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 

@@ -919,7 +919,7 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = [0.0 0.0; 0.0 0.0]\n"
     finally
         rm(fname, force=true)
     end
@@ -1145,4 +1145,14 @@ end
     buf = IOBuffer()
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+
+@testset "Intrinsic printing" begin
+    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    let io = IOBuffer()
+        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        str = String(take!(io))
+        @test contains(str, "arraylen")
+        @test contains(str, "(intrinsic function")
+    end
 end

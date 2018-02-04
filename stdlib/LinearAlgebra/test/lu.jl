@@ -82,7 +82,6 @@ dimg  = randn(n)/2
         # compact printing
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin

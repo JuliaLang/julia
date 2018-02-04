@@ -274,7 +274,8 @@ issuccess(F::LU) = F.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
-        println(io, summary(F), "\nL factor:")
+        println(io, summary(F))
+        println(io, "L factor:")
         show(io, mime, F.L)
         println(io, "\nU factor:")
         show(io, mime, F.U)

@@ -5,6 +5,7 @@ Tools for working with the Markdown file format. Mainly for documentation.
 """
 module Markdown
 
+import Pkg
 import Base: show, ==, with_output_color
 
 include(joinpath("parse", "config.jl"))

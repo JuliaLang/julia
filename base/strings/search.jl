@@ -14,7 +14,7 @@ function findnext(pred::EqualTo{Char}, s::String, i::Integer)
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
         s[i] == c && return i
-        i = next(s, i)[2]
+        i = nextind(s, i)
     end
 end
 
@@ -106,12 +106,10 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    while !done(s,i)
-        d, j = next(s,i)
+    for (j, d) in pairs(SubString(s, i))
         if testf(d)
-            return i
+            return i + j - 1
         end
-        i = j
     end
     return nothing
 end
@@ -125,28 +123,14 @@ function _searchindex(s::Union{AbstractString,ByteArray},
         return 1 <= i <= nextind(s,lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t1, j2 = next(t,start(t))
+    t1, trest = Iterators.peel(t)
     while true
         i = findnext(equalto(t1),s,i)
         if i === nothing return 0 end
-        c, ii = next(s,i)
-        j = j2; k = ii
-        matched = true
-        while !done(t,j)
-            if done(s,k)
-                matched = false
-                break
-            end
-            c, k = next(s,k)
-            d, j = next(t,j)
-            if c != d
-                matched = false
-                break
-            end
-        end
-        if matched
-            return i
-        end
+        ii = nextind(s, i)
+        a = Iterators.Stateful(trest)
+        matched = all(splat(==), zip(SubString(s, ii), a))
+        (isempty(a) && matched) && return i
         i = ii
     end
 end
@@ -308,30 +292,20 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t = t isa AbstractString ? reverse(t) : t
-    rs = reverse(s)
-    l = lastindex(s)
-    t1, j2 = next(t, start(t))
+    t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
         i = findprev(equalto(t1), s, i)
         i === nothing && return 0
-        c, ii = next(rs, reverseind(rs, i))
-        j = j2; k = ii
-        matched = true
-        while !done(t, j)
-            if done(rs, k)
-                matched = false
-                break
-            end
-            c, k = next(rs, k)
-            d, j = next(t, j)
-            if c != d
-                matched = false
-                break
-            end
+        ii = prevind(s, i)
+        a = Iterators.Stateful(trest)
+        b = Iterators.Stateful(Iterators.reverse(
+            pairs(SubString(s, 1, ii))))
+        matched = all(splat(==), zip(a, (x[2] for x in b)))
+        if matched && isempty(a)
+            isempty(b) && return firstindex(s)
+            return nextind(s, popfirst!(b)[1])
         end
-        matched && return nextind(s, reverseind(s, k))
-        i = reverseind(s, ii)
+        i = ii
     end
 end
 

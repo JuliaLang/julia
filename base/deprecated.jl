@@ -496,6 +496,9 @@ end
 # related items to remove in: abstractarray.jl, dates/periods.jl, compiler.jl
 # also remove all uses of is_default_method
 
+@deprecate convert(::Type{UInt128},     u::UUID)     UInt128(u)
+@deprecate convert(::Type{UUID}, s::AbstractString)  UUID(s)
+
 # Issue #19923
 @deprecate ror                  circshift
 @deprecate ror!                 circshift!
@@ -1153,6 +1156,8 @@ end
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
 
+@deprecate_binding KeyIterator KeySet false
+
 # issue #25016
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
@@ -1328,6 +1333,9 @@ end
 # this method is to avoid ambiguity, delete at the same time as deprecation of skipchars above:
 skipchars(::IO, ::IO; linecomment=nothing) = throw(ArgumentError("the first argument of `skipchars` must be callable"))
 
+# Issue #25745
+@deprecate print_shortest Base.Grisu.print_shortest
+
 # issue #9053
 if Sys.iswindows()
 function Filesystem.tempname(uunique::UInt32)
@@ -1388,7 +1396,7 @@ function lastindex(a, n)
 end
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
-@deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
+@deprecate Timer(callback, delay, repeat) Timer(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)

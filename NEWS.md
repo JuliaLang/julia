@@ -44,6 +44,9 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
+  * Keyword arguments can be required: if a default value is omitted, then an
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
+
 Language changes
 ----------------
 
@@ -56,6 +59,10 @@ Language changes
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
+
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
@@ -199,10 +206,13 @@ This section lists changes that do not have deprecation warnings.
   * `replace(s::AbstractString, pat=>repl)` for function `repl` arguments formerly
     passed a substring to `repl` in all cases.  It now passes substrings for
     string patterns `pat`, but a `Char` for character patterns (when `pat` is a
-    `Char`, collection of `Char`, or a character predicate).
+    `Char`, collection of `Char`, or a character predicate) ([#25815]).
 
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
+  * `countlines` now always counts the last non-empty line even if it does not
+    end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
@@ -408,6 +418,9 @@ This section lists changes that do not have deprecation warnings.
     + any non-letter character is considered as a word separator;
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
+
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
 
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
@@ -1000,7 +1013,10 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
-  * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
+  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
@@ -1266,3 +1282,4 @@ Command-line option changes
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25745]: https://github.com/JuliaLang/julia/issues/25745

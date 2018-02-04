@@ -3,7 +3,6 @@
 export
 # Modules
     Meta,
-    Pkg,
     LibGit2,
     StackTraces,
     Sys,
@@ -614,7 +613,6 @@ export
     oct,
     prevind,
     print,
-    print_shortest,
     println,
     printstyled,
     repeat,
