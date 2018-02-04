@@ -271,6 +271,41 @@ size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
 
+abstract type MemoryLayout{T} end
+struct UnknownLayout{T} <: MemoryLayout{T} end
+
+"""
+    UnknownLayout{T}()
+
+is returned by `MemoryLayout(A)` is unknown if or how the entries of an array `A`
+are stored in memory.
+"""
+UnknownLayout
+
+"""
+    MemoryLayout(A)
+    MemoryLayout(typeof(A))
+
+`MemoryLayout` specifies the layout in memory for an array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+memory layout to indicate that an array is strided in memory. If you decide to
+implement memory layout, then you must set this trait for your array
+type:
+
+    Base.MemoryLayout(::Type{M}) where M <: MyArray{T,N} where {T} = LinearAlgebra.StridedLayout{T}()
+
+The default is `Base.UnknownLayout{T,N}()` to indicate that the layout
+in memory is unknown.
+
+Julia's internal linear algebra machinery will automatically (and invisibly)
+dispatch to BLAS and LAPACK routines if the memory layout is BLAS and
+the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
+In this case, one must implement the strided array interface, which requires
+overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`.
+"""
+MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout{T}()
+
+
 function isassigned(a::AbstractArray, i::Int...)
     try
         a[i...]

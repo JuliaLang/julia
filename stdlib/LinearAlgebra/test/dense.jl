@@ -854,7 +854,7 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
     @test LinearAlgebra.MemoryLayout(view(A,:,:))         == LinearAlgebra.DenseColumnMajor{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,:))           == LinearAlgebra.DenseColumnMajor{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,:,1))         == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test LinearAlgebra.MemoryLayout(view(A,:,1:1))       == LinearAlgebra.DenseColumnsStridedRows{Float64}()
+    @test LinearAlgebra.MemoryLayout(view(A,:,1:1))       == LinearAlgebra.DenseColumnMajor{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,1:1,1))       == LinearAlgebra.DenseColumnMajor{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,1,1:1))       == LinearAlgebra.StridedLayout{Float64}()
     @test LinearAlgebra.MemoryLayout(view(A,1,:))         == LinearAlgebra.StridedLayout{Float64}()

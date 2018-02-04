@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
+import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar, conj
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
@@ -107,56 +107,14 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 
 
 # MemoryLayout of transposed and adjoint matrices
-abstract type ConjDenseColumns{T<:Complex} <: BlasMatrixLayout{T} end
-struct ConjDenseColumnMajor{T<:Complex} <: ConjDenseColumns{T} end
-struct ConjDenseColumnsStridedRows{T<:Complex} <: ConjDenseColumns{T} end
-abstract type ConjDenseRows{T<:Complex} <: BlasMatrixLayout{T} end
-struct ConjDenseRowMajor{T<:Complex} <: ConjDenseRows{T} end
-struct ConjDenseRowsStridedColumns{T<:Complex} <: ConjDenseRows{T} end
-struct ConjStridedLayout{T<:Complex} <: DenseLayout{T} end
+struct ConjLayout{T<:Complex, ML<:MemoryLayout} <: MemoryLayout{T}
+    layout::ML
+end
+ConjLayout(layout::MemoryLayout{T}) where T<:Complex = ConjLayout{T, typeof(layout)}(layout)
+conj(::UnknownLayout{T}) where T = UnknownLayout{T}()
+conj(c::ConjLayout) = c.layout
+conj(layout::MemoryLayout{T}) where T<:Complex = ConjLayout(layout)
 
-"""
-    ConjDenseColumnMajor{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-equivalent to the complex conjugate of an `Array`, so that `stride(A,1) == 1`
-and `stride(A,2) == size(A,1)`.
-`Array`s with `ConjDenseColumnMajor` must conform to the `DenseArray` interface
-and `adjoint(A)` should return a matrix whose layout is `DenseRowMajor{T}()`.
-"""
-ConjDenseColumnMajor
-
-"""
-    ConjDenseColumnsStridedRows{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-as a column major matrix, where the complex conjugates of the entries of `A`
-are stored.
-`Array`s with `ConjDenseColumnsStridedRows` must conform to the `DenseArray` interface,
-and `adjoint(A)` should return a matrix whose layout is `DenseRowsStridedColumns{T}()`.
-"""
-ConjDenseColumnsStridedRows
-
-"""
-    ConjDenseRowMajor{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-equivalent to the adjoint of an `Array`, so that `stride(A,1) == 1` and `stride(A,2) == size(A,1)`.
-`Array`s with `ConjDenseRowMajor` must conform to the `DenseArray` interface
-and `adjoint(A)` should return a matrix whose layout is `DenseColumnMajor{T}()`.
-"""
-ConjDenseRowMajor
-
-"""
-    ConjDenseRowsStridedColumns{T}()
-
-is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
-as a column major matrix, where the complex conjugates of the entries of `A`
-are stored.
-`Array`s with `ConjDenseRowsStridedColumns` must conform to the `DenseArray` interface,
-and `adjoint(A)` should return a matrix whose layout is `DenseColumnsStridedRows{T}()`.
-"""
-ConjDenseRowsStridedColumns
 
 MemoryLayout(A::Adjoint) = adjoint(MemoryLayout(parent(A)))
 MemoryLayout(A::Transpose) = transpose(MemoryLayout(parent(A)))
@@ -168,19 +126,13 @@ transpose(::DenseColumnMajor{T}) where T = DenseRowMajor{T}()
 transpose(::DenseRowMajor{T}) where T = DenseColumnMajor{T}()
 adjoint(::MemoryLayout{T}) where T = UnknownLayout{T}()
 adjoint(M::MemoryLayout{T}) where T<:Real = transpose(M)
-adjoint(::StridedLayout{T}) where T<:Complex = ConjStridedLayout{T}()
-adjoint(::DenseColumnsStridedRows{T}) where T<:Complex = ConjDenseRowsStridedColumns{T}()
-adjoint(::DenseRowsStridedColumns{T}) where T<:Complex = ConjDenseColumnsStridedRows{T}()
-adjoint(::ConjDenseColumnsStridedRows{T}) where T<:Complex = DenseRowsStridedColumns{T}()
-adjoint(::ConjDenseRowsStridedColumns{T}) where T<:Complex = DenseColumnsStridedRows{T}()
-adjoint(::DenseColumnMajor{T}) where T<:Complex = ConjDenseRowMajor{T}()
-adjoint(::DenseRowMajor{T}) where T<:Complex = ConjDenseColumnMajor{T}()
-adjoint(::ConjDenseColumnMajor{T}) where T<:Complex = DenseRowMajor{T}()
-adjoint(::ConjDenseRowMajor{T}) where T<:Complex = DenseColumnMajor{T}()
+adjoint(M::ConjLayout{T}) where T<:Complex = transpose(conj(M))
+adjoint(M::MemoryLayout{T}) where T<:Complex = conj(transpose(M))
+submemorylayout(M::ConjLayout{T}, t::Tuple) where T<:Complex = conj(submemorylayout(conj(M), t))
 
 # Adjoints and transposes conform to the strided array interface if their parent does
-unsafe_convert(::Ptr{T}, A::AdjOrTrans{T,S}) where {T,S} = unsafe_convert(Ptr{T}, parent(A))
-strides(A::AdjOrTrans) = reverse(strides(parent(A)))
+Base.unsafe_convert(::Type{Ptr{T}}, A::AdjOrTrans{T,S}) where {T,S} = Base.unsafe_convert(Ptr{T}, parent(A))
+strides(A::AdjOrTrans) = (stride(parent(A),2), stride(parent(A),1))
 
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i])
 @propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
@@ -280,7 +232,7 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
 /(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
 
-# dismabiguation methods
+# disambiguation methods
 *(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = copy(A) * B

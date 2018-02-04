@@ -342,27 +342,27 @@ end
 
 ## Matrix-vector product
 _mul!(y::AbstractVector{T},    A::AbstractMatrix{T}, x::AbstractVector{T},
-      ::DenseLayout, AL::SymmetricLayout,  ::DenseLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
     BLAS.symv!(AL.uplo, one(T), parent(A), x, zero(T), y)
 _mul!(y::AbstractVector{T},     A::AbstractMatrix{T}, x::AbstractVector{T},
-      ::DenseLayout,  AL::HermitianLayout,  ::DenseLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemv!(A.uplo, one(T), parent(A), x, zero(T), y)
 ## Matrix-matrix product
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::DenseLayout, AL::SymmetricLayout,  ::DenseLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, AL::SymmetricLayout,  ::AbstractStridedLayout) where {T<:BlasFloat} =
     BLAS.symm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::DenseLayout, ::DenseLayout, BL::SymmetricLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::SymmetricLayout) where {T<:BlasFloat} =
     BLAS.symm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::DenseLayout,  AL::HermitianLayout,  ::DenseLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout,  AL::HermitianLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::DenseLayout, ::DenseLayout, BL::HermitianLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout) where {T<:BlasComplex} =
     BLAS.hemm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::DenseLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
     mul!(C, A, Matrix{T}(B))
 
 
