@@ -755,7 +755,7 @@ end
 
 # PR 17117
 # test print_array
-let s = IOBuffer(Vector{UInt8}(), true, true)
+let s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end

@@ -105,7 +105,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0  # TODO: Is this really needed?
+    buf.data[:] = 0
     if flags.truncate
         buf.size = 0
     end

@@ -343,7 +343,7 @@ for (name, f) in l
     @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(codeunits(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), read=false, write=true)
     write(to, io())
     @test String(take!(to)) == text
 
