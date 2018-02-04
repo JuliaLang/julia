@@ -112,34 +112,6 @@ function IOBuffer(;
     return buf
 end
 
-# TODO: deprecate these methods?
-IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer=typemax(Int)) = IOBuffer(data, read=read, write=write, maxsize=maxsize)
-IOBuffer(read::Bool, write::Bool) = IOBuffer(read=read, write=write)
-"""
-    IOBuffer(size::Integer)
-
-Create a fixed size IOBuffer. The buffer will not grow dynamically.
-
-# Examples
-```jldoctest
-julia> io = IOBuffer(12)
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=12, ptr=1, mark=-1)
-
-julia> write(io, "Hello world.")
-12
-
-julia> String(take!(io))
-"Hello world."
-
-julia> write(io, "Hello world again.")
-12
-
-julia> String(take!(io))
-"Hello world "
-```
-"""
-IOBuffer(maxsize::Integer) = IOBuffer(maxsize=maxsize)
-
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
 
 """
