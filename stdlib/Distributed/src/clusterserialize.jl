@@ -10,7 +10,7 @@ import Serialization: object_number, lookup_object_number, remember_object
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::IdDict
+    table::IdDict{Any,Any}
     pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.

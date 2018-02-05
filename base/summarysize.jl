@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct SummarySize
-    seen::IdDict
+    seen::IdDict{Any,Any}
     frontier_x::Vector{Any}
     frontier_i::Vector{Int}
     exclude::Any

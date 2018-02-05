@@ -135,7 +135,7 @@ function get_task_tls(t::Task)
     if t.storage === nothing
         t.storage = IdDict()
     end
-    (t.storage)::IdDict
+    (t.storage)::IdDict{Any,Any}
 end
 
 """

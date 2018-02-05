@@ -176,12 +176,12 @@ end
 struct AllocOptContext
     infomap::ValueInfoMap
     sv::OptimizationState
-    todo::IdDict
-    changes::IdDict
-    sym_count::IdDict
-    all_fld::IdDict
-    setfield_typ::IdDict
-    undef_fld::IdDict
+    todo::IdDict{Any,Any}
+    changes::IdDict{Any,Any}
+    sym_count::IdDict{Any,Any}
+    all_fld::IdDict{Any,Any}
+    setfield_typ::IdDict{Any,Any}
+    undef_fld::IdDict{Any,Any}
     structinfos::Vector{StructInfo}
     function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
         todo = IdDict()
