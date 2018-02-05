@@ -2354,15 +2354,20 @@
 
 (define (simple-string-literal? e) (string? e))
 
+(define (string-macro-name? x)
+  (let ((x (string x)))
+    (and (> (string-length x) 4)
+         (eqv? (string.char x 0) #\@)
+         (eqv? (string.sub x (string.dec x (sizeof x) 4)) "_str"))))
+
 (define (doc-string-literal? e)
   (or (simple-string-literal? e)
-      (and (pair? e) (eq? 'string (car e))) ; string interpolation
-      (and (length= e 3) (eq? (car e) 'macrocall)
-           (simple-string-literal? (caddr e))
-           (eq? (cadr e) '@doc_str))
-      (and (length= e 4) (eq? (car e) 'macrocall)
-           (simple-string-literal? (cadddr e))
-           (eq? (cadr e) '@doc_str))))
+      (and (pair? e)
+           (or (eq? (car e) 'string) ; string interpolation
+               (and (eq? (car e) 'macrocall)
+                    (string-macro-name? (cadr e))
+                    (or (and (length= e 3) (simple-string-literal? (caddr e)))
+                        (and (length= e 4) (simple-string-literal? (cadddr e)))))))))
 
 (define (parse-docstring s production)
   (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring

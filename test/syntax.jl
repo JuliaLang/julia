@@ -1267,3 +1267,9 @@ end
 
 # issue #25020
 @test_throws ParseError Meta.parse("using Colors()")
+
+let ex = Meta.parse("md\"x\"
+                     f(x) = x")
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] == Core.GlobalRef(Core, Symbol("@doc"))
+end
