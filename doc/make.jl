@@ -130,7 +130,6 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
-            "devdocs/libgit2.md",
             "devdocs/require.md",
             "devdocs/inference.md",
         ],
@@ -154,7 +153,7 @@ makedocs(
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    strict    = true,
+    strict    = false,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",

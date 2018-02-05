@@ -3,7 +3,6 @@
 export
 # Modules
     Meta,
-    LibGit2,
     StackTraces,
     Sys,
     Libc,

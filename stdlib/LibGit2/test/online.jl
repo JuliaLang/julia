@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+module LibGit2OnlineTests
 
+using Test
+import LibGit2
 using Random
 
 #########
@@ -50,3 +53,5 @@ mktempdir() do dir
         end
     end
 end
+
+end # module

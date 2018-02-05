@@ -2,6 +2,8 @@
 
 module Consts
 
+import ..LibGit2: version
+
 const HEAD_FILE  = "HEAD"
 const FETCH_HEAD  = "FETCH_HEAD"
 const REMOTE_ORIGIN = "origin"
@@ -346,7 +348,7 @@ Option flags for `GitRepo`.
                    FEATURE_SSH     = Cuint(1 << 2),
                    FEATURE_NSEC    = Cuint(1 << 3))
 
-if LibGit2.version() >= v"0.24.0"
+if version() >= v"0.24.0"
     @doc """
     Priority level of a config file.
 
