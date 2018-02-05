@@ -98,6 +98,9 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
+typemin(::Type{String}) = ""
+typemin(::String) = typemin(String)
+
 ## thisind, nextind ##
 
 thisind(s::String, i::Int) = _thisind_str(s, i)
