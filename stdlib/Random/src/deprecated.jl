@@ -16,9 +16,6 @@ end
 
 @deprecate randjump(mt::MersenneTwister, jumps::Integer)  randjump(mt, big(10)^20, jumps)
 
-@deprecate convert(::Type{UInt128},     u::UUID)     UInt128(u)
-@deprecate convert(::Type{UUID}, s::AbstractString)  UUID(s)
-
 # PR #25429
 @deprecate rand(r::AbstractRNG, dims::Dims) rand(r, Float64, dims)
 @deprecate rand(                dims::Dims) rand(Float64, dims)

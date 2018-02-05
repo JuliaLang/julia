@@ -130,19 +130,27 @@ end
 
 
 """
-    mul1!(A, B)
+    rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
+<<<<<<< HEAD
 mul1!(A, B) = _mul1!(A, B, MemoryLayout(A), MemoryLayout(B))
 
+=======
+rmul!(A, B)
+>>>>>>> 4b90831838f84f1c5fb8ec1ed6ed98da7b9fc04d
 
 """
-    mul2!(A, B)
+    lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
 """
+<<<<<<< HEAD
 mul2!(A, B) = _mul2!(A, B, MemoryLayout(A), MemoryLayout(B))
+=======
+lmul!(A, B)
+>>>>>>> 4b90831838f84f1c5fb8ec1ed6ed98da7b9fc04d
 
 
 _mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, _1, _2, _3) = generic_matmatmul!(C, 'N', 'N', A, B)
@@ -207,11 +215,11 @@ function copytri!(A::AbstractMatrix, uplo::Char, conjugate::Bool=false)
     n = checksquare(A)
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
-            A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
+            A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
         for i = 1:(n-1), j = (i+1):n
-            A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
+            A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))

@@ -181,6 +181,20 @@ end
         typejoin(Int, AbstractFloat, Bool)
     @test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) ===
         typejoin(Int, Float64, Bool)
+    @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+end
+
+@testset "map with Nothing and Missing" begin
+    for T in (Nothing, Missing)
+        x = [(1, T()), (1, 2)]
+        y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
+        @test y isa Vector{Tuple{Int,Union{T,Int}}}
+        @test isequal(x, y)
+    end
+    y = map(v -> (v[1], v[1] + v[2]), [(1, missing), (1, 2)])
+    @test y isa Vector{Tuple{Int,Union{Missing,Int}}}
+    @test isequal(y, [(1, missing), (1, 3)])
 end
 
 @testset "mapping" begin

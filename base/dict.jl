@@ -5,10 +5,8 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
-    idx = start(str)
-    while !done(str, idx)
+    for (idx, c) in pairs(str)
         lastidx = idx
-        c, idx = next(str, idx)
         wid += textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
@@ -175,7 +173,7 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
-            new = empty(dest, typejoin(K,typeof(k)), typejoin(V,typeof(v)))
+            new = empty(dest, promote_typejoin(K,typeof(k)), promote_typejoin(V,typeof(v)))
             merge!(new, dest)
             new[k] = v
             return grow_to!(new, itr, st)

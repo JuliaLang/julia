@@ -6,6 +6,7 @@ using Markdown
 using REPL
 
 using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
 
 # For curmod_*
 include("testenv.jl")
@@ -896,7 +897,7 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(Base.Iterators.@time) == x
 end
 
 let x = Binding(Iterators, :enumerate)
@@ -904,7 +905,7 @@ let x = Binding(Iterators, :enumerate)
     @test @var(enumerate) == x
     @test @var(Base.enumerate) == x
     @test @var(Iterators.enumerate) == x
-    @test @var(Base.Pkg.Dir.enumerate) == x
+    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -912,14 +913,13 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)

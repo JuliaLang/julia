@@ -69,6 +69,15 @@ end
     @test isnan(mean([1.,-1.,Inf,-Inf]))
     @test isnan(mean([-Inf,Inf]))
     @test isequal(mean([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
+
+    # Check that small types are accumulated using wider type
+    for T in (Int8, UInt8)
+        x = [typemax(T) typemax(T)]
+        g = (v for v in x)
+        @test mean(x) == mean(g) == typemax(T)
+        @test mean(identity, x) == mean(identity, g) == typemax(T)
+        @test mean(x, 2) == [typemax(T)]'
+    end
 end
 
 @testset "var & std" begin

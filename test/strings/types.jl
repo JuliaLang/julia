@@ -188,6 +188,43 @@ let s = "lorem ipsum", sdict = Dict(
     end
 end
 
+# proper nextind/prevind/thisind for SubString{String}
+let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
+                                      String(rand(rng, UInt8, 50))]
+    for s in strs
+        a = 0
+        while !done(s, a)
+            a = nextind(s, a)
+            b = a - 1
+            while !done(s, b)
+                ss = SubString(s, a:b)
+                s2 = s[a:b]
+                @test ncodeunits(ss) == ncodeunits(s2)
+                for i in 0:ncodeunits(ss)+1
+                    @test thisind(ss, i) == thisind(s2, i)
+                end
+                for i in 0:ncodeunits(ss)
+                    @test nextind(ss, i) == nextind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test nextind(ss, i, j) == nextind(s2, i, j)
+                        end
+                    end
+                end
+                for i in 1:ncodeunits(ss)+1
+                    @test prevind(ss, i) == prevind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test prevind(ss, i, j) == prevind(s2, i, j)
+                        end
+                    end
+                end
+                b = nextind(s, b)
+            end
+        end
+    end
+end
+
 # for isvalid(SubString{String})
 let s = "Σx + βz - 2"
     for i in -1:ncodeunits(s)+2

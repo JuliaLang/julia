@@ -1,0 +1,39 @@
+diff --git a/lib/IR/Core.cpp b/lib/IR/Core.cpp
+index 1cf17b1f311..a969e08cabc 100644
+--- a/lib/IR/Core.cpp
++++ b/lib/IR/Core.cpp
+@@ -1842,12 +1842,16 @@ void LLVMAddAttributeAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx,
+ 
+ unsigned LLVMGetAttributeCountAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx) {
+   auto *ASN = AttributeSetNode::get(unwrap<Function>(F)->getAttributes(), Idx);
++  if (!ASN)
++    return 0;
+   return ASN->getNumAttributes();
+ }
+ 
+ void LLVMGetAttributesAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx,
+                               LLVMAttributeRef *Attrs) {
+   auto *ASN = AttributeSetNode::get(unwrap<Function>(F)->getAttributes(), Idx);
++  if (!ASN)
++    return;
+   for (auto A: make_range(ASN->begin(), ASN->end()))
+     *Attrs++ = wrap(A);
+ }
+@@ -2173,6 +2177,8 @@ unsigned LLVMGetCallSiteAttributeCount(LLVMValueRef C,
+                                        LLVMAttributeIndex Idx) {
+   auto CS = CallSite(unwrap<Instruction>(C));
+   auto *ASN = AttributeSetNode::get(CS.getAttributes(), Idx);
++  if (!ASN)
++    return 0;
+   return ASN->getNumAttributes();
+ }
+ 
+@@ -2180,6 +2186,8 @@ void LLVMGetCallSiteAttributes(LLVMValueRef C, LLVMAttributeIndex Idx,
+                                LLVMAttributeRef *Attrs) {
+   auto CS = CallSite(unwrap<Instruction>(C));
+   auto *ASN = AttributeSetNode::get(CS.getAttributes(), Idx);
++  if (!ASN)
++    return;
+   for (auto A: make_range(ASN->begin(), ASN->end()))
+     *Attrs++ = wrap(A);
+ }

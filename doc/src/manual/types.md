@@ -387,7 +387,7 @@ to point to different objects.
 Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
 discussed in the next section.
 
-Composite types with no fields are singletons; there can be only one instance of such types:
+Immutable composite types with no fields are singletons; there can be only one instance of such types:
 
 ```jldoctest
 julia> struct NoFields
@@ -907,7 +907,7 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 ### Named Tuple Types
 
-Named tuples are instances of the `NamedTuple` type, which has two parameters: a tuple of
+Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
 
 ```jldoctest

@@ -133,7 +133,7 @@ try
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
-              let some_method = @which Base.include("string")
+              let some_method = which(Base.include, (String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
                       ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
@@ -217,7 +217,7 @@ try
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL]))
+                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -243,7 +243,7 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
-        some_method = @which Base.include("string")
+        some_method = which(Base.include, (String,))
         some_linfo =
                 ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))

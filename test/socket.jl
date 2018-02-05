@@ -30,6 +30,12 @@ using Random
 
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFFFFF")
     @test_throws ArgumentError parse(IPv4, "192.")
+    @test_throws ArgumentError parse(IPv4, "256.256.256.256")
+    # too many fields
+    @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+
+    @test_throws ArgumentError IPv4(-1)
+    @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
 
     @test ip"::1" == IPv6(1)
     @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))
@@ -45,6 +51,11 @@ using Random
 
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
+
+    @test IPv6(UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1)) == IPv6(1,1,1,1,1,1,1,1)
+
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), -1)
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), 9)
 end
 
 @testset "InetAddr constructor" begin

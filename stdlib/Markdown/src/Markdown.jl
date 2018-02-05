@@ -5,6 +5,7 @@ Tools for working with the Markdown file format. Mainly for documentation.
 """
 module Markdown
 
+import Pkg
 import Base: show, ==, with_output_color
 
 include(joinpath("parse", "config.jl"))
@@ -23,16 +24,10 @@ include(joinpath("render", "rst.jl"))
 
 include(joinpath("render", "terminal", "render.jl"))
 
-export readme, license, @md_str, @doc_str
+export @md_str, @doc_str
 
 parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)
-
-readme(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "README.md"), flavor = flavor)
-readme(pkg::Module; flavor = github) = readme(string(pkg), flavor = flavor)
-
-license(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavor = flavor)
-license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
     md = parse(s, flavor = Symbol(flavor))

@@ -3,8 +3,6 @@
 export
 # Modules
     Meta,
-    Pkg,
-    LibGit2,
     StackTraces,
     Sys,
     Libc,
@@ -614,7 +612,6 @@ export
     oct,
     prevind,
     print,
-    print_shortest,
     println,
     printstyled,
     repeat,
@@ -761,7 +758,6 @@ export
     promote,
     promote_rule,
     promote_type,
-    subtypes,
     instances,
     supertype,
     typeintersect,
@@ -777,26 +773,17 @@ export
     parse,
 
 # help and reflection
-    apropos,
-    edit,
     code_typed,
-    code_warntype,
     code_lowered,
-    code_llvm,
-    code_native,
     fullname,
     functionloc,
     isconst,
     isinteractive,
-    less,
     hasmethod,
     methods,
-    methodswith,
     nameof,
     parentmodule,
     names,
-    varinfo,
-    versioninfo,
     which,
     @isdefined,
 
@@ -818,7 +805,6 @@ export
     clipboard,
     exit,
     ntuple,
-    quit,
 
 # IP address stuff
     @ip_str,
@@ -1032,17 +1018,6 @@ export
     @timev,
     @elapsed,
     @allocated,
-
-    # reflection
-    @which,
-    @edit,
-    @functionloc,
-    @less,
-    @code_typed,
-    @code_warntype,
-    @code_lowered,
-    @code_llvm,
-    @code_native,
 
     # tasks
     @schedule,

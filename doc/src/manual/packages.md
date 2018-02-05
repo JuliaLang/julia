@@ -3,8 +3,8 @@
 Julia has a built-in package manager for installing add-on functionality written in Julia. It
 can also install external libraries using your operating system's standard system for doing so,
 or by compiling from source. The list of registered Julia packages can be found at [http://pkg.julialang.org](http://pkg.julialang.org).
-All package manager commands are found in the `Pkg` module, included in Julia's `Base`
-install.
+All package manager commands are found in the `Pkg` standard library which becomes available after using
+`import Pkg`.
 
 First we'll go over the mechanics of the `Pkg` family of commands and then we'll provide some
 guidance on how to get your package registered. Be sure to read the section below on package naming

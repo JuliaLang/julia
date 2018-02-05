@@ -211,7 +211,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    else
+    elseif root_module_exists(PkgId(nothing, "LibGit2"))
+        LibGit2 = Base.root_module(Main, :LibGit2)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -230,6 +231,8 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
+    else
+        return fileurl(file)
     end
 end
 
@@ -301,7 +304,7 @@ end
 
 show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of AbstractVector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     first = true

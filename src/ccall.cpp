@@ -722,12 +722,14 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 }
 
 
-static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure, bool compiletime=false)
+static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure)
 {
-    jl_value_t *constant = NULL;
-    constant = static_eval(ctx, ex, true, true);
-    if (constant || jl_is_ssavalue(ex))
+    jl_value_t *constant = static_eval(ctx, ex, true, true);
+    if (jl_is_ssavalue(ex) && !constant)
+        jl_error(failure);
+    else if (constant)
         return constant;
+
     JL_TRY {
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = ctx.world;
@@ -735,12 +737,9 @@ static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failu
         jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
-        if (compiletime)
-            jl_rethrow_with_add(failure);
-        if (failure)
-            emit_error(ctx, failure);
-        constant = NULL;
+        jl_rethrow_with_add(failure);
     }
+
     return constant;
 }
 
@@ -955,9 +954,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_NARGSV(llvmcall, 3);
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     JL_GC_PUSH4(&ir, &rt, &at, &decl);
-    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple", true);
-    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type", true);
-    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument", true);
+    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
+    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument");
     int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)

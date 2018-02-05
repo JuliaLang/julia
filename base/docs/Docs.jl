@@ -64,7 +64,7 @@ import Base.Meta: quot, isexpr
 import Base: Callable, with_output_color
 import ..CoreDocs: lazy_iterpolate
 
-export doc, apropos
+export doc
 
 # Basic API / Storage
 

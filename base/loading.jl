@@ -1066,6 +1066,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
+        import Pkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
         empty!(Base.DEPOT_PATH)

@@ -905,10 +905,10 @@ function setup_interface(
             LineEdit.push_undo(s)
             edit_insert(sbuffer, input)
             input = String(take!(sbuffer))
-            oldpos = start(input)
+            oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            while !done(input, oldpos) # loop until all lines have been executed
+            while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
                     # skip it. But first skip whitespace

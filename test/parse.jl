@@ -27,7 +27,7 @@
 @test parse(Int,'3', base = 8) == 3
 
 # Issue 20587
-for T in vcat(subtypes(Signed), subtypes(Unsigned))
+for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
         # Without a base (handles things like "0x00001111", etc)
@@ -75,7 +75,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, start(s), lastindex(s), 0, true))
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 

@@ -25,7 +25,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, i-1, 0)
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)
@@ -49,6 +49,7 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
+convert(::Type{T}, s::T) where {T<:SubString} = s
 
 String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
 
@@ -78,26 +79,8 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
-function thisind(s::SubString, i::Int)
-    @boundscheck 0 ≤ i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return thisind(s.string, s.offset + i) - s.offset
-end
-function nextind(s::SubString, i::Int, n::Int)
-    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return nextind(s.string, s.offset + i, n) - s.offset
-end
-function nextind(s::SubString, i::Int)
-    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return nextind(s.string, s.offset + i) - s.offset
-end
-function prevind(s::SubString, i::Int, n::Int)
-    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return prevind(s.string, s.offset + i, n) - s.offset
-end
-function prevind(s::SubString, i::Int)
-    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return prevind(s.string, s.offset + i) - s.offset
-end
+thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
@@ -148,7 +131,7 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 """
 function reverse(s::Union{String,SubString{String}})::String
     sprint() do io
-        i, j = start(s), lastindex(s)
+        i, j = firstindex(s), lastindex(s)
         while i ≤ j
             c, j = s[j], prevind(s, j)
             write(io, c)

@@ -4,14 +4,14 @@
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_mul1!(X::AbstractArray, s::Number)
+function generic_rmul!(X::AbstractArray, s::Number)
     @simd for I in eachindex(X)
         @inbounds X[I] *= s
     end
     X
 end
 
-function generic_mul2!(s::Number, X::AbstractArray)
+function generic_lmul!(s::Number, X::AbstractArray)
     @simd for I in eachindex(X)
         @inbounds X[I] = s*X[I]
     end
@@ -43,7 +43,7 @@ mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
 mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
 """
-    mul1!(A::AbstractArray, b::Number)
+    rmul!(A::AbstractArray, b::Number)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.
 
@@ -54,16 +54,16 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> mul1!(A, 2)
+julia> rmul!(A, 2)
 2×2 Array{Int64,2}:
  2  4
  6  8
 ```
 """
-mul1!(A::AbstractArray, b::Number) = generic_mul1!(A, b)
+rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
 
 """
-    mul2!(a::Number, B::AbstractArray)
+    lmul!(a::Number, B::AbstractArray)
 
 Scale an array `B` by a scalar `a` overwriting `B` in-place.
 
@@ -74,13 +74,13 @@ julia> B = [1 2; 3 4]
  1  2
  3  4
 
-julia> mul2!(2, B)
+julia> lmul!(2, B)
 2×2 Array{Int64,2}:
  2  4
  6  8
 ```
 """
-mul2!(a::Number, B::AbstractArray) = generic_mul2!(a, B)
+lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
 
 """
     cross(x, y)
@@ -1447,12 +1447,12 @@ end
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        mul1!(v, invnrm)
+        rmul!(v, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        mul1!(v, εδ)
-        mul1!(v, inv(nrm*εδ))
+        rmul!(v, εδ)
+        rmul!(v, inv(nrm*εδ))
     end
 
     v

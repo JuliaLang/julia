@@ -23,12 +23,18 @@ nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
-promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
-promote_rule(::Type{Any}, ::Type{Missing}) = Any
-promote_rule(::Type{Missing}, ::Type{Any}) = Any
-promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
+for U in (:Nothing, :Missing)
+    @eval begin
+        promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
+        promote_rule(::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::Type{$U}, ::Type{$U}) = U
+    end
+end
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
@@ -99,7 +105,11 @@ for f in (:(ceil), :(floor), :(round), :(trunc))
         ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
-            throw(MissingException("cannot convert a missing value to type $T"))
+            throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        # to fix ambiguities
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 

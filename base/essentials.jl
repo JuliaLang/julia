@@ -621,16 +621,6 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by keyword arg call lowering
-function vector_any(@nospecialize xs...)
-    n = length(xs)
-    a = Vector{Any}(uninitialized, n)
-    @inbounds for i = 1:n
-        Core.arrayset(false, a, xs[i], i)
-    end
-    a
-end
-
 """
     invokelatest(f, args...; kwargs...)
 
@@ -765,3 +755,7 @@ Indicate whether `x` is [`missing`](@ref).
 """
 ismissing(::Any) = false
 ismissing(::Missing) = true
+
+function popfirst! end
+function peek end
+
