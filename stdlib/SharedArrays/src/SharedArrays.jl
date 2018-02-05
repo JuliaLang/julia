@@ -10,7 +10,8 @@ module SharedArrays
 using Mmap, Distributed, Random
 
 import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
-             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert,
+             strides, stride
 import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
@@ -342,6 +343,10 @@ way you wish. For a `SharedArray`, all indices should be equally fast
 for each worker process.
 """
 localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
+
+Base.MemoryLayout(S::SharedArray) = Base.MemoryLayout(sdata(S))
+strides(S::SharedArray) = strides(sdata(S))
+stride(S::SharedArray, i::Int) = stride(sdata(S), i)
 
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))

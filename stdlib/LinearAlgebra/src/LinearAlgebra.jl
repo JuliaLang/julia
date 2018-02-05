@@ -239,7 +239,6 @@ StridedLayout
 
 MemoryLayout(A::Vector{T}) where T = DenseColumnMajor{T}()
 MemoryLayout(A::Matrix{T}) where T = DenseColumnMajor{T}()
-MemoryLayout(A::DenseArray{T}) where T = StridedLayout{T}()
 
 MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
 submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()

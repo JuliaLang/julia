@@ -375,24 +375,21 @@ MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, Unit
 trilayout(_1, _2, ::MemoryLayout{T}) where T = UnknownLayout{T}()
 trilayout(::Type{Tri}, _, ::DenseColumns{T}) where {Tri,T} = Tri{'N',T}()
 trilayout(_, ::Type{TriT}, ::DenseRows{T}) where {TriT,T} = TriT{'T',T}()
-trilayout(_, ::Type{TriT}, ::ConjLayout{T,DenseRowsStridedColumns{T}}) where {TriT,T} = TriT{'C',T}()
+trilayout(_, ::Type{TriT}, ::ConjLayout{T,<:DenseRows}) where {TriT,T} = TriT{'C',T}()
 
-transpose(::UpperTriangularLayout{'N',T}) where {T} = LowerTriangularLayout{'T',T}()
-transpose(::UnitUpperTriangularLayout{'N',T}) where {T} = UnitLowerTriangularLayout{'T',T}()
-transpose(::LowerTriangularLayout{'N',T}) where {T} = UpperTriangularLayout{'T',T}()
-transpose(::UnitLowerTriangularLayout{'N',T}) where {T} = UnitUpperTriangularLayout{'T',T}()
-transpose(::UpperTriangularLayout{'T',T}) where {T} = LowerTriangularLayout{'N',T}()
-transpose(::UnitUpperTriangularLayout{'T',T}) where {T} = UnitLowerTriangularLayout{'N',T}()
-transpose(::LowerTriangularLayout{'T',T}) where {T} = UpperTriangularLayout{'N',T}()
-transpose(::UnitLowerTriangularLayout{'T',T}) where {T} = UnitUpperTriangularLayout{'N',T}()
-adjoint(::UpperTriangularLayout{'N',T}) where {T<:Complex} = LowerTriangularLayout{'C',T}()
-adjoint(::UnitUpperTriangularLayout{'N',T}) where {T<:Complex} = UnitLowerTriangularLayout{'C',T}()
-adjoint(::LowerTriangularLayout{'N',T}) where {T<:Complex} = UpperTriangularLayout{'C',T}()
-adjoint(::UnitLowerTriangularLayout{'N',T}) where {T<:Complex} = UnitUpperTriangularLayout{'C',T}()
-adjoint(::UpperTriangularLayout{'C',T}) where {T<:Complex} = LowerTriangularLayout{'N',T}()
-adjoint(::UnitUpperTriangularLayout{'C',T}) where {T<:Complex} = UnitLowerTriangularLayout{'N',T}()
-adjoint(::LowerTriangularLayout{'C',T}) where {T<:Complex} = UpperTriangularLayout{'N',T}()
-adjoint(::UnitLowerTriangularLayout{'C',T}) where {T<:Complex} = UnitUpperTriangularLayout{'N',T}()
+for (TriLayout, TriLayoutTrans) in ((UpperTriangularLayout,     LowerTriangularLayout),
+                                    (UnitUpperTriangularLayout, UnitLowerTriangularLayout),
+                                    (LowerTriangularLayout,     UpperTriangularLayout),
+                                    (UnitLowerTriangularLayout, UnitUpperTriangularLayout))
+    @eval begin
+        transpose(::$TriLayout{'N',T}) where T = $TriLayoutTrans{'T',T}()
+        transpose(::$TriLayout{'T',T}) where T = $TriLayoutTrans{'N',T}()
+        adjoint(::$TriLayout{'N',T}) where T<:Complex = $TriLayoutTrans{'C',T}()
+        adjoint(::$TriLayout{'C',T}) where T<:Complex = $TriLayoutTrans{'N',T}()
+        conj(::$TriLayout{'T',T}) where T<:Complex = $TriLayout{'C',T}()
+        conj(::$TriLayout{'C',T}) where T<:Complex = $TriLayout{'T',T}()
+    end
+end
 
 # Unary operations
 -(A::LowerTriangular) = LowerTriangular(-A.data)

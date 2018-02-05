@@ -399,7 +399,7 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
-| `LinearAlgebra.MemoryLayout(A)`                 |                                        | Return a subtype of `LinearAlgebra.AbstractStridedLayout`,  such as `LinearAlgebra.DenseColumnMajor{T}()`,`LinearAlgebra.DenseRowMajor{T}()`, or `LinearAlgebra.StridedLayout{T}()`.
+| `Base.MemoryLayout(A)`                 |                                        | Return a subtype of `LinearAlgebra.AbstractStridedLayout`,  such as `LinearAlgebra.DenseColumnMajor{T}()`,`LinearAlgebra.DenseRowMajor{T}()`, or `LinearAlgebra.StridedLayout{T}()`.
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 

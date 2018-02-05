@@ -556,17 +556,17 @@ end
                                  (UnitUpperTriangular, LinearAlgebra.UnitUpperTriangularLayout, LinearAlgebra.UnitLowerTriangularLayout),
                                  (LowerTriangular, LinearAlgebra.LowerTriangularLayout, LinearAlgebra.UpperTriangularLayout),
                                  (UnitLowerTriangular, LinearAlgebra.UnitLowerTriangularLayout, LinearAlgebra.UnitUpperTriangularLayout))
-        @test LinearAlgebra.MemoryLayout(TriType(A)) == TriLayout{'N',Float64}()
-        @test LinearAlgebra.MemoryLayout(TriType(transpose(A))) == TriLayoutTrans{'T',Float64}()
-        @test LinearAlgebra.MemoryLayout(TriType(A')) == TriLayoutTrans{'T',Float64}()
-        @test LinearAlgebra.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans{'T',Float64}()
-        @test LinearAlgebra.MemoryLayout(TriType(A)') == TriLayoutTrans{'T',Float64}()
+        @test Base.MemoryLayout(TriType(A)) == TriLayout{'N',Float64}()
+        @test Base.MemoryLayout(TriType(transpose(A))) == TriLayoutTrans{'T',Float64}()
+        @test Base.MemoryLayout(TriType(A')) == TriLayoutTrans{'T',Float64}()
+        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans{'T',Float64}()
+        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans{'T',Float64}()
 
-        @test LinearAlgebra.MemoryLayout(TriType(B)) == TriLayout{'N',ComplexF64}()
-        @test LinearAlgebra.MemoryLayout(TriType(transpose(B))) == TriLayoutTrans{'T',ComplexF64}()
-        @test LinearAlgebra.MemoryLayout(TriType(B')) == TriLayoutTrans{'C',ComplexF64}()
-        @test LinearAlgebra.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans{'T',ComplexF64}()
-        @test LinearAlgebra.MemoryLayout(TriType(B)') == TriLayoutTrans{'C',ComplexF64}()
+        @test Base.MemoryLayout(TriType(B)) == TriLayout{'N',ComplexF64}()
+        @test Base.MemoryLayout(TriType(transpose(B))) == TriLayoutTrans{'T',ComplexF64}()
+        @test Base.MemoryLayout(TriType(B')) == TriLayoutTrans{'C',ComplexF64}()
+        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans{'T',ComplexF64}()
+        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans{'C',ComplexF64}()
     end
 end
 end # module TestTriangular

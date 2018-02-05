@@ -75,9 +75,9 @@ julia> Y
 mul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat) = _mul!(C, A, B, MemoryLayout(C), MemoryLayout(A), MemoryLayout(B))
 
 _mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector, _1, _2, _3) = generic_matvecmul!(y, 'N', A, x)
-_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::AbstractStridedLayout, ::AbstractStridedLayout, _) where {T<:BlasFloat} =
+_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::AbstractStridedLayout, ::DenseColumnsStridedRows, _) where {T<:BlasFloat} =
     mul!(y, A, convert(Vector{T}, x))
-_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+_mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::DenseColumnsStridedRows, ::AbstractStridedLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
 for elty in (Float32,Float64)
     @eval begin
         function _mul!(y::AbstractVector{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, x::AbstractVector{$elty}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::AbstractStridedLayout)
@@ -93,7 +93,7 @@ _mul!(y::AbstractVector, transA::AbstractMatrix, x::AbstractVector, ::AbstractSt
     (A = transpose(transA); generic_matvecmul!(y, 'T', A, x))
 _mul!(y::AbstractVector, adjA::AbstractMatrix, x::AbstractVector, ::AbstractStridedLayout, ::ConjLayout{<:Complex,<:DenseRowsStridedColumns}, ::AbstractStridedLayout) =
     (A = adjoint(adjA); generic_matvecmul!(y, 'C', A, x))
-_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::DenseRowsStridedColumns, ::AbstractStridedLayout) where {T<:BlasComplex} =
+_mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::DenseRowsStridedColumns, ::AbstractStridedLayout) where {T<:BlasFloat} =
     gemv!(y, 'T', transpose(adjA), x)
 _mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::ConjLayout{<:Complex,<:DenseRowsStridedColumns}, ::AbstractStridedLayout) where {T<:BlasComplex} =
     gemv!(y, 'C', adjoint(adjA), x)

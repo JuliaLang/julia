@@ -127,6 +127,7 @@ function stride(a::Union{Array,StridedReshapedArray,StridedReinterpretArray}, i:
     return s
 end
 strides(a::Array) = size_to_strides(1, size(a)...)
+strides(a::BitArray) = size_to_strides(1, size(a)...) #TODO: This is needed for permutedims!, but its not clear what stride means here
 strides(a::ReshapedArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 strides(a::ReinterpretArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 _dense_strides(sz, ::DenseColumnMajor) = size_to_strides(1, sz...)
