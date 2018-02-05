@@ -1182,7 +1182,6 @@ function get_testset_depth()
     return length(testsets)
 end
 
-_args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """
     @inferred f(x)
 
@@ -1228,26 +1227,23 @@ macro inferred(ex)
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
-    Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
+    Meta.isexpr(ex, :call) || error("@inferred requires a call expression")
+
+    if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+        # The call has keywords. Since we're interested in testing how this does
+        # in a compiled scope, put the kwcall into an anonymous function
+        args = Any[]
+        f = :(()->$(esc(ex)))
+    else
+        args = Any[esc(ex.args[i]) for i = 2:length(ex.args)]
+        f = esc(ex.args[1])
+    end
 
     Base.remove_linenums!(quote
         let
-            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-                # Has keywords
-                args = gensym()
-                kwargs = gensym()
-                quote
-                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-                end
-            else
-                # No keywords
-                quote
-                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                    result = $(esc(ex.args[1]))(args...)
-                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-                end
-            end)
+            args = ($(args...),)
+            result = $f(args...)
+            inftypes = Base.return_types($f, Base.typesof(args...))
             @assert length(inftypes) == 1
             rettype = isa(result, Type) ? Type{result} : typeof(result)
             rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
