@@ -261,11 +261,22 @@ end
     @test ismissing((missing, 2) == (1, missing))
     @test !((missing, 1) == (missing, 2))
 
+    longtuple = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
+    @test ismissing((longtuple...,17,missing) == (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) == (longtuple...,17,18))
+    @test !((longtuple...,17,missing) == (longtuple...,-17,18))
+    @test !((longtuple...,missing,18) == (longtuple...,17,-18))
+
     @test ismissing((1, missing) != (1, missing))
     @test ismissing(("a", missing) != ("a", missing))
     @test ismissing((missing,) != (missing,))
     @test ismissing((missing, 2) != (1, missing))
     @test (missing, 1) != (missing, 2)
+
+    @test ismissing((longtuple...,17,missing) != (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) != (longtuple...,17,18))
+    @test (longtuple...,17,missing) != (longtuple...,-17,18)
+    @test (longtuple...,missing,18) != (longtuple...,17,-18)
 end
 
 @testset "< and isless on tuples" begin
