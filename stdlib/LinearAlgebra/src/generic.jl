@@ -1183,29 +1183,6 @@ function linreg(x::AbstractVector, y::AbstractVector)
     return (a, b)
 end
 
-"""
-    peakflops(n::Integer=2000; parallel::Bool=false)
-
-`peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
-multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](@ref).
-
-If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
-the worker processors. The flop rate of the entire parallel computer is returned. When
-running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
-of the problem that is solved on each processor.
-"""
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)
-end
-
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
