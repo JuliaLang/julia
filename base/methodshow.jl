@@ -211,9 +211,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    else
-        return fileurl(file)
-        #=
+    elseif root_module_exists(PkgId(nothing, "LibGit2"))
+        LibGit2 = Base.root_module(Main, :LibGit2)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -232,7 +231,8 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
-        =#
+    else
+        return fileurl(file)
     end
 end
 
