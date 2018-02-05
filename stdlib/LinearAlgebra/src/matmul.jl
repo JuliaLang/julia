@@ -134,23 +134,14 @@ end
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
-<<<<<<< HEAD
-mul1!(A, B) = _mul1!(A, B, MemoryLayout(A), MemoryLayout(B))
-
-=======
-rmul!(A, B)
->>>>>>> 4b90831838f84f1c5fb8ec1ed6ed98da7b9fc04d
+rmul!(A, B) = _rmul!(A, B, MemoryLayout(A), MemoryLayout(B))
 
 """
     lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
 """
-<<<<<<< HEAD
-mul2!(A, B) = _mul2!(A, B, MemoryLayout(A), MemoryLayout(B))
-=======
-lmul!(A, B)
->>>>>>> 4b90831838f84f1c5fb8ec1ed6ed98da7b9fc04d
+lmul!(A, B) = _lmul!(A, B, MemoryLayout(A), MemoryLayout(B))
 
 
 _mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, _1, _2, _3) = generic_matmatmul!(C, 'N', 'N', A, B)

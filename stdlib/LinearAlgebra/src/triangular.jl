@@ -543,7 +543,6 @@ lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
 mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
-<<<<<<< HEAD
 
 for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, 'L', 'N'),
                                     (:UnitLowerTriangular, :UnitLowerTriangularLayout, 'L', 'U'),
@@ -552,103 +551,35 @@ for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, '
     @eval begin
         # Vector multiplication
         _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::AbstractStridedLayout, ::$memlay, ::AbstractStridedLayout) where {T<:BlasFloat} =
-            mul2!(A, copyto!(y, b))
+            lmul!(A, copyto!(y, b))
 
-        _mul2!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
+        _lmul!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        _mul2!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
+        _lmul!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
             (A = transpose(transA); BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        _mul2!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::AbstractStridedLayout) where {T<:BlasComplex} =
+        _lmul!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::AbstractStridedLayout) where {T<:BlasComplex} =
             (A = adjoint(adjA); BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
 
         # Matrix multiplication
         _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::$memlay, ::AbstractStridedLayout) where {T<:BlasFloat} =
-            mul2!(A, copyto!(C, B))
+            lmul!(A, copyto!(C, B))
         _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::$memlay) where {T<:BlasFloat}  =
-            mul1!(copyto!(C, A), B)
+            rmul!(copyto!(C, A), B)
 
-        _mul2!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::DenseColumns) where {T<:BlasFloat} =
+        _lmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::DenseColumns) where {T<:BlasFloat} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        _mul1!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'N'}) where {T<:BlasFloat} =
+        _rmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'N'}) where {T<:BlasFloat} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        _mul2!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::DenseColumns) where {T<:BlasFloat} =
+        _lmul!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::DenseColumns) where {T<:BlasFloat} =
             (A = transpose(transA); BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        _mul2!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::DenseColumns) where {T<:BlasComplex} =
+        _lmul!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::DenseColumns) where {T<:BlasComplex} =
             (A = adjoint(adjA); BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
 
-        _mul1!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'T'}) where {T<:BlasFloat} =
+        _rmul!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'T'}) where {T<:BlasFloat} =
             (B = transpose(transB); BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        _mul1!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'C'}) where {T<:BlasComplex} =
+        _rmul!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'C'}) where {T<:BlasComplex} =
             (B = adjoint(adjB); BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
-=======
-mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; lmul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; lmul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
-
-# The three methods for each op are neceesary to avoid ambiguities with definitions in matmul.jl
-mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = lmul!(A, copyto!(C, B))
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
-mul!(C::AbstractVector  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractMatrix  , adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractVecOrMat, adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = adjA.parent; lmul!(adjoint(A), copyto!(C, B)))
-mul!(C::AbstractVector  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVector) =
-    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
-    (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-
-for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
-                            (:UnitLowerTriangular, 'L', 'U'),
-                            (:UpperTriangular, 'U', 'N'),
-                            (:UnitUpperTriangular, 'U', 'U'))
-    @eval begin
-        # Vector multiplication
-        lmul!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
-            BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        lmul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasFloat} =
-            (A = transA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasReal} =
-            (A = adjA.parent; BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasComplex} =
-            (A = adjA.parent; BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
-
-        # Matrix multiplication
-        lmul!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-            BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        rmul!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
-            BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-
-        lmul!(transA::Transpose{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-            (A = transA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasComplex} =
-            (A = adjA.parent; BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
-        lmul!(adjA::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasReal} =
-            (A = adjA.parent; BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-
-        rmul!(A::StridedMatrix{T}, transB::Transpose{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-            (B = transB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasComplex} =
-            (B = adjB.parent; BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
-        rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:$t{T,<:StridedMatrix}}) where {T<:BlasReal} =
-            (B = adjB.parent; BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
->>>>>>> 4b90831838f84f1c5fb8ec1ed6ed98da7b9fc04d
 
         # Left division
         ldiv!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
