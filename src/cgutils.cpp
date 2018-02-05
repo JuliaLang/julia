@@ -2060,7 +2060,7 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
-// get the runtime tindex value
+// get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
     if (val.typ == jl_bottom_type)
@@ -2069,8 +2069,50 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
         return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.isboxed)
         return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
-    assert(val.TIndex);
-    return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+    if (val.TIndex)
+        return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+    return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+}
+
+static void union_alloca_type(jl_uniontype_t *ut,
+        bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align)
+{
+    nbytes = 0;
+    align = 0;
+    min_align = MAX_ALIGN;
+    // compute the size of the union alloca that could hold this type
+    unsigned counter = 0;
+    allunbox = for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) {
+                if (!jl_is_datatype_singleton(jt)) {
+                    size_t nb1 = jl_datatype_size(jt);
+                    size_t align1 = jl_datatype_align(jt);
+                    if (nb1 > nbytes)
+                        nbytes = nb1;
+                    if (align1 > align)
+                        align = align1;
+                    if (align1 < min_align)
+                        min_align = align1;
+                }
+            },
+            (jl_value_t*)ut,
+            counter);
+}
+
+static Value *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, bool &allunbox, size_t &min_align)
+{
+    size_t nbytes, align;
+    union_alloca_type(ut, allunbox, nbytes, align, min_align);
+    if (nbytes > 0) {
+        // at least some of the values can live on the stack
+        // try to pick an Integer type size such that SROA will emit reasonable code
+        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * min_align), (nbytes + min_align - 1) / min_align);
+        AllocaInst *lv = emit_static_alloca(ctx, AT);
+        if (align > 1)
+            lv->setAlignment(align);
+        return lv;
+    }
+    return NULL;
 }
 
 /*

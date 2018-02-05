@@ -821,8 +821,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
     }
     else if (jl_is_array_type(vt)) {
-        n += jl_static_show_x(out, (jl_value_t*)vt, depth);
-        n += jl_printf(out, "[");
+        n += jl_printf(out, "Array{");
+        n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth);
+        n += jl_printf(out, ", (");
+        size_t i, ndims = jl_array_ndims(v);
+        if (ndims == 1)
+            n += jl_printf(out, "%" PRIdPTR ",", jl_array_dim0(v));
+        else
+            for (i = 0; i < ndims; i++)
+                n += jl_printf(out, (i > 0 ? ", %" PRIdPTR : "%" PRIdPTR), jl_array_dim(v, i));
+        n += jl_printf(out, ")}[");
         size_t j, tlen = jl_array_len(v);
         jl_array_t *av = (jl_array_t*)v;
         jl_datatype_t *el_type = (jl_datatype_t*)jl_tparam0(vt);
