@@ -34,18 +34,18 @@ Base.getindex(tbl::Table, key::AbstractString) = tbl.values[key]
 Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)
 
 "Parser error exception"
-mutable struct ParserError <: Exception
+struct ParserError <: Exception
     lo::Int
     hi::Int
     msg::String
 end
 
 "TOML Parser"
-mutable struct Parser
-    input::IO
+struct Parser{IO_T <: IO}
+    input::IO_T
     errors::Vector{ParserError}
 
-    Parser(input::IO) = new(input, ParserError[])
+    Parser(input::IO_T) where {IO_T <: IO}  = new{IO_T}(input, ParserError[])
 end
 Parser(input::String) = Parser(IOBuffer(input))
 Base.error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
