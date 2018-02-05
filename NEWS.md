@@ -464,8 +464,7 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
-  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
-    However, this does not include formats commonly output by Fortran programs.
+  * `parse(Complex{T}, string)` can parse complex numbers in some common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
