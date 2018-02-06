@@ -1502,7 +1502,7 @@ _pairs(iter) = _pairs(IteratorSize(iter), iter)
 # includes HasShape{1} for consistency with keys(::AbstractVector)
 _pairs(::Union{HasLength, HasShape{1}}, iter) = zip(1:length(iter), iter)
 _pairs(::HasShape, iter) = zip(CartesianIndices(size(iter)), iter)
-_pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
+_pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iter.countfrom(1), iter)
 
 """
     findnext(A, i::Integer)
@@ -1787,7 +1787,7 @@ CartesianIndex(2, 1)
 """
 function findlast(A)
     warned = false
-    for (i, a) in Iterators.reverse(_pairs(A))
+    for (i, a) in Iter.reverse(_pairs(A))
         if !warned && !(a isa Bool)
             depwarn("In the future `findlast` will only work on boolean collections. Use `findlast(x->x!=0, A)` instead.", :findlast)
             warned = true
@@ -1880,7 +1880,7 @@ CartesianIndex(2, 1)
 ```
 """
 function findlast(testf::Function, A)
-    for (i, a) in Iterators.reverse(_pairs(A))
+    for (i, a) in Iter.reverse(_pairs(A))
         testf(a) && return i
     end
     return nothing

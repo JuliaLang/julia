@@ -124,16 +124,6 @@ let gen = Base.Generator(+, 1:10, 1:10, 1:10)
     @test collect(gen) == 3:3:30
 end
 
-let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
-    @test collect(gen) == collect(gen2)
-    @test collect(gen) == 2:2:10
-end
-
-let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
-    gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(gen2)
-end
-
 # inference on vararg generator of a type (see #22907 comments)
 let f(x) = collect(Base.Generator(=>, x, x))
     @test @inferred(f((1,2))) == [1=>1, 2=>2]

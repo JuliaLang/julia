@@ -123,12 +123,12 @@ function _searchindex(s::Union{AbstractString,ByteArray},
         return 1 <= i <= nextind(s,lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(t)
+    t1, trest = Iter.peel(t)
     while true
         i = findnext(equalto(t1),s,i)
         if i === nothing return 0 end
         ii = nextind(s, i)
-        a = Iterators.Stateful(trest)
+        a = Iter.Stateful(trest)
         matched = all(splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
@@ -292,13 +292,13 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(Iterators.reverse(t))
+    t1, trest = Iter.peel(Iter.reverse(t))
     while true
         i = findprev(equalto(t1), s, i)
         i === nothing && return 0
         ii = prevind(s, i)
-        a = Iterators.Stateful(trest)
-        b = Iterators.Stateful(Iterators.reverse(
+        a = Iter.Stateful(trest)
+        b = Iter.Stateful(Iter.reverse(
             pairs(SubString(s, 1, ii))))
         matched = all(splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)

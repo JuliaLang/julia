@@ -8,7 +8,6 @@ export
     Libc,
     Docs,
     Threads,
-    Iterators,
     Broadcast,
 
 # Types
@@ -669,7 +668,7 @@ export
     next,
     start,
 
-    enumerate,  # re-exported from Iterators
+    enumerate,
     zip,
 
 # object identity and equality

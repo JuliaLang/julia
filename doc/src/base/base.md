@@ -73,7 +73,6 @@ primitive type
 ## Base Modules
 ```@docs
 Base.Docs
-Base.Iterators
 Base.Libc
 Base.Meta
 Base.StackTraces

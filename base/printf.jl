@@ -38,7 +38,7 @@ end
 function parse(s::AbstractString)
     # parse format string into strings and format tuples
     list = []
-    a = Iterators.Stateful(pairs(s))
+    a = Base.Iter.Stateful(pairs(s))
     lastparse = firstindex(s)
     lastidx = 0 # invariant: lastidx == prevind(s, idx)
     for (idx, c) in a

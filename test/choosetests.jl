@@ -39,7 +39,7 @@ function choosetests(choices = [])
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement",
-        "bitarray", "copy", "math", "fastmath", "functional", "iterators",
+        "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "file", "read", "version", "namedtuple",

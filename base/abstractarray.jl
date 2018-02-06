@@ -1822,7 +1822,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     R[ridx...] = r1
 
     nidx = length(otherdims)
-    indices = Iterators.drop(CartesianIndices(itershape), 1)
+    indices = Iter.drop(CartesianIndices(itershape), 1)
     inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
 end
 

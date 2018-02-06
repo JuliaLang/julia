@@ -751,7 +751,7 @@ end
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
     isempty(target) && return ""
-    c, rest = Iterators.peel(target)
+    c, rest = Iter.peel(target)
     if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end

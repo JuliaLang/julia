@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators
-using Random
+using Iterators, Random
 
 # zip and filter iterators
 # issue #4718
@@ -24,6 +23,16 @@ let z = zip(1:2, 3:4, 5:6)
 end
 
 @test eltype(Iterators.filter(isodd, 1:5)) == Int
+
+let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
+    @test collect(gen) == collect(gen2)
+    @test collect(gen) == 2:2:10
+end
+
+let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
+    gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
+    @test collect(gen) == collect(gen2)
+end
 
 # typed `collect`
 @test collect(Float64, Iterators.filter(isodd, [1,2,3,4]))[1] === 1.0

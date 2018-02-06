@@ -256,7 +256,7 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    a, b = Iter.Stateful(a), Iter.Stateful(b)
     for (c, d) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
@@ -622,12 +622,12 @@ julia> "Test "^3
 (^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
-start(r::Iterators.Reverse{<:AbstractString}) = lastindex(r.itr)
-done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
-next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
-start(r::Iterators.Reverse{<:EachStringIndex}) = lastindex(r.itr.s)
-done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
-next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+start(r::Iter.Reverse{<:AbstractString}) = lastindex(r.itr)
+done(r::Iter.Reverse{<:AbstractString}, i) = i < start(r.itr)
+next(r::Iter.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
+start(r::Iter.Reverse{<:EachStringIndex}) = lastindex(r.itr.s)
+done(r::Iter.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
+next(r::Iter.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
 
 ## code unit access ##
 
