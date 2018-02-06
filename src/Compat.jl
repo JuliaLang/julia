@@ -1520,6 +1520,12 @@ else
     import InteractiveUtils
 end
 
+@static if VERSION < v"0.7.0-DEV.3724"
+    const LibGit2 = Base.LibGit2
+else
+    import LibGit2
+end
+
 # 0.7.0-DEV.2695
 @static if !isdefined(Base, :AbstractDisplay)
     const AbstractDisplay = Display

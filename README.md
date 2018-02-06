@@ -135,6 +135,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `using Compat.InteractiveUtils` is provided on versions older than 0.7, where this library is
   not yet part of the standard library ([#25780]).
 
+* `using Compat.LibGit2` is provided on versions older than 0.7, where this library is
+  not yet part of the standard library ([#25706]).
+
 ## New functions, macros, and methods
 
 * `@views` takes an expression and converts all slices to views ([#20164]), while
@@ -538,5 +541,6 @@ includes this fix. Find the minimum version from there.
 [#25646]: https://github.com/JuliaLang/julia/issues/25646
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25705]: https://github.com/JuliaLang/julia/issues/25705
+[#25706]: https://github.com/JuliaLang/julia/issues/25706
 [#25780]: https://github.com/JuliaLang/julia/issues/25780
 [#24182]: https://github.com/JuliaLang/julia/issues/24182

@@ -1302,6 +1302,14 @@ module TestInteractiveUtils
     @test isdefined(@__MODULE__, :varinfo)
 end
 
+module TestLibGit2
+    using Compat
+    using Compat.LibGit2
+    using Compat.Test
+    @test isdefined(@__MODULE__, :LibGit2)
+    @test isdefined(@__MODULE__, :GitRepo)
+end
+
 # 0.7.0-DEV.3469
 @test GC.enable(true)
 @test GC.enable(false)
