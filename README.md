@@ -372,16 +372,17 @@ Please be aware that this procedure is not officially supported, as it introduce
 ### LLVM
 
 The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches (LLVM is not backward compatible). We recommend either:
- - adding the patches to the LLVM 3.9 package of the distribution (note: these are backported upstream bug fixes, _not_ Julia-specific patches: all have been contributed into upstream LLVM), or
- - bundling a Julia-only LLVM library inside the Julia package.
-
-A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/
+ - bundling a Julia-only LLVM library inside the Julia package, or
+ - adding the patches to the LLVM 3.9 package of the distribution.
+  * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
+  * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
+  * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance. There are flags in the Makefiles for newer LLVM versions, but support for this should be regarded as experimental and not suitable for packaging.
 
 ### BLAS and LAPACK
 
-As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS, and _not_ the reference implementations which are the default on some systems.
+As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
 
 ### SuiteSparse
 
