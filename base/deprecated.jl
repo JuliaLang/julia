@@ -1348,6 +1348,11 @@ end
 
 @deprecate which(s::Symbol) which(Main, s)
 
+@deprecate IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool=false, maxsize::Integer=typemax(Int)) IOBuffer(data, read=read, write=write, maxsize=maxsize)
+@deprecate IOBuffer(read::Bool, write::Bool) IOBuffer(read=read, write=write)
+@deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
+
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

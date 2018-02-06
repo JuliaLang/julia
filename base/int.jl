@@ -539,7 +539,7 @@ end
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
-        bf = IOBuffer(lastindex(s))
+        bf = IOBuffer(maxsize=lastindex(s))
         print(bf, s[1])
         for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)

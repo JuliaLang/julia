@@ -195,7 +195,7 @@ end
 
 @testset "pr #11554" begin
     io  = IOBuffer(SubString("***αhelloworldω***", 4, 16))
-    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), read=true, write=true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
@@ -227,7 +227,7 @@ end
 
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
-let io = IOBuffer(0)
+let io = IOBuffer(maxsize=0)
    write(io, fill(0x01, 1048577))
 end
 
@@ -289,11 +289,11 @@ end
 end
 
 @testset "Test constructor with a generic type argument." begin
-    io = IOBuffer(Int16(10))
+    io = IOBuffer(maxsize=Int16(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int32(10))
+    io = IOBuffer(maxsize=Int32(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int64(10))
+    io = IOBuffer(maxsize=Int64(10))
     @test io isa IOBuffer
 end
 

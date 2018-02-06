@@ -1114,7 +1114,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     if precision >= 0
         fmt_len += ndigits(precision)+1
     end
-    fmt = IOBuffer(fmt_len)
+    fmt = IOBuffer(maxsize=fmt_len)
     write(fmt, '%')
     write(fmt, flags)
     if width > 0
