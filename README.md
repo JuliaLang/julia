@@ -378,7 +378,7 @@ The most complicated dependency is LLVM, for which we require version 3.9 with s
   * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
   * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
-Using an unpatched or different version of LLVM will result in errors and/or poor performance. There are flags in the Makefiles for newer LLVM versions, but support for this should be regarded as experimental and not suitable for packaging.
+Using an unpatched or different version of LLVM will result in errors and/or poor performance. Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
 
 ### BLAS and LAPACK
 
