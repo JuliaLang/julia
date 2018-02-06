@@ -299,7 +299,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2) (see [notes below](#blas-and-lapack)).
 - **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices (see [note below](#suitesparse).
@@ -349,7 +349,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 ### Notes for distribution package maintainers
 
-Package maintaners will typically want to make use of system libraries where possible. Please refer to the abover version requirements and notes below.
+Package maintaners will typically want to make use of system libraries where possible. Please refer to the above version requirements and notes below.
 
 Currently community maintained packages are:
 - Fedora: [official](https://src.fedoraproject.org/rpms/julia), [Copr (for backports)](https://copr.fedorainfracloud.org/coprs/nalimilan/julia/)
