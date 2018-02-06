@@ -386,6 +386,7 @@ const REPL_MODULE_REF = Ref{Module}()
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    global active_repl
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
