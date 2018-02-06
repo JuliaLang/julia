@@ -294,34 +294,33 @@ function logmsg_code(_module, file, line, level, message, exs...)
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
     id !== nothing || (id = Expr(:quote, log_record_id(_module, level, exs)))
     group !== nothing || (group = Expr(:quote, Symbol(splitext(basename(file))[1])))
-    quote
-        level = $level
-        std_level = convert(LogLevel, level)
+    return quote
+        std_level = convert(LogLevel, $level)
         if std_level >= _min_enabled_level[]
-            logstate = current_logstate()
-            if std_level >= logstate.min_enabled_level
-                logger = logstate.logger
-                _module = $_module
-                id = $id
-                group = $group
-                # Second chance at an early bail-out, based on arbitrary
-                # logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
-                    # Bind log record generation into a closure, allowing us to
-                    # defer creation of the records until after filtering.
-                    create_msg = function cm(logger, level, _module, group, id, file, line)
-                        msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
-                    end
-                    file = $file
-                    line = $line
-                    dispatch_message(logger, level, _module, group, id, file, line, create_msg)
-                end
-            end
+            maybe_log(std_level, $level, $_module, $id, $group, $(esc(message)), $file, $line, $(kwargs...))
         end
-        nothing
     end
 end
+
+# This is in a separate function for performance
+function maybe_log(std_level, level, _module, id, group, msg, file, line, kwargs...)
+    logstate = current_logstate()
+    if std_level >= logstate.min_enabled_level
+        logger = logstate.logger
+        # Second chance at an early bail-out, based on arbitrary
+        # logger-specific logic.
+        if shouldlog(logger, level, _module, group, id)
+            # Bind log record generation into a closure, allowing us to
+            # defer creation of the records until after filtering.
+            create_msg = function cm(logger, level, _module, group, id, file, line)
+                handle_message(logger, level, msg, _module, group, id, file, line; kwargs...)
+            end
+            dispatch_message(logger, level, _module, group, id, file, line, create_msg)
+        end
+    end
+    return nothing
+end
+
 
 # Call the log message creation function, and dispatch the result to `logger`.
 # TODO: Consider some @nospecialize annotations here
