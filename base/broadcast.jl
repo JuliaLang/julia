@@ -484,6 +484,16 @@ end
     return C
 end
 
+# In the one-argument case, we don't need to worry about aliasing as we only make one pass
+@inline function _broadcast!(f, C, A)
+    shape = broadcast_indices(C)
+    @boundscheck check_broadcast_indices(shape, A)
+    keeps, Idefaults = map_newindexer(shape, A, ())
+    iter = CartesianIndices(shape)
+    _broadcast!(f, C, keeps, Idefaults, A, (), Val(0), iter)
+    return C
+end
+
 # broadcast with element type adjusted on-the-fly. This widens the element type of
 # B as needed (allocating a new container and copying previously-computed values) to
 # accommodate any incompatible new elements.
