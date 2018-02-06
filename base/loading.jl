@@ -118,7 +118,8 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, project_file)
+dummy_uuid(project_file::String) = isfile_casesensitive(project_file) ?
+    uuid5(ns_dummy_uuid, realpath(project_file)) : nothing
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
