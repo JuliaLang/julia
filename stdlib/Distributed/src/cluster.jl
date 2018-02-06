@@ -163,8 +163,9 @@ mutable struct LocalProcess
 end
 
 
+import LinearAlgebra
 function disable_threaded_libs()
-    BLAS.set_num_threads(1)
+    LinearAlgebra.BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
@@ -711,7 +712,7 @@ const LPROC = LocalProcess()
 const HDR_VERSION_LEN=16
 const HDR_COOKIE_LEN=16
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
-const map_sock_wrkr = ObjectIdDict()
+const map_sock_wrkr = IdDict()
 const map_del_wrkr = Set{Int}()
 
 # cluster management related API
@@ -1074,7 +1075,7 @@ function terminate_all_workers()
             try
                 rmprocs(workers(); waitfor=5.0)
             catch _ex2
-                @error "Unable to terminate all workers" exception=_ex2
+                @error "Unable to terminate all workers" exception=_ex2,catch_backtrace()
             end
         end
     end
@@ -1105,6 +1106,8 @@ function init_bind_addr()
     LPROC.bind_addr = bind_addr
     LPROC.bind_port = UInt16(bind_port)
 end
+
+using Random: randstring
 
 function init_parallel()
     start_gc_msgs_task()
@@ -1141,8 +1144,8 @@ function process_opts(opts)
     end
 
     # load processes from machine file
-    if opts.machinefile != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    if opts.machine_file != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
     end
     return nothing
 end

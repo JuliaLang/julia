@@ -26,12 +26,12 @@ julia> colon(1, 2, 5)
 ```
 """
 colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 colon(start::T, step::T, stop::T) where {T<:Real} =
-    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-_colon(::HasOrder, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
+_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
-_colon(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
+_colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
@@ -57,8 +57,8 @@ end
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range(a::T, step, len::Integer) where {T} = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
-_range(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) where {T,S} =
+range(a::T, step, len::Integer) where {T} = _range(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+_range(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 _range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
@@ -79,8 +79,8 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
-TypeRangeStep(::Type{<:AbstractRange}) = RangeStepIrregular()
-TypeRangeStep(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
+RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
+RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 ## ordinal ranges
 
@@ -705,7 +705,7 @@ function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::A
     i
 end
 
-# findin (the index of intersection)
+# _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
     local ifirst
     local ilast
@@ -724,17 +724,7 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
-    ifirst, ilast
-end
-
-function findin(r::AbstractUnitRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:ilast
-end
-
-function findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    ifirst, ilast = _findin(r, span)
-    ifirst:1:ilast
+    r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
 ## linear operations on ranges ##
@@ -810,7 +800,7 @@ broadcast(::typeof(\), x::Number, r::LinSpace)      = LinSpace(x \ r.start, x \ 
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
-el_same(::Type, a, b) = typejoin(a, b)
+el_same(::Type, a, b) = promote_typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1,T2), a, b)

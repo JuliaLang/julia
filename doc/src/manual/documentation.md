@@ -616,13 +616,13 @@ the Julia documentation itself. For example:
 
 ```julia
 """
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    accumulate!(op, y, x)
 
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+Cumulative operation `op` on a vector `x`, storing the result in `y`. See also [`accumulate`](@ref).
 """
 ```
 
-This will create a link in the generated docs to the `eigvals` documentation
+This will create a link in the generated docs to the `accumulate` documentation
 (which has more information about what this function actually does). It's good to include
 cross references to mutating/non-mutating versions of a function, or to highlight a difference
 between two similar-seeming functions.

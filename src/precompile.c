@@ -47,7 +47,7 @@ void jl_write_compiler_output(void)
     jl_module_init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_arrayref(worklist, i);
+        jl_value_t *m = jl_ptrarrayref(worklist, i);
         if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
         }
@@ -93,9 +93,9 @@ void jl_write_compiler_output(void)
 // and expanding the Union may give a leaf function
 static void _compile_all_tvar_union(jl_value_t *methsig)
 {
-    if (!jl_is_unionall(methsig) && jl_is_leaf_type(methsig)) {
+    if (!jl_is_unionall(methsig) && jl_is_dispatch_tupletype(methsig)) {
         // usually can create a specialized version of the function,
-        // if the signature is already a leaftype
+        // if the signature is already a dispatch type
         if (jl_compile_hint((jl_tupletype_t*)methsig))
             return;
     }
@@ -126,7 +126,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
         }
         if (!jl_has_concrete_subtype(sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
-        if (jl_is_leaf_type(sig)) {
+        if (jl_is_concrete_type(sig)) {
             if (jl_compile_hint((jl_tupletype_t*)sig))
                 goto getnext; // success
         }
@@ -143,7 +143,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
                 }
                 else {
                     jl_value_t *ty = jl_nth_union_component(tv->ub, j);
-                    if (!jl_is_leaf_type(ty))
+                    if (!jl_is_concrete_type(ty))
                         ty = (jl_value_t*)jl_new_typevar(tv->name, tv->lb, ty);
                     env[2 * i + 1] = ty;
                     idx[i] = j + 1;
@@ -174,7 +174,9 @@ static void _compile_all_union(jl_value_t *sig)
             ++count_unions;
         else if (ty == jl_bottom_type)
             return; // why does this method exist?
-        else if (!jl_is_leaf_type(ty) && !jl_has_free_typevars(ty))
+        else if (jl_is_datatype(ty) && !jl_has_free_typevars(ty) &&
+                 ((!jl_is_kind(ty) && ((jl_datatype_t*)ty)->isconcretetype) ||
+                  ((jl_datatype_t*)ty)->name == jl_type_typename))
             return; // no amount of union splitting will make this a leaftype signature
     }
 

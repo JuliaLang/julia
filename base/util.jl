@@ -320,33 +320,42 @@ end
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)
-    iscolor && bold && print(buf, text_colors[:bold])
-    iscolor && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        iscolor && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
-        iscolor && (bold || color == :bold) && print(buf, disable_text_style[:bold])
-        print(io, String(take!(buf)))
+        str = String(take!(buf))
+        if !iscolor
+            print(io, str)
+        else
+            bold && color == :bold && (color = :nothing)
+            enable_ansi  = get(text_colors, color, text_colors[:default]) *
+                               (bold ? text_colors[:bold] : "")
+            disable_ansi = (bold ? disable_text_style[:bold] : "") *
+                               get(disable_text_style, color, text_colors[:default])
+            first = true
+            for line in split(str, '\n')
+                first || print(buf, '\n')
+                first = false
+                isempty(line) && continue
+                print(buf, enable_ansi, line, disable_ansi)
+            end
+            print(io, String(take!(buf)))
+        end
     end
 end
 
 """
-    print_with_color(color::Union{Symbol, Int}, [io], xs...; bold::Bool = false)
+    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
 
-Print `xs` in a color specified as a symbol.
+Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-print_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(print, color, io, msg...; bold = bold)
-print_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    print_with_color(color, STDOUT, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(println, color, io, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    println_with_color(color, STDOUT, msg...; bold = bold)
+printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold)
+printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(STDOUT, msg...; bold=bold, color=color)
 
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -410,7 +419,7 @@ function getpass(prompt::AbstractString)
                 ccall(:_getch, UInt8, ()) # ignore function/arrow keys
             elseif c == UInt8('\b') && plen > 0
                 plen -= 1 # delete last character on backspace
-            elseif !Unicode.iscntrl(Char(c)) && plen < 128
+            elseif !iscntrl(Char(c)) && plen < 128
                 p[plen += 1] = c
             end
         end
@@ -445,7 +454,7 @@ function prompt(message::AbstractString; default::AbstractString="", password::B
         uinput = getpass(msg)
     else
         print(msg)
-        uinput = readline(chomp=false)
+        uinput = readline(keep=true)
         isempty(uinput) && return nothing  # Encountered an EOF
         uinput = chomp(uinput)
     end
@@ -666,18 +675,36 @@ kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
 kwdef_val(::Type{T}) where {T} = T()
 
+# testing
 
-function _check_bitarray_consistency(B::BitArray{N}) where N
-    n = length(B)
-    if N ≠ 1
-        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
-        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+"""
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false, [seed])
+
+Run the Julia unit tests listed in `tests`, which can be either a string or an array of
+strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+"""
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Nothing}=nothing)
+    if isa(tests,AbstractString)
+        tests = split(tests)
     end
-    Bc = B.chunks
-    nc = length(Bc)
-    nc == num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
-    n == 0 && return true
-    Bc[end] & _msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
-    return true
+    exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
+    ENV2 = copy(ENV)
+    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    try
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+    catch
+        buf = PipeBuffer()
+        versioninfo(buf)
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
+    end
 end
-

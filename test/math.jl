@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using LinearAlgebra
+
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
@@ -297,13 +300,14 @@ end
 
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
-    TAA = (TAA + transpose(TAA))/2.
+    TAA = (TAA + TAA')/2.
     STAA = Symmetric(TAA)
     @test Array(atanh.(STAA)) == atanh.(TAA)
     @test Array(asinh.(STAA)) == asinh.(TAA)
-    @test Array(acosh.(STAA+Symmetric(ones(2,2)))) == acosh.(TAA+ones(2,2))
-    @test Array(acsch.(STAA+Symmetric(ones(2,2)))) == acsch.(TAA+ones(2,2))
-    @test Array(acoth.(STAA+Symmetric(ones(2,2)))) == acoth.(TAA+ones(2,2))
+    TAA .+= 1
+    @test Array(acosh.(STAA)) == acosh.(TAA)
+    @test Array(acsch.(STAA)) == acsch.(TAA)
+    @test Array(acoth.(STAA)) == acoth.(TAA)
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -857,4 +861,42 @@ end
         @test_throws DomainError acos(T(Inf))
         @test isnan_type(T, acos(T(NaN)))
     end
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper <: Real
+    x::Float64
+end
+
+import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+
+for op in (:+, :-, :*, :/, :^)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
+end
+
+for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
+    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
+end
+
+for op in (:isfinite,)
+    @eval $op(x::FloatWrapper) = $op(x.x)
+end
+
+convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
+promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
+
+float(x::FloatWrapper) = x
+
+@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+
+    x = FloatWrapper(3.1)
+    y = FloatWrapper(4.1)
+
+    @test sincos(x) == (sin(x), cos(x))
+
+    z = Complex(x, y)
+
+    @test isa(exp(z), Complex)
+    @test isa(sin(z), Complex)
+    @test isa(cos(z), Complex)
 end

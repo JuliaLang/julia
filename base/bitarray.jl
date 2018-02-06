@@ -431,7 +431,7 @@ end
 
 function copyto!(dest::BitArray, src::Array)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    length(src) == 0 && return det
+    length(src) == 0 && return dest
     return unsafe_copyto!(dest, 1, src, 1, length(src))
 end
 
@@ -498,7 +498,7 @@ end
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
 reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)
 end
 
@@ -530,7 +530,7 @@ julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
  false
 ```
 """
-BitArray(itr) = gen_bitarray(iteratorsize(itr), itr)
+BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
@@ -1459,13 +1459,13 @@ function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Integer)
             end
         end
     end
-    return 0
+    return nothing
 end
 
-# returns the index of the next non-zero element, or 0 if all zeros
+# returns the index of the next true element, or nothing if all false
 function findnext(B::BitArray, start::Integer)
     start > 0 || throw(BoundsError(B, start))
-    start > length(B) && return 0
+    start > length(B) && return nothing
     unsafe_bitfindnext(B.chunks, start)
 end
 
@@ -1474,11 +1474,11 @@ end
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
     start > 0 || throw(BoundsError(B, start))
-    start > length(B) && return 0
+    start > length(B) && return nothing
 
     Bc = B.chunks
     l = length(Bc)
-    l == 0 && return 0
+    l == 0 && return nothing
 
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
@@ -1499,15 +1499,16 @@ function findnextnot(B::BitArray, start::Integer)
     elseif Bc[l] | mask != _msk_end(B)
         return (l-1) << 6 + trailing_ones(Bc[l] | mask) + 1
     end
-    return 0
+    return nothing
 end
 findfirstnot(B::BitArray) = findnextnot(B,1)
 
 # returns the index of the first matching element
-function findnext(B::BitArray, v, start::Integer)
+function findnext(pred::EqualTo, B::BitArray, start::Integer)
+    v = pred.x
     v == false && return findnextnot(B, start)
     v == true && return findnext(B, start)
-    return 0
+    return nothing
 end
 #findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
 
@@ -1519,9 +1520,9 @@ function findnext(testf::Function, B::BitArray, start::Integer)
     f0 && !f1 && return findnextnot(B, start)
 
     start > 0 || throw(BoundsError(B, start))
-    start > length(B) && return 0
+    start > length(B) && return nothing
     f0 && f1 && return Int(start)
-    return 0 # last case: !f0 && !f1
+    return nothing # last case: !f0 && !f1
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
@@ -1540,18 +1541,18 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Integer)
             end
         end
     end
-    return 0
+    return nothing
 end
 
-# returns the index of the previous non-zero element, or 0 if all zeros
+# returns the index of the previous true element, or nothing if all false
 function findprev(B::BitArray, start::Integer)
-    start > 0 || return 0
+    start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
     unsafe_bitfindprev(B.chunks, start)
 end
 
 function findprevnot(B::BitArray, start::Integer)
-    start > 0 || return 0
+    start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
 
     Bc = B.chunks
@@ -1570,15 +1571,16 @@ function findprevnot(B::BitArray, start::Integer)
             end
         end
     end
-    return 0
+    return nothing
 end
 findlastnot(B::BitArray) = findprevnot(B, length(B))
 
 # returns the index of the previous matching element
-function findprev(B::BitArray, v, start::Integer)
+function findprev(pred::EqualTo, B::BitArray, start::Integer)
+    v = pred.x
     v == false && return findprevnot(B, start)
     v == true && return findprev(B, start)
-    return 0
+    return nothing
 end
 #findlast(B::BitArray, v) = findprev(B, 1, v)  ## defined in array.jl
 
@@ -1589,30 +1591,30 @@ function findprev(testf::Function, B::BitArray, start::Integer)
     !f0 && f1 && return findprev(B, start)
     f0 && !f1 && return findprevnot(B, start)
 
-    start > 0 || return 0
+    start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
     f0 && f1 && return Int(start)
-    return 0 # last case: !f0 && !f1
+    return nothing # last case: !f0 && !f1
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function find(B::BitArray)
+function findall(B::BitArray)
     l = length(B)
     nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
+    ind = first(keys(B))
+    I = Vector{typeof(ind)}(uninitialized, nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
-    Bcount = 1
     Icount = 1
     for i = 1:length(Bc)-1
         u = UInt64(1)
         c = Bc[i]
         for j = 1:64
             if c & u != 0
-                I[Icount] = Bcount
+                I[Icount] = ind
                 Icount += 1
             end
-            Bcount += 1
+            ind = nextind(B, ind)
             u <<= 1
         end
     end
@@ -1620,36 +1622,17 @@ function find(B::BitArray)
     c = Bc[end]
     for j = 0:_mod64(l-1)
         if c & u != 0
-            I[Icount] = Bcount
+            I[Icount] = ind
             Icount += 1
         end
-        Bcount += 1
+        ind = nextind(B, ind)
         u <<= 1
     end
     return I
 end
 
-findn(B::BitVector) = find(B)
-
-function findn(B::BitMatrix)
-    nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
-    J = Vector{Int}(uninitialized, nnzB)
-    cnt = 1
-    for j = 1:size(B,2), i = 1:size(B,1)
-        if B[i,j]
-            I[cnt] = i
-            J[cnt] = j
-            cnt += 1
-        end
-    end
-    return I, J
-end
-
-function findnz(B::BitMatrix)
-    I, J = findn(B)
-    return I, J, trues(length(I))
-end
+# For performance
+findall(::typeof(!iszero), B::BitArray) = findall(B)
 
 ## Reductions ##
 
@@ -1812,7 +1795,7 @@ function vcat(A::BitMatrix...)
     nrowsA = [size(a, 1) for a in A]
     Ac = [a.chunks for a in A]
     pos_d = 1
-    pos_s = ones(Int, nargs)
+    pos_s = fill(1, nargs)
     for j = 1:ncols, k = 1:nargs
         copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
         pos_s[k] += nrowsA[k]

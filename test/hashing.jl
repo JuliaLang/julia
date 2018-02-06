@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random, LinearAlgebra, SparseArrays
+
 types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
@@ -32,6 +34,7 @@ for T = types[2:end],
     x = vals,
     a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
 for T = types,
@@ -83,7 +86,7 @@ vals = Any[
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
     zeros(2, 2), spzeros(2, 2), Matrix(1.0I, 2, 2), sparse(1.0I, 2, 2),
-    sparse(ones(2, 2)), ones(2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
+    sparse(fill(1., 2, 2)), fill(1., 2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
     [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
     # issue #16364
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, linspace(1, 4, 4),
@@ -96,7 +99,7 @@ vals = Any[
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
     if a isa AbstractArray
-        @test hash(a) == hash(collect(a)) == hash(collect(Any, a))
+        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
 end
 
@@ -166,7 +169,7 @@ vals = Any[
 ]
 
 for a in vals
-    @test hash(collect(a)) == hash(a)
+    @test hash(Array(a)) == hash(a)
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")
@@ -205,7 +208,7 @@ end
 # issue #20744
 @test hash(:c, hash(:b, hash(:a))) != hash(:a, hash(:b, hash(:c)))
 
-# issue #5849, object_id of types
+# issue #5849, objectid of types
 @test Vector === (Array{T,1} where T)
 @test (Pair{A,B} where A where B) !== (Pair{A,B} where B where A)
 let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Union{String, Int},
@@ -217,6 +220,6 @@ let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Un
     vals_b = eval(vals_expr)
     for (i, a) in enumerate(vals_a), (j, b) in enumerate(vals_b)
         @test i != j || (a === b)
-        @test (a === b) == (object_id(a) == object_id(b))
+        @test (a === b) == (objectid(a) == objectid(b))
     end
 end

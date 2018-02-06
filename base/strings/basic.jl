@@ -51,7 +51,7 @@ are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
-[`length`](@ref), [`endof`](@ref)
+[`length`](@ref), [`lastindex`](@ref)
 """
 ncodeunits(s::AbstractString)
 
@@ -82,7 +82,7 @@ I.e. the value returned by `codeunit(s, i)` is of the type returned by
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(codeunit, Tuple{typeof(s),Int})) : codeunit(s, Int(i))
+    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
     isvalid(s::AbstractString, i::Integer) -> Bool
@@ -119,7 +119,7 @@ Stacktrace:
 ```
 """
 @propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(isvalid, Tuple{typeof(s),Int})) : isvalid(s, Int(i))
+    throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
     next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
@@ -134,7 +134,7 @@ See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 [`checkbounds`](@ref)
 """
 @propagate_inbounds next(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(next, Tuple{typeof(s),Int})) : next(s, Int(i))
+    throw(MethodError(next, (s, i))) : next(s, Int(i))
 
 ## basic generic definitions ##
 
@@ -142,7 +142,8 @@ start(s::AbstractString) = 1
 done(s::AbstractString, i::Integer) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
-endof(s::AbstractString) = thisind(s, ncodeunits(s))
+firstindex(s::AbstractString) = 1
+lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
@@ -152,7 +153,6 @@ end
 getindex(s::AbstractString, i::Colon) = s
 # TODO: handle other ranges with stride ±1 specially?
 # TODO: add more @propagate_inbounds annotations?
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
 getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(io->(for i in v; write(io, s[i]) end), sizehint=length(v))
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
@@ -185,8 +185,8 @@ checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
 string() = ""
 string(s::AbstractString) = s
 
-(::Type{Vector{UInt8}})(s::AbstractString) = Vector{UInt8}(String(s))
-(::Type{Array{UInt8}})(s::AbstractString) = Vector{UInt8}(s)
+(::Type{Vector{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+(::Type{Array{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 (::Type{Vector{Char}})(s::AbstractString) = collect(s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
@@ -224,11 +224,11 @@ one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 """
     cmp(a::AbstractString, b::AbstractString) -> Int
 
-Compare two strings for equality. Return `0` if both strings have the same
-length and the character at each index is the same in both strings. Return `-1`
-if `a` is a substring of `b`, or if `a` comes before `b` in alphabetical order.
-Return `1` if `b` is a substring of `a`, or if `b` comes before `a` in
-alphabetical order (technically, lexicographical order by Unicode code points).
+Compare two strings. Return `0` if both strings have the same length and the character
+at each index is the same in both strings. Return `-1` if `a` is a prefix of `b`, or if
+`a` comes before `b` in alphabetical order. Return `1` if `b` is a prefix of `a`, or if
+`b` comes before `a` in alphabetical order (technically, lexicographical order by Unicode
+code points).
 
 # Examples
 ```jldoctest
@@ -256,15 +256,12 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    i = start(a)
-    j = start(b)
-    while !done(a, i)
-        done(b, j) && return 1
-        c, i = next(a, i)
-        d, j = next(b, j)
+    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    for (c, d) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
-    return ifelse(done(b, j), 0, -1)
+    isempty(a) && return ifelse(isempty(b), 0, -1)
+    return 1
 end
 
 """
@@ -325,7 +322,7 @@ indices in the string `s`. In addition to in-bounds values, `i` may take the
 out-of-bounds value `ncodeunits(s) + 1` and `j` may take the out-of-bounds
 value `0`.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref),
+See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
 [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 
 # Examples
@@ -451,7 +448,7 @@ julia> nextind(str, 1)
 julia> nextind(str, 1, 2)
 5
 
-julia> endof(str)
+julia> lastindex(str)
 9
 
 julia> nextind(str, 9)
@@ -481,6 +478,8 @@ end
 keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
+first(::EachStringIndex) = 1
+last(e::EachStringIndex) = lastindex(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
@@ -513,7 +512,7 @@ isascii(s::AbstractString) = all(isascii, s)
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(sizeof(s)), true, true)
     truncate(out, 0)
     for c in s
         c′ = f(c)
@@ -526,7 +525,7 @@ function map(f, s::AbstractString)
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(sizeof(s)), true, true)
     truncate(out, 0)
     for c in s
         f(c) && write(out, c)
@@ -623,9 +622,46 @@ julia> "Test "^3
 (^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
-start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)
+start(r::Iterators.Reverse{<:AbstractString}) = lastindex(r.itr)
 done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
 next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
-start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
+start(r::Iterators.Reverse{<:EachStringIndex}) = lastindex(r.itr.s)
 done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
 next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+
+## code unit access ##
+
+"""
+    CodeUnits(s::AbstractString)
+
+Wrap a string (without copying) in an immutable vector-like object that accesses the code units
+of the string's representation.
+"""
+struct CodeUnits{T,S<:AbstractString} <: DenseVector{T}
+    s::S
+    CodeUnits(s::S) where {S<:AbstractString} = new{codeunit(s),S}(s)
+end
+
+length(s::CodeUnits) = ncodeunits(s.s)
+sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
+size(s::CodeUnits) = (length(s),)
+strides(s::CodeUnits) = (1,)
+@propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
+IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
+start(s::CodeUnits) = 1
+next(s::CodeUnits, i) = (@_propagate_inbounds_meta; (s[i], i+1))
+done(s::CodeUnits, i) = (@_inline_meta; i == length(s)+1)
+
+write(io::IO, s::CodeUnits) = write(io, s.s)
+
+unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
+unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+
+"""
+    codeunits(s::AbstractString)
+
+Obtain a vector-like object containing the code units of a string.
+Returns a `CodeUnits` wrapper by default, but `codeunits` may optionally be defined
+for new string types if necessary.
+"""
+codeunits(s::AbstractString) = CodeUnits(s)

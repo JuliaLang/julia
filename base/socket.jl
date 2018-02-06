@@ -174,7 +174,7 @@ function parse(::Type{IPv4}, str::AbstractString)
         if length(f) > 1 && f[1] == '0'
             throw(ArgumentError(ipv4_leading_zero_error))
         else
-            r = parse(Int,f,10)
+            r = parse(Int, f, base = 10)
         end
         if i != length(fields)
             if r < 0 || r > 255
@@ -207,7 +207,7 @@ function parseipv6fields(fields,num_fields)
             cf -= 1
             continue
         end
-        ret |= UInt128(parse(Int,f,16))<<(cf*16)
+        ret |= UInt128(parse(Int, f, base = 16))<<(cf*16)
         cf -= 1
     end
     ret
@@ -254,7 +254,13 @@ end
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
+"""
+    TCPSocket(; delay=true)
 
+Open a TCP socket using libuv. If `delay` is true, libuv delays creation of the
+socket's file descriptor till the first [`bind`](@ref) call. `TCPSocket` has various
+fields to denote the state of the socket as well as its send/receive buffers.
+"""
 mutable struct TCPSocket <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -326,7 +332,7 @@ function TCPServer(; delay=true)
     return tcp
 end
 
-isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0
+isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
 iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
@@ -354,7 +360,12 @@ accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
     readable=false, writable=false, julia_only=true))
 
 # UDP
+"""
+    UDPSocket()
 
+Open a UDP socket using libuv. `UDPSocket` has various
+fields to denote the state of the socket.
+"""
 mutable struct UDPSocket <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -542,7 +553,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
                       ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt8}), addr, pointer(tmp))
                       IPv6(ntoh(tmp[1]))
                   end
-        buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), true)
+        buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), own = true)
         notify(sock.recvnotify, (addrout, buf))
     end
     ccall(:uv_udp_recv_stop, Cint, (Ptr{Cvoid},), sock.handle)
@@ -688,7 +699,7 @@ getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 """
     getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
 
-Gets the first IP address of the `host` of the specified IPAddr type.
+Gets the first IP address of the `host` of the specified `IPAddr` type.
 Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
 """
 function getaddrinfo(host::String, T::Type{<:IPAddr})

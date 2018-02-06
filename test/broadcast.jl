@@ -4,7 +4,7 @@ module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_indices, check_broadcast_shape, newindex, _bcs
 using Base: OneTo
-using Test
+using Test, Random
 
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)
@@ -134,7 +134,7 @@ for arr in (identity, as_sub)
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
-    @test A == diagm(0 => 10:12)
+    @test A == [10 0 0; 0 11 0; 0 0 12]
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
@@ -553,16 +553,16 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    @test iszero(ones(N, N) .= zeros(N, N))
-    @test iszero(ones(N, N) .= zeros(N, 1))
-    @test iszero(ones(N, N) .= zeros(1, N))
-    @test iszero(ones(N, N) .= zeros(1, 1))
+    @test iszero(fill(1, N, N) .= zeros(N, N))
+    @test iszero(fill(1, N, N) .= zeros(N, 1))
+    @test iszero(fill(1, N, N) .= zeros(1, N))
+    @test iszero(fill(1, N, N) .= zeros(1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin
-    A = fill(zeros(2,2), 4, 4)
-    A[1:3,1:3] .= [ones(2,2)]
-    @test all(A[1:3,1:3] .== [ones(2,2)])
+    A = fill([0 0; 0 0], 4, 4)
+    A[1:3,1:3] .= [[1 1; 1 1]]
+    @test all(A[1:3,1:3] .== [[1 1; 1 1]])
 end
 
 # Test that broadcast does not confuse eltypes. See also

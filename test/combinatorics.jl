@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random: randcycle
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0
@@ -13,7 +15,7 @@
     @test binomial(Int32(34), Int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
     @test binomial(Int64(67), Int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
     @test binomial(Int128(131), Int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
-    @test_throws InexactError binomial(Int64(67), Int64(30))
+    @test_throws OverflowError binomial(Int64(67), Int64(30))
 end
 
 @testset "permutations" begin

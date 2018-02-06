@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.copy, Base.==
+using Random
+using InteractiveUtils: code_llvm
+
+import Libdl
 
 const libccalltest = "libccalltest"
 
@@ -1292,7 +1296,7 @@ struct Bits22734 <: Abstract22734
     y::Float64
 end
 function cb22734(ptr::Ptr{Cvoid})
-    gc()
+    GC.gc()
     obj = unsafe_pointer_to_objref(ptr)::Bits22734
     obj.x + obj.y
 end

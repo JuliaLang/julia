@@ -5,29 +5,34 @@
 """
     typejoin(T, S)
 
-Compute a type that contains both `T` and `S`.
+
+Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
+they both inherit.
 """
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+typejoin(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; join_types(a, b, typejoin))
+
+function join_types(@nospecialize(a), @nospecialize(b), f::Function)
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        return UnionAll(a.var, join_types(a.body, b, f))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return UnionAll(b.var, join_types(a, b.body, f))
     elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
+        return f(a.ub, b)
     elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
+        return f(a, b.ub)
     elseif isa(a,Union)
-        return typejoin(typejoin(a.a,a.b), b)
+        a′ = f(a.a,a.b)
+        return a′ === a ? typejoin(a, b) : f(a′, b)
     elseif isa(b,Union)
-        return typejoin(a, typejoin(b.a,b.b))
+        b′ = f(b.a,b.b)
+        return b′ === b ? typejoin(a, b) : f(a, b′)
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -35,31 +40,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
         if lar == 0
-            return Tuple{Vararg{tailjoin(bp,1)}}
+            return Tuple{Vararg{tailjoin(bp,1,f)}}
         end
         if lbr == 0
-            return Tuple{Vararg{tailjoin(ap,1)}}
+            return Tuple{Vararg{tailjoin(ap,1,f)}}
         end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(uninitialized, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
+                c[laf] = Vararg{f(unwrapva(ap[lar]), tailjoin(bp,laf,f))}
                 n = laf-1
             else
                 c = Vector{Any}(uninitialized, laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                c[laf+1] = Vararg{tailjoin(bp,laf+1,f)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(uninitialized, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
+                c[lbf] = Vararg{f(unwrapva(bp[lbr]), tailjoin(ap,lbf,f))}
                 n = lbf-1
             else
                 c = Vector{Any}(uninitialized, lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                c[lbf+1] = Vararg{tailjoin(ap,lbf+1,f)}
                 n = lbf
             end
         else
@@ -68,7 +73,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            ci = f(unwrapva(ai),unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -102,6 +107,28 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     return Any
 end
 
+"""
+    promote_typejoin(T, S)
+
+Compute a type that contains both `T` and `S`, which could be
+either a parent of both types, or a `Union` if appropriate.
+Falls back to [`typejoin`](@ref).
+"""
+promote_typejoin(@nospecialize(a), @nospecialize(b)) =
+    (@_pure_meta; join_types(a, b, promote_typejoin))
+promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+    isconcretetype(T) ? Union{T, Nothing} : Any
+promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+    isconcretetype(T) ? Union{T, Nothing} : Any
+promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+    isconcretetype(T) ? Union{T, Missing} : Any
+promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+    isconcretetype(T) ? Union{T, Missing} : Any
+promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+
 # Returns length, isfixed
 function full_va_len(p)
     isempty(p) && return 0, true
@@ -116,14 +143,14 @@ function full_va_len(p)
     return length(p)::Int, true
 end
 
-# reduce typejoin over A[i:end]
-function tailjoin(A, i)
+# reduce join_types over A[i:end]
+function tailjoin(A, i, f::Function)
     if i > length(A)
         return unwrapva(A[end])
     end
     t = Bottom
     for j = i:length(A)
-        t = typejoin(t, unwrapva(A[j]))
+        t = f(t, unwrapva(A[j]))
     end
     return t
 end
@@ -193,6 +220,10 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+# To fix ambiguities
+promote_rule(::Type{Any}, ::Type{<:Any}) = Any
+promote_rule(::Type{<:Any}, ::Type{Any}) = Any
+promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -346,23 +377,41 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_inline_meta; T)
 
-if isdefined(Core, :Inference)
-    const _return_type = Core.Inference.return_type
+if isdefined(Core, :Compiler)
+    const _return_type = Core.Compiler.return_type
 else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+"""
+    promote_op(f, argtypes...)
+
+Guess what an appropriate container eltype would be for storing results of
+`f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
+
+!!! warning
+    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
+    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
+    should _not_ be used e.g. in the preallocation of an output array.
+
+!!! warning
+    Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
+    the container eltype on the type of the actual elements. Only in the absence of any
+    elements (for an empty result container), it may be unavoidable to call `promote_op`.
+"""
 promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(S)})
-    _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
-    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    _isleaftype(R) && _isleaftype(S) && return _isleaftype(T) ? T : Any
+    TT = Tuple{_default_type(R), _default_type(S)}
+    T = _return_type(f, TT)
+    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(R, S, T)
 end
 

@@ -110,6 +110,7 @@ end
     @test Dates.Time(Dates.Hour(4), Dates.Second(10), Dates.Millisecond(15),
                      Dates.Microsecond(20), Dates.Nanosecond(25)) == Dates.Time(4, 0, 10, 15, 20, 25)
 end
+
 @testset "various input types for Date/DateTime" begin
     test = Dates.Date(1, 1, 1)
     @test Dates.Date(Int8(1), Int8(1), Int8(1)) == test

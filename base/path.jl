@@ -78,7 +78,7 @@ end
 
 
 if Sys.iswindows()
-    isabspath(path::String) = ismatch(path_absolute_re, path)
+    isabspath(path::String) = contains(path, path_absolute_re)
 else
     isabspath(path::String) = startswith(path, '/')
 end
@@ -113,7 +113,7 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
+isdirpath(path::String) = contains(splitdrive(path)[2], path_directory_re)
 
 """
     splitdir(path::AbstractString) -> (AbstractString, AbstractString)
@@ -218,9 +218,9 @@ function joinpath(a::String, b::String)
     B, b = splitdrive(b)
     !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
-    isempty(a)                             ? string(C,b) :
-    ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
-                                             string(C,a,pathsep(a,b),b)
+    isempty(a)                              ? string(C,b) :
+    contains(a[end:end], path_separator_re) ? string(C,a,b) :
+                                              string(C,a,pathsep(a,b),b)
 end
 joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
@@ -380,8 +380,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:findlast(x -> !isempty(x), path_arr)], path_separator)
-    prefix_num = findlast(x -> !isempty(x), start_arr) - i - 1
+    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

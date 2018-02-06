@@ -11,7 +11,7 @@ Within `gdb`, any `jl_value_t*` object `obj` can be displayed using
 The object will be displayed in the `julia` session, not in the gdb session. This is a useful
 way to discover the types and values of objects being manipulated by Julia's C code.
 
-Similarly, if you're debugging some of Julia's internals (e.g., `inference.jl`), you can print
+Similarly, if you're debugging some of Julia's internals (e.g., `compiler.jl`), you can print
 `obj` using
 
 ```julia

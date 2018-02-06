@@ -1,13 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "constructors" begin
     @test String([0x61,0x62,0x63,0x21]) == "abc!"
     @test String("abc!") == "abc!"
 
     @test isempty(string())
     @test eltype(GenericString) == Char
-    @test start("abc") == 1
+    @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test typemin(String) === ""
+    @test typemin("abc") === ""
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
@@ -16,7 +20,7 @@
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
         for x in strs, y in strs
-            @test (x === y) == (object_id(x) == object_id(y))
+            @test (x === y) == (objectid(x) == objectid(y))
         end
     end
 end
@@ -62,7 +66,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n), b) == n
+        @test parse(T, base(b, n),  base = b) == n
     end
     end
 end
@@ -164,11 +168,11 @@ end
 let
     srep = repeat("Σβ",2)
     s="Σβ"
-    ss=SubString(s,1,endof(s))
+    ss=SubString(s,1,lastindex(s))
 
     @test repeat(ss,2) == "ΣβΣβ"
 
-    @test endof(srep) == 7
+    @test lastindex(srep) == 7
 
     @test next(srep, 3) == ('β',5)
     @test next(srep, 7) == ('β',9)
@@ -206,7 +210,7 @@ struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
 @testset "AbstractString functions" begin
-    tstr = tstStringType(Vector{UInt8}("12"))
+    tstr = tstStringType(unsafe_wrap(Vector{UInt8},"12"))
     @test_throws MethodError ncodeunits(tstr)
     @test_throws MethodError codeunit(tstr)
     @test_throws MethodError codeunit(tstr, 1)
@@ -215,7 +219,7 @@ end
     @test_throws MethodError isvalid(tstr, true)
     @test_throws MethodError next(tstr, 1)
     @test_throws MethodError next(tstr, true)
-    @test_throws MethodError endof(tstr)
+    @test_throws MethodError lastindex(tstr)
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
@@ -231,9 +235,12 @@ end
     @test_throws StringIndexError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
+    @test first(eachindex("foobar")) === 1
+    @test first(eachindex("")) === 1
+    @test last(eachindex("foobar")) === lastindex("foobar")
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
-    @test map(Base.Unicode.uppercase, "foó") == "FOÓ"
+    @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
     @test Symbol(gstr) == Symbol("12")
@@ -293,6 +300,8 @@ end
     @test tryparse(Float32, "32o") === nothing
 end
 
+import Unicode
+
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         @test_throws ArgumentError parse(T, "1\0")
@@ -300,7 +309,7 @@ end
     for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
         @test tryparse(T, "1\0") === nothing
     end
-    let s = Base.Unicode.normalize("tést",:NFKC)
+    let s = Unicode.normalize("tést",:NFKC)
         @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
         @test unsafe_string(Base.unsafe_convert(Cstring, Symbol(s))) == s
     end
@@ -355,6 +364,7 @@ end
             ("\udc00\ud800", false),
         )
         @test isvalid(String, val) == pass == isvalid(String(val))
+        @test isvalid(val[1]) == pass
     end
 
     # Issue #11203
@@ -428,6 +438,17 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+
+    # invalid Chars
+    @test  isvalid('a')
+    @test  isvalid('柒')
+    @test !isvalid("\xff"[1])
+    @test !isvalid("\xc0\x80"[1])
+    @test !isvalid("\xf0\x80\x80\x80"[1])
+    @test !isvalid('\ud800')
+    @test  isvalid('\ud7ff')
+    @test !isvalid('\udfff')
+    @test  isvalid('\ue000')
 end
 
 @testset "NULL pointers are handled consistently by String" begin
@@ -442,9 +463,9 @@ end
     @test_throws ArgumentError ascii("Hello, ∀")
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
-@testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof("\x90") == 1
-    @test endof("\xce") == 1
+@testset "issue #17271: lastindex() doesn't throw an error even with invalid strings" begin
+    @test lastindex("\x90") == 1
+    @test lastindex("\xce") == 1
 end
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
@@ -452,8 +473,8 @@ end
 @testset "issue #18280: next/nextind must return past String's underlying data" begin
     for s in ("Hello", "Σ", "こんにちは", "😊😁")
         local s
-        @test next(s, endof(s))[2] > sizeof(s)
-        @test nextind(s, endof(s)) > sizeof(s)
+        @test next(s, lastindex(s))[2] > sizeof(s)
+        @test nextind(s, lastindex(s)) > sizeof(s)
     end
 end
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
@@ -466,7 +487,7 @@ end
 Base.start(x::CharStr) = start(x.chars)
 Base.next(x::CharStr, i::Int) = next(x.chars, i)
 Base.done(x::CharStr, i::Int) = done(x.chars, i)
-Base.endof(x::CharStr) = endof(x.chars)
+Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -697,7 +718,7 @@ end
     end
 end
 
-@test Vector{UInt8}("\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
+@test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
 @test next("a", 1)[2] == 2
 @test nextind("a", 1) == 2
@@ -794,3 +815,51 @@ end
 @test nextind("\xf8\x9f\x98\x84", 1) == 2
 @test next("\xf8\x9f\x98\x84z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84z", 1) == 2
+
+# codeunit vectors
+
+let s = "∀x∃y", u = codeunits(s)
+    @test u isa Base.CodeUnits{UInt8,String}
+    @test length(u) == ncodeunits(s) == 8
+    @test sizeof(u) == sizeof(s)
+    @test eltype(u) === UInt8
+    @test size(u) == (length(u),)
+    @test strides(u) == (1,)
+    @test u[1] == 0xe2
+    @test u[2] == 0x88
+    @test u[8] == 0x79
+    @test_throws ErrorException (u[1] = 0x00)
+    @test collect(u) == b"∀x∃y"
+end
+
+# issue #24388
+let v = unsafe_wrap(Vector{UInt8}, "abc")
+    s = String(v)
+    @test_throws BoundsError v[1]
+    push!(v, UInt8('x'))
+    @test s == "abc"
+end
+
+# PR #25535
+let v = [0x40,0x41,0x42]
+    @test String(view(v, 2:3)) == "AB"
+end
+
+# make sure length for identical String and AbstractString return the same value, PR #25533
+let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
+                                   String(rand(rng, UInt8, 200))]
+    for s in strs, i in 1:ncodeunits(s)+1, j in 0:ncodeunits(s)
+            @test length(s,i,j) == length(GenericString(s),i,j)
+    end
+    for i in 0:10, j in 1:100,
+        s in [randstring(rng, i), randstring(rng, "∀∃α1", i), String(rand(rng, UInt8, i))]
+        @test length(s) == length(GenericString(s))
+    end
+end
+
+# conversion of SubString to the same type, issue #25525
+let x = SubString("ab", 1, 1)
+    y = convert(SubString{String}, x)
+    @test y === x
+    chop("ab") === chop.(["ab"])[1]
+end

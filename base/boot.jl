@@ -111,7 +111,6 @@
 #    parent::Task
 #    storage::Any
 #    state::Symbol
-#    consumers::Any
 #    donenotify::Any
 #    result::Any
 #    exception::Any
@@ -140,6 +139,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -212,8 +212,6 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-function postfixapostrophize end
-
 struct BoundsError <: Exception
     a::Any
     i::Any
@@ -255,6 +253,9 @@ end
 
 struct ArgumentError <: Exception
     msg::AbstractString
+end
+struct UndefKeywordError <: Exception
+    var::Symbol
 end
 
 struct MethodError <: Exception
@@ -413,9 +414,6 @@ end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-macro doc_str(s)
-    Expr(:escape, s)
-end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
@@ -459,6 +457,7 @@ struct GeneratedFunctionStub
     spnames::Union{Nothing, Array{Any,1}}
     line::Int
     file::Symbol
+    expand_early::Bool
 end
 
 # invoke and wrap the results of @generated

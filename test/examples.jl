@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 dir = joinpath(Sys.BINDIR, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
@@ -24,9 +26,9 @@ include(joinpath(dir, "ndgrid.jl"))
 r = repmat(1:10,1,10)
 r1, r2 = ndgrid(1:10, 1:10)
 @test r1 == r
-@test r2 == adjoint(r)
+@test r2 == r'
 r3, r4 = meshgrid(1:10,1:10)
-@test r3 == adjoint(r)
+@test r3 == r'
 @test r4 == r
 
 include(joinpath(dir, "queens.jl"))

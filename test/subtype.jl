@@ -2,6 +2,7 @@
 
 using Base: Bottom
 using Test
+using LinearAlgebra
 
 macro UnionAll(var, expr)
     Expr(:where, esc(expr), esc(var))
@@ -638,7 +639,6 @@ macro testintersect(a, b, result)
     else
         cmp = :(==)
     end
-    cmp = esc(cmp)
     a = esc(a)
     b = esc(b)
     result = esc(result)
@@ -1011,9 +1011,9 @@ f18348(::Type{T}, x::T) where {T<:Any} = 2
 @test length(methods(f18348, Tuple{Type{Any},Any})) == 1
 
 # Issue #13165
-@test Symmetric{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
-@test Hermitian{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
-@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinAlg.RealHermSymComplexHerm
+@test Symmetric{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinearAlgebra.RealHermSymComplexHerm
 
 # Issue #12721
 f12721(::T) where {T<:Type{Int}} = true
@@ -1067,7 +1067,7 @@ let a = Tuple{Float64,T7} where T7,
 end
 let a = Tuple{T1,T1} where T1,
     b = Tuple{Val{S2},S6} where S2 where S6
-    @test_broken typeintersect(a, b) == typeintersect(b, a)
+    @test typeintersect(a, b) == typeintersect(b, a)
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6
@@ -1246,7 +1246,7 @@ f3_24305(x,y,z) = exp(x)+z-exp(y)-3
 Fun_24305(x) = [ f1_24305(x[1],x[2],x[3]); f2_24305(x[1],x[2],x[3]); f3_24305(x[1],x[2],x[3]) ]
 Jac_24305(x) = [ x[2] x[1] -2*x[3] ; x[2]*x[3]-2x[1]  x[1]*x[3]+2x[2]  x[1]*x[2] ; exp(x[1])  -exp(x[2])  1 ]
 
-x_24305 = ones(3)
+x_24305 = fill(1.,3)
 
 for it = 1:5
     h = - \(Jac_24305(x_24305), Fun_24305(x_24305))

@@ -37,7 +37,7 @@ Copy a string from the address of a C-style (NUL-terminated) string encoded as U
 (The pointer can be safely freed afterwards.) If `length` is specified
 (the length of the data in bytes), the string does not have to be NUL-terminated.
 
-This function is labelled "unsafe" because it will crash if `p` is not
+This function is labeled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 """
 function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
@@ -60,7 +60,13 @@ This representation is often appropriate for passing strings to C.
 String(s::AbstractString) = print_to_string(s)
 String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
-(::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+
+(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(uninitialized, length(s)), s)
+
+String(a::AbstractVector{UInt8}) = String(copyto!(StringVector(length(a)), a))
+
+String(s::CodeUnits{UInt8,String}) = s.s
 
 ## low-level functions ##
 
@@ -72,11 +78,11 @@ codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
     @boundscheck checkbounds(s, i)
-    @gc_preserve s unsafe_load(pointer(s, i))
+    GC.@preserve s unsafe_load(pointer(s, i))
 end
 
 write(io::IO, s::String) =
-    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
@@ -92,14 +98,21 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## thisind, prevind, nextind ##
+typemin(::Type{String}) = ""
+typemin(::String) = typemin(String)
 
-function thisind(s::String, i::Int)
+## thisind, nextind ##
+
+thisind(s::String, i::Int) = _thisind_str(s, i)
+
+# s should be String or SubString{String}
+function _thisind_str(s, i::Int)
+    i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
-    @boundscheck between(i, 0, n) || throw(BoundsError(s, i))
+    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || return i
+    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
     @inbounds b = codeunit(s, i-1)
     between(b, 0b11000000, 0b11110111) && return i-1
     (b & 0xc0 == 0x80) & (i-2 > 0) || return i
@@ -111,7 +124,10 @@ function thisind(s::String, i::Int)
     return i
 end
 
-function nextind(s::String, i::Int)
+nextind(s::String, i::Int) = _nextind_str(s, i)
+
+# s should be String or SubString{String}
+function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
@@ -239,9 +255,8 @@ function length(s::String, i::Int, j::Int)
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
     j < i && return 0
-    c = j - i + 1
     @inbounds i, k = thisind(s, i), i
-    c -= i < k
+    c = j - i + (i == k)
     _length(s, i, j, c)
 end
 

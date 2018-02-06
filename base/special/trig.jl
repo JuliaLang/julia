@@ -197,7 +197,13 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         return -co, si
     end
 end
-sincos(x::Real) = sincos(float(x))
+
+_sincos(x::AbstractFloat) = sincos(x)
+_sincos(x) = (sin(x), cos(x))
+
+sincos(x) = _sincos(float(x))
+
+
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
 # ving superfluous calculations.

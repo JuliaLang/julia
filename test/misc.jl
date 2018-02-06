@@ -83,22 +83,12 @@ let # test the process title functions, issue #9957
     @test Sys.get_process_title() == oldtitle
 end
 
-# test gc_enable/disable
-@test gc_enable(true)
-@test gc_enable(false)
-@test gc_enable(false) == false
-@test gc_enable(true) == false
-@test gc_enable(true)
-
-# test methodswith
-# `methodswith` relies on exported symbols
-export func4union, Base
-struct NoMethodHasThisType end
-@test isempty(methodswith(NoMethodHasThisType))
-@test !isempty(methodswith(Int))
-struct Type4Union end
-func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union, @__MODULE__))
+# test GC.enable/disable
+@test GC.enable(true)
+@test GC.enable(false)
+@test GC.enable(false) == false
+@test GC.enable(true) == false
+@test GC.enable(true)
 
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
@@ -146,7 +136,7 @@ let c = Ref(0),
     t2 = @schedule (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
-    gc() # this should run the finalizer for t
+    GC.gc() # this should run the finalizer for t
     @test c[] == 1
     yield()
     @test c[] == 1
@@ -159,7 +149,7 @@ end
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(@__MODULE__, true)
+names_before_timing = names(@__MODULE__, all = true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -178,12 +168,12 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(@__MODULE__, true) == names_before_timing
+@test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Inference) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -194,16 +184,12 @@ let R = Ref{Any}(nothing), depth = 10^6
     @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
 
-module _test_varinfo_
-export x
-x = 1.0
-end
-@test repr(varinfo(Main, r"^$")) == """
-| name | size | summary |
-|:---- | ----:|:------- |
-"""
-let v = repr(varinfo(_test_varinfo_))
-    @test contains(v, "| x              |   8 bytes | Float64 |")
+# issue #25367 - summarysize with reshaped arrays
+let A = zeros(1000), B = reshape(A, (1,1000))
+    @test summarysize((A,B)) < 2 * sizeof(A)
+
+    # check that object header is accounted for
+    @test summarysize(A) > sizeof(A)
 end
 
 # issue #13021
@@ -215,15 +201,6 @@ catch ex
 end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
-
-# Issue 14173
-module Tmp14173
-    export A
-    A = randn(2000, 2000)
-end
-varinfo(Tmp14173) # warm up
-const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 60000 : 20000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -313,7 +290,7 @@ for s in [map(first,V8); X8],
     ss = s[i:j]
     ss in X8 || push!(X8, ss)
 end
-sort!(X8, lt=lexless)
+sort!(X8, lt=isless)
 sort!(X8, by=length)
 
 I8 = [(s,map(UInt16,s)) for s in X8]
@@ -394,7 +371,7 @@ end
 
 let s = "abcα🐨\0x\0"
     for T in (UInt8, UInt16, UInt32, Int32)
-        @test transcode(T, s) == transcode(T, Vector{UInt8}(s))
+        @test transcode(T, s) == transcode(T, codeunits(s))
         @test transcode(String, transcode(T, s)) == s
     end
 end
@@ -432,11 +409,6 @@ let a = [1,2,3]
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
-let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
-    securezero!(cache)
-    @test cache["foo"].pass == "\0\0\0"
-end
 
 # Test that we can VirtualProtect jitted code to writable
 if Sys.iswindows()
@@ -456,20 +428,28 @@ if Sys.iswindows()
 end
 
 let buf = IOBuffer()
-    print_with_color(:red, IOContext(buf, :color=>true), "foo")
+    printstyled(IOContext(buf, :color=>true), "foo", color=:red)
     @test startswith(String(take!(buf)), Base.text_colors[:red])
 end
 
-# Test that `print_with_color` accepts non-string values, just as `print` does
+# Test that `printstyled` accepts non-string values, just as `print` does
 let buf_color = IOBuffer()
     args = (3.2, "foo", :testsym)
-    print_with_color(:red, IOContext(buf_color, :color=>true), args...)
+    printstyled(IOContext(buf_color, :color=>true), args..., color=:red)
     buf_plain = IOBuffer()
     print(buf_plain, args...)
     expected_str = string(Base.text_colors[:red],
                           String(take!(buf_plain)),
                           Base.text_colors[:default])
     @test expected_str == String(take!(buf_color))
+end
+
+# Test that `printstyled` on multiline input prints the ANSI codes
+# on each line
+let buf_color = IOBuffer()
+    str = "Two\nlines"
+    printstyled(IOContext(buf_color, :color=>true), str; bold=true, color=:red)
+    @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
 if STDOUT isa Base.TTY
@@ -494,13 +474,13 @@ end
 
 let buf = IOBuffer()
     buf_color = IOContext(buf, :color => true)
-    print_with_color(:red, buf_color, "foo")
+    printstyled(buf_color, "foo", color=:red)
     # Check that we get back to normal text color in the end
     @test String(take!(buf)) == "\e[31mfoo\e[39m"
 
     # Check that boldness is turned off
-    print_with_color(:red, buf_color, "foo"; bold = true)
-    @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
+    printstyled(buf_color, "foo"; bold=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end

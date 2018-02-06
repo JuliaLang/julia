@@ -67,17 +67,17 @@ it is not a view.
 
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> s_a = Symmetric(a)
-2×2 Symmetric{Int64,Array{Int64,2}}:
+julia> V = view(A, 1:2, :)
+2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
  1  2
- 2  4
+ 3  4
 
-julia> parent(s_a)
+julia> parent(V)
 2×2 Array{Int64,2}:
  1  2
  3  4
@@ -251,16 +251,16 @@ end
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
 IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
-# Strides are the distance between adjacent elements in a given dimension,
-# so they are well-defined even for non-linear memory layouts
+# Strides are the distance in memory between adjacent elements in a given dimension
+# which we determine from the strides of the parent
 strides(V::SubArray) = substrides(V.parent, V.indices)
 
-substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
-substrides(s, parent, dim, ::Tuple{}) = ()
-substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...,)
-substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
+substrides(parent, I::Tuple) = substrides(parent, strides(parent), I)
+substrides(parent, strds::Tuple{}, ::Tuple{}) = ()
+substrides(parent, strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(parent, tail(strds), tail(I))...,)
+substrides(parent, strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(parent, tail(strds), tail(I))...)
+substrides(parent, strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(parent, tail(strds), tail(I))...)
+substrides(parent, strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
@@ -375,14 +375,14 @@ end
     replace_ref_end!(ex)
 
 Recursively replace occurrences of the symbol :end in a "ref" expression (i.e. A[...]) `ex`
-with the appropriate function calls (`endof` or `size`). Replacement uses
+with the appropriate function calls (`lastindex` or `size`). Replacement uses
 the closest enclosing ref, so
 
     A[B[end]]
 
 should transform to
 
-    A[B[endof(B)]]
+    A[B[lastindex(B)]]
 
 """
 replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
@@ -402,11 +402,11 @@ function replace_ref_end_!(ex, withex)
             if nargs == 0
                 return ex, used_withex
             elseif nargs == 1
-                # replace with endof(S)
-                ex.args[2], used_S = replace_ref_end_!(ex.args[2],:($endof($S)))
+                # replace with lastindex(S)
+                ex.args[2], used_S = replace_ref_end_!(ex.args[2],:($lastindex($S)))
             else
                 n = 1
-                J = endof(ex.args)
+                J = lastindex(ex.args)
                 for j = 2:J
                     exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
                     used_S |= used
@@ -499,7 +499,7 @@ end
 # _views implements the transformation for the @views macro.
 # @views calls esc(_views(...)) to work around #20241,
 # so any function calls we insert (to maybeview, or to
-# size and endof in replace_ref_end!) must be interpolated
+# size and lastindex in replace_ref_end!) must be interpolated
 # as values rather than as symbols to ensure that they are called
 # from Base rather than from the caller's scope.
 _views(x) = x

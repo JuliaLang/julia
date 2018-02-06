@@ -127,7 +127,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
+    v = transcode(Cwchar_t, String(s))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -140,7 +140,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
+function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -174,7 +174,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = Vector{UInt8}(String(s))
+    bytes = codeunits(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -202,19 +202,20 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
+transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(src))
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
+transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Vector{UInt8})
+function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst

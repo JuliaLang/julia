@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays
+using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
@@ -68,7 +68,7 @@ for p in procs(d)
     @test d[idxl] == rv
 end
 
-@test ones(10, 10, 10) == SharedArrays.shmem_fill(1.0, (10,10,10))
+@test fill(1., 10, 10, 10) == SharedArrays.shmem_fill(1.0, (10,10,10))
 @test zeros(Int32, 10, 10, 10) == SharedArrays.shmem_fill(0, (10,10,10))
 
 d = SharedArrays.shmem_rand(dims)
@@ -78,7 +78,7 @@ copyto!(s, d)
 s = SharedArrays.shmem_rand(dims)
 copyto!(s, sdata(d))
 @test s == d
-a = rand(dims)
+a = rand(Float64, dims)
 @test sdata(a) == a
 
 d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
@@ -133,7 +133,7 @@ finalize(S)
 
 # Appending to a file
 fn3 = tempname()
-write(fn3, ones(UInt8, 4))
+write(fn3, fill(0x1, 4))
 S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
@@ -145,9 +145,9 @@ finalize(S)
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere gc()
-@everywhere gc()
-@everywhere gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
+@everywhere GC.gc()
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -169,7 +169,7 @@ S = @inferred(SharedArray{Int}(1,2,3))
 # reshape
 
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
-@test ones(100, 10) == reshape(d,(100,10))
+@test fill(1., 100, 10) == reshape(d,(100,10))
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test_throws DimensionMismatch reshape(d,(50,))
 
@@ -190,7 +190,7 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
+remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)
@@ -212,8 +212,8 @@ d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
-B = @inferred(convert(SharedArray, adjoint(AA)))
-@test B*A == adjoint(AA)*AA
+B = @inferred(convert(SharedArray, copy(AA')))
+@test B*A == AA'*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
@@ -223,7 +223,7 @@ d2 = map(x->1, d)
 map!(x->1, d, d)
 @test reduce(+, d) == 100
 
-@test fill!(d, 1) == ones(10, 10)
+@test fill!(d, 1) == fill(1., 10, 10)
 @test fill!(d, 2.) == fill(2, 10, 10)
 @test d[:] == fill(2, 100)
 @test d[:,1] == fill(2, 10)
@@ -242,7 +242,7 @@ end
 
 # Issue #14664
 d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     d[i] = i
 end
 
@@ -253,7 +253,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
 end
@@ -284,11 +284,11 @@ finalize(d)
 let
     aorig = a1 = SharedArray{Float64}((3, 3))
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    @test object_id(aorig) == object_id(a1)
+    @test objectid(aorig) == objectid(a1)
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    gc(); gc()
+    GC.gc(); GC.gc()
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test haskey(SharedArrays.sa_refs, id)
     finalize(a1)

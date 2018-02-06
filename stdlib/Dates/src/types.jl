@@ -258,10 +258,10 @@ end
 Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
 parts not provided will default to the value of `Dates.default(period)`.
 """
-function DateTime(periods::Period...)
+function DateTime(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -279,9 +279,9 @@ end
 Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Date(periods::Period...)
+function Date(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -295,10 +295,10 @@ end
 Construct a `Time` type by `Period` type parts. Arguments may be in any order. `Time` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Time(periods::TimePeriod...)
+function Time(period::TimePeriod, periods::TimePeriod...)
     h = Hour(0); mi = Minute(0); s = Second(0)
     ms = Millisecond(0); us = Microsecond(0); ns = Nanosecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Hour) && (h = p::Hour)
         isa(p, Minute) && (mi = p::Minute)
         isa(p, Second) && (s = p::Second)
@@ -353,8 +353,9 @@ end
 
 import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
+Timer(time::Period; interval::Period = Second(0)) =
+    Timer(toms(time) / 1000, interval = toms(interval) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-Base.TypeOrder(::Type{<:AbstractTime}) = Base.HasOrder()
-Base.TypeArithmetic(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()
+Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
+Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()

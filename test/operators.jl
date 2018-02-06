@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random: randstring
+
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 
@@ -45,19 +47,12 @@ p = 1=>:foo
 @test last(p)  == :foo
 @test first(reverse(p)) == :foo
 @test last(reverse(p))  == 1
-@test endof(p) == 2
-@test p[endof(p)] == p[end] == p[2] == :foo
+@test lastindex(p) == 2
+@test p[lastindex(p)] == p[end] == p[2] == :foo
 
 @test (|)(2) == 2
 @test xor(2) == 2
 @test (⊻)(2) == 2
-
-@test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
-@test_throws ArgumentError Base.scalarmin('a',['c','d'])
-@test_throws ArgumentError Base.scalarmin(['a','b'],'c')
-@test_throws ArgumentError Base.scalarmax(['a','b'],['c','d'])
-@test_throws ArgumentError Base.scalarmax('a',['c','d'])
-@test_throws ArgumentError Base.scalarmax(['a','b'],'c')
 
 @test_throws MethodError min(Set([1]), Set([2]))
 @test_throws MethodError max(Set([1]), Set([2]))
@@ -82,7 +77,7 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
-@test lexless('a','b')
+@test isless('a','b')
 
 @test 1 .!= 2
 @test 1 .== 1
@@ -106,12 +101,12 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
 # pr #17155
 @testset "function composition" begin
-    @test (Base.Unicode.uppercase∘hex)(239487) == "3A77F"
+    @test (uppercase∘hex)(239487) == "3A77F"
 end
 @testset "function negation" begin
     str = randstring(20)
-    @test filter(!Base.Unicode.isupper, str) == replace(str, r"[A-Z]" => "")
-    @test filter(!Base.Unicode.islower, str) == replace(str, r"[a-z]" => "")
+    @test filter(!isupper, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!islower, str) == replace(str, r"[a-z]" => "")
 end
 
 # issue #19891

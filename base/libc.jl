@@ -204,7 +204,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+        if !contains(fmt, r"([^%]|^)%(a|A|j|w|Ow)")
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -251,7 +251,7 @@ function gethostname()
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     end
     systemerror("gethostname", err != 0)
-    return Base.@gc_preserve hn unsafe_string(pointer(hn))
+    return GC.@preserve hn unsafe_string(pointer(hn))
 end
 
 ## system error handling ##
@@ -307,7 +307,7 @@ if Sys.iswindows()
         p = lpMsgBuf[]
         len == 0 && return ""
         buf = Vector{UInt16}(uninitialized, len)
-        Base.@gc_preserve buf unsafe_copyto!(pointer(buf), p, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), p)
         return transcode(String, buf)
     end

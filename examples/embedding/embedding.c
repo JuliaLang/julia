@@ -152,12 +152,13 @@ int main()
     {
         // Importing a Julia package
 
-        checked_eval_string("let d = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
+        checked_eval_string("let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
                             // disable the package manager
-                            "    ENV[\"JULIA_PKGDIR\"] = joinpath(d, \"disabled\")\n"
+                            "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
                             // locate files relative to the "embedding" executable
+                            "    stdlib = pop!(LOAD_PATH)\n"
                             "    empty!(LOAD_PATH)\n"
-                            "    push!(LOAD_PATH, d)\n"
+                            "    push!(LOAD_PATH, dir, stdlib)\n"
                             // this directory needs to be writable for the example,
                             // although in real code it usually wouldn't necessarily be used that way
                             "    empty!(Base.LOAD_CACHE_PATH)\n"

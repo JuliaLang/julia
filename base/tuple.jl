@@ -16,12 +16,13 @@ NTuple
 ## indexing ##
 
 length(t::Tuple) = nfields(t)
-endof(t::Tuple) = length(t)
+firstindex(t::Tuple) = 1
+lastindex(t::Tuple) = length(t)
 size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -78,11 +79,11 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
-    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
-        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
     end
     return r
 end
@@ -211,8 +212,8 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Inference!
-if module_name(@__MODULE__) === :Base
+# NOTE: this means this constructor must be avoided in Core.Compiler!
+if nameof(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
@@ -252,10 +253,11 @@ end
 
 ## comparison ##
 
-function isequal(t1::Tuple, t2::Tuple)
-    if length(t1) != length(t2)
-        return false
-    end
+isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
+_isequal(t1::Tuple{}, t2::Tuple{}) = true
+_isequal(t1::Tuple{Any}, t2::Tuple{Any}) = isequal(t1[1], t2[1])
+_isequal(t1::Tuple, t2::Tuple) = isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
+function _isequal(t1::Any16, t2::Any16)
     for i = 1:length(t1)
         if !isequal(t1[i], t2[i])
             return false
@@ -264,11 +266,17 @@ function isequal(t1::Tuple, t2::Tuple)
     return true
 end
 
-function ==(t1::Tuple, t2::Tuple)
-    if length(t1) != length(t2)
+==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2, false)
+_eq(t1::Tuple{}, t2::Tuple{}, anymissing) = anymissing ? missing : true
+function _eq(t1::Tuple, t2::Tuple, anymissing)
+    eq = t1[1] == t2[1]
+    if eq === false
         return false
+    else
+        return _eq(tail(t1), tail(t2), anymissing | ismissing(eq))
     end
-    anymissing = false
+end
+function _eq(t1::Any16, t2::Any16, anymissing)
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
         if ismissing(eq)

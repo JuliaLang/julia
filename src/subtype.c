@@ -206,9 +206,7 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 0;
-    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract)
-        return 1;
-    if (jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract)
+    if (jl_is_concrete_type(a) || jl_is_concrete_type(b))
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
@@ -250,8 +248,7 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
         return 0;
-    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract &&
-        jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract &&
+    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
         // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
         (((jl_datatype_t*)a)->name != jl_tuple_typename ||
          ((jl_datatype_t*)b)->name != jl_tuple_typename))
@@ -505,27 +502,20 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     return 1;
 }
 
-// check that a type is concrete. this is used to check concrete typevars;
+// check that a type is concrete or quasi-concrete (Type{T}).
+// this is used to check concrete typevars:
 // issubtype is false if the lower bound of a concrete type var is not concrete.
 static int is_leaf_bound(jl_value_t *v)
 {
-    if (v == jl_bottom_type) return 1;
+    if (v == jl_bottom_type)
+        return 1;
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->isleaftype) return 1;
         if (((jl_datatype_t*)v)->abstract) {
             if (jl_is_type_type(v))
                 return 1;//!jl_has_free_typevars(jl_tparam0(v));
             return 0;
         }
-        jl_svec_t *t = ((jl_datatype_t*)v)->parameters;
-        size_t l = jl_svec_len(t);
-        if (((jl_datatype_t*)v)->name == jl_tuple_typename) {
-            for(int i=0; i < l; i++) {
-                if (!is_leaf_bound(jl_svecref(t,i)))
-                    return 0;
-            }
-        }
-        return 1;
+        return ((jl_datatype_t*)v)->isconcretetype;
     }
     return !jl_is_type(v) && !jl_is_typevar(v);
 }
@@ -795,7 +785,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         }
         if (xi == lastx &&
             ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
-             (yi == lasty && !vx && vy && jl_is_leaf_type(xi)))) {
+             (yi == lasty && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
         else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
@@ -1175,11 +1165,10 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         if (t == (jl_value_t*)jl_type_type)
             return 1;
         if (!jl_has_free_typevars(x)) {
-            if (jl_is_leaf_type(t)) {
-                if (jl_is_type_type(t))
-                    return jl_types_equal(x, jl_tparam0(t));
+            if (jl_is_concrete_type(t))
                 return 0;
-            }
+            if (jl_is_type_type(t))
+                return jl_types_equal(x, jl_tparam0(t));
             jl_value_t *t2 = jl_unwrap_unionall(t);
             if (jl_is_datatype(t2)) {
                 if (((jl_datatype_t*)t2)->name == jl_type_typename) {
@@ -1207,7 +1196,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_leaf_type(t))
+    if (jl_is_concrete_type(t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
@@ -2194,7 +2183,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *ans = b;
     }
     else {
-        int lta = jl_is_leaf_type(a), ltb = jl_is_leaf_type(b);
+        int lta = jl_is_concrete_type(a);
+        int ltb = jl_is_concrete_type(b);
         if (lta && ltb)
             goto bot;
         jl_stenv_t e;
@@ -2345,7 +2335,8 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
     size_t clen = jl_nparams(cdt);
     if (clen == 0) return 1;
     int i = 0;
-    int cva = jl_vararg_kind(jl_tparam(cdt,clen-1)) > JL_VARARG_INT;
+    jl_vararg_kind_t ckind = jl_vararg_kind(jl_tparam(cdt,clen-1));
+    int cva = ckind > JL_VARARG_INT;
     int pva = jl_vararg_kind(jl_tparam(pdt,plen-1)) > JL_VARARG_INT;
     int cdiag = 0, pdiag = 0;
     int some_morespecific = 0;
@@ -2383,8 +2374,17 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         int cms = type_morespecific_(ce, pe, invariant, env);
         int eqv = !cms && eq_msp(ce, pe, env);
 
-        if (!cms && !eqv)
-            return 0;
+        if (!cms && !eqv) {
+            /*
+              A bound vararg tuple can be more specific despite disjoint elements in order to
+              preserve transitivity. For example in
+              A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N}
+              B = Tuple{Array, Int}
+              C = Tuple{AbstractArray, Int, Array}
+              we need A < B < C and A < C.
+            */
+            return some_morespecific && cva && ckind == JL_VARARG_BOUND;
+        }
 
         // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal
         if (eqv && i == clen-1 && clen == plen && !cva && pva && jl_is_typevar(ce) && jl_is_typevar(pe) && !cdiag && pdiag)
@@ -2515,12 +2515,14 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         jl_vararg_kind_t akind = jl_va_tuple_kind((jl_datatype_t*)a);
         jl_vararg_kind_t bkind = jl_va_tuple_kind((jl_datatype_t*)b);
         int ans = -1;
-        if (akind == JL_VARARG_BOUND && bkind < JL_VARARG_BOUND)
+        if (akind == JL_VARARG_BOUND && bkind < JL_VARARG_BOUND) {
             ans = args_morespecific_fix1(a, b, 0, env);
-        if (bkind == JL_VARARG_BOUND && akind < JL_VARARG_BOUND)
+            if (ans == 1) return 1;
+        }
+        if (bkind == JL_VARARG_BOUND && akind < JL_VARARG_BOUND) {
             ans = args_morespecific_fix1(b, a, 1, env);
-        if (ans != -1)
-            return ans;
+            if (ans == 0) return 0;
+        }
         return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, invariant, env);
     }
 

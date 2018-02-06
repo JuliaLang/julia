@@ -61,7 +61,7 @@ Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Ta
 creates a task, and does not run it.
 
 ```jldoctest
-julia> a1() = det(rand(1000, 1000));
+julia> a1() = sum(i for i in 1:1000);
 
 julia> b = @task a1();
 
@@ -93,7 +93,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 Determine whether a task has exited.
 
 ```jldoctest
-julia> a2() = det(rand(1000, 1000));
+julia> a2() = sum(i for i in 1:1000);
 
 julia> b = Task(a2);
 
@@ -116,7 +116,7 @@ istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 Determine whether a task has started executing.
 
 ```jldoctest
-julia> a3() = det(rand(1000, 1000));
+julia> a3() = sum(i for i in 1:1000);
 
 julia> b = Task(a3);
 
@@ -133,9 +133,9 @@ task_result(t::Task) = t.result
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
     if t.storage === nothing
-        t.storage = ObjectIdDict()
+        t.storage = IdDict()
     end
-    (t.storage)::ObjectIdDict
+    (t.storage)::IdDict{Any,Any}
 end
 
 """
@@ -186,7 +186,7 @@ function wait(t::Task)
     return task_result(t)
 end
 
-suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
+suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
@@ -204,34 +204,16 @@ function task_done_hook(t::Task)
         t.backtrace = catch_backtrace()
     end
 
-    q = t.consumers
-    t.consumers = nothing
-
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
         notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
-    if isa(t.storage, ObjectIdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
         foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
         delete!(t.storage, :TASKDONE_HOOKS)
         handled = true
-    end
-
-    #### un-optimized version
-    #isa(q,Condition) && notify(q, result, error=err)
-    if isa(q,Task)
-        handled = true
-        nexttask = q
-        nexttask.state = :runnable
-        if err
-            nexttask.exception = result
-        end
-        yieldto(nexttask, result) # this terminates the task
-    elseif isa(q,Condition) && !isempty(q.waitq)
-        handled = true
-        notify(q, result, error=err)
     end
 
     if err && !handled
@@ -375,7 +357,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = Timer(timercb, pollint, pollint)
+        t = Timer(timercb, pollint, interval = pollint)
         ret = fetch(done)
         close(t)
     else

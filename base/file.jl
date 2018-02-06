@@ -81,8 +81,15 @@ Temporarily changes the current working directory and applies function `f` befor
 """
 cd(f::Function) = cd(f, homedir())
 
+function checkmode(mode::Integer)
+    if !(0 <= mode <= 511)
+        throw(ArgumentError("Mode must be between 0 and 511 = 0o777"))
+    end
+    mode
+end
+
 """
-    mkdir(path::AbstractString, mode::Unsigned=0o777)
+    mkdir(path::AbstractString; mode::Unsigned = 0o777)
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
 modified by the current file creation mask. This function never creates more than one
@@ -90,28 +97,28 @@ directory. If the directory already exists, or some intermediate directories do 
 this function throws an error. See [`mkpath`](@ref) for a function which creates all
 required intermediate directories.
 """
-function mkdir(path::AbstractString, mode::Unsigned=0o777)
+function mkdir(path::AbstractString; mode::Integer = 0o777)
     @static if Sys.iswindows()
         ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     else
-        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, mode)
+        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, checkmode(mode))
     end
     systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
 """
-    mkpath(path::AbstractString, mode::Unsigned=0o777)
+    mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask.
 """
-function mkpath(path::AbstractString, mode::Unsigned=0o777)
+function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
     (path == dir || isdir(path)) && return
-    mkpath(dir, mode)
+    mkpath(dir, mode = checkmode(mode))
     try
-        mkdir(path, mode)
+        mkdir(path, mode = mode)
     # If there is a problem with making the directory, but the directory
     # does in fact exist, then ignore the error. Else re-throw it.
     catch err
@@ -122,9 +129,6 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
         end
     end
 end
-
-mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
-mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
@@ -265,13 +269,13 @@ function tempdir()
     resize!(temppath,lentemppath)
     return transcode(String, temppath)
 end
-tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
+
 const temp_prefix = cwstring("jl_")
-function tempname(temppath::AbstractString,uunique::UInt32)
+function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
     tname = Vector{UInt16}(uninitialized, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
-    lentname = findfirst(iszero,tname)-1
+    lentname = coalesce(findfirst(iszero,tname), 0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
@@ -280,22 +284,37 @@ function tempname(temppath::AbstractString,uunique::UInt32)
 end
 
 function mktemp(parent=tempdir())
-    filename = tempname(parent, UInt32(0))
+    filename = _win_tempname(parent, UInt32(0))
     return (filename, Base.open(filename, "r+"))
 end
 
 function mktempdir(parent=tempdir())
-    seed::UInt32 = rand(UInt32)
+    seed::UInt32 = Base.Crand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
         end
-        filename = tempname(parent, seed)
+        filename = _win_tempname(parent, seed)
         ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
         if ret == 0
             return filename
         end
         systemerror(:mktempdir, Libc.errno()!=Libc.EEXIST)
+        seed += 1
+    end
+end
+
+function tempname()
+    parent = tempdir()
+    seed::UInt32 = rand(UInt32)
+    while true
+        if (seed & typemax(UInt16)) == 0
+            seed += 1
+        end
+        filename = _win_tempname(parent, seed)
+        if !ispath(filename)
+            return filename
+        end
         seed += 1
     end
 end
@@ -343,7 +362,14 @@ tempdir()
 """
     tempname()
 
-Generate a unique temporary file path.
+Generate a temporary file path. This function only returns a path; no file is
+created. The path is likely to be unique, but this cannot be guaranteed.
+
+!!! warning
+
+    This can lead to race conditions if another process obtains the same
+    file name and creates the file before you are able to.
+    Using [`mktemp()`](@ref) is recommended instead.
 """
 tempname()
 
@@ -514,8 +540,8 @@ function rename(src::AbstractString, dst::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    local src_open = false
-    local dst_open = false
+    src_open = false
+    dst_open = false
     local src_file, dst_file
     try
         src_file = open(src, JL_O_RDONLY)

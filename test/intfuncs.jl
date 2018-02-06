@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "gcd/lcm" begin
     # Int32 and Int64 take different code paths -- test both
     for T in (Int32, Int64)
@@ -33,6 +35,31 @@
         @test lcm(-typemax(T), T(1)) === typemax(T)
         @test_throws OverflowError lcm(typemin(T), T(1))
         @test_throws OverflowError lcm(typemin(T), typemin(T))
+    end
+end
+@testset "gcd/lcm for arrays" begin
+    for T in (Int32, Int64)
+        @test gcd(T[]) === T(0)
+        @test gcd(T[3, 5]) === T(1)
+        @test gcd(T[3, 15]) === T(3)
+        @test gcd(T[0, 15]) === T(15)
+        @test gcd(T[3,-15]) === T(3)
+        @test gcd(T[-3,-15]) === T(3)
+        @test gcd(T[0, 0]) === T(0)
+
+        @test gcd(T[2, 4, 6]) === T(2)
+        @test gcd(T[2, 4, 3, 5]) === T(1)
+
+        @test lcm(T[]) === T(1)
+        @test lcm(T[2]) === T(2)
+        @test lcm(T[2, 3]) === T(6)
+        @test lcm(T[4, 6]) === T(12)
+        @test lcm(T[3, 0]) === T(0)
+        @test lcm(T[0, 0]) === T(0)
+        @test lcm(T[4, -6]) === T(12)
+        @test lcm(T[-4, -6]) === T(12)
+
+        @test lcm(T[2, 4, 6]) === T(12)
     end
 end
 @testset "gcdx" begin
@@ -140,14 +167,14 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, 2) == [0, 0, 1]
-    @test digits(5, 3) == [2, 1]
+    @test digits(4, base = 2) == [0, 0, 1]
+    @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, b)" for T in (Int, UInt, BigInt, Int32)
-            @test digits(T(8163), -10) == [3, 4, 2, 2, 1]
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+            @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
-                @test digits(T(-8163), -10) == [7, 7, 9, 9]
+                @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
             end
         end
         @test [base(b, n)

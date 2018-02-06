@@ -5,7 +5,7 @@ STDLIBDIR := $(abspath $(JULIAHOME)/stdlib)
 include $(JULIAHOME)/Make.inc
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
-TESTGROUPS = linalg sparse unicode strings dates
+TESTGROUPS = unicode strings
 TESTS = all stdlib $(TESTGROUPS) \
         $(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out TestHelpers runtests testdefs, \

@@ -38,7 +38,14 @@ New language features
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
   * Field access via dot-syntax can now be overloaded by adding methods to
-    `Base.getproperty` and `Base.setproperty!` ([#1974]).
+    `Base.getproperty` and `Base.setproperty!` ([#1974]), optionally along with
+    a corresponding `Base.propertynames` method for reflection ([#25311]).
+
+  * Values for `Enum`s can now be specified inside of a `begin` block when using the
+    `@enum` macro ([#25424]).
+
+  * Keyword arguments can be required: if a default value is omitted, then an
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
 
 Language changes
 ----------------
@@ -52,6 +59,10 @@ Language changes
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
+
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
@@ -102,6 +113,8 @@ Language changes
     Additionally, the new bindings are now created before the statement is executed.
     For example, `f() = (global sin = "gluttony"; nothing)` will now resolve which module
     contains `sin` eagerly, rather than delaying that decision until `f` is run. ([#22984]).
+
+  * `global const` declarations may no longer appear inside functions ([#12010]).
 
   * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
     deprecated in favor of equivalents accepting `uninitialized` (an alias for
@@ -176,11 +189,25 @@ Language changes
   * The syntax `using A.B` can now only be used when `A.B` is a module, and the syntax
     `using A: B` can only be used for adding single bindings ([#8000]).
 
+  * `=>` now has its own precedence level, giving it strictly higher precedence than
+    `=` and `,` ([#25391]).
+
+  * `begin` is disallowed inside indexing expressions, in order to enable the syntax
+    `a[begin]` (for selecting the first element) in the future ([#23354]).
+
+  * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
+    parser. ([#25564])
 
 Breaking changes
 ----------------
 
 This section lists changes that do not have deprecation warnings.
+
+  * `readuntil` now does *not* include the delimiter in its result, matching the
+    behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
+  * `countlines` now always counts the last non-empty line even if it does not
+    end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
@@ -291,7 +318,9 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
-  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+  * `indmin` and `indmax` have been renamed to `argmin` and `argmax`, respectively ([#25654]).
+
+  * `findmin`, `findmax`, `argmin`, and `argmax` used to always return linear indices.
     They now return `CartesianIndex`es for all but 1-d arrays, and in general return
     the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
 
@@ -355,9 +384,41 @@ This section lists changes that do not have deprecation warnings.
   * `AbstractRange` objects are now considered as equal to other `AbstractArray` objects
     by `==` and `isequal` if all of their elements are equal ([#16401]).
     This has required changing the hashing algorithm: ranges now use an O(N) fallback
-    instead of a O(1) specialized method unless they define the `Base.TypeRangeStep`
+    instead of a O(1) specialized method unless they define the `Base.RangeStepStyle`
     trait; see its documentation for details. Types which support subtraction (operator
     `-`) must now implement `widen` for hashing to work inside heterogeneous arrays.
+
+  * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
+    now returns cartesian indices for multidimensional arrays (see below, [#25532]).
+
+  * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
+    now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
+    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
+    In particular, this means that they use `CartesianIndex` objects for matrices
+    and higher-dimensional arrays insted of linear indices as was previously the case.
+    Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
+
+  * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
+    number of dimensions, which must correspond to the length of the tuple returned by
+    `size` ([#25655]).
+
+ * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
+    elements are equal ([#25368]). This has required changing the hashing algorithm
+    for `BitSet`.
+
+  * the default behavior of `titlecase` is changed in two ways ([#23393]):
+    + characters not starting a word are converted to lowercase;
+      a new keyword argument `strict` is added which
+      allows to get the old behavior when it's `false`.
+    + any non-letter character is considered as a word separator;
+      to get the old behavior (only "space" characters are considered as
+      word separators), use the keyword `wordsep=isspace`.
+
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
+
+  * The `tempname` function used to create a file on Windows but not on other
+    platforms. It now never creates a file ([#9053]).
 
 Library improvements
 --------------------
@@ -403,7 +464,7 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
-  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
+  * `parse(Complex{T}, string)` can parse complex numbers in some common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
@@ -472,7 +533,7 @@ Library improvements
     has been changed to `KeySet{K, <:Associative{K}} <: AbstractSet{K}` ([#24580]).
 
   * New function `ncodeunits(s::AbstractString)` gives the number of code units in a string.
-    The generic definition is constant time but calls `endof(s)` which may be inefficient.
+    The generic definition is constant time but calls `lastindex(s)` which may be inefficient.
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
@@ -515,6 +576,10 @@ Library improvements
 
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
+
+  * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
+    like other `AbstractDict` subtypes and its constructors mirror the
+    ones of `Dict`. ([#25210])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -643,9 +708,14 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
+
+  * `nb_available` is now `bytesavailable` ([#25634]).
+
+  * `skipchars(io::IO, predicate; linecomment=nothing)` is deprecated in favor of
+    `skipchars(predicate, io::IO; linecomment=nothing)` ([#25667]).
 
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
@@ -784,10 +854,10 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
 
-  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
-    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
-    this is not true. If you are certain you need the old behavior, it is temporarily available
-    as `Base._isleaftype` ([#17086]).
+  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
+    Concrete types are those that might equal `typeof(x)` for some `x`;
+    `isleaftype` included some types for which this is not true. Those are now categorized more precisely
+    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
@@ -841,26 +911,30 @@ Deprecated or removed
   * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
     for an alternative workflow ([#25046]).
 
-  * `cumsum`, `cumprod`, `accumulate`, and their mutating versions now require a `dim`
-    argument instead of defaulting to using the first dimension ([#24684]).
+  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
+    argument instead of defaulting to using the first dimension unless there is only
+    one dimension ([#24684], [#25457]).
 
   * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
-  * Unicode-related string functions have been moved to the new `Unicode` standard
-    library module ([#25021]). This applies to `normalize_string`, `graphemes`,
-    `is_assigned_char`, `textwidth`, `islower`, `isupper`, `isalpha`,
-    `isdigit`, `isxdigit`, `isnumber`, `isalnum`, `iscntrl`, `ispunct`, `isspace`,
-    `isprint`, `isgraph`, `lowercase`, `uppercase`, `titlecase`, `lcfirst` and `ucfirst`.
+  * `isnumber` has been renamed to `isnumeric` ([#25021]).
+
+  * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
+    `normalize`, and moved to the new `Unicode` standard library module.
+    `graphemes` has also been moved to that module ([#25021]).
 
   * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
     library module ([#24714]).
 
+  * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
+
+  * Linear algebra functionality, and specifically the `LinAlg` module has moved to the
+    `LinearAlgebra` standard library module ([#25571]).
+
   * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
 
-  * `isnumber` has been deprecated in favor of `isnumeric`, `is_assigned_char`
-    in favor of `isassigned` and `normalize_string` in favor of `normalize`, all three
-    in the new `Unicode` standard library module ([#25021]).
+  * The `Libdl` module has moved to the `Libdl` standard library module ([#25459]).
 
   * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
     `ComplexF32` and `ComplexF64` respectively ([#24647]).
@@ -882,20 +956,69 @@ Deprecated or removed
 
   * `unshift!` and `shift!` have been renamed to `pushfirst!` and `popfirst!` ([#23902])
 
-  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]).
-    Use `Union{T, Void}` instead, or `Union{Some{T}, Void}` if `nothing` is a possible value
-    (i.e. `Void <: T`). `isnull(x)` can be replaced with `x === nothing`
-    and `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
-
   * `ipermute!` has been deprecated in favor of `invpermute!` ([#25168]).
 
   * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
-  * `getindex(F::Factorizion, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
+  * `getindex(F::Factorization, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
     in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
     `F.Q` instead of `F[:Q]` ([#25184]).
+
+  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
+    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
+    predicates for some methods ([#24673]
+
+  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+
+  * `linspace` and `logspace` now require an explicit number of elements to be
+    supplied rather than defaulting to `50`([#24794], [#24805]).
+
+  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
+    `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
+    `empty(::Associative, K, V)` ([#24390]).
+
+  * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
+
+  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
+    the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor
+    of `nameof` methods ([#25622]).
+
+  * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
+
+  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
+    `Random.RandomDevice(; unlimited=unlimited)` ([#25668]).
+
+  * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
+     have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
+     array interface should define their own `strides` method ([#25321]).
+
+  * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
+    in favor of `parentmodule` ([#TODO]).
+
+  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
+    `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+
+  * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
+
+  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
+
+  * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
+
+  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
+
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
+  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
+
+  * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
+    lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
+    where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
+
+  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
+    and `Time(0)` respectively ([#23724]).
 
 Command-line option changes
 ---------------------------
@@ -1053,6 +1176,7 @@ Command-line option changes
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
@@ -1113,14 +1237,18 @@ Command-line option changes
 [#24653]: https://github.com/JuliaLang/julia/issues/24653
 [#24654]: https://github.com/JuliaLang/julia/issues/24654
 [#24656]: https://github.com/JuliaLang/julia/issues/24656
+[#24673]: https://github.com/JuliaLang/julia/issues/24673
 [#24679]: https://github.com/JuliaLang/julia/issues/24679
 [#24684]: https://github.com/JuliaLang/julia/issues/24684
 [#24713]: https://github.com/JuliaLang/julia/issues/24713
 [#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24715]: https://github.com/JuliaLang/julia/issues/24715
+[#24774]: https://github.com/JuliaLang/julia/issues/24774
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786
+[#24794]: https://github.com/JuliaLang/julia/issues/24794
+[#24805]: https://github.com/JuliaLang/julia/issues/24805
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#24831]: https://github.com/JuliaLang/julia/issues/24831
 [#24839]: https://github.com/JuliaLang/julia/issues/24839
@@ -1140,3 +1268,13 @@ Command-line option changes
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
+[#25365]: https://github.com/JuliaLang/julia/issues/25365
+[#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25532]: https://github.com/JuliaLang/julia/issues/25532
+[#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25616]: https://github.com/JuliaLang/julia/issues/25616
+[#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25634]: https://github.com/JuliaLang/julia/issues/25634
+[#25654]: https://github.com/JuliaLang/julia/issues/25654
+[#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25745]: https://github.com/JuliaLang/julia/issues/25745

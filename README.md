@@ -15,7 +15,7 @@ Code coverage:
 
 [travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
 [appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
-[coveralls-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=coveralls
+[coveralls-img]: https://img.shields.io/coveralls/c/github/JuliaLang/julia/master.svg?label=coveralls
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 
 ## The Julia Language
@@ -86,7 +86,7 @@ Be sure to also configure your system to use the appropriate proxy settings, e.g
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.6` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v0.6.0
+    git checkout v0.6.2
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -435,4 +435,4 @@ is available through
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
 enables interaction between IJulia and Sublime Text.
 
-In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](https://docs.julialang.org/en/latest/manual/interacting-with-julia) for more details.
+In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/) for more details.

@@ -57,6 +57,7 @@ typedef struct {
 
 // Cache of thread local change to global metadata during GC
 // This is sync'd after marking.
+typedef union _jl_gc_mark_data jl_gc_mark_data_t;
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
     size_t perm_scanned_bytes;
@@ -76,7 +77,7 @@ typedef struct {
     jl_mutex_t stack_lock;
     void **pc_stack;
     void **pc_stack_end;
-    char *data_stack;
+    jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
 // This includes all the thread local states we care about for a thread.

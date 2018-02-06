@@ -2,12 +2,14 @@
 
 # tests for parser and syntax lowering
 
+using Random
+
 import Base.Meta.ParseError
 
 function parseall(str)
-    pos = start(str)
+    pos = firstindex(str)
     exs = []
-    while !done(str, pos)
+    while pos <= lastindex(str)
         ex, pos = Meta.parse(str, pos)
         push!(exs, ex)
     end
@@ -498,10 +500,6 @@ let m_error, error_out, filename = Base.source_path()
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: invalid type for argument number 1 in method definition for method_c6 at $filename:")
 
-    m_error = try @eval method_c6(A; B) = 3; catch e; e; end
-    error_out = sprint(showerror, m_error)
-    @test error_out == "syntax: keyword argument \"B\" needs a default value"
-
     # issue #20614
     m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
@@ -748,8 +746,8 @@ end
     end
 end
 
-f1_exprs = get_expr_list(@code_typed(f1(1))[1])
-f2_exprs = get_expr_list(@code_typed(f2(1))[1])
+f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
+f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
 @test is_pop_loc(f2_exprs[end])
@@ -793,7 +791,7 @@ module Mod18756
 mutable struct Type
 end
 end
-@test method_exists(Mod18756.Type, ())
+@test hasmethod(Mod18756.Type, ())
 
 # issue 18002
 @test Meta.parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
@@ -1237,6 +1235,9 @@ end
     @test raw"x \\\ y" == "x \\\\\\ y"
 end
 
+@test_throws ParseError("expected \"}\" or separator in arguments to \"{ }\"; got \"V)\"") Meta.parse("f(x::V) where {V) = x")
+@test_throws ParseError("expected \"]\" or separator in arguments to \"[ ]\"; got \"1)\"") Meta.parse("[1)")
+
 # issue #9972
 @test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
 
@@ -1246,3 +1247,23 @@ function f25055()
     return x
 end
 @test f25055() !== f25055()
+
+# issue #25391
+@test Meta.parse("0:-1, \"\"=>\"\"") == Meta.parse("(0:-1, \"\"=>\"\")") ==
+    Expr(:tuple, Expr(:(:), 0, -1), Expr(:call, :(=>), "", ""))
+@test Meta.parse("a => b = c") == Expr(:(=), Expr(:call, :(=>), :a, :b), Expr(:block, LineNumberNode(1, :none), :c))
+@test Meta.parse("a = b => c") == Expr(:(=), :a, Expr(:call, :(=>), :b, :c))
+
+# issue #16239, hygiene of rest keyword name
+macro foo16239(x)
+    :($(esc(:blah))(args...; kwargs...) = $(esc(x)))
+end
+function bar16239()
+    kwargs = 0
+    f = @foo16239 kwargs
+    f()
+end
+@test bar16239() == 0
+
+# issue #25020
+@test_throws ParseError Meta.parse("using Colors()")

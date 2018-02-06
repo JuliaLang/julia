@@ -23,11 +23,11 @@ for sets of arbitrary objects.
 Set(itr) = Set{eltype(itr)}(itr)
 function Set(g::Generator)
     T = @default_eltype(g)
-    (_isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
+    (isconcretetype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
     return Set{T}(g)
 end
 
-empty(s::Set{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
@@ -261,9 +261,11 @@ function symdiff!(s::AbstractSet, itr)
     s
 end
 
-==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
-<=(l::Set, r::Set) = issubset(l, r)
+==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
+# convenience functions for AbstractSet
+# (if needed, only their synonyms ⊊ and ⊆ must be specialized)
+<( l::AbstractSet, r::AbstractSet) = l ⊊ r
+<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
 """
     issubset(a, b)
@@ -290,21 +292,35 @@ function issubset(l, r)
     end
     return true
 end
-
 # use the implementation below when it becoms as efficient
 # issubset(l, r) = all(_in(r), l)
 
 const ⊆ = issubset
-⊊(l::Set, r::Set) = <(l, r)
-⊈(l::Set, r::Set) = !⊆(l, r)
-⊇(l, r) = issubset(r, l)
-⊉(l::Set, r::Set) = !⊇(l, r)
-⊋(l::Set, r::Set) = <(r, l)
 
-⊊(l::T, r::T) where {T<:AbstractSet} = <(l, r)
-⊈(l::T, r::T) where {T<:AbstractSet} = !⊆(l, r)
-⊉(l::T, r::T) where {T<:AbstractSet} = !⊇(l, r)
-⊋(l::T, r::T) where {T<:AbstractSet} = <(r, l)
+"""
+    issetequal(a, b)
+
+Determine whether `a` and `b` have the same elements. Equivalent
+to `a ⊆ b && b ⊆ a`.
+
+# Examples
+```jldoctest
+julia> issetequal([1, 2], [1, 2, 3])
+false
+
+julia> issetequal([1, 2], [2, 1])
+true
+```
+"""
+issetequal(l, r) = length(l) == length(r) && l ⊆ r
+issetequal(l::AbstractSet, r::AbstractSet) = l == r
+
+⊊(l, r) = length(l) < length(r) && l ⊆ r
+⊈(l, r) = !⊆(l, r)
+
+⊇(l, r) = r ⊆ l
+⊉(l, r) = r ⊈ l
+⊋(l, r) = r ⊊ l
 
 """
     unique(itr)
@@ -337,7 +353,7 @@ function unique(itr)
         return out
     end
     x, i = next(itr, i)
-    if !_isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
+    if !isconcretetype(T) && IteratorEltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
     end
@@ -352,7 +368,7 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
         x, i = next(itr, i)
         S = typeof(x)
         if !(S === T || S <: T)
-            R = typejoin(S, T)
+            R = promote_typejoin(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
             if !in(x, seenR)
@@ -534,7 +550,7 @@ function mapfilter(pred, f, itr, res)
 end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
-function hash(s::Set, h::UInt)
+function hash(s::AbstractSet, h::UInt)
     hv = hashs_seed
     for x in s
         hv ⊻= hash(x)
@@ -547,6 +563,10 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 
 ## replace/replace! ##
+
+# to make replace/replace! work for a new container type Cont, only
+# replace!(new::Callable, A::Cont; count::Integer=typemax(Int))
+# has to be implemented
 
 """
     replace!(A, old_new::Pair...; [count::Integer])
@@ -571,15 +591,14 @@ Set([0, 2, 3])
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, eltype(A), count, old_new)
 
-# we use this wrapper because using directly eltype(A) as the type
-# parameter below for Some degrades performance
 function _replace!(A, ::Type{K}, count::Integer, old_new::Tuple{Vararg{Pair}}) where K
-    @inline function prednew(x)
+    @inline function new(x)
         for o_n in old_new
-            first(o_n) == x && return Some{K}(last(o_n))
+            first(o_n) == x && return last(o_n)
         end
+        return x # no replace
     end
-    replace!(prednew, A, count=count)
+    replace!(new, A, count=count)
 end
 
 """
@@ -601,37 +620,26 @@ julia> replace!(isodd, A, 0, count=2)
 ```
 """
 replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> if pred(x) Some(new) end, A, count=count)
+    replace!(x -> ifelse(pred(x), new, x), A, count=count)
 
 """
-    replace!(prednew::Function, A; [count::Integer])
+    replace!(new::Function, A; [count::Integer])
 
-For each value `x` in `A`, `prednew(x)` is called and must
-return either `nothing`, in which case no replacement occurs,
-or a value, possibly wrapped as a [`Some`](@ref) object, which
-will be used as a replacement for `x`.
+Replace each element `x` in collection `A` by `new(x)`.
+If `count` is specified, then replace at most `count` values in total
+(replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
-julia> replace!(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Array{Int64,1}:
  2
  2
  6
  4
 
-julia> replace!(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : nothing
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
- 4
-
 julia> replace!(Dict(1=>2, 3=>4)) do kv
-           if first(kv) < 3; first(kv)=>3 end
+           first(kv) < 3 ? first(kv)=>3 : kv
        end
 Dict{Int64,Int64} with 2 entries:
   3 => 4
@@ -641,10 +649,12 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-replace!(prednew::Callable, A; count::Integer=typemax(Int)) =
-    replace!(prednew, A, count=clamp(count, typemin(Int), typemax(Int)) % Int)
-
-
+function replace!(new::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
+                  count::Integer=typemax(Int))
+    count < 0 && throw(DomainError(count, "`count` must not be negative"))
+    count != 0 && _replace!(new, A, min(count, typemax(Int)) % Int)
+    A
+end
 
 """
     replace(A, old_new::Pair...; [count::Integer])
@@ -684,44 +694,31 @@ julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
 ```
 """
 replace(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> if pred(x) Some(new) end, copy(A), count=count)
+    replace!(pred, copy(A), new, count=count)
 
 """
-    replace(prednew::Function, A; [count::Integer])
+    replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where for each value `x` in `A`, `prednew(x)` is called
-and must return  either `nothing`, in which case no replacement occurs,
-or a value, possibly wrapped as a [`Some`](@ref) object, which
-will be used as a replacement for `x`.
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
 
 # Examples
 ```jldoctest
-julia> replace(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Array{Int64,1}:
  2
  2
  6
  4
 
-julia> replace(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : nothing
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
- 4
-
 julia> replace(Dict(1=>2, 3=>4)) do kv
-           if first(kv) < 3; first(kv)=>3 end
+           first(kv) < 3 ? first(kv)=>3 : kv
        end
 Dict{Int64,Int64} with 2 entries:
   3 => 4
   1 => 3
 ```
 """
-replace(prednew::Callable, A; count::Integer=typemax(Int)) = replace!(prednew, copy(A), count=count)
+replace(new::Callable, A; count::Integer=typemax(Int)) = replace!(new, copy(A), count=count)
 
 # Handle ambiguities
 replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
@@ -736,21 +733,15 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace_update_dict!(repl::Vector{<:Pair}, x, y::Some)
-    push!(repl, x => y.value)
-    true
-end
-
-_replace_update_dict!(repl::Vector{<:Pair}, x, ::Nothing) = false
-_replace_update_dict!(repl::Vector{<:Pair}, x, y) = _replace_update_dict!(repl, x, Some(y))
-
-function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(new::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
     repl = Pair{eltype(A),eltype(A)}[]
     c = 0
     for x in A
-        c += _replace_update_dict!(repl, x, prednew(x))
+        y = new(x)
+        if x !== y
+            push!(repl, x => y)
+            c += 1
+        end
         c == count && break
     end
     for oldnew in repl
@@ -759,26 +750,19 @@ function replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}; count::
     for oldnew in repl
         push!(A, last(oldnew))
     end
-    A
 end
 
 ### AbstractArray
 
-function _replace_update!(A::AbstractArray, i::Integer, y::Some)
-    @inbounds A[i] = y.value
-    true
-end
-
-_replace_update!(A::AbstractArray, i::Integer, ::Nothing) = false
-_replace_update!(A::AbstractArray, i::Integer, y) = _replace_update!(A, i, Some(y))
-
-function replace!(prednew::Callable, A::AbstractArray; count::Int=typemax(Int))
-    count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count == 0 && return A
+function _replace!(new::Callable, A::AbstractArray, count::Int)
     c = 0
     for i in eachindex(A)
-        c += _replace_update!(A, i, prednew(A[i]))
+        @inbounds Ai = A[i]
+        y = new(Ai)
+        if Ai !== y
+            @inbounds A[i] = y
+            c += 1
+        end
         c == count && break
     end
-    A
 end

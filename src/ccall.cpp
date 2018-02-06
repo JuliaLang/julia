@@ -722,12 +722,14 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 }
 
 
-static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure, bool compiletime=false)
+static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure)
 {
-    jl_value_t *constant = NULL;
-    constant = static_eval(ctx, ex, true, true);
-    if (constant || jl_is_ssavalue(ex))
+    jl_value_t *constant = static_eval(ctx, ex, true, true);
+    if (jl_is_ssavalue(ex) && !constant)
+        jl_error(failure);
+    else if (constant)
         return constant;
+
     JL_TRY {
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = ctx.world;
@@ -735,12 +737,9 @@ static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failu
         jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
-        if (compiletime)
-            jl_rethrow_with_add(failure);
-        if (failure)
-            emit_error(ctx, failure);
-        constant = NULL;
+        jl_rethrow_with_add(failure);
     }
+
     return constant;
 }
 
@@ -955,9 +954,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_NARGSV(llvmcall, 3);
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     JL_GC_PUSH4(&ir, &rt, &at, &decl);
-    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple", true);
-    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type", true);
-    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument", true);
+    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
+    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument");
     int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
@@ -1139,8 +1138,8 @@ static jl_cgval_t mark_or_box_ccall_result(jl_codectx_t &ctx, Value *result, boo
     if (!static_rt) {
         assert(!isboxed && ctx.spvals_ptr && unionall && jl_is_datatype(rt));
         Value *runtime_dt = runtime_apply_type(ctx, rt, unionall);
-        // TODO: is this leaf check actually necessary, or is it structurally guaranteed?
-        emit_leafcheck(ctx, runtime_dt, "ccall: return type must be a leaf DataType");
+        // TODO: is this concrete check actually necessary, or is it structurally guaranteed?
+        emit_concretecheck(ctx, runtime_dt, "ccall: return type must be a concrete DataType");
 #if JL_LLVM_VERSION >= 40000
         const DataLayout &DL = jl_data_layout;
 #else
@@ -1414,11 +1413,11 @@ static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl
     }
 
     if (!retboxed && static_rt) {
-        if (!jl_is_leaf_type(rt)) {
+        if (!jl_is_concrete_type(rt)) {
             if (jl_is_cpointer_type(rt))
                 return "ccall: return type Ptr should have an element type (not Ptr{_<:T})";
             else if (rt != jl_bottom_type)
-                return "ccall: return type must be a leaf DataType";
+                return "ccall: return type must be a concrete DataType";
         }
     }
 
@@ -1741,20 +1740,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
-    else if (is_libjulia_func(jl_is_leaf_type)) {
-        assert(!isVa && !llvmcall && nargt == 1 && !addressOf.at(0));
-        const jl_cgval_t &arg = argv[0];
-        jl_value_t *ty = arg.constant;
-        if (!ty && jl_is_type_type(arg.typ) && !jl_has_free_typevars(arg.typ))
-            ty = jl_tparam0(arg.typ);
-        if (ty) {
-            int isleaf = jl_is_leaf_type(ty);
-            JL_GC_POP();
-            return mark_or_box_ccall_result(ctx,
-                    ConstantInt::get(T_int32, isleaf),
-                    false, rt, unionall, static_rt);
-        }
-    }
     else if (is_libjulia_func(jl_function_ptr)) {
         assert(!isVa && !llvmcall && nargt == 3);
         assert(lrt == T_size);
@@ -1883,7 +1868,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t &arg = argv[ai];
 
         // if we know the function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
+        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
             jl_svec_len(ctx.linfo->sparam_vals) > 0) {
@@ -1941,7 +1926,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     bool sretboxed = false;
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
-        if (jl_isbits(rt)) {
+        if (jl_justbits(rt)) {
             result = emit_static_alloca(ctx, lrt);
         }
         else {

@@ -53,8 +53,6 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-eltype(s::BitSet) = Int
-
 sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
@@ -68,14 +66,16 @@ function _bits_findnext(b::Bits, start::Int)
     # start is 0-based
     # @assert start >= 0
     _div64(start) + 1 > length(b) && return -1
-    unsafe_bitfindnext(b, start+1) - 1
+    ind = unsafe_bitfindnext(b, start+1)
+    ind === nothing ? -1 : ind - 1
 end
 
 function _bits_findprev(b::Bits, start::Int)
     # start is 0-based
     # @assert start <= 64 * length(b) - 1
     start >= 0 || return -1
-    unsafe_bitfindprev(b, start+1) - 1
+    ind = unsafe_bitfindprev(b, start+1)
+    ind === nothing ? -1 : ind - 1
 end
 
 # An internal function for setting the inclusion bit for a given integer
@@ -356,33 +356,9 @@ function ==(s1::BitSet, s2::BitSet)
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = isequal(a, intersect(a,b))
-<(a::BitSet, b::BitSet) = (a<=b) && !isequal(a,b)
-<=(a::BitSet, b::BitSet) = issubset(a, b)
+issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
-const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
-function hash(s::BitSet, h::UInt)
-    h ⊻= hashis_seed
-    bc = s.bits
-    i = 1
-    j = length(bc)
-
-    while j > 0 && bc[j] == CHK0
-        # Skip trailing empty bytes to prevent extra space from changing the hash
-        j -= 1
-    end
-    while i <= j && bc[i] == CHK0
-        # Skip leading empty bytes to prevent extra space from changing the hash
-        i += 1
-    end
-    i > j && return h # empty
-    h = hash(i+s.offset, h) # normalized offset
-    while j >= i
-        h = hash(bc[j], h)
-        j -= 1
-    end
-    h
-end
 
 minimum(s::BitSet) = first(s)
 maximum(s::BitSet) = last(s)

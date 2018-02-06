@@ -90,16 +90,16 @@
 ;; the array `a` in the `n`th index.
 ;; `tuples` are a list of the splatted arguments that precede index `n`
 ;; `last` = is this last index?
-;; returns a call to endof(a) or size(a,n)
+;; returns a call to lastindex(a) or lastindex(a,n)
 (define (end-val a n tuples last)
   (if (null? tuples)
       (if (and last (= n 1))
-          `(call (top endof) ,a)
-          `(call (top size) ,a ,n))
+          `(call (top lastindex) ,a)
+          `(call (top lastindex) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
-            `(call (top size) ,a ,dimno))))
+            `(call (top lastindex) ,a ,dimno))))
 
 ;; replace `end` for the closest ref expression, so doesn't go inside nested refs
 (define (replace-end ex a n tuples last)
@@ -362,7 +362,8 @@
                                                            'nothing
                                                            (cons 'list (map car sparams)))
                                                       ,(if (null? loc) 0 (cadr loc))
-                                                      (inert ,(if (null? loc) 'none (caddr loc))))))))
+                                                      (inert ,(if (null? loc) 'none (caddr loc)))
+                                                      false)))))
                              (list gf))
                            '()))
             (types (llist-types argl))
@@ -555,7 +556,7 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) (call (top pairs) ,kw) ,@(map arg-name pargl)
+                            (call (top kwerr) ,kw ,@(map arg-name pargl)
                                   ,@(if (null? vararg) '()
                                         (list `(... ,(arg-name (car vararg))))))))
                       '())
@@ -643,12 +644,22 @@
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
             (error "more than one semicolon in argument list")
-            (cond ((symbol? (car invalid))
-                   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
-                  (else
-                   (error (string "invalid keyword argument syntax \""
-                                  (deparse (car invalid))
-                                  "\" (expected assignment)"))))))))
+            (error (string "invalid keyword argument syntax \""
+                           (deparse (car invalid)) "\""))))))
+
+; replace unassigned kw args with assignment to throw() call (forcing the caller to assign the keyword)
+(define (throw-unassigned-kw-args argl)
+  (define (throw-unassigned argname)
+    `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
+  (if (has-parameters? argl)
+      (cons (cons 'parameters
+                  (map (lambda (x)
+                         (cond ((symbol? x) `(kw ,x ,(throw-unassigned x)))
+                               ((decl? x) `(kw ,x ,(throw-unassigned (cadr x))))
+                               (else x)))
+                       (cdar argl)))
+            (cdr argl))
+      argl))
 
 ;; method-def-expr checks for keyword arguments, and if there are any, calls
 ;; keywords-method-def-expr to expand the definition into several method
@@ -657,7 +668,7 @@
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
 (define (method-def-expr name sparams argl body rett)
-  (let ((argl (remove-empty-parameters argl)))
+  (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
@@ -1190,11 +1201,21 @@
                      (eq? (caadar binds) 'tuple))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           ,@(map (lambda (v) `(local-def ,v)) vars)
-                           ,(car binds)
-                           ,blk)))))
+                        (if (expr-contains-p (lambda (x) (memq x vars)) (caddr (car binds)))
+                            ;; use more careful lowering if there are name conflicts. issue #25652
+                            (let ((temp (make-ssavalue)))
+                              `(block
+                                (= ,temp ,(caddr (car binds)))
+                                (scope-block
+                                 (block
+                                  ,@(map (lambda (v) `(local-def ,v)) vars)
+                                  (= ,(cadr (car binds)) ,temp)
+                                  ,blk))))
+                            `(scope-block
+                              (block
+                               ,@(map (lambda (v) `(local-def ,v)) vars)
+                               ,(car binds)
+                               ,blk))))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
@@ -2342,38 +2363,13 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) (expand-forms `(call (core postfixapostrophize) ,(cadr e))))
-   '|.'| (lambda (e) (begin (deprecation-message (string "The syntax `.'` for transposition is deprecated, "
-                                             "and the special lowering of `.'` in multiplication "
-                                             "(`*`), left-division (`\\`), and right-division (`/`) "
-                                             "operations, for example `A.'*B` lowering to `At_mul_B(A, B)`, "
-                                             "`A\\B.'` lowering to `A_ldiv_Bt(A, B)`, and `A.'/B.'` "
-                                             "lowering to `At_rdiv_Bt(A, B)`, has been removed "
-                                             "in favor of a lazy `Transpose` wrapper type and "
-                                             "dispatch on that type. Two rewrites for `A.'` for "
-                                             "matrix `A` exist: eager or materializing `transpose(A)`, "
-                                             "which constructs a freshly allocated matrix of `A`'s type "
-                                             "and containing the transpose of `A`, and lazy "
-                                             "`Transpose(A)`, which wraps `A` in a `Transpose` "
-                                             "view type. Which rewrite is appropriate depends on "
-                                             "context: If `A.'` appears in a multiplication, "
-                                             "left-division, or right-division operation that "
-                                             "was formerly specially lowered to an `A_mul_B`-like "
-                                             "call, then the lazy `Tranpose(A)` is the correct "
-                                             "replacement and will result in dispatch to a method "
-                                             "equivalent to the former `A_mul_B`-like call. For "
-                                             "example, `A.'*B`, formerly yielding `At_mul_B(A, B)`, "
-                                             "should be rewritten `Transpose(A)*B`, which will "
-                                             "dispatch to a method equivalent to the former "
-                                             "`At_mul_B(A, B)` method. If `A.'` appears outside "
-                                             "such an operation, then `transpose(A)` is the "
-                                             "correct rewrite. For vector `A`, `A.'` already "
-                                             "transposed lazily to a `RowVector`, so `Transpose(A)`. "
-                                             "which now yields a `Transpose`-wrapped vector "
-                                             "behaviorally equivalent to the former `RowVector` "
-                                             "is always the correct rewrite for vectors. For "
-                                             "more information, see issue #5332 on Julia's "
-                                             "issue tracker on GitHub." #\newline) #f)
+   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
+   '|.'| (lambda (e) (begin (deprecation-message (string "The postfix .' syntax is deprecated. "
+                                             "For vector v in v.', use transpose(v) "
+                                             "instead. For matrix A in A.', use "
+                                             "copy(transpose(A)) instead, unless A.' "
+                                             "appears as an argument of *, / or \\. In "
+                                             "those cases, use transpose(A) instead. " #\newline) #f)
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
@@ -3431,6 +3427,7 @@ f(x) = yt(x)
         (current-loc #f)
         (rett #f)
         (deprecated-loop-vars (table))
+        (deprecated-global-const-locs '())
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
@@ -3829,7 +3826,11 @@ f(x) = yt(x)
                  (begin
                    (syntax-deprecation "`const` declaration on local variable" "" current-loc)
                    '(null))
-                 (emit e)))
+                 (if (pair? (cadr lam))
+                     ;; delay these deprecation warnings to allow "misplaced struct" errors to happen first
+                     (set! deprecated-global-const-locs
+                           (cons current-loc deprecated-global-const-locs))
+                     (emit e))))
             ((isdefined) (if tail (emit-return e) e))
             ((warn-loop-var)
              (if (or *warn-all-loop-vars*
@@ -3960,6 +3961,12 @@ f(x) = yt(x)
                           (else
                            (set-car! (cdr point) `(leave ,(- hl target-level))))))))
               handler-goto-fixups)
+    (for-each (lambda (loc)
+                (deprecation-message
+                 (string "`global const` declarations may no longer appear inside functions." #\newline
+                         "Instead, use a non-constant global, or a global `const var = Ref{T}()`.")
+                 loc))
+              (reverse! deprecated-global-const-locs))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'body (filter (lambda (e)
@@ -4008,7 +4015,7 @@ f(x) = yt(x)
                      (if (has? vars (cadr e))
                          (begin (del! vars (cadr e))
                                 (put! di (cadr e) #t))))
-                    ((and (pair? e) (memq (car e) '(goto gotoifnot)))
+                    ((and (pair? e) (memq (car e) '(goto gotoifnot enter)))
                      (set! vars (table)))))
             (loop (cdr stmts)))))))
 

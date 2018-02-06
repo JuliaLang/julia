@@ -218,10 +218,10 @@ close(s)
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
-path = tempname()
-# Issue #9053.
-@test ispath(path) == Sys.iswindows()
-ispath(path) && rm(path)
+let path = tempname()
+    # issue #9053
+    @test !ispath(path)
+end
 
 (p, f) = mktemp()
 print(f, "Here is some text")
@@ -252,7 +252,7 @@ end
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
-@test isempty(readlines(emptyf, chomp=false))
+@test isempty(readlines(emptyf, keep=true))
 close(emptyf)
 rm(emptyfile)
 
@@ -1026,7 +1026,7 @@ function test_13559()
 end
 test_13559()
 end
-@test_throws ArgumentError mkpath("fakepath", -1)
+@test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 # issue #22566
 # issue #24037 (disabling on FreeBSD)

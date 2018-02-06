@@ -7,15 +7,17 @@ Provide the [`SharedArray`](@ref) type. It represents an array, which is shared 
 """
 module SharedArrays
 
-using Mmap, Distributed
+using Mmap, Distributed, Random
 
-import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
-             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copyto!, unsafe_convert
-import Base.Random
-import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
+import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+import Random
+using Serialization
+using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
+import Serialization: serialize, deserialize
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
-using Base.Printf.@sprintf
+using Printf: @sprintf
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 
@@ -37,7 +39,7 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
-    # this can be removed when @parallel or its equivalent supports looping on
+    # this can be removed when @distributed or its equivalent supports looping on
     # a subset of workers.
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
@@ -357,7 +359,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
+function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
     copyto!(sdata(R), sdata(S))
@@ -507,7 +509,7 @@ function fill!(S::SharedArray, v)
     return S
 end
 
-function rand!(S::SharedArray{T}) where T
+function Random.rand!(S::SharedArray{T}) where T
     f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)

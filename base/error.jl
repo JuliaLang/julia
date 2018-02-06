@@ -113,6 +113,13 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`.
 Also available as the macro [`@assert`](@ref).
+
+!!! warning
+    An assert might be disabled at various optimization levels.
+    Assert should therefore only be used as a debugging tool
+    and not used for authentication verification (e.g. verifying passwords),
+    nor should side effects needed for the function to work correctly
+    be used inside of asserts.
 """
 assert(x) = x ? nothing : throw(AssertionError())
 
@@ -121,6 +128,13 @@ assert(x) = x ? nothing : throw(AssertionError())
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
 Message `text` is optionally displayed upon assertion failure.
+
+!!! warning
+    An assert might be disabled at various optimization levels.
+    Assert should therefore only be used as a debugging tool
+    and not used for authentication verification (e.g. verifying passwords),
+    nor should side effects needed for the function to work correctly
+    be used inside of asserts.
 
 # Examples
 ```jldoctest
@@ -172,7 +186,7 @@ start(ebo::ExponentialBackOff) = (ebo.n, min(ebo.first_delay, ebo.max_delay))
 function next(ebo::ExponentialBackOff, state)
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand() * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 done(ebo::ExponentialBackOff, state) = state[1]<1

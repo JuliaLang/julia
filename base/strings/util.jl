@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+
 # starts with and ends with predicates
 
 """
@@ -17,14 +19,8 @@ true
 ```
 """
 function startswith(a::AbstractString, b::AbstractString)
-    i = start(a)
-    j = start(b)
-    while !done(a,i) && !done(b,i)
-        c, i = next(a,i)
-        d, j = next(b,j)
-        (c != d) && (return false)
-    end
-    done(b,i)
+    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    all(splat(==), zip(a, b)) && isempty(b)
 end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
 
@@ -43,18 +39,9 @@ true
 ```
 """
 function endswith(a::AbstractString, b::AbstractString)
-    i = endof(a)
-    j = endof(b)
-    a1 = start(a)
-    b1 = start(b)
-    while a1 <= i && b1 <= j
-        c = a[i]
-        d = b[j]
-        (c != d) && (return false)
-        i = prevind(a,i)
-        j = prevind(b,j)
-    end
-    j < b1
+    a = Iterators.Stateful(Iterators.reverse(a))
+    b = Iterators.Stateful(Iterators.reverse(b))
+    all(splat(==), zip(a, b)) && isempty(b)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
@@ -68,7 +55,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
 # TODO: fast endswith
 
 """
-    chop(s::AbstractString, head::Integer=0, tail::Integer=1)
+    chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
 
 Remove the first `head` and the last `tail` characters from `s`.
 The call `chop(s)` removes the last character from `s`.
@@ -83,16 +70,19 @@ julia> a = "March"
 julia> chop(a)
 "Marc"
 
-julia> chop(a, 1, 2)
+julia> chop(a, head = 1, tail = 2)
 "ar"
 
-julia> chop(a, 5, 5)
+julia> chop(a, head = 5, tail = 5)
 ""
 ```
 """
-chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
-chop(s::AbstractString, head::Integer, tail::Integer) =
-    SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
+function chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
+    SubString(s, nextind(s, firstindex(s), head), prevind(s, lastindex(s), tail))
+end
+
+# TODO: optimization for the default case based on
+# chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
     chomp(s::AbstractString)
@@ -106,14 +96,14 @@ julia> chomp("Hello\\n")
 ```
 """
 function chomp(s::AbstractString)
-    i = endof(s)
+    i = lastindex(s)
     (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
-    i = endof(s)
+    i = lastindex(s)
     if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
@@ -144,14 +134,9 @@ julia> lstrip(a)
 ```
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
-    e = endof(s)
-    i = start(s)
-    while !done(s,i)
-        c, j = next(s,i)
-        if !(c in chars)
-            return SubString(s, i, e)
-        end
-        i = j
+    e = lastindex(s)
+    for (i, c) in pairs(s)
+        !(c in chars) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
@@ -175,15 +160,10 @@ julia> rstrip(a)
 ```
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
-    a = start(s)
-    i = endof(s)
-    while a ≤ i
-        c = s[i]
-        j = prevind(s, i)
-        c in chars || return SubString(s, 1:i)
-        i = j
+    for (i, c) in Iterators.reverse(pairs(s))
+        c in chars || return SubString(s, 1, i)
     end
-    SubString(s, a, a-1)
+    SubString(s, 1, 0)
 end
 
 """
@@ -258,18 +238,15 @@ function rpad(
     r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
 end
 
-# splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
-# any splitter that provides search(s::AbstractString, splitter)
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _split(str, splitter, limit, keep, T[])
-
 """
     split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by `search`'s
-second argument (i.e. a single character, collection of characters, string, or regular
-expression). If `chars` is omitted, it defaults to the set of all space characters, and
+character delimiters, which may be specified in any of the formats allowed by
+[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
+or as a single character or collection of characters.
+
+If `chars` is omitted, it defaults to the set of all space characters, and
 `keep` is taken to be `false`. The two keyword arguments are optional: they are a
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
@@ -285,12 +262,22 @@ julia> split(a,".")
  "rch"
 ```
 """
-split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, splitter, limit, keep, SubString{T}[])
+function split end
+
+split(str::T, splitter;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::Char;
+      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
-    n = endof(str)
-    r = search(str,splitter,i)
+    n = lastindex(str)
+    r = coalesce(findfirst(splitter,str), i - 1)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -301,7 +288,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = search(str,splitter,k)
+            r = coalesce(findnext(splitter,str,k), 0)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -314,9 +301,6 @@ end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
-
-rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
-    _rsplit(str, splitter, limit, keep, T[])
 
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -346,12 +330,21 @@ julia> rsplit(a,".";limit=2)
  "h"
 ```
 """
+function rsplit end
+
 rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _rsplit(str, splitter, limit, keep, SubString{T}[])
+    _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::Char;
+       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+  _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
-    n = endof(str)
-    r = rsearch(str,splitter)
+    n = lastindex(str)
+    r = coalesce(findlast(splitter, str), i - 1)
     j = first(r)-1
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
@@ -360,7 +353,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool
             n = j
         end
         (k <= j) && (j = prevind(str,j))
-        r = rsearch(str,splitter,j)
+        r = coalesce(findprev(splitter,str,j), 0)
         j = first(r)-1
         k = last(r)
     end
@@ -373,14 +366,22 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
+    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},
+                                            AbstractVector{Char},Set{Char}}};
+        count::Integer=typemax(Int)) =
+    replace(str, occursin(first(pat_repl)) => last(pat_repl), count=count)
+
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
-    e = endof(str)
-    i = a = start(str)
-    r = search(str,pattern,i)
+    e = lastindex(str)
+    i = a = firstindex(str)
+    r = coalesce(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
     out.size = 0
@@ -397,7 +398,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = search(str,pattern,k)
+        r = coalesce(findnext(pattern,str,k), 0)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
@@ -411,8 +412,8 @@ end
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with [`search`](@ref), `pat` may be a
-single character, a vector or a set of characters, a string, or a regular expression. If `r`
+`pat` may be a single character, a vector or a set of characters, a string,
+or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -475,24 +476,29 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+hex2bytes(s::AbstractString) = hex2bytes(String(s))
+hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+
+_firstbyteidx(s::String) = 1
+_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
+_lastbyteidx(s::String) = sizeof(s)
+_lastbyteidx(s::AbstractVector{UInt8}) = lastindex(s)
 
 """
-    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+    hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
 
 Convert an array `s` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
 in `d`.   The length of `s` must be exactly twice the length of `d`.
 """
-function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
-    if 2length(d) != length(s)
-        isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
+function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
+    if 2length(d) != sizeof(s)
+        isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
     j = first(eachindex(d)) - 1
-    for i = first(eachindex(s)):2:endof(s)
-        @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
+    for i = _firstbyteidx(s):2:_lastbyteidx(s)
+        @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
     end
     return d
 end

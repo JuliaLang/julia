@@ -140,7 +140,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     In Julia, they cannot be used interchangeably.
   * Julia's [`diag`](@ref) and [`diagm`](@ref) are not like R's.
   * Julia cannot assign to the results of function calls on the left hand side of an assignment operation:
-    you cannot write `diag(M) = ones(n)`.
+    you cannot write `diag(M) = fill(1, n)`.
   * Julia discourages populating the main namespace with functions. Most statistical functionality
     for Julia is found in [packages](https://pkg.julialang.org/) under the [JuliaStats organization](https://github.com/JuliaStats).
     For example:
@@ -211,7 +211,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     by default. To get optimal performance when looping over arrays, the order of the loops should
     be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
-    means `A = ones(4); B = A; B += 3` doesn't change values in `A`, it rather rebinds the name `B`
+    means `A = [1, 1]; B = A; B += [3, 3]` doesn't change values in `A`, it rather rebinds the name `B`
     to the result of the right-hand side `B = B + 3`, which is a new array. For in-place operation, use `B .+= 3`
     (see also [dot operators](@ref man-dot-operators)), explicit loops, or `InplaceOps.jl`.
   * Julia evaluates default values of function arguments every time the method is invoked, unlike
@@ -295,7 +295,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     and have both a function-like syntax, `@mymacro(arg1, arg2, arg3)`, and a statement-like syntax,
     `@mymacro arg1 arg2 arg3`. The forms are interchangable; the function-like form is particularly
     useful if the macro appears within another expression, and is often clearest. The statement-like
-    form is often used to annotate blocks, as in the parallel `for` construct: `@parallel for i in 1:n; #= body =#; end`.
+    form is often used to annotate blocks, as in the distributed `for` construct: `@distributed for i in 1:n; #= body =#; end`.
     Where the end of the macro construct may be unclear, use the function-like form.
   * Julia now has an enumeration type, expressed using the macro `@enum(name, value1, value2, ...)`
     For example: `@enum(Fruit, banana=1, apple, pear)`

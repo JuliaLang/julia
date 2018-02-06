@@ -2,6 +2,9 @@
 
 # tests for codegen and optimizations
 
+using Random
+using InteractiveUtils
+
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
@@ -11,7 +14,7 @@ get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
 get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    Base._dump_function(f, t,
+    InteractiveUtils._dump_function(f, t,
                 #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
                 #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
 
@@ -195,7 +198,7 @@ end
 
 function load_dummy_ref(x::Int)
     r = Ref{Int}(x)
-    Base.@gc_preserve r begin
+    GC.@preserve r begin
         unsafe_load(Ptr{Int}(pointer_from_objref(r)))
     end
 end
@@ -232,13 +235,13 @@ let was_gced = false
         a = Ref(1)
         use(x); use(a); use(y)
         c = Ref(3)
-        gc()
+        GC.gc()
         assert_not_gced()
         use(x)
         use(c)
     end
     foo22770()
-    gc()
+    GC.gc()
     @test was_gced
 end
 
@@ -322,3 +325,14 @@ end
 # the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
 @test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
 @test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")
+
+str_22330 = """
+Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
+             copyto!(Array{T,n}(uninitialized, size(a)), a)
+
+empty(Dict(),  Pair{Union{},Union{}})
+"""
+f_22330 = tempname()
+write(f_22330, str_22330)
+@test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
+

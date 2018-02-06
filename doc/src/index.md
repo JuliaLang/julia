@@ -1,4 +1,13 @@
-# Julia Documentation
+# Julia 0.7 Documentation
+
+Welcome to the documentation for Julia 0.7.
+
+Please read the [release notes](NEWS.md) to see what has changed since the last release.
+
+* [Manual](#Manual-1)
+* [Base](#Base-1)
+* [Standard Library](#Standard-Library-1)
+* [Developer Documentation](#Developer-Documentation-1)
 
 ## Manual
 
@@ -21,7 +30,6 @@
   * [Documentation](@ref)
   * [Metaprogramming](@ref)
   * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
-  * [Linear Algebra](@ref)
   * [Missing Values](@ref missing)
   * [Networking and Streams](@ref)
   * [Parallel Computing](@ref)
@@ -30,7 +38,6 @@
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)
   * [Environment Variables](@ref)
-  * [Interacting With Julia](@ref)
   * [Embedding Julia](@ref)
   * [Packages](@ref)
   * [Profiling](@ref)
@@ -42,7 +49,7 @@
   * [Noteworthy Differences from other Languages](@ref)
   * [Unicode Input](@ref)
 
-## Standard Library
+## Base
 
   * [Essentials](@ref)
   * [Collections and Data Structures](@ref)
@@ -54,29 +61,38 @@
   * [Distributed Computing](@ref)
   * [Multi-Threading](@ref)
   * [Shared Arrays](@ref)
-  * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
-  * [Delimited Files](@ref)
   * [I/O and Network](@ref)
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)
   * [Package Manager Functions](@ref)
-  * [Dates and Time](@ref stdlib-dates)
   * [Iteration utilities](@ref)
-  * [Unit Testing](@ref)
   * [C Interface](@ref)
   * [C Standard Library](@ref)
   * [Dynamic Linker](@ref)
   * [StackTraces](@ref)
   * [SIMD Support](@ref)
-  * [Profiling](@ref lib-profiling)
-  * [Memory-mapped I/O](@ref)
+
+## Standard Library
+
+  * [The Julia REPL](@ref)
   * [Base64](@ref)
+  * [CRC32c](@ref)
+  * [Dates and Time](@ref stdlib-dates)
+  * [Delimited Files](@ref)
+  * [Distributed Computing](@ref)
   * [File Events](@ref lib-filewatching)
   * [Iterative Eigensolvers](@ref lib-itereigen)
-  * [Unicode](@ref)
+  * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
+  * [Profiling](@ref lib-profiling)
+  * [Random Numbers](@ref)
+  * [Shared Arrays](@ref)
+  * [Linear Algebra](@ref)
+  * [Sparse Arrays](@ref)
+  * [Unicode](@ref)
+  * [Unit Testing](@ref)
 
 ## Developer Documentation
 
@@ -99,7 +115,6 @@
       * [Bounds checking](@ref)
       * [Proper maintenance and care of multi-threading locks](@ref)
       * [Arrays with custom indices](@ref)
-      * [Base.LibGit2](@ref)
       * [Module loading](@ref)
       * [Inference](@ref)
   * Developing/debugging Julia's C code

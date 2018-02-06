@@ -146,7 +146,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
     assert(world >= m->min_world && "typemap lookup is corrupted");
     JL_LOCK(&m->writelock);
     jl_typemap_entry_t *sf =
-        jl_typemap_assoc_by_type(m->specializations, (jl_tupletype_t*)type, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
+        jl_typemap_assoc_by_type(m->specializations, type, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
     if (sf && jl_is_method_instance(sf->func.value)) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)sf->func.value;
         assert(linfo->min_world <= sf->min_world && linfo->max_world >= sf->max_world);
@@ -177,7 +177,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
     return li;
 }
 
-JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_tupletype_t *type, size_t world)
+JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *type, size_t world)
 {
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(
             m->specializations, type, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
@@ -186,7 +186,7 @@ JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_tupletype_
     return sf->func.value;
 }
 
-JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type, size_t world)
+JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world)
 {
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(
             mt->defs, type, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
@@ -548,7 +548,7 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
 // after intersection, the argument tuple type needs to be corrected to reflect the signature match
 // that occurred, if the arguments contained a Type but the signature matched on the kind
 // if sharp_match is returned as false, this tt may have matched only because of bug in subtyping
-static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig, int *sharp_match)
+static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_value_t *sig, int *sharp_match)
 {
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH1(&newparams);
@@ -563,13 +563,13 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig, int *s
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with UnionAll or DataType
             // and the result of matching the type signature
-            // needs to be corrected to the leaf type 'kind'
+            // needs to be corrected to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_tparam0(elt));
             if (jl_subtype(kind, decl_i)) {
                 if (!jl_subtype((jl_value_t*)jl_type_type, decl_i)) {
                     // UnionAlls are problematic because they can be alternate
                     // representations of any type. If we matched this method because
-                    // it matched the leaf type UnionAll, then don't cache something
+                    // it matched the concrete type UnionAll, then don't cache something
                     // different since that doesn't necessarily actually apply.
                     //
                     // similarly, if we matched Type{T<:Any}::DataType,
@@ -728,13 +728,14 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
     // compute whether this type signature is a possible return value from jl_cacheable_sig
     //return jl_cacheable_sig(type, NULL, definition->sig, definition, NULL, NULL);
 
-    if (definition->generator)
-        // staged functions can't be optimized
-        // so assume the caller was intelligent about calling us
-        return 1;
-
-    if (!jl_is_datatype(type))
+    if (!jl_is_datatype(type) || jl_has_free_typevars((jl_value_t*)type))
         return 0;
+
+    if (definition->generator) {
+        // staged functions aren't optimized
+        // so assume the caller was intelligent about calling us
+        return type->isdispatchtuple;
+    }
 
     size_t i, np = jl_nparams(type);
     for (i = 0; i < np; i++) {
@@ -743,8 +744,11 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
 
         if (jl_is_vararg_type(elt)) // varargs are always considered compilable
             continue;
-        if (jl_is_kind(elt)) // kind slots always need guard entries (checking for subtypes of Type)
-            continue;
+        if (jl_is_kind(elt)) { // kind slots always get guard entries (checking for subtypes of Type)
+            if (decl_i == elt || jl_subtype((jl_value_t*)jl_type_type, decl_i))
+                continue;
+            return 0;
+        }
         if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
             (definition->nospecialize & (1 << (i - 1))) &&
             decl_i == (jl_value_t*)jl_any_type) { // TODO: nospecialize with other types
@@ -754,9 +758,9 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
         }
         if (jl_is_type_type(elt)) { // if join_tsig would make a swap
             // if the declared type was not Any or Union{Type, ...},
-            // then the match must been with TypeConstructor or DataType
+            // then the match must been with kind, such as UnionAll or DataType,
             // and the result of matching the type signature
-            // needs to be corrected to the leaf type 'kind'
+            // needs to be corrected to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_tparam0(elt));
             if (kind != (jl_value_t*)jl_tvar_type && jl_subtype(kind, decl_i)) {
                 if (!jl_subtype((jl_value_t*)jl_type_type, decl_i))
@@ -845,7 +849,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                 return 0;
             continue;
         }
-        else if (!jl_is_leaf_type(elt)) {
+        else if (!jl_is_concrete_type(elt) && !jl_is_type_type(elt)) {
             return 0;
         }
     }
@@ -899,7 +903,7 @@ static jl_method_instance_t *cache_method(
         // then specialize as (Any...)
         //
         // note: this also protects the work join_tsig did to correct `types` for the
-        // leaftype signatures TypeConstructor and DataType
+        // concrete signatures UnionAll and DataType
         // (assuming those made an unlikely appearance in Varargs position)
         size_t j = i;
         int all_are_subtypes = 1;
@@ -1070,10 +1074,10 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     jl_method_instance_t *nf = NULL;
     JL_GC_PUSH4(&env, &entry, &func, &sig);
 
-    entry = jl_typemap_assoc_by_type(mt->defs, tt, &env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
+    entry = jl_typemap_assoc_by_type(mt->defs, (jl_value_t*)tt, &env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
     if (entry != NULL) {
         jl_method_t *m = entry->func.method;
-        if (!jl_has_call_ambiguities(tt, m)) {
+        if (!jl_has_call_ambiguities((jl_value_t*)tt, m)) {
 #ifdef TRACE_COMPILE
             if (!jl_has_free_typevars((jl_value_t*)tt)) {
                 jl_printf(JL_STDERR, "precompile(");
@@ -1082,7 +1086,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
             }
 #endif
             int sharp_match;
-            sig = join_tsig(tt, (jl_tupletype_t*)m->sig, &sharp_match);
+            sig = join_tsig(tt, m->sig, &sharp_match);
             if (!mt_cache) {
                 nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
             }
@@ -1167,7 +1171,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         // (if type-morespecific made a mistake, this also might end up finding
         // that isect == type or isect == sig and return the original match)
         jl_typemap_entry_t *l = jl_typemap_assoc_by_type(
-                map, (jl_tupletype_t*)isect, NULL, /*subtype*/0, /*offs*/0,
+                map, isect, NULL, /*subtype*/0, /*offs*/0,
                 closure->newentry->min_world, /*max_world_mask*/0);
         if (l != NULL) // ok, intersection is covered
             return 1;
@@ -1601,17 +1605,17 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
     jl_tupletype_t *tt;
     size_t i;
-    if (nargs < jl_page_size/sizeof(jl_value_t*)) {
+    if (nargs * sizeof(jl_value_t*) < jl_page_size) {
         jl_value_t **types;
         JL_GC_PUSHARGS(types, nargs);
-        for(i=0; i < nargs; i++) {
+        for (i = 0; i < nargs; i++) {
             jl_value_t *ai = args[i];
             if (jl_is_type(ai))
                 types[i] = (jl_value_t*)jl_wrap_Type(ai);
             else
                 types[i] = jl_typeof(ai);
         }
-        // if `ai` has free type vars this will not be a leaf type.
+        // if `ai` has free type vars this will not be a valid (concrete) type.
         // TODO: it would be really nice to only dispatch and cache those as
         // `jl_typeof(ai)`, but that will require some redesign of the caching
         // logic.
@@ -1621,7 +1625,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     else {
         jl_svec_t *types = jl_alloc_svec(nargs);
         JL_GC_PUSH1(&types);
-        for(i=0; i < nargs; i++) {
+        for (i = 0; i < nargs; i++) {
             jl_value_t *ai = args[i];
             if (jl_is_type(ai))
                 jl_svecset(types, i, (jl_value_t*)jl_wrap_Type(ai));
@@ -1637,7 +1641,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                                int cache, int allow_exec, size_t world)
 {
-    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
     if (entry) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
         assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
@@ -1645,7 +1649,7 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         return linfo;
     }
     JL_LOCK(&mt->writelock);
-    entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
+    entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
     if (entry) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
         assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
@@ -1653,7 +1657,7 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         JL_UNLOCK(&mt->writelock);
         return linfo;
     }
-    if (jl_is_leaf_type((jl_value_t*)types)) // FIXME: this is the wrong predicate
+    if (jl_is_datatype((jl_value_t*)types) && types->isdispatchtuple)
         cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
     if (cache) {
@@ -1787,7 +1791,8 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
-    if (/* TODO: !jl_is_cacheable_sig((jl_value_t*)types) &&*/ !jl_is_leaf_type((jl_value_t*)types))
+    if (!jl_is_datatype(((jl_value_t*)types)) || !types->isdispatchtuple)
+        /* TODO: if (!jl_is_cacheable_sig((jl_value_t*)types)) return NULL; */
         return NULL;
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
@@ -1808,12 +1813,12 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
     jl_svec_t *env = (jl_svec_t*)jl_svecref(match, 1);
     jl_tupletype_t *ti = (jl_tupletype_t*)jl_unwrap_unionall(jl_svecref(match, 0));
     jl_method_instance_t *nf = NULL;
-    if (ti == types && !jl_has_call_ambiguities(types, m)) {
+    if (ti == types && !jl_has_call_ambiguities((jl_value_t*)types, m)) {
         jl_datatype_t *dt = jl_first_argument_datatype(jl_unwrap_unionall((jl_value_t*)types));
         assert(jl_is_datatype(dt));
         jl_methtable_t *mt = dt->name->mt;
         int sharp_match;
-        sig = join_tsig(ti, (jl_tupletype_t*)m->sig, &sharp_match);
+        sig = join_tsig(ti, m->sig, &sharp_match);
         if (sharp_match) {
             JL_LOCK(&mt->writelock);
             nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, ti, m, world, env, /*allow_exec*/1);
@@ -1872,7 +1877,7 @@ JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
 }
 
 // see if a call to m with computed from `types` is ambiguous
-JL_DLLEXPORT int jl_is_call_ambiguous(jl_tupletype_t *types, jl_method_t *m)
+JL_DLLEXPORT int jl_is_call_ambiguous(jl_value_t *types, jl_method_t *m)
 {
     if (m->ambig == jl_nothing)
         return 0;
@@ -1885,22 +1890,23 @@ JL_DLLEXPORT int jl_is_call_ambiguous(jl_tupletype_t *types, jl_method_t *m)
 }
 
 // see if a call to m with a subtype of `types` might be ambiguous
-// if types is from a call signature (approximated by isleaftype), this is the same as jl_is_call_ambiguous above
-JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
+// if types is from a call signature (isdispatchtuple), this is the same as jl_is_call_ambiguous above
+JL_DLLEXPORT int jl_has_call_ambiguities(jl_value_t *types, jl_method_t *m)
 {
     if (m->ambig == jl_nothing)
         return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
-        if (!jl_has_empty_intersection((jl_value_t*)mambig->sig, (jl_value_t*)types))
+        if (!jl_has_empty_intersection(mambig->sig, types))
             return 1;
     }
     return 0;
 }
 
 // add type of `f` to front of argument tuple type
-jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types)
+jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0)
 {
+    jl_value_t *types = jl_unwrap_unionall(types0);
     size_t l = jl_nparams(types);
     jl_value_t *tt = (jl_value_t*)jl_alloc_svec(1+l);
     size_t i;
@@ -1912,8 +1918,9 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
     for(i=0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
     tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
+    tt = jl_rewrap_unionall(tt, types0);
     JL_GC_POP();
-    return (jl_tupletype_t*)tt;
+    return tt;
 }
 
 #ifdef JL_TRACE
@@ -2026,7 +2033,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
         mt = jl_gf_mtable(F);
         entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
         if (entry && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leaftype lookup,
+            // put the entry into the cache if it's valid for a leafsig lookup,
             // using pick_which to slightly randomize where it ends up
             call_cache[cache_idx[++pick_which[cache_idx[0]] & 3]] = entry;
         }
@@ -2083,9 +2090,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types, size_t world)
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, size_t world)
 {
-    jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
+    jl_methtable_t *mt = jl_first_argument_datatype(types)->name->mt;
     jl_svec_t *env = jl_emptysvec;
     JL_GC_PUSH1(&env);
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
@@ -2107,21 +2114,21 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types, size_t world)
 // every definition has its own private method table for this purpose.
 //
 // NOTE: assumes argument type is a subtype of the lookup type.
-jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs)
+jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
 {
     size_t world = jl_get_ptls_states()->world_age;
     jl_svec_t *tpenv = jl_emptysvec;
     jl_tupletype_t *tt = NULL;
-    jl_tupletype_t *types = NULL;
+    jl_value_t *types = NULL;
     jl_tupletype_t *sig = NULL;
     JL_GC_PUSH4(&types, &tpenv, &sig, &tt);
     jl_value_t *gf = args[0];
-    types = (jl_datatype_t*)jl_argtype_with_function(gf, (jl_tupletype_t*)types0);
+    types = jl_argtype_with_function(gf, types0);
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, world);
 
     if ((jl_value_t*)entry == jl_nothing) {
-        jl_method_error_bare(gf, (jl_value_t*)types0, world);
+        jl_method_error_bare(gf, types0, world);
         // unreachable
     }
 
@@ -2154,7 +2161,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
                 method->invokes.unknown = jl_nothing;
 
             int sharp_match;
-            sig = join_tsig(tt, (jl_tupletype_t*)method->sig, &sharp_match);
+            sig = join_tsig(tt, method->sig, &sharp_match);
             mfunc = cache_method(mt, &method->invokes, entry->func.value, sig, tt, method, world, tpenv, 1);
         }
         JL_UNLOCK(&method->writelock);
@@ -2163,44 +2170,13 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     return jl_call_method_internal(mfunc, args, nargs);
 }
 
-typedef struct _tupletype_stack_t {
-    struct _tupletype_stack_t *parent;
-    jl_tupletype_t *tt;
-} tupletype_stack_t;
-
-static int tupletype_on_stack(jl_tupletype_t *tt, tupletype_stack_t *stack)
-{
-    while (stack) {
-        if (tt == stack->tt)
-            return 1;
-        stack = stack->parent;
-    }
-    return 0;
-}
-
-static int tupletype_has_datatype(jl_tupletype_t *tt, tupletype_stack_t *stack)
-{
-    for (int i = 0; i < jl_nparams(tt); i++) {
-        jl_value_t *ti = jl_tparam(tt, i);
-        if (ti == (jl_value_t*)jl_datatype_type)
-            return 1;
-        if (jl_is_tuple_type(ti)) {
-            jl_tupletype_t *tt1 = (jl_tupletype_t*)ti;
-            if (!tupletype_on_stack(tt1, stack) &&
-                tupletype_has_datatype(tt1, stack)) {
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
 JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
                                               jl_typemap_entry_t *entry,
-                                              jl_tupletype_t *tt,
+                                              jl_value_t *tt,
                                               size_t world)
 {
-    if (!jl_is_leaf_type((jl_value_t*)tt) || tupletype_has_datatype(tt, NULL))
+    // TODO: refactor this method to be more like `jl_get_specialization1`
+    if (!jl_is_datatype(tt) || !((jl_datatype_t*)tt)->isdispatchtuple)
         return jl_nothing;
 
     jl_method_t *method = entry->func.method;
@@ -2228,7 +2204,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     JL_GC_PUSH2(&tpenv, &sig);
     if (jl_is_unionall(entry->sig)) {
         jl_value_t *ti =
-            jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
+            jl_type_intersection_env(tt, (jl_value_t*)entry->sig, &tpenv);
         assert(ti != (jl_value_t*)jl_bottom_type);
         (void)ti;
     }
@@ -2237,9 +2213,9 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
         method->invokes.unknown = jl_nothing;
 
     int sharp_match;
-    sig  =  join_tsig(tt, (jl_tupletype_t*)method->sig, &sharp_match);
+    sig  =  join_tsig((jl_tupletype_t*)tt, method->sig, &sharp_match);
     jl_method_instance_t *mfunc = cache_method(mt, &method->invokes, entry->func.value,
-                                               sig, tt, method, world, tpenv, 1);
+                                               sig, (jl_tupletype_t*)tt, method, world, tpenv, 1);
     JL_GC_POP();
     JL_UNLOCK(&method->writelock);
     return (jl_value_t*)mfunc;
@@ -2353,9 +2329,10 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // the "limited" mode used by type inference.
         for (i = 0; i < len; i++) {
             jl_value_t *prior_ti = jl_svecref(jl_array_ptr_ref(closure->t, i), 0);
-            // TODO: should be possible to remove the `jl_is_leaf_type` check,
+            // TODO: should be possible to remove the `isdispatchtuple` check,
             // but we still need it in case an intersection was approximate.
-            if (jl_is_leaf_type(prior_ti) && jl_subtype(closure->match.ti, prior_ti)) {
+            if (jl_is_datatype(prior_ti) && ((jl_datatype_t*)prior_ti)->isdispatchtuple &&
+                    jl_subtype(closure->match.ti, prior_ti)) {
                 skip = 1;
                 break;
             }

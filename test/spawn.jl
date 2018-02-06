@@ -4,6 +4,8 @@
 # Cross Platform tests for spawn. #
 ###################################
 
+using Random
+
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
 yescmd = `yes`
@@ -46,8 +48,8 @@ end
 @test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test search(out,"world") != 0:-1
-@test search(out,"hello") != 0:-1
+@test contains(out,"world")
+@test contains(out,"hello")
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -136,16 +138,16 @@ let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
     end
 end
 
-let str = "", stdin, stdout, proc, str2, file
+let str = "", proc, str2, file
     for i = 1:1000
       str = "$str\n $(randstring(10))"
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    stdout, stdin, proc = readandwrite(`$catcmd -`)
-    write(stdin, str)
-    close(stdin)
-    str2 = read(stdout, String)
+    proc = open(`$catcmd -`, "r+")
+    write(proc, str)
+    close(proc.in)
+    str2 = read(proc, String)
     @test str2 == str
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
@@ -207,6 +209,7 @@ let r, t, sock
     close(sock)
     @test wait(t)
 end
+
 # issue #4535
 exename = Base.julia_cmd()
 if valgrind_off
@@ -219,9 +222,6 @@ if valgrind_off
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
-
-# issue #6310
-@test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
 # setup_stdio for AbstractPipe
 let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
@@ -335,13 +335,13 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
-    @test nb_available(out) == 0
-    @test endswith(readuntil(out, '1'), '1')
+    @test bytesavailable(out) == 0
+    @test endswith(readuntil(out, '1', keep=true), '1')
     @test Char(read(out, UInt8)) == '\t'
     c = UInt8[0]
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
-    @test nb_available(out) > 0
+    @test bytesavailable(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
     desc = read(out, String)
@@ -350,7 +350,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test !isopen(out)
     @test infd != Base._fd(out.in) == Base.INVALID_OS_HANDLE
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
-    @test nb_available(out) == 0
+    @test bytesavailable(out) == 0
     @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello"
     @test ln1 == "orld"

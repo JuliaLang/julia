@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed
+using Test, Distributed, Random
 
 import Logging: Debug, Info, Warn
 
@@ -530,7 +530,7 @@ end
 @test @inferred(inferrable_kwtest(1)) == 2
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
-@test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
+@test @inferred(uninferrable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
@@ -592,7 +592,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
             @testset "Arrays" begin
                 @test foo(zeros(2)) == 4
-                @test foo(ones(4)) == 15
+                @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=DevNull), String)
     @test contains(msg,
@@ -614,7 +614,7 @@ end
 
 @testset "test guarded srand" begin
     seed = rand(UInt)
-    orig = copy(Base.GLOBAL_RNG)
+    orig = copy(Random.GLOBAL_RNG)
     @test guardsrand(()->rand(), seed) == guardsrand(()->rand(), seed)
     @test guardsrand(()->rand(Int), seed) == guardsrand(()->rand(Int), seed)
     r1, r2 = MersenneTwister(0), MersenneTwister(0)
@@ -628,7 +628,7 @@ end
     end::Tuple{Float64,Int}
     @test a == c == rand(r1) == rand(r2)
     @test b == d == rand(r1, Int) == rand(r2, Int)
-    @test orig == Base.GLOBAL_RNG
+    @test orig == Random.GLOBAL_RNG
     @test rand(orig) == rand()
 end
 
@@ -798,3 +798,43 @@ end
     msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull))
 end
 
+@testset "non AbstractTestSet as testset" begin
+    local f, err = tempname(), tempname()
+    write(f,
+    """
+    using Test
+    desc = "description"
+    @testset desc begin
+        @test 1==1
+    end
+    """)
+    run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=err))
+    msg = read(err, String)
+    @test contains(msg, "Expected `desc` to be an AbstractTestSet, it is a String")
+    rm(f; force=true)
+end
+
+f25835(;x=nothing) = _f25835(x)
+_f25835(::Nothing) = ()
+_f25835(x) = (x,)
+# A keyword function that is never type stable
+g25835(;x=1) = rand(Bool) ? 1.0 : 1
+# A keyword function that is sometimes type stable
+h25835(;x=1,y=1) = x isa Int ? x*y : (rand(Bool) ? 1.0 : 1)
+@testset "keywords in @inferred" begin
+    @test @inferred(f25835()) == ()
+    @test @inferred(f25835(x=nothing)) == ()
+    @test @inferred(f25835(x=1)) == (1,)
+
+    # A global argument should make this uninferrable
+    global y25835 = 1
+    @test f25835(x=y25835) == (1,)
+    @test_throws ErrorException @inferred((()->f25835(x=y25835))()) == (1,)
+
+    @test_throws ErrorException @inferred(g25835()) == 1
+    @test_throws ErrorException @inferred(g25835(x=1)) == 1
+
+    @test @inferred(h25835()) == 1
+    @test @inferred(h25835(x=2,y=3)) == 6
+    @test_throws ErrorException @inferred(h25835(x=1.0,y=1.0)) == 1
+end

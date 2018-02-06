@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
+
 @test reim(2 + 3im) == (2, 3)
 
 for T in (Int64, Float64)
@@ -772,12 +774,6 @@ end
     @test isequal(atan(complex( NaN, Inf)),complex( NaN, 0.0))
     @test isequal(atan(complex( NaN,-Inf)),complex( NaN,-0.0))
     @test isequal(atan(complex( NaN, NaN)),complex( NaN, NaN))
-end
-
-@testset "lexcmp" begin
-    @test lexcmp(1.0-1.0im, 1.0+0.0im) == -1
-    @test lexcmp(0.0+0.0im, 0.0+0.0im) == 0
-    @test lexcmp(1.0-1.0im, 0.0+0.0im) == 1
 end
 
 # misc.

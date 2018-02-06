@@ -43,16 +43,16 @@ function stream_wait(x, c...) # for x::LibuvObject
     end
 end
 
-nb_available(s::LibuvStream) = nb_available(s.buffer)
+bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
 
 function eof(s::LibuvStream)
     if isopen(s) # fast path
-        nb_available(s) > 0 && return false
+        bytesavailable(s) > 0 && return false
     else
-        return nb_available(s) <= 0
+        return bytesavailable(s) <= 0
     end
     wait_readnb(s,1)
-    return !isopen(s) && nb_available(s) <= 0
+    return !isopen(s) && bytesavailable(s) <= 0
 end
 
 # Limit our default maximum read and buffer size,
@@ -205,12 +205,12 @@ show(io::IO, stream::LibuvServer) = print(io, typeof(stream), "(",
 show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
     _fd(stream), " ",
     uv_status_string(stream), ", ",
-    nb_available(stream.buffer)," bytes waiting)")
+    bytesavailable(stream.buffer)," bytes waiting)")
 
 # Shared LibuvStream object interface
 
 function isreadable(io::LibuvStream)
-    nb_available(io) > 0 && return true
+    bytesavailable(io) > 0 && return true
     isopen(io) || return false
     return ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), io.handle) != 0
 end
@@ -271,13 +271,13 @@ end
 
 function wait_readbyte(x::LibuvStream, c::UInt8)
     if isopen(x) # fast path
-        search(x.buffer, c) > 0 && return
+        findfirst(equalto(c), x.buffer) !== nothing && return
     else
         return
     end
     preserve_handle(x)
     try
-        while isopen(x) && search(x.buffer, c) <= 0
+        while isopen(x) && coalesce(findfirst(equalto(c), x.buffer), 0) <= 0
             start_reading(x) # ensure we are reading
             wait(x.readnotify)
         end
@@ -292,14 +292,14 @@ end
 
 function wait_readnb(x::LibuvStream, nb::Int)
     if isopen(x) # fast path
-        nb_available(x.buffer) >= nb && return
+        bytesavailable(x.buffer) >= nb && return
     else
         return
     end
     oldthrottle = x.throttle
     preserve_handle(x)
     try
-        while isopen(x) && nb_available(x.buffer) < nb
+        while isopen(x) && bytesavailable(x.buffer) < nb
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             wait(x.readnotify)
@@ -536,8 +536,8 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         # 3) we have an alternate buffer that has reached its limit.
         if stream.status == StatusPaused ||
            (stream.status == StatusActive &&
-            ((nb_available(stream.buffer) >= stream.throttle) ||
-             (nb_available(stream.buffer) >= stream.buffer.maxsize)))
+            ((bytesavailable(stream.buffer) >= stream.throttle) ||
+             (bytesavailable(stream.buffer) >= stream.buffer.maxsize)))
             # save cycles by stopping kernel notifications from arriving
             ccall(:uv_read_stop, Cint, (Ptr{Cvoid},), stream)
             stream.status = StatusOpen
@@ -574,6 +574,22 @@ mutable struct Pipe <: AbstractPipe
     in::PipeEndpoint # writable
     out::PipeEndpoint # readable
 end
+
+"""
+Construct an uninitialized Pipe object.
+
+The appropriate end of the pipe will be automatically initialized if
+the object is used in process spawning. This can be useful to easily
+obtain references in process pipelines, e.g.:
+
+```
+julia> err = Pipe()
+
+# After this `err` will be initialized and you may read `foo`'s
+# stderr from the `err` pipe.
+julia> spawn(pipeline(pipeline(`foo`, stderr=err), `cat`))
+```
+"""
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
 pipe_writer(p::Pipe) = p.in
@@ -590,7 +606,7 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.in), " => ",
     _fd(stream.out), " ",
     uv_status_string(stream.out), ", ",
-    nb_available(stream), " bytes waiting)")
+    bytesavailable(stream), " bytes waiting)")
 
 
 ## Functions for PipeEndpoint and PipeServer ##
@@ -747,7 +763,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
 
-    if nb_available(sbuf) >= nb
+    if bytesavailable(sbuf) >= nb
         return readbytes!(sbuf, a, nb)
     end
 
@@ -757,13 +773,13 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-            newbuf = PipeBuffer(a, #=maxsize=# nb)
+            newbuf = PipeBuffer(a, maxsize = nb)
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_readnb(s, Int(nb))
             compact(newbuf)
-            return nb_available(newbuf)
+            return bytesavailable(newbuf)
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -784,7 +800,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
 
-    if nb_available(sbuf) >= nb
+    if bytesavailable(sbuf) >= nb
         return unsafe_read(sbuf, p, nb)
     end
 
@@ -794,12 +810,12 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-            newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), #=maxsize=# Int(nb))
+            newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize = Int(nb))
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_readnb(s, Int(nb))
-            nb == nb_available(newbuf) || throw(EOFError())
+            nb == bytesavailable(newbuf) || throw(EOFError())
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -824,11 +840,11 @@ function readavailable(this::LibuvStream)
     return take!(buf)
 end
 
-function readuntil(this::LibuvStream, c::UInt8)
+function readuntil(this::LibuvStream, c::UInt8; keep::Bool=false)
     wait_readbyte(this, c)
     buf = this.buffer
     @assert buf.seekable == false
-    return readuntil(buf, c)
+    return readuntil(buf, c, keep=keep)
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
@@ -894,7 +910,7 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     end
 
     buf = s.sendbuf
-    totb = nb_available(buf) + n
+    totb = bytesavailable(buf) + n
     if totb < buf.maxsize
         nb = unsafe_write(buf, p, n)
     else
@@ -911,7 +927,7 @@ end
 function flush(s::LibuvStream)
     if s.sendbuf !== nothing
         buf = s.sendbuf
-        if nb_available(buf) > 0
+        if bytesavailable(buf) > 0
             arr = take!(buf)        # Array of UInt8s
             uv_write(s, arr)
             return
@@ -928,7 +944,7 @@ buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 function write(s::LibuvStream, b::UInt8)
     if s.sendbuf !== nothing
         buf = s.sendbuf
-        if nb_available(buf) + 1 < buf.maxsize
+        if bytesavailable(buf) + 1 < buf.maxsize
             return write(buf, b)
         end
     end
@@ -1073,7 +1089,7 @@ for (x, writable, unix_fd, c_symbol) in
         ((:STDIN, false, 0, :jl_uv_stdin),
          (:STDOUT, true, 1, :jl_uv_stdout),
          (:STDERR, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_",Unicode.lowercase(string(x)))
+    f = Symbol("redirect_",lowercase(string(x)))
     _f = Symbol("_",f)
     @eval begin
         function ($_f)(stream)
@@ -1114,7 +1130,7 @@ the pipe. The `wr` end is given for convenience in case the old
 elsewhere.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout
 
@@ -1124,7 +1140,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`STDERR`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr
 
@@ -1136,7 +1152,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`STDIN`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin
 
@@ -1161,7 +1177,7 @@ Run the function `f` while redirecting [`STDOUT`](@ref) to `stream`.
 Upon completion, [`STDOUT`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdout(f::Function, stream)
 
@@ -1172,7 +1188,7 @@ Run the function `f` while redirecting [`STDERR`](@ref) to `stream`.
 Upon completion, [`STDERR`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stderr(f::Function, stream)
 
@@ -1183,7 +1199,7 @@ Run the function `f` while redirecting [`STDIN`](@ref) to `stream`.
 Upon completion, [`STDIN`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+    `stream` must be a `TTY`, a `Pipe`, or a [`TCPSocket`](@ref).
 """
 redirect_stdin(f::Function, stream)
 
@@ -1223,21 +1239,21 @@ uvfinalize(s::BufferStream) = nothing
 
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
 unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
-nb_available(s::BufferStream) = nb_available(s.buffer)
+bytesavailable(s::BufferStream) = bytesavailable(s.buffer)
 
 isreadable(s::BufferStream) = s.buffer.readable
 iswritable(s::BufferStream) = s.buffer.writable
 
 function wait_readnb(s::BufferStream, nb::Int)
-    while isopen(s) && nb_available(s.buffer) < nb
+    while isopen(s) && bytesavailable(s.buffer) < nb
         wait(s.r_c)
     end
 end
 
-show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nb_available(s.buffer),", isopen:", s.is_open)
+show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",bytesavailable(s.buffer),", isopen:", s.is_open)
 
 function wait_readbyte(s::BufferStream, c::UInt8)
-    while isopen(s) && search(s.buffer,c) <= 0
+    while isopen(s) && findfirst(equalto(c), s.buffer) === nothing
         wait(s.r_c)
     end
 end
@@ -1255,7 +1271,7 @@ end
 
 function eof(s::BufferStream)
     wait_readnb(s, 1)
-    return !isopen(s) && nb_available(s)<=0
+    return !isopen(s) && bytesavailable(s)<=0
 end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.

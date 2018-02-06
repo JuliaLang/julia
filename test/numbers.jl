@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.MathConstants
+using Random
+using LinearAlgebra
+
 const ≣ = isequal # convenient for comparing NaNs
 
 # remove these tests and re-enable the same ones in the
@@ -720,6 +723,8 @@ end
     @test !isless(+NaN,+Inf)
     @test !isless(+NaN,-NaN)
     @test !isless(+NaN,+NaN)
+    @test !isless(+NaN,1)
+    @test !isless(-NaN,1)
 
     @test  isequal(   0, 0.0)
     @test  isequal( 0.0,   0)
@@ -729,11 +734,11 @@ end
     @test  !isless(   0,-0.0)
 
     @test isless(-0.0, 0.0f0)
-    @test lexcmp(-0.0, 0.0f0) == -1
-    @test lexcmp(0.0, -0.0f0) == 1
-    @test lexcmp(NaN, 1) == 1
-    @test lexcmp(1, NaN) == -1
-    @test lexcmp(NaN, NaN) == 0
+    @test cmp(isless, -0.0, 0.0f0) == -1
+    @test cmp(isless, 0.0, -0.0f0) == 1
+    @test cmp(isless, NaN, 1) == 1
+    @test cmp(isless, 1, NaN) == -1
+    @test cmp(isless, NaN, NaN) == 0
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -2460,24 +2465,24 @@ ndigf(n) = Float64(log(Float32(n)))
 @test sum([Int128(1) Int128(2)]) == Int128(3)
 
 @testset "digits and digits!" begin
-    @test digits(24, 2) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
-    @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
+    @test digits(24, base = 2) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 3) == [0, 0, 0, 1, 1]
+    @test digits(24, base = 2, pad = 7) == [0, 0, 0, 1, 1, 0, 0]
     @test digits(100) == [0, 0, 1]
-    @test digits(BigInt(2)^128, 2) == [zeros(128); 1]
+    @test digits(BigInt(2)^128, base = 2) == [zeros(128); 1]
     let a = zeros(Int, 3)
         digits!(a, 50)
         @test a == [0, 5, 0]
-        digits!(a, 9, 2)
+        digits!(a, 9, base = 2)
         @test a == [1, 0, 0]
-        digits!(a, 7, 2)
+        digits!(a, 7, base = 2)
         @test a == [1, 1, 1]
     end
 end
 # Fill a pre allocated 2x4 matrix
 let a = zeros(Int,(2,4))
     for i in 0:3
-        digits!(view(a,:,i+1),i,2)
+        digits!(view(a,:,i+1),i, base = 2)
     end
     @test a == [0 1 0 1;
                 0 0 1 1]
@@ -2539,12 +2544,12 @@ for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
 end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
-    for s in names(m, true)
+    for s in names(m, all = true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
-            elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
+            elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
                 allsubtypes!(t, x, sts)
             end
         end
@@ -2853,7 +2858,7 @@ end
     @test !isinteger(π)
     @test size(1) == ()
     @test length(1) == 1
-    @test endof(1) == 1
+    @test lastindex(1) == 1
     @test eltype(Integer) == Integer
 end
 # issue #15920
@@ -3024,8 +3029,8 @@ end
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
-    @test !isone(tril(ones(Int, 5, 5)))
-    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(tril(fill(1, 5, 5)))
+    @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF

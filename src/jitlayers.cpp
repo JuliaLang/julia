@@ -336,14 +336,14 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-// Resolve non-lock free atomic functions in the libatomic library.
+// Resolve non-lock free atomic functions in the libatomic1 library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-    static const char *const libatomic = "libatomic";
+    static const char *const libatomic = "libatomic.so.1";
 #elif defined(_OS_WINDOWS_)
-    static const char *const libatomic = "libatomic-1";
+    static const char *const libatomic = "libatomic-1.dll";
 #endif
     static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
                                                         JL_RTLD_LOCAL);

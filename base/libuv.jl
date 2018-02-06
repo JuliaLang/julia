@@ -20,10 +20,10 @@ function uv_sizeof_req(req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(h)))) = uv_sizeof_handle($h)
+@eval const $(Symbol("_sizeof_",lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_",Unicode.lowercase(string(r)))) = uv_sizeof_req($r)
+@eval const $(Symbol("_sizeof_",lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
 uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Cvoid},(Ptr{Cvoid},),handle)
@@ -47,7 +47,7 @@ disassociate_julia_struct(handle::Ptr{Cvoid}) =
 
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
-const uvhandles = ObjectIdDict()
+const uvhandles = IdDict()
 preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
 unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
 

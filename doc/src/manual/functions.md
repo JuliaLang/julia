@@ -164,7 +164,6 @@ A few special expressions correspond to calls to functions with non-obvious name
 | `[A; B; C; ...]`  | [`vcat`](@ref)          |
 | `[A B; C D; ...]` | [`hvcat`](@ref)         |
 | `A'`              | [`adjoint`](@ref)       |
-| `A.'`             | [`transpose`](@ref)     |
 | `1:n`             | [`colon`](@ref)         |
 | `A[i]`            | [`getindex`](@ref)      |
 | `A[i] = x`        | [`setindex!`](@ref)     |
@@ -447,12 +446,12 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base)`](@ref)
+be passed explicitly in every call. For example, the library function [`parse(T, num, base = base)`](@ref)
 interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
 can be expressed concisely as:
 
 ```julia
-function parse(T, num, base=10)
+function parse(T, num; base = 10)
     ###
 end
 ```
@@ -461,13 +460,13 @@ With this definition, the function can be called with either two or three argume
 is automatically passed when a third argument is not specified:
 
 ```jldoctest
-julia> parse(Int,"12",10)
+julia> parse(Int, "12", base = 10)
 12
 
-julia> parse(Int,"12",3)
+julia> parse(Int, "12", base = 3)
 5
 
-julia> parse(Int,"12")
+julia> parse(Int, "12")
 12
 ```
 
@@ -517,6 +516,17 @@ Extra keyword arguments can be collected using `...`, as in varargs functions:
 function f(x; y=0, kwargs...)
     ###
 end
+```
+
+If a keyword argument is not assigned a default value in the method definition,
+then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
+if the caller does not assign it a value:
+```julia
+function f(x; y)
+    ###
+end
+f(3, y=5) # ok, y is assigned
+f(3)      # throws UndefKeywordError(:y)
 ```
 
 Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
@@ -692,7 +702,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g. `broadcast!(sin, view(X, 2:endof(X)), Y)`,
+e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression

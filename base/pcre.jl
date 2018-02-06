@@ -88,7 +88,7 @@ function get_ovec(match_data)
                 (Ptr{Cvoid},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Cvoid},), match_data)
-    unsafe_wrap(Array, ptr, 2n, false)
+    unsafe_wrap(Array, ptr, 2n, own = false)
 end
 
 function compile(pattern::AbstractString, options::Integer)
@@ -123,7 +123,7 @@ function err_message(errno)
     buffer = Vector{UInt8}(uninitialized, 256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    Base.@gc_preserve buffer unsafe_string(pointer(buffer))
+    GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)

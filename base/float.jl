@@ -262,7 +262,6 @@ Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, 
     float(x)
 
 Convert a number or array to a floating point data type.
-When passed a string, this function is equivalent to `parse(Float64, x)`.
 """
 float(x) = AbstractFloat(x)
 
@@ -458,22 +457,6 @@ isless( x::Float32, y::Float32) = fpislt(x, y)
 isless( x::Float64, y::Float64) = fpislt(x, y)
 for op in (:<, :<=, :isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
-end
-
-function cmp(x::AbstractFloat, y::AbstractFloat)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
-    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
-function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
-function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
@@ -880,7 +863,7 @@ Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float(A::AbstractArray{T}) where T
-    if !isconcrete(T)
+    if !isconcretetype(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)

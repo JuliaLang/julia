@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)
@@ -28,9 +30,15 @@
 
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFFFFF")
     @test_throws ArgumentError parse(IPv4, "192.")
+    @test_throws ArgumentError parse(IPv4, "256.256.256.256")
+    # too many fields
+    @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+
+    @test_throws ArgumentError IPv4(-1)
+    @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
 
     @test ip"::1" == IPv6(1)
-    @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3",16))
+    @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))
 
     @test ip"2001:db8:0:0:0:0:2:1" == ip"2001:db8::2:1" == ip"2001:db8::0:2:1"
 
@@ -43,6 +51,11 @@
 
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
+
+    @test IPv6(UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1)) == IPv6(1,1,1,1,1,1,1,1)
+
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), -1)
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), 9)
 end
 
 @testset "InetAddr constructor" begin
@@ -346,7 +359,7 @@ end
     P = Pipe()
     Base.link_pipe(P)
     write(P, "hello")
-    @test nb_available(P) == 0
+    @test bytesavailable(P) == 0
     @test !eof(P)
     @test read(P, Char) === 'h'
     @test !eof(P)
@@ -369,7 +382,7 @@ end
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
-    @test readuntil(P, 'w') == "llow"
+    @test readuntil(P, 'w') == "llo"
     Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now

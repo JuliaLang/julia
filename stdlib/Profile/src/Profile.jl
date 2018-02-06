@@ -9,7 +9,7 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 using Base: iszero
-using Base.Printf.@sprintf
+using Printf: @sprintf
 
 export @profile
 
@@ -442,7 +442,7 @@ end
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
 function tree_aggregate(data::Vector{UInt64})
-    iz = find(iszero, data)  # find the breaks between backtraces
+    iz = findall(iszero, data)  # find the breaks between backtraces
     treecount = Dict{Vector{UInt64},Int}()
     istart = 1 + btskip
     for iend in iz

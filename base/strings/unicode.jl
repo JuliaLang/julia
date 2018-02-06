@@ -4,7 +4,7 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
-             next, done, convert, isvalid, MalformedCharError, ismalformed
+             next, done, convert, isvalid, ismalformed, isoverlong
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -43,7 +43,7 @@ true
 """
 isvalid(T,value)
 
-isvalid(c::Char) = !ismalformed(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(c::Char) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{Char}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
 isvalid(::Type{Char}, c::Integer)  = isvalid(Char, Unsigned(c))
 isvalid(::Type{Char}, c::Char)     = isvalid(c)
@@ -259,8 +259,6 @@ Give the number of columns needed to print a character.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> textwidth('α')
 1
 
@@ -280,8 +278,6 @@ Give the number of columns needed to print a string.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> textwidth("March")
 5
 ```
@@ -299,9 +295,11 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::Char)
-    ismalformed(c) && return Cint(31)
-    c ≤ '\U10ffff' || return Cint(30)
-    ccall(:utf8proc_category, Cint, (UInt32,), c)
+    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
+end
+
+function category_code(x::Integer)
+    x ≤ 0x10ffff ? ccall(:utf8proc_category, Cint, (UInt32,), x) : Cint(30)
 end
 
 # more human-readable representations of the category code
@@ -322,14 +320,14 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 ```jldoctest
 julia> using Unicode
 
-julia> isassigned(101)
+julia> Unicode.isassigned(101)
 true
 
-julia> isassigned('\\x01')
+julia> Unicode.isassigned('\\x01')
 true
 ```
 """
-isassigned(c) = category_code(c) != UTF8PROC_CATEGORY_CN
+isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 
 ## libc character class predicates ##
 
@@ -342,8 +340,6 @@ Letter: Lowercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> islower('α')
 true
 
@@ -367,8 +363,6 @@ Letter: Uppercase, or Lt, Letter: Titlecase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isupper('γ')
 false
 
@@ -385,14 +379,25 @@ function isupper(c::Char)
 end
 
 """
+    iscased(c::Char) -> Bool
+
+Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+"""
+function iscased(c::Char)
+    cat = category_code(c)
+    return cat == UTF8PROC_CATEGORY_LU ||
+           cat == UTF8PROC_CATEGORY_LT ||
+           cat == UTF8PROC_CATEGORY_LL
+end
+
+
+"""
     isdigit(c::Char) -> Bool
 
 Tests whether a character is a decimal digit (0-9).
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isdigit('❤')
 false
 
@@ -414,8 +419,6 @@ category Letter, i.e. a character whose category code begins with 'L'.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isalpha('❤')
 false
 
@@ -440,8 +443,6 @@ Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isnumeric('௰')
 true
 
@@ -457,33 +458,6 @@ false
 """
 isnumeric(c::Char) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
 
-"""
-    isalnum(c::Char) -> Bool
-
-Tests whether a character is alphanumeric.
-A character is classified as alphabetic if it belongs to the Unicode general
-category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
-
-# Examples
-```jldoctest
-julia> using Unicode
-
-julia> isalnum('❤')
-false
-
-julia> isalnum('9')
-true
-
-julia> isalnum('α')
-true
-```
-"""
-function isalnum(c::Char)
-    cat = category_code(c)
-    UTF8PROC_CATEGORY_LU <= cat <= UTF8PROC_CATEGORY_LO ||
-    UTF8PROC_CATEGORY_ND <= cat <= UTF8PROC_CATEGORY_NO
-end
-
 # following C++ only control characters from the Latin-1 subset return true
 
 """
@@ -494,8 +468,6 @@ Control characters are the non-printing characters of the Latin-1 subset of Unic
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> iscntrl('\\x01')
 true
 
@@ -513,8 +485,6 @@ character whose category code begins with 'P'.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> ispunct('α')
 false
 
@@ -538,8 +508,6 @@ category Zs.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isspace('\\n')
 true
 
@@ -564,8 +532,6 @@ Tests whether a character is printable, including spaces, but not a control char
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isprint('\\x01')
 false
 
@@ -578,26 +544,6 @@ isprint(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY
 # true in principal if a printer would use ink
 
 """
-    isgraph(c::Char) -> Bool
-
-Tests whether a character is printable, and not a space.
-Any character that would cause a printer to use ink should be
-classified with `isgraph(c)==true`.
-
-# Examples
-```jldoctest
-julia> using Unicode
-
-julia> isgraph('\\x01')
-false
-
-julia> isgraph('A')
-true
-```
-"""
-isgraph(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO
-
-"""
     isxdigit(c::Char) -> Bool
 
 Test whether a character is a valid hexadecimal digit. Note that this does not
@@ -605,8 +551,6 @@ include `x` (as in the standard `0x` prefix).
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> isxdigit('a')
 true
 
@@ -625,8 +569,6 @@ Return `s` with all characters converted to uppercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> uppercase("Julia")
 "JULIA"
 ```
@@ -640,8 +582,6 @@ Return `s` with all characters converted to lowercase.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> lowercase("STRINGS AND THINGS")
 "strings and things"
 ```
@@ -649,27 +589,38 @@ julia> lowercase("STRINGS AND THINGS")
 lowercase(s::AbstractString) = map(lowercase, s)
 
 """
-    titlecase(s::AbstractString) -> String
+    titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true) -> String
 
-Capitalize the first character of each word in `s`.
+Capitalize the first character of each word in `s`;
+if `strict` is true, every other character is
+converted to lowercase, otherwise they are left unchanged.
+By default, all non-letters are considered as word separators;
+a predicate can be passed as the `wordsep` keyword to determine
+which characters should be considered as word separators.
 See also [`ucfirst`](@ref) to capitalize only the first
 character in `s`.
 
 # Examples
 ```jldoctest
-julia> titlecase("the Julia programming language")
+julia> titlecase("the JULIA programming language")
 "The Julia Programming Language"
+
+julia> titlecase("ISS - international space station", strict=false)
+"ISS - International Space Station"
+
+julia> titlecase("a-a b-b", wordsep = c->c==' ')
+"A-a B-b"
 ```
 """
-function titlecase(s::AbstractString)
+function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool=true)
     startword = true
     b = IOBuffer()
     for c in s
-        if isspace(c)
+        if wordsep(c)
             print(b, c)
             startword = true
         else
-            print(b, startword ? titlecase(c) : c)
+            print(b, startword ? titlecase(c) : strict ? lowercase(c) : c)
             startword = false
         end
     end

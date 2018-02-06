@@ -10,7 +10,7 @@ a permanent effect. The current value of the same environment variable is
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
-[`Base.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
+[`InteractiveUtils.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
@@ -153,7 +153,7 @@ falls back to `/bin/sh` if `$SHELL` is unset.
 
 ### `JULIA_EDITOR`
 
-The editor returned by `Base.editor()` and used in, e.g., [`Base.edit`](@ref),
+The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@ref),
 referring to the command of the preferred editor, for instance `vim`.
 
 `$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence
@@ -207,7 +207,7 @@ Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
 sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
 a high-level interface with much of the same functionality: see the section on
-[Interacting With Julia](@ref).
+[The Julia REPL](@ref).
 
 ### `JULIA_ERROR_COLOR`
 

@@ -187,6 +187,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 jl_array_del_end(meta, na - ins);
         }
     }
+    li->signature_for_inference_heuristics = jl_nothing;
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -255,6 +256,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
+    src->signature_for_inference_heuristics = NULL;
     src->slotnames = NULL;
     src->slotflags = NULL;
     src->slottypes = NULL;
@@ -442,8 +444,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             else if (jl_expr_nargs(st) == 2 && jl_exprarg(st, 0) == (jl_value_t*)generated_sym) {
                 m->generator = NULL;
                 jl_value_t *gexpr = jl_exprarg(st, 1);
-                if (jl_expr_nargs(gexpr) == 6) {
-                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file)
+                if (jl_expr_nargs(gexpr) == 7) {
+                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file expandearly)
                     jl_value_t *funcname = jl_exprarg(gexpr, 1);
                     assert(jl_is_symbol(funcname));
                     if (jl_get_global(m->module, (jl_sym_t*)funcname) != NULL) {
@@ -691,10 +693,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
     if (ftype == NULL ||
-        !(jl_is_type_type((jl_value_t*)ftype) ||
-          (jl_is_datatype(ftype) &&
-           (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
-           ftype->name->mt != NULL)))
+        ((!jl_is_type_type((jl_value_t*)ftype)) &&
+         (!jl_is_datatype(ftype) || ftype->abstract || ftype->name->mt == NULL)))
         jl_error("cannot add methods to an abstract type");
     if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
         jl_error("cannot add methods to a builtin function");

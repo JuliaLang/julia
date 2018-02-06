@@ -40,6 +40,16 @@ end
     @test_broken promote_type(Union{Nothing, Missing, Int}, Float64) == Any
 end
 
+@testset "promotion in various contexts" for T in (Nothing, Missing)
+    @test collect(v for v in (1, T())) isa Vector{Union{Int,T}}
+    @test map(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test broadcast(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test unique((1, T())) isa Vector{Union{Int,T}}
+
+    @test map(ismissing, Any[1, missing]) isa Vector{Bool}
+    @test broadcast(ismissing, Any[1, missing]) isa BitVector
+end
+
 @testset "comparison operators" begin
     @test (missing == missing) === missing
     @test (1 == missing) === missing
@@ -65,7 +75,7 @@ end
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, +, -]
+    for f in [!, ~, +, -]
         @test ismissing(f(missing))
     end
 
@@ -76,6 +86,15 @@ end
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
         @test ismissing(f(missing, 1))
+    end
+
+    @test ismissing(min(missing, missing))
+    @test ismissing(max(missing, missing))
+    for f in [min, max]
+        for arg in ["", "a", 1, -1.0, [2]]
+            @test ismissing(f(missing, arg))
+            @test ismissing(f(arg, missing))
+        end
     end
 end
 
@@ -171,6 +190,7 @@ end
         @test ismissing(f(missing, 1))
         @test ismissing(f(missing, 1, 1))
         @test ismissing(f(Union{Int, Missing}, missing))
+        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
     end
 end
@@ -241,11 +261,22 @@ end
     @test ismissing((missing, 2) == (1, missing))
     @test !((missing, 1) == (missing, 2))
 
+    longtuple = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
+    @test ismissing((longtuple...,17,missing) == (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) == (longtuple...,17,18))
+    @test !((longtuple...,17,missing) == (longtuple...,-17,18))
+    @test !((longtuple...,missing,18) == (longtuple...,17,-18))
+
     @test ismissing((1, missing) != (1, missing))
     @test ismissing(("a", missing) != ("a", missing))
     @test ismissing((missing,) != (missing,))
     @test ismissing((missing, 2) != (1, missing))
     @test (missing, 1) != (missing, 2)
+
+    @test ismissing((longtuple...,17,missing) != (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) != (longtuple...,17,18))
+    @test (longtuple...,17,missing) != (longtuple...,-17,18)
+    @test (longtuple...,missing,18) != (longtuple...,17,-18)
 end
 
 @testset "< and isless on tuples" begin

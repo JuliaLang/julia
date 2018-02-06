@@ -371,7 +371,7 @@ for result in eachrow(results)
     else
         continue
     end
-    print_with_color(color, result[:package], ": Release ", a, " -> Backport ", b, "\n")
+    printstyled(result[:package], ": Release ", a, " -> Backport ", b, "\n", color=color)
 end
 ```
 

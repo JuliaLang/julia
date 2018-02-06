@@ -237,7 +237,7 @@ eltype(::Type{TwicePrecision{T}}) where {T} = T
 
 promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
-promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S} =
+promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
 (::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T

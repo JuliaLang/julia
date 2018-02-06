@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
+using Random, LinearAlgebra, Test
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
@@ -8,7 +9,7 @@ tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{
 tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
-bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
+bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
 
 function check_bitop_call(ret_type, func, args...)
@@ -93,8 +94,8 @@ timesofar("conversions")
     @test isequal(fill!(b1, false), falses(size(b1)))
 
     for (sz,T) in allsizes
-        @test isequal(Array(trues(sz...)), ones(Bool, sz...))
-        @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
+        @test isequal(Array(trues(sz...)), fill(true, sz...))
+        @test isequal(Array(falses(sz...)), fill(false, sz...))
 
         b1 = rand!(falses(sz...))
         @test isa(b1, T)
@@ -110,10 +111,13 @@ timesofar("conversions")
     end
 
     @testset "copyto!" begin
+        let b1 = trues(1)
+            @test all(copyto!(b1, []))
+        end
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]
-                u1 = ones(Bool, m)
+                u1 = fill(true, m)
                 for fu! in [u->fill!(u, true), u->rand!(u)]
                     fu!(u1)
                     c1 = convert(Vector{Int}, u1)
@@ -233,7 +237,7 @@ timesofar("constructors")
             @check_bit_operation getindex(b1, m1) BitVector
         end
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         @check_bit_operation getindex(b1, t1)        BitVector
 
         for j = 1:l
@@ -271,7 +275,7 @@ timesofar("constructors")
         y = rand(0.0:1.0)
         @check_bit_operation setindex!(b1, y, 1:100) T
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         x = rand(Bool)
         @check_bit_operation setindex!(b1, x, t1) T
         b2 = bitrand(length(t1))
@@ -1078,18 +1082,18 @@ timesofar("datamove")
     for m = 0:v1, b1 in Any[bitrand(m), trues(m), falses(m)]
         @check_bit_operation count(b1) Int
 
-        @check_bit_operation findfirst(b1) Int
+        @check_bit_operation findfirst(b1) Union{Int,Nothing}
 
-        @check_bit_operation findfirst(!iszero, b1)    Int
-        @check_bit_operation findfirst(iszero, b1)     Int
-        @check_bit_operation findfirst(equalto(3), b1) Int
+        @check_bit_operation findfirst(!iszero, b1)    Union{Int,Nothing}
+        @check_bit_operation findfirst(iszero, b1)     Union{Int,Nothing}
+        @check_bit_operation findfirst(equalto(3), b1) Union{Int,Nothing}
 
-        @check_bit_operation findfirst(x->x, b1)     Int
-        @check_bit_operation findfirst(x->!x, b1)    Int
-        @check_bit_operation findfirst(x->true, b1)  Int
-        @check_bit_operation findfirst(x->false, b1) Int
+        @check_bit_operation findfirst(x->x, b1)     Union{Int,Nothing}
+        @check_bit_operation findfirst(x->!x, b1)    Union{Int,Nothing}
+        @check_bit_operation findfirst(x->true, b1)  Union{Int,Nothing}
+        @check_bit_operation findfirst(x->false, b1) Union{Int,Nothing}
 
-        @check_bit_operation find(b1) Vector{Int}
+        @check_bit_operation findall(b1) Vector{Int}
     end
 
     b1 = trues(v1)
@@ -1105,16 +1109,17 @@ timesofar("datamove")
     end
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
+    @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
+    @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
 end
 
-timesofar("nnz&find")
+timesofar("find")
 
 @testset "Findnext/findprev" begin
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
-        @test findprev(b1, i) == findprev(b1, true, i) == findprev(identity, b1, i)
+        @test findprev(b1, i) == findprev(equalto(true), b1, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
     end
 
@@ -1125,14 +1130,14 @@ timesofar("nnz&find")
     for i = 1:2:2000
         @test findprev(odds,i)  == findprevnot(evens,i) == i
         @test findnext(odds,i)  == findnextnot(evens,i) == i
-        @test findprev(evens,i) == findprevnot(odds,i)  == i-1
-        @test findnext(evens,i) == findnextnot(odds,i)  == (i < 2000 ? i+1 : 0)
+        @test findprev(evens,i) == findprevnot(odds,i)  == (i > 1    ? i-1 : nothing)
+        @test findnext(evens,i) == findnextnot(odds,i)  == (i < 2000 ? i+1 : nothing)
     end
     for i = 2:2:2000
         @test findprev(odds,i)  == findprevnot(evens,i) == i-1
         @test findprev(evens,i) == findprevnot(odds,i)  == i
         @test findnext(evens,i) == findnextnot(odds,i)  == i
-        @test findnext(odds,i)  == findnextnot(evens,i) == (i < 2000 ? i+1 : 0)
+        @test findnext(odds,i)  == findnextnot(evens,i) == (i < 2000 ? i+1 : nothing)
     end
 
     elts = (1:64:(64*64+1)) .+ (0:64)
@@ -1162,9 +1167,9 @@ timesofar("nnz&find")
     @test findprev(b1, 777)  == findprevnot(b2, 777)  == findprev(!, b2, 777)  == 777
     @test findprev(b1, 776)  == findprevnot(b2, 776)  == findprev(!, b2, 776)  == 77
     @test findprev(b1, 77)   == findprevnot(b2, 77)   == findprev(!, b2, 77)   == 77
-    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   == 0
-    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   == 0
-    @test findprev(identity, b1, -1) == findprev(x->false, b1, -1) == findprev(x->true, b1, -1) == 0
+    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   == nothing
+    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   == nothing
+    @test findprev(identity, b1, -1) == findprev(x->false, b1, -1) == findprev(x->true, b1, -1) == nothing
     @test_throws BoundsError findnext(b1, -1)
     @test_throws BoundsError findnextnot(b2, -1)
     @test_throws BoundsError findnext(!, b2, -1)
@@ -1175,41 +1180,41 @@ timesofar("nnz&find")
     @test findnext(b1, 77)   == findnextnot(b2, 77)   == findnext(!, b2, 77)   == 77
     @test findnext(b1, 78)   == findnextnot(b2, 78)   == findnext(!, b2, 78)   == 777
     @test findnext(b1, 777)  == findnextnot(b2, 777)  == findnext(!, b2, 777)  == 777
-    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  == 0
-    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) == 0
-    @test findnext(identity, b1, 1001) == findnext(x->false, b1, 1001) == findnext(x->true, b1, 1001) == 0
+    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  == nothing
+    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) == nothing
+    @test findnext(identity, b1, 1001) == findnext(x->false, b1, 1001) == findnext(x->true, b1, 1001) == nothing
 
     @test findlast(b1) == Base.findlastnot(b2) == 777
     @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
     b0 = BitVector()
-    @test findprev(x->true, b0, -1) == 0
+    @test findprev(x->true, b0, -1) == nothing
     @test_throws BoundsError findprev(x->true, b0, 1)
     @test_throws BoundsError findnext(x->true, b0, -1)
-    @test findnext(x->true, b0, 1) == 0
+    @test findnext(x->true, b0, 1) == nothing
 
     b1 = falses(10)
     @test findprev(x->true, b1, 5) == 5
     @test findnext(x->true, b1, 5) == 5
-    @test findprev(x->true, b1, -1) == 0
-    @test findnext(x->true, b1, 11) == 0
-    @test findprev(x->false, b1, 5) == 0
-    @test findnext(x->false, b1, 5) == 0
-    @test findprev(x->false, b1, -1) == 0
-    @test findnext(x->false, b1, 11) == 0
+    @test findprev(x->true, b1, -1) == nothing
+    @test findnext(x->true, b1, 11) == nothing
+    @test findprev(x->false, b1, 5) == nothing
+    @test findnext(x->false, b1, 5) == nothing
+    @test findprev(x->false, b1, -1) == nothing
+    @test findnext(x->false, b1, 11) == nothing
     @test_throws BoundsError findprev(x->true, b1, 11)
     @test_throws BoundsError findnext(x->true, b1, -1)
 
     for l = [1, 63, 64, 65, 127, 128, 129]
         f = falses(l)
         t = trues(l)
-        @test findprev(f, l) == findprevnot(t, l) == 0
+        @test findprev(f, l) == findprevnot(t, l) == nothing
         @test findprev(t, l) == findprevnot(f, l) == l
         b1 = falses(l)
         b1[end] = true
         b2 = .~b1
         @test findprev(b1, l) == findprevnot(b2, l) == l
-        @test findprevnot(b1, l) == findprev(b2, l) == l-1
+        @test findprevnot(b1, l) == findprev(b2, l) == (l == 1 ? nothing : l-1)
         if l > 1
             b1 = falses(l)
             b1[end-1] = true
@@ -1306,13 +1311,13 @@ end
 
 # TODO
 
-@testset "Transpose" begin
+@testset "transpose" begin
     b1 = bitrand(v1)
     @check_bit_operation transpose(b1) Transpose{Bool,BitVector}
 
     for m1 = 0:n1, m2 = 0:n2
         b1 = bitrand(m1, m2)
-        @check_bit_operation transpose(b1) BitMatrix
+        @check_bit_operation copy(b1') BitMatrix
     end
 end
 
@@ -1390,7 +1395,7 @@ timesofar("cat")
     end
 
     b1 = bitrand(n1,n1)
-    b1 .|= transpose(b1)
+    b1 .|= copy(b1')
     @check_bit_operation issymmetric(b1) Bool
     @check_bit_operation ishermitian(b1) Bool
 
@@ -1406,7 +1411,8 @@ timesofar("cat")
     @check_bit_operation diff(b1) Vector{Int}
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1) Matrix{Int}
+    @check_bit_operation diff(b1, 1) Matrix{Int}
+    @check_bit_operation diff(b1, 2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
     @check_bit_operation svd(b1)

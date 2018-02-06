@@ -51,7 +51,7 @@ Elements of `dims` must be unique and within the range `1:ndims(A)`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:4),(2,2,1,1))
+julia> a = reshape(Vector(1:4),(2,2,1,1))
 2×2×1×1 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3
@@ -186,7 +186,7 @@ first dimension.
 
 # Examples
 ```jldoctest
-julia> b = reshape(collect(1:16), (4,4))
+julia> b = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14

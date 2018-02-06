@@ -54,7 +54,8 @@ jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
-jl_sym_t *polly_sym; jl_sym_t *inline_sym;
+jl_sym_t *inline_sym; jl_sym_t *noinline_sym;
+jl_sym_t *polly_sym;
 jl_sym_t *propagate_inbounds_sym; jl_sym_t *generated_sym;
 jl_sym_t *generated_only_sym;
 jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
@@ -369,8 +370,9 @@ void jl_init_frontend(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
-    polly_sym = jl_symbol("polly");
     inline_sym = jl_symbol("inline");
+    noinline_sym = jl_symbol("noinline");
+    polly_sym = jl_symbol("polly");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
@@ -682,7 +684,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        jl_value_t *file = jl_fieldref(v,1); // non-allocating
+        jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
         jl_value_t *line = jl_fieldref(v,0); // allocating
         value_t args = julia_to_list2(fl_ctx, line, file);
         fl_gc_handle(fl_ctx, &args);

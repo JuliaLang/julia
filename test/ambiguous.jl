@@ -9,6 +9,8 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
+using LinearAlgebra, SparseArrays
+
 # For curmod_*
 include("testenv.jl")
 
@@ -71,8 +73,6 @@ let io = IOBuffer()
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
     @test length(code_typed(ambig, (Int, Int))) == 1
-    code_llvm(io, ambig, (Int, Int))
-    code_native(io, ambig, (Int, Int))
 end
 
 # Test that ambiguous cases fail appropriately
@@ -82,10 +82,7 @@ let io = IOBuffer()
     @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_llvm(io, ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_native(io, ambig, (UInt8, Int)))
+    @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
 
 # Method overwriting doesn't destroy ambiguities
@@ -255,16 +252,22 @@ end
 @test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
 @test length(detect_ambiguities(Ambig9)) == 0
 
+# issue #25341
+module M25341
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
+end
+@test length(detect_unbound_args(M25341; recursive=true)) == 1
+
 # Test that Core and Base are free of UndefVarErrors
 # not using isempty so this prints more information when it fails
 @testset "detect_unbound_args in Base and Core" begin
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.eltype, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
         @test_broken need_to_handle_undef_sparam == Set()
-        pop!(need_to_handle_undef_sparam, which(Core.Inference.cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Inference.same_names)))
+        pop!(need_to_handle_undef_sparam, which(Core.Compiler.cat, Tuple{Any, AbstractArray}))
+        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -275,14 +278,10 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base.cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T}, 1}, Tuple{Vararg{Pair{T}}}} where T<:AbstractString,)))
-        pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes, (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:Number,)))
-        pop!(need_to_handle_undef_sparam, which(Base.LinAlg.promote_leaf_eltypes,
-                                                (Union{AbstractArray{T}, Tuple{Vararg{T}}} where T<:(AbstractArray{<:Number}),)))
-        pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_vcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
-        pop!(need_to_handle_undef_sparam, which(Base.SparseArrays._absspvec_hcat, (AbstractSparseArray{Tv, Ti, 1} where {Tv, Ti},)))
-        pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, Base.SparseArrays._TypedDenseConcatGroup{T} where T)))
+        pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing, S}} where S, Type{T} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, S}} where S, Type{T} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
@@ -292,6 +291,10 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
         @test need_to_handle_undef_sparam == Set()
     end
+end
+
+@testset "has_bottom_parameter with Union{} in tvar bound" begin
+    @test Base.has_bottom_parameter(Ref{<:Union{}})
 end
 
 nothing # don't return a module from the remote include

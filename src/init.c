@@ -551,8 +551,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
-    if (jl_options.machinefile)
-        jl_options.machinefile = abspath(jl_options.machinefile, 0);
+    if (jl_options.machine_file)
+        jl_options.machine_file = abspath(jl_options.machine_file, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
@@ -784,7 +784,6 @@ void jl_get_builtin_hooks(void)
     for (t = 0; t < jl_n_threads; t++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t];
         ptls2->root_task->tls = jl_nothing;
-        ptls2->root_task->consumers = jl_nothing;
         ptls2->root_task->donenotify = jl_nothing;
         ptls2->root_task->exception = jl_nothing;
         ptls2->root_task->result = jl_nothing;

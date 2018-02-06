@@ -2,7 +2,7 @@
 
 # deep copying
 
-# Note: deepcopy_internal(::Any, ::ObjectIdDict) is
+# Note: deepcopy_internal(::Any, ::IdDict) is
 #       only exposed for specialization by libraries
 
 """
@@ -19,21 +19,21 @@ i.e. functions which may contain hidden internal references.
 
 While it isn't normally necessary, user-defined types can override the default `deepcopy`
 behavior by defining a specialized version of the function
-`deepcopy_internal(x::T, dict::ObjectIdDict)` (which shouldn't otherwise be used),
+`deepcopy_internal(x::T, dict::IdDict)` (which shouldn't otherwise be used),
 where `T` is the type to be specialized for, and `dict` keeps track of objects copied
 so far within the recursion. Within the definition, `deepcopy_internal` should be used
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 """
-deepcopy(x) = deepcopy_internal(x, ObjectIdDict())::typeof(x)
+deepcopy(x) = deepcopy_internal(x, IdDict())::typeof(x)
 
 deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,Task},
-                  stackdict::ObjectIdDict) = x
-deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
+                  stackdict::IdDict) = x
+deepcopy_internal(x::Tuple, stackdict::IdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
-deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
+deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not supported")
 
-function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
+function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
@@ -42,16 +42,16 @@ function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
     return y
 end
 
-function deepcopy_internal(x::String, stackdict::ObjectIdDict)
+function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
-    y = @gc_preserve x unsafe_string(pointer(x), sizeof(x))
+    y = GC.@preserve x unsafe_string(pointer(x), sizeof(x))
     stackdict[x] = y
     return y
 end
 
-function deepcopy_internal(@nospecialize(x), stackdict::ObjectIdDict)
+function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
     (isbits(T) || nf == 0) && return x
@@ -71,14 +71,14 @@ function deepcopy_internal(@nospecialize(x), stackdict::ObjectIdDict)
     return y::T
 end
 
-function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
+function deepcopy_internal(x::Array, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
     _deepcopy_array_t(x, eltype(x), stackdict)
 end
 
-function _deepcopy_array_t(@nospecialize(x), T, stackdict::ObjectIdDict)
+function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
     if isbits(T)
         return (stackdict[x]=copy(x))
     end
@@ -96,7 +96,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::ObjectIdDict)
     return dest
 end
 
-function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
+function deepcopy_internal(x::Dict, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
@@ -112,4 +112,3 @@ function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
     end
     dest
 end
-

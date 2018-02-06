@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Printf: @sprintf
+using Random
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -140,7 +141,7 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Test
+    using Test, Random
 
     @generated function bar(x)
         error("I'm not happy with type $x")
@@ -190,9 +191,7 @@ let gf_err2
         return nothing
     end
     @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
+    @test gf_err_ref[] == 4
     @test gf_err2(code_lowered) === nothing
 end
 
@@ -242,7 +241,7 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
     return code_info
 end
 
@@ -277,7 +276,7 @@ let a = Any[]
     @test a == [1, 6, 3]
     @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
     @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), false)), "2 * x")
+    @test contains(string(code_lowered(f23168, (Vector{Any},Int), generated=false)), "2 * x")
     @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
 end
 

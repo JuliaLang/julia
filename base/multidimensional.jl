@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert, show
+                 ndims, IteratorSize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -31,7 +31,7 @@ module IteratorsMD
 
     # Examples
     ```jldoctest
-    julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+    julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
     2×2×2×2 Array{Int64,4}:
     [:, :, 1, 1] =
      1  3
@@ -89,7 +89,7 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
-    eltype(index::CartesianIndex) = eltype(index.I)
+    eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
@@ -142,9 +142,13 @@ module IteratorsMD
         return h
     end
 
-    # nextind with CartesianIndex
+    # nextind and prevind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         _, ni = next(CartesianIndices(axes(a)), i)
+        return ni
+    end
+    function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(Iterators.reverse(CartesianIndices(axes(a))), i)
         return ni
     end
 
@@ -189,7 +193,7 @@ module IteratorsMD
     CartesianIndex(1, 2, 2)
     CartesianIndex(2, 2, 2)
 
-    julia> CartesianIndices(ones(2,3))
+    julia> CartesianIndices(fill(1, (2,3)))
     2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
       CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
       CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
@@ -264,14 +268,13 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        all(x->axes(x) == axsA, B) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
+        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch(IndexCartesian(), A, B...)
         CartesianIndices(axsA)
     end
 
-    eltype(R::CartesianIndices) = eltype(typeof(R))
     eltype(::Type{CartesianIndices{N}}) where {N} = CartesianIndex{N}
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
-    iteratorsize(::Type{<:CartesianIndices}) = Base.HasShape()
+    IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
@@ -418,6 +421,7 @@ module IteratorsMD
     # AbstractArray implementation
     Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
     Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
+    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
     @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         dims = length.(iter.indices)
         #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
@@ -686,25 +690,6 @@ end
 
 ##
 
-# small helper function since we cannot use a closure in a generated function
-_countnz(x) = x != 0
-
-@generated function findn(A::AbstractArray{T,N}) where {T,N}
-    quote
-        nnzA = count(_countnz, A)
-        @nexprs $N d->(I_d = Vector{Int}(uninitialized, nnzA))
-        k = 1
-        @nloops $N i A begin
-            @inbounds if (@nref $N A i) != zero(T)
-                @nexprs $N d->(I_d[k] = i_d)
-                k += 1
-            end
-        end
-        @ntuple $N I
-    end
-end
-
-
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
 rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
@@ -754,7 +739,7 @@ end
 
 function cumsum!(out, v::AbstractVector, dim::Integer)
     # we dispatch on the possibility of numerical stability issues
-    _cumsum!(out, v, dim, TypeArithmetic(eltype(out)))
+    _cumsum!(out, v, dim, ArithmeticStyle(eltype(out)))
 end
 
 function _cumsum!(out, v, dim, ::ArithmeticRounds)
@@ -763,7 +748,7 @@ end
 function _cumsum!(out, v, dim, ::ArithmeticUnknown)
     _cumsum!(out, v, dim, ArithmeticRounds())
 end
-function _cumsum!(out, v, dim, ::TypeArithmetic)
+function _cumsum!(out, v, dim, ::ArithmeticStyle)
     dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
 end
 
@@ -1018,21 +1003,19 @@ See also [`accumulate`](@ref).
 
 # Examples
 ``jldoctest
-julia> x = SparseVector(7, [1, 3, 5], [2., 4., 5.]);
+julia> x = [1, 0, 2, 0, 3];
 
-julia> y = zeros(7);
+julia> y = [0, 0, 0, 0, 0];
 
 julia> accumulate!(+, y, x);
 
 julia> y
-7-element Array{Float64,1}:
-  2.0
-  2.0
-  6.0
-  6.0
- 11.0
- 11.0
- 11.0
+5-element Array{Int64,1}:
+ 1
+ 1
+ 3
+ 3
+ 6
 ```
 """
 function accumulate!(op::Op, y, x::AbstractVector) where Op
@@ -1280,7 +1263,7 @@ arrays have overlapping indices, then on the domain of the overlap
 
 # Examples
 ```julia-repl
-julia> src = reshape(collect(1:16), (4,4))
+julia> src = reshape(Vector(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13
  2  6  10  14
@@ -1570,25 +1553,6 @@ end
     end
 end
 
-## findn
-
-@generated function findn(B::BitArray{N}) where N
-    quote
-        nnzB = count(B)
-        I = ntuple(x->Vector{Int}(uninitialized, nnzB), Val($N))
-        if nnzB > 0
-            count = 1
-            @nloops $N i B begin
-                if (@nref $N B i) # TODO: should avoid bounds checking
-                    @nexprs $N d->(I[d][count] = i_d)
-                    count += 1
-                end
-            end
-        end
-        return I
-    end
-end
-
 ## isassigned
 
 @generated function isassigned(B::BitArray, I_0::Int, I::Int...)
@@ -1680,7 +1644,7 @@ Return unique regions of `A` along dimension `dim`.
 
 # Examples
 ```jldoctest
-julia> A = map(isodd, reshape(collect(1:8), (2,2,2)))
+julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
   true   true
@@ -1790,7 +1754,7 @@ Compute the minimum and maximum elements of an array over the given dimensions.
 
 # Examples
 ```jldoctest
-julia> A = reshape(collect(1:2:16), (2,2,2))
+julia> A = reshape(Vector(1:2:16), (2,2,2))
 2×2×2 Array{Int64,3}:
 [:, :, 1] =
  1  5
@@ -1835,4 +1799,14 @@ end
         end
     end
     return B
+end
+
+# Show for pairs() with Cartesian indicies. Needs to be here rather than show.jl for bootstrap order
+function Base.showarg(io::IO, r::Union{Iterators.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
+                                       Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
+    print(io, "pairs(::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+    print(io, "pairs(IndexCartesian(), ::$T)")
 end

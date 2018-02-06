@@ -124,7 +124,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
     @threads for i = 1:20
         @test lock(critical) === nothing
         @test islocked(critical)
-        gc(false)
+        GC.gc(false)
         @test unlock(critical) === nothing
     end
     @test !islocked(critical)
@@ -455,6 +455,7 @@ test_nested_loops()
 @testset "libatomic" begin
     prog = """
     using Base.Threads
+    using InteractiveUtils: code_native
     function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
         Base.llvmcall(\"\"\"
             %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
@@ -478,3 +479,19 @@ test_nested_loops()
         @test !contains(err, "__atomic_store")
     end
 end
+
+function test_thread_too_few_iters()
+    x = Atomic()
+    a = zeros(Int, nthreads()+2)
+    threaded_loop(a, 1:nthreads()-1, x)
+    found = zeros(Bool, nthreads()+2)
+    for i=1:nthreads()-1
+        found[a[i]] = true
+    end
+    @test x[] == nthreads()-1
+    # Next test checks that all loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test !(false in found[1:nthreads()-1])
+    @test !(true in found[nthreads():end])
+end
+test_thread_too_few_iters()

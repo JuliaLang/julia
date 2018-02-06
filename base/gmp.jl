@@ -238,9 +238,9 @@ hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     # don't make a copy in the common case where we are parsing a whole String
-    bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
+    bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,start(bstr),endof(bstr))
+    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -253,7 +253,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = Base.@gc_preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
+        err = GC.@preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-firstindex(bstr)), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
@@ -492,7 +492,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -613,7 +613,7 @@ function base(b::Integer, n::BigInt, pad::Integer=1)
     nd1 = ndigits(n, b)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    Base.@gc_preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
@@ -663,7 +663,7 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
+function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end

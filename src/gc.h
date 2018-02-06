@@ -16,6 +16,7 @@
 #endif
 #include <inttypes.h>
 #include "julia.h"
+#include "julia_threads.h"
 #include "julia_internal.h"
 #include "threading.h"
 #ifndef _OS_WINDOWS_
@@ -76,7 +77,7 @@ typedef struct {
 
 typedef struct {
     void **pc; // Current stack address for the pc (up growing)
-    char *data; // Current stack address for the data (up growing)
+    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
     void **pc_start; // Cached value of `gc_cache->pc_stack`
     void **pc_end; // Cached value of `gc_cache->pc_stack_end`
 } gc_mark_sp_t;
@@ -93,29 +94,6 @@ enum {
     GC_MARK_L_module_binding,
     _GC_MARK_L_MAX
 };
-
-// Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
-// This should be used after dispatch and therefore the pc stack pointer is already popped from
-// the stack.
-STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
-{
-    char *data = sp->data - size;
-    sp->data = data;
-    return data;
-}
-#define gc_pop_markdata(sp, type) ((type*)gc_pop_markdata_(sp, sizeof(type)))
-
-// Re-push a frame to the mark stack (both data and pc)
-// The data and pc are expected to be on the stack (or updated in place) already.
-// Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
-{
-    char *data = sp->data;
-    sp->pc++;
-    sp->data = data + size;
-    return data;
-}
-#define gc_repush_markdata(sp, type) ((type*)gc_repush_markdata_(sp, sizeof(type)))
 
 /**
  * The `nptr` member of marking data records the number of pointers slots referenced by
@@ -198,7 +176,7 @@ typedef struct {
 // We'll use this size to determine the size of the data stack corresponding to a
 // PC stack size. Since the data objects are not all of the same size, we'll waste
 // some memory on the data stack this way but that size is unlikely going to be significant.
-typedef union {
+union _jl_gc_mark_data {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
     gc_mark_obj8_t obj8;
@@ -207,7 +185,30 @@ typedef union {
     gc_mark_stackframe_t stackframe;
     gc_mark_binding_t binding;
     gc_mark_finlist_t finlist;
-} gc_mark_data_t;
+};
+
+// Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
+// This should be used after dispatch and therefore the pc stack pointer is already popped from
+// the stack.
+STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
+{
+    jl_gc_mark_data_t *data = (jl_gc_mark_data_t *)(((char*)sp->data) - size);
+    sp->data = data;
+    return data;
+}
+#define gc_pop_markdata(sp, type) ((type*)gc_pop_markdata_(sp, sizeof(type)))
+
+// Re-push a frame to the mark stack (both data and pc)
+// The data and pc are expected to be on the stack (or updated in place) already.
+// Mainly useful to pause the current scanning in order to scan an new object.
+STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
+{
+    jl_gc_mark_data_t *data = sp->data;
+    sp->pc++;
+    sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
+    return data;
+}
+#define gc_repush_markdata(sp, type) ((type*)gc_repush_markdata_(sp, sizeof(type)))
 
 // layout for big (>2k) objects
 
@@ -519,18 +520,18 @@ void gc_final_pause_end(int64_t t0, int64_t tend);
 #endif
 
 #ifdef GC_TIME
-void gc_time_pool_start(void);
-void gc_time_count_page(int freedall, int pg_skpd);
-void gc_time_pool_end(int sweep_full);
-void gc_time_sysimg_end(uint64_t t0);
+void gc_time_pool_start(void) JL_NOTSAFEPOINT;
+void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT;
+void gc_time_pool_end(int sweep_full) JL_NOTSAFEPOINT;
+void gc_time_sysimg_end(uint64_t t0) JL_NOTSAFEPOINT;
 
-void gc_time_big_start(void);
-void gc_time_count_big(int old_bits, int bits);
-void gc_time_big_end(void);
+void gc_time_big_start(void) JL_NOTSAFEPOINT;
+void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
+void gc_time_big_end(void) JL_NOTSAFEPOINT;
 
-void gc_time_mallocd_array_start(void);
-void gc_time_count_mallocd_array(int bits);
-void gc_time_mallocd_array_end(void);
+void gc_time_mallocd_array_start(void) JL_NOTSAFEPOINT;
+void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT;
+void gc_time_mallocd_array_end(void) JL_NOTSAFEPOINT;
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes);
@@ -539,7 +540,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int sweep_full);
 #else
 #define gc_time_pool_start()
-STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
+STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
 {
     (void)freedall;
     (void)pg_skpd;
@@ -547,14 +548,14 @@ STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
 #define gc_time_pool_end(sweep_full) (void)(sweep_full)
 #define gc_time_sysimg_end(t0) (void)(t0)
 #define gc_time_big_start()
-STATIC_INLINE void gc_time_count_big(int old_bits, int bits)
+STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
 {
     (void)old_bits;
     (void)bits;
 }
 #define gc_time_big_end()
 #define gc_time_mallocd_array_start()
-STATIC_INLINE void gc_time_count_mallocd_array(int bits)
+STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 {
     (void)bits;
 }

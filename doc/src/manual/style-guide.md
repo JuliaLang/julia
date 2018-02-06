@@ -92,7 +92,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a
@@ -103,14 +103,14 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a
 end
 ```
 
-The Julia standard library uses this convention throughout and contains examples of functions
+Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.

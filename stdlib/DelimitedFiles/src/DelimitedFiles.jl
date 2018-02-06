@@ -247,7 +247,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
-        return readdlm_string(Base.@gc_preserve(a, unsafe_string(pointer(a),length(a))), dlm, T, eol, auto, optsd)
+        return readdlm_string(GC.@preserve(a, unsafe_string(pointer(a),length(a))), dlm, T, eol, auto, optsd)
     else
         return readdlm_string(read(input, String), dlm, T, eol, auto, optsd)
     end
@@ -337,7 +337,7 @@ function DLMStore(::Type{T}, dims::NTuple{2,Integer},
 end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
-    Base.@gc_preserve sbuff (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
+    GC.@preserve sbuff (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
@@ -381,7 +381,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, lastindex(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -400,7 +400,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, lastindex(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end
@@ -487,7 +487,7 @@ function val_opts(opts)
     for (opt_name, opt_val) in opts
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
-        opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)]
+        opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)::Int]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
@@ -730,7 +730,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
 end
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"" => "\"\""), '"')
@@ -749,7 +749,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
             writedlm_cell(pb, a[i, j], dlm, quotes)
             j == lastc ? write(pb,'\n') : print(pb,dlm)
         end
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing
@@ -783,7 +783,7 @@ function writedlm(io::IO, itr, dlm; opts...)
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing

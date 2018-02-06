@@ -11,8 +11,8 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = search(s,'#')
-    if i > 0
+    i = findfirst(equalto('#'), s)
+    if i !== nothing
         s = s[1:i-1]
     end
     if t === Any && !isempty(s)
@@ -84,7 +84,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
         i = findfirst(x -> endswith(string(x), "..."), kws)
-        i == 0 && return kws
+        i === nothing && return kws
         push!(kws, kws[i])
         return deleteat!(kws, i)
     end
@@ -191,7 +191,7 @@ function inbase(m::Module)
     if m == Base
         true
     else
-        parent = module_parent(m)
+        parent = parentmodule(m)
         parent === m ? false : inbase(parent)
     end
 end
@@ -202,7 +202,7 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -211,7 +211,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    else
+    elseif root_module_exists(PkgId(nothing, "LibGit2"))
+        LibGit2 = Base.root_module(Main, :LibGit2)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -230,6 +231,8 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
+    else
+        return fileurl(file)
     end
 end
 
@@ -301,13 +304,15 @@ end
 
 show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of AbstractVector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
+    first = true
     for (i, m) in enumerate(mt)
+        first || println(io)
+        first = false
         print(io, "[$(i)] ")
         show(io, m)
-        println(io)
         push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
     end
 end

@@ -75,7 +75,7 @@ function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)
+        ptr = start = findnext(!iszero, p, start+1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -125,7 +125,7 @@ function invpermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
-        start = findnext(!iszero, p, start+1)
+        start = findnext(!iszero, p, start+1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -239,7 +239,7 @@ function nextprod(a::Vector{Int}, x)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
-    v = ones(Int, k)                  # current value of each counter
+    v = fill(1, k)                    # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case

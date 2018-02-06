@@ -13,20 +13,20 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
-| Value returned by `iteratorsize(IterType)` | Required Methods                           |
+| Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
 | `HasLength()`                              | `length(iter)`                             |
-| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
 
-| Value returned by `iteratoreltype(IterType)` | Required Methods   |
+| Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
 | `HasEltype()`                                | `eltype(IterType)` |
 | `EltypeUnknown()`                            | (*none*)           |
@@ -115,9 +115,12 @@ Now, when we ask Julia to [`collect`](@ref) all the elements into an array it ca
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
-julia> collect(Squares(10))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 1  4  9  16  25  36  49  64  81  100
+julia> collect(Squares(4))
+4-element Array{Int64,1}:
+  1
+  4
+  9
+ 16
 ```
 
 While we can rely upon generic implementations, we can also extend specific methods where we know
@@ -131,7 +134,7 @@ julia> sum(Squares(1803))
 1955361914
 ```
 
-This is a very common pattern throughout the Julia standard library: a small set of required methods
+This is a very common pattern throughout Julia Base: a small set of required methods
 define an informal interface that enable many fancier behaviors. In some cases, types will want
 to additionally specialize those extra behaviors when they know a more efficient algorithm can
 be used in their specific case.
@@ -150,9 +153,12 @@ julia> Base.next(::Iterators.Reverse{Squares}, state) = (state*state, state-1)
 
 julia> Base.done(::Iterators.Reverse{Squares}, state) = state < 1
 
-julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
-1×10 RowVector{Int64,Array{Int64,1}}:
- 100  81  64  49  36  25  16  9  4  1
+julia> collect(Iterators.reverse(Squares(4)))
+4-element Array{Int64,1}:
+ 16
+  9
+  4
+  1
 ```
 
 ## Indexing
@@ -161,7 +167,8 @@ julia> collect(Iterators.reverse(Squares(10)))' # transposed to save space
 |:-------------------- |:-------------------------------- |
 | `getindex(X, i)`     | `X[i]`, indexed element access   |
 | `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `endof(X)`           | The last index, used in `X[end]` |
+| `firstindex(X)`      | The first index                  |
+| `lastindex(X)`        | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -177,11 +184,12 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`endof`](@ref) to specify the last valid
-index:
+Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
+valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
 
 ```jldoctest squaretype
-julia> Base.endof(S::Squares) = length(S)
+julia> Base.firstindex(S::Squares) = 1
+julia> Base.lastindex(S::Squares) = length(S)
 
 julia> Squares(23)[end]
 529
@@ -234,7 +242,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
-the [arrays manual page](@ref man-multi-dim-arrays) and [standard library section](@ref lib-arrays) for more supported methods.
+the [arrays manual page](@ref man-multi-dim-arrays) and the [Julia Base section](@ref lib-arrays) for more supported methods.
 
 A key part in defining an `AbstractArray` subtype is [`IndexStyle`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
@@ -250,8 +258,8 @@ arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
-`ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
-supports two dimensions, so it just defines
+`ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
+library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
@@ -275,28 +283,31 @@ methods are all it takes for `SquaresVector` to be an iterable, indexable, and c
 array:
 
 ```jldoctest squarevectype
-julia> s = SquaresVector(7)
-7-element SquaresVector:
+julia> s = SquaresVector(4)
+4-element SquaresVector:
   1
   4
   9
  16
- 25
- 36
- 49
 
-julia> s[s .> 20]
-3-element Array{Int64,1}:
- 25
- 36
- 49
+julia> s[s .> 8]
+2-element Array{Int64,1}:
+  9
+ 16
 
-julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 RowVector{Float64,Array{Float64,1}}:
- 0.305389  0.335329
+julia> s + s
+4-element Array{Int64,1}:
+  2
+  8
+ 18
+ 32
 
-julia> s ⋅ s # dot(s, s)
-4676
+julia> sin.(s)
+4-element Array{Float64,1}:
+  0.8414709848078965
+ -0.7568024953079282
+  0.4121184852417566
+ -0.2879033166650653
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built
@@ -373,7 +384,7 @@ julia> copy(A)
 ```
 
 In addition to all the iterable and indexable methods from above, these types can also interact
-with each other and use most of the methods defined in the standard library for `AbstractArrays`:
+with each other and use most of the methods defined in Julia Base for `AbstractArrays`:
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]
@@ -382,14 +393,45 @@ julia> A[SquaresVector(3)]
  4.0
  9.0
 
-julia> dot(A[:,1],A[:,2])
-32.0
+julia> mean(A)
+5.0
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
 something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
+
+## [Strided Arrays](@id man-interface-strided-arrays)
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+
+A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
+Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
+for more efficient linear algebra routines.  A typical example of a user-defined strided array is one
+that wraps a standard `Array` with additional structure.
+
+Warning: do not implement these methods if the underlying storage is not actually strided, as it
+may lead to incorrect results or segmentation faults.
+
+Here are some examples to demonstrate which type of arrays are strided and which are not:
+```julia
+1:5   # not strided (there is no storage associated with this array.)
+Vector(1:5)  # is strided with strides (1,)
+A = [1 5; 2 6; 3 7; 4 8]  # is strided with strides (1,4)
+V = view(A, 1:2, :)   # is strided with strides (1,4)
+V = view(A, 1:2:3, 1:2)   # is strided with strides (2,4)
+V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not fixed.
+```
+
+
+
+
 
 ## [Broadcasting](@id man-interfaces-broadcasting)
 
