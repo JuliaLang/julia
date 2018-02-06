@@ -1052,13 +1052,13 @@ end
 """
     unalias(dest, A)
 
-Return either A or a copy of A, in a rough effort to prevent modifications to `dest` from
+Return either `A` or a copy of `A`, in a rough effort to prevent modifications to `dest` from
 affecting the returned object. No guarantees are provided, and each custom array must
 opt-into aliasing detection by overloading this method by specializing on the second argument.
 
-This function must return an object of exactly the same type as A for performance and type-stability.
+This function must return an object of exactly the same type as `A` for performance and type-stability.
 
-See also `mightalias` and `dataids`.
+See also [`mightalias`](@ref) and [`dataids`](@ref).
 """
 unalias(dest, A) = A
 unalias(dest, A::Array) = mightalias(dest, A) ? copy(A) : A
@@ -1068,7 +1068,7 @@ unalias(dest, As::Tuple{}) = ()
 """
     mightalias(A::AbstractArray, B::AbstractArray)
 
-Perform a rudimentary test to check if arrays A and B might share the same memory.
+Perform a rudimentary test to check if arrays `A` and `B` might share the same memory.
 
 Defaults to false unless `dataids` is specialized for both `A` and `B`.
 """
