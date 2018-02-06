@@ -484,10 +484,13 @@ end
     return C
 end
 
-# In the one-argument case, we don't need to worry about aliasing as we only make one pass
+# In the one-argument case, we can avoid de-aliasing `A` from `C` if
+# `A === C`. Otherwise `A` might be something like `transpose(C)` or
+# another such re-ordering that won't iterate the two safely.
 @inline function _broadcast!(f, C, A)
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A)
+    A !== C && (A = unalias(C, A))
     keeps, Idefaults = map_newindexer(shape, A, ())
     iter = CartesianIndices(shape)
     _broadcast!(f, C, keeps, Idefaults, A, (), Val(0), iter)
