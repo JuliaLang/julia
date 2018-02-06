@@ -1376,12 +1376,15 @@ end
     # AbstractArray implementation
     Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
     Compat.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
+    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
     @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         dims = length.(iter.indices)
         #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
         @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
         return result
     end
+elseif VERSION < v"0.7.0-DEV.3395"
+    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
 end
 
 @static if !isdefined(Base, Symbol("@info"))
