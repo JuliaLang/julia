@@ -1348,6 +1348,9 @@ end
 
 @deprecate which(s::Symbol) which(Main, s)
 
+# PR #23332
+@deprecate ^(x, p::Integer) power_by_squaring(x,p)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
