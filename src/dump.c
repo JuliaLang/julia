@@ -81,6 +81,8 @@ static const intptr_t Array1d_tag      = 30;
 static const intptr_t Singleton_tag    = 31;
 static const intptr_t CommonSym_tag    = 32;
 static const intptr_t NearbyGlobal_tag = 33;  // a GlobalRef pointing to tree_enclosing_module
+static const intptr_t CoreMod_tag      = 34;
+static const intptr_t BaseMod_tag      = 35;
 static const intptr_t Null_tag         = 253;
 static const intptr_t ShortBackRef_tag = 254;
 static const intptr_t BackRef_tag      = 255;
@@ -484,7 +486,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
 
     if (s->mode == MODE_AST) {
         // compressing tree
-        if (!as_literal && !is_ast_node(v)) {
+        if (v == (jl_value_t*)jl_core_module) {
+            writetag(s->s, (jl_value_t*)CoreMod_tag);
+            return;
+        }
+        else if (v == (jl_value_t*)jl_base_module) {
+            writetag(s->s, (jl_value_t*)BaseMod_tag);
+            return;
+        }
+        else if (!as_literal && !is_ast_node(v)) {
             writetag(s->s, (jl_value_t*)LiteralVal_tag);
             int id = literal_val_id(s, v);
             assert(id >= 0 && id < UINT16_MAX);
@@ -1849,6 +1859,12 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     else if (vtag == (jl_value_t*)Singleton_tag) {
         return jl_deserialize_value_singleton(s, loc);
     }
+    else if (vtag == (jl_value_t*)CoreMod_tag) {
+        return (jl_value_t*)jl_core_module;
+    }
+    else if (vtag == (jl_value_t*)BaseMod_tag) {
+        return (jl_value_t*)jl_base_module;
+    }
     else if (vtag == (jl_value_t*)jl_string_type) {
         size_t n = read_int32(s->s);
         jl_value_t *str = jl_alloc_string(n);
@@ -2825,6 +2841,7 @@ void jl_init_serializer(void)
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
+                     (void*)CoreMod_tag, (void*)BaseMod_tag,
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
@@ -2844,8 +2861,8 @@ void jl_init_serializer(void)
                      jl_box_int32(18), jl_box_int32(19), jl_box_int32(20),
                      jl_box_int32(21), jl_box_int32(22), jl_box_int32(23),
                      jl_box_int32(24), jl_box_int32(25), jl_box_int32(26),
-                     jl_box_int32(27), jl_box_int32(28), jl_box_int32(29),
-                     jl_box_int32(30),
+                     jl_box_int32(27),
+
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
                      jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
@@ -2855,8 +2872,9 @@ void jl_init_serializer(void)
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
-                     jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
-                     jl_box_int64(30),
+                     jl_box_int64(27), jl_box_int64(28),
+
+                     jl_bool_type, jl_int32_type, jl_int64_type,
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
                      jl_quotenode_type, jl_pinode_type, jl_phinode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type,

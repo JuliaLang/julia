@@ -2014,8 +2014,8 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
 {
-    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
-            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type)
+    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) || val == jl_nothing ||
+            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
         return;
     JL_GC_PUSH1(&val);
     if (ctx.roots == NULL) {
