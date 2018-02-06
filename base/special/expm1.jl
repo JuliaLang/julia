@@ -134,10 +134,9 @@ expm1_small_k(::Type{Float32}) = Int32(23)
 @inline expm1_two_pow_k(::Type{Float64}, k) = reinterpret(Float64, UInt64(0x3ff00000+(k<<20))<<32)
 
 #this is 2^-k not 1-2f0^k
-#@inline expm1_one_m_2_pow_mk(::Type{Float32}, k) = 
 @inline expm1_one_m_2_pow_mk(::Type{Float32}, k) = reinterpret(Float32, UInt32(0x3f800000 - (0x1000000>>k)))
 # 0x00000000 after & comes from lowword(1.0) = unsafe_trunc(UInt32, reinterpret(UInt64, 1.0))
-#@inline expm1_one_m_2_pow_mk(::Type{Float64}, k) = reinterpret(Float64, (UInt64(0x3ff00000 - (0x200000>>k))<<32)|0x00000000)
+# @inline expm1_one_m_2_pow_mk(::Type{Float64}, k) = reinterpret(Float64, (UInt64(0x3ff00000 - (0x200000>>k))<<32)|0x00000000)
 @inline expm1_one_m_2_pow_mk(::Type{Float64}, k) = reinterpret(Float64, (UInt64(0x3ff00000 - (0x200000>>k))<<32) | unsafe_trunc(UInt32, reinterpret(UInt64, 1.0)))
 
 @inline expm1_two_pow_big_km1(T::Type{Float64}) = 8.98846567431158e307 # T(2.0)^(expm1_big_k(T) - 1)
@@ -146,88 +145,91 @@ expm1_small_k(::Type{Float32}) = Int32(23)
 function expm1(x::T) where T<:Union{Float32, Float64}
     xsign = signbit(x)
     absx = abs(x)
- 
+
     # filter out huge and non-finite argument
-	if absx >= expm1_huge(T) # quit early for large absolute values of x
+    if absx >= expm1_huge(T) # quit early for large absolute values of x
         if isinf(absx)
-            return xsign == true ? x : -T(1.0)
+            return ifelse(xsign, -T(1.0), x)
         end
         if x >= expm1_overflow(T) # largest value T can take before overflowing
             return T(Inf)
         end
-        if xsign == true # x < -expm1_huge(T)
-	    	return -T(1.0)
+        if xsign # x < -expm1_huge(T)
+            return -T(1.0)
         end
     end
-    
+
     # argument reduction
-	if absx > T(0.5)*expm1_ln2(T)
-	    if absx < T(1.5)*expm1_ln2(T)
-            if xsign == false
-                hi = x - expm1_ln2_hi(T)
-                lo = expm1_ln2_lo(T)
-                k = Int32(1)
-            else
+    if absx > T(0.5)*expm1_ln2(T)
+        if absx < T(1.5)*expm1_ln2(T)
+            if xsign
                 hi = x + expm1_ln2_hi(T)
                 lo = -expm1_ln2_lo(T)
                 k = Int32(-1)
+            else
+                hi = x - expm1_ln2_hi(T)
+                lo = expm1_ln2_lo(T)
+                k = Int32(1)
             end
-	    else
-            #            k  = round(Int32, expm1_invln2(T)*x)
-            k = unsafe_trunc(Int32, expm1_invln2(T)*x + (!xsign ? 0.5 : -0.5))
+        else
+            # k  = round(Int32, expm1_invln2(T)*x)
+            # the next line could be replaced with the above but we don't need the
+            # safety of round, so we round by adding one half with the appropriate
+            # sign and truncate to Int32
+            k = unsafe_trunc(Int32, expm1_invln2(T)*x + ifelse(xsign, -T(0.5), 0.5))
             hi = x - k*expm1_ln2_hi(T) # t*expm1_ln2_hi is exact here
             lo = k*expm1_ln2_lo(T)
         end
-	    x = hi - lo
-	    c  = (hi - x) - lo
+        x = hi - lo
+        c  = (hi - x) - lo
     elseif absx < expm1_underflow(T)
-	    return x
+        return x
     else
         k = Int32(0)
     end
     # x is now in primary range
-	hfx = T(0.5)*x
-	hfxs = x*hfx
-	r1 = T(1.0) + hfxs*expm1_p(hfxs)
-	t  = T(3.0) - r1*hfx
-	e  = hfxs*((r1 - t)/(T(6.0) - x*t))
+    hfx = T(0.5)*x
+    hfxs = x*hfx
+    r1 = T(1.0) + hfxs*expm1_p(hfxs)
+    t  = T(3.0) - r1*hfx
+    e  = hfxs*((r1 - t)/(T(6.0) - x*t))
     if k == 0
         return x - (x*e - hfxs) # c is 0
     else
         e  = (x*(e - c) - c)
-	    e -= hfxs
+        e -= hfxs
         if k == -1
             return T(0.5)*(x - e) - T(0.5)
         end
-	    if k ==1
+        if k ==1
             if x < -T(0.25)
                 return -T(2.0)*(e - (x + T(0.5)))
             else
                 return  T(1.0) + T(2.0)*(x - e)
             end
         end
-        two_pow_k = expm1_two_pow_k(T, k) # T(2.0)^k but 9-10 times faster 
-	    if (k <= -2 || k > 56) # suffice to return exp(x)-1
+        two_pow_k = expm1_two_pow_k(T, k) # T(2.0)^k but 9-10 times faster
+        if (k <= -2 || k > 56) # suffice to return exp(x)-1
             y = T(1.0) - (e - x)
             if k == expm1_big_k(T)
                 y = y*T(2.0)*expm1_two_pow_big_km1(T) # T(2.0)^(expm1_big_k(T) - 1)
             else
                 y = y*two_pow_k # y*2^k
             end
-	        return y-T(1.0)
+            return y-T(1.0)
         end
         if k < expm1_small_k(T)
-	        t = expm1_one_m_2_pow_mk(T, k) # T(1.0)-T(2.0)^-k, but 4-5 times faster
+            t = expm1_one_m_2_pow_mk(T, k) # T(1.0)-T(2.0)^-k, but 4-5 times faster
             y = t-(e-x)
-		    y = y*two_pow_k # y*2^k
-	    else
+            y = y*two_pow_k # y*2^k
+        else
             t = expm1_two_pow_mk(T, k) # T(2.0)^-k
             y = x-(e+t)
             y += T(1.0)
-		    y = y*two_pow_k # y*2^k
+            y = y*two_pow_k # y*2^k
         end
     end
-	y
+    y
 end
 
 expm1(x::Real) = expm1(float(x))
