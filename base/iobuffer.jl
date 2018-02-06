@@ -41,7 +41,7 @@ It may take optional keyword arguments:
 - `truncate`: truncates the buffer size to zero length.
 - `maxsize`: specifies a size beyond which the buffer may not be grown.
 
-When `data` is given, the buffer will be both readable and writable by default.
+When `data` is not given, the buffer will be both readable and writable by default.
 
 # Examples
 ```jldoctest
