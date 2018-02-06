@@ -1206,6 +1206,7 @@ let c = CartesianIndices(1:3, 1:2), l = LinearIndices(1:3, 1:2)
     @test c[1:6] == vec(c)
     @test l == l[c] == map(i -> l[i], c)
     @test l[vec(c)] == collect(1:6)
+    @test CartesianIndex(1, 1) in CartesianIndices((3, 4))
 end
 
 if !isdefined(Base, Symbol("@info"))
@@ -1347,5 +1348,48 @@ end
 let x = y = 1
     @test objectid(x) == objectid(y)
 end
+
+# 0.7.0-DEV.3415
+for (f1, f2, i) in ((Compat.findfirst, Compat.findnext, 1),
+                    (Compat.findlast, Compat.findprev, 2))
+    # Generic methods
+    @test f1(equalto(0), [1, 0]) == f2(equalto(0), [1, 0], i) == 2
+    @test f1(equalto(9), [1, 0]) == f2(equalto(9), [1, 0], i) == nothing
+    @test f1(occursin([0, 2]), [1, 0]) == f2(occursin([0, 2]), [1, 0], i) == 2
+    @test f1(occursin([0, 2]), [1, 9]) == f2(occursin([0, 2]), [1, 9], i) == nothing
+    @test f1([true, false]) == f2([true, false], i) == 1
+    @test f1([false, false]) == f2([false, false], i) == nothing
+
+    # Specific methods
+    @test f2(equalto('a'), "ba", i) == f1(equalto('a'), "ba") == 2
+    for S in (Int8, UInt8), T in (Int8, UInt8)
+        # Bug in Julia 0.6
+        f1 === Compat.findlast && VERSION < v"0.7.0-DEV.3272" && continue
+        @test f2(equalto(S(1)), T[0, 1], i) == f1(equalto(S(1)), T[0, 1]) == 2
+        @test f2(equalto(S(9)), T[0, 1], i) == f1(equalto(S(9)), T[0, 1]) == nothing
+    end
+    for chars in (['a', 'z'], Set(['a', 'z']), ('a', 'z'))
+        @test f2(occursin(chars), "ba", i) == f1(occursin(chars), "ba") == 2
+        @test f2(occursin(chars), "bx", i) == f1(occursin(chars), "bx") == nothing
+    end
+end
+for (f1, f2, i) in ((findfirst, findnext, 1),
+                    (findlast, findprev, 2),
+                    (Compat.findfirst, Compat.findnext, 1),
+                    (Compat.findlast, Compat.findprev, 2))
+    @test f2("a", "ba", i) == f1("a", "ba") == 2:2
+    @test f2("z", "ba", i) == f1("z", "ba") == 0:-1
+end
+for (f1, f2, i) in ((findfirst, findnext, 1),
+                    (Compat.findfirst, Compat.findnext, 1))
+    @test f2(r"a", "ba", 1) == f1(r"a", "ba") == 2:2
+    @test f2(r"z", "ba", 1) == f1(r"z", "ba") == 0:-1
+end
+
+@test Compat.findfirst(equalto(UInt8(0)), IOBuffer(UInt8[1, 0])) == 2
+@test Compat.findfirst(equalto(UInt8(9)), IOBuffer(UInt8[1, 0])) == nothing
+
+@test findall([true, false, true]) == [1, 3]
+@test findall(occursin([1, 2]), [1]) == [1]
 
 nothing
