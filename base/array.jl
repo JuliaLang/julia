@@ -1992,6 +1992,19 @@ function findall(A)
     end
     collect(first(p) for p in _pairs(A) if last(p) != 0)
 end
+# Allocating result upfront is faster (possible only when collection can be iterated twice)
+function findall(A::AbstractArray{Bool})
+    n = count(A)
+    I = Vector{eltype(keys(A))}(uninitialized, n)
+    cnt = 1
+    for (i,a) in pairs(A)
+        if a
+            I[cnt] = i
+            cnt += 1
+        end
+    end
+    I
+end
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()

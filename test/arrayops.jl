@@ -506,6 +506,19 @@ end
     @test findlast(!iszero, g3) == CartesianIndex(9, 2)
     @test findfirst(equalto(2), g3) === nothing
     @test findlast(equalto(2), g3) === nothing
+
+    g4 = (x for x in [true, false, true, false])
+    @test findall(g4) == [1, 3]
+    @test findfirst(g4) == 1
+    @test findlast(g4) == 3
+
+    g5 = (x for x in [true false; true false])
+    @test findall(g5) == findall(collect(g5))
+    @test findfirst(g5) == CartesianIndex(1, 1)
+    @test findlast(g5) == CartesianIndex(2, 1)
+
+    @test findfirst(x for x in Bool[]) === nothing
+    @test findlast(x for x in Bool[]) === nothing
 end
 
 @testset "findmin findmax argmin argmax" begin
