@@ -238,6 +238,8 @@ function acosh(x::T) where T <: Union{Float32, Float64}
     #         return log(x)+ln2
     # Special cases:
     #     if x < 1 throw DomainError
+    isnan(x) && return x
+
     if x < T(1)
         return acosh_domain_error(x)
     elseif x == T(1)
@@ -274,6 +276,8 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     #         return Inf
     # Special cases:
     #    if |x| > 1 throw DomainError
+    isnan(x) && return x
+
     absx = abs(x)
 
     if absx > 1
