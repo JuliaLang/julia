@@ -377,7 +377,7 @@ Using an unpatched or different version of LLVM will result in errors and/or poo
 
 ### BLAS and LAPACK
 
-As the pupose of Julia is to be a high-performance numerical language, a multi-threaded BLAS and LAPACK, such as OpenBLAS should be used, and _not_ the reference implementations that are the default on some systems.
+As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS, and _not_ the reference implementations which are the default on some systems.
 
 ### SuiteSparse
 
