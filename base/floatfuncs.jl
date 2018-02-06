@@ -19,7 +19,7 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 """
     maxintfloat(T=Float64)
 
-The largest consecutive integer representable by the given floating-point type `T`
+The largest consecutive integer that is exactly represented in the given floating-point type `T`
 (which defaults to `Float64`).
 
 That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
@@ -33,7 +33,7 @@ maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
 """
     maxintfloat(T, S)
 
-The largest consecutive integer representable by the given floating-point type `T` that
+The largest consecutive integer representable in the given floating-point type `T` that
 also does not exceed the maximum integer representable by the integer type `S`.  Equivalently,
 it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
