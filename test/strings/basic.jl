@@ -262,7 +262,7 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
