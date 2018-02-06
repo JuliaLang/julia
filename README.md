@@ -354,11 +354,12 @@ Package maintaners will typically want to make use of system libraries where pos
 Currently community maintained packages are:
 - Fedora: [official](https://src.fedoraproject.org/rpms/julia), [Copr (for backports)](https://copr.fedorainfracloud.org/coprs/nalimilan/julia/)
 - [Arch](https://www.archlinux.org/packages/community/x86_64/julia/)
+- [Gentoo](https://packages.gentoo.org/packages/dev-lang/julia)
 - [Raspbian](https://github.com/JuliaBerry/julia-raspbian)
 
 Additionally, the following unmaintained packages may still be useful:
 - [Homebrew](https://github.com/staticfloat/homebrew-julia)
-- [Ubuntu](https://launchpad.net/~staticfloat/+archive/ubuntu/juliareleases) (0.5)
+- [Ubuntu PPA](https://launchpad.net/~staticfloat/+archive/ubuntu/juliareleases) (0.5)
 - [Debian](https://packages.debian.org/sid/julia) (0.4)
 
 ### System Provided Libraries
