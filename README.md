@@ -294,15 +294,15 @@ Building Julia requires that the following software be installed:
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.9)           — compiler infrastructure.
+- **[LLVM]** (3.9 + patches) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**                — portable, high-performance event-based I/O library.
+- **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
 - **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
+- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices (see [note below](#suitesparse).
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
@@ -347,11 +347,37 @@ Julia uses the following external libraries, which are automatically downloaded 
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
+### Notes for distribution package maintainers
+
+Package maintaners will typically want to make use of system libraries where possible. Please refer to the abover version requirements and notes below.
+
+Currently community maintained packages are:
+- Fedora: [official](https://src.fedoraproject.org/rpms/julia), [Copr (for backports)](https://copr.fedorainfracloud.org/coprs/nalimilan/julia/)
+- [Arch](https://www.archlinux.org/packages/community/x86_64/julia/)
+- [Raspbian](https://github.com/JuliaBerry/julia-raspbian)
+
+Additionally, the following unmaintained packages may still be useful:
+- [Homebrew](https://github.com/staticfloat/homebrew-julia)
+- [Ubuntu](https://launchpad.net/~staticfloat/+archive/ubuntu/juliareleases) (0.5)
+- [Debian](https://packages.debian.org/sid/julia) (0.4)
+
 ### System Provided Libraries
 
 If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`.
 
 Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+
+### LLVM
+
+The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches (LLVM is not backward compatible). We recommend either:
+ - adding the patches to the LLVM 3.9 package of the distribution (note: these are backported upstream bug fixes, _not_ Julia-specific patches: all have been contributed into upstream LLVM), or
+ - bundling a Julia-only LLVM library inside the Julia package.
+
+Using an unpatched or different version of LLVM will result in errors and/or poor performance. 
+
+### BLAS and LAPACK
+
+As the pupose of Julia is to be a high-performance numerical language, a multi-threaded BLAS and LAPACK, such as OpenBLAS should be used, and _not_ the reference implementations that are the default on some systems.
 
 ### SuiteSparse
 
