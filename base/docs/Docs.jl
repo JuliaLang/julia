@@ -196,7 +196,7 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::IdDict
+    docs::IdDict{Any,Any}
 
     MultiDoc() = new(Type[], IdDict())
 end
