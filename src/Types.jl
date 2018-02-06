@@ -67,36 +67,44 @@ Base.:(==)(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
 ## VersionRange ##
 
-struct VersionBound{n}
-    t::NTuple{n,Int}
-    function VersionBound{n}(t::NTuple{n,Integer}) where n
+struct VersionBound
+    t::NTuple{3,Int}
+    n::Int
+    function VersionBound(tin::NTuple{n,Integer}) where n
         n <= 3 || throw(ArgumentError("VersionBound: you can only specify major, minor and patch versions"))
-        return new(t)
+        n == 0 && return new( (     0,      0,      0), n)
+        n == 1 && return new( (tin[1],      0,      0), n)
+        n == 2 && return new( (tin[1], tin[2],      0), n)
+        n == 3 && return new( (tin[1], tin[2], tin[3]), n)
+        error("invalid $n")
     end
 end
-VersionBound(t::Integer...) = VersionBound{length(t)}(t)
+VersionBound(t::Integer...) = VersionBound(t)
 
 Base.convert(::Type{VersionBound}, v::VersionNumber) =
     VersionBound(v.major, v.minor, v.patch)
 
 Base.getindex(b::VersionBound, i::Int) = b.t[i]
 
-≲(v::VersionNumber, b::VersionBound{0}) = true
-≲(v::VersionNumber, b::VersionBound{1}) = v.major <= b[1]
-≲(v::VersionNumber, b::VersionBound{2}) = (v.major, v.minor) <= (b[1], b[2])
-≲(v::VersionNumber, b::VersionBound{3}) = (v.major, v.minor, v.patch) <= (b[1], b[2], b[3])
+function ≲(v::VersionNumber, b::VersionBound)
+    b.n == 0 && return true
+    b.n == 1 && return v.major <= b[1]
+    b.n == 2 && return (v.major, v.minor) <= (b[1], b[2])
+    return (v.major, v.minor, v.patch) <= (b[1], b[2], b[3])
+end
 
-≲(b::VersionBound{0}, v::VersionNumber) = true
-≲(b::VersionBound{1}, v::VersionNumber) = v.major >= b[1]
-≲(b::VersionBound{2}, v::VersionNumber) = (v.major, v.minor) >= (b[1], b[2])
-≲(b::VersionBound{3}, v::VersionNumber) = (v.major, v.minor, v.patch) >= (b[1], b[2], b[3])
+function ≲(b::VersionBound, v::VersionNumber)
+    b.n == 0 && return true
+    b.n == 1 && return v.major >= b[1]
+    b.n == 2 && return (v.major, v.minor) >= (b[1], b[2])
+    return (v.major, v.minor, v.patch) >= (b[1], b[2], b[3])
+end
 
 ≳(v::VersionNumber, b::VersionBound) = v ≲ b
 ≳(b::VersionBound, v::VersionNumber) = b ≲ v
 
-# Comparison between two lower bounds
-# (could be done with generated functions, or even manually unrolled...)
-function isless_ll(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+function isless_ll(a::VersionBound, b::VersionBound)
+    m, n = a.n, b.n
     for i = 1:min(m,n)
         a[i] < b[i] && return true
         a[i] > b[i] && return false
@@ -108,7 +116,8 @@ stricterlower(a::VersionBound, b::VersionBound) = isless_ll(a, b) ? b : a
 
 # Comparison between two upper bounds
 # (could be done with generated functions, or even manually unrolled...)
-function isless_uu(a::VersionBound{m}, b::VersionBound{n}) where {m,n}
+function isless_uu(a::VersionBound, b::VersionBound)
+    m, n = a.n, b.n
     for i = 1:min(m,n)
         a[i] < b[i] && return true
         a[i] > b[i] && return false
@@ -123,35 +132,34 @@ stricterupper(a::VersionBound, b::VersionBound) = isless_uu(a, b) ? a : b
 # The equal-length-bounds case is special since e.g. `1.5` can be joined with `1.6`,
 # `2.3.4` can be joined with `2.3.5` etc.
 
-isjoinable(up::VersionBound{0}, lo::VersionBound{0}) = true
-
-function isjoinable(up::VersionBound{n}, lo::VersionBound{n}) where {n}
-    for i = 1:(n - 1)
-        up[i] > lo[i] && return true
-        up[i] < lo[i] && return false
+function isjoinable(up::VersionBound, lo::VersionBound)
+    up.n == 0 && up.lo == 0 && return true
+    if up.n == lo.n
+        n = up.n
+        for i = 1:(n - 1)
+            up[i] > lo[i] && return true
+            up[i] < lo[i] && return false
+        end
+        up[n] < lo[n] - 1 && return false
+        return true
+    else
+        l = min(up.n, lo.n)
+        for i = 1:l
+            up[i] > lo[i] && return true
+            up[i] < lo[i] && return false
+        end
     end
-    up[n] < lo[n] - 1 && return false
     return true
 end
 
-function isjoinable(up::VersionBound{m}, lo::VersionBound{n}) where {m,n}
-    l = min(m,n)
-    for i = 1:l
-        up[i] > lo[i] && return true
-        up[i] < lo[i] && return false
-    end
-    return true
-end
-
-
-Base.hash(r::VersionBound, h::UInt) = hash(r.t, h)
+Base.hash(r::VersionBound, h::UInt) = hash(hash(r.t, h), r.n)
 
 Base.convert(::Type{VersionBound}, s::AbstractString) =
     s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
 
-struct VersionRange{m,n}
-    lower::VersionBound{m}
-    upper::VersionBound{n}
+struct VersionRange
+    lower::VersionBound
+    upper::VersionBound
     # NOTE: ranges are allowed to be empty; they are ignored by VersionSpec anyway
 end
 VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
@@ -160,8 +168,8 @@ VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
 Base.convert(::Type{VersionRange}, v::VersionNumber) =
     VersionRange(VersionBound(v))
 
-function Base.isempty(r::VersionRange{m,n}) where {m,n}
-    for i = 1:min(m,n)
+function Base.isempty(r::VersionRange)
+    for i = 1:min(r.lower.n, r.upper.n)
         r.lower[i] > r.upper[i] && return true
         r.lower[i] < r.upper[i] && return false
     end
@@ -176,20 +184,22 @@ function Base.convert(::Type{VersionRange}, s::AbstractString)
     return VersionRange(lower, upper)
 end
 
-Base.print(io::IO, r::VersionRange{0,0}) = print(io, '*')
-function Base.print(io::IO, r::VersionRange{0,n}) where {n}
-    print(io, "0-")
-    join(io, r.upper.t, '.')
-end
-function Base.print(io::IO, r::VersionRange{m,0}) where {m}
-    join(io, r.lower.t, '.')
-    print(io, "-*")
-end
 function Base.print(io::IO, r::VersionRange)
-    join(io, r.lower.t, '.')
-    if r.lower != r.upper
-        print(io, '-')
+    m, n = r.lower.n, r.upper.n
+    if (m, n) == (0, 0)
+        print(io, '*')
+    elseif m == 0
+        print(io, "0-")
         join(io, r.upper.t, '.')
+    elseif n == 0
+        join(io, r.lower.t, '.')
+        print(io, "-*")
+    else
+        join(io, r.lower.t, '.')
+        if r.lower != r.upper
+            print(io, '-')
+            join(io, r.upper.t, '.')
+        end
     end
 end
 Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
@@ -935,7 +945,7 @@ function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
     choices::Vector{String} = []
-    choices_cache::Vector{Tuple{UUID, String}} = [] 
+    choices_cache::Vector{Tuple{UUID, String}} = []
     for uuid in uuids
         values = registered_info(env, uuid, "repo")
         for value in values
@@ -974,7 +984,7 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     for path in paths
         info = parse_toml(path, "package.toml")
         value = get(info, key, nothing)
-        push!(values, (path, value)) 
+        push!(values, (path, value))
     end
     return values
 end
