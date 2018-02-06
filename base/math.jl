@@ -984,7 +984,4 @@ include(joinpath("special", "gamma.jl"))
 include(joinpath("special", "rem_pio2.jl"))
 include(joinpath("special", "log.jl"))
 
-module JuliaLibm
-end
-
 end # module
