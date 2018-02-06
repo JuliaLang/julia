@@ -465,7 +465,8 @@ endif
 
 	# Create file light-source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > light-source-dist.tmp
-	git ls-files | sed -e '/\.git/d' -e '/\.travis/d' -e '/appveyor.yml/d' -e '/\.circleci/d' -e '/\.freebsdci/d' -e '/\.mailmap/d' >> light-source-dist.tmp
+	# Exclude git, github and CI config files
+	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code
