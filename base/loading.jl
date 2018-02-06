@@ -101,6 +101,25 @@ isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
+# fake uuid5 function (for self-assigned UUIDs)
+# TODO: delete and use real uuid5 once it's in stdlib
+
+function uuid5(namespace::UUID, key::String)
+    u::UInt128 = 0
+    h = hash(namespace)
+    for _ = 1:sizeof(u)÷sizeof(h)
+        u <<= sizeof(h) << 3
+        u |= (h = hash(key, h))
+    end
+    u &= 0xffffffffffff0fff3fffffffffffffff
+    u |= 0x00000000000050008000000000000000
+    return UUID(u)
+end
+
+const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
+
+dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, project_file)
+
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
 const SlugInt = UInt32 # max p = 4
@@ -242,8 +261,8 @@ function identify_package(where::Module, name::String)::Union{Nothing,PkgId}
 end
 
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
-    where.uuid === nothing && return identify_package(name)
     where.name === name && return where
+    where.uuid === nothing && return identify_package(name)
     for env in load_path()
         found_or_uuid = manifest_deps_get(env, where, name)
         found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
@@ -325,17 +344,21 @@ function project_deps_get(env::String, name::String)::Union{Bool,UUID}
 end
 
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Bool,UUID}
+    @assert where.uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
-        proj_name, proj_uuid = project_file_name_and_uuid(project_file)
+        proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
         if proj_name == where.name && proj_uuid == where.uuid
+            # `where` matches the project, use deps as manifest
             found_or_uuid = explicit_project_deps_get(project_file, name)
             return found_or_uuid isa UUID ? found_or_uuid : true
         end
+        # look for `where` stanza in manifest file
         manifest_file = project_file_manifest_path(project_file)
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_deps_get(manifest_file, where.uuid, name)
         end
+        return false # `where` stanza not found
     end
     project_file && implicit_manifest_deps_get(env, where, name)
 end
@@ -347,6 +370,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_uuid_path(manifest_file, pkg)
         end
+        return nothing
     end
     project_file ? implicit_manifest_uuid_path(env, pkg) : nothing
 end
@@ -367,9 +391,10 @@ const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
 # find project file's top-level UUID entry (or nothing)
-function project_file_name_and_uuid(project_file::String)::Tuple{Union{Nothing,String},Union{Nothing,UUID}}
+function project_file_name_and_uuid(project_file::String,
+    name::Union{Nothing,String}=nothing)::Tuple{Union{Nothing,String},UUID}
     open(project_file) do io
-        name = uuid = nothing
+        uuid = dummy_uuid(project_file)
         for line in eachline(io)
             contains(line, re_section) && break
             if (m = match(re_name_to_string, line)) != nothing
@@ -470,7 +495,7 @@ end
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
         root_name = nothing
-        root_uuid = true
+        root_uuid = dummy_uuid(project_file)
         state = :top
         for line in eachline(io)
             if state == :top
@@ -573,13 +598,13 @@ end
 
 # look for an entry point for `name`:
 #  - `false` means: did not find `name`
-#  - `true` means: found `name` without UUID
-#  - `uuid` means: found `name` with `uuid` in project file
+#  - `true` means: found `name` without project file
+#  - `uuid` means: found `name` with project file with real or dummy `uuid`
 function implicit_project_deps_get(dir::String, name::String)::Union{Bool,UUID}
     path, project_file = entry_point_and_project_file(dir, name)
     project_file == nothing && return path != nothing
-    uuid = project_file_name_and_uuid(project_file)[2]
-    uuid == nothing || uuid
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, name)
+    proj_name == name && proj_uuid
 end
 
 # look for an entry-point for `where` by name, check that UUID matches
@@ -589,9 +614,9 @@ end
 #  - `uuid` means: found `where` and `name` mapped to `uuid` in its deps
 function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Union{Bool,UUID}
     @assert where.uuid !== nothing
-    path, project_file = entry_point_and_project_file(dir, where.name)
+    project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return false
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file)
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
     proj_name == where.name && proj_uuid == where.uuid || return false
     found_or_uuid = explicit_project_deps_get(project_file, name)
     found_or_uuid isa UUID ? found_or_uuid : true
@@ -600,9 +625,10 @@ end
 # look for an entry-point for `pkg` and return its path if UUID matches
 function implicit_manifest_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,String}
     path, project_file = entry_point_and_project_file(dir, pkg.name)
-    uuid = project_file == nothing ? nothing :
-        project_file_name_and_uuid(project_file)[2]
-    uuid == pkg.uuid ? path : nothing
+    pkg.uuid === nothing && project_file === nothing && return path
+    pkg.uuid === nothing || project_file === nothing && return nothing
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, pkg.name)
+    proj_name == pkg.name && proj_uuid == pkg.uuid ? path : nothing
 end
 
 ## other code loading functionality ##
