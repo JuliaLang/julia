@@ -238,6 +238,7 @@ function acosh(x::T) where T <: Union{Float32, Float64}
     #         return log(x)+ln2
     # Special cases:
     #     if x < 1 throw DomainError
+
     isnan(x) && return x
 
     if x < T(1)
