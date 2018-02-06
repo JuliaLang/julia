@@ -11,7 +11,7 @@ ga('send', 'pageview');
  eval(::Module, ::Any) at boot.jl:236
  eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
  macro expansion at REPL.jl:97 [inlined]
- (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73</code></pre><p>Calling <a href="../../base/stacktraces/#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> returns a vector of <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackFrame</code></a> s. For ease of use, the alias <a href="../../base/stacktraces/#Base.StackTraces.StackTrace"><code>StackTrace</code></a> can be used in place of <code>Vector{StackFrame}</code>. (Examples with <code>[...]</code> indicate that output may vary depending on how the code is run.)</p><pre><code class="language-julia-repl">julia&gt; example() = stacktrace()
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73</code></pre><p>Calling <a href="../../base/stacktraces/#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> returns a vector of <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackTraces.StackFrame</code></a> s. For ease of use, the alias <a href="../../base/stacktraces/#Base.StackTraces.StackTrace"><code>StackTraces.StackTrace</code></a> can be used in place of <code>Vector{StackFrame}</code>. (Examples with <code>[...]</code> indicate that output may vary depending on how the code is run.)</p><pre><code class="language-julia-repl">julia&gt; example() = stacktrace()
 example (generic function with 1 method)
 
 julia&gt; example()
@@ -43,7 +43,7 @@ julia&gt; example()
  eval(::Module, ::Any) at boot.jl:236
  eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
  macro expansion at REPL.jl:97 [inlined]
- (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73</code></pre><h2><a class="nav-anchor" id="Extracting-useful-information-1" href="#Extracting-useful-information-1">Extracting useful information</a></h2><p>Each <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackFrame</code></a> contains the function name, file name, line number, lambda info, a flag indicating whether the frame has been inlined, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by <a href="../../base/base/#Base.backtrace"><code>backtrace</code></a>:</p><pre><code class="language-julia-repl">julia&gt; top_frame = stacktrace()[1]
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73</code></pre><h2><a class="nav-anchor" id="Extracting-useful-information-1" href="#Extracting-useful-information-1">Extracting useful information</a></h2><p>Each <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackTraces.StackFrame</code></a> contains the function name, file name, line number, lambda info, a flag indicating whether the frame has been inlined, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by <a href="../../base/base/#Base.backtrace"><code>backtrace</code></a>:</p><pre><code class="language-julia-repl">julia&gt; top_frame = stacktrace()[1]
 eval(::Module, ::Expr) at REPL.jl:3
 
 julia&gt; top_frame.func
@@ -171,7 +171,7 @@ julia&gt; stacktrace(trace)
  jl_apply_generic at gf.c:2215
  jl_apply at julia.h:1411 [inlined]
  start_task at task.c:261
- ip:0xffffffffffffffff</code></pre><p>Individual pointers returned by <a href="../../base/base/#Base.backtrace"><code>backtrace</code></a> can be translated into <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackFrame</code></a> s by passing them into <a href="../../base/stacktraces/#Base.StackTraces.lookup"><code>StackTraces.lookup</code></a>:</p><pre><code class="language-julia-repl">julia&gt; pointer = backtrace()[1];
+ ip:0xffffffffffffffff</code></pre><p>Individual pointers returned by <a href="../../base/base/#Base.backtrace"><code>backtrace</code></a> can be translated into <a href="../../base/stacktraces/#Base.StackTraces.StackFrame"><code>StackTraces.StackFrame</code></a> s by passing them into <a href="../../base/stacktraces/#Base.StackTraces.lookup"><code>StackTraces.lookup</code></a>:</p><pre><code class="language-julia-repl">julia&gt; pointer = backtrace()[1];
 
 julia&gt; frame = StackTraces.lookup(pointer)
 1-element Array{StackFrame,1}:
