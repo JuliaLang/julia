@@ -7,7 +7,7 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 using Base: iszero
 using Printf: @sprintf
 

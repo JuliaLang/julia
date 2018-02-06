@@ -697,7 +697,7 @@ function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
         hi = ceil(Int,1+maxp*(lv-1))
 
         # only need to perform partial sort
-        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
+        sort!(v, 1, lv, Sort.PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     return v

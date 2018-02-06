@@ -15,7 +15,7 @@ function finalize_backedges(frame::InferenceState)
                     ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
-                    typeassert(to, MethodTable)
+                    typeassert(to, Core.MethodTable)
                     typ = edges[i + 1]
                     ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2

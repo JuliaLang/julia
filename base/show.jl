@@ -441,7 +441,7 @@ isvisible(sym::Symbol, parent::Module, from::Module) =
     isdefined(from, sym) && !isdeprecated(from, sym) && !isdeprecated(parent, sym) &&
         getfield(from, sym) === getfield(parent, sym)
 
-function show_type_name(io::IO, tn::TypeName)
+function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
         # intercept this case and print `UnionAll` instead.
@@ -546,7 +546,7 @@ macro show(exs...)
     return blk
 end
 
-function show(io::IO, tn::TypeName)
+function show(io::IO, tn::Core.TypeName)
     show_type_name(io, tn)
 end
 

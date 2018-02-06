@@ -16,8 +16,8 @@ julia> stacktrace()
  (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
-Calling [`stacktrace()`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
-alias [`StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
+Calling [`stacktrace()`](@ref) returns a vector of [`StackTraces.StackFrame`](@ref) s. For ease of use, the
+alias [`StackTraces.StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
 indicate that output may vary depending on how the code is run.)
 
 ```julia-repl
@@ -66,7 +66,7 @@ julia> example()
 
 ## Extracting useful information
 
-Each [`StackFrame`](@ref) contains the function name, file name, line number, lambda info, a flag
+Each [`StackTraces.StackFrame`](@ref) contains the function name, file name, line number, lambda info, a flag
 indicating whether the frame has been inlined, a flag indicating whether it is a C function (by
 default C functions do not appear in the stack trace), and an integer representation of the pointer
 returned by [`backtrace`](@ref):
@@ -257,7 +257,7 @@ julia> stacktrace(trace, true)
  ip:0xffffffffffffffff
 ```
 
-Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackFrame`](@ref)
+Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackTraces.StackFrame`](@ref)
 s by passing them into [`StackTraces.lookup`](@ref):
 
 ```julia-repl

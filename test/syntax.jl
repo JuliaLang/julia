@@ -651,7 +651,7 @@ end
 # Issue #16578 (Lowering) mismatch between push_loc and pop_loc
 module TestMeta_16578
 using Test
-function get_expr_list(ex::CodeInfo)
+function get_expr_list(ex::Core.CodeInfo)
     return ex.code::Array{Any,1}
 end
 function get_expr_list(ex::Expr)
@@ -680,7 +680,7 @@ function count_meta_loc(exprs)
 end
 
 function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], SSAValue)
+    ex.head === :return && isa(ex.args[1], Core.SSAValue)
 end
 
 function is_pop_loc(ex::Expr)

@@ -95,7 +95,7 @@ if opt_level > 0
     # String
     test_loads_no_call(get_llvm(core_sizeof, Tuple{String}), [Iptr])
     # String
-    test_loads_no_call(get_llvm(core_sizeof, Tuple{SimpleVector}), [Iptr])
+    test_loads_no_call(get_llvm(core_sizeof, Tuple{Core.SimpleVector}), [Iptr])
     # Array
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector{Int}}), [Iptr])
     # As long as the eltype is known we don't need to load the elsize

@@ -3,7 +3,7 @@
 # tests for Core.Compiler correctness and precision
 import Core.Compiler: Const, Conditional, ⊑
 
-using Random
+using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
@@ -926,7 +926,7 @@ end
 @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
 @test isdefined_tfunc(Const(Base), Symbol) == Bool
 @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
-@test isdefined_tfunc(SimpleVector, Const(1)) === Const(false)
+@test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Bool
@@ -1019,7 +1019,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
     precompile(tt)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{SimpleVector}, (Any, Any), tt, meth.sig)
+    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
     meth = Base.func_for_method_checked(meth, tt)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                  (Any, Any, Any, UInt), meth, tt, env, world)
