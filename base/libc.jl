@@ -3,7 +3,7 @@
 module Libc
 @doc """
 Interface to libc, the C standard library.
-""" -> Libc
+""" Libc
 
 import Base: transcode
 

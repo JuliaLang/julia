@@ -3,7 +3,7 @@
 module Sys
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
-""" -> Sys
+""" Sys
 
 export BINDIR,
        CPU_CORES,

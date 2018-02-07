@@ -1269,7 +1269,34 @@ end
 @test_throws ParseError Meta.parse("using Colors()")
 
 let ex = Meta.parse("md\"x\"
+                     f(x) = x", 1)[1]  # custom string literal is not a docstring
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] === Symbol("@md_str")
+    @test length(ex.args) == 3
+end
+
+let ex = Meta.parse("@doc raw\"
+                     \"
                      f(x) = x")
     @test Meta.isexpr(ex, :macrocall)
-    @test ex.args[1] == Core.GlobalRef(Core, Symbol("@doc"))
+    @test ex.args[1] === Symbol("@doc")
+    @test length(ex.args) == 4
+    @test Meta.isexpr(ex.args[4], :(=))
 end
+
+let ex = Meta.parse("@doc raw\"
+                     \"
+
+                     f(x) = x", 1)[1]
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] === Symbol("@doc")
+    @test length(ex.args) == 3
+end
+
+# TODO: enable when 0.7 deprecations are removed
+#@test Meta.parse("\"x\"
+#                  # extra line, not a doc string
+#                  f(x) = x", 1)[1] === "x"
+#@test Meta.parse("\"x\"
+#
+#                  f(x) = x", 1)[1] === "x"
