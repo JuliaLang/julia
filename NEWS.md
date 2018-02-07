@@ -746,6 +746,10 @@ Deprecated or removed
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
 
+  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`,
+    `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are
+    deprecated in favor of constructors taking keyword arguments ([#25872]).
+
   * `Display` has been renamed to `AbstractDisplay` ([#24831]).
 
   * Remaining vectorized methods over `SparseVector`s, particularly `floor`, `ceil`,
