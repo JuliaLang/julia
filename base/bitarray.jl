@@ -685,42 +685,6 @@ function _unsafe_setindex!(B::BitArray, x, I::BitArray)
     return B
 end
 
-# Assigning an array of bools is more complicated, but we can still do some
-# work on chunks by combining X and I 64 bits at a time to improve perf by ~40%
-@inline function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
-    @boundscheck checkbounds(B, I)
-    _unsafe_setindex!(B, X, I)
-end
-function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
-    Bc = B.chunks
-    Ic = I.chunks
-    length(Bc) == length(Ic) || throw_boundserror(B, I)
-    lc = length(Bc)
-    lx = length(X)
-    last_chunk_len = _mod64(length(B)-1)+1
-
-    c = 1
-    for i = 1:lc
-        @inbounds Imsk = Ic[i]
-        @inbounds C = Bc[i]
-        u = UInt64(1)
-        for j = 1:(i < lc ? 64 : last_chunk_len)
-            if Imsk & u != 0
-                lx < c && throw_setindex_mismatch(X, c)
-                @inbounds x = convert(Bool, X[c])
-                C = ifelse(x, C | u, C & ~u)
-                c += 1
-            end
-            u <<= 1
-        end
-        @inbounds Bc[i] = C
-    end
-    if length(X) != c-1
-        throw_setindex_mismatch(X, c-1)
-    end
-    return B
-end
-
 ## Dequeue functionality ##
 
 function push!(B::BitVector, item)

@@ -562,8 +562,9 @@ function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractAr
     end
 end
 _unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...) = deprecate_nonscalar_indexed_assignment!(A, X, I...)
-setindex!(B::BitArray, X::StridedArray, J0::Union{Colon,UnitRange{Int}}) = deprecate_nonscalar_indexed_assignment!(B, X, J0)
-setindex!(B::BitArray, X::StridedArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...) = deprecate_nonscalar_indexed_assignment!(B, X, I0, I)
+setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}}) = deprecate_nonscalar_indexed_assignment!(B, X, J0)
+setindex!(B::BitArray, X::AbstractArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...) = deprecate_nonscalar_indexed_assignment!(B, X, I0, I)
+setindex!(B::BitArray, X::AbstractArray, I::BitArray) = deprecate_nonscalar_indexed_assignment!(B, X, I)
 
 # issue #22791
 @deprecate select partialsort
