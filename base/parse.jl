@@ -218,20 +218,22 @@ function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = noth
 end
 
 ## string to float functions ##
-function parsefloat_preamble(s::AbstractString, base::Int, i::Int=1)
+function parsefloat_preamble(s::AbstractString, base::Int)
     isempty(s) && throw(ArgumentError("Empty string!"))
+    i = firstindex(s)
     c = ' '
     sign = 1
-    while isspace(c)
+    while !done(s, i) && isspace(c)
         c, i = next(s,i)
     end
     if c in ('-', '+')
         sign = (c == '-') ? -1 : 1
         c, i = next(s, i)
     end
-    while isspace(c)
+    while !done(s, i) && isspace(c)
         c, i = next(s,i)
     end
+    done(s,i) && throw(ArgumentError("input string is empty or only contains whitespace"))
     startpos = i-1
     return sign, startpos
 end
