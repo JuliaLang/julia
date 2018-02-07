@@ -88,6 +88,11 @@ function _compute_eltype(t::Type{<:Tuple})
     return r
 end
 
+# promotion
+
+# Not an actual promotion, just an improved typejoin
+promote_rule(::Type{S}, ::Type{T}) where {S<:Tuple, T<:Tuple} = promote_typejoin(S, T)
+
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()

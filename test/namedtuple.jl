@@ -222,9 +222,36 @@ abstr_nt_22194_3()
 @test findfirst(equalto(1), (a=2, b=3)) === nothing
 @test findlast(equalto(1), (a=2, b=3)) === nothing
 
+# Test promotion
+
+@test promote_type(NamedTuple{(:a,),Tuple{Int}},
+                   NamedTuple{(:a,),Tuple{Float64}}) ===
+    NamedTuple{(:a,),Tuple{Real}}
+@test promote_type(NamedTuple{(:a,:b),Tuple{Int,Float64}},
+                   NamedTuple{(:a,:b),Tuple{Float64,Int}}) ===
+    NamedTuple{(:a, :b),Tuple{Real, Real}}
+@test promote_type(NamedTuple{(:a,:b),Tuple{Int,String}},
+                   NamedTuple{(:a,:b),Tuple{Float64,Int}}) ===
+    NamedTuple{(:a,:b),Tuple{Real,Any}}
+
+for T in (Nothing, Missing)
+    @test promote_type(NamedTuple{(:a,),Tuple{Int}},
+                       NamedTuple{(:a,),Tuple{T}}) ===
+        NamedTuple{(:a,),Tuple{Union{T,Int}}}
+    @test promote_type(NamedTuple{(:a,:b),Tuple{Int,T}},
+                       NamedTuple{(:a,:b),Tuple{T,Float64}}) ===
+        NamedTuple{(:a, :b),Tuple{Union{T,Int}, Union{T,Float64}}}
+    @test promote_type(NamedTuple{(:a,),Tuple{Int}},
+                       NamedTuple{(:a,),Tuple{Float64}},
+                       NamedTuple{(:a,),Tuple{T}}) ===
+        NamedTuple{(:a,),Tuple{Union{Any,T}}}
+end
+
 # Test map with Nothing and Missing
 for T in (Nothing, Missing)
     x = [(a=1, b=T()), (a=1, b=2)]
+    @test x isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{T,Int}}}}
+
     y = map(v -> (a=v.a, b=v.b), [(a=1, b=T()), (a=1, b=2)])
     @test y isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{T,Int}}}}
     @test isequal(x, y)
