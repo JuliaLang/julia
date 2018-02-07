@@ -419,8 +419,6 @@ This section lists changes that do not have deprecation warnings.
 
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
-    
-  * Strings representing floating point numbers can now be parsed in bases 2 to 23 ([#22596]).
 
 Library improvements
 --------------------
@@ -581,7 +579,9 @@ Library improvements
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
-    ones of `Dict`. ([#25210])
+    ones of `Dict`. ([#25210])  
+        
+  * Strings representing floating point numbers can now be parsed in bases 2 to 23 ([#22480]).
 
 Compiler/Runtime improvements
 -----------------------------
