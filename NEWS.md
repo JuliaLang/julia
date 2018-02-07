@@ -1020,6 +1020,9 @@ Deprecated or removed
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
 
+  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
+    add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
+
 Command-line option changes
 ---------------------------
 
