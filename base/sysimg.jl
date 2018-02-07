@@ -477,7 +477,8 @@ function __init__()
     Csrand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
+    Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
+    global_logger(Logging.ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_depot_path()
