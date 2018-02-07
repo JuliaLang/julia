@@ -371,7 +371,7 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 ### LLVM
 
-The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches (LLVM is not backward compatible). We recommend either:
+The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches from upstream (LLVM is not backward compatible). We recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM 3.9 package of the distribution.
    * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
@@ -379,6 +379,10 @@ The most complicated dependency is LLVM, for which we require version 3.9 with s
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance. Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
+
+### libuv
+
+Julia uses a custom fork of libuv. It is a small dependency, and can be safely bundled in the same package as Julia, and will not conflict with the system library. Julia builds should _not_ try to use the system libuv.
 
 ### BLAS and LAPACK
 
