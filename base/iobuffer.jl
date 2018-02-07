@@ -53,7 +53,7 @@ julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 julia> String(take!(io))
 "JuliaLang is a GitHub organization. It has many members."
 
-julia> io = IOBuffer("JuliaLang is a GitHub organization.")
+julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
 
 julia> read(io, String)
@@ -70,6 +70,12 @@ julia> write(io, "JuliaLang is a GitHub organization.")
 
 julia> String(take!(io))
 "JuliaLang is a GitHub organization"
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
+4
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=true)))
+0
 ```
 """
 function IOBuffer(
@@ -106,9 +112,6 @@ function IOBuffer(;
         truncate=flags.truncate,
         maxsize=maxsize)
     buf.data[:] = 0
-    if flags.truncate
-        buf.size = 0
-    end
     return buf
 end
 
