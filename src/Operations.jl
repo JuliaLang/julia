@@ -133,17 +133,24 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
     uuids = union(keys(reqs), keys(fixed), map(fx->keys(fx.requires), values(fixed))...)
     seen = UUID[]
 
-    all_versions = Dict{UUID,Set{VersionNumber}}(fp => Set([fx.version]) for (fp,fx) in fixed)
-    all_deps = Dict{UUID,Dict{VersionRange,Dict{String,UUID}}}(fp => Dict(VersionRange(fx.version) => Dict()) for (fp,fx) in fixed)
-    all_compat = Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}}(fp => Dict(VersionRange(fx.version) => Dict()) for (fp,fx) in fixed)
+    all_versions = Dict{UUID,Set{VersionNumber}}()
+    all_deps     = Dict{UUID,Dict{VersionRange,Dict{String,UUID}}}()
+    all_compat   = Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}}()
+
+    for (fp, fx) in fixed
+        all_versions[fp] = Set([fx.version])
+        all_deps[fp]     = Dict(VersionRange(fx.version) => Dict())
+        all_compat[fp]   = Dict(VersionRange(fx.version) => Dict())
+    end
+
     while true
         unseen = setdiff(uuids, seen)
         isempty(unseen) && break
         for uuid in unseen
             push!(seen, uuid)
             all_versions_u = get_or_make!(all_versions, uuid)
-            all_deps_u = get_or_make!(all_deps, uuid)
-            all_compat_u = get_or_make!(all_compat, uuid)
+            all_deps_u     = get_or_make!(all_deps,     uuid)
+            all_compat_u   = get_or_make!(all_compat,   uuid)
             # make sure all versions of all packages know about julia uuid
             if uuid ≠ uuid_julia
                 deps_u_allvers = get_or_make!(all_deps_u, VersionRange())
@@ -157,7 +164,7 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
 
                 union!(all_versions_u, versions)
 
-                for (vr,dd) in deps_data
+                for (vr, dd) in deps_data
                     all_deps_u_vr = get_or_make!(all_deps_u, vr)
                     for (name,other_uuid) in dd
                         # check conflicts??
@@ -165,7 +172,7 @@ function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requir
                         other_uuid in uuids || push!(uuids, other_uuid)
                     end
                 end
-                for (vr,cd) in compatibility_data
+                for (vr, cd) in compatibility_data
                     all_compat_u_vr = get_or_make!(all_compat_u, vr)
                     for (name,vs) in cd
                         # check conflicts??

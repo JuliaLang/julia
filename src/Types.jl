@@ -251,7 +251,13 @@ struct VersionSpec
 end
 VersionSpec() = VersionSpec(VersionRange())
 
-Base.in(v::VersionNumber, s::VersionSpec) = any(v in r for r in s.ranges)
+# Hot code
+function Base.in(v::VersionNumber, s::VersionSpec)
+    for r in s.ranges
+        v in r && return true
+    end
+    return false
+end
 
 Base.convert(::Type{VersionSpec}, v::VersionNumber) = VersionSpec(VersionRange(v))
 Base.convert(::Type{VersionSpec}, r::VersionRange) = VersionSpec(VersionRange[r])
@@ -264,9 +270,15 @@ const _empty_symbol = @static iswindows() ? "empty" : "∅"
 
 Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
 @assert isempty(empty_versionspec)
+# Hot code, measure performance before changing
 function Base.intersect(A::VersionSpec, B::VersionSpec)
     (isempty(A) || isempty(B)) && return copy(empty_versionspec)
-    ranges = [intersect(a,b) for a in A.ranges for b in B.ranges]
+    ranges = Vector{VersionRange}(length(A.ranges) * length(B.ranges))
+    i = 1
+    @inbounds for a in A.ranges, b in B.ranges
+        ranges[i] = intersect(a, b)
+        i += 1
+    end
     VersionSpec(ranges)
 end
 
