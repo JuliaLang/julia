@@ -350,7 +350,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 ### Notes for distribution package maintainers
 
-Package maintaners will typically want to make use of system libraries where possible. Please refer to the above version requirements and additional notes below.
+Package maintainers will typically want to make use of system libraries where possible. Please refer to the above version requirements and additional notes below.
 
 Currently community maintained packages are:
 - Fedora: [official](https://src.fedoraproject.org/rpms/julia), [Copr (for backports)](https://copr.fedorainfracloud.org/coprs/nalimilan/julia/)
@@ -374,9 +374,9 @@ Please be aware that this procedure is not officially supported, as it introduce
 The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches (LLVM is not backward compatible). We recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM 3.9 package of the distribution.
-  * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
-  * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
-  * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
+   * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
+   * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
+   * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance. Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
 
