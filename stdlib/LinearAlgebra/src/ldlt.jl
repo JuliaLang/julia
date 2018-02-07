@@ -131,7 +131,7 @@ function SymTridiagonal(F::LDLt)
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]
-    d[2:end] += e .* F.data.ev
+    d[2:end] .+= e .* F.data.ev
     SymTridiagonal(d, e)
 end
 AbstractMatrix(F::LDLt) = SymTridiagonal(F)

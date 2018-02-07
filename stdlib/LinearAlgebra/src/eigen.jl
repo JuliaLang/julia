@@ -38,7 +38,7 @@ function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) whe
     j = 1
     while j <= n
         if WI[j] == 0
-            evec[:,j] = view(VR, :, j)
+            evec[:,j] .= view(VR, :, j)
         else
             for i = 1:n
                 evec[i,j]   = VR[i,j] + im*VR[i,j+1]
@@ -321,7 +321,7 @@ function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     j = 1
     while j <= n
         if alphai[j] == 0
-            vecs[:,j] = view(vr, :, j)
+            vecs[:,j] .= view(vr, :, j)
         else
             for i = 1:n
                 vecs[i,j  ] = vr[i,j] + im*vr[i,j+1]

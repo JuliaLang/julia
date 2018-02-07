@@ -781,7 +781,7 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
     ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(lmul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
-    B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
+    B[1:nA,:] .= view(B, 1:nA, :)[invperm(A.p),:]
     return B, rnk
 end
 ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
@@ -837,7 +837,7 @@ end
 ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
-    b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
+    b[1:size(A.factors, 2)] .= view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
     b
 end
 function ldiv!(A::QRPivoted, B::StridedMatrix)
@@ -864,7 +864,7 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
     AA = Factorization{S}(A)
 
     X = _zeros(S, B, n)
-    X[1:size(B, 1), :] = B
+    X[1:size(B, 1), :] .= B
     ldiv!(AA, X)
     return _cut_B(X, 1:n)
 end
@@ -887,7 +887,7 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
     B = reshape(copy(transpose(reinterpret(T, reshape(BIn, (1, length(BIn)))))), size(BIn, 1), 2*size(BIn, 2))
 
     X = _zeros(T, B, n)
-    X[1:size(B, 1), :] = B
+    X[1:size(B, 1), :] .= B
 
     ldiv!(A, X)
 
