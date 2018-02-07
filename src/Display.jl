@@ -1,6 +1,7 @@
 module Display
 
-import Base: UUID
+using UUIDs
+import LibGit2
 
 using Pkg3.Types
 import Pkg3: @info, Nothing
@@ -60,7 +61,7 @@ function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     pm₁ = filter_manifest(in_project(env₁.project["deps"]), env₁.manifest)
     diff = filter!(x->x.old != x.new, manifest_diff(pm₀, pm₁))
     if isempty(diff)
-        print_with_color(color_dark, " [no changes]\n")
+        printstyled(color = color_dark, " [no changes]\n")
     else
         print_diff(diff)
     end
@@ -70,7 +71,7 @@ function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
     diff = manifest_diff(env₀.manifest, env₁.manifest)
     diff = filter!(x->x.old != x.new, diff)
     if isempty(diff)
-        print_with_color(color_dark, " [no changes]\n")
+        printstyled(color = color_dark, " [no changes]\n")
     else
         print_diff(diff)
     end
@@ -131,8 +132,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
             vstr = "[unknown]"
         end
         v = same ? "" : " $verb"
-        print_with_color(color_dark, " [$(string(x.uuid)[1:8])]")
-        print_with_color(colors[verb], "$v $(x.name) $vstr\n")
+        printstyled(color = color_dark, " [$(string(x.uuid)[1:8])]")
+        printstyled(color = colors[verb], "$v $(x.name) $vstr\n")
     end
 end
 print_diff(diff::Vector{DiffEntry}) = print_diff(STDOUT, diff)

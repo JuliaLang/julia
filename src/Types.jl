@@ -1,8 +1,9 @@
 module Types
 
-import Base: UUID
+using UUIDs
 using Random
 using Dates
+import LibGit2
 
 using Pkg3.TOML
 using Pkg3.TerminalMenus
@@ -360,7 +361,7 @@ cmderror(msg::String...) = throw(CommandError(join(msg)))
 
 Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, string(ex.msg))
+    printstyled(color = Base.error_color(), io, string(ex.msg))
 end
 
 ## type for expressing operations ##
