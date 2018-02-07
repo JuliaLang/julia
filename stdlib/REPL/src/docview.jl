@@ -1,6 +1,7 @@
 ## Code for searching and viewing documentation
 
 using Markdown
+import Pkg
 
 using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, namify, bindingexpr,
     defined, resolve, getdoc, meta, aliasof, signature
@@ -8,6 +9,8 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color
+
+using InteractiveUtils: subtypes
 
 ## Help mode ##
 
@@ -204,14 +207,7 @@ function summarize(io::IO, T::DataType, binding)
 end
 
 function summarize(io::IO, m::Module, binding)
-    readme = Pkg.dir(string(m), "README.md")
-    if isfile(readme)
-        println(io, "Displaying the `README.md` for the module instead.\n")
-        println(io, "---\n")
-        println(io, read(readme, String))
-    else
-        println(io, "No docstring or `README.md` found for module `", m, "`.\n")
-    end
+    println(io, "No docstring found for module `", m, "`.\n")
 end
 
 function summarize(io::IO, ::T, binding) where T

@@ -27,7 +27,7 @@
 @test parse(Int,'3', base = 8) == 3
 
 # Issue 20587
-for T in vcat(subtypes(Signed), subtypes(Unsigned))
+for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
         # Without a base (handles things like "0x00001111", etc)
@@ -75,7 +75,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, start(s), lastindex(s), 0, true))
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -318,3 +318,15 @@ end
 @test parse(Float64, "1E3", base=10)  === 1000.0
 
 @test_throws ArgumentError parse(Float64, "14.0", base=3)
+
+@testset "parse and tryparse type inference" begin
+    @inferred parse(Int, "12")
+    @inferred parse(Float64, "12")
+    @inferred parse(Complex{Int}, "12")
+    @test eltype([parse(Int, s, 16) for s in String[]]) == Int
+    @test eltype([parse(Float64, s) for s in String[]]) == Float64
+    @test eltype([parse(Complex{Int}, s) for s in String[]]) == Complex{Int}
+    @test eltype([tryparse(Int, s, 16) for s in String[]]) == Union{Nothing, Int}
+    @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
+    @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
+end

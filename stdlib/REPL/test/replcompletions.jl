@@ -3,6 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
+import Pkg
 
 let ex = quote
     module CompletionFoo
@@ -87,7 +88,7 @@ end
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
-    # clone METADATA (only pkg and libgit2-online tests should need internet access)
+    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
@@ -206,7 +207,7 @@ let
 end
 
 # inexistent completion inside a string
-let s = "Pkg.add(\"lol"
+let s = "Base.print(\"lol"
     c, r, res = test_complete(s)
     @test res == false
 end
@@ -613,11 +614,11 @@ let s, c, r
         @test s[r] == ""
     end
 
-    s = "cd \$(Pk"
+    s = "cd \$(Iter"
     c,r = test_scomplete(s)
-    @test "Pkg" in c
-    @test r == 6:7
-    @test s[r] == "Pk"
+    @test "Iterators" in c
+    @test r == 6:9
+    @test s[r] == "Iter"
 
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current

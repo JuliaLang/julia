@@ -38,24 +38,23 @@ end
 function parse(s::AbstractString)
     # parse format string into strings and format tuples
     list = []
-    i = j = start(s)
-    j1 = 0 # invariant: j1 == prevind(s, j)
-    while !done(s,j)
-        c, k = next(s,j)
+    a = Iterators.Stateful(pairs(s))
+    lastparse = firstindex(s)
+    lastidx = 0 # invariant: lastidx == prevind(s, idx)
+    for (idx, c) in a
         if c == '%'
-            i > j1 || push!(list, s[i:j1])
-            flags, width, precision, conversion, k = parse1(s,k)
+            lastparse > lastidx || push!(list, s[lastparse:lastidx])
+            flags, width, precision, conversion = parse1!(s,  a)
             '\'' in flags && error("printf format flag ' not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            i = k
+            lastparse = isempty(a) ? lastindex(s)+1 : Base.peek(a)[1]
         end
-        j1 = j
-        j = k
+        lastidx = idx
     end
-    i > lastindex(s) || push!(list, s[i:end])
+    lastparse > lastindex(s) || push!(list, s[lastparse:end])
     # coalesce adjacent strings
-    i = 1
+    i = j = 1
     while i < length(list)
         if isa(list[i],AbstractString)
             for outer j = i+1:length(list)
@@ -83,55 +82,55 @@ end
 #   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
-next_or_die(s::AbstractString, k) = !done(s,k) ? next(s,k) :
+pop_or_die!(s, a) = !isempty(a) ? popfirst!(a) :
     throw(ArgumentError("invalid printf format string: $(repr(s))"))
 
-function parse1(s::AbstractString, k::Integer)
-    j = k
+function parse1!(s, a)
     width = 0
     precision = -1
-    c, k = next_or_die(s,k)
+    k, c = pop_or_die!(s, a)
+    j = k
     # handle %%
     if c == '%'
-        return "", width, precision, c, k
+        return "", width, precision, c
     end
     # parse flags
     while c in "#0- + '"
-        c, k = next_or_die(s,k)
+        k, c = pop_or_die!(s, a)
     end
-    flags = String(s[j:prevind(s,k)-1]) # exploiting that all flags are one-byte.
+    flags = String(s[j:k-1]) # All flags are 1 byte
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
-        c, k = next_or_die(s,k)
+        _, c = pop_or_die!(s, a)
     end
     # parse precision
     if c == '.'
-        c, k = next_or_die(s,k)
+        _, c = pop_or_die!(s, a)
         if '0' <= c <= '9'
             precision = 0
             while '0' <= c <= '9'
                 precision = 10*precision + c-'0'
-                c, k = next_or_die(s,k)
+                _, c = pop_or_die!(s, a)
             end
         end
     end
     # parse length modifer (ignored)
     if c == 'h' || c == 'l'
         prev = c
-        c, k = next_or_die(s,k)
+        _, c = pop_or_die!(s, a)
         if c == prev
-            c, k = next_or_die(s,k)
+            _, c = pop_or_die!(s, a)
         end
     elseif c in "Ljqtz"
-        c, k = next_or_die(s,k)
+        _, c = pop_or_die!(s, a)
     end
     # validate conversion
     if !(c in "diouxXDOUeEfFgGaAcCsSpn")
         throw(ArgumentError("invalid printf format string: $(repr(s))"))
     end
     # TODO: warn about silly flag/conversion combinations
-    flags, width, precision, c, k
+    flags, width, precision, c
 end
 
 ### printf formatter generation ###
@@ -1115,7 +1114,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     if precision >= 0
         fmt_len += ndigits(precision)+1
     end
-    fmt = IOBuffer(fmt_len)
+    fmt = IOBuffer(maxsize=fmt_len)
     write(fmt, '%')
     write(fmt, flags)
     if width > 0

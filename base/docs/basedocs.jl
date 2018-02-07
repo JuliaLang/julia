@@ -988,7 +988,7 @@ callable with no arguments). The task exits when this function returns.
 
 # Examples
 ```jldoctest
-julia> a() = det(rand(1000, 1000));
+julia> a() = sum(i for i in 1:1000);
 
 julia> b = Task(a);
 ```
@@ -1018,6 +1018,13 @@ nfields
 A symbol in the current scope is not defined.
 """
 UndefVarError
+
+"""
+    UndefKeywordError(var::Symbol)
+
+The required keyword argument `var` was not assigned in a function call.
+"""
+UndefKeywordError
 
 """
     OverflowError(msg)

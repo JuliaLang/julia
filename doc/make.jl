@@ -1,5 +1,6 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+using Pkg
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
@@ -101,7 +102,6 @@ const PAGES = [
         "base/io-network.md",
         "base/punctuation.md",
         "base/sort.md",
-        "base/pkg.md",
         "base/iterators.md",
         "base/c.md",
         "base/libc.md",
@@ -130,7 +130,6 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
-            "devdocs/libgit2.md",
             "devdocs/require.md",
             "devdocs/inference.md",
         ],
@@ -154,7 +153,7 @@ makedocs(
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    strict    = true,
+    strict    = false,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",

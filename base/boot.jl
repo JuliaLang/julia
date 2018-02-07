@@ -122,10 +122,10 @@
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Nothing, Cvoid,
-    SimpleVector, AbstractArray, DenseArray, NamedTuple,
+    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    AbstractArray, DenseArray, NamedTuple,
     # special objects
-    Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
+    Function, Method,
     Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -139,9 +139,9 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
-    GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -252,6 +252,9 @@ end
 
 struct ArgumentError <: Exception
     msg::AbstractString
+end
+struct UndefKeywordError <: Exception
+    var::Symbol
 end
 
 struct MethodError <: Exception
@@ -402,6 +405,15 @@ function Symbol(a::Array{UInt8,1})
                  Intrinsics.arraylen(a))
 end
 Symbol(s::Symbol) = s
+
+# module providing the IR object model
+module IR
+export CodeInfo, MethodInstance, GotoNode, LabelNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+
+import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+end
 
 # docsystem basics
 macro doc(x...)

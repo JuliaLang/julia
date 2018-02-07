@@ -7,14 +7,14 @@ transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R
 
 function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    mul2!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
+    lmul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
 *(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 *(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    mul1!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), adjoint(convert(AbstractRotation{TS}, R)))
+    rmul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), adjoint(convert(AbstractRotation{TS}, R)))
 end
 """
     LinearAlgebra.Givens(i1,i2,c,s) -> G
@@ -325,7 +325,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
     end
 end
 
-function mul2!(G::Givens, A::AbstractVecOrMat)
+function lmul!(G::Givens, A::AbstractVecOrMat)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -337,7 +337,7 @@ function mul2!(G::Givens, A::AbstractVecOrMat)
     end
     return A
 end
-function mul1!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
+function rmul!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
     G = adjG.parent
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
@@ -351,20 +351,20 @@ function mul1!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
     return A
 end
 
-function mul2!(G::Givens, R::Rotation)
+function lmul!(G::Givens, R::Rotation)
     push!(R.rotations, G)
     return R
 end
-function mul2!(R::Rotation, A::AbstractMatrix)
+function lmul!(R::Rotation, A::AbstractMatrix)
     @inbounds for i = 1:length(R.rotations)
-        mul2!(R.rotations[i], A)
+        lmul!(R.rotations[i], A)
     end
     return A
 end
-function mul1!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
+function rmul!(A::AbstractMatrix, adjR::Adjoint{<:Any,<:Rotation})
     R = adjR.parent
     @inbounds for i = 1:length(R.rotations)
-        mul1!(A, adjoint(R.rotations[i]))
+        rmul!(A, adjoint(R.rotations[i]))
     end
     return A
 end

@@ -139,7 +139,7 @@ function check()
                     Please rebuild Julia with USE_BLAS64=1"""
             end
             println("Quitting.")
-            quit()
+            exit()
         end
     elseif blas == :mkl
         if Base.USE_BLAS64

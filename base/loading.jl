@@ -101,6 +101,25 @@ isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
+# fake uuid5 function (for self-assigned UUIDs)
+# TODO: delete and use real uuid5 once it's in stdlib
+
+function uuid5(namespace::UUID, key::String)
+    u::UInt128 = 0
+    h = hash(namespace)
+    for _ = 1:sizeof(u)÷sizeof(h)
+        u <<= sizeof(h) << 3
+        u |= (h = hash(key, h))
+    end
+    u &= 0xffffffffffff0fff3fffffffffffffff
+    u |= 0x00000000000050008000000000000000
+    return UUID(u)
+end
+
+const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
+
+dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, project_file)
+
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
 const SlugInt = UInt32 # max p = 4
@@ -242,6 +261,7 @@ function identify_package(where::Module, name::String)::Union{Nothing,PkgId}
 end
 
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
+    where.name === name && return where
     where.uuid === nothing && return identify_package(name)
     for env in load_path()
         found_or_uuid = manifest_deps_get(env, where, name)
@@ -324,12 +344,21 @@ function project_deps_get(env::String, name::String)::Union{Bool,UUID}
 end
 
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Bool,UUID}
+    @assert where.uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
+        proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+        if proj_name == where.name && proj_uuid == where.uuid
+            # `where` matches the project, use deps as manifest
+            found_or_uuid = explicit_project_deps_get(project_file, name)
+            return found_or_uuid isa UUID ? found_or_uuid : true
+        end
+        # look for `where` stanza in manifest file
         manifest_file = project_file_manifest_path(project_file)
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_deps_get(manifest_file, where.uuid, name)
         end
+        return false # `where` stanza not found
     end
     project_file && implicit_manifest_deps_get(env, where, name)
 end
@@ -341,6 +370,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_uuid_path(manifest_file, pkg)
         end
+        return nothing
     end
     project_file ? implicit_manifest_uuid_path(env, pkg) : nothing
 end
@@ -354,20 +384,26 @@ const re_section_capture    = r"^\s*\[\s*\[\s*\"?(\w+)\"?\s*\]\s*\]\s*(?:#|$)"
 const re_subsection_deps    = r"^\s*\[\s*\"?(\w+)\"?\s*\.\s*\"?deps\"?\s*\]\s*(?:#|$)"
 const re_key_to_string      = r"^\s*(\w+)\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_uuid_to_string     = r"^\s*uuid\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_name_to_string     = r"^\s*name\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_path_to_string     = r"^\s*path\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_hash_to_string     = r"^\s*git-tree-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
 # find project file's top-level UUID entry (or nothing)
-function project_file_uuid(project_file::String)::Union{Nothing,UUID}
+function project_file_name_and_uuid(project_file::String,
+    name::Union{Nothing,String}=nothing)::Tuple{Union{Nothing,String},UUID}
     open(project_file) do io
+        uuid = dummy_uuid(project_file)
         for line in eachline(io)
             contains(line, re_section) && break
-            if (m = match(re_uuid_to_string, line)) != nothing
-                return UUID(m.captures[1])
+            if (m = match(re_name_to_string, line)) != nothing
+                name = String(m.captures[1])
+            elseif (m = match(re_uuid_to_string, line)) != nothing
+                uuid = UUID(m.captures[1])
             end
         end
+        return name, uuid
     end
 end
 
@@ -446,16 +482,38 @@ end
 
 ## explicit project & manifest API ##
 
-# find project file deps section's `name => uuid` mapping
+# find project file root or deps `name => uuid` mapping
+#  - `false` means: did not find `name`
+#  - `true` means: found `name` without UUID
+#  - `uuid` means: found `name` with `uuid` in project file
+#
+# `true` can only be returned in the case that `name` is the project's name
+# and the project file does not have a top-level `uuid` mapping
+# it is not currently supported to have a name in `deps` mapped to anything
+# besides a UUID, so otherwise the answer is `false` or a UUID value
+
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
+        root_name = nothing
+        root_uuid = dummy_uuid(project_file)
+        state = :top
         for line in eachline(io)
-            contains(line, re_section_deps) && break
-        end
-        for line in eachline(io)
-            contains(line, re_section) && break
-            (m = match(re_key_to_string, line)) == nothing && continue
-            m.captures[1] == name && return UUID(m.captures[2])
+            if state == :top
+                if contains(line, re_section)
+                    root_name == name && return root_uuid
+                    state = contains(line, re_section_deps) ? :deps : :other
+                elseif (m = match(re_name_to_string, line)) != nothing
+                    root_name = String(m.captures[1])
+                elseif (m = match(re_uuid_to_string, line)) != nothing
+                    root_uuid = UUID(m.captures[1])
+                end
+            elseif state == :deps
+                if (m = match(re_key_to_string, line)) != nothing
+                    m.captures[1] == name && return UUID(m.captures[2])
+                end
+            elseif contains(line, re_section)
+                state = :deps
+            end
         end
         return false
     end
@@ -463,13 +521,13 @@ end
 
 # find `where` stanza and `name` in its deps and return its UUID
 #  - `false` means: did not find `where`
-#  - `true` means: found `where` but not `name` in its deps
+#  - `true` means: found `where` but `name` not in its deps
 #  - `uuid` means: found `where` and `name` mapped to `uuid` in its deps
 
 function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::String)::Union{Bool,UUID}
-    uuid = deps = nothing
-    state = :other
     open(manifest_file) do io
+        uuid = deps = nothing
+        state = :other
         for line in eachline(io)
             if contains(line, re_array_of_tables)
                 uuid == where && break
@@ -540,41 +598,37 @@ end
 
 # look for an entry point for `name`:
 #  - `false` means: did not find `name`
-#  - `true` means: found `name` without UUID
-#  - `uuid` means: found `name` with `uuid` in project file
+#  - `true` means: found `name` without project file
+#  - `uuid` means: found `name` with project file with real or dummy `uuid`
 function implicit_project_deps_get(dir::String, name::String)::Union{Bool,UUID}
     path, project_file = entry_point_and_project_file(dir, name)
     project_file == nothing && return path != nothing
-    uuid = project_file_uuid(project_file)
-    uuid == nothing || uuid
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, name)
+    proj_name == name && proj_uuid
 end
 
 # look for an entry-point for `where` by name, check that UUID matches
 # if there's a project file, look up `name` in its deps and return that
-# if that returns a path to a project, return the UUID of that
 #  - `false` means: did not find `where`
-#  - `true` means: found `where` but not `name` in its deps
+#  - `true` means: found `where` but `name` not in its deps
 #  - `uuid` means: found `where` and `name` mapped to `uuid` in its deps
 function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Union{Bool,UUID}
     @assert where.uuid !== nothing
-    path, project_file = entry_point_and_project_file(dir, where.name)
+    project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return false
-    uuid = project_file_uuid(project_file)
-    uuid === where.uuid || return false
-    uuid_or_path = explicit_project_deps_get(project_file, name)
-    uuid_or_path === nothing && return true
-    uuid_or_path isa UUID && return uuid_or_path
-    # found `name => path`, see if we can figure out its UUID
-    project_file = package_path_to_project_file(uuid_or_path::String)
-    uuid = project_file_uuid(project_file)
-    uuid isa UUID ? uuid : false
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+    proj_name == where.name && proj_uuid == where.uuid || return false
+    found_or_uuid = explicit_project_deps_get(project_file, name)
+    found_or_uuid isa UUID ? found_or_uuid : true
 end
 
 # look for an entry-point for `pkg` and return its path if UUID matches
 function implicit_manifest_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,String}
     path, project_file = entry_point_and_project_file(dir, pkg.name)
-    uuid = project_file == nothing ? nothing : project_file_uuid(project_file)
-    uuid == pkg.uuid ? path : nothing
+    pkg.uuid === nothing && project_file === nothing && return path
+    pkg.uuid === nothing || project_file === nothing && return nothing
+    proj_name, proj_uuid = project_file_name_and_uuid(project_file, pkg.name)
+    proj_name == pkg.name && proj_uuid == pkg.uuid ? path : nothing
 end
 
 ## other code loading functionality ##
@@ -1066,6 +1120,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
+        import Pkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
         empty!(Base.DEPOT_PATH)

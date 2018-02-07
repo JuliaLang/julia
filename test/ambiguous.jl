@@ -73,8 +73,6 @@ let io = IOBuffer()
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
     @test length(code_typed(ambig, (Int, Int))) == 1
-    code_llvm(io, ambig, (Int, Int))
-    code_native(io, ambig, (Int, Int))
 end
 
 # Test that ambiguous cases fail appropriately
@@ -84,10 +82,7 @@ let io = IOBuffer()
     @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_llvm(io, ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_native(io, ambig, (UInt8, Int)))
+    @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
 
 # Method overwriting doesn't destroy ambiguities

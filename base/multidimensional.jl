@@ -1800,3 +1800,13 @@ end
     end
     return B
 end
+
+# Show for pairs() with Cartesian indicies. Needs to be here rather than show.jl for bootstrap order
+function Base.showarg(io::IO, r::Union{Iterators.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
+                                       Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
+    print(io, "pairs(::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+    print(io, "pairs(IndexCartesian(), ::$T)")
+end

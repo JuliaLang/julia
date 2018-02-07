@@ -5,10 +5,8 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
-    idx = start(str)
-    while !done(str, idx)
+    for (idx, c) in pairs(str)
         lastidx = idx
-        c, idx = next(str, idx)
         wid += textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break

@@ -1,5 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    NamedTuple
+
+`NamedTuple`s are, as their name suggests, named [`Tuple`](@ref)s. That is, they're a
+tuple-like collection of values, where each entry has a unique name, represented as a
+`Symbol`. Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
+can be modified in place after construction.
+
+Accessing the value associated with a name in a named tuple can be done using field
+access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]`. A tuple of the
+names can be obtained using [`keys`](@ref), and a tuple of the values can be obtained
+using [`values`](@ref).
+
+!!! note
+    Iteration over `NamedTuple`s produces the *values* without the names. (See example
+    below.) To iterate over the name-value pairs, use the [`pairs`](@ref) function.
+
+# Examples
+```jldoctest
+julia> x = (a=1, b=2)
+(a = 1, b = 2)
+
+julia> x.a
+1
+
+julia> x[:a]
+1
+
+julia> keys(x)
+(:a, :b)
+
+julia> values(x)
+(1, 2)
+
+julia> collect(x)
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> collect(pairs(x))
+2-element Array{Pair{Symbol,Int64},1}:
+ :a => 1
+ :b => 2
+```
+"""
+Core.NamedTuple
+
 if nameof(@__MODULE__) === :Base
 
 """

@@ -20,8 +20,8 @@ end
 
 # issue #11534
 let
-    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
+    t1 = Tuple{AbstractArray, Tuple{Vararg{Base.RangeIndex}}}
+    t2 = Tuple{Array, T} where T<:Tuple{Vararg{Base.RangeIndex}}
     @test !args_morespecific(t1, t2)
     @test  args_morespecific(t2, t1)
 end
@@ -182,4 +182,12 @@ let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
     @test !args_morespecific(y, x)
     @test !args_morespecific(x.parameters[1], y.parameters[1])
     @test !args_morespecific(y.parameters[1], x.parameters[1])
+end
+
+let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
+    B = Tuple{Array, Int},
+    C = Tuple{AbstractArray, Int, Array}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
 end

@@ -6,6 +6,7 @@ export completions, shell_completions, bslash_completions
 
 using Base.Meta
 using Base: propertynames, coalesce
+import Pkg
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -14,7 +15,7 @@ end
 function appendmacro!(syms, macros, needle, endchar)
     for s in macros
         if endswith(s, needle)
-            from = nextind(s, start(s))
+            from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
             push!(syms, s[from:to]*endchar)
         end
@@ -342,7 +343,7 @@ function try_get_type(sym::Expr, fn::Module)
         return get_type_call(sym)
     elseif sym.head === :thunk
         thk = sym.args[1]
-        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::Core.CodeInfo, fn)
         rt !== Any && return (rt, true)
     elseif sym.head === :ref
         # some simple cases of `expand`
@@ -557,7 +558,8 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [Pkg.dir(); LOAD_PATH; pwd()]
+            for dir in [LOAD_PATH; pwd()]
+                dir isa Function && (dir = dir())
                 dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&

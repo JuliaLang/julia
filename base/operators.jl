@@ -823,3 +823,26 @@ The returned function is of type `Base.OccursIn`. This allows dispatching to
 specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
 """
 const occursin = OccursIn
+
+"""
+    splat(f)
+
+Defined as
+```julia
+    splat(f) = args->f(args...)
+```
+i.e. given a function returns a new function that takes one argument and splats
+its argument into the original function. This is useful as an adaptor to pass
+a multi-argument function in a context that expects a single argument, but
+passes a tuple as that single argument.
+
+# Example usage:
+```jldoctest
+julia> map(splat(+), zip(1:3,4:6))
+3-element Array{Int64,1}:
+ 5
+ 7
+ 9
+```
+"""
+splat(f) = args->f(args...)

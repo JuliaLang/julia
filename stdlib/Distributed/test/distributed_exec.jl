@@ -434,7 +434,7 @@ let ex
     @test ((ex.captured::CapturedException).ex::ErrorException).msg == "A.error"
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
-    frame, repeated = bt[1]::Tuple{StackFrame, Int}
+    frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
     @test frame.func == :foo
     @test frame.linfo == nothing
     @test repeated == 1

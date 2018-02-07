@@ -166,8 +166,8 @@ struct StructInfo
 end
 
 struct InvokeData
-    mt::MethodTable
-    entry::TypeMapEntry
+    mt::Core.MethodTable
+    entry::Core.TypeMapEntry
     types0
     fexpr
     texpr
@@ -176,12 +176,12 @@ end
 struct AllocOptContext
     infomap::ValueInfoMap
     sv::OptimizationState
-    todo::IdDict
-    changes::IdDict
-    sym_count::IdDict
-    all_fld::IdDict
-    setfield_typ::IdDict
-    undef_fld::IdDict
+    todo::IdDict{Any,Any}
+    changes::IdDict{Any,Any}
+    sym_count::IdDict{Any,Any}
+    all_fld::IdDict{Any,Any}
+    setfield_typ::IdDict{Any,Any}
+    undef_fld::IdDict{Any,Any}
     structinfos::Vector{StructInfo}
     function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
         todo = IdDict()
@@ -298,7 +298,7 @@ function optimize(me::InferenceState)
         let code = opt.src.code::Array{Any,1}
             meta_elim_pass!(code, coverage_enabled())
             filter!(x -> x !== nothing, code)
-            force_noinline = popmeta!(code, :noinline)[1]
+            force_noinline = peekmeta(code, :noinline)[1]
         end
         reindex_labels!(opt)
         me.min_valid = opt.min_valid

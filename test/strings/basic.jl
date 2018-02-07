@@ -8,8 +8,10 @@ using Random
 
     @test isempty(string())
     @test eltype(GenericString) == Char
-    @test start("abc") == 1
+    @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test typemin(String) === ""
+    @test typemin("abc") === ""
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
@@ -260,7 +262,7 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
@@ -853,4 +855,11 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
         s in [randstring(rng, i), randstring(rng, "∀∃α1", i), String(rand(rng, UInt8, i))]
         @test length(s) == length(GenericString(s))
     end
+end
+
+# conversion of SubString to the same type, issue #25525
+let x = SubString("ab", 1, 1)
+    y = convert(SubString{String}, x)
+    @test y === x
+    chop("ab") === chop.(["ab"])[1]
 end

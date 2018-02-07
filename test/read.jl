@@ -169,8 +169,8 @@ for (name, f) in l
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
-        @test readuntil(io(t), SubString(s, start(s), lastindex(s))) == m
-        @test readuntil(io(t), SubString(s, start(s), lastindex(s)), keep=true) == kept
+        @test readuntil(io(t), SubString(s, firstindex(s))) == m
+        @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
         @test readuntil(io(t), GenericString(s), keep=true) == kept
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
@@ -343,7 +343,7 @@ for (name, f) in l
     @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(codeunits(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), read=false, write=true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -537,15 +537,18 @@ rm(f)
 end # mktempdir() do dir
 
 @testset "countlines" begin
+    @test countlines(IOBuffer("")) == 0
     @test countlines(IOBuffer("\n")) == 1
-    @test countlines(IOBuffer("\n"), eol = '\r') == 0
+    @test countlines(IOBuffer("\n"), eol = '\r') == 1
+    @test countlines(IOBuffer("\r\r\n\r"), eol = '\r') == 3
     @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
     @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
     @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    @test countlines(IOBuffer("foo\nbar")) == length(readlines(IOBuffer("foo\nbar"))) == 2
     file = tempname()
     write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
     @test countlines(file) == 4
-    @test countlines(file, eol = '\r') == 0
+    @test countlines(file, eol = '\r') == 1
     @test countlines(file, eol = '\n') == 4
     rm(file)
 end

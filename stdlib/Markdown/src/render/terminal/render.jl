@@ -32,6 +32,7 @@ end
 
 function term(io::IO, md::Admonition, columns)
     col = :default
+    # If the types below are modified, the page manual/documentation.md must be updated accordingly.
     if lowercase(md.title) == "danger"
         col = Base.error_color()
     elseif lowercase(md.title) == "warning"

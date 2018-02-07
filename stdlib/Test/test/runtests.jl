@@ -530,7 +530,7 @@ end
 @test @inferred(inferrable_kwtest(1)) == 2
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
-@test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
+@test @inferred(uninferrable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
@@ -771,4 +771,29 @@ end
     msg = read(err, String)
     @test contains(msg, "Expected `desc` to be an AbstractTestSet, it is a String")
     rm(f; force=true)
+end
+
+f25835(;x=nothing) = _f25835(x)
+_f25835(::Nothing) = ()
+_f25835(x) = (x,)
+# A keyword function that is never type stable
+g25835(;x=1) = rand(Bool) ? 1.0 : 1
+# A keyword function that is sometimes type stable
+h25835(;x=1,y=1) = x isa Int ? x*y : (rand(Bool) ? 1.0 : 1)
+@testset "keywords in @inferred" begin
+    @test @inferred(f25835()) == ()
+    @test @inferred(f25835(x=nothing)) == ()
+    @test @inferred(f25835(x=1)) == (1,)
+
+    # A global argument should make this uninferrable
+    global y25835 = 1
+    @test f25835(x=y25835) == (1,)
+    @test_throws ErrorException @inferred((()->f25835(x=y25835))()) == (1,)
+
+    @test_throws ErrorException @inferred(g25835()) == 1
+    @test_throws ErrorException @inferred(g25835(x=1)) == 1
+
+    @test @inferred(h25835()) == 1
+    @test @inferred(h25835(x=2,y=3)) == 6
+    @test_throws ErrorException @inferred(h25835(x=1.0,y=1.0)) == 1
 end

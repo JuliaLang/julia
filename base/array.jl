@@ -573,12 +573,11 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     i = offs
     while !done(itr, st)
         el, st = next(itr, st)
-        S = typeof(el)
-        if S === T || S <: T
+        if el isa T || typeof(el) === T
             @inbounds dest[i] = el::T
             i += 1
         else
-            R = promote_typejoin(T, S)
+            R = promote_typejoin(T, typeof(el))
             new = similar(dest, R)
             copyto!(new,1, dest,1, i-1)
             @inbounds new[i] = el
@@ -1564,7 +1563,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1661,7 +1660,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1757,7 +1756,7 @@ Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1853,7 +1852,7 @@ Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1899,7 +1898,7 @@ If there are no such elements of `A`, return an empty array.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1955,7 +1954,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and `NamedTuple` objects, and are linear indices starting at `1`
+`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
 for other iterables.
 
 # Examples
@@ -1992,10 +1991,23 @@ function findall(A)
     end
     collect(first(p) for p in _pairs(A) if last(p) != 0)
 end
+# Allocating result upfront is faster (possible only when collection can be iterated twice)
+function findall(A::AbstractArray{Bool})
+    n = count(A)
+    I = Vector{eltype(keys(A))}(uninitialized, n)
+    cnt = 1
+    for (i,a) in pairs(A)
+        if a
+            I[cnt] = i
+            cnt += 1
+        end
+    end
+    I
+end
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
-findall(testf::Function, x::Number) = !testf(x) ? Vector{Int}() : [1]
-findall(p::OccursIn, x::Number) = x in p.x ? Vector{Int}() : [1]
+findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
+findall(p::OccursIn, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
     findmax(itr) -> (x, index)
@@ -2127,35 +2139,38 @@ argmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Return a vector containing the highest index in `b` for
-each value in `a` that is a member of `b` . The output
-vector contains 0 wherever `a` is not a member of `b`.
+Return an array containing the highest index in `b` for
+each value in `a` that is a member of `b`. The output
+array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
 
-julia> b = ['a','b','c'];
+julia> b = ['a', 'b', 'c']
 
-julia> indexin(a,b)
-6-element Array{Int64,1}:
+julia> indexin(a, b)
+6-element Array{Union{Nothing, Int64},1}:
  1
  2
  3
  2
- 0
+  nothing
  1
 
-julia> indexin(b,a)
-3-element Array{Int64,1}:
+julia> indexin(b, a)
+3-element Array{Union{Nothing, Int64},1}:
  6
  4
  3
 ```
 """
-function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(zip(b, 1:length(b)))
-    [get(bdict, i, 0) for i in a]
+function indexin(a, b::AbstractArray)
+    indexes = keys(b)
+    bdict = Dict(zip(b, indexes))
+    return Union{eltype(indexes), Nothing}[
+        get(bdict, i, nothing) for i in a
+    ]
 end
 
 function _findin(a, b)

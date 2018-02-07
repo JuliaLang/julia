@@ -526,23 +526,26 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
                       jl_symbol_name(b->owner->name), jl_symbol_name(b->name));
             dep_message_binding = jl_get_dep_message_binding(b->owner, b);
         }
-        else
+        else {
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
+        }
 
         if (dep_message_binding && dep_message_binding->value) {
             if (jl_isa(dep_message_binding->value, (jl_value_t*)jl_string_type)) {
                 jl_uv_puts(JL_STDERR, jl_string_data(dep_message_binding->value),
                     jl_string_len(dep_message_binding->value));
-            } else {
+            }
+            else {
                 jl_static_show(JL_STDERR, dep_message_binding->value);
             }
-        } else {
+        }
+        else {
             jl_value_t *v = b->value;
             if (v) {
                 if (jl_is_type(v) || jl_is_module(v)) {
                     jl_printf(JL_STDERR, ", use ");
                     jl_static_show(JL_STDERR, v);
-                    jl_printf(JL_STDERR, " instead");
+                    jl_printf(JL_STDERR, " instead.");
                 }
                 else {
                     jl_methtable_t *mt = jl_gf_mtable(v);
@@ -554,12 +557,12 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
                             jl_printf(JL_STDERR, ".");
                         }
                         jl_printf(JL_STDERR, "%s", jl_symbol_name(mt->name));
-                        jl_printf(JL_STDERR, " instead");
+                        jl_printf(JL_STDERR, " instead.");
                     }
                 }
             }
         }
-        jl_printf(JL_STDERR, ".\n");
+        jl_printf(JL_STDERR, "\n");
 
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR) {
             if (jl_lineno == 0) {

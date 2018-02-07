@@ -616,13 +616,13 @@ the Julia documentation itself. For example:
 
 ```julia
 """
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    accumulate!(op, y, x)
 
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+Cumulative operation `op` on a vector `x`, storing the result in `y`. See also [`accumulate`](@ref).
 """
 ```
 
-This will create a link in the generated docs to the `eigvals` documentation
+This will create a link in the generated docs to the `accumulate` documentation
 (which has more information about what this function actually does). It's good to include
 cross references to mutating/non-mutating versions of a function, or to highlight a difference
 between two similar-seeming functions.
@@ -881,9 +881,8 @@ cannot span multiple rows or columns of the table.
 
 #### Admonitions
 
-Specially formatted blocks with titles such as "Notes", "Warning", or "Tips" are known as admonitions
-and are used when some part of a document needs special attention. They can be defined using the
-following `!!!` syntax:
+Specially formatted blocks, known as admonitions, can be used to highlight particular remarks.
+They can be defined using the following `!!!` syntax:
 
 ```
 !!! note
@@ -897,9 +896,14 @@ following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-Admonitions, like most other toplevel elements, can contain other toplevel elements. When no title
-text, specified after the admonition type in double quotes, is included then the title used will
-be the type of the block, i.e. `"Note"` in the case of the `note` admonition.
+The type of the admonition can be any word, but some types produce special styling,
+namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+
+A custom title for the box can be provided as a string (in double quotes) after the admonition type.
+If no title text is specified after the admonition type, then the title used will be the type of the block,
+i.e. `"Note"` in the case of the `note` admonition.
+
+Admonitions, like most other toplevel elements, can contain other toplevel elements.
 
 ## Markdown Syntax Extensions
 

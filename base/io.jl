@@ -750,10 +750,9 @@ end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    i = start(target)
-    done(target, i) && return ""
-    c, i = next(target, start(target))
-    if done(target, i) && c <= '\x7f'
+    isempty(target) && return ""
+    c, rest = Iterators.peel(target)
+    if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
     # convert String to a utf8-byte-iterator
@@ -999,7 +998,8 @@ end
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
-passing them as the second argument.
+passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
+end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
 
 # Examples
 ```jldoctest
@@ -1011,7 +1011,7 @@ julia> countlines(io)
 julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 
 julia> countlines(io)
-0
+1
 
 julia> countlines(io, eol = '.')
 1
@@ -1021,12 +1021,15 @@ function countlines(io::IO; eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
-    nl = 0
+    nl = nb = 0
     while !eof(io)
         nb = readbytes!(io, a)
         @simd for i=1:nb
             @inbounds nl += a[i] == aeol
         end
+    end
+    if nb > 0 && a[nb] != aeol
+        nl += 1 # final line is not terminated with eol
     end
     nl
 end

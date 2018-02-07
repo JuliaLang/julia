@@ -39,107 +39,8 @@ end
 
 test_code_reflections(test_ast_reflection, code_lowered)
 test_code_reflections(test_ast_reflection, code_typed)
-test_code_reflections(test_bin_reflection, code_llvm)
-test_code_reflections(test_bin_reflection, code_native)
-
-# Issue #16326
-mktemp() do f, io
-    OLDSTDOUT = STDOUT
-    redirect_stdout(io)
-    @test try @code_native map(abs, rand(3)); true; catch; false; end
-    redirect_stdout(OLDSTDOUT)
-    nothing
-end
 
 end # module ReflectionTest
-
-# code_warntype
-module WarnType
-using Test, Random
-
-function warntype_hastag(f, types, tag)
-    iob = IOBuffer()
-    code_warntype(iob, f, types)
-    str = String(take!(iob))
-    return contains(str, tag)
-end
-
-pos_stable(x) = x > 0 ? x : zero(x)
-pos_unstable(x) = x > 0 ? x : 0
-
-tag = "UNION"
-@test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
-@test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
-
-mutable struct Stable{T,N}
-    A::Array{T,N}
-end
-mutable struct Unstable{T}
-    A::Array{T}
-end
-Base.getindex(A::Stable, i) = A.A[i]
-Base.getindex(A::Unstable, i) = A.A[i]
-
-tag = "ARRAY{FLOAT64,N}"
-@test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
-@test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
-@test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
-
-# Make sure emphasis is not used for other functions
-tag = "ANY"
-iob = IOBuffer()
-show(iob, Meta.lower(Main, :(x -> x^2)))
-str = String(take!(iob))
-@test !contains(str, tag)
-
-# Make sure non used variables are not emphasized
-has_unused() = (a = rand(5))
-@test !warntype_hastag(has_unused, Tuple{}, tag)
-@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
-
-# Make sure that "expected" unions are highlighted with warning color instead of error color
-iob = IOBuffer()
-code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
-str = String(take!(iob))
-@test contains(str, Base.text_colors[Base.warn_color()])
-
-# Make sure getproperty and setproperty! works with @code_... macros
-struct T1234321
-    t::Int
-end
-Base.getproperty(t::T1234321, ::Symbol) = "foo"
-@test (@code_typed T1234321(1).f).second == String
-Base.setproperty!(t::T1234321, ::Symbol, ::Symbol) = "foo"
-@test (@code_typed T1234321(1).f = :foo).second == String
-
-module ImportIntrinsics15819
-# Make sure changing the lookup path of an intrinsic doesn't break
-# the heuristic for type instability warning.
-import Core.Intrinsics: sqrt_llvm, bitcast
-# Use import
-sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
-# Use fully qualified name
-sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
-end # module ImportIntrinsics15819
-
-foo11122(x) = @fastmath x - 1.0
-
-# issue #11122, #13568 and #15819
-@test !warntype_hastag(+, Tuple{Int,Int}, tag)
-@test !warntype_hastag(-, Tuple{Int,Int}, tag)
-@test !warntype_hastag(*, Tuple{Int,Int}, tag)
-@test !warntype_hastag(/, Tuple{Int,Int}, tag)
-@test !warntype_hastag(foo11122, Tuple{Float32}, tag)
-@test !warntype_hastag(foo11122, Tuple{Float64}, tag)
-@test !warntype_hastag(foo11122, Tuple{Int}, tag)
-@test !warntype_hastag(sqrt, Tuple{Int}, tag)
-@test !warntype_hastag(sqrt, Tuple{Float64}, tag)
-@test !warntype_hastag(^, Tuple{Float64,Int32}, tag)
-@test !warntype_hastag(^, Tuple{Float32,Int32}, tag)
-@test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
-@test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
-
-end # module WarnType
 
 # isbits
 
@@ -187,7 +88,7 @@ i10165(::Type{AbstractArray{T,n}}) where {T,n} = 1
 
 # fullname
 @test fullname(Base) == (:Base,)
-@test fullname(Base.Pkg) == (:Base, :Pkg)
+@test fullname(Base.Iterators) == (:Base, :Iterators)
 
 const a_const = 1
 not_const = 1
@@ -275,15 +176,13 @@ let
     @test parentmodule(Foo7648) == TestMod7648
     @test nameof(Foo7648) == :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
-    @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
-    @test TestMod7648 == @which foo7648
-    @test TestMod7648.TestModSub9475 == @which a9475
+    @test first(methods(TestMod7648.TestModSub9475.foo7648)) == which(foo7648, (Int,))
+    @test TestMod7648 == which(@__MODULE__, :foo7648)
+    @test TestMod7648.TestModSub9475 == which(@__MODULE__, :a9475)
 end
 
 @test_throws ArgumentError("argument is not a generic function") which(===, Tuple{Int, Int})
 @test_throws ArgumentError("argument is not a generic function") code_typed(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
 @test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
@@ -292,30 +191,15 @@ include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
-@test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(:this_is_not_defined)
-@test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
-@test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(:this_is_not_exported)
+@test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(Main, :this_is_not_defined)
+@test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(Main, :this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
 const a_value = 1
-@test Base.which_module(@__MODULE__, :a_value) === @__MODULE__
-@test @which(a_value) === @__MODULE__
-@test_throws ErrorException("\"a_value\" is not defined in module Main") which(:a_value)
-@test which(:Core) === Main
+@test which(@__MODULE__, :a_value) === @__MODULE__
+@test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
+@test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
-end
-
-# issue #13264
-@test isa((@which vcat(1...)), Method)
-
-# issue #13464
-let t13464 = "hey there sailor"
-    try
-        @which t13464[1,1] = (1.0,true)
-        error("unexpected")
-    catch err13464
-        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
-    end
 end
 
 # PR 13825
@@ -385,7 +269,7 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
                   (Base.:+, Tuple{Int, Int})]
     meth = which(f, t)
     tt = Tuple{typeof(f), t.parameters...}
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::SimpleVector
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
     @test ti === tt # intersection should be a subtype
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
@@ -393,25 +277,6 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
     @test llvmf != C_NULL
     @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
-end
-
-module MacroTest
-export @macrotest
-macro macrotest(x::Int, y::Symbol) end
-macro macrotest(x::Int, y::Int)
-    nothing #This is here because of #15280
-end
-end
-
-let
-    using .MacroTest
-    a = 1
-    m = getfield(@__MODULE__, Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
-
-    @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
-    @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
 
 # issue #15714
@@ -439,6 +304,8 @@ function g15714(array_var15714)
         index_var15714
     end
 end
+
+import InteractiveUtils.code_warntype
 
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
@@ -617,42 +484,6 @@ else
     @test h16850 === nothing
 end
 
-# Adds test for PR #17636
-let a = @code_typed 1 + 1
-    b = @code_lowered 1 + 1
-    @test isa(a, Pair{CodeInfo, DataType})
-    @test isa(b, CodeInfo)
-    @test isa(a[1].code, Array{Any,1})
-    @test isa(b.code, Array{Any,1})
-
-    function thing(a::Array, b::Real)
-        println("thing")
-    end
-    function thing(a::AbstractArray, b::Int)
-        println("blah")
-    end
-    @test_throws MethodError thing(rand(10), 1)
-    a = @code_typed thing(rand(10), 1)
-    b = @code_lowered thing(rand(10), 1)
-    @test length(a) == 0
-    @test length(b) == 0
-end
-
-mutable struct A18434
-end
-A18434(x; y=1) = 1
-
-global counter18434 = 0
-function get_A18434()
-    global counter18434
-    counter18434 += 1
-    return A18434
-end
-@which get_A18434()(1; y=2)
-@test counter18434 == 1
-@which get_A18434()(1, y=2)
-@test counter18434 == 2
-
 # PR #18888: code_typed shouldn't cache if not optimizing
 let
     world = typemax(UInt)
@@ -670,14 +501,6 @@ let
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
-
-# Issue #18883, code_llvm/code_native for generated functions
-@generated f18883() = nothing
-@test !isempty(sprint(code_llvm, f18883, Tuple{}))
-@test !isempty(sprint(code_native, f18883, Tuple{}))
-
-# PR #19964
-@test isempty(subtypes(Float64))
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
@@ -723,14 +546,6 @@ let
                  Base.typename(Union{Int, Float64}))
 end
 
-# Issue #20086
-abstract type A20086{T,N} end
-struct B20086{T,N} <: A20086{T,N} end
-@test subtypes(A20086) == [B20086]
-@test subtypes(A20086{Int}) == [B20086{Int}]
-@test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
-@test subtypes(A20086{Int,3}) == [B20086{Int,3}]
-
 # sizeof and nfields
 @test sizeof(Int16) == 2
 @test sizeof(ComplexF64) == 16
@@ -755,7 +570,7 @@ end
 @test_throws ErrorException sizeof(String)
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
-@test_throws ErrorException sizeof(SimpleVector)
+@test_throws ErrorException sizeof(Core.SimpleVector)
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
@@ -789,7 +604,7 @@ instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
 cinfo_generated = Core.Compiler.get_staged(instance)
 @test_throws ErrorException Base.uncompressed_ast(m)
 
-test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
+test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 
 cinfos = code_lowered(f22979, typeof.(x22979), generated = true)
 @test length(cinfos) == 1
