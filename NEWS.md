@@ -419,6 +419,8 @@ This section lists changes that do not have deprecation warnings.
 
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
+    
+  * Strings representing floating point numbers can now be parsed in bases 2 to 23 ([#22596]).
 
 Library improvements
 --------------------
