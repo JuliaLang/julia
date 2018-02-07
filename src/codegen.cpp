@@ -702,19 +702,27 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
         return v; // doesn't improve type info
     }
     if (v.TIndex) {
-        if (jl_is_datatype(typ) && !jl_justbits(typ)) {
-            // discovered that this union-split type must actually be isboxed
-            if (v.Vboxed) {
-                return jl_cgval_t(v.Vboxed, nullptr, true, typ, NULL);
-            }
-            else {
-                // type mismatch (there weren't any boxed values in the union)
-                CreateTrap(ctx.builder);
-                return jl_cgval_t();
+        jl_value_t *utyp = jl_unwrap_unionall(typ);
+        if (jl_is_datatype(utyp)) {
+            bool alwaysboxed;
+            if (jl_is_concrete_type(utyp))
+                alwaysboxed = !jl_justbits(utyp);
+            else
+                alwaysboxed = !((jl_datatype_t*)utyp)->abstract && ((jl_datatype_t*)utyp)->mutabl;
+            if (alwaysboxed) {
+                // discovered that this union-split type must actually be isboxed
+                if (v.Vboxed) {
+                    return jl_cgval_t(v.Vboxed, nullptr, true, typ, NULL);
+                }
+                else {
+                    // type mismatch (there weren't any boxed values in the union)
+                    CreateTrap(ctx.builder);
+                    return jl_cgval_t();
+                }
             }
         }
         if (!jl_is_concrete_type(typ))
-            return v; // not generally worth trying to improve type info
+            return v; // not generally worth trying to change type info (which would require recomputing tindex)
     }
     Type *T = julia_type_to_llvm(typ);
     if (type_is_ghost(T))
