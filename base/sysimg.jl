@@ -16,6 +16,7 @@ setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
+function include_relative end
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
