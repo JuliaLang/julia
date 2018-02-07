@@ -1,9 +1,10 @@
 module API
 
-import Base.UUID
+using UUIDs
 using Printf
 import Random
 import Dates
+import LibGit2
 
 import Pkg3
 import Pkg3: depots, logdir, Display.DiffEntry

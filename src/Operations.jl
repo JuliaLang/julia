@@ -1,15 +1,16 @@
 module Operations
 
-import Random: UUID, randstring
-using Base.LibGit2
+using UUIDs
+using Random: randstring
+import LibGit2
 
 using Pkg3.TerminalMenus
 using Pkg3.Types
 using Pkg3.GraphType
 using Pkg3.Resolve
+
 import Pkg3: GLOBAL_SETTINGS, depots, BinaryProvider, @info, Nothing
 import Pkg3.Types: uuid_julia
-
 
 const SlugInt = UInt32 # max p = 4
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

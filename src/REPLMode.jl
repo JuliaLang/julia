@@ -1,7 +1,7 @@
 module REPLMode
 
-using Base.Markdown
-import Base.UUID
+using Markdown
+using UUIDs
 
 import REPL
 import REPL: LineEdit, REPLCompletions
@@ -165,7 +165,7 @@ function do_preview!(tokens, repl)
     do_cmd!(tokens, repl, preview = true)
 end
 
-const help = Base.Markdown.parse("""
+const help = Markdown.parse("""
     **Synopsis**
 
         pkg> [--env=...] cmd [opts] [args]
