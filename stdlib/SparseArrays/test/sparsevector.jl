@@ -445,7 +445,7 @@ end
         @test nnz(H) == tnnz
         Hr = zeros(m, n)
         for j = 1:n
-            Hr[:,j] = Array(A[j])
+            Hr[:,j] .= Array(A[j])
         end
         @test Array(H) == Hr
 

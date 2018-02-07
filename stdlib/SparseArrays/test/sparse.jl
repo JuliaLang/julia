@@ -790,14 +790,14 @@ end
     @test nnz(a) == 20
     @test count(!iszero, a) == 11
 
-    a[1,:] = 1:10
+    a[1,:] .= 1:10
     @test a[1,:] == sparse([1:10;])
-    a[:,2] = 1:10
+    a[:,2] .= 1:10
     @test a[:,2] == sparse([1:10;])
 
-    a[1,1:0] = []
+    a[1,1:0] .= []
     @test a[1,:] == sparse([1; 1; 3:10])
-    a[1:0,2] = []
+    a[1:0,2] .= []
     @test a[:,2] == sparse([1:10;])
     a[1,1:0] = 0
     @test a[1,:] == sparse([1; 1; 3:10])
@@ -808,11 +808,11 @@ end
     a[1:0,2] = 1
     @test a[:,2] == sparse([1:10;])
 
-    @test_throws BoundsError a[:,11] = spzeros(10,1)
-    @test_throws BoundsError a[11,:] = spzeros(1,10)
-    @test_throws BoundsError a[:,-1] = spzeros(10,1)
-    @test_throws BoundsError a[-1,:] = spzeros(1,10)
-    @test_throws BoundsError a[0:9] = spzeros(1,10)
+    @test_throws BoundsError a[:,11] .= spzeros(10,1)
+    @test_throws BoundsError a[11,:] .= spzeros(1,10)
+    @test_throws BoundsError a[:,-1] .= spzeros(10,1)
+    @test_throws BoundsError a[-1,:] .= spzeros(1,10)
+    @test_throws BoundsError a[0:9] .= spzeros(1,10)
     @test_throws BoundsError a[:,11] = 0
     @test_throws BoundsError a[11,:] = 0
     @test_throws BoundsError a[:,-1] = 0
@@ -824,10 +824,10 @@ end
     @test_throws BoundsError a[-1,:] = 1
     @test_throws BoundsError a[0:9] = 1
 
-    @test_throws DimensionMismatch a[1:2,1:2] = 1:3
-    @test_throws DimensionMismatch a[1:2,1] = 1:3
-    @test_throws DimensionMismatch a[1,1:2] = 1:3
-    @test_throws DimensionMismatch a[1:2] = 1:3
+    @test_throws DimensionMismatch a[1:2,1:2] .= 1:3
+    @test_throws DimensionMismatch a[1:2,1] .= 1:3
+    @test_throws DimensionMismatch a[1,1:2] .= 1:3
+    @test_throws DimensionMismatch a[1:2] .= 1:3
 
     A = spzeros(Int, 10, 20)
     A[1:5,1:10] = 10
@@ -853,12 +853,12 @@ end
     A[1:TSZ, 1:(2*TSZ)] = 0
     nB = count(!iszero, A)
     @test nB == (nA - nx)
-    A[1:TSZ, 1:(2*TSZ)] = x
+    A[1:TSZ, 1:(2*TSZ)] .= x
     @test count(!iszero, A) == nA
     @test A == B
     A[1:TSZ, 1:(2*TSZ)] = 10
     @test count(!iszero, A) == nB + 2*TSZ*TSZ
-    A[1:TSZ, 1:(2*TSZ)] = x
+    A[1:TSZ, 1:(2*TSZ)] .= x
     @test count(!iszero, A) == nA
     @test A == B
 
@@ -866,19 +866,19 @@ end
     lininds = 1:10
     X=reshape([trues(10); falses(15)],5,5)
     @test A[lininds] == A[X] == [1,0,0,0,0,0,1,0,0,0]
-    A[lininds] = [1:10;]
+    A[lininds] .= [1:10;]
     @test A[lininds] == A[X] == 1:10
-    A[lininds] = zeros(Int, 10)
+    A[lininds] .= zeros(Int, 10)
     @test nnz(A) == 13
     @test count(!iszero, A) == 3
     @test A[lininds] == A[X] == zeros(Int, 10)
     c = Vector(11:20); c[1] = c[3] = 0
-    A[lininds] = c
+    A[lininds] .= c
     @test nnz(A) == 13
     @test count(!iszero, A) == 11
     @test A[lininds] == A[X] == c
     A = sparse(1I, 5, 5)
-    A[lininds] = c
+    A[lininds] .= c
     @test nnz(A) == 12
     @test count(!iszero, A) == 11
     @test A[lininds] == A[X] == c
@@ -910,7 +910,7 @@ end
         @test nnz(S) == nnzS3
         @test count(!iszero, S) == cnzS2
 
-        S[FI] = [1:sum(FI);]
+        S[FI] .= [1:sum(FI);]
         @test sum(S) == sumS2 + sum(1:sum(FI))
 
         S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
@@ -921,7 +921,7 @@ end
         sumS2 = sum(S[I])
         S[I] = 0
         @test sum(S) == (sumS1 - sumS2)
-        S[I] = J
+        S[I] .= J
         @test sum(S) == (sumS1 - sumS2 + sum(J))
     end
 end

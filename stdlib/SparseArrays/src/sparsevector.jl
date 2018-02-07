@@ -1914,7 +1914,7 @@ function _densifyfirstnztoend!(x::SparseVector)
         nextpos = newpos - 1
     end
     # finally update lengthened nzinds
-    x.nzind[2:end] = (x.nzind[1]+1):x.n
+    x.nzind[2:end] .= (x.nzind[1]+1):x.n
     x
 end
 "Densifies `x::SparseVector` from its beginning (`x[1]`) through its last nonzero (`x[x.nzind[end]]`)."
@@ -1937,7 +1937,7 @@ function _densifystarttolastnz!(x::SparseVector)
     end
     nextpos > 0 && (x.nzval[1:nextpos] = 0)
     # finally update lengthened nzinds
-    x.nzind[1:newnnz] = 1:newnnz
+    x.nzind[1:newnnz] .= 1:newnnz
     x
 end
 

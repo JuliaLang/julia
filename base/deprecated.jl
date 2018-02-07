@@ -551,13 +551,14 @@ end
 
 # issue #...: nonscalar indexed assignment of many values to many locations
 function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractArray, I...)
-    shape = Base.index_shape(I...)
+    J = to_indices(A, I)
+    shape = Base.index_shape(J...)
     if shape == axes(X)
         depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= X` to explicitly opt-in to broadcasting.", :setindex!)
-        A[I...] .= X
+        A[J...] .= X
     else
         depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= reshape(X, axes(view(A, I...)))` to explicitly opt-in to broadcasting.", :setindex!)
-        A[I...] .= reshape(X, shape)
+        A[J...] .= reshape(X, shape)
     end
 end
 _unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...) = deprecate_nonscalar_indexed_assignment!(A, X, I...)
