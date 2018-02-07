@@ -53,7 +53,7 @@ jobs:
           /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
           /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
           pushd /tmp/julia/share/julia/test &&
-          /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip socket | bar -i 30 &&
+          /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
           /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download &&
           popd &&
           mkdir /tmp/embedding-test &&

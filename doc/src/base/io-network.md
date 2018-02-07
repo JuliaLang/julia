@@ -126,27 +126,7 @@ Base.Multimedia.istextmime
 ## Network I/O
 
 ```@docs
-Base.connect(::TCPSocket, ::Integer)
-Base.connect(::AbstractString)
-Base.listen(::Any)
-Base.listen(::AbstractString)
-Base.getaddrinfo
-Base.getalladdrinfo
-Base.getnameinfo
-Base.getsockname
-Base.getpeername
-Base.IPv4
-Base.IPv6
-Base.TCPSocket
-Base.UDPSocket
 Base.bytesavailable
-Base.accept
-Base.listenany
-Base.bind
-Base.send
-Base.recv
-Base.recvfrom
-Base.setopt
 Base.ntoh
 Base.hton
 Base.ltoh

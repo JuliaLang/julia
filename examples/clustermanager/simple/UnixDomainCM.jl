@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Distributed
+using Sockets, Distributed
 import Distributed: launch, manage, connect, exit
 
 mutable struct UnixDomainCM <: ClusterManager
