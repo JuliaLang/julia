@@ -420,8 +420,6 @@ include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-include("i18n.jl")
-using .I18n
 
 # Stack frames and traces
 include("stacktraces.jl")
