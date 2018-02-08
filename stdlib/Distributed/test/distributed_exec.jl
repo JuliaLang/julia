@@ -693,7 +693,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException wait(t)
+    @test_throws ErrorException Base._wait(t)
 end
 
 # issue #8207
@@ -716,7 +716,7 @@ let t = schedule(@task f13168(100))
     yield()
     @test t.state == :done
     @test_throws ErrorException schedule(t)
-    @test isa(wait(t),Float64)
+    @test isa(fetch(t),Float64)
 end
 
 # issue #13122
@@ -1004,7 +1004,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    wait(rmprocs(p; waitfor=0))
+    Base._wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1092,7 +1092,7 @@ for (addp_testf, expected_errstr, env) in testruns
     catch ex
         redirect_stdout(old_stdout)
         close(stdout_in)
-        @test isempty(wait(stdout_txt))
+        @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end

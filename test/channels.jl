@@ -248,9 +248,9 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    wait(t)
+    Base._wait(t)
     @test run[] == 3
-    @test wait(errstream) == """
+    @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -266,7 +266,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
 end
 
 @testset "schedule_and_wait" begin
@@ -286,7 +286,7 @@ end
     testerr = ErrorException("expected")
     @async Base.throwto(t, testerr)
     @test try
-        wait(t)
+        Base._wait(t)
         false
     catch ex
         ex

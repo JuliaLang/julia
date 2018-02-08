@@ -38,7 +38,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     end
     @test read(stderr.out, String) == ""
     #display(read(stdout.out, String))
-    wait(t)
+    Base._wait(t)
     nothing
 end
 
@@ -184,7 +184,7 @@ fake_repl() do stdin_write, stdout_read, repl
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
-        @test wait(get_stdout) == "HI\n"
+        @test fetch(get_stdout) == "HI\n"
     end
 
     # Issue #7001
@@ -248,7 +248,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 function buffercontents(buf::IOBuffer)
@@ -617,7 +617,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close repl
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Simple non-standard REPL tests
@@ -657,7 +657,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
@@ -828,7 +828,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close REPL ^D
             write(stdin_write, '\x04')
-            wait(repltask)
+            Base._wait(repltask)
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
@@ -885,7 +885,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,

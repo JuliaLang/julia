@@ -19,7 +19,7 @@ end
     stderr = read(stderr, String)
     @test stderr == "MethodError: no method matching this_function_has_no_methods()\n"
     @test success(p)
-    lines = wait(stdout_task)
+    lines = fetch(stdout_task)
     @test length(lines) == 10
     @test parse(Float64, lines[1]) ≈ sqrt(2)
     @test lines[8] == "called bar"

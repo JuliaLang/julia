@@ -233,7 +233,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             close(out.in)
             wait(proc)
             @test success(proc)
-            @test wait(output) == "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5"
+            @test fetch(output) == "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5"
         end
 
         let out  = Pipe(),
@@ -243,7 +243,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             wait(proc)
             close(out.in)
             @test success(proc)
-            @test wait(output) == ""
+            @test fetch(output) == ""
         end
     end
 

@@ -131,7 +131,7 @@ defaultport = rand(2000:4000)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
-        wait(tsk)
+        Base._wait(tsk)
     end
 
     mktempdir() do tmpdir
@@ -147,7 +147,7 @@ defaultport = rand(2000:4000)
         end
         wait(c)
         @test read(connect(socketname), String) == "Hello World\n"
-        wait(tsk)
+        Base._wait(tsk)
     end
 end
 
@@ -205,7 +205,7 @@ end
     end
     @test fetch(r) === :start
     close(server)
-    wait(tsk)
+    Base._wait(tsk)
 end
 
 # test connecting to a named port
@@ -239,11 +239,11 @@ end
             notify(c)
         end
         send(b, ip"127.0.0.1", randport, "Hello World")
-        wait(tsk2)
+        Base._wait(tsk2)
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
     wait(c)
-    wait(tsk)
+    Base._wait(tsk)
 
     tsk = @async begin
         @test begin
@@ -252,7 +252,7 @@ end
         end
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
-    wait(tsk)
+    Base._wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
@@ -272,9 +272,9 @@ end
             end
         end
         send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
+        Base._wait(tsk)
         send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
+        Base._wait(tsk)
     end
 end
 
@@ -332,7 +332,7 @@ end
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
-            map(wait, recvs)
+            map(Base._wait, recvs)
         end
 
         a, b, c = [create_socket() for i = 1:3]
@@ -378,12 +378,12 @@ end
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    Sys.iswindows() || wait(t)
+    Sys.iswindows() || Base._wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llo"
-    Sys.iswindows() && wait(t)
+    Sys.iswindows() && Base._wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure
