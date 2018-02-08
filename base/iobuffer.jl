@@ -40,6 +40,7 @@ It may take optional keyword arguments:
 - `read`, `write`, `append`: restricts operations to the buffer; see `open` for details.
 - `truncate`: truncates the buffer size to zero length.
 - `maxsize`: specifies a size beyond which the buffer may not be grown.
+- `sizehint`: suggests a capacity of the buffer (`data` must implement `sizehint!(data, size)`).
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
@@ -84,9 +85,13 @@ function IOBuffer(
         write::Union{Bool,Nothing}=nothing,
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=nothing,
-        maxsize::Integer=typemax(Int))
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
         throw(ArgumentError("negative maxsize: $(maxsize)"))
+    end
+    if sizehint !== nothing
+        sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize))
@@ -101,8 +106,9 @@ function IOBuffer(;
         write::Union{Bool,Nothing}=true,
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=true,
-        maxsize::Integer=typemax(Int))
-    size = maxsize == typemax(Int) ? 32 : Int(maxsize)
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
+    size = maxsize != typemax(Int) ? Int(maxsize) : sizehint !== nothing ? Int(sizehint) : 32
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = IOBuffer(
         StringVector(size),
