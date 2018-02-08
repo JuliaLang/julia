@@ -953,6 +953,28 @@ float(x::FloatWrapper) = x
     @test isa(cos(z), Complex)
 end
 
+@testset "cbrt" begin
+    for T in (Float32, Float64)
+        @test cbrt(zero(T)) === zero(T)
+        @test cbrt(-zero(T)) === -zero(T)
+        @test cbrt(one(T)) === one(T)
+        @test cbrt(-one(T)) === -one(T)
+        @test cbrt(T(Inf)) === T(Inf)
+        @test cbrt(-T(Inf)) === -T(Inf)
+        @test isnan_type(T, cbrt(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  pcnfloat(prevfloat(prevfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  nextfloat(-T(Inf)), prevfloat(T(Inf)))
+            by = cbrt(big(T(x)))
+            @test cbrt(T(x)) ≈ by rtol=eps(T)
+            bym = cbrt(big(T(-x)))
+            @test cbrt(T(-x)) ≈ bym rtol=eps(T)
+        end
+    end
+end
+
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers: Furlong
 @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
