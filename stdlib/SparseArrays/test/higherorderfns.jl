@@ -9,7 +9,7 @@ module HigherOrderFnsTests
 using Test
 using SparseArrays
 using LinearAlgebra
-using Random
+using Random, Iterators
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12

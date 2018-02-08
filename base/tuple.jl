@@ -222,7 +222,7 @@ All16{E,N}(x::Tuple) where {E,N} = convert(All16{E,N}, x)
 
 function (T::All16{E,N})(itr) where {E,N}
     len = N+16
-    elts = collect(E, Iterators.take(itr,len))
+    elts = collect(E, Iter.take(itr,len))
     if length(elts) != len
         _totuple_err(T)
     end
@@ -245,9 +245,9 @@ function _totuple(T, itr, s)
     (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
 end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iter.rest(itr,s))...,)
 
-_totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple}, itr, s) = (collect(Iter.rest(itr,s))...,)
 
 end
 

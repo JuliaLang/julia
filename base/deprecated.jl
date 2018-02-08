@@ -559,7 +559,7 @@ end
 
 @deprecate promote_noncircular promote false
 
-import .Iterators.enumerate
+import .Iter.enumerate
 
 @deprecate enumerate(i::IndexLinear,    A::AbstractArray)  pairs(i, A)
 @deprecate enumerate(i::IndexCartesian, A::AbstractArray)  pairs(i, A)

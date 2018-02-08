@@ -219,7 +219,7 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
 function join(io::IO, strings, delim, last)
-    a = Iterators.Stateful(strings)
+    a = Iter.Stateful(strings)
     isempty(a) && return
     print(io, popfirst!(a))
     for str in a
@@ -229,7 +229,7 @@ function join(io::IO, strings, delim, last)
 end
 
 function join(io::IO, strings, delim)
-    a = Iterators.Stateful(strings)
+    a = Iter.Stateful(strings)
     for str in a
         print(io, str)
         !isempty(a) && print(io, delim)
@@ -263,7 +263,7 @@ escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=lasti
 Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
 """
 function escape_string(io, s::AbstractString, esc::AbstractString="")
-    a = Iterators.Stateful(s)
+    a = Iter.Stateful(s)
     for c in a
         if c in esc
             print(io, '\\', c)
@@ -314,7 +314,7 @@ unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastind
 Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
-    a = Iterators.Stateful(s)
+    a = Iter.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
             c = popfirst!(a)

@@ -8,6 +8,8 @@ using Base.Meta
 using Base: propertynames, coalesce
 import Pkg
 
+using Iterators
+
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end

@@ -208,8 +208,8 @@ include("some.jl")
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
+using .Iter: zip, enumerate
+using .Iter: Flatten, Filter, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")
@@ -520,6 +520,7 @@ Base.require(Base, :LibGit2)
 Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
+Base.require(Base, :Iterators)
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -531,6 +532,7 @@ Base.require(Base, :Markdown)
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
     @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
     @deprecate_binding Markdown root_module(Base, :Markdown) true ", run `using Markdown` instead"
+    @deprecate_binding Iterators root_module(Base, :Iterators) true ", run `using Iterators` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"

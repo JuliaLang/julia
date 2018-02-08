@@ -19,7 +19,7 @@ true
 ```
 """
 function startswith(a::AbstractString, b::AbstractString)
-    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    a, b = Iter.Stateful(a), Iter.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
@@ -39,8 +39,8 @@ true
 ```
 """
 function endswith(a::AbstractString, b::AbstractString)
-    a = Iterators.Stateful(Iterators.reverse(a))
-    b = Iterators.Stateful(Iterators.reverse(b))
+    a = Iter.Stateful(Iter.reverse(a))
+    b = Iter.Stateful(Iter.reverse(b))
     all(splat(==), zip(a, b)) && isempty(b)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
@@ -160,7 +160,7 @@ julia> rstrip(a)
 ```
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
-    for (i, c) in Iterators.reverse(pairs(s))
+    for (i, c) in Iter.reverse(pairs(s))
         c in chars || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)

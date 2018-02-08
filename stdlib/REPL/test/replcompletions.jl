@@ -614,11 +614,11 @@ let s, c, r
         @test s[r] == ""
     end
 
-    s = "cd \$(Iter"
+    s = "cd \$(Thr"
     c,r = test_scomplete(s)
-    @test "Iterators" in c
-    @test r == 6:9
-    @test s[r] == "Iter"
+    @test "Threads" in c
+    @test r == 6:8
+    @test s[r] == "Thr"
 
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current

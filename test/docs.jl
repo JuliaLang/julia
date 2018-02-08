@@ -897,15 +897,15 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Iterators.@time) == x
 end
+
+using Iterators
 
 let x = Binding(Iterators, :enumerate)
     @test defined(x) == true
     @test @var(enumerate) == x
     @test @var(Base.enumerate) == x
     @test @var(Iterators.enumerate) == x
-    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -915,11 +915,10 @@ let x = Binding(Core, :Int)
     @test @var(Core.Int) == x
 end
 
-let x = Binding(Base, :Iterators)
+let x = Binding(Base, :Threads)
     @test defined(x) == true
-    @test @var(Iterators) == x
-    @test @var(Base.Iterators) == x
-    @test @var(Main.Iterators) == x
+    @test @var(Threads) == x
+    @test @var(Base.Threads) == x
 end
 
 let x = Binding(Base, :VERSION)

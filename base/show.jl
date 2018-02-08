@@ -1933,16 +1933,16 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, ')')
 end
 
-# pretty printing for Iterators.Pairs
-function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
+# pretty printing for Iter.Pairs
+function Base.showarg(io::IO, r::Iter.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
     print(io, "pairs(IndexLinear(), ::$T)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+function Base.showarg(io::IO, r::Iter.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
     print(io, "pairs(::NamedTuple)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
+function Base.showarg(io::IO, r::Iter.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
     print(io, "Iterators.Pairs(::$D, ::$I)")
 end
 

@@ -507,7 +507,7 @@ end
                 # This element type doesn't fit in B. Allocate a new B with wider eltype,
                 # copy over old values, and continue
                 newB = Base.similar(B, promote_typejoin(eltype(B), typeof(V)))
-                for II in Iterators.take(iter, count)
+                for II in Base.Iter.take(iter, count)
                     newB[II] = B[II]
                 end
                 newB[I] = V

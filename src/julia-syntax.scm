@@ -2382,7 +2382,7 @@
                       (car ranges)
                       `(call (top product) ,@ranges)))
             (iter (if filt?
-                      `(call (|.| (top Iterators) 'Filter)
+                      `(call (top Filter)
                              ,(func-for-generator-ranges (cadr (caddr e)) range-exprs)
                              ,iter)
                       iter)))

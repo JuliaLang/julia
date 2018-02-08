@@ -21,6 +21,8 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
 using Serialization
 import Serialization: serialize, deserialize
 
+using Iterators
+
 # NOTE: clusterserialize.jl imports additional symbols from Serialization for use
 
 export

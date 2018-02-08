@@ -9,7 +9,7 @@ module IteratorsMD
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
-    using Base.Iterators: Reverse
+    using Base.Iter: Reverse
 
     export CartesianIndex, CartesianIndices, LinearIndices
 
@@ -148,7 +148,7 @@ module IteratorsMD
         return ni
     end
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
-        _, ni = next(Iterators.reverse(CartesianIndices(axes(a))), i)
+        _, ni = next(Base.Iter.reverse(CartesianIndices(axes(a))), i)
         return ni
     end
 
@@ -671,7 +671,7 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
 end
 
 _iterable(v::AbstractArray) = v
-_iterable(v) = Iterators.repeated(v)
+_iterable(v) = Base.Iter.repeated(v)
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
@@ -1802,11 +1802,11 @@ end
 end
 
 # Show for pairs() with Cartesian indicies. Needs to be here rather than show.jl for bootstrap order
-function Base.showarg(io::IO, r::Union{Iterators.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
-                                       Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
+function Base.showarg(io::IO, r::Union{Base.Iter.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
+                                       Base.Iter.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
     print(io, "pairs(::$T)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+function Base.showarg(io::IO, r::Base.Iter.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
     print(io, "pairs(IndexCartesian(), ::$T)")
 end

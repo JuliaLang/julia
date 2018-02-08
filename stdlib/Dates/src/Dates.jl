@@ -37,7 +37,7 @@ module Dates
 import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
 using Printf: @sprintf
 
-using Base.Iterators
+using Iterators
 
 include("types.jl")
 include("periods.jl")
