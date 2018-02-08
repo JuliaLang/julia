@@ -496,32 +496,41 @@ using Base
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
-# load some stdlib packages but don't put their names in Main
-Base.require(Base, :Base64)
-Base.require(Base, :CRC32c)
-Base.require(Base, :Dates)
-Base.require(Base, :DelimitedFiles)
-Base.require(Base, :Serialization)
-Base.require(Base, :Distributed)
-Base.require(Base, :FileWatching)
-Base.require(Base, :Future)
-Base.require(Base, :IterativeEigensolvers)
-Base.require(Base, :Libdl)
-Base.require(Base, :LinearAlgebra)
-Base.require(Base, :Logging)
-Base.require(Base, :Mmap)
-Base.require(Base, :Printf)
-Base.require(Base, :Profile)
-Base.require(Base, :Random)
-Base.require(Base, :SharedArrays)
-Base.require(Base, :SparseArrays)
-Base.require(Base, :SuiteSparse)
-Base.require(Base, :Test)
-Base.require(Base, :Unicode)
-Base.require(Base, :LibGit2)
-Base.require(Base, :Pkg)
-Base.require(Base, :REPL)
-Base.require(Base, :Markdown)
+# load stdlib packages but don't put their names in Main
+const stdlibs = [
+        :Base64,
+        :CRC32c,
+        :Dates,
+        :DelimitedFiles,
+        :Serialization,
+        :Distributed,
+        :FileWatching,
+        :Future,
+        :IterativeEigensolvers,
+        :Libdl,
+        :LinearAlgebra,
+        :Logging,
+        :Mmap,
+        :Printf,
+        :Profile,
+        :Random,
+        :SharedArrays,
+        :SparseArrays,
+        :SuiteSparse,
+        :Test,
+        :Unicode,
+        :LibGit2,
+        :Pkg,
+        :REPL,
+        :Markdown,
+    ]
+
+let maxlen = maximum(textwidth.(string.(stdlibs)))
+    for stdlib in stdlibs
+        print(rpad(stdlib, maxlen))
+        @time Base.require(Base, stdlib)
+    end
+end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
