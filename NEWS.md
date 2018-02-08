@@ -82,6 +82,9 @@ Language changes
 
   * The parsing of `<|` is now right associative. `|>` remains left associative ([#24153]).
 
+  * `:` now parses like other operators, as a call to a function named `:`, instead of
+    calling `colon` ([#25947]).
+
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
     of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
 

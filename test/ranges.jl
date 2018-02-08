@@ -189,12 +189,12 @@ end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
     @testset "colon" begin
-        @inferred(colon(10, 1, 0))
-        @inferred(colon(1, .2, 2))
-        @inferred(colon(1., .2, 2.))
-        @inferred(colon(2, -.2, 1))
-        @inferred(colon(1, 0))
-        @inferred(colon(0.0, -0.5))
+        @inferred((:)(10, 1, 0))
+        @inferred((:)(1, .2, 2))
+        @inferred((:)(1., .2, 2.))
+        @inferred((:)(2, -.2, 1))
+        @inferred((:)(1, 0))
+        @inferred((:)(0.0, -0.5))
     end
 
     @testset "indexing" begin
@@ -1154,7 +1154,7 @@ end
 end
 
 # issue #20382
-let r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
+let r = @inferred((:)(big(1.0),big(2.0),big(5.0)))
     @test eltype(r) == BigFloat
 end
 
@@ -1184,13 +1184,13 @@ end
     @test r[4] === 3.0+im
 end
 
-# ambiguity between colon methods (#20988)
+# ambiguity between (:) methods (#20988)
 struct NotReal; val; end
 Base.:+(x, y::NotReal) = x + y.val
 Base.zero(y::NotReal) = zero(y.val)
 Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
-@test colon(1, NotReal(1), 5) isa StepRange{Int,NotReal}
+@test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers: Furlong

@@ -1519,11 +1519,7 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x)
-                                   (or (eq? x 'end)
-                                       (eq? x ':)
-                                       (and (pair? x)
-                                            (eq? (car x) ':))))
+                       (contains (lambda (x) (eq? x 'end))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -2054,10 +2050,7 @@
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
-                               (contains (lambda (x)
-                                           (or (eq? x 'end)
-                                               (and (pair? x)
-                                                    (eq? (car x) ':))))
+                               (contains (lambda (x) (eq? x 'end))
                                          idxs)))
                    (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
@@ -2296,16 +2289,6 @@
    '>>>=   lower-update-op
    '.>>>=   lower-update-op
 
-   ':
-   (lambda (e)
-     (if (or (length= e 2)
-             (and (length= e 3)
-                  (eq? (caddr e) ':))
-             (and (length= e 4)
-                  (eq? (cadddr e) ':)))
-         (error "invalid \":\" outside indexing"))
-     (expand-forms `(call colon ,@(cdr e))))
-
    '|...|
    (lambda (e) (error "\"...\" expression outside call"))
 
@@ -2412,7 +2395,9 @@
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                                              (pair? (caddr x))
+                                              (eq? (car (caddr x)) 'call)
+                                              (eq? (cadr (caddr x)) ':)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
