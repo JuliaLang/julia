@@ -553,7 +553,7 @@ end
 function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractArray, I...)
     J = to_indices(A, I)
     shape = Base.index_shape(J...)
-    if shape == axes(X)
+    if shape == axes(X) || length(X) == prod(shape) <= 1
         depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= X` to explicitly opt-in to broadcasting.", :setindex!)
         A[J...] .= X
     else

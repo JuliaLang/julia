@@ -1296,9 +1296,9 @@ let
     tst = 1
     m1(i) = (tst+=1;i-1)
     x = [1:4;]
-    x[1:end] *= 2
+    x[1:end] .*= 2
     @test x == [2:2:8;]
-    x[m1(end)] += 3
+    x[m1(end)] .+= 3
     @test x == [2,4,9,8]
     @test tst == 2
 
@@ -3270,7 +3270,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
     u32 = UInt32[0x3]
-    a[9:end] = reinterpret(UInt8, u32)
+    a[9:end] .= reinterpret(UInt8, u32)
     p = pointer(a)
     @test (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
     f11813(p) = (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
@@ -3279,7 +3279,7 @@ end
 # issue #13037
 let a = UInt8[0, 0, 0, 0, 0x66, 99, 254, 13, 0, 0, 0, 0]
     u32 = UInt32[0x3]
-    a[1:4] = reinterpret(UInt8, u32)
+    a[1:4] .= reinterpret(UInt8, u32)
     p = pointer(a)
     @test ((Int32(3),UInt8(0x66)),Int32(0)) === unsafe_load(convert(Ptr{Tuple{Tuple{Int32,UInt8},Int32}},p))
     f11813(p) = ((Int32(3),UInt8(0x66)),Int32(0)) === unsafe_load(convert(Ptr{Tuple{Tuple{Int32,UInt8},Int32}},p))
@@ -4129,7 +4129,7 @@ function test_shared_array_resize(::Type{T}) where T
     a = Vector{T}(uninitialized, len)
     function test_unshare(f)
         a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
-        a[:] = 1:length(a)
+        a .= 1:length(a)
         # The operation should fail on the owner shared array
         # and has no side effect.
         @test_throws ErrorException f(a)

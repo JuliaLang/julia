@@ -294,7 +294,7 @@ repl(x) = repl(STDOUT, x)
 
 function _repl(x)
     if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
-        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+        x.args[2:end] .= [:(::typeof($arg)) for arg in x.args[2:end]]
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
@@ -395,8 +395,8 @@ function levenshtein(s1, s2)
     n = length(b)
     d = Matrix{Int}(uninitialized, m+1, n+1)
 
-    d[1:m+1, 1] = 0:m
-    d[1, 1:n+1] = 0:n
+    d[1:m+1, 1] .= 0:m
+    d[1, 1:n+1] .= 0:n
 
     for i = 1:m, j = 1:n
         d[i+1,j+1] = min(d[i  , j+1] + 1,

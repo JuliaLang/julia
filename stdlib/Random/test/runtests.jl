@@ -203,10 +203,10 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     end
     ke[2] = zero(UInt64)
 
-    wi[:] = wib
-    fi[:] = fib
-    we[:] = web
-    fe[:] = feb
+    wi .= wib
+    fi .= fib
+    we .= web
+    fe .= feb
     return nothing
 end
 randmtzig_fill_ziggurat_tables()

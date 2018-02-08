@@ -63,7 +63,7 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
             end
         elseif mode == 3 && bmat == "I" # corresponds to dsdrv2, dndrv2 or zndrv2
             if ido[] == -1 || ido[] == 1
-                y[:] = solveSI(x)
+                y .= solveSI(x)
             elseif ido[] == 99
                 break
             else
@@ -73,11 +73,11 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
             if ido[] == -1 || ido[] == 1
                 matvecA!(y, x)
                 if sym
-                    x[:] = y    # overwrite as per Remark 5 in dsaupd.f
+                    x .= y    # overwrite as per Remark 5 in dsaupd.f
                 end
-                y[:] = solveSI(y)
+                y .= solveSI(y)
             elseif ido[] == 2
-                y[:] = matvecB(x)
+                y .= matvecB(x)
             elseif ido[] == 99
                 break
             else
@@ -85,11 +85,11 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
             end
         elseif mode == 3 && bmat == "G" # corresponds to dsdrv4, dndrv4 or zndrv4
             if ido[] == -1
-                y[:] = solveSI(matvecB(x))
+                y .= solveSI(matvecB(x))
             elseif  ido[] == 1
-                y[:] = solveSI(view(workd,ipntr[3] .+ zernm1))
+                y .= solveSI(view(workd,ipntr[3] .+ zernm1))
             elseif ido[] == 2
-                y[:] = matvecB(x)
+                y .= matvecB(x)
             elseif ido[] == 99
                 break
             else
@@ -168,17 +168,17 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
         j = 1
         while j <= nev
             if di[j] == 0
-                evec[:,j] = v[:,j]
+                evec[:,j] .= v[:,j]
             else # For complex conjugate pairs
-                evec[:,j]   = v[:,j] + im*v[:,j+1]
-                evec[:,j+1] = v[:,j] - im*v[:,j+1]
+                evec[:,j]   .= v[:,j] + im*v[:,j+1]
+                evec[:,j+1] .= v[:,j] - im*v[:,j+1]
                 j += 1
             end
             j += 1
         end
         if j == nev+1 && !isnan(di[j])
             if di[j] == 0
-                evec[:,j] = v[:,j]
+                evec[:,j] .= v[:,j]
                 j += 1
             else
                 throw(ARPACKException("unexpected behavior"))

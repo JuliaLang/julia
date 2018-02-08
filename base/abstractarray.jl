@@ -1269,7 +1269,7 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
             end
         end
         I::NTuple{N, UnitRange{Int}} = (inds...,)
-        A[I...] .= x
+        concatenate_setindex!(A, x, I...)
     end
     return A
 end
@@ -1818,7 +1818,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     for d in dims
         ridx[d] = axes(R,d)
     end
-    
+
     concatenate_setindex!(R, r1, ridx...)
 
     nidx = length(otherdims)

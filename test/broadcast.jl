@@ -57,7 +57,7 @@ end
 function as_sub(x::AbstractVector)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = view(y, 2:2:length(y))
-    y[:] = x[:]
+    y .= x
     y
 end
 function as_sub(x::AbstractMatrix)
