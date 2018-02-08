@@ -22,6 +22,7 @@ using Random
     let ipv = parse(IPAddr, "127.0.0.1")
         @test isa(ipv, IPv4)
         @test ipv == ip"127.0.0.1"
+        @test sprint(show, ipv) == "ip\"127.0.0.1\""
     end
 
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFFF")
@@ -49,6 +50,7 @@ using Random
         @test ipv == ip"0:0:0:0:0:ffff:127.0.0.1"
     end
 
+    @test_throws ArgumentError IPv6(-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
 
