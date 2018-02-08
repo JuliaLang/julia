@@ -582,7 +582,7 @@ Library improvements
     ones of `Dict`. ([#25210])
 
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
-    the buffer ([#?????]).
+    the buffer ([#25944]).
 
 Compiler/Runtime improvements
 -----------------------------
