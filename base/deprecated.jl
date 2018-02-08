@@ -246,6 +246,7 @@ DEPRECATED: use @__MODULE__ instead
 end
 export current_module
 
+@deprecate colon (:)
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),

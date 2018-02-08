@@ -819,21 +819,12 @@
 (define (parse-pipe< s) (parse-RtoL s parse-pipe> is-prec-pipe<? #f parse-pipe<))
 (define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>?))
 
-; parse ranges and postfix ...
-; colon is strange; 3 arguments with 2 colons yields one call:
-; 1:2   => (: 1 2)
-; 1:2:3 => (: 1 2 3)
-; 1:    => (: 1 :)
-; 1:2:  => (: 1 2 :)
-;; not enabled:
-;;; :2    => (: 2)
-;;; :1:2  => (: (: 1 2))
-;;; :1:   => (: (: 1 :))
-; a simple state machine is up to the task.
-; we will leave : expressions as a syntax form, not a call to ':',
-; so they can be processed by syntax passes.
+;; parse ranges and postfix ...
+;; colon is strange; 3 arguments with 2 colons yields one call:
+;; 1:2   => (call : 1 2)
+;; 1:2:3 => (call : 1 2 3)
 (define (parse-range s)
-  (let loop ((ex (parse-expr s))
+  (let loop ((ex     (parse-expr s))
              (first? #t))
     (let* ((t   (peek-token s))
            (spc (ts:space? s)))
@@ -860,7 +851,7 @@
                        (error (string "\":" argument "\" found instead of \""
                                       argument ":\"")))
                    (if first?
-                       (loop (list t ex argument) #f)
+                       (loop (list 'call t ex argument) #f)
                        (loop (append ex (list argument)) #t)))))
             ((eq? t '...)
              (take-token s)

@@ -380,7 +380,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
     steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), Int(len), 1)
 end
 
-function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)

@@ -142,6 +142,15 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+# range syntax
+@test_repr "1:2"
+@test_repr "3:4:5"
+let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
+    ex1 = Expr(:call, :(:), 1)
+    @test eval(Meta.parse(repr(ex4))) == ex4
+    @test eval(Meta.parse(repr(ex1))) == ex1
+end
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
