@@ -1,11 +1,12 @@
-using TerminalMenus
-using Base.Test
+import REPL
+using REPL.TerminalMenus
+using Test
 
 TerminalMenus.config(supress_output=true)
 
 function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...)
     # If we cannot write to the buffer, skip the test
-    !(:buffer in fieldnames(STDIN)) && return true
+    !(:buffer in fieldnames(typeof(STDIN))) && return true
 
     keydict =  Dict(:up => "\e[A",
                     :down => "\e[B",

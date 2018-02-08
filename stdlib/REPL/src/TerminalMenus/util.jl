@@ -13,10 +13,10 @@
 # Enable raw mode. Allows us to process keyboard inputs directly.
 function enableRawMode(term)
     try
-        Base.Terminals.raw!(term, true)
+        REPL.Terminals.raw!(term, true)
         return true
     catch err
-        warn("TerminalMenus: Unable to enter raw mode: $err")
+        @warn("TerminalMenus: Unable to enter raw mode: $err")
     end
     return false
 end
@@ -24,10 +24,10 @@ end
 # Disable raw mode. Give control back to Julia REPL if interactive session.
 function disableRawMode(term)
     try
-        Base.Terminals.raw!(term, false)
+        REPL.Terminals.raw!(term, false)
         return true
     catch err
-        warn("TerminalMenus: Unable to disable raw mode: $err")
+        @warn("TerminalMenus: Unable to disable raw mode: $err")
     end
     return false
 end
@@ -39,7 +39,8 @@ readNextChar(stream::IO=STDIN) = Char(read(stream,1)[1])
 # Read the next key from STDIN. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-function readKey(stream::IO=STDIN) ::UInt32
+readKey(stream::IO=STDIN) = UInt32(_readKey(stream))
+function _readKey(stream::IO=STDIN)
     c = readNextChar(stream)
 
 	# Escape characters
@@ -104,7 +105,7 @@ function readKey(stream::IO=STDIN) ::UInt32
 		elseif esc_a == 'H'
             return HOME_KEY
         elseif esc_a == 'F'
-             return END_KEY
+            return END_KEY
 		end
 
 		return '\x1b'
