@@ -2739,8 +2739,7 @@ end
     yf = Complex{BigFloat}(1//2 + 1//5*im)
     yi = 4
 
-    # FIXME: reenable once #25221 is fixed
-    # @test x^y ≈ xf^yf
+    @test x^y ≈ xf^yf
     @test x^yi ≈ xf^yi
     @test x^true ≈ xf^true
     @test x^false == xf^false
