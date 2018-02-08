@@ -1,0 +1,10 @@
+[[Compat]]
+git-tree-sha1 = "796ab395151ed47df970529c2eb24082aa6f66e8"
+uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
+version = "0.31.0"
+
+[[SHA]]
+deps = ["Compat"]
+git-tree-sha1 = "91cc54078cfe28488add383c458333ef39cdcde5"
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.5.1"
