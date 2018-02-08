@@ -1265,6 +1265,12 @@ function bar16239()
 end
 @test bar16239() == 0
 
+# lowering of <: and >:
+let args = (Int, Any)
+    @test <:(args...)
+    @test >:(reverse(args)...)
+end
+
 # issue #25020
 @test_throws ParseError Meta.parse("using Colors()")
 

@@ -1617,10 +1617,6 @@
                                           `(call (top next) ,coll ,state))
                  ,body))))))
 
-;; convert an operator parsed as (op a b) to (call op a b)
-(define (syntactic-op-to-call e)
-  `(call ,(car e) ,@(map expand-forms (cdr e))))
-
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
   (let* ((vars    (map cadr range-exprs))
@@ -1927,8 +1923,10 @@
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
 
-   '|<:| syntactic-op-to-call
-   '|>:| syntactic-op-to-call
+   '|<:|
+   (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
+   '|>:|
+   (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
