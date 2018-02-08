@@ -512,7 +512,7 @@ isascii(s::AbstractString) = all(isascii, s)
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), read=true, write=true)
+    out = IOBuffer(sizehint=sizeof(s), read=true, write=true)
     truncate(out, 0)
     for c in s
         c′ = f(c)
@@ -525,7 +525,7 @@ function map(f, s::AbstractString)
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), read=true, write=true)
+    out = IOBuffer(sizehint=sizeof(s), read=true, write=true)
     truncate(out, 0)
     for c in s
         f(c) && write(out, c)
