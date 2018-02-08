@@ -1515,7 +1515,7 @@
        (new-idxs stuff) (process-indices arr idxs)
        `(block
          ,@(append stmts stuff)
-         (call getindex ,arr ,@new-idxs))))))
+         (call (top getindex) ,arr ,@new-idxs))))))
 
 (define (expand-update-operator op op= lhs rhs . declT)
   (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
@@ -2054,7 +2054,7 @@
                  ,.(map expand-forms stuff)
                  ,@rini
                  ,(expand-forms
-                   `(call setindex! ,arr ,r ,@new-idxs))
+                   `(call (top setindex!) ,arr ,r ,@new-idxs))
                  (unnecessary ,r))))))
          ((|::|)
           ;; (= (|::| x T) rhs)
@@ -2292,7 +2292,7 @@
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,@(cdr e))))
+   (lambda (e) (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
@@ -2309,10 +2309,10 @@
                                        (cdr x)
                                        (list x)))
                                  a)))
-                  `(call hvcat
+                  `(call (top hvcat)
                          (tuple ,.(map length rows))
                          ,.(apply append rows)))
-                `(call vcat ,@a))))))
+                `(call (top vcat) ,@a))))))
 
    'typed_hcat
    (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
