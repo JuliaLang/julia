@@ -786,7 +786,7 @@ julia> digits(10, base = 2, pad = 6)
  0
 ```
 """
-digits(n::Integer; base = base::Integer = 10, pad = pad::Integer = 1) =
+digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
     digits(typeof(base), n, base = base, pad = pad)
 
 function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer = 1)
