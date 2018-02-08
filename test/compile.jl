@@ -195,7 +195,7 @@ try
         @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
-                            Base.PkgId(Foo) => Base.PkgId("Test"),
+                            Base.PkgId(Foo) => Base.PkgId(Test),
                             Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)) ]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)

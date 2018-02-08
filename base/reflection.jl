@@ -32,6 +32,22 @@ Base
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
+    moduleroot(m::Module) -> Module
+
+Find the root module of a given module. This is the first module in the chain of
+parent modules of `m` which is either a registered root module or which is its
+own parent module.
+"""
+function moduleroot(m::Module)
+    while true
+        is_root_module(m) && return m
+        p = parentmodule(m)
+        p == m && return m
+        m = p
+    end
+end
+
+"""
     @__MODULE__ -> Module
 
 Get the `Module` of the toplevel eval,

@@ -118,7 +118,8 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, project_file)
+dummy_uuid(project_file::String) = isfile_casesensitive(project_file) ?
+    uuid5(ns_dummy_uuid, realpath(project_file)) : nothing
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
@@ -220,11 +221,9 @@ struct PkgId
 end
 PkgId(name::AbstractString) = PkgId(nothing, name)
 
-function PkgId(m::Module)
+function PkgId(m::Module, name::String = String(nameof(moduleroot(m))))
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(nameof(m))
-    UInt128(uuid) == 0 && return PkgId(name)
-    return PkgId(uuid, name)
+    UInt128(uuid) == 0 ? PkgId(name) : PkgId(uuid, name)
 end
 
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
@@ -865,6 +864,7 @@ Windows.
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
+    # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
     uuidkey === nothing &&
         throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
     if _track_dependencies[]
@@ -883,8 +883,11 @@ end
 const loaded_modules = Dict{PkgId,Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
+is_root_module(m::Module) = haskey(module_keys, m)
+root_module_key(m::Module) = module_keys[m]
+
 function register_root_module(m::Module)
-    key = PkgId(m)
+    key = PkgId(m, String(nameof(m)))
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
@@ -899,9 +902,6 @@ end
 register_root_module(Core)
 register_root_module(Base)
 register_root_module(Main)
-
-is_root_module(m::Module) = haskey(module_keys, m)
-root_module_key(m::Module) = module_keys[m]
 
 # This is used as the current module when loading top-level modules.
 # It has the special behavior that modules evaluated in it get added
@@ -1008,9 +1008,10 @@ function _require(pkg::PkgId)
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $name declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
-        end
-        if uuid !== old_uuid
-            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+        finally
+            if uuid !== old_uuid
+                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+            end
         end
     finally
         toplevel_load[] = last
@@ -1141,10 +1142,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             write(in, "push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
         end
         write(io, "end\0")
-        if uuid !== nothing
-            uuid_tuple = convert(NTuple{2, UInt64}, uuid)
-            write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
-        end
+        uuid_tuple = uuid === nothing ? (0, 0) : convert(NTuple{2, UInt64}, uuid)
+        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
         source = source_path(nothing)
         if source !== nothing
             write(in, "task_local_storage()[:SOURCE_PATH] = $(repr(source))\0")
@@ -1154,9 +1153,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         if source !== nothing
             write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
         end
-        if uuid !== nothing
-            write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
-        end
+        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
     catch ex
         close(in)

@@ -1,0 +1,5 @@
+name = "DelimitedFiles"
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
+[deps]
+Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
