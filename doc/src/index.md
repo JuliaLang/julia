@@ -79,6 +79,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [The Julia REPL](@ref)
   * [Base64](@ref)
   * [CRC32c](@ref)
+  * [SHA](@ref)
   * [Dates and Time](@ref stdlib-dates)
   * [Delimited Files](@ref)
   * [Distributed Computing](@ref)

@@ -1,5 +1,7 @@
 using SHA
-using Compat
+using Test
+
+const VERBOSE = false
 
 # Define some data we will run our tests on
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
@@ -108,7 +110,7 @@ function describe_hash(T::Type{S}) where {S <: SHA.SHA_CTX}
     if T <: SHA.SHA3_CTX return "SHA3-$(SHA.digestlen(T)*8)" end
 end
 
-println("Loaded hash types: $(join(sort([describe_hash(t[2]) for t in sha_types]), ", ", " and "))")
+VERBOSE && println("Loaded hash types: $(join(sort([describe_hash(t[2]) for t in sha_types]), ", ", " and "))")
 
 # First, test processing the data in one go
 nerrors = 0
@@ -116,7 +118,7 @@ for idx in 1:length(data)
     global nerrors
 
     desc = data_desc[idx]
-    print("Testing on $desc$(join(["." for z in 1:(34-length(desc))]))")
+    VERBOSE && print("Testing on $desc$(join(["." for z in 1:(34-length(desc))]))")
     nerrors_old = nerrors
     for sha_idx in 1:length(sha_funcs)
         sha_func = sha_funcs[sha_idx]
@@ -140,16 +142,16 @@ for idx in 1:length(data)
             """)
             nerrors += 1
         else
-            print(".")
+            VERBOSE && print(".")
         end
     end
-    println("Done! [$(nerrors - nerrors_old) errors]")
+    VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 end
 
 # Do another test on the "so many a's" data where we chunk up the data into
 # two chunks, (sized appropriately to AVOID overflow from one update to another)
 # in order to test multiple update!() calls
-print("Testing on one million a's (chunked properly)")
+VERBOSE && print("Testing on one million a's (chunked properly)")
 nerrors_old = nerrors
 for sha_idx in 1:length(sha_funcs)
     global nerrors
@@ -169,15 +171,15 @@ for sha_idx in 1:length(sha_funcs)
         """)
         nerrors += 1
     else
-        print(".")
+        VERBOSE && print(".")
     end
 end
-println("Done! [$(nerrors - nerrors_old) errors]")
+VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 
 # Do another test on the "so many a's" data where we chunk up the data into
 # three chunks, (sized appropriately to CAUSE overflow from one update to another)
 # in order to test multiple update!() calls as well as the overflow codepaths
-print("Testing on one million a's (chunked clumsily)")
+VERBOSE && print("Testing on one million a's (chunked clumsily)")
 nerrors_old = nerrors
 for sha_idx in 1:length(sha_funcs)
     global nerrors
@@ -210,13 +212,13 @@ for sha_idx in 1:length(sha_funcs)
         """)
         nerrors += 1
     else
-        print(".")
+        VERBOSE && print(".")
     end
 end
-println("Done! [$(nerrors - nerrors_old) errors]")
+VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 
 # test hmac correctness using the examples on [wiki](https://en.wikipedia.org/wiki/Hash-based_message_authentication_code#Examples)
-print("Testing on the hmac functions")
+VERBOSE && print("Testing on the hmac functions")
 nerrors_old = nerrors
 for (key, msg, fun, hash) in (
     (b"", b"", hmac_sha1, "fbdb1d1b18aa6c08324b7d64b71fb76370690e1d"),
@@ -237,21 +239,17 @@ for (key, msg, fun, hash) in (
         """)
         nerrors += 1
     else
-        print(".")
+        VERBOSE && print(".")
     end
 end
-println("Done! [$(nerrors - nerrors_old) errors]")
+VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 
-if VERSION >= v"0.7.0-DEV.1472"
-    replstr(x) = sprint((io, x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
-else
-    replstr(x) = sprint((io, x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
-end
+replstr(x) = sprint((io, x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 
 for idx in 1:length(ctxs)
     global nerrors
     # Part #1: copy
-    print("Testing copy function @ $(ctxs[idx]) ...")
+    VERBOSE && print("Testing copy function @ $(ctxs[idx]) ...")
     try
         copy(ctxs[idx]())
     catch
@@ -259,16 +257,16 @@ for idx in 1:length(ctxs)
         warn("Some weird copy error happened with $(ctxs[idx])")
         nerrors += 1
     end
-    println("Done! [$(nerrors - nerrors_old) errors]")
+    VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 
     # Part #2: show
-    print("Testing show function @ $(ctxs[idx]) ...")
+    VERBOSE && print("Testing show function @ $(ctxs[idx]) ...")
     if replstr(ctxs[idx]()) != shws[idx]
         print("\n")
         warn("Some weird show error happened with $(ctxs[idx])")
         nerrors += 1
     end
-    println("Done! [$(nerrors - nerrors_old) errors]")
+    VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
 end
 
 # test error if eltype of input is not UInt8
@@ -281,13 +279,12 @@ for f in sha_funcs
     end
 end
 
-
 # Clean up the I/O mess
 rm(file)
 
 if nerrors == 0
-    println("ALL OK")
+    VERBOSE && println("ALL OK")
 else
     println("Failed with $nerrors failures")
 end
-exit(nerrors)
+@test nerrors == 0

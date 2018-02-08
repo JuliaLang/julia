@@ -1,7 +1,6 @@
 __precompile__()
 
 module SHA
-using Compat
 
 # Export convenience functions, context types, update!() and digest!() functions
 export sha1, SHA1_CTX, update!, digest!
@@ -25,11 +24,6 @@ include("sha2.jl")
 include("sha3.jl")
 include("common.jl")
 include("hmac.jl")
-
-# Compat.jl-like shim for codeunits() on Julia <= 0.6:
-if VERSION < v"0.7.0-DEV.3213"
-    codeunits(x) = x
-end
 
 # Create data types and convenience functions for each hash implemented
 for (f, ctx) in [(:sha1, :SHA1_CTX),

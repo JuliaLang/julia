@@ -1,10 +1,5 @@
 # SHA
 
-[![Build Status](https://travis-ci.org/staticfloat/SHA.jl.svg?branch=master)](https://travis-ci.org/staticfloat/SHA.jl)
-[![codecov.io](http://codecov.io/github/staticfloat/SHA.jl/coverage.svg?branch=master)](http://codecov.io/github/staticfloat/SHA.jl?branch=master)
-
-[![SHA](http://pkg.julialang.org/badges/SHA_0.3.svg)](http://pkg.julialang.org/?pkg=SHA&ver=0.3)
-[![SHA](http://pkg.julialang.org/badges/SHA_0.4.svg)](http://pkg.julialang.org/?pkg=SHA&ver=0.4)
 
 Usage is very straightforward:
 ```julia
@@ -49,4 +44,4 @@ Due to the colloquial usage of `sha256` to refer to `sha2_256`, convenience func
 
 `shaxxx()` takes `AbstractString` and array-like objects (`NTuple` and `Array`) with elements of type `UInt8`.
 
-Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2.  Pull requests are welcome.
+Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2.
