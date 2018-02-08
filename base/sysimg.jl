@@ -162,6 +162,10 @@ Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missi
 
 include("abstractdict.jl")
 
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
+
 include("namedtuple.jl")
 
 # numeric operations
@@ -207,9 +211,6 @@ include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")

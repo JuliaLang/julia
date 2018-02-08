@@ -226,6 +226,8 @@ end
 
 merge(a::NamedTuple{()}, b::NamedTuple) = b
 
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+
 """
     merge(a::NamedTuple, iterable)
 
