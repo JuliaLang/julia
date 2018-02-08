@@ -408,7 +408,7 @@ function replace_ref_end_!(ex, withex)
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
+                    exj, used = replace_ref_end_!(ex.args[j],:($lastindex($S,$n)))
                     used_S |= used
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head == :...
@@ -499,7 +499,7 @@ end
 # _views implements the transformation for the @views macro.
 # @views calls esc(_views(...)) to work around #20241,
 # so any function calls we insert (to maybeview, or to
-# size and lastindex in replace_ref_end!) must be interpolated
+# lastindex in replace_ref_end!) must be interpolated
 # as values rather than as symbols to ensure that they are called
 # from Base rather than from the caller's scope.
 _views(x) = x
