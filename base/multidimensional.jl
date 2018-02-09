@@ -1157,6 +1157,18 @@ function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
+# For contiguous arrays (and contiguous views thereof) we can punt to an
+# optimized unsafe_copyto! method that acts upon the `Array` themselves
+_arrayparentoffset(::Array) = 1
+_arrayparentoffset(S::FastContiguousSubArray{<:Any,<:Any,<:Array}) = S.offset1+1
+function copyto!(dest::Union{Array{T,N}, FastContiguousSubArray{T,N,<:Array}},
+                 src::Union{Array{T,N}, FastContiguousSubArray{T,N,<:Array}}) where {T,N}
+    checkbounds(dest, axes(src)...)
+    return unsafe_copyto!(parent(dest), _arrayparentoffset(dest),
+                          parent(src), _arrayparentoffset(src), length(src))
+end
+
+
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest

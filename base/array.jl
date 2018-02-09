@@ -690,26 +690,6 @@ function setindex! end
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
     (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
-# Faster contiguous setindex! with copyto! TODO: Transform to Broadcasts impls
-# function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
-#     @_inline_meta
-#     @boundscheck checkbounds(A, I)
-#     lI = length(I)
-#     @boundscheck setindex_shape_check(X, lI)
-#     if lI > 0
-#         unsafe_copyto!(A, first(I), X, 1, lI)
-#     end
-#     return A
-# end
-# function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
-#     @_inline_meta
-#     lI = length(A)
-#     @boundscheck setindex_shape_check(X, lI)
-#     if lI > 0
-#         unsafe_copyto!(A, 1, X, 1, lI)
-#     end
-#     return A
-# end
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
 setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A, x)
 
