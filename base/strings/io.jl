@@ -96,6 +96,9 @@ tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
 function print_to_string(xs...; env=nothing)
+    if isempty(xs)
+        return ""
+    end
     # specialized for performance reasons
     s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
     if env !== nothing
