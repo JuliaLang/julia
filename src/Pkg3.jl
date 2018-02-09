@@ -2,6 +2,8 @@ __precompile__(true)
 module Pkg3
 
 import Random
+import REPL
+using REPL.TerminalMenus
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
@@ -19,7 +21,6 @@ logdir() = joinpath(depots()[1], "logs")
 
 # load snapshotted dependencies
 include("../ext/TOML/src/TOML.jl")
-include("../ext/TerminalMenus/src/TerminalMenus.jl")
 
 include("PlatformEngines.jl")
 include("Types.jl")

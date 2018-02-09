@@ -4,7 +4,8 @@ using UUIDs
 using Random: randstring
 import LibGit2
 
-using Pkg3.TerminalMenus
+import REPL
+using REPL.TerminalMenus
 using Pkg3.Types
 using Pkg3.GraphType
 using Pkg3.Resolve

@@ -4,9 +4,10 @@ using UUIDs
 using Random
 using Dates
 import LibGit2
+import REPL
+using REPL.TerminalMenus
 
 using Pkg3.TOML
-using Pkg3.TerminalMenus
 import Pkg3
 import Pkg3: depots, logdir
 
