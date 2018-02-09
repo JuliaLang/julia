@@ -1816,7 +1816,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     ridx = Any[map(first, axes(R))...]
     for d in dims
-        ridx[d] = axes(R,d)
+        ridx[d] = Slice(axes(R,d))
     end
 
     concatenate_setindex!(R, r1, ridx...)
