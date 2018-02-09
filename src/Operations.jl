@@ -103,7 +103,7 @@ get_or_make!(d::Dict{K,V}, k::K) where {K,V} = get!(d, k) do; V() end
 
 function load_versions(path::String)
     toml = parse_toml(path, "versions.toml")
-    Dict(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
+    return Dict{VersionNumber, SHA1}(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
 end
 
 function load_package_data(f::Base.Callable, path::String, versions)
