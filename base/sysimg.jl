@@ -738,7 +738,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib nullspace   LinearAlgebra true
     @deprecate_stdlib ordschur!   LinearAlgebra true
     @deprecate_stdlib ordschur    LinearAlgebra true
-    @deprecate_stdlib peakflops   LinearAlgebra true
     @deprecate_stdlib pinv        LinearAlgebra true
     @deprecate_stdlib qr          LinearAlgebra true
     @deprecate_stdlib qrfact!     LinearAlgebra true
@@ -845,6 +844,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib methodswith   InteractiveUtils true
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
+    @deprecate_stdlib peakflops     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
