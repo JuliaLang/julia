@@ -240,6 +240,9 @@ end
     @test last(eachindex("foobar")) === lastindex("foobar")
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
+        == eltype(Base.EachStringIndex{String})
+        == eltype(Base.EachStringIndex{GenericString})
+        == eltype(eachindex("foobar")) == eltype(gstr)
     @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
