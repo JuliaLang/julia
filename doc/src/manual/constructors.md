@@ -262,7 +262,7 @@ You can pass incomplete objects to other functions from inner constructors to de
 ```jldoctest
 julia> mutable struct Lazy
            xx
-           Lazy(v) = complete_me(new(), v)
+           Lazy(v) = complete_me!(new(), v)
        end
 ```
 
