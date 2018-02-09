@@ -14,7 +14,7 @@ Please see the manual section on packages for more information.
 module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
-export dir, init, rm, add, available, installed, status, clone, checkout,
+export dir, init, add, available, installed, status, clone, checkout,
        update, resolve, test, build, free, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
