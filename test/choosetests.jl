@@ -5,7 +5,7 @@ using Random
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
 
-@doc """
+"""
 
 `tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
@@ -30,7 +30,7 @@ in the `choices` argument:
    - "--seed=SEED", which sets the value of `seed` to `SEED`
      (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
      This option can be used to reproduce failed tests.
-""" ->
+"""
 function choosetests(choices = [])
     testnames = [
         "subarray", "core", "compiler", "worlds",

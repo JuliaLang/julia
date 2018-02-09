@@ -2317,17 +2317,19 @@
                             (parse-unary-prefix s))))
               (peek-token s)
               (if (ts:space? s)
-                  `(macrocall ,(macroify-name head)
-                              ,startloc
-                              ,@(parse-space-separated-exprs s))
+                  (maybe-docstring
+                   s `(macrocall ,(macroify-name head)
+                                 ,startloc
+                                 ,@(parse-space-separated-exprs s)))
                   (let ((call (parse-call-chain s head #t)))
                     (if (and (pair? call) (eq? (car call) 'call))
                         `(macrocall ,(macroify-name (cadr call))
                                     ,startloc
                                     ,@(cddr call))
-                        `(macrocall ,(macroify-name call)
-                                    ,startloc
-                                    ,@(parse-space-separated-exprs s))))))))
+                        (maybe-docstring
+                         s `(macrocall ,(macroify-name call)
+                                       ,startloc
+                                       ,@(parse-space-separated-exprs s)))))))))
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
@@ -2352,30 +2354,60 @@
                (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
         (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
 
+(define (called-macro-name e)
+  (if (and (length= e 3) (eq? (car e) '|.|)
+           (pair? (caddr e)) (eq? (car (caddr e)) 'quote))
+      (called-macro-name (cadr (caddr e)))
+      e))
+
+(define (maybe-docstring s e)
+  (if (and (length= e 4)
+           (eq? (called-macro-name (cadr e)) '@doc))
+      (let ((arg (cadddr e)))
+        (if (and (pair? arg) (eq? (car arg) '->))
+            (begin (parser-depwarn s "@doc call with ->" "a line break")
+                   e)
+            (let loop ((t  (peek-token s))
+                       (nl 0))
+              (cond ((closing-token? t) e)
+                    ((newline? t)
+                     (if (> nl 0)
+                         e
+                         (begin (take-token s)
+                                (loop (peek-token s) 1))))
+                    (else
+                     `(,@e ,(parse-eq s)))))))
+      e))
+
 (define (simple-string-literal? e) (string? e))
 
-(define (string-macro-name? x)
-  (let ((x (string x)))
-    (and (> (string-length x) 4)
-         (eqv? (string.char x 0) #\@)
-         (eqv? (string.sub x (string.dec x (sizeof x) 4)) "_str"))))
-
-(define (doc-string-literal? e)
+(define (doc-string-literal? s e)
   (or (simple-string-literal? e)
       (and (pair? e)
            (or (eq? (car e) 'string) ; string interpolation
                (and (eq? (car e) 'macrocall)
-                    (string-macro-name? (cadr e))
                     (or (and (length= e 3) (simple-string-literal? (caddr e)))
-                        (and (length= e 4) (simple-string-literal? (cadddr e)))))))))
+                        (and (length= e 4) (simple-string-literal? (cadddr e))))
+                    (eq? (cadr e) '@doc_str)
+                    (begin (parser-depwarn s "doc\" \"" "@doc doc\" \"")
+                           #t))))))
 
 (define (parse-docstring s production)
   (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring
-        (ex (production s)))
-    (if (and (doc-string-literal? ex)
-             (let loop ((t (peek-token s)))
+        (ex       (production s)))
+    (if (and (doc-string-literal? s ex)
+             (let loop ((t  (peek-token s))
+                        (nl 0))
                (cond ((closing-token? t) #f)
-                     ((newline? t) (take-token s) (loop (peek-token s)))
+                     ((newline? t)
+                      (if (= nl 1)
+                          ;;#f  ;; extra line => not a doc string. enable when deprecation is removed.
+                          (begin (parser-depwarn s "multiple line breaks between doc string and object"
+                                                 "at most one line break")
+                                 (take-token s)
+                                 (loop (peek-token s) 2))
+                          (begin (take-token s)
+                                 (loop (peek-token s) 1))))
                      (else #t))))
         `(macrocall (core @doc) ,startloc ,ex ,(production s))
         ex)))

@@ -452,7 +452,7 @@ end
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
-        @eval @doc ("""
+        @eval @doc """
             rem(x::Integer, T::Type{<:Integer}) -> T
             mod(x::Integer, T::Type{<:Integer}) -> T
             %(x::Integer, T::Type{<:Integer}) -> T
@@ -466,7 +466,7 @@ if nameof(@__MODULE__) === :Base
         julia> 129 % Int8
         -127
         ```
-        """ -> $fname(x::Integer, T::Type{<:Integer}))
+        """ $fname(x::Integer, T::Type{<:Integer})
     end
 end
 
