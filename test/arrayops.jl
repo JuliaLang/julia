@@ -2324,3 +2324,20 @@ end
     inds_b = Base.Indices{1}([1:3])
     @test Base.promote_shape(inds_a, inds_b) == Base.promote_shape(inds_b, inds_a)
 end
+
+struct T25958
+end
+Base.lastindex(::T25958, args...) = (:lastindex, args...)
+Base.getindex(::T25958, args...) = args
+Base.view(::T25958, args...) = args
+@testset "ensure @view and @views matches lowering" begin
+    t = T25958()
+    @test t[end]         == @view(t[end])         == @views t[end]
+    @test t[1,end]       == @view(t[1,end])       == @views t[1,end]
+    @test t[end,1]       == @view(t[end,1])       == @views t[end,1]
+    @test t[end,end]     == @view(t[end,end])     == @views t[end,end]
+    @test t[1,end,end]   == @view(t[1,end,end])   == @views t[1,end,end]
+    @test t[end,1,end]   == @view(t[end,1,end])   == @views t[end,1,end]
+    @test t[end,end,1]   == @view(t[end,end,1])   == @views t[end,end,1]
+    @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
+end
