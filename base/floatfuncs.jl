@@ -23,7 +23,7 @@ The largest consecutive integer that is exactly represented in the given floatin
 (which defaults to `Float64`).
 
 That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
-is *not* exactly representable in the type `T`.  
+is *not* exactly representable in the type `T`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
