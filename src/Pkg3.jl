@@ -40,7 +40,7 @@ function __init__()
         REPLMode.repl_init(Base.active_repl)
     else
         atreplinit() do repl
-            repl.interface = Base.REPL.setup_interface(repl)
+            repl.interface = REPL.setup_interface(repl)
             REPLMode.repl_init(repl)
         end
     end

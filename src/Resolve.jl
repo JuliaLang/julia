@@ -11,9 +11,7 @@ using Pkg3.Resolve.MaxSum
 import Pkg3.Types: uuid_julia
 import Pkg3.GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
 
-if Base.isdeprecated(Base, Symbol("@sprintf"))
-    using Printf
-end
+using Printf
 
 export resolve, sanity_check
 
