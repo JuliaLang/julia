@@ -266,7 +266,7 @@ julia> mutable struct Lazy
        end
 ```
 
-As with incomplete objects returned from constructors, if `complete_me` or any of its callees
+As with incomplete objects returned from constructors, if `complete_me!` or any of its callees
 try to access the `xx` field of the `Lazy` object before it has been initialized, an error will
 be thrown immediately.
 
