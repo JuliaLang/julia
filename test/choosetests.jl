@@ -3,7 +3,7 @@
 using Random
 
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = readdir(STDLIB_DIR)
+const STDLIBS = filter(x->isfile(joinpath(STDLIB_DIR), x, "src", "$x.jl"), readdir(STDLIB_DIR))
 
 @doc """
 
