@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "The Julia REPL\nBase64\nCRC32c\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
+    "text": "The Julia REPL\nBase64\nCRC32c\nSHA\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
 },
 
 {
@@ -5005,7 +5005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
 },
 
 {
@@ -7621,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -19078,6 +19078,22 @@ var documenterSearchIndex = {"docs": [
     "title": "Serialization",
     "category": "section",
     "text": "Serialization.serialize\nSerialization.deserialize\nSerialization.writeheader"
+},
+
+{
+    "location": "stdlib/SHA/#",
+    "page": "SHA",
+    "title": "SHA",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/SHA/#SHA-1",
+    "page": "SHA",
+    "title": "SHA",
+    "category": "section",
+    "text": "Usage is very straightforward:julia> using SHA\n\njulia> bytes2hex(sha256(\"test\"))\n\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"Each exported function (at the time of this writing, SHA-1, SHA-2 224, 256, 384 and 512, and SHA-3 224, 256, 384 and 512 functions are implemented) takes in either an Array{UInt8}, a ByteString or an IO object.  This makes it trivial to checksum a file:shell> cat /tmp/test.txt\ntest\njulia> using SHA\n\njulia> open(\"/tmp/test.txt\") do f\n           sha2_256(f)\n       end\n32-element Array{UInt8,1}:\n 0x9f\n 0x86\n 0xd0\n 0x81\n 0x88\n 0x4c\n 0x7d\n 0x65\n    ⋮\n 0x5d\n 0x6c\n 0x15\n 0xb0\n 0xf0\n 0x0a\n 0x08Note the lack of a newline at the end of /tmp/text.txt.  Julia automatically inserts a newline before the julia> prompt.Due to the colloquial usage of sha256 to refer to sha2_256, convenience functions are provided, mapping shaxxx() function calls to sha2_xxx().  For SHA-3, no such colloquialisms exist and the user must use the full sha3_xxx() names.shaxxx() takes AbstractString and array-like objects (NTuple and Array) with elements of type UInt8.Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2."
 },
 
 {
