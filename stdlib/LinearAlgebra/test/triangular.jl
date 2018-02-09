@@ -556,17 +556,63 @@ end
                                  (UnitUpperTriangular, LinearAlgebra.UnitUpperTriangularLayout, LinearAlgebra.UnitLowerTriangularLayout),
                                  (LowerTriangular, LinearAlgebra.LowerTriangularLayout, LinearAlgebra.UpperTriangularLayout),
                                  (UnitLowerTriangular, LinearAlgebra.UnitLowerTriangularLayout, LinearAlgebra.UnitUpperTriangularLayout))
-        @test Base.MemoryLayout(TriType(A)) == TriLayout{'N',Float64}()
-        @test Base.MemoryLayout(TriType(transpose(A))) == TriLayoutTrans{'T',Float64}()
-        @test Base.MemoryLayout(TriType(A')) == TriLayoutTrans{'T',Float64}()
-        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans{'T',Float64}()
-        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans{'T',Float64}()
+        @test Base.MemoryLayout(TriType(A)) == TriLayout(LinearAlgebra.DenseColumnMajor{Float64}())
+        @test Base.MemoryLayout(TriType(transpose(A))) == Base.UnknownLayout{Float64}()
+        @test Base.MemoryLayout(TriType(A')) == Base.UnknownLayout{Float64}()
+        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans(LinearAlgebra.DenseRowMajor{Float64}())
+        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans(LinearAlgebra.DenseRowMajor{Float64}())
 
-        @test Base.MemoryLayout(TriType(B)) == TriLayout{'N',ComplexF64}()
-        @test Base.MemoryLayout(TriType(transpose(B))) == TriLayoutTrans{'T',ComplexF64}()
-        @test Base.MemoryLayout(TriType(B')) == TriLayoutTrans{'C',ComplexF64}()
-        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans{'T',ComplexF64}()
-        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans{'C',ComplexF64}()
+        @test Base.MemoryLayout(TriType(B)) == TriLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}())
+        @test Base.MemoryLayout(TriType(transpose(B))) == Base.UnknownLayout{ComplexF64}()
+        @test Base.MemoryLayout(TriType(B')) == Base.UnknownLayout{ComplexF64}()
+        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans(LinearAlgebra.DenseRowMajor{ComplexF64}())
+        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans(conj(LinearAlgebra.DenseRowMajor{ComplexF64}()))
     end
+
+    A = randn(Float64, 100, 100)
+    x = randn(Float64, 100)
+    @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+    @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+
+    A = randn(ComplexF64, 100, 100)
+    x = randn(ComplexF64, 100)
+    @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
+                                            BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+    @test all(transpose(UpperTriangular(A))*x .=== transpose(UpperTriangular(view(A',:,:)'))*x .===
+                                            BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+    @test all(transpose(UnitUpperTriangular(A))*x .=== transpose(UnitUpperTriangular(view(A',:,:)'))*x .===
+                                            BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+    @test all(transpose(LowerTriangular(A))*x .=== transpose(LowerTriangular(view(A',:,:)'))*x .===
+                                            BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+    @test all(transpose(UnitLowerTriangular(A))*x .=== transpose(UnitLowerTriangular(view(A',:,:)'))*x .===
+                                            BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+    @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('U', 'C', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('U', 'C', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('L', 'C', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
+                                            BLAS.trmv!('L', 'C', 'U', A, copy(x)))
 end
 end # module TestTriangular

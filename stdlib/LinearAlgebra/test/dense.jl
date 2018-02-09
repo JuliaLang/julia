@@ -869,6 +869,22 @@ end
     @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == LinearAlgebra.DenseColumnMajor{ComplexF64}()
 
     Base.MemoryLayout(BitArray([true,true,false])) == LinearAlgebra.UnknownLayout{Bool}()
+
+    A = rand(100,100)
+    x = rand(100)
+    @test all(A*x .=== view(A,:,:)*x .=== view(A',:,:)'*x .===
+                       BLAS.gemv!('N', 1.0, A, x, 0.0, similar(x)))
+    @test all(A'*x .=== view(A',:,:)*x .=== view(A,:,:)'*x .===
+                        BLAS.gemv!('T', 1.0, A, x, 0.0, similar(x)))
+
+    B = rand(ComplexF64,100,100)
+    y = rand(ComplexF64,100)
+    @test all(B*y .=== view(B,:,:)*y .=== view(B',:,:)'*y  .=== transpose(view(transpose(B),:,:))*y .===
+                       BLAS.gemv!('N', one(ComplexF64), B, y, zero(ComplexF64), similar(y)))
+    @test all(B'*y .=== view(B',:,:)*y .=== view(B,:,:)'*y .===
+                        BLAS.gemv!('C', one(ComplexF64), B, y, zero(ComplexF64), similar(y)))
+   @test all(transpose(B)*y .=== view(transpose(B),:,:)*y .=== transpose(view(B,:,:))*y .===
+                                 BLAS.gemv!('T', one(ComplexF64), B, y, zero(ComplexF64), similar(y)))
 end
 
 end # module TestDense

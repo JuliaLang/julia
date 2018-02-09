@@ -489,27 +489,38 @@ end
 
 @testset "Symmetric/Hermitian MemoryLayout" begin
     A = [1.0 2; 3 4]
-    @test Base.MemoryLayout(Symmetric(A)) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Hermitian(A)) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Transpose(Symmetric(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Transpose(Hermitian(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Adjoint(Symmetric(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Adjoint(Hermitian(A))) == LinearAlgebra.SymmetricLayout{Float64}('U')
-    @test Base.MemoryLayout(Symmetric(A')) == LinearAlgebra.SymmetricLayout{Float64}('L')
-    @test Base.MemoryLayout(Hermitian(A')) == LinearAlgebra.SymmetricLayout{Float64}('L')
-    @test Base.MemoryLayout(Symmetric(transpose(A))) == LinearAlgebra.SymmetricLayout{Float64}('L')
-    @test Base.MemoryLayout(Hermitian(transpose(A))) == LinearAlgebra.SymmetricLayout{Float64}('L')
+    @test Base.MemoryLayout(Symmetric(A)) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Hermitian(A)) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Transpose(Symmetric(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Transpose(Hermitian(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Adjoint(Symmetric(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Adjoint(Hermitian(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Symmetric(A')) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseRowMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Hermitian(A')) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseRowMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Symmetric(transpose(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseRowMajor{Float64}(),'U')
+    @test Base.MemoryLayout(Hermitian(transpose(A))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseRowMajor{Float64}(),'U')
     B = [1.0+im 2; 3 4]
-    @test Base.MemoryLayout(Symmetric(B)) == LinearAlgebra.SymmetricLayout{ComplexF64}('U')
-    @test Base.MemoryLayout(Hermitian(B)) == LinearAlgebra.HermitianLayout{ComplexF64}('U')
-    @test Base.MemoryLayout(Transpose(Symmetric(B))) == LinearAlgebra.SymmetricLayout{ComplexF64}('U')
+    @test Base.MemoryLayout(Symmetric(B)) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}(),'U')
+    @test Base.MemoryLayout(Hermitian(B)) == LinearAlgebra.HermitianLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}(),'U')
+    @test Base.MemoryLayout(Transpose(Symmetric(B))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}(),'U')
     @test Base.MemoryLayout(Transpose(Hermitian(B))) == LinearAlgebra.UnknownLayout{ComplexF64}()
-    @test Base.MemoryLayout(Adjoint(Symmetric(B))) == LinearAlgebra.ConjLayout(LinearAlgebra.SymmetricLayout{ComplexF64}('U'))
-    @test Base.MemoryLayout(Adjoint(Hermitian(B))) == LinearAlgebra.HermitianLayout{ComplexF64}('U')
+    @test Base.MemoryLayout(Adjoint(Symmetric(B))) == LinearAlgebra.ConjLayout(LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}(),'U'))
+    @test Base.MemoryLayout(Adjoint(Hermitian(B))) == LinearAlgebra.HermitianLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}(),'U')
     @test Base.MemoryLayout(Symmetric(B')) == LinearAlgebra.UnknownLayout{ComplexF64}()
     @test Base.MemoryLayout(Hermitian(B')) == LinearAlgebra.UnknownLayout{ComplexF64}()
-    @test Base.MemoryLayout(Symmetric(transpose(B))) == LinearAlgebra.SymmetricLayout{ComplexF64}('L')
-    @test Base.MemoryLayout(Hermitian(transpose(B))) == LinearAlgebra.HermitianLayout{ComplexF64}('L')
+    @test Base.MemoryLayout(Symmetric(transpose(B))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.DenseRowMajor{ComplexF64}(),'U')
+    @test Base.MemoryLayout(Hermitian(transpose(B))) == LinearAlgebra.HermitianLayout(LinearAlgebra.DenseRowMajor{ComplexF64}(),'U')
+
+    A = randn(100,100)
+    x = randn(100)
+    @test all(Symmetric(A)*x .=== Hermitian(A)*x .=== Symmetric(A)'*x .=== Symmetric(view(A,:,:)',:L)*x .=== BLAS.symv!('U', 1.0, A, x, 0.0, similar(x)))
+    @test all(Symmetric(A,:L)*x .=== Hermitian(A,:L)*x .=== Symmetric(A,:L)'*x .=== Symmetric(view(A,:,:)',:U)*x .=== BLAS.symv!('L', 1.0, A, x, 0.0, similar(x)))
+    A = randn(ComplexF64,100,100)
+    x = randn(ComplexF64,100)
+    @test all(Symmetric(A)*x .=== transpose(Symmetric(A))*x .=== Symmetric(transpose(view(A,:,:)),:L)*x .=== BLAS.symv!('U', one(ComplexF64), A, x, zero(ComplexF64), similar(x)))
+    @test all(Symmetric(A,:L)*x .=== transpose(Symmetric(A,:L))*x .=== Symmetric(transpose(view(A,:,:)),:U)*x .=== BLAS.symv!('L', one(ComplexF64), A, x, zero(ComplexF64), similar(x)))
+    @test all(Hermitian(A)*x .=== Hermitian(A)'*x .=== BLAS.hemv!('U', one(ComplexF64), A, x, zero(ComplexF64), similar(x)))
+    @test all(Hermitian(A,:L)*x .=== Hermitian(A,:L)'*x .=== BLAS.hemv!('L', one(ComplexF64), A, x, zero(ComplexF64), similar(x)))
 end
 
 @testset "#25625 recursive transposition" begin
@@ -534,4 +545,4 @@ end
     @test H == adjoint(H) == Matrix(H) == Matrix(adjoint(H)) == adjoint(Matrix(H))
 end
 
-end # module TestSymmetric
+end # module TestSymmetricx

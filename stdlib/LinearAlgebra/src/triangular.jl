@@ -364,30 +364,84 @@ diag(A::UpperTriangular) = diag(A.data)
 diag(A::UnitUpperTriangular) = fill(one(eltype(A)), size(A,1))
 
 # MemoryLayout of triangular matrices
-struct LowerTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UnitLowerTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UpperTriangularLayout{trans,T} <: MemoryLayout{T} end
-struct UnitUpperTriangularLayout{trans,T} <: MemoryLayout{T} end
-MemoryLayout(A::UpperTriangular) = trilayout(UpperTriangularLayout, LowerTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, UnitLowerTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, UpperTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, UnitUpperTriangularLayout, MemoryLayout(parent(A)))
-trilayout(_1, _2, ::MemoryLayout{T}) where T = UnknownLayout{T}()
-trilayout(::Type{Tri}, _, ::DenseColumns{T}) where {Tri,T} = Tri{'N',T}()
-trilayout(_, ::Type{TriT}, ::DenseRows{T}) where {TriT,T} = TriT{'T',T}()
-trilayout(_, ::Type{TriT}, ::ConjLayout{T,<:DenseRows}) where {TriT,T} = TriT{'C',T}()
+for memlay in (:LowerTriangularLayout, :UnitLowerTriangularLayout,
+               :UpperTriangularLayout, :UnitUpperTriangularLayout)
+    @eval begin
+        struct $memlay{T, ML<:MemoryLayout} <: MemoryLayout{T}
+            layout::ML
+        end
+        $memlay(layout::ML) where ML<:MemoryLayout{T} where T = $memlay{T,ML}(layout)
+    end
+end
+
+"""
+    LowerTriangularLayout{trans,T}
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+equivalent to a `LowerTriangular{T,Matrix{T}}` (`trans == 'N'`),
+`Adjoint{T,UpperTriangular{T,Matrix{T}}` (`trans == 'C'`), or
+`Transpose{T,UpperTriangular{T,Matrix{T}}` (`trans == 'T'`).
+
+`A.data` must exist if `trans == 'N'`, `adjoint(A).data` must exist if `trans == 'C'`, and
+`transpose(A).data` must exist if `trans == 'T'`.
+"""
+LowerTriangularLayout
+
+"""
+    UnitLowerTriangularLayout{trans,T}
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+equivalent to a `UnitLowerTriangular{T,Matrix{T}}` (`trans = 'N'`),
+`Adjoint{T,UnitUpperTriangular{T,Matrix{T}}` (`trans = 'C'`), or
+`Transpose{T,UnitUpperTriangular{T,Matrix{T}}` (`trans = 'T'`).
+
+`A.data` must exist if `trans == 'N'`, `adjoint(A).data` must exist if `trans == 'C'`, and
+`transpose(A).data` must exist if `trans == 'T'`.
+"""
+UnitLowerTriangularLayout
+
+"""
+    UpperTriangularLayout{trans,T}
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+equivalent to a `UpperTriangular{T,Matrix{T}}` (`trans = 'N'`),
+`Adjoint{T,LowerTriangular{T,Matrix{T}}` (`trans = 'C'`), or
+`Transpose{T,LowerTriangular{T,Matrix{T}}` (`trans = 'T'`).
+
+`A.data` must exist if `trans == 'N'`, `adjoint(A).data` must exist if `trans == 'C'`, and
+`transpose(A).data` must exist if `trans == 'T'`.
+"""
+UpperTriangularLayout
+
+"""
+    UnitUpperTriangularLayout{trans,T}
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+equivalent to a `UnitUpperTriangular{T,Matrix{T}}` (`trans = 'N'`),
+`Adjoint{T,UnitLowerTriangular{T,Matrix{T}}` (`trans = 'C'`), or
+`Transpose{T,UnitLowerTriangular{T,Matrix{T}}` (`trans = 'T'`).
+
+`A.data` must exist if `trans == 'N'`, `adjoint(A).data` must exist if `trans == 'C'`, and
+`transpose(A).data` must exist if `trans == 'T'`.
+"""
+UnitUpperTriangularLayout
+
+
+MemoryLayout(A::UpperTriangular) = trilayout(UpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, MemoryLayout(parent(A)))
+trilayout(_, ::MemoryLayout{T}) where T = UnknownLayout{T}()
+trilayout(::Type{Tri}, ML::DenseColumns{T}) where {Tri,T} = Tri(ML)
 
 for (TriLayout, TriLayoutTrans) in ((UpperTriangularLayout,     LowerTriangularLayout),
                                     (UnitUpperTriangularLayout, UnitLowerTriangularLayout),
                                     (LowerTriangularLayout,     UpperTriangularLayout),
                                     (UnitLowerTriangularLayout, UnitUpperTriangularLayout))
     @eval begin
-        transpose(::$TriLayout{'N',T}) where T = $TriLayoutTrans{'T',T}()
-        transpose(::$TriLayout{'T',T}) where T = $TriLayoutTrans{'N',T}()
-        adjoint(::$TriLayout{'N',T}) where T<:Complex = $TriLayoutTrans{'C',T}()
-        adjoint(::$TriLayout{'C',T}) where T<:Complex = $TriLayoutTrans{'N',T}()
-        conj(::$TriLayout{'T',T}) where T<:Complex = $TriLayout{'C',T}()
-        conj(::$TriLayout{'C',T}) where T<:Complex = $TriLayout{'T',T}()
+        transpose(ml::$TriLayout) = $TriLayoutTrans(transpose(ml.layout))
+        adjoint(ml::$TriLayout) = $TriLayoutTrans(adjoint(ml.layout))
+        conj(ml::$TriLayout) = $TriLayoutTrans(conj(ml.layout))
     end
 end
 
@@ -544,20 +598,20 @@ lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
 mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
 
-for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, 'L', 'N'),
-                                    (:UnitLowerTriangular, :UnitLowerTriangularLayout, 'L', 'U'),
-                                    (:UpperTriangular, :UpperTriangularLayout, 'U', 'N'),
-                                    (:UnitUpperTriangular, :UnitUpperTriangularLayout, 'U', 'U'))
+for (t, memlay, memlaytrans, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, :UpperTriangularLayout, 'L', 'N'),
+                                                 (:UnitLowerTriangular, :UnitLowerTriangularLayout, :UnitUpperTriangularLayout, 'L', 'U'),
+                                                 (:UpperTriangular, :UpperTriangularLayout, :LowerTriangularLayout, 'U', 'N'),
+                                                 (:UnitUpperTriangular, :UnitUpperTriangularLayout, :UnitLowerTriangularLayout, 'U', 'U'))
     @eval begin
         # Vector multiplication
         _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::AbstractStridedLayout, ::$memlay, ::AbstractStridedLayout) where {T<:BlasFloat} =
             lmul!(A, copyto!(y, b))
 
-        _lmul!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'N'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
+        _lmul!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{T,DC}, ::AbstractStridedLayout) where {T<:BlasFloat,DC<:DenseColumns} =
             BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        _lmul!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'T'}, ::AbstractStridedLayout) where {T<:BlasFloat} =
+        _lmul!(transA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlaytrans{T,DR}, ::AbstractStridedLayout) where {T<:BlasFloat,DR<:DenseRows} =
             (A = transpose(transA); BLAS.trmv!($uploc, 'T', $isunitc, A.data, b))
-        _lmul!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{'C'}, ::AbstractStridedLayout) where {T<:BlasComplex} =
+        _lmul!(adjA::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlaytrans{T,ConjLayout{T,DR}}, ::AbstractStridedLayout) where {T<:BlasComplex,DR<:DenseRows} =
             (A = adjoint(adjA); BLAS.trmv!($uploc, 'C', $isunitc, A.data, b))
 
         # Matrix multiplication
@@ -566,19 +620,19 @@ for (t, memlay, uploc, isunitc) in ((:LowerTriangular, :LowerTriangularLayout, '
         _mul!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::AbstractStridedLayout, ::AbstractStridedLayout, ::$memlay) where {T<:BlasFloat}  =
             rmul!(copyto!(C, A), B)
 
-        _lmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'N'}, ::DenseColumns) where {T<:BlasFloat} =
+        _lmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{T,DC}, ::DenseColumns) where {T<:BlasFloat,DC<:DenseColumns} =
             BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        _rmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'N'}) where {T<:BlasFloat} =
+        _rmul!(A::AbstractMatrix{T}, B::AbstractMatrix{T}, ::DenseColumns, ::$memlay{T,DC}) where {T<:BlasFloat,DC<:DenseColumns} =
             BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        _lmul!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlay{'T'}, ::DenseColumns) where {T<:BlasFloat} =
+        _lmul!(transA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlaytrans{T,DR}, ::DenseColumns) where {T<:BlasFloat,DR<:DenseRows} =
             (A = transpose(transA); BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B))
-        _lmul!(adjA::AbstractMatrix{T}, B::StridedMatrix{T}, ::$memlay{'C'}, ::DenseColumns) where {T<:BlasComplex} =
+        _lmul!(adjA::AbstractMatrix{T}, B::AbstractMatrix{T}, ::$memlaytrans{T,ConjLayout{T,DR}}, ::DenseColumns) where {T<:BlasComplex,DR<:DenseRows} =
             (A = adjoint(adjA); BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B))
 
-        _rmul!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'T'}) where {T<:BlasFloat} =
+        _rmul!(A::AbstractMatrix{T}, transB::AbstractMatrix{T}, ::DenseColumns, ::$memlaytrans{T,DR}) where {T<:BlasFloat,DR<:DenseRows} =
             (B = transpose(transB); BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A))
-        _rmul!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseColumns, ::$memlay{'C'}) where {T<:BlasComplex} =
+        _rmul!(A::AbstractMatrix{T}, adjB::AbstractMatrix{T}, ::DenseColumns, ::$memlaytrans{T,ConjLayout{T,DR}}) where {T<:BlasComplex,DR<:DenseRows} =
             (B = adjoint(adjB); BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A))
 
         # Left division
@@ -714,7 +768,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function lmul!(A::UpperTriangular, B::StridedVecOrMat)
+function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::UpperTriangularLayout{T,<:DenseColumns}, _) where T
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -731,7 +785,7 @@ function lmul!(A::UpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::UnitUpperTriangularLayout{T,<:DenseColumns}, _) where T
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -748,7 +802,7 @@ function lmul!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(A::LowerTriangular, B::StridedVecOrMat)
+function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::LowerTriangularLayout{T,<:DenseColumns}, _) where T
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -764,7 +818,7 @@ function lmul!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::UnitLowerTriangularLayout{T,<:DenseColumns}, _) where T
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -781,8 +835,8 @@ function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
-    A = adjA.parent
+function _lmul!(adjA::AbstractMatrix, B::AbstractVecOrMat, ::LowerTriangularLayout{T,ConjLayout{T,DR}}, _) where {T,DR<:DenseRows}
+    A = adjoint(adjA)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -799,7 +853,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function _lmul!(adjA::AbstractMatrix, B::AbstractVecOrMat, ::UnitLowerTriangularLayout{T,ConjLayout{T,DR}}, _) where {T,DR<:DenseRows}
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -817,7 +871,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function _lmul!(adjA::AbstractMatrix, B::AbstractVecOrMat, ::UpperTriangularLayout{T,ConjLayout{T,DR}}, _) where {T,DR<:DenseRows}
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -834,7 +888,7 @@ function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function _lmul!(adjA::AbstractMatrix, B::AbstractVecOrMat, ::UnitUpperTriangularLayout{T,ConjLayout{T,DR}}, _) where {T,DR<:DenseRows}
     A = adjA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -852,7 +906,7 @@ function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function _lmul!(transA::AbstractMatrix, B::AbstractVecOrMat, ::LowerTriangularLayout{T,DR}, _) where {T,DR<:DenseRows}
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -869,7 +923,7 @@ function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function _lmul!(transA::AbstractMatrix, B::AbstractVecOrMat, ::UnitLowerTriangularLayout{T,DR}, _) where {T,DR<:DenseRows}
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -887,7 +941,7 @@ function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMa
     B
 end
 
-function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+function _lmul!(transA::AbstractMatrix, B::AbstractVecOrMat, ::UpperTriangularLayout{T,DR}, _) where {T,DR<:DenseRows}
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -904,7 +958,7 @@ function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
     end
     B
 end
-function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+function _lmul!(transA::AbstractMatrix, B::AbstractVecOrMat, ::UnitUpperTriangularLayout{T,DR}, _) where {T,DR<:DenseRows}
     A = transA.parent
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
@@ -922,7 +976,7 @@ function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMa
     B
 end
 
-function rmul!(A::StridedMatrix, B::UpperTriangular)
+function _rmul!(A::AbstractMatrix, B::AbstractMatrix, ::AbstractStridedLayout, ::UpperTriangularLayout)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -938,7 +992,7 @@ function rmul!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function rmul!(A::StridedMatrix, B::UnitUpperTriangular)
+function _rmul!(A::AbstractMatrix, B::AbstractMatrix, ::AbstractStridedLayout, ::UnitUpperTriangularLayout)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -955,7 +1009,7 @@ function rmul!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function rmul!(A::StridedMatrix, B::LowerTriangular)
+function _rmul!(A::AbstractMatrix, B::AbstractMatrix, ::AbstractStridedLayout, ::LowerTriangularLayout)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -971,7 +1025,7 @@ function rmul!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function rmul!(A::StridedMatrix, B::UnitLowerTriangular)
+function _rmul!(A::AbstractMatrix, B::AbstractMatrix, ::AbstractStridedLayout, ::UnitLowerTriangularLayout)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -988,8 +1042,8 @@ function rmul!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
-    B = adjB.parent
+function _rmul!(A::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::LowerTriangularLayout{T,ConjLayout{T,DR}}) where {T,DR<:DenseRows}
+    B = adjoint(adjB)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1006,8 +1060,8 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
-    B = adjB.parent
+function _rmul!(A::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::UnitLowerTriangularLayout{T,ConjLayout{T,DR}}) where {T,DR<:DenseRows}
+    B = adjoint(adjB)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1024,8 +1078,8 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
-    B = adjB.parent
+function _rmul!(A::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::UpperTriangularLayout{T,ConjLayout{T,DR}}) where {T,DR<:DenseRows}
+    B = adjoint(adjB)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1042,8 +1096,8 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:LowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
-    B = adjB.parent
+function _rmul!(A::AbstractMatrix, adjB::AbstractMatrix, ::AbstractStridedLayout, ::UnitUpperTriangularLayout{T,ConjLayout{T,DR}}) where {T,DR<:DenseRows}
+    B = adjoint(adjB)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1060,8 +1114,8 @@ function rmul!(A::StridedMatrix, adjB::Adjoint{<:Any,<:UnitLowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
-    B = transB.parent
+function _rmul!(A::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::LowerTriangularLayout{T,DR}) where {T,DR<:DenseRows}
+    B = transpose(transB)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1077,7 +1131,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UpperTriangular})
     end
     A
 end
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
+function _rmul!(A::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::UnitLowerTriangularLayout{T,DR}) where {T,DR<:DenseRows}
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1095,7 +1149,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitUpperTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
+function _rmul!(A::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::UpperTriangularLayout{T,DR}) where {T,DR<:DenseRows}
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
@@ -1113,7 +1167,7 @@ function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:LowerTriangular})
     A
 end
 
-function rmul!(A::StridedMatrix, transB::Transpose{<:Any,<:UnitLowerTriangular})
+function _rmul!(A::AbstractMatrix, transB::AbstractMatrix, ::AbstractStridedLayout, ::UnitUpperTriangularLayout{T,DR}) where {T,DR<:DenseRows}
     B = transB.parent
     m, n = size(A)
     if size(B, 1) != n
