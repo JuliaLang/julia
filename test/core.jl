@@ -1298,7 +1298,7 @@ let
     x = [1:4;]
     x[1:end] .*= 2
     @test x == [2:2:8;]
-    x[m1(end)] .+= 3
+    x[m1(end)] += 3
     @test x == [2,4,9,8]
     @test tst == 2
 
@@ -1306,7 +1306,7 @@ let
     X = [1:4;]
     r = Vector{UnitRange{Int}}(uninitialized, 1)
     r[1] = 2:3
-    X[r...] *= 2
+    X[r...] .*= 2
     @test X == [1,4,6,4]
 end
 end
@@ -4034,7 +4034,7 @@ let ary = Vector{Any}(uninitialized, 10)
 
     ary = Vector{Any}(uninitialized, 100)
     ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
-    ary[:] = 1:length(ary)
+    ary .= 1:length(ary)
     ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
     # grow on the back until a buffer reallocation happens
     cur_ptr = pointer(ary)
@@ -4047,7 +4047,7 @@ let ary = Vector{Any}(uninitialized, 10)
     end
 
     ary = Vector{Any}(uninitialized, 100)
-    ary[:] = 1:length(ary)
+    ary .= 1:length(ary)
     ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
         @test !isassigned(ary, i)
