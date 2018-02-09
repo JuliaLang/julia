@@ -369,6 +369,13 @@ This section lists changes that do not have deprecation warnings.
     `AbstractArray` types that specialized broadcasting using the old internal API will
     need to switch to the new API. ([#20740])
 
+  * Assigning many elements of array `B` to many indices of array `A` with `setindex!(A, B, ...)`
+    or the `A[...] = B` syntax has been deprecated in favor of broadcasting: `A[...] .= B`. In
+	making this transformation, be aware that the two behaviors are not perfectly compatible as
+	broadcasting will additionally treat tuples and other broadcastable collections like arrays.
+	This also means that custom arrays that extend the `setindex!` function should transform their
+	specializations to `broadcast!` methods. ([#24368])
+
   * The logging system has been redesigned - `info` and `warn` are deprecated
     and replaced with the logging macros `@info`, `@warn`, `@debug` and
     `@error`.  The `logging` function is also deprecated and replaced with

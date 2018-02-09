@@ -549,7 +549,7 @@ function _depwarn_for_trailing_indices(t::Tuple)
     true
 end
 
-# issue #...: nonscalar indexed assignment of many values to many locations
+# issue #24368: nonscalar indexed assignment of many values to many locations
 function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractArray, I...)
     J = to_indices(A, I)
     shape = Base.index_shape(J...)
