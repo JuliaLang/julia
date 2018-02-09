@@ -18,10 +18,10 @@ depots() = GLOBAL_SETTINGS.depots
 logdir() = joinpath(depots()[1], "logs")
 
 # load snapshotted dependencies
-include("../ext/BinaryProvider/src/BinaryProvider.jl")
 include("../ext/TOML/src/TOML.jl")
 include("../ext/TerminalMenus/src/TerminalMenus.jl")
 
+include("PlatformEngines.jl")
 include("Types.jl")
 include("GraphType.jl")
 include("Resolve.jl")
@@ -34,6 +34,7 @@ import .API: add, rm, up, test, gc, init, build, installed
 const update = up
 
 function __init__()
+    BinaryProvider.probe_platform_engines!()
     if isdefined(Base, :active_repl)
         REPLMode.repl_init(Base.active_repl)
     else

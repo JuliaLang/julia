@@ -8,6 +8,7 @@ using Pkg3.TerminalMenus
 using Pkg3.Types
 using Pkg3.GraphType
 using Pkg3.Resolve
+import Pkg3.BinaryProvider
 
 import Pkg3: GLOBAL_SETTINGS, depots, BinaryProvider, @info, Nothing
 import Pkg3.Types: uuid_julia
