@@ -40,8 +40,8 @@ import Base.range
 @deprecate colon(start::T, stop::T) where {T<:Date}       start:Day(1):stop    false
 @deprecate colon(start::T, stop::T) where {T<:Time}       start:Second(1):stop false
 
-@deprecate range(start::DateTime, len::Integer)  range(start, Day(1), len) false
-@deprecate range(start::Date, len::Integer)      range(start, Day(1), len) false
+@deprecate range(start::DateTime, len::Integer)  range(start, step=Day(1), length=len) false
+@deprecate range(start::Date, len::Integer)      range(start, step=Day(1), length=len) false
 
 # PR #23724
 @deprecate DateTime() DateTime(1)

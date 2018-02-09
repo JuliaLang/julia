@@ -1197,8 +1197,8 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers: Furlong
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), 9)) == 9
-    @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
+    @test length(range(Furlong(2), length=9)) == 9
+    @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
 end
@@ -1227,4 +1227,12 @@ end
     @test map(Float32, x) === -5.0f0:1.0f0:5.0f0
     @test map(Float16, x) === Float16(-5.0):Float16(1.0):Float16(5.0)
     @test map(BigFloat, x) === x
+end
+
+@testset "Bad range calls" begin
+    @test_throws ArgumentError range(1)
+    @test_throws ArgumentError range(nothing)
+    @test_throws ArgumentError range(1, step=4)
+    @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
 end

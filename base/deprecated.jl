@@ -1312,6 +1312,10 @@ export readandwrite
 @deprecate indmin argmin
 @deprecate indmax argmax
 
+# PR #25896
+@deprecate range(start, length) range(start, length=length)
+@deprecate range(start, step, length) range(start, step=step, length=length)
+
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
 

@@ -421,7 +421,7 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
     steprangelen_hp(T, start, step, 0, len, 1)
 end
 
-function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
