@@ -537,8 +537,8 @@ function sum(r::StepRangeLen)
     np, nn = l - r.offset, r.offset - 1  # positive, negative
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
-    tp = _prod(r.step, sp[1], sp[2])
-    tn = _prod(r.step, sn[1], sn[2])
+    tp = _tp_prod(r.step, sp[1], sp[2])
+    tn = _tp_prod(r.step, sn[1], sn[2])
     s_hi, s_lo = add12(tp.hi, -tn.hi)
     s_lo += tp.lo - tn.lo
     # Add in contributions of ref
@@ -692,11 +692,11 @@ narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
-function _prod(t::TwicePrecision, x, y...)
+function _tp_prod(t::TwicePrecision, x, y...)
     @_inline_meta
-    _prod(t * x, y...)
+    _tp_prod(t * x, y...)
 end
-_prod(t::TwicePrecision) = t
+_tp_prod(t::TwicePrecision) = t
 <(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T} =
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 

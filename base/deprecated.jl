@@ -1303,6 +1303,9 @@ export readandwrite
 @deprecate datatype_name(t::DataType) nameof(t) false
 @deprecate datatype_name(t::UnionAll) nameof(t) false
 
+#@deprecate sum(a, dims) sum(a, dims=dims)
+#@deprecate sum(f, a, dims) sum(f, a, dims=dims)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
