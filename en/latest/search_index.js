@@ -5005,7 +5005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
 },
 
 {
@@ -6973,7 +6973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
 },
 
 {
@@ -7005,7 +7005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
 },
 
 {
@@ -7325,7 +7325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
@@ -19022,6 +19022,62 @@ var documenterSearchIndex = {"docs": [
     "title": "Customizing Colors",
     "category": "section",
     "text": "The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia prompt you can add something like the following to your .juliarc.jl file, which is to be placed inside your home directory:function customize_colors(repl)\n    repl.prompt_color = Base.text_colors[:cyan]\nend\n\natreplinit(customize_colors)The available color keys can be seen by typing Base.text_colors in the help mode of the REPL. In addition, the integers 0 to 255 can be used as color keys for terminals with 256 color support.You can also change the colors for the help and shell prompts and input and answer text by setting the appropriate field of repl in the customize_colors function above (respectively, help_color, shell_color, input_color, and answer_color). For the latter two, be sure that the envcolors field is also set to false.It is also possible to apply boldface formatting by using Base.text_colors[:bold] as a color. For instance, to print answers in boldface font, one can use the following as a .juliarc.jl:function customize_colors(repl)\n    repl.envcolors = false\n    repl.answer_color = Base.text_colors[:bold]\nend\n\natreplinit(customize_colors)You can also customize the color used to render warning and informational messages by setting the appropriate environment variables. For instance, to render error, warning, and informational messages respectively in magenta, yellow, and cyan you can add the following to your .juliarc.jl file:ENV[\"JULIA_ERROR_COLOR\"] = :magenta\nENV[\"JULIA_WARN_COLOR\"] = :yellow\nENV[\"JULIA_INFO_COLOR\"] = :cyan"
+},
+
+{
+    "location": "stdlib/REPL/#TerminalMenus-1",
+    "page": "The Julia REPL",
+    "title": "TerminalMenus",
+    "category": "section",
+    "text": "TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal."
+},
+
+{
+    "location": "stdlib/REPL/#Examples-1",
+    "page": "The Julia REPL",
+    "title": "Examples",
+    "category": "section",
+    "text": "import REPL\nusing REPL.TerminalMenus\n\noptions = [\"apple\", \"orange\", \"grape\", \"strawberry\",\n            \"blueberry\", \"peach\", \"lemon\", \"lime\"]\n"
+},
+
+{
+    "location": "stdlib/REPL/#RadioMenu-1",
+    "page": "The Julia REPL",
+    "title": "RadioMenu",
+    "category": "section",
+    "text": "The RadioMenu allows the user to select one option from the list. The request function displays the interactive menu and returns the index of the selected choice. If a user presses 'q' or ctrl-c, request will return a -1.# `pagesize` is the number of items to be displayed at a time.\n#  The UI will scroll if the number of options is greater\n#   than the `pagesize`\nmenu = RadioMenu(options, pagesize=4)\n\n# `request` displays the menu and returns the index after the\n#   user has selected a choice\nchoice = request(\"Choose your favorite fruit:\", menu)\n\nif choice != -1\n    println(\"Your favorite fruit is \", options[choice], \"!\")\nelse\n    println(\"Menu canceled.\")\nend\nOutput:Choose your favorite fruit:\n^  grape\n   strawberry\n > blueberry\nv  peach\nYour favorite fruit is blueberry!"
+},
+
+{
+    "location": "stdlib/REPL/#MultiSelectMenu-1",
+    "page": "The Julia REPL",
+    "title": "MultiSelectMenu",
+    "category": "section",
+    "text": "The MultiSelectMenu allows users to select many choices from a list.# here we use the default `pagesize` 10\nmenu = MultiSelectMenu(options)\n\n# `request` returns a `Set` of selected indices\n# if the menu us canceled (ctrl-c or q), return an empty set\nchoices = request(\"Select the fruits you like:\", menu)\n\nif length(choices) > 0\n    println(\"You like the following fruits:\")\n    for i in choices\n        println(\"  - \", options[i])\n    end\nelse\n    println(\"Menu canceled.\")\nendOutput:Select the fruits you like:\n[press: d=done, a=all, n=none]\n   [ ] apple\n > [X] orange\n   [X] grape\n   [ ] strawberry\n   [ ] blueberry\n   [X] peach\n   [ ] lemon\n   [ ] lime\nYou like the following fruits:\n  - orange\n  - grape\n  - peach"
+},
+
+{
+    "location": "stdlib/REPL/#Customization-/-Configuation-1",
+    "page": "The Julia REPL",
+    "title": "Customization / Configuation",
+    "category": "section",
+    "text": "All interface customization is done through the keyword only TerminalMenus.config() function."
+},
+
+{
+    "location": "stdlib/REPL/#Arguments-1",
+    "page": "The Julia REPL",
+    "title": "Arguments",
+    "category": "section",
+    "text": "charset::Symbol=:na: ui characters to use (:ascii or :unicode); overridden by other arguments\ncursor::Char='>'|'→': character to use for cursor\nup_arrow::Char='^'|'↑': character to use for up arrow\ndown_arrow::Char='v'|'↓': character to use for down arrow\nchecked::String=\"[X]\"|\"✓\": string to use for checked\nunchecked::String=\"[ ]\"|\"⬚\"): string to use for unchecked\nscroll::Symbol=:na: If :wrap then wrap the cursor around top and bottom, if :nowrap do not wrap cursor\nsupress_output::Bool=false: For testing. If true, menu will not be printed to console.\nctrl_c_interrupt::Bool=true: If false, return empty on ^C, if true throw InterruptException() on ^C"
+},
+
+{
+    "location": "stdlib/REPL/#Examples-2",
+    "page": "The Julia REPL",
+    "title": "Examples",
+    "category": "section",
+    "text": "julia> menu = MultiSelectMenu(options, pagesize=5);\n\njulia> request(menu) # ASCII is used by default\n[press: d=done, a=all, n=none]\n   [ ] apple\n   [X] orange\n   [ ] grape\n > [X] strawberry\nv  [ ] blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(charset=:unicode)\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   ⬚ apple\n   ✓ orange\n   ⬚ grape\n → ✓ strawberry\n↓  ⬚ blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(checked=\"YEP!\", unchecked=\"NOPE\", cursor='⧐')\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   NOPE apple\n   YEP! orange\n   NOPE grape\n ⧐ YEP! strawberry\n↓  NOPE blueberry\nSet([4, 2])\n"
 },
 
 {
