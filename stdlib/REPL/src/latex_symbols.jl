@@ -340,7 +340,6 @@ const latex_symbols = Dict(
     "\\c" => "̧",
     "\\k" => "̨",
     "\\sbbrg" => "̪",
-    "\\xl" => "̵",
     "\\strike" => "̶",
     "\\Alpha" => "Α",
     "\\Beta" => "Β",
