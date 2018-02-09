@@ -499,6 +499,7 @@ pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 # load some stdlib packages but don't put their names in Main
 Base.require(Base, :Base64)
 Base.require(Base, :CRC32c)
+Base.require(Base, :SHA)
 Base.require(Base, :Dates)
 Base.require(Base, :DelimitedFiles)
 Base.require(Base, :Serialization)
