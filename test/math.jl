@@ -960,3 +960,27 @@ using .Main.TestHelpers: Furlong
 @test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
 @test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
 @test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
+
+@testset "expm1 function" for T in (Float64, Float32)
+    @testset "$T accuracy" begin
+        X = map(T, vcat(0.0:0.00001:0.34658, -10:0.0002:10, -80:0.001:80,
+                        2.0^-54, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13, 0.6931471805599453,
+                        18.714973))
+        for x in X
+            y, yb = expm1(x), expm1(big(x))
+            @test abs(y-yb) <= 1.0*eps(T(yb))
+        end
+    end
+    @testset "$T edge cases" begin
+        @test isnan_type(T, expm1(T(NaN)))
+        @test expm1(T(-Inf)) === T(-1.0)
+        @test expm1(T(Inf)) === T(Inf)
+        @test expm1(T(0.0)) === T(0.0) # exact
+        @test expm1(T(5000.0)) === T(Inf)
+        @test expm1(T(-5000.0)) === T(-1.0)
+        @test expm1(T(5000.0)) === T(Inf)
+        @test expm1(T(-5000.0)) === T(-1.0)
+    end
+        @test expm1(nextfloat(88.72168f0)) === Inf32
+        @test expm1(nextfloat(7.09782712893383973096e+02)) === Inf
+end

@@ -95,11 +95,14 @@
 #
 expm1_ln2_hi(::Type{Float64}) = 6.93147180369123816490e-01
 expm1_ln2_lo(::Type{Float64}) = 1.90821492927058770002e-10
+
 @inline expm1_invln2(::Type{Float64}) = 1.44269504088896338700e+00
 @inline expm1_huge(T::Type{Float64}) = 56.0*expm1_ln2(T)
+
 expm1_overflow(::Type{Float64}) = 7.09782712893383973096e+02
-@inline expm1_underflow(::Type{Float64}) = 5.551115123125783e-17# 2.0^-54
+expm1_underflow(::Type{Float64}) = 5.551115123125783e-17# 2.0^-54
 # Scaled Q's: Qn_here = 2**n * Qn_above, for R(2*z) where z = hfxs = x*x/2:
+
 expm1_p(hfxs::Float64) = @horner(hfxs, -3.33333333333331316428e-02, # Q1
                                         1.58730158725481460165e-03, # Q2
                                        -7.93650757867487942473e-05, # Q3
@@ -151,7 +154,7 @@ function expm1(x::T) where T<:Union{Float32, Float64}
         if isinf(absx)
             return ifelse(xsign, -T(1.0), x)
         end
-        if x >= expm1_overflow(T) # largest value T can take before overflowing
+        if x > expm1_overflow(T) # largest value T can take before overflowing
             return T(Inf)
         end
         if xsign # x < -expm1_huge(T)
@@ -176,7 +179,7 @@ function expm1(x::T) where T<:Union{Float32, Float64}
             # the next line could be replaced with the above but we don't need the
             # safety of round, so we round by adding one half with the appropriate
             # sign and truncate to Int32
-            k = unsafe_trunc(Int32, expm1_invln2(T)*x + ifelse(xsign, -T(0.5), 0.5))
+            k = (expm1_invln2(T)*x + ifelse(xsign, -T(0.5), 0.5)) % Int32
             hi = x - k*expm1_ln2_hi(T) # t*expm1_ln2_hi is exact here
             lo = k*expm1_ln2_lo(T)
         end
