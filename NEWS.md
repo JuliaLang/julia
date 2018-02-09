@@ -587,6 +587,9 @@ Library improvements
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
 
+  * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
+    the buffer ([#25944]).
+
 Compiler/Runtime improvements
 -----------------------------
 
