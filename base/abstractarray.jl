@@ -1011,7 +1011,9 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
 """
     setindex!(A, X, inds...)
 
-Store values from array `X` within some subset of `A` as specified by `inds`.
+Store the value `X` to a location or multiple locations in `A` as specified by `inds`.
+
+See the manual section on [array indexing](@ref man-array-indexing) for details.
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
