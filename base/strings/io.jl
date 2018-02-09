@@ -82,9 +82,6 @@ julia> sprint(showcompact, 66.66666)
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
     if context !== nothing
         f(IOContext(s, context), args...)
     else
@@ -101,9 +98,6 @@ tostr_sizehint(x::Float32) = 12
 function print_to_string(xs...; env=nothing)
     # specialized for performance reasons
     s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
     if env !== nothing
         env_io = IOContext(s, env)
         for x in xs
