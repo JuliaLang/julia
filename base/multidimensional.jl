@@ -1514,10 +1514,6 @@ end
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, x, J...)
 end
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
-end
 
 @generated function _unsafe_setindex!(B::BitArray, x,
         I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)

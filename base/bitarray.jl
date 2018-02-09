@@ -657,9 +657,6 @@ indexoffset(::Colon) = 0
     fill_chunks!(B.chunks, y, f0, l0)
     return B
 end
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}})
-    _setindex!(IndexStyle(B), B, X, to_indices(B, (J0,))[1])
-end
 
 # logical indexing
 
