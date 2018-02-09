@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Tests for deprecated functionality.
 #
 # These can't be run with --depwarn=error, so currently require special

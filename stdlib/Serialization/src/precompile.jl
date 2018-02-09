@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 precompile(Tuple{typeof(Serialization.write_as_tag), Base.TCPSocket, Int32})
 precompile(Tuple{typeof(Serialization.object_number), Core.TypeName})
 precompile(Tuple{typeof(Serialization.serialize_array_data), Base.TCPSocket, Array{Int64, 1}})

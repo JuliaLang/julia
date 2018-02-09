@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
 Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in

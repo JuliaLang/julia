@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #  Method
 #  1. Argument reduction: Reduce x to an r so that |r| <= 0.5*log10(2). Given x,
 #     find r and integer k such that
