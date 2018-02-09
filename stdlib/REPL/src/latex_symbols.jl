@@ -88,7 +88,7 @@ const frak = "\\frak"
 const boldfrak = "\\bfrak"
 const mono = "\\tt"
 
-const latex_symbols = [
+const latex_symbols = Dict(
 
 # manual additions:
 
@@ -2579,4 +2579,4 @@ const latex_symbols = [
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
 
-]
+)
