@@ -1,5 +1,7 @@
 module NastyGenerator
 
+using Random
+
 pn(i) = "P$i"
 randvers(k::Int) = VersionNumber(rand(0:k), rand(0:k), rand(0:k))
 

@@ -2,7 +2,7 @@
 
 using Base: thispatch, thisminor, nextpatch, nextminor
 import LinearAlgebra: checksquare
-import Random: UUID
+import UUIDs
 using Pkg3.Types
 using Pkg3.Types: uuid_package, uuid_registry, uuid5
 
@@ -43,7 +43,7 @@ function load_requires(path::String)
             versions = versions ∩ requires[r.package].versions
             systems  = systems  ∪ requires[r.package].systems
         end
-        requires[r.package] = Require(versions, systems)
+        requires[r.package] = Require(versions, Symbol.(systems))
     end
     return requires
 end
@@ -125,8 +125,8 @@ function prune!(pkgs::AbstractDict{String,Package})
     # remove unsatisfiable versions
     while true
         clean = true
-        filter!(pkgs) do pkg, p
-            filter!(p.versions) do ver, v
+        filter!(pkgs) do (pkg, p)
+            filter!(p.versions) do (ver, v)
                 @clean ver == thispatch(ver) > v"0.0.0" &&
                 all(v.requires) do kv
                     req, r = kv

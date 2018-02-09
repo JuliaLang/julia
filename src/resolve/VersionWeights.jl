@@ -14,8 +14,7 @@ end
 VersionWeight(major::Integer, minor::Integer) = VersionWeight(major, minor, 0)
 VersionWeight(major::Integer) = VersionWeight(major, 0)
 VersionWeight() = VersionWeight(0)
-
-Base.convert(::Type{VersionWeight}, vn::VersionNumber) = VersionWeight(vn.major, vn.minor, vn.patch)
+VersionWeight(vn::VersionNumber) = VersionWeight(vn.major, vn.minor, vn.patch)
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 

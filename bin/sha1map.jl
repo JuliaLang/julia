@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 
 using Pkg3.TOML
-using Base: LibGit2
+using LibGit2
 
 function sha1map(pkgs::Dict{String,Package})
     f = joinpath(@__DIR__, "sha1map.toml")
@@ -19,7 +19,7 @@ function sha1map(pkgs::Dict{String,Package})
                 repo_path = joinpath(homedir(), ".julia", "upstream", uuid)
                 repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
                     updated = true
-                    info("Cloning [$uuid] $pkg")
+                    @info("Cloning [$uuid] $pkg")
                     LibGit2.clone(p.url, repo_path, isbare=true)
                 end
             end
@@ -27,7 +27,7 @@ function sha1map(pkgs::Dict{String,Package})
                 try LibGit2.GitObject(repo, git_commit_hash)
                 catch err
                     err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-                    info("Updating $pkg from $(p.url)")
+                    @info("Updating $pkg from $(p.url)")
                     LibGit2.fetch(repo, remoteurl=p.url, refspecs=["+refs/*:refs/remotes/cache/*"])
                 end
             end

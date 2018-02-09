@@ -272,7 +272,7 @@ Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
 # Hot code, measure performance before changing
 function Base.intersect(A::VersionSpec, B::VersionSpec)
     (isempty(A) || isempty(B)) && return copy(empty_versionspec)
-    ranges = Vector{VersionRange}(length(A.ranges) * length(B.ranges))
+    ranges = Vector{VersionRange}(uninitialized, length(A.ranges) * length(B.ranges))
     i = 1
     @inbounds for a in A.ranges, b in B.ranges
         ranges[i] = intersect(a, b)
@@ -1026,7 +1026,7 @@ function pathrepr(env::EnvCache, path::String, base::String=pwd())
     if !Sys.iswindows() && isabspath(path)
         home = joinpath(homedir(), "")
         if startswith(path, home)
-            path = joinpath("~", path[nextind(path,endof(home)):end])
+            path = joinpath("~", path[nextind(path, lastindex(home)):end])
         end
     end
     return repr(path)

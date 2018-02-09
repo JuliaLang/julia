@@ -87,12 +87,12 @@ Returns `true` if the given command executes successfully, `false` otherwise.
 """
 function probe_cmd(cmd::Cmd; verbose::Bool = false)
     if verbose
-        info("Probing $(cmd.exec[1]) as a possibility...")
+        @info("Probing $(cmd.exec[1]) as a possibility...")
     end
     try
         success(cmd)
         if verbose
-            info("  Probe successful for $(cmd.exec[1])")
+            @info("  Probe successful for $(cmd.exec[1])")
         end
         return true
     catch
@@ -261,7 +261,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     sh_found = false
 
     if verbose
-        info("Probing for download engine...")
+        @info("Probing for download engine...")
     end
 
     # Search for a download engine
@@ -272,14 +272,14 @@ function probe_platform_engines!(;verbose::Bool = false)
             download_found = true
 
             if verbose
-                info("Found download engine $(test.exec[1])")
+                @info("Found download engine $(test.exec[1])")
             end
             break
         end
     end
 
     if verbose
-        info("Probing for compression engine...")
+        @info("Probing for compression engine...")
     end
 
     # Search for a compression engine
@@ -292,7 +292,7 @@ function probe_platform_engines!(;verbose::Bool = false)
             parse_tarball_listing = parse
 
             if verbose
-                info("Found compression engine $(test.exec[1])")
+                @info("Found compression engine $(test.exec[1])")
             end
 
             compression_found = true
@@ -301,14 +301,14 @@ function probe_platform_engines!(;verbose::Bool = false)
     end
 
     if verbose
-        info("Probing for sh engine...")
+        @info("Probing for sh engine...")
     end
 
     for path in sh_engines
         if probe_cmd(`$path --help`; verbose=verbose)
             gen_sh_cmd = (cmd) -> `$path -c $cmd`
             if verbose
-                info("Found sh engine $(path.exec[1])")
+                @info("Found sh engine $(path.exec[1])")
             end
             sh_found = true
             break

@@ -11,7 +11,7 @@ using Pkg3.GraphType
 using Pkg3.Resolve
 import Pkg3.BinaryProvider
 
-import Pkg3: GLOBAL_SETTINGS, depots, BinaryProvider, @info, Nothing
+import Pkg3: GLOBAL_SETTINGS, depots
 import Pkg3.Types: uuid_julia
 
 const SlugInt = UInt32 # max p = 4
@@ -407,21 +407,11 @@ function prune_manifest(env::EnvCache)
         end
         clean && break
     end
-    if VERSION < v"0.7.0-DEV.1393"
-        filter!(env.manifest) do _, infos
-            filter!(infos) do info
-                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
-            end
-            !isempty(infos)
+    filter!(env.manifest) do (_, infos)
+        filter!(infos) do info
+            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
         end
-    else
-        filter!(env.manifest) do _infos # (_, info) doesn't parse on 0.6
-            _, infos = _infos
-            filter!(infos) do info
-                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
-            end
-            !isempty(infos)
-        end
+        !isempty(infos)
     end
 end
 
@@ -597,15 +587,8 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
     end
     # delete drops from project
     n = length(env.project["deps"])
-    if VERSION < v"0.7.0-DEV.1393"
-        filter!(env.project["deps"]) do _, uuid
-            UUID(uuid) ∉ drop
-        end
-    else
-        filter!(env.project["deps"]) do _uuid # (_, uuid) doesn't parse on 0.6
-            _, uuid = _uuid
-            UUID(uuid) ∉ drop
-        end
+    filter!(env.project["deps"]) do (_, uuid)
+        UUID(uuid) ∉ drop
     end
     if length(env.project["deps"]) == n
         @info "No changes"

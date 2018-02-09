@@ -260,7 +260,7 @@ mutable struct Graph
         local extended_deps
         let spp = spp # Due to https://github.com/JuliaLang/julia/issues/15276
             # Type assert below to help inference
-            extended_deps = [Vector{Dict{Int,BitVector}}(spp[p0]-1) for p0 = 1:np]::Vector{Vector{Dict{Int,BitVector}}}
+            extended_deps = [Vector{Dict{Int,BitVector}}(uninitialized, spp[p0]-1) for p0 = 1:np]::Vector{Vector{Dict{Int,BitVector}}}
         end
         for p0 = 1:np, v0 = 1:(spp[p0]-1)
             n2u = Dict{String,UUID}()
@@ -293,10 +293,10 @@ mutable struct Graph
             # Translate the requirements into bit masks
             # Hot code, measure performance before changing
             req_msk = Dict{Int,BitVector}()
-            @inbounds for (p1, vs) in req
+            for (p1, vs) in req
                 pv = pvers[p1]
-                req_msk_p1 = BitArray(spp[p1] - 1)
-                for i in 1:spp[p1] - 1
+                req_msk_p1 = BitArray(uninitialized, spp[p1] - 1)
+                @inbounds for i in 1:spp[p1] - 1
                     req_msk_p1[i] = pv[i] ∈ vs
                 end
                 req_msk[p1] = req_msk_p1
