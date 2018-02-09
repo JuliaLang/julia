@@ -1667,7 +1667,7 @@ function _mapreducecols!(f, op, R::AbstractArray, A::SparseMatrixCSC{Tv,Ti}) whe
         end
     end
     @inbounds for i = 1:m
-        R[i, 1] = _mapreducezeros(f, op, Tv, rownz[i], R[i, 1])
+        R[i, 1] = _mapreducezeros(f, op, Tv, Int(rownz[i]), R[i, 1])
     end
     R
 end
