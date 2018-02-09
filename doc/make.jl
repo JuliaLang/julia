@@ -23,11 +23,12 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
 const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
-for dir in readdir(STDLIB_DIR)
-    sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
-    if isfile(sourcefile)
-        cd(joinpath(@__DIR__, "src")) do
-            isdir("stdlib") || mkdir("stdlib")
+cd(joinpath(@__DIR__, "src")) do
+    Base.rm("stdlib"; recursive=true, force=true)
+    mkdir("stdlib")
+    for dir in readdir(STDLIB_DIR)
+        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+        if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
             if Sys.iswindows()
