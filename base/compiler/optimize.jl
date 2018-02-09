@@ -2950,7 +2950,8 @@ function structinfo_constant(ctx::AllocOptContext, @nospecialize(v), vt::DataTyp
     if vt <: Tuple
         si = StructInfo(Vector{Any}(uninitialized, nf), Symbol[], vt, false, false)
     else
-        si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, false, false)
+        si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+                        vt, false, false)
     end
     for i in 1:nf
         if isdefined(v, i)
@@ -2966,7 +2967,8 @@ end
 structinfo_tuple(ex::Expr) = StructInfo(ex.args[2:end], Symbol[], Tuple, false, false)
 function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     nf = fieldcount(vt)
-    si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, vt.mutable, true)
+    si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+                    vt, vt.mutable, true)
     ninit = length(ex.args) - 1
     for i in 1:nf
         if i <= ninit

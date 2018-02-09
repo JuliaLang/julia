@@ -423,6 +423,9 @@ This section lists changes that do not have deprecation warnings.
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
 
+  * The `fieldnames` and `propertynames` functions now return a tuple rather than
+    an array ([#25725]).
+
 Library improvements
 --------------------
 
@@ -1287,4 +1290,5 @@ Command-line option changes
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
