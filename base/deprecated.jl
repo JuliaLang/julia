@@ -1357,6 +1357,9 @@ end
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
+# issue #25928
+@deprecate wait(t::Task) fetch(t)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

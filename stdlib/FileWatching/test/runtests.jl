@@ -36,7 +36,7 @@ function pfd_tst_reads(idx, intvl)
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
-    @test evt === wait(evt2)
+    @test evt === fetch(evt2)
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
@@ -63,7 +63,7 @@ function pfd_tst_timeout(idx, intvl)
         @test evt.timedout
         @test !evt.readable
         @test !evt.writable
-        @test evt === wait(evt2)
+        @test evt === fetch(evt2)
     end
 
     # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
@@ -107,7 +107,7 @@ for (i, intvl) in enumerate(intvls)
         end
         notify(ready_c, all=true)
         for idx in 1:n
-            wait(t[idx])
+            Base._wait(t[idx])
         end
     end
 end
@@ -226,7 +226,7 @@ end
 
 function test_watch_file_timeout(tval)
     watch = @async watch_file(file, tval)
-    @test wait(watch) == FileWatching.FileEvent(false, false, true)
+    @test fetch(watch) == FileWatching.FileEvent(false, false, true)
 end
 
 function test_watch_file_change(tval)
@@ -235,7 +235,7 @@ function test_watch_file_change(tval)
     open(file, "a") do f
         write(f, "small change\n")
     end
-    @test wait(watch) == FileWatching.FileEvent(false, true, false)
+    @test fetch(watch) == FileWatching.FileEvent(false, true, false)
 end
 
 function test_monitor_wait(tval)

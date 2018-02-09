@@ -130,7 +130,7 @@ function cleanup()
     end
     empty!(open_streams)
     for tsk in tasks
-        wait(tsk)
+        Base._wait(tsk)
     end
     empty!(tasks)
 end
@@ -563,7 +563,7 @@ let p = Pipe()
         end
         @async close(p.in)
     end
-    s = reinterpret(UInt16, wait(t))
+    s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end

@@ -119,8 +119,8 @@ if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) 
         close(sock)
         return true
     end
-    @test wait(t1)
-    @test wait(t2)
+    @test fetch(t1)
+    @test fetch(t2)
 end
 
 @test read(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"]), String) == "Hello World\n"
@@ -175,7 +175,7 @@ let r, t
     yield()
     put!(r,11)
     yield()
-    @test wait(t)
+    @test fetch(t)
 end
 
 # Test marking of IO
@@ -207,7 +207,7 @@ let r, t, sock
     @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
-    @test wait(t)
+    @test fetch(t)
 end
 
 # issue #4535
@@ -357,7 +357,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
-    wait(t)
+    Base._wait(t)
 end
 
 # issue #8529

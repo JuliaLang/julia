@@ -175,7 +175,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     close(chnl)
 
     # check and throw any exceptions from the worker tasks
-    foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), worker_tasks)
+    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), worker_tasks)
 
     # check if there was a genuine problem with asyncrun
     (asyncrun_excp !== nothing) && throw(asyncrun_excp)
@@ -327,7 +327,7 @@ function done(itr::AsyncCollector, state::AsyncCollectorState)
         close(state.chnl)
 
         # wait for all tasks to finish
-        foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+        foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
         empty!(state.worker_tasks)
         return true
     else

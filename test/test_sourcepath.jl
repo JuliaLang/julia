@@ -12,6 +12,6 @@ end == path
 @test let ct = current_task(), t = @task Base.source_path()
     schedule(ct)
     yieldto(t)
-    wait(t)
+    fetch(t)
 end == path
 @test isabspath(@__FILE__)
