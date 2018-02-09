@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 
 using Base: thispatch, thisminor, nextpatch, nextminor
-using Base.LinAlg: checksquare
-using Base.Random: UUID
+import LinearAlgebra: checksquare
+import UUIDs
 using Pkg3.Types
 using Pkg3.Types: uuid_package, uuid_registry, uuid5
 
@@ -43,7 +43,7 @@ function load_requires(path::String)
             versions = versions ∩ requires[r.package].versions
             systems  = systems  ∪ requires[r.package].systems
         end
-        requires[r.package] = Require(versions, systems)
+        requires[r.package] = Require(versions, Symbol.(systems))
     end
     return requires
 end
@@ -121,12 +121,12 @@ julia_versions(vi::VersionInterval) = julia_versions(v->v in vi)
 
 macro clean(ex) :(x = $(esc(ex)); $(esc(:clean)) &= x; x) end
 
-function prune!(pkgs::Associative{String,Package})
+function prune!(pkgs::AbstractDict{String,Package})
     # remove unsatisfiable versions
     while true
         clean = true
-        filter!(pkgs) do pkg, p
-            filter!(p.versions) do ver, v
+        filter!(pkgs) do (pkg, p)
+            filter!(p.versions) do (ver, v)
                 @clean ver == thispatch(ver) > v"0.0.0" &&
                 all(v.requires) do kv
                     req, r = kv

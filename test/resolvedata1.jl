@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module ResolveData
+
 deps_data = Any[
     ["ASTInterpreter", v"0.0.1", "AbstractTrees", "0.0.1-0.0" ],
     ["ASTInterpreter", v"0.0.1", "JuliaParser", "0.7.1-*" ],
@@ -2851,3 +2853,5 @@ want_data = Dict(
     "WebSockets"=>v"0.2.1",
     "WoodburyMatrices"=>v"0.2.2",
 )
+
+end

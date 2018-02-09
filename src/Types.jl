@@ -1,11 +1,17 @@
 module Types
 
-using Base.Random: UUID
-using SHA
-using Pkg3: TOML, TerminalMenus, Dates
+using UUIDs
+using Random
+using Dates
+import LibGit2
+import REPL
+using REPL.TerminalMenus
 
+using Pkg3.TOML
 import Pkg3
-import Pkg3: depots, logdir, iswindows
+import Pkg3: depots, logdir
+
+using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, PkgError,
@@ -15,14 +21,14 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     git_file_stream, git_discover, read_project, read_manifest, pathrepr, registries
 
+
 ## ordering of UUIDs ##
 
 Base.isless(a::UUID, b::UUID) = a.value < b.value
-Base.convert(::Type{String}, u::UUID) = string(u)
 
 ## Computing UUID5 values from (namespace, key) pairs ##
 function uuid5(namespace::UUID, key::String)
-    data = [reinterpret(UInt8, [namespace.value]); Vector{UInt8}(key)]
+    data = [reinterpret(UInt8, [namespace.value]); codeunits(key)]
     u = reinterpret(UInt128, sha1(data)[1:16])[1]
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000050008000000000000000
@@ -53,14 +59,11 @@ struct SHA1
             throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
         return new(bytes)
     end
+    SHA1(s::String) = SHA1(hex2bytes(s))
 end
 
-Base.convert(::Type{SHA1}, s::String) = SHA1(hex2bytes(s))
-Base.convert(::Type{Vector{UInt8}}, hash::SHA1) = hash.bytes
-Base.convert(::Type{String}, hash::SHA1) = bytes2hex(Vector{UInt8}(hash))
-
-Base.string(hash::SHA1) = String(hash)
-Base.show(io::IO, hash::SHA1) = print(io, "SHA1(", String(hash), ")")
+Base.string(hash::SHA1) = bytes2hex(hash.bytes)
+Base.show(io::IO, hash::SHA1) = print(io, "SHA1(", String(hash.bytes), ")")
 Base.isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 Base.hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 Base.:(==)(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -81,8 +84,7 @@ struct VersionBound
 end
 VersionBound(t::Integer...) = VersionBound(t)
 
-Base.convert(::Type{VersionBound}, v::VersionNumber) =
-    VersionBound(v.major, v.minor, v.patch)
+VersionBound(v::VersionNumber) = VersionBound(v.major, v.minor, v.patch)
 
 Base.getindex(b::VersionBound, i::Int) = b.t[i]
 
@@ -154,7 +156,7 @@ end
 
 Base.hash(r::VersionBound, h::UInt) = hash(hash(r.t, h), r.n)
 
-Base.convert(::Type{VersionBound}, s::AbstractString) =
+VersionBound(s::AbstractString) =
     s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
 
 struct VersionRange
@@ -163,10 +165,15 @@ struct VersionRange
     # NOTE: ranges are allowed to be empty; they are ignored by VersionSpec anyway
 end
 VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
-VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
-
-Base.convert(::Type{VersionRange}, v::VersionNumber) =
-    VersionRange(VersionBound(v))
+VersionRange(t::Integer...)                  = VersionRange(VersionBound(t...))
+VersionRange(v::VersionNumber)               = VersionRange(VersionBound(v))
+function VersionRange(s::AbstractString)
+    m = match(r"^\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
+    m == nothing && throw(ArgumentError("invalid version range: $(repr(s))"))
+    lower = VersionBound(m.captures[1])
+    upper = m.captures[2] != nothing ? VersionBound(m.captures[2]) : lower
+    return VersionRange(lower, upper)
+end
 
 function Base.isempty(r::VersionRange)
     for i = 1:min(r.lower.n, r.upper.n)
@@ -174,14 +181,6 @@ function Base.isempty(r::VersionRange)
         r.lower[i] < r.upper[i] && return false
     end
     return false
-end
-
-function Base.convert(::Type{VersionRange}, s::AbstractString)
-    m = match(r"^\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
-    m == nothing && throw(ArgumentError("invalid version range: $(repr(s))"))
-    lower = VersionBound(m.captures[1])
-    upper = m.captures[2] != nothing ? VersionBound(m.captures[2]) : lower
-    return VersionRange(lower, upper)
 end
 
 function Base.print(io::IO, r::VersionRange)
@@ -245,11 +244,14 @@ end
 struct VersionSpec
     ranges::Vector{VersionRange}
     VersionSpec(r::Vector{<:VersionRange}) = new(union!(r))
-    # copy is defined inside the struct block to call `new` directly
-    # without going through `union!`
-    Base.copy(vs::VersionSpec) = new(copy(vs.ranges))
+    VersionSpec(vs::VersionSpec) = new(copy(vs.ranges))
 end
+
 VersionSpec() = VersionSpec(VersionRange())
+VersionSpec(v::VersionNumber) = VersionSpec(VersionRange(v))
+VersionSpec(r::VersionRange) = VersionSpec(VersionRange[r])
+VersionSpec(s::AbstractString) = VersionSpec(VersionRange(s))
+VersionSpec(v::AbstractVector) = VersionSpec(map(VersionRange, v))
 
 # Hot code
 function Base.in(v::VersionNumber, s::VersionSpec)
@@ -259,21 +261,18 @@ function Base.in(v::VersionNumber, s::VersionSpec)
     return false
 end
 
-Base.convert(::Type{VersionSpec}, v::VersionNumber) = VersionSpec(VersionRange(v))
-Base.convert(::Type{VersionSpec}, r::VersionRange) = VersionSpec(VersionRange[r])
-Base.convert(::Type{VersionSpec}, s::AbstractString) = VersionSpec(VersionRange(s))
-Base.convert(::Type{VersionSpec}, v::AbstractVector) = VersionSpec(map(VersionRange, v))
+Base.copy(vs::VersionSpec) = VersionSpec(vs)
 
 const empty_versionspec = VersionSpec(VersionRange[])
 # Windows console doesn't like Unicode
-const _empty_symbol = @static iswindows() ? "empty" : "∅"
+const _empty_symbol = @static Sys.iswindows() ? "empty" : "∅"
 
 Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
 @assert isempty(empty_versionspec)
 # Hot code, measure performance before changing
 function Base.intersect(A::VersionSpec, B::VersionSpec)
     (isempty(A) || isempty(B)) && return copy(empty_versionspec)
-    ranges = Vector{VersionRange}(length(A.ranges) * length(B.ranges))
+    ranges = Vector{VersionRange}(uninitialized, length(A.ranges) * length(B.ranges))
     i = 1
     @inbounds for a in A.ranges, b in B.ranges
         ranges[i] = intersect(a, b)
@@ -292,7 +291,7 @@ end
 
 Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
 Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
-Base.deepcopy_internal(vs::VersionSpec, ::ObjectIdDict) = copy(vs)
+Base.deepcopy_internal(vs::VersionSpec, ::IdDict) = copy(vs)
 
 function Base.print(io::IO, s::VersionSpec)
     isempty(s) && return print(io, _empty_symbol)
@@ -334,14 +333,14 @@ Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
 
 struct PkgError <: Exception
     msg::AbstractString
-    ex::Nullable{Exception}
+    ex::Union{Exception, Nothing}
 end
-PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+PkgError(msg::AbstractString) = PkgError(msg, nothing)
 
 function Base.showerror(io::IO, pkgerr::PkgError)
     print(io, pkgerr.msg)
-    if !isnull(pkgerr.ex)
-        pkgex = get(pkgerr.ex)
+    if pkgerr.ex !== nothing
+        pkgex = pkgerr.ex
         if isa(pkgex, CompositeException)
             for cex in pkgex
                 print(io, "\n=> ")
@@ -363,22 +362,21 @@ cmderror(msg::String...) = throw(CommandError(join(msg)))
 
 Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, string(ex.msg))
+    printstyled(color = Base.error_color(), io, string(ex.msg))
 end
 
 ## type for expressing operations ##
 
 @enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
 
-function Base.convert(::Type{UpgradeLevel}, s::Symbol)
+function UpgradeLevel(s::Symbol)
     s == :fixed ? fixed :
     s == :patch ? patch :
     s == :minor ? minor :
     s == :major ? major :
     throw(ArgumentError("invalid upgrade bound: $s"))
 end
-Base.convert(::Type{UpgradeLevel}, s::String) = UpgradeLevel(Symbol(s))
-Base.convert(::Type{Union{VersionSpec,UpgradeLevel}}, v::VersionRange) = VersionSpec(v)
+UpgradeLevel(s::String) = UpgradeLevel(Symbol(s))
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
@@ -431,8 +429,8 @@ const default_envs = [
 
 struct EnvCache
     # environment info:
-    env::Union{Void,String}
-    git::Union{Void,LibGit2.GitRepo}
+    env::Union{Nothing,String}
+    git::Union{Nothing,LibGit2.GitRepo}
 
     # paths for files:
     project_file::String
@@ -448,7 +446,7 @@ struct EnvCache
 
     preview::Ref{Bool}
 
-    function EnvCache(env::Union{Void,String})
+    function EnvCache(env::Union{Nothing,String})
         project_file, git_repo = find_project(env)
         project = read_project(project_file)
         if haskey(project, "manifest")
@@ -531,7 +529,7 @@ function write_env(env::EnvCache)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        info("Updating $(pathrepr(env, env.project_file))")
+        @info "Updating $(pathrepr(env, env.project_file))"
         Pkg3.Display.print_project_diff(old_env, env)
         if !env.preview[]
             mkpath(dirname(env.project_file))
@@ -542,7 +540,7 @@ function write_env(env::EnvCache)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        info("Updating $(pathrepr(env, env.manifest_file))")
+        @info "Updating $(pathrepr(env, env.manifest_file))"
         Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
@@ -550,7 +548,7 @@ function write_env(env::EnvCache)
         uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
         for (name, infos) in manifest, info in infos
             haskey(info, "deps") || continue
-            deps = convert(Dict{String,UUID}, info["deps"])
+            deps = Dict{String,UUID}(n => UUID(u) for (n, u) in info["deps"])
             all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
             info["deps"] = sort!(collect(keys(deps)))
         end
@@ -569,7 +567,7 @@ function git_discover(
     ceiling::Union{AbstractString,Vector} = "",
     across_fs::Bool = false,
 )
-    sep = @static iswindows() ? ";" : ":"
+    sep = @static Sys.iswindows() ? ";" : ":"
     ceil = ceiling isa AbstractString ? ceiling :
         join(convert(Vector{String}, ceiling), sep)
     buf_ref = Ref(LibGit2.Buffer())
@@ -680,7 +678,7 @@ function init_if_interactive(path::String)
     cmderror("did not find a local environment at $(path), run `init` to create one")
 end
 
-function find_project(::Void)
+function find_project(::Nothing)
     path, gitrepo = find_local_env(pwd())
     path != nothing && return path, gitrepo
     path, gitrepo = find_named_env()
@@ -696,11 +694,11 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
     names = Dict(uuid => name for (uuid, name) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
-        warn("duplicate UUID found in project file's [deps] section")
+        @warn "duplicate UUID found in project file's [deps] section"
     for pkg in pkgs
         pkg.mode == :project || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
-            pkg.uuid = uuids[pkg.name]
+            pkg.uuid = UUID(uuids[pkg.name])
         end
         if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
             pkg.name = names[pkg.uuid]
@@ -724,7 +722,7 @@ function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     for pkg in pkgs
         pkg.mode == :manifest || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
-            length(uuids[pkg.name]) == 1 && (pkg.uuid = uuids[pkg.name][1])
+            length(uuids[pkg.name]) == 1 && (pkg.uuid = UUID(uuids[pkg.name][1]))
         end
         if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
             pkg.name = names[pkg.uuid]
@@ -760,7 +758,7 @@ function ensure_resolved(
     env::EnvCache,
     pkgs::AbstractVector{PackageSpec},
     registry::Bool = false,
-)::Void
+)::Nothing
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs
         has_uuid(pkg) && continue
@@ -814,9 +812,9 @@ function registries()::Vector{String}
     user_regs = abspath(depots()[1], "registries")
     if !ispath(user_regs)
         mkpath(user_regs)
-        info("Cloning default registries into $user_regs")
+        @info "Cloning default registries into $user_regs"
         for (reg, url) in DEFAULT_REGISTRIES
-            info(" [+] $reg = $(repr(url))")
+            @info " [+] $reg = $(repr(url))"
             path = joinpath(user_regs, reg)
             LibGit2.clone(url, path)
         end
@@ -841,7 +839,7 @@ function find_registered!(
     names::Vector{String},
     uuids::Vector{UUID} = UUID[];
     force::Bool = false,
-)::Void
+)::Nothing
     # only look if there's something new to see (or force == true)
     names = filter(name->!haskey(env.uuids, name), names)
     uuids = filter(uuid->!haskey(env.paths, uuid), uuids)
@@ -910,11 +908,11 @@ function find_registered!(
         open(joinpath(registry, "registry.toml")) do io
             # skip forward until [packages] section
             for line in eachline(io)
-                ismatch(r"^ \s* \[ \s* packages \s* \] \s* $"x, line) && break
+                contains(line, r"^ \s* \[ \s* packages \s* \] \s* $"x) && break
             end
             # find lines with uuid or name we're looking for
             for line in eachline(io)
-                ismatch(regex, line) || continue
+                contains(line,regex) || continue
                 m = match(line_re, line)
                 m == nothing &&
                     error("misformatted registry.toml package entry: $line")
@@ -927,11 +925,12 @@ function find_registered!(
         end
     end
 end
-find_registered!(env::EnvCache, uuids::Vector{UUID}; force::Bool=false)::Void =
+
+find_registered!(env::EnvCache, uuids::Vector{UUID}; force::Bool=false)::Nothing =
     find_registered!(env, String[], uuids, force=force)
 
 "Lookup all packages in project & manifest files"
-find_registered!(env::EnvCache)::Void =
+find_registered!(env::EnvCache)::Nothing =
     find_registered!(env, String[], UUID[], force=true)
 
 "Get registered uuids associated with a package name"
@@ -1002,7 +1001,7 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
 end
 
 "Find package by UUID in the manifest file"
-function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
+function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothing}
     uuid in values(env.uuids) || find_registered!(env, [uuid])
     for (name, infos) in env.manifest, info in infos
         haskey(info, "uuid") && uuid == UUID(info["uuid"]) || continue
@@ -1024,10 +1023,10 @@ function pathrepr(env::EnvCache, path::String, base::String=pwd())
             path = relpath(path, repo)
         end
     end
-    if !iswindows() && isabspath(path)
+    if !Sys.iswindows() && isabspath(path)
         home = joinpath(homedir(), "")
         if startswith(path, home)
-            path = joinpath("~", path[nextind(path,endof(home)):end])
+            path = joinpath("~", path[nextind(path, lastindex(home)):end])
         end
     end
     return repr(path)

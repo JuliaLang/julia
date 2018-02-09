@@ -1,12 +1,9 @@
 __precompile__(true)
 module Pkg3
 
-
-if VERSION < v"0.7.0-DEV.2575"
-    const Dates = Base.Dates
-else
-    import Dates
-end
+import Random
+import REPL
+using REPL.TerminalMenus
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
@@ -22,25 +19,10 @@ const GLOBAL_SETTINGS = GlobalSettings()
 depots() = GLOBAL_SETTINGS.depots
 logdir() = joinpath(depots()[1], "logs")
 
-iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
-isapple()   = @static VERSION < v"0.7-" ? Sys.is_apple()   : Sys.isapple()
-islinux()   = @static VERSION < v"0.7-" ? Sys.is_linux()   : Sys.islinux()
-
-# Backport of Equalto
-if !isdefined(Base, :EqualTo)
-    struct EqualTo{T} <: Function
-        x::T
-        EqualTo(x::T) where {T} = new{T}(x)
-    end
-    (f::EqualTo)(y) = isequal(f.x, y)
-    const equalto = EqualTo
-end
-
 # load snapshotted dependencies
-include("../ext/BinaryProvider/src/BinaryProvider.jl")
 include("../ext/TOML/src/TOML.jl")
-include("../ext/TerminalMenus/src/TerminalMenus.jl")
 
+include("PlatformEngines.jl")
 include("Types.jl")
 include("GraphType.jl")
 include("Resolve.jl")
@@ -53,8 +35,7 @@ import .API: add, rm, up, test, gc, init, build, installed
 const update = up
 
 function __init__()
-    push!(empty!(LOAD_PATH), dirname(dirname(@__DIR__)))
-
+    BinaryProvider.probe_platform_engines!()
     if isdefined(Base, :active_repl)
         REPLMode.repl_init(Base.active_repl)
     else
@@ -62,49 +43,6 @@ function __init__()
             repl.interface = Base.REPL.setup_interface(repl)
             REPLMode.repl_init(repl)
         end
-    end
-end
-
-function Base.julia_cmd(julia::AbstractString)
-    cmd = invoke(Base.julia_cmd, Tuple{Any}, julia)
-    push!(cmd.exec, "-L$(abspath(@__DIR__, "require.jl"))")
-    return cmd
-end
-
-if VERSION < v"0.7.0-DEV.2303"
-    Base.find_in_path(name::String, wd::Void)   = _find_package(name)
-    Base.find_in_path(name::String, wd::String) = _find_package(name)
-else
-    Base.find_package(name::String) = _find_package(name)
-end
-
-function _find_package(name::String)
-    isabspath(name) && return name
-    base = name
-    if endswith(name, ".jl")
-        base = name[1:end-3]
-    else
-        name = string(base, ".jl")
-    end
-    info = Pkg3.Operations.package_env_info(base, verb = "use")
-    info == nothing && @goto find_global
-    haskey(info, "uuid") || @goto find_global
-    haskey(info, "git-tree-sha1") || @goto find_global
-    uuid = Base.Random.UUID(info["uuid"])
-    hash = Pkg3.Types.SHA1(info["git-tree-sha1"])
-    path = Pkg3.Operations.find_installed(uuid, hash)
-    ispath(path) && return joinpath(path, "src", name)
-
-    # If we still haven't found the file, look if the package exists in the registry
-    # and query the user (if we are interactive) to install it.
-    @label find_global
-    if isinteractive()
-        # query_if_interactive is hidden from inference
-        # since it has a significant inference cost and is not used
-        # when e.g. precompiling modules
-        return query_if_interactive[](base, name)::Union{Void, String}
-    else
-        return nothing
     end
 end
 

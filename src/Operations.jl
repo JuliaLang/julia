@@ -1,9 +1,17 @@
 module Operations
 
-using Base.Random: UUID
-using Base: LibGit2
-using Pkg3: TerminalMenus, Types, GraphType, Resolve
-import Pkg3: GLOBAL_SETTINGS, depots, BinaryProvider
+using UUIDs
+using Random: randstring
+import LibGit2
+
+import REPL
+using REPL.TerminalMenus
+using Pkg3.Types
+using Pkg3.GraphType
+using Pkg3.Resolve
+import Pkg3.BinaryProvider
+
+import Pkg3: GLOBAL_SETTINGS, depots
 import Pkg3.Types: uuid_julia
 
 const SlugInt = UInt32 # max p = 4
@@ -95,7 +103,7 @@ get_or_make!(d::Dict{K,V}, k::K) where {K,V} = get!(d, k) do; V() end
 
 function load_versions(path::String)
     toml = parse_toml(path, "versions.toml")
-    Dict(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
+    return Dict{VersionNumber, SHA1}(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
 end
 
 function load_package_data(f::Base.Callable, path::String, versions)
@@ -130,7 +138,7 @@ function load_package_data_raw(T::Type, path::String)
 end
 
 function deps_graph(env::EnvCache, uuid_to_name::Dict{UUID,String}, reqs::Requires, fixed::Dict{UUID,Fixed})
-    uuids = union(keys(reqs), keys(fixed), map(fx->keys(fx.requires), values(fixed))...)
+    uuids = collect(union(keys(reqs), keys(fixed), map(fx->keys(fx.requires), values(fixed))...))
     seen = UUID[]
 
     all_versions = Dict{UUID,Set{VersionNumber}}()
@@ -199,11 +207,12 @@ end
 
 "Resolve a set of versions given package version specs"
 function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,VersionNumber}
-    info("Resolving package versions")
+    @info("Resolving package versions")
     # anything not mentioned is fixed
     uuids = UUID[pkg.uuid for pkg in pkgs]
     uuid_to_name = Dict{UUID,String}(uuid_julia => "julia")
-    for (name::String, uuid::UUID) in env.project["deps"]
+    for (name::String, uuidstr::String) in env.project["deps"]
+        uuid = UUID(uuidstr)
         uuid_to_name[uuid] = name
         uuid in uuids && continue
         info = manifest_info(env, uuid)
@@ -212,7 +221,7 @@ function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,
         push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Requires(pkg.uuid => pkg.version for pkg in pkgs if pkg.uuid ≠ uuid_julia)
+    reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed = Dict([uuid_julia => Fixed(VERSION)])
     graph = deps_graph(env, uuid_to_name, reqs, fixed)
 
@@ -258,7 +267,7 @@ function version_data(env::EnvCache, pkgs::Vector{PackageSpec})
                 h = vers[ver]
                 if haskey(hashes, uuid)
                     h == hashes[uuid] ||
-                        warn("$uuid: hash mismatch for version $ver!")
+                        @warn "$uuid: hash mismatch for version $ver!"
                 else
                     hashes[uuid] = h
                 end
@@ -285,7 +294,7 @@ function install(
     name::String,
     hash::SHA1,
     urls::Vector{String},
-    version::Union{VersionNumber,Void} = nothing
+    version::Union{VersionNumber,Nothing} = nothing
 )::Tuple{String,Bool}
     # returns path to version & if it's newly installed
     version_path = find_installed(uuid, hash)
@@ -377,7 +386,7 @@ function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, ve
     for path in registered_paths(env, uuid)
         data = load_package_data(UUID, joinpath(path, "dependencies.toml"), version)
         data == nothing && continue
-        info["deps"] = convert(Dict{String,String}, data)
+        info["deps"] = Dict(string(k) => string(v) for (k,v) in data)
         break
     end
     return info
@@ -390,7 +399,7 @@ function prune_manifest(env::EnvCache)
         for (name, infos) in env.manifest, info in infos
             haskey(info, "uuid") && haskey(info, "deps") || continue
             UUID(info["uuid"]) ∈ keep || continue
-            for dep::UUID in values(info["deps"])
+            for dep in map(UUID, values(info["deps"]))
                 dep ∈ keep && continue
                 push!(keep, dep)
                 clean = false
@@ -398,21 +407,11 @@ function prune_manifest(env::EnvCache)
         end
         clean && break
     end
-    if VERSION < v"0.7.0-DEV.1393"
-        filter!(env.manifest) do _, infos
-            filter!(infos) do info
-                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
-            end
-            !isempty(infos)
+    filter!(env.manifest) do (_, infos)
+        filter!(infos) do info
+            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
         end
-    else
-        filter!(env.manifest) do _infos # (_, info) doesn't parse on 0.6
-            _, infos = _infos
-            filter!(infos) do info
-                haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
-            end
-            !isempty(infos)
-        end
+        !isempty(infos)
     end
 end
 
@@ -455,7 +454,7 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
         pkg, path, version, hash, new = r
         if new
             vstr = version != nothing ? "v$version" : "[$h]"
-            new && info("Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr")
+            new && @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
         end
         uuid = pkg.uuid
         version = pkg.version::VersionNumber
@@ -473,7 +472,7 @@ function dependency_order_uuids(env::EnvCache, uuids::Vector{UUID})::Dict{UUID,I
     k::Int = 0
     function visit(uuid::UUID)
         uuid in seen &&
-            return warn("Dependency graph not a DAG, linearizing anyway")
+            return @warn("Dependency graph not a DAG, linearizing anyway")
         haskey(order, uuid) && return
         push!(seen, uuid)
         info = manifest_info(env, uuid)
@@ -489,7 +488,7 @@ end
 
 function build_versions(env::EnvCache, uuids::Vector{UUID})
     # collect builds for UUIDs with `deps/build.jl` files
-    env.preview[] && (info("Skipping building in preview mode"); return)
+    env.preview[] && (@info "Skipping building in preview mode"; return)
     builds = Tuple{UUID,String,SHA1,String}[]
     for uuid in uuids
         info = manifest_info(env, uuid)
@@ -507,14 +506,15 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
     sort!(builds, by = build -> order[first(build)])
     # build each package verions in a child process
     withenv("JULIA_ENV" => env.project_file) do
-        LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
         for (uuid, name, hash, build_file) in builds
             log_file = splitext(build_file)[1] * ".log"
-            Base.info("Building $name [$(string(hash)[1:16])]...")
-            Base.info(" → $log_file")
+            @info "Building $name [$(string(hash)[1:16])]..."
+            @info " → $log_file"
             code = """
                 empty!(Base.LOAD_PATH)
-                append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+                append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+                empty!(Base.DEPOT_PATH)
+                append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
                 empty!(Base.LOAD_CACHE_PATH)
                 append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
                 empty!(Base.DL_LOAD_PATH)
@@ -532,7 +532,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
             open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
             end ? Base.rm(log_file, force=true) :
-            warn("Error building `$name`; see log file for further info")
+            @warn("Error building `$name`; see log file for further info")
         end
     end
     return
@@ -548,7 +548,7 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
             pkg.uuid in drop || push!(drop, pkg.uuid)
         else
             str = has_name(pkg) ? pkg.name : string(pkg.uuid)
-            warn("`$str` not in manifest, ignoring")
+            @warn("`$str` not in manifest, ignoring")
         end
     end
     # drop reverse dependencies
@@ -569,7 +569,8 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
     for pkg in pkgs
         pkg.mode == :project || continue
         found = false
-        for (name::String, uuid::UUID) in env.project["deps"]
+        for (name::String, uuidstr::String) in env.project["deps"]
+            uuid = UUID(uuidstr)
             has_name(pkg) && pkg.name == name ||
             has_uuid(pkg) && pkg.uuid == uuid || continue
             !has_name(pkg) || pkg.name == name ||
@@ -582,22 +583,15 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
         end
         found && continue
         str = has_name(pkg) ? pkg.name : string(pkg.uuid)
-        warn("`$str` not in project, ignoring")
+        @warn("`$str` not in project, ignoring")
     end
     # delete drops from project
     n = length(env.project["deps"])
-    if VERSION < v"0.7.0-DEV.1393"
-        filter!(env.project["deps"]) do _, uuid
-            UUID(uuid) ∉ drop
-        end
-    else
-        filter!(env.project["deps"]) do _uuid # (_, uuid) doesn't parse on 0.6
-            _, uuid = _uuid
-            UUID(uuid) ∉ drop
-        end
+    filter!(env.project["deps"]) do (_, uuid)
+        UUID(uuid) ∉ drop
     end
     if length(env.project["deps"]) == n
-        info("No changes")
+        @info "No changes"
         return
     end
     # only keep reachable manifest entires
@@ -618,7 +612,8 @@ function add(env::EnvCache, pkgs::Vector{PackageSpec})
     # if a package is in the project file and
     # the manifest version in the specified version set
     # then leave the package as is at the installed version
-    for (name::String, uuid::UUID) in env.project["deps"]
+    for (name::String, uuidstr::String) in env.project["deps"]
+        uuid = UUID(uuidstr)
         info = manifest_info(env, uuid)
         info != nothing && haskey(info, "version") || continue
         version = VersionNumber(info["version"])
@@ -682,9 +677,9 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false)
 
     pkgs_errored = []
     for (pkg, testfile, version_path) in zip(pkgs, testfiles, version_paths)
-        info("Testing $(pkg.name) located at $version_path")
+        @info("Testing $(pkg.name) located at $version_path")
         if env.preview[]
-            info("In preview mode, skipping tests for $(pkg.name)")
+            @info("In preview mode, skipping tests for $(pkg.name)")
             continue
         end
         # TODO, cd to test folder (need to be careful with getting the same EnvCache
@@ -705,7 +700,7 @@ function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false)
         ```
         try
             run(cmd)
-            info("$(pkg.name) tests passed")
+            @info("$(pkg.name) tests passed")
         catch err
             push!(pkgs_errored, pkg.name)
         end
@@ -730,7 +725,7 @@ function init(path::String)
     mkpath(path)
     isfile(joinpath(path, "Project.toml")) && cmderror("Environment already initialized at $path")
     touch(joinpath(path, "Project.toml"))
-    info("Initialized environment in $path by creating the file Project.toml")
+    @info("Initialized environment in $path by creating the file Project.toml")
 end
 
 end # module

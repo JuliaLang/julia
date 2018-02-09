@@ -1,10 +1,10 @@
+# Content in this file is extracted from BinaryProvider.jl, see LICENSE.method
+
+module BinaryProvider
+
 # In this file, we setup the `gen_download_cmd()`, `gen_unpack_cmd()` and
 # `gen_package_cmd()` functions by providing methods to probe the environment
 # and determine the most appropriate platform binaries to call.
-
-export gen_download_cmd, gen_unpack_cmd, gen_package_cmd, gen_list_tarball_cmd,
-       parse_tarball_listing, gen_sh_cmd, parse_7z_list, parse_tar_list,
-       download_verify_unpack, download_verify, unpack
 
 """
 `gen_download_cmd(url::AbstractString, out_path::AbstractString)`
@@ -87,12 +87,12 @@ Returns `true` if the given command executes successfully, `false` otherwise.
 """
 function probe_cmd(cmd::Cmd; verbose::Bool = false)
     if verbose
-        info("Probing $(cmd.exec[1]) as a possibility...")
+        @info("Probing $(cmd.exec[1]) as a possibility...")
     end
     try
         success(cmd)
         if verbose
-            info("  Probe successful for $(cmd.exec[1])")
+            @info("  Probe successful for $(cmd.exec[1])")
         end
         return true
     catch
@@ -185,7 +185,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     ]
 
     # For windows, we need to tweak a few things, as the tools available differ
-    @static if iswindows()
+    @static if Sys.iswindows()
         # For download engines, we will most likely want to use powershell.
         # Let's generate a functor to return the necessary powershell magics
         # to download a file, given a path to the powershell executable
@@ -197,7 +197,7 @@ function probe_platform_engines!(;verbose::Bool = false)
                 \$webclient = (New-Object System.Net.Webclient);
                 \$webclient.DownloadFile(\"$url\", \"$path\")
                 """
-                replace(webclient_code, "\n", " ")
+                replace(webclient_code, "\n" => " ")
                 return `$psh_path -NoProfile -Command "$webclient_code"`
             end
         end
@@ -261,7 +261,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     sh_found = false
 
     if verbose
-        info("Probing for download engine...")
+        @info("Probing for download engine...")
     end
 
     # Search for a download engine
@@ -272,14 +272,14 @@ function probe_platform_engines!(;verbose::Bool = false)
             download_found = true
 
             if verbose
-                info("Found download engine $(test.exec[1])")
+                @info("Found download engine $(test.exec[1])")
             end
             break
         end
     end
 
     if verbose
-        info("Probing for compression engine...")
+        @info("Probing for compression engine...")
     end
 
     # Search for a compression engine
@@ -292,7 +292,7 @@ function probe_platform_engines!(;verbose::Bool = false)
             parse_tarball_listing = parse
 
             if verbose
-                info("Found compression engine $(test.exec[1])")
+                @info("Found compression engine $(test.exec[1])")
             end
 
             compression_found = true
@@ -301,14 +301,14 @@ function probe_platform_engines!(;verbose::Bool = false)
     end
 
     if verbose
-        info("Probing for sh engine...")
+        @info("Probing for sh engine...")
     end
 
     for path in sh_engines
         if probe_cmd(`$path --help`; verbose=verbose)
             gen_sh_cmd = (cmd) -> `$path -c $cmd`
             if verbose
-                info("Found sh engine $(path.exec[1])")
+                @info("Found sh engine $(path.exec[1])")
             end
             sh_found = true
             break
@@ -405,138 +405,4 @@ function parse_tar_list(output::AbstractString)
     return lines
 end
 
-"""
-    download(url::AbstractString, dest::AbstractString;
-             verbose::Bool = false)
-
-Download file located at `url`, store it at `dest`, continuing if `dest`
-already exists and the server and download engine support it.
-"""
-function download(url::AbstractString, dest::AbstractString;
-                  verbose::Bool = false)
-    download_cmd = gen_download_cmd(url, dest)
-    if verbose
-        info("Downloading $(url) to $(dest)...")
-    end
-    oc = OutputCollector(download_cmd; verbose=verbose)
-    try
-        if !wait(oc)
-            error()
-        end
-    catch
-        error("Could not download $(url) to $(dest)")
-    end
-end
-
-"""
-    download_verify(url::AbstractString, hash::AbstractString;
-                    verbose::Bool = false, force::Bool = false)
-
-Download file located at `url`, verify it matches the given `hash`, and throw
-an error if anything goes wrong.  If `dest` already exists, just verify it. If
-`force` is set to `true`, overwrite the given file if it exists but does not
-match the given `hash`.
-"""
-function download_verify(url::AbstractString, hash::AbstractString,
-                         dest::AbstractString; verbose::Bool = false,
-                         force::Bool = false)
-    # Whether the file existed in the first place
-    file_existed = false
-
-    if isfile(dest)
-        file_existed = true
-        if verbose
-            info("Destination file $(dest) already exists, verifying...")
-        end
-
-        # verify download, if it passes, return happy.  If it fails, (and
-        # `force` is `true`, re-download!)
-        try
-            verify(dest, hash; verbose=verbose)
-            return true
-        catch
-            if !force
-                rethrow()
-            end
-            if verbose
-                info("Verification failed, re-downloading...")
-            end
-        end
-    end
-
-    # Download the file, optionally continuing
-    download(url, dest; verbose=verbose)
-
-    # If it worked, then yay!
-    try
-        return verify(dest, hash; verbose=verbose)
-    catch
-        # If the file already existed, it's possible the initially downloaded chunk
-        # was bad.  If verification fails after downloading, auto-delete the file
-        # and start over from scratch.
-        if file_existed
-            if verbose
-                msg = strip("""
-                Continued download did not yield change in file size, restarting
-                from scratch...""")
-                info(msg)
-            end
-            rm(dest; force=true)
-
-            # Download and verify from scratch
-            download(url, dest; verbose=verbose)
-            return verify(dest, hash; verbose=verbose)
-        else
-            # If it didn't verify properly and we didn't resume, something is
-            # very wrong and we must complain mightily.
-            rethrow()
-        end
-    end
-end
-
-"""
-`unpack(tarball_path::AbstractString, dest::AbstractString;
-        verbose::Bool = false)`
-
-Unpack tarball located at file `tarball_path` into directory `dest`.
-"""
-function unpack(tarball_path::AbstractString, dest::AbstractString;
-                verbose::Bool = false)
-    # unpack into dest
-    try mkpath(dest) end
-    oc = OutputCollector(gen_unpack_cmd(tarball_path, dest); verbose=verbose)
-    try 
-        if !wait(oc)
-            error()
-        end
-    catch
-        error("Could not unpack $(tarball_path) into $(dest)")
-    end
-end
-
-
-"""
-`download_verify_unpack(url::AbstractString, hash::AbstractString,
-                        dest::AbstractString; verbose::Bool = false)`
-
-Helper method to download tarball located at `url`, verify it matches the
-given `hash`, then unpack it into folder `dest`.  In general, the method
-`install()` should be used to download and install tarballs into a `Prefix`;
-this method should only be used if the extra functionality of `install()` is
-undesired.
-"""
-function download_verify_unpack(url::AbstractString,
-                                hash::AbstractString,
-                                dest::AbstractString;
-                                verbose::Bool = false)
-    # First, download tarball to temporary path and verify it
-    tarball_path = "$(tempname())-download.tar.gz"
-    download_verify(url, hash, tarball_path)
-
-    try
-        unpack(tarball_path, dest; verbose=verbose)
-    finally
-        # Clear out the tarball path no matter what
-        rm(tarball_path)
-    end
 end

@@ -1,3 +1,0 @@
-# LibFoo.jl
-
-Example Julia Package, showing off how to install binaries provided through `BinaryProvider.jl`.  Look at `deps/build.jl` for an example of how to download and install binaries, then generate a `deps/deps.jl` file that contains the paths to desired binary objects.  Look at `src/LibFoo.jl` for an example of how to load the `deps/deps.jl` file, and how to use the binary objects stored within.

@@ -1,17 +1,12 @@
 module TOML
-
-    if Base.isdeprecated(Base, :Dates)
-        using Dates
-    else
-        using Base.Dates
-    end
+    using Dates
 
     include("parser.jl")
     include("print.jl")
 
     "Convert `TOML.Table` to `Dict{String,Any}`"
-    function table2dict(tbl::Nullable{Table})
-        isnull(tbl) && return Dict{String,Any}()
+    function table2dict(tbl::Union{Nothing,Table})
+        tbl == nothing && return Dict{String,Any}()
         return table2dict(get(tbl))
     end
 

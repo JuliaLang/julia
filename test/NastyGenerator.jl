@@ -1,5 +1,7 @@
 module NastyGenerator
 
+using Random
+
 pn(i) = "P$i"
 randvers(k::Int) = VersionNumber(rand(0:k), rand(0:k), rand(0:k))
 
@@ -34,7 +36,7 @@ function generate_nasty(n::Int,             # size of planted solutions
                         sat::Bool = true    # create a satisfiable problem?
                        )
     @assert m ≥ n
-    d ≤ m-1 || warn("d=$d, should be ≤ m-1=$(m-1)")
+    d ≤ m-1 || @warn "d=$d, should be ≤ m-1=$(m-1)"
 
     srand(seed)
 
