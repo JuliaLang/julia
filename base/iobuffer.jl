@@ -108,7 +108,7 @@ function IOBuffer(;
         truncate::Union{Bool,Nothing}=true,
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
-    size = maxsize != typemax(Int) ? Int(maxsize) : sizehint !== nothing ? Int(sizehint) : 32
+    size = sizehint !== nothing ? Int(sizehint) : maxsize != typemax(Int) ? Int(maxsize) : 32
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = IOBuffer(
         StringVector(size),
