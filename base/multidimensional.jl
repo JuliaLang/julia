@@ -1467,7 +1467,7 @@ function broadcast!(::typeof(identity), V::SubArray{<:Any,<:Any,<:BitArray,<:Tup
     l0 == 0 && return B
     f0 = indexoffset(I0)+1
     copy_to_bitarray_chunks!(B.chunks, f0, X, 1, l0)
-    return B
+    return V
 end
 @generated function broadcast!(::typeof(identity),
         V::SubArray{<:Any,<:Any,<:BitArray,VI}, X::Union{StridedArray,BitArray}) where
@@ -1504,7 +1504,7 @@ end
                     refind += l0
                 end)
 
-        return B
+        return V
     end
 end
 
