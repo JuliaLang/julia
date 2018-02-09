@@ -5005,7 +5005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
 },
 
 {
@@ -7621,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -17289,9 +17289,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra/#LinearAlgebra.peakflops",
+    "location": "stdlib/LinearAlgebra/#Base.peakflops",
     "page": "Linear Algebra",
-    "title": "LinearAlgebra.peakflops",
+    "title": "Base.peakflops",
     "category": "Function",
     "text": "peakflops(n::Integer=2000; parallel::Bool=false)\n\npeakflops computes the peak flop rate of the computer by using double precision gemm!. By default, if no arguments are specified, it multiplies a matrix of size n x n, where n = 2000. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with BLAS.set_num_threads(n).\n\nIf the keyword argument parallel is set to true, peakflops is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument n still refers to the size of the problem that is solved on each processor.\n\n\n\n\n\n"
 },
