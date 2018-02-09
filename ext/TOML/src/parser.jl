@@ -40,7 +40,7 @@ end
 mutable struct Parser{IO_T <: IO}
     input::IO_T
     errors::Vector{ParserError}
-    charbuffer::Base.AbstractIOBuffer{Array{UInt8,1}}
+    charbuffer::Base.GenericIOBuffer{Array{UInt8,1}}
     currentchar::Char
 
     Parser(input::IO_T) where {IO_T <: IO}  = new{IO_T}(input, ParserError[], IOBuffer(), ' ')
