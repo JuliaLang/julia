@@ -1,16 +1,5 @@
 #!/usr/bin/env julia
 
-function write_toml(f::Function, names::String...)
-    path = joinpath(names...) * ".toml"
-    mkpath(dirname(path))
-    open(path, "w") do io
-        f(io)
-    end
-end
-
-toml_key(str::String) = contains(str, r"[^\w-]") ? repr(str) : str
-toml_key(strs::String...) = join(map(toml_key, [strs...]), '.')
-
 prefix = joinpath(homedir(), ".julia", "registries", "Uncurated")
 
 write_toml(prefix, "registry") do io
@@ -42,11 +31,35 @@ for (pkg, p) in pkgs
     push!(get!(buckets, bucket, []), (pkg, p))
 end
 
-include("utils.jl")
-include("sha1map.jl")
-const trees = sha1map(pkgs)
+const trees, stdlibs = gitmeta(pkgs)
+
+for pkg in STDLIBS
+    tree = stdlib_trees[pkg]
+    deps = Dict(dep => Require(VersionInterval()) for dep in stdlib_deps[pkg])
+    pkgs[pkg] = Package(
+        UUID(stdlib_uuids[pkg]),
+        "https://github.com/JuliaLang/julia.git",
+        Dict(VersionNumber(0,7,0,("DEV",),("r"*tree[1:8],)) => Version(tree, deps)),
+    )
+end
+
+for (pkg, p) in pkgs
+    uuid = string(p.uuid)
+    haskey(stdlibs, uuid) || continue
+    for (ver, v) in p.versions
+        n = get(stdlibs[uuid], v.sha1, 0)
+        n == 0 && continue
+        for lib in STDLIBS
+            if n & 1 != 0
+                v.requires[lib] = Require(VersionInterval())
+            end
+            n >>>= 1
+        end
+    end
+end
 
 for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
+    haskey(stdlibs, pkg) && continue
     url = p.url
     uuid = string(p.uuid)
     startswith(url, "git://github.com") && (url = "https"*url[4:end])

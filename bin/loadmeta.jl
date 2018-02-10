@@ -144,5 +144,13 @@ end
 ## Load package data ##
 
 const pkgs = load_packages(Pkg2.dir("METADATA"))
-delete!(pkgs, "CardinalDicts") # package repo no longer exists
+# delete packages whose repos that no longer exist:
+for pkg in [
+    "CardinalDicts"
+    "CreateMacrosFrom"
+    "GSDicts"
+    "S3Dicts"
+]
+    delete!(pkgs, pkg)
+end
 prune!(pkgs)

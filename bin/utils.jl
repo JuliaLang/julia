@@ -103,3 +103,16 @@ end
 
 flatten_keys(d::Dict{Vector{K},V}) where {K,V} =
     isempty(d) ? Dict{K,V}() : Dict{K,V}(k => v for (ks, v) in d for k in ks)
+
+## TOML generation functions ##
+
+function write_toml(f::Function, names::String...)
+    path = joinpath(names...) * ".toml"
+    mkpath(dirname(path))
+    open(path, "w") do io
+        f(io)
+    end
+end
+
+toml_key(str::String) = contains(str, r"[^\w-]") ? repr(str) : str
+toml_key(strs::String...) = join(map(toml_key, [strs...]), '.')
