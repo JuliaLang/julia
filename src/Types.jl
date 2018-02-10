@@ -960,7 +960,14 @@ function registered_uuid(env::EnvCache, name::String)::UUID
     for uuid in uuids
         values = registered_info(env, uuid, "repo")
         for value in values
-            push!(choices, "Registry: $(basename(dirname(dirname(value[1])))) - Path: $(value[2])")
+            depot = "(unknown)"
+            for d in depots()
+                r = joinpath(d, "registries")
+                startswith(value[1], r) || continue
+                depot = split(relpath(value[1], r), Base.Filesystem.path_separator_re)[1]
+                break
+            end
+            push!(choices, "Registry: $depot - Path: $(value[2])")
             push!(choices_cache, (uuid, value[1]))
         end
     end
