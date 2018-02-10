@@ -1161,8 +1161,8 @@ end
 # optimized unsafe_copyto! method that acts upon the `Array` themselves
 _arrayparentoffset(::Array) = 1
 _arrayparentoffset(S::FastContiguousSubArray{<:Any,<:Any,<:Array}) = S.offset1+1
-function copyto!(dest::Union{Array{T,N}, FastContiguousSubArray{T,N,<:Array}},
-                 src::Union{Array{T,N}, FastContiguousSubArray{T,N,<:Array}}) where {T,N}
+function copyto!(dest::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}},
+                 src::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}}) where {T}
     checkbounds(dest, axes(src)...)
     return unsafe_copyto!(parent(dest), _arrayparentoffset(dest),
                           parent(src), _arrayparentoffset(src), length(src))
