@@ -876,8 +876,6 @@ export
     istextmime,
     MIME,
     @MIME_str,
-    reprmime,
-    stringmime,
     mimewritable,
     popdisplay,
     pushdisplay,

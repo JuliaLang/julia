@@ -94,8 +94,7 @@ Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
 Base.Multimedia.mimewritable
-Base.Multimedia.reprmime
-Base.Multimedia.stringmime
+Base.repr(::Any, ::Any)
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display
@@ -105,8 +104,9 @@ types with PNG representations will automatically display the image using the mo
 In order to define a new display backend, one should first create a subtype `D` of the abstract
 class `AbstractDisplay`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
-usually by calling [`reprmime(mime, x)`](@ref).  A `MethodError` should be thrown if `x` cannot be displayed
-as that MIME type; this is automatic if one calls [`reprmime`](@ref). Finally, one should define a function
+usually by calling [`show(io, mime, x)`](@ref) or [`repr(io, mime, x)`](@ref).
+A `MethodError` should be thrown if `x` cannot be displayed
+as that MIME type; this is automatic if one calls `show` or `repr`. Finally, one should define a function
 `display(d::D, x)` that queries [`mimewritable(mime, x)`](@ref) for the `mime` types supported by `D`
 and displays the "best" one; a `MethodError` should be thrown if no supported MIME types are found
 for `x`.  Similarly, some subtypes may wish to override [`redisplay(d::D, ...)`](@ref Base.Multimedia.redisplay). (Again, one should

@@ -137,8 +137,8 @@ end
 @test repr(apple) == "apple::$(string(Fruit)) = 0"
 @test string(apple) == "apple"
 
-@test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test reprmime("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+@test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
+@test repr("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
 let io = IOBuffer()
     ioc = IOContext(io, :compact=>false)
     show(io, Fruit)

@@ -3,7 +3,7 @@
 module Multimedia
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
-    MIME, @MIME_str, reprmime, stringmime, istextmime,
+    MIME, @MIME_str, istextmime,
     mimewritable, TextDisplay
 
 ###########################################################################
@@ -15,8 +15,7 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # struct MIME{mime} end
 # macro MIME_str(s)
 import Base: MIME, @MIME_str
-import Base64
-import Base: show, print, string, convert
+import Base: show, print, string, convert, repr
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
@@ -79,59 +78,73 @@ show(stream, mime, x)
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
-verbose_show(io, m, x) = show(IOContext(io, :limit => false), m, x)
-
 """
-    reprmime(mime, x)
+    repr(mime, x, context::Pair{Symbol}...)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
-`x` in the requested `mime` type, as written by [`show`](@ref) (throwing a
+`x` in the requested `mime` type, as written by [`show(io, mime, x)`](@ref) (throwing a
 [`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
 `"application/postscript"`), whereas binary data is returned as
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
 
+If `context` pairs are given, the IO buffer used to capture `show` output
+is wrapped in an [`IOContext`](@ref) object with those context pairs.
+
 As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
-`Vector{UInt8}` (for binary MIME types), the `reprmime` function assumes that
+`Vector{UInt8}` (for binary MIME types), the `repr` function assumes that
 `x` is already in the requested `mime` format and simply returns `x`. This
 special case does not apply to the `"text/plain"` MIME type. This is useful so
 that raw data can be passed to `display(m::MIME, x)`.
+
+In particular, `repr("text/plain", x)` is typically a "pretty-printed" version
+of `x` designed for human consumption.  See also [`repr(x)`](@ref) to instead
+return a string corresponding to [`show(x)`](@ref) that may be closer to how
+the value of `x` would be entered in Julia.
 
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
 
-julia> reprmime("text/plain", A)
+julia> repr("text/plain", A)
 "2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
 ```
 """
-reprmime(m::MIME, x) = istextmime(m) ? _textreprmime(m, x) : _binreprmime(m, x)
+repr(m::MIME, x, context::Pair{Symbol}...) = istextmime(m) ? _textrepr(m, x, context...) : _binrepr(m, x, context...)
+repr(m::AbstractString, x, context::Pair{Symbol}...) = repr(MIME(m), x, context...)
 
 # strings are shown escaped for text/plain
-_textreprmime(m::MIME, x) = sprint(verbose_show, m, x)
-_textreprmime(::MIME, x::AbstractString) = x
-_textreprmime(m::MIME"text/plain", x::AbstractString) =
-    sprint(verbose_show, m, x)
-
-function _binreprmime(m::MIME, x)
+_textrepr(m::MIME, x) = sprint(show, m, x)
+_textrepr(::MIME, x::AbstractString, context::Pair{Symbol}...) = x
+_textrepr(m::MIME"text/plain", x::AbstractString) =
+    sprint(show, m, x)
+function _textrepr(m::MIME"text/plain", x, context::Pair{Symbol}...)
     s = IOBuffer()
-    verbose_show(s, m, x)
+    show(IOContext(s, context...), m, x)
+    String(take!(s))
+end
+
+function _binrepr(m::MIME, x)
+    s = IOBuffer()
+    show(s, m, x)
     take!(s)
 end
-_binreprmime(m::MIME, x::Vector{UInt8}) = x
+function _binrepr(m::MIME, x, context::Pair{Symbol}...)
+    s = IOBuffer()
+    show(IOContext(s, context...), m, x)
+    take!(s)
+end
+_binrepr(m::MIME, x::Vector{UInt8}, context::Pair{Symbol}...) = x
 
-"""
-    stringmime(mime, x)
+# resolve method ambiguities with repr(x, context...):
+repr(m::MIME, x::Pair{Symbol}, context::Pair{Symbol}...) = istextmime(m) ? _textrepr(m, x, context...) : _binrepr(m, x, context...)
+function repr(x::AbstractString, c::Pair{Symbol}, context::Pair{Symbol}...)
+    s = IOBuffer()
+    show(IOContext(s, c, context...), x)
+    String(take!(s))
+end
 
-Returns an `AbstractString` containing the representation of `x` in the
-requested `mime` type. This is similar to [`reprmime`](@ref) except
-that binary data is base64-encoded as an ASCII string.
-"""
-stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
-
-_binstringmime(m::MIME, x) = Base64.base64encode(verbose_show, m, x)
-_binstringmime(m::MIME, x::Vector{UInt8}) = Base64.base64encode(write, x)
 
 """
     istextmime(m::MIME)
@@ -149,11 +162,7 @@ false
 ```
 """
 istextmime(m::MIME) = startswith(string(m), "text/")
-
-# it is convenient to accept strings instead of ::MIME
 istextmime(m::AbstractString) = istextmime(MIME(m))
-reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
-stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
 for mime in ["application/atom+xml", "application/ecmascript",
              "application/javascript", "application/julia",
@@ -169,7 +178,7 @@ end
 # We have an abstract AbstractDisplay class that can be subclassed in order to
 # define new rich-display output devices.  A typical subclass should
 # overload display(d::AbstractDisplay, m::MIME, x) for supported MIME types m,
-# (typically using reprmime or stringmime to get the MIME
+# (typically using show, repr, ..., to get the MIME
 # representation of x) and should also overload display(d::AbstractDisplay, x)
 # to display x in whatever MIME type is preferred by the AbstractDisplay and
 # is writable by x.  display(..., x) should throw a MethodError if x

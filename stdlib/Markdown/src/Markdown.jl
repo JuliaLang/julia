@@ -6,6 +6,7 @@ Tools for working with the Markdown file format. Mainly for documentation.
 module Markdown
 
 import Base: show, ==, with_output_color
+using Base64: stringmime
 
 include(joinpath("parse", "config.jl"))
 include(joinpath("parse", "util.jl"))

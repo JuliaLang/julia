@@ -152,7 +152,12 @@ end
 
 Create a string from any value using the [`show`](@ref) function.
 If context pairs are given, the IO buffer used to capture `show` output
-is wrapped in an `IOContext` object with those context pairs.
+is wrapped in an [`IOContext`](@ref) object with those context pairs.
+
+In particular, `repr(x)` is usually similar to how the value of `x` would
+be entered in Julia.  See also [`repr("text/plain", x)`](@ref) to instead
+return a "pretty-printed" version of `x` designed more for human consumption,
+equivalent to the REPL display of `x`.
 
 # Examples
 ```jldoctest
