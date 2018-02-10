@@ -85,9 +85,6 @@ end
     @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 end
 
-# test show() function for UDPSocket()
-@test repr(UDPSocket()) == "UDPSocket(init)"
-
 defaultport = rand(2000:4000)
 @testset "writing to/reading from a socket, getsockname and getpeername" begin
     for testport in [0, defaultport]
@@ -227,6 +224,8 @@ end
 @test_throws Base.DNSError connect(".invalid", 80)
 
 @testset "UDPSocket" begin
+    # test show() function for UDPSocket()
+    @test repr(UDPSocket()) == "UDPSocket(init)"
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"127.0.0.1", randport)
