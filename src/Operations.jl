@@ -416,6 +416,7 @@ end
 
 # install & update manifest
 function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
+    BinaryProvider.probe_platform_engines!()
     names, hashes, urls = version_data(env, pkgs)
     new_versions = UUID[]
 

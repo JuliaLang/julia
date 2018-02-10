@@ -100,6 +100,8 @@ function probe_cmd(cmd::Cmd; verbose::Bool = false)
     end
 end
 
+already_probed = false
+
 """
 `probe_platform_engines!(;verbose::Bool = false)`
 
@@ -131,9 +133,10 @@ will be printed and the typical searching will be performed.
 If `verbose` is `true`, print out the various engines as they are searched.
 """
 function probe_platform_engines!(;verbose::Bool = false)
+    global already_probed
     global gen_download_cmd, gen_list_tarball_cmd, gen_package_cmd
     global gen_unpack_cmd, parse_tarball_listing, gen_sh_cmd
-
+    already_probed && return
     # download_engines is a list of (test_cmd, download_opts_functor)
     # The probulator will check each of them by attempting to run `$test_cmd`,
     # and if that works, will set the global download functions appropriately.
@@ -340,6 +343,7 @@ function probe_platform_engines!(;verbose::Bool = false)
     if !download_found || !compression_found || !sh_found
         error(errmsg)
     end
+    already_probed = true
 end
 
 """

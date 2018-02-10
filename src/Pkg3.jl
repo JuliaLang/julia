@@ -35,7 +35,6 @@ import .API: add, rm, up, test, gc, init, build, installed
 const update = up
 
 function __init__()
-    BinaryProvider.probe_platform_engines!()
     if isdefined(Base, :active_repl)
         REPLMode.repl_init(Base.active_repl)
     else
