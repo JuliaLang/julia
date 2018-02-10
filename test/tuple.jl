@@ -192,6 +192,9 @@ end
     @test promote_type(Tuple{Int,Float64}, Tuple{Float64,Int}) === Tuple{Real,Real}
     @test promote_type(Tuple{Int,String}, Tuple{Float64,Int}) === Tuple{Real,Any}
 
+    @test promote_type(Tuple{Any}, Tuple{Int}) === Tuple{Any}
+    @test promote_type(Tuple{Any,Any}, Tuple{Float64,Int}) === Tuple{Any,Any}
+
     for T in (Nothing, Missing)
         @test promote_type(Tuple{Int}, Tuple{T}) === Tuple{Union{T,Int}}
         @test promote_type(Tuple{Int,T}, Tuple{T,Float64}) ===

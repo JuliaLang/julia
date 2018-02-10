@@ -92,6 +92,7 @@ end
 
 # Not an actual promotion, just an improved typejoin
 promote_rule(::Type{S}, ::Type{T}) where {S<:Tuple, T<:Tuple} = promote_typejoin(S, T)
+promote_rule(::Type{NTuple{N,Any}}, ::Type{<:NTuple{N}}) where {N} = NTuple{N,Any}
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
