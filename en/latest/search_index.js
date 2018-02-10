@@ -6973,7 +6973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
 },
 
 {
@@ -7005,7 +7005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
 },
 
 {
@@ -7325,7 +7325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -7621,7 +7621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -18761,6 +18761,166 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/REPL/#",
+    "page": "The Julia REPL",
+    "title": "The Julia REPL",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/REPL/#The-Julia-REPL-1",
+    "page": "The Julia REPL",
+    "title": "The Julia REPL",
+    "category": "section",
+    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:$ julia\n               _\n   _       _ _(_)_     |  A fresh approach to technical computing\n  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org\n   _ _   _| |_  __ _   |  Type \"?help\" for help.\n  | | | | | | |/ _` |  |\n  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)\n _/ |\\__'_|_|_|\\__'_|  |  Commit c99e12c* (0 days old master)\n|__/                   |  x86_64-linux-gnu\n\njulia>To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type quit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
+},
+
+{
+    "location": "stdlib/REPL/#The-different-prompt-modes-1",
+    "page": "The Julia REPL",
+    "title": "The different prompt modes",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "stdlib/REPL/#The-Julian-mode-1",
+    "page": "The Julia REPL",
+    "title": "The Julian mode",
+    "category": "section",
+    "text": "The REPL has four main modes of operation. The first and most common is the Julian prompt. It is the default mode of operation; each new line initially starts with julia>. It is here that you can enter Julia expressions. Hitting return or enter after a complete expression has been entered will evaluate the entry and show the result of the last expression.julia> string(1 + 2)\n\"3\"There are a number useful features unique to interactive work. In addition to showing the result, the REPL also binds the result to the variable ans. A trailing semicolon on the line can be used as a flag to suppress showing the result.julia> string(3 * 4);\n\njulia> ans\n\"12\"In Julia mode, the REPL supports something called prompt pasting. This activates when pasting text that starts with julia>  into the REPL. In that case, only expressions starting with julia>  are parsed, others are removed. This makes it is possible to paste a chunk of code that has been copied from a REPL session without having to scrub away prompts and outputs. This feature is enabled by default but can be disabled or enabled at will with Base.REPL.enable_promptpaste(::Bool). If it is enabled, you can try it out by pasting the code block above this paragraph straight into the REPL. This feature does not work on the standard Windows command prompt due to its limitation at detecting when a paste occurs."
+},
+
+{
+    "location": "stdlib/REPL/#Help-mode-1",
+    "page": "The Julia REPL",
+    "title": "Help mode",
+    "category": "section",
+    "text": "When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing ?. Julia will attempt to print help or documentation for anything entered in help mode:julia> ? # upon typing ?, the prompt changes (in place) to: help?>\n\nhelp?> string\nsearch: string String stringmime Cstring Cwstring RevString randstring bytestring SubString\n\n  string(xs...)\n\n  Create a string from any values using the print function.Macros, types and variables can also be queried:help?> @time\n  @time\n\n  A macro to execute an expression, printing the time it took to execute, the number of allocations,\n  and the total number of bytes its execution caused to be allocated, before returning the value of the\n  expression.\n\n  See also @timev, @timed, @elapsed, and @allocated.\n\nhelp?> Int32\nsearch: Int32 UInt32\n\n  Int32 <: Signed\n\n  32-bit signed integer type.Help mode can be exited by pressing backspace at the beginning of the line."
+},
+
+{
+    "location": "stdlib/REPL/#man-shell-mode-1",
+    "page": "The Julia REPL",
+    "title": "Shell mode",
+    "category": "section",
+    "text": "Just as help mode is useful for quick access to documentation, another common task is to use the system shell to execute system commands. Just as ? entered help mode when at the beginning of the line, a semicolon (;) will enter the shell mode. And it can be exited by pressing backspace at the beginning of the line.julia> ; # upon typing ;, the prompt changes (in place) to: shell>\n\nshell> echo hello\nhello"
+},
+
+{
+    "location": "stdlib/REPL/#Search-modes-1",
+    "page": "The Julia REPL",
+    "title": "Search modes",
+    "category": "section",
+    "text": "In all of the above modes, the executed lines get saved to a history file, which can be searched.  To initiate an incremental search through the previous history, type ^R – the control key together with the r key. The prompt will change to (reverse-i-search)`':, and as you type the search query will appear in the quotes. The most recent result that matches the query will dynamically update to the right of the colon as more is typed. To find an older result using the same query, simply type ^R again.Just as ^R is a reverse search, ^S is a forward search, with the prompt (i-search)`':.  The two may be used in conjunction with each other to move through the previous or next matching results, respectively."
+},
+
+{
+    "location": "stdlib/REPL/#Key-bindings-1",
+    "page": "The Julia REPL",
+    "title": "Key bindings",
+    "category": "section",
+    "text": "The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced above (^D to exit, ^R and ^S for searching), but there are many more. In addition to the control-key, there are also meta-key bindings. These vary more by platform, but most terminals default to using alt- or option- held down with a key to send the meta-key (or can be configured to do so).Keybinding Description\nProgram control  \n^D Exit (when buffer is empty)\n^C Interrupt or cancel\n^L Clear console screen\nReturn/Enter, ^J New line, executing if it is complete\nmeta-Return/Enter Insert new line without executing it\n? or ; Enter help or shell mode (when at start of a line)\n^R, ^S Incremental history search, described above\nCursor movement  \nRight arrow, ^F Move right one character\nLeft arrow, ^B Move left one character\nctrl-Right, meta-F Move right one word\nctrl-Left, meta-B Move left one word\nHome, ^A Move to beginning of line\nEnd, ^E Move to end of line\nUp arrow, ^P Move up one line (or change to the previous history entry that matches the text before the cursor)\nDown arrow, ^N Move down one line (or change to the next history entry that matches the text before the cursor)\nShift-Arrow Key Move cursor according to the direction of the Arrow key, while activating the region (\"shift selection\")\nPage-up, meta-P Change to the previous history entry\nPage-down, meta-N Change to the next history entry\nmeta-< Change to the first history entry (of the current session if it is before the current position in history)\nmeta-> Change to the last history entry\n^-Space Set the \"mark\" in the editing region (and de-activate the region if it's active)\n^-Space ^-Space Set the \"mark\" in the editing region and make the region \"active\", i.e. highlighted\n^G De-activate the region (i.e. make it not highlighted)\n^X^X Exchange the current position with the mark\nEditing  \nBackspace, ^H Delete the previous character, or the whole region when it's active\nDelete, ^D Forward delete one character (when buffer has text)\nmeta-Backspace Delete the previous word\nmeta-d Forward delete the next word\n^W Delete previous text up to the nearest whitespace\nmeta-w Copy the current region in the kill ring\nmeta-W \"Kill\" the current region, placing the text in the kill ring\n^K \"Kill\" to end of line, placing the text in the kill ring\n^Y \"Yank\" insert the text from the kill ring\nmeta-y Replace a previously yanked text with an older entry from the kill ring\n^T Transpose the characters about the cursor\nmeta-Up arrow Transpose current line with line above\nmeta-Down arrow Transpose current line with line below\nmeta-u Change the next word to uppercase\nmeta-c Change the next word to titlecase\nmeta-l Change the next word to lowercase\n^/, ^_ Undo previous editing action\n^Q Write a number in REPL and press ^Q to open editor at corresponding stackframe or method\nmeta-Left Arrow indent the current line on the left\nmeta-Right Arrow indent the current line on the right"
+},
+
+{
+    "location": "stdlib/REPL/#Customizing-keybindings-1",
+    "page": "The Julia REPL",
+    "title": "Customizing keybindings",
+    "category": "section",
+    "text": "Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to REPL.setup_interface. The keys of this dictionary may be characters or strings. The key '*' refers to the default action. Control plus character x bindings are indicated with \"^x\". Meta plus x can be written \"\\\\Mx\". The values of the custom keymap must be nothing (indicating that the input should be ignored) or functions that accept the signature (PromptState, AbstractREPL, Char). The REPL.setup_interface function must be called before the REPL is initialized, by registering the operation with atreplinit . For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in .juliarc.jl:import REPL\nimport REPL.LineEdit\n\nconst mykeys = Dict{Any,Any}(\n    # Up Arrow\n    \"\\e[A\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),\n    # Down Arrow\n    \"\\e[B\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))\n)\n\nfunction customize_keys(repl)\n    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)\nend\n\natreplinit(customize_keys)Users should refer to LineEdit.jl to discover the available actions on key input."
+},
+
+{
+    "location": "stdlib/REPL/#Tab-completion-1",
+    "page": "The Julia REPL",
+    "title": "Tab completion",
+    "category": "section",
+    "text": "In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches:julia> stri[TAB]\nstride     strides     string      stringmime  strip\n\njulia> Stri[TAB]\nStridedArray    StridedMatrix    StridedVecOrMat  StridedVector    StringThe tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents, and get a list of LaTeX matches as well:julia> \\pi[TAB]\njulia> π\nπ = 3.1415926535897...\n\njulia> e\\_1[TAB] = [1,0]\njulia> e₁ = [1,0]\n2-element Array{Int64,1}:\n 1\n 0\n\njulia> e\\^1[TAB] = [1 0]\njulia> e¹ = [1 0]\n1×2 Array{Int64,2}:\n 1  0\n\njulia> \\sqrt[TAB]2     # √ is equivalent to the sqrt function\njulia> √2\n1.4142135623730951\n\njulia> \\hbar[TAB](h) = h / 2\\pi[TAB]\njulia> ħ(h) = h / 2π\nħ (generic function with 1 method)\n\njulia> \\h[TAB]\n\\hat              \\hermitconjmatrix  \\hkswarow          \\hrectangle\n\\hatapprox        \\hexagon           \\hookleftarrow     \\hrectangleblack\n\\hbar             \\hexagonblack      \\hookrightarrow    \\hslash\n\\heartsuit        \\hksearow          \\house             \\hspace\n\njulia> α=\"\\alpha[TAB]\"   # LaTeX completion also works in strings\njulia> α=\"α\"A full list of tab-completions can be found in the Unicode Input section of the manual.Completion of paths works for strings and julia's shell mode:julia> path=\"/[TAB]\"\n.dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/\n.dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/\nshell> /[TAB]\n.dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/\n.dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/Tab completion can help with investigation of the available methods matching the input arguments:julia> max([TAB] # All methods are displayed, not shown here due to size of the list\n\njulia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument\nmax(x, y) in Base at operators.jl:215\nmax(a, b, c, xs...) in Base at operators.jl:281\n\njulia> max([1, 2], max(1, 2), [TAB] # All methods matching the arguments.\nmax(x, y) in Base at operators.jl:215\nmax(a, b, c, xs...) in Base at operators.jl:281Keywords are also displayed in the suggested methods, see second line after ; where limit and keep are keyword arguments:julia> split(\"1 1 1\", [TAB]\nsplit(str::AbstractString) in Base at strings/util.jl:302\nsplit(str::T, splitter; limit, keep) where T<:AbstractString in Base at strings/util.jl:277The completion of the methods uses type inference and can therefore see if the arguments match even if the arguments are output from functions. The function needs to be type stable for the completion to be able to remove non-matching methods.Tab completion can also help completing fields:julia> Pkg.a[TAB]\nadd       availableFields for output from functions can also be completed:julia> split(\"\",\"\")[1].[TAB]\nlastindex  offset  stringThe completion of fields for output from functions uses type inference, and it can only suggest fields if the function is type stable."
+},
+
+{
+    "location": "stdlib/REPL/#Customizing-Colors-1",
+    "page": "The Julia REPL",
+    "title": "Customizing Colors",
+    "category": "section",
+    "text": "The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia prompt you can add something like the following to your .juliarc.jl file, which is to be placed inside your home directory:function customize_colors(repl)\n    repl.prompt_color = Base.text_colors[:cyan]\nend\n\natreplinit(customize_colors)The available color keys can be seen by typing Base.text_colors in the help mode of the REPL. In addition, the integers 0 to 255 can be used as color keys for terminals with 256 color support.You can also change the colors for the help and shell prompts and input and answer text by setting the appropriate field of repl in the customize_colors function above (respectively, help_color, shell_color, input_color, and answer_color). For the latter two, be sure that the envcolors field is also set to false.It is also possible to apply boldface formatting by using Base.text_colors[:bold] as a color. For instance, to print answers in boldface font, one can use the following as a .juliarc.jl:function customize_colors(repl)\n    repl.envcolors = false\n    repl.answer_color = Base.text_colors[:bold]\nend\n\natreplinit(customize_colors)You can also customize the color used to render warning and informational messages by setting the appropriate environment variables. For instance, to render error, warning, and informational messages respectively in magenta, yellow, and cyan you can add the following to your .juliarc.jl file:ENV[\"JULIA_ERROR_COLOR\"] = :magenta\nENV[\"JULIA_WARN_COLOR\"] = :yellow\nENV[\"JULIA_INFO_COLOR\"] = :cyan"
+},
+
+{
+    "location": "stdlib/REPL/#TerminalMenus-1",
+    "page": "The Julia REPL",
+    "title": "TerminalMenus",
+    "category": "section",
+    "text": "TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal."
+},
+
+{
+    "location": "stdlib/REPL/#Examples-1",
+    "page": "The Julia REPL",
+    "title": "Examples",
+    "category": "section",
+    "text": "import REPL\nusing REPL.TerminalMenus\n\noptions = [\"apple\", \"orange\", \"grape\", \"strawberry\",\n            \"blueberry\", \"peach\", \"lemon\", \"lime\"]\n"
+},
+
+{
+    "location": "stdlib/REPL/#RadioMenu-1",
+    "page": "The Julia REPL",
+    "title": "RadioMenu",
+    "category": "section",
+    "text": "The RadioMenu allows the user to select one option from the list. The request function displays the interactive menu and returns the index of the selected choice. If a user presses 'q' or ctrl-c, request will return a -1.# `pagesize` is the number of items to be displayed at a time.\n#  The UI will scroll if the number of options is greater\n#   than the `pagesize`\nmenu = RadioMenu(options, pagesize=4)\n\n# `request` displays the menu and returns the index after the\n#   user has selected a choice\nchoice = request(\"Choose your favorite fruit:\", menu)\n\nif choice != -1\n    println(\"Your favorite fruit is \", options[choice], \"!\")\nelse\n    println(\"Menu canceled.\")\nend\nOutput:Choose your favorite fruit:\n^  grape\n   strawberry\n > blueberry\nv  peach\nYour favorite fruit is blueberry!"
+},
+
+{
+    "location": "stdlib/REPL/#MultiSelectMenu-1",
+    "page": "The Julia REPL",
+    "title": "MultiSelectMenu",
+    "category": "section",
+    "text": "The MultiSelectMenu allows users to select many choices from a list.# here we use the default `pagesize` 10\nmenu = MultiSelectMenu(options)\n\n# `request` returns a `Set` of selected indices\n# if the menu us canceled (ctrl-c or q), return an empty set\nchoices = request(\"Select the fruits you like:\", menu)\n\nif length(choices) > 0\n    println(\"You like the following fruits:\")\n    for i in choices\n        println(\"  - \", options[i])\n    end\nelse\n    println(\"Menu canceled.\")\nendOutput:Select the fruits you like:\n[press: d=done, a=all, n=none]\n   [ ] apple\n > [X] orange\n   [X] grape\n   [ ] strawberry\n   [ ] blueberry\n   [X] peach\n   [ ] lemon\n   [ ] lime\nYou like the following fruits:\n  - orange\n  - grape\n  - peach"
+},
+
+{
+    "location": "stdlib/REPL/#Customization-/-Configuation-1",
+    "page": "The Julia REPL",
+    "title": "Customization / Configuation",
+    "category": "section",
+    "text": "All interface customization is done through the keyword only TerminalMenus.config() function."
+},
+
+{
+    "location": "stdlib/REPL/#Arguments-1",
+    "page": "The Julia REPL",
+    "title": "Arguments",
+    "category": "section",
+    "text": "charset::Symbol=:na: ui characters to use (:ascii or :unicode); overridden by other arguments\ncursor::Char='>'|'→': character to use for cursor\nup_arrow::Char='^'|'↑': character to use for up arrow\ndown_arrow::Char='v'|'↓': character to use for down arrow\nchecked::String=\"[X]\"|\"✓\": string to use for checked\nunchecked::String=\"[ ]\"|\"⬚\"): string to use for unchecked\nscroll::Symbol=:na: If :wrap then wrap the cursor around top and bottom, if :nowrap do not wrap cursor\nsupress_output::Bool=false: For testing. If true, menu will not be printed to console.\nctrl_c_interrupt::Bool=true: If false, return empty on ^C, if true throw InterruptException() on ^C"
+},
+
+{
+    "location": "stdlib/REPL/#Examples-2",
+    "page": "The Julia REPL",
+    "title": "Examples",
+    "category": "section",
+    "text": "julia> menu = MultiSelectMenu(options, pagesize=5);\n\njulia> request(menu) # ASCII is used by default\n[press: d=done, a=all, n=none]\n   [ ] apple\n   [X] orange\n   [ ] grape\n > [X] strawberry\nv  [ ] blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(charset=:unicode)\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   ⬚ apple\n   ✓ orange\n   ⬚ grape\n → ✓ strawberry\n↓  ⬚ blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(checked=\"YEP!\", unchecked=\"NOPE\", cursor='⧐')\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   NOPE apple\n   YEP! orange\n   NOPE grape\n ⧐ YEP! strawberry\n↓  NOPE blueberry\nSet([4, 2])\n"
+},
+
+{
+    "location": "stdlib/REPL/#Base.atreplinit",
+    "page": "The Julia REPL",
+    "title": "Base.atreplinit",
+    "category": "Function",
+    "text": "atreplinit(f)\n\nRegister a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of f is the REPL object. This function should be called from within the .juliarc.jl initialization file.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/REPL/#References-1",
+    "page": "The Julia REPL",
+    "title": "References",
+    "category": "section",
+    "text": "Base.atreplinit"
+},
+
+{
     "location": "stdlib/Random/#",
     "page": "Random Numbers",
     "title": "Random Numbers",
@@ -18937,163 +19097,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL/#",
-    "page": "The Julia REPL",
-    "title": "The Julia REPL",
+    "location": "stdlib/SHA/#",
+    "page": "SHA",
+    "title": "SHA",
     "category": "page",
     "text": ""
 },
 
 {
-    "location": "stdlib/REPL/#The-Julia-REPL-1",
-    "page": "The Julia REPL",
-    "title": "The Julia REPL",
+    "location": "stdlib/SHA/#SHA-1",
+    "page": "SHA",
+    "title": "SHA",
     "category": "section",
-    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:$ julia\n               _\n   _       _ _(_)_     |  A fresh approach to technical computing\n  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org\n   _ _   _| |_  __ _   |  Type \"?help\" for help.\n  | | | | | | |/ _` |  |\n  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)\n _/ |\\__'_|_|_|\\__'_|  |  Commit c99e12c* (0 days old master)\n|__/                   |  x86_64-linux-gnu\n\njulia>To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type quit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
-},
-
-{
-    "location": "stdlib/REPL/#The-different-prompt-modes-1",
-    "page": "The Julia REPL",
-    "title": "The different prompt modes",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "stdlib/REPL/#The-Julian-mode-1",
-    "page": "The Julia REPL",
-    "title": "The Julian mode",
-    "category": "section",
-    "text": "The REPL has four main modes of operation. The first and most common is the Julian prompt. It is the default mode of operation; each new line initially starts with julia>. It is here that you can enter Julia expressions. Hitting return or enter after a complete expression has been entered will evaluate the entry and show the result of the last expression.julia> string(1 + 2)\n\"3\"There are a number useful features unique to interactive work. In addition to showing the result, the REPL also binds the result to the variable ans. A trailing semicolon on the line can be used as a flag to suppress showing the result.julia> string(3 * 4);\n\njulia> ans\n\"12\"In Julia mode, the REPL supports something called prompt pasting. This activates when pasting text that starts with julia>  into the REPL. In that case, only expressions starting with julia>  are parsed, others are removed. This makes it is possible to paste a chunk of code that has been copied from a REPL session without having to scrub away prompts and outputs. This feature is enabled by default but can be disabled or enabled at will with Base.REPL.enable_promptpaste(::Bool). If it is enabled, you can try it out by pasting the code block above this paragraph straight into the REPL. This feature does not work on the standard Windows command prompt due to its limitation at detecting when a paste occurs."
-},
-
-{
-    "location": "stdlib/REPL/#Help-mode-1",
-    "page": "The Julia REPL",
-    "title": "Help mode",
-    "category": "section",
-    "text": "When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing ?. Julia will attempt to print help or documentation for anything entered in help mode:julia> ? # upon typing ?, the prompt changes (in place) to: help?>\n\nhelp?> string\nsearch: string String stringmime Cstring Cwstring RevString randstring bytestring SubString\n\n  string(xs...)\n\n  Create a string from any values using the print function.Macros, types and variables can also be queried:help?> @time\n  @time\n\n  A macro to execute an expression, printing the time it took to execute, the number of allocations,\n  and the total number of bytes its execution caused to be allocated, before returning the value of the\n  expression.\n\n  See also @timev, @timed, @elapsed, and @allocated.\n\nhelp?> Int32\nsearch: Int32 UInt32\n\n  Int32 <: Signed\n\n  32-bit signed integer type.Help mode can be exited by pressing backspace at the beginning of the line."
-},
-
-{
-    "location": "stdlib/REPL/#man-shell-mode-1",
-    "page": "The Julia REPL",
-    "title": "Shell mode",
-    "category": "section",
-    "text": "Just as help mode is useful for quick access to documentation, another common task is to use the system shell to execute system commands. Just as ? entered help mode when at the beginning of the line, a semicolon (;) will enter the shell mode. And it can be exited by pressing backspace at the beginning of the line.julia> ; # upon typing ;, the prompt changes (in place) to: shell>\n\nshell> echo hello\nhello"
-},
-
-{
-    "location": "stdlib/REPL/#Search-modes-1",
-    "page": "The Julia REPL",
-    "title": "Search modes",
-    "category": "section",
-    "text": "In all of the above modes, the executed lines get saved to a history file, which can be searched.  To initiate an incremental search through the previous history, type ^R – the control key together with the r key. The prompt will change to (reverse-i-search)`':, and as you type the search query will appear in the quotes. The most recent result that matches the query will dynamically update to the right of the colon as more is typed. To find an older result using the same query, simply type ^R again.Just as ^R is a reverse search, ^S is a forward search, with the prompt (i-search)`':.  The two may be used in conjunction with each other to move through the previous or next matching results, respectively."
-},
-
-{
-    "location": "stdlib/REPL/#Key-bindings-1",
-    "page": "The Julia REPL",
-    "title": "Key bindings",
-    "category": "section",
-    "text": "The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced above (^D to exit, ^R and ^S for searching), but there are many more. In addition to the control-key, there are also meta-key bindings. These vary more by platform, but most terminals default to using alt- or option- held down with a key to send the meta-key (or can be configured to do so).Keybinding Description\nProgram control  \n^D Exit (when buffer is empty)\n^C Interrupt or cancel\n^L Clear console screen\nReturn/Enter, ^J New line, executing if it is complete\nmeta-Return/Enter Insert new line without executing it\n? or ; Enter help or shell mode (when at start of a line)\n^R, ^S Incremental history search, described above\nCursor movement  \nRight arrow, ^F Move right one character\nLeft arrow, ^B Move left one character\nctrl-Right, meta-F Move right one word\nctrl-Left, meta-B Move left one word\nHome, ^A Move to beginning of line\nEnd, ^E Move to end of line\nUp arrow, ^P Move up one line (or change to the previous history entry that matches the text before the cursor)\nDown arrow, ^N Move down one line (or change to the next history entry that matches the text before the cursor)\nShift-Arrow Key Move cursor according to the direction of the Arrow key, while activating the region (\"shift selection\")\nPage-up, meta-P Change to the previous history entry\nPage-down, meta-N Change to the next history entry\nmeta-< Change to the first history entry (of the current session if it is before the current position in history)\nmeta-> Change to the last history entry\n^-Space Set the \"mark\" in the editing region (and de-activate the region if it's active)\n^-Space ^-Space Set the \"mark\" in the editing region and make the region \"active\", i.e. highlighted\n^G De-activate the region (i.e. make it not highlighted)\n^X^X Exchange the current position with the mark\nEditing  \nBackspace, ^H Delete the previous character, or the whole region when it's active\nDelete, ^D Forward delete one character (when buffer has text)\nmeta-Backspace Delete the previous word\nmeta-d Forward delete the next word\n^W Delete previous text up to the nearest whitespace\nmeta-w Copy the current region in the kill ring\nmeta-W \"Kill\" the current region, placing the text in the kill ring\n^K \"Kill\" to end of line, placing the text in the kill ring\n^Y \"Yank\" insert the text from the kill ring\nmeta-y Replace a previously yanked text with an older entry from the kill ring\n^T Transpose the characters about the cursor\nmeta-Up arrow Transpose current line with line above\nmeta-Down arrow Transpose current line with line below\nmeta-u Change the next word to uppercase\nmeta-c Change the next word to titlecase\nmeta-l Change the next word to lowercase\n^/, ^_ Undo previous editing action\n^Q Write a number in REPL and press ^Q to open editor at corresponding stackframe or method\nmeta-Left Arrow indent the current line on the left\nmeta-Right Arrow indent the current line on the right"
-},
-
-{
-    "location": "stdlib/REPL/#Customizing-keybindings-1",
-    "page": "The Julia REPL",
-    "title": "Customizing keybindings",
-    "category": "section",
-    "text": "Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to REPL.setup_interface. The keys of this dictionary may be characters or strings. The key '*' refers to the default action. Control plus character x bindings are indicated with \"^x\". Meta plus x can be written \"\\\\Mx\". The values of the custom keymap must be nothing (indicating that the input should be ignored) or functions that accept the signature (PromptState, AbstractREPL, Char). The REPL.setup_interface function must be called before the REPL is initialized, by registering the operation with atreplinit . For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in .juliarc.jl:import REPL\nimport REPL.LineEdit\n\nconst mykeys = Dict{Any,Any}(\n    # Up Arrow\n    \"\\e[A\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),\n    # Down Arrow\n    \"\\e[B\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))\n)\n\nfunction customize_keys(repl)\n    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)\nend\n\natreplinit(customize_keys)Users should refer to LineEdit.jl to discover the available actions on key input."
-},
-
-{
-    "location": "stdlib/REPL/#Tab-completion-1",
-    "page": "The Julia REPL",
-    "title": "Tab completion",
-    "category": "section",
-    "text": "In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches:julia> stri[TAB]\nstride     strides     string      stringmime  strip\n\njulia> Stri[TAB]\nStridedArray    StridedMatrix    StridedVecOrMat  StridedVector    StringThe tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents, and get a list of LaTeX matches as well:julia> \\pi[TAB]\njulia> π\nπ = 3.1415926535897...\n\njulia> e\\_1[TAB] = [1,0]\njulia> e₁ = [1,0]\n2-element Array{Int64,1}:\n 1\n 0\n\njulia> e\\^1[TAB] = [1 0]\njulia> e¹ = [1 0]\n1×2 Array{Int64,2}:\n 1  0\n\njulia> \\sqrt[TAB]2     # √ is equivalent to the sqrt function\njulia> √2\n1.4142135623730951\n\njulia> \\hbar[TAB](h) = h / 2\\pi[TAB]\njulia> ħ(h) = h / 2π\nħ (generic function with 1 method)\n\njulia> \\h[TAB]\n\\hat              \\hermitconjmatrix  \\hkswarow          \\hrectangle\n\\hatapprox        \\hexagon           \\hookleftarrow     \\hrectangleblack\n\\hbar             \\hexagonblack      \\hookrightarrow    \\hslash\n\\heartsuit        \\hksearow          \\house             \\hspace\n\njulia> α=\"\\alpha[TAB]\"   # LaTeX completion also works in strings\njulia> α=\"α\"A full list of tab-completions can be found in the Unicode Input section of the manual.Completion of paths works for strings and julia's shell mode:julia> path=\"/[TAB]\"\n.dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/\n.dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/\nshell> /[TAB]\n.dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/\n.dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/Tab completion can help with investigation of the available methods matching the input arguments:julia> max([TAB] # All methods are displayed, not shown here due to size of the list\n\njulia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument\nmax(x, y) in Base at operators.jl:215\nmax(a, b, c, xs...) in Base at operators.jl:281\n\njulia> max([1, 2], max(1, 2), [TAB] # All methods matching the arguments.\nmax(x, y) in Base at operators.jl:215\nmax(a, b, c, xs...) in Base at operators.jl:281Keywords are also displayed in the suggested methods, see second line after ; where limit and keep are keyword arguments:julia> split(\"1 1 1\", [TAB]\nsplit(str::AbstractString) in Base at strings/util.jl:302\nsplit(str::T, splitter; limit, keep) where T<:AbstractString in Base at strings/util.jl:277The completion of the methods uses type inference and can therefore see if the arguments match even if the arguments are output from functions. The function needs to be type stable for the completion to be able to remove non-matching methods.Tab completion can also help completing fields:julia> Pkg.a[TAB]\nadd       availableFields for output from functions can also be completed:julia> split(\"\",\"\")[1].[TAB]\nlastindex  offset  stringThe completion of fields for output from functions uses type inference, and it can only suggest fields if the function is type stable."
-},
-
-{
-    "location": "stdlib/REPL/#Customizing-Colors-1",
-    "page": "The Julia REPL",
-    "title": "Customizing Colors",
-    "category": "section",
-    "text": "The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia prompt you can add something like the following to your .juliarc.jl file, which is to be placed inside your home directory:function customize_colors(repl)\n    repl.prompt_color = Base.text_colors[:cyan]\nend\n\natreplinit(customize_colors)The available color keys can be seen by typing Base.text_colors in the help mode of the REPL. In addition, the integers 0 to 255 can be used as color keys for terminals with 256 color support.You can also change the colors for the help and shell prompts and input and answer text by setting the appropriate field of repl in the customize_colors function above (respectively, help_color, shell_color, input_color, and answer_color). For the latter two, be sure that the envcolors field is also set to false.It is also possible to apply boldface formatting by using Base.text_colors[:bold] as a color. For instance, to print answers in boldface font, one can use the following as a .juliarc.jl:function customize_colors(repl)\n    repl.envcolors = false\n    repl.answer_color = Base.text_colors[:bold]\nend\n\natreplinit(customize_colors)You can also customize the color used to render warning and informational messages by setting the appropriate environment variables. For instance, to render error, warning, and informational messages respectively in magenta, yellow, and cyan you can add the following to your .juliarc.jl file:ENV[\"JULIA_ERROR_COLOR\"] = :magenta\nENV[\"JULIA_WARN_COLOR\"] = :yellow\nENV[\"JULIA_INFO_COLOR\"] = :cyan"
-},
-
-{
-    "location": "stdlib/REPL/#TerminalMenus-1",
-    "page": "The Julia REPL",
-    "title": "TerminalMenus",
-    "category": "section",
-    "text": "TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal."
-},
-
-{
-    "location": "stdlib/REPL/#Examples-1",
-    "page": "The Julia REPL",
-    "title": "Examples",
-    "category": "section",
-    "text": "import REPL\nusing REPL.TerminalMenus\n\noptions = [\"apple\", \"orange\", \"grape\", \"strawberry\",\n            \"blueberry\", \"peach\", \"lemon\", \"lime\"]\n"
-},
-
-{
-    "location": "stdlib/REPL/#RadioMenu-1",
-    "page": "The Julia REPL",
-    "title": "RadioMenu",
-    "category": "section",
-    "text": "The RadioMenu allows the user to select one option from the list. The request function displays the interactive menu and returns the index of the selected choice. If a user presses 'q' or ctrl-c, request will return a -1.# `pagesize` is the number of items to be displayed at a time.\n#  The UI will scroll if the number of options is greater\n#   than the `pagesize`\nmenu = RadioMenu(options, pagesize=4)\n\n# `request` displays the menu and returns the index after the\n#   user has selected a choice\nchoice = request(\"Choose your favorite fruit:\", menu)\n\nif choice != -1\n    println(\"Your favorite fruit is \", options[choice], \"!\")\nelse\n    println(\"Menu canceled.\")\nend\nOutput:Choose your favorite fruit:\n^  grape\n   strawberry\n > blueberry\nv  peach\nYour favorite fruit is blueberry!"
-},
-
-{
-    "location": "stdlib/REPL/#MultiSelectMenu-1",
-    "page": "The Julia REPL",
-    "title": "MultiSelectMenu",
-    "category": "section",
-    "text": "The MultiSelectMenu allows users to select many choices from a list.# here we use the default `pagesize` 10\nmenu = MultiSelectMenu(options)\n\n# `request` returns a `Set` of selected indices\n# if the menu us canceled (ctrl-c or q), return an empty set\nchoices = request(\"Select the fruits you like:\", menu)\n\nif length(choices) > 0\n    println(\"You like the following fruits:\")\n    for i in choices\n        println(\"  - \", options[i])\n    end\nelse\n    println(\"Menu canceled.\")\nendOutput:Select the fruits you like:\n[press: d=done, a=all, n=none]\n   [ ] apple\n > [X] orange\n   [X] grape\n   [ ] strawberry\n   [ ] blueberry\n   [X] peach\n   [ ] lemon\n   [ ] lime\nYou like the following fruits:\n  - orange\n  - grape\n  - peach"
-},
-
-{
-    "location": "stdlib/REPL/#Customization-/-Configuation-1",
-    "page": "The Julia REPL",
-    "title": "Customization / Configuation",
-    "category": "section",
-    "text": "All interface customization is done through the keyword only TerminalMenus.config() function."
-},
-
-{
-    "location": "stdlib/REPL/#Arguments-1",
-    "page": "The Julia REPL",
-    "title": "Arguments",
-    "category": "section",
-    "text": "charset::Symbol=:na: ui characters to use (:ascii or :unicode); overridden by other arguments\ncursor::Char='>'|'→': character to use for cursor\nup_arrow::Char='^'|'↑': character to use for up arrow\ndown_arrow::Char='v'|'↓': character to use for down arrow\nchecked::String=\"[X]\"|\"✓\": string to use for checked\nunchecked::String=\"[ ]\"|\"⬚\"): string to use for unchecked\nscroll::Symbol=:na: If :wrap then wrap the cursor around top and bottom, if :nowrap do not wrap cursor\nsupress_output::Bool=false: For testing. If true, menu will not be printed to console.\nctrl_c_interrupt::Bool=true: If false, return empty on ^C, if true throw InterruptException() on ^C"
-},
-
-{
-    "location": "stdlib/REPL/#Examples-2",
-    "page": "The Julia REPL",
-    "title": "Examples",
-    "category": "section",
-    "text": "julia> menu = MultiSelectMenu(options, pagesize=5);\n\njulia> request(menu) # ASCII is used by default\n[press: d=done, a=all, n=none]\n   [ ] apple\n   [X] orange\n   [ ] grape\n > [X] strawberry\nv  [ ] blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(charset=:unicode)\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   ⬚ apple\n   ✓ orange\n   ⬚ grape\n → ✓ strawberry\n↓  ⬚ blueberry\nSet([4, 2])\n\njulia> TerminalMenus.config(checked=\"YEP!\", unchecked=\"NOPE\", cursor='⧐')\n\njulia> request(menu)\n[press: d=done, a=all, n=none]\n   NOPE apple\n   YEP! orange\n   NOPE grape\n ⧐ YEP! strawberry\n↓  NOPE blueberry\nSet([4, 2])\n"
-},
-
-{
-    "location": "stdlib/REPL/#Base.atreplinit",
-    "page": "The Julia REPL",
-    "title": "Base.atreplinit",
-    "category": "Function",
-    "text": "atreplinit(f)\n\nRegister a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of f is the REPL object. This function should be called from within the .juliarc.jl initialization file.\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/REPL/#References-1",
-    "page": "The Julia REPL",
-    "title": "References",
-    "category": "section",
-    "text": "Base.atreplinit"
+    "text": "Usage is very straightforward:julia> using SHA\n\njulia> bytes2hex(sha256(\"test\"))\n\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"Each exported function (at the time of this writing, SHA-1, SHA-2 224, 256, 384 and 512, and SHA-3 224, 256, 384 and 512 functions are implemented) takes in either an Array{UInt8}, a ByteString or an IO object.  This makes it trivial to checksum a file:shell> cat /tmp/test.txt\ntest\njulia> using SHA\n\njulia> open(\"/tmp/test.txt\") do f\n           sha2_256(f)\n       end\n32-element Array{UInt8,1}:\n 0x9f\n 0x86\n 0xd0\n 0x81\n 0x88\n 0x4c\n 0x7d\n 0x65\n    ⋮\n 0x5d\n 0x6c\n 0x15\n 0xb0\n 0xf0\n 0x0a\n 0x08Note the lack of a newline at the end of /tmp/text.txt.  Julia automatically inserts a newline before the julia> prompt.Due to the colloquial usage of sha256 to refer to sha2_256, convenience functions are provided, mapping shaxxx() function calls to sha2_xxx().  For SHA-3, no such colloquialisms exist and the user must use the full sha3_xxx() names.shaxxx() takes AbstractString and array-like objects (NTuple and Array) with elements of type UInt8.Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2."
 },
 
 {
@@ -19134,22 +19150,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Serialization",
     "category": "section",
     "text": "Serialization.serialize\nSerialization.deserialize\nSerialization.writeheader"
-},
-
-{
-    "location": "stdlib/SHA/#",
-    "page": "SHA",
-    "title": "SHA",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "stdlib/SHA/#SHA-1",
-    "page": "SHA",
-    "title": "SHA",
-    "category": "section",
-    "text": "Usage is very straightforward:julia> using SHA\n\njulia> bytes2hex(sha256(\"test\"))\n\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"Each exported function (at the time of this writing, SHA-1, SHA-2 224, 256, 384 and 512, and SHA-3 224, 256, 384 and 512 functions are implemented) takes in either an Array{UInt8}, a ByteString or an IO object.  This makes it trivial to checksum a file:shell> cat /tmp/test.txt\ntest\njulia> using SHA\n\njulia> open(\"/tmp/test.txt\") do f\n           sha2_256(f)\n       end\n32-element Array{UInt8,1}:\n 0x9f\n 0x86\n 0xd0\n 0x81\n 0x88\n 0x4c\n 0x7d\n 0x65\n    ⋮\n 0x5d\n 0x6c\n 0x15\n 0xb0\n 0xf0\n 0x0a\n 0x08Note the lack of a newline at the end of /tmp/text.txt.  Julia automatically inserts a newline before the julia> prompt.Due to the colloquial usage of sha256 to refer to sha2_256, convenience functions are provided, mapping shaxxx() function calls to sha2_xxx().  For SHA-3, no such colloquialisms exist and the user must use the full sha3_xxx() names.shaxxx() takes AbstractString and array-like objects (NTuple and Array) with elements of type UInt8.Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2."
 },
 
 {
@@ -19609,46 +19609,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode/#",
-    "page": "Unicode",
-    "title": "Unicode",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "stdlib/Unicode/#Base.Unicode.isassigned",
-    "page": "Unicode",
-    "title": "Base.Unicode.isassigned",
-    "category": "Function",
-    "text": "Unicode.isassigned(c) -> Bool\n\nReturns true if the given char or integer is an assigned Unicode code point.\n\nExamples\n\njulia> using Unicode\n\njulia> Unicode.isassigned(101)\ntrue\n\njulia> Unicode.isassigned('\\x01')\ntrue\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/Unicode/#Base.Unicode.normalize",
-    "page": "Unicode",
-    "title": "Base.Unicode.normalize",
-    "category": "Function",
-    "text": "Unicode.normalize(s::AbstractString, normalform::Symbol)\n\nNormalize the string s according to one of the four \"normal forms\" of the Unicode standard: normalform can be :NFC, :NFD, :NFKC, or :NFKD.  Normal forms C (canonical composition) and D (canonical decomposition) convert different visually identical representations of the same abstract string into a single canonical form, with form C being more compact.  Normal forms KC and KD additionally canonicalize \"compatibility equivalents\": they convert characters that are abstractly similar but visually distinct into a single canonical choice (e.g. they expand ligatures into the individual characters), with form KC being more compact.\n\nAlternatively, finer control and additional transformations may be be obtained by calling Unicode.normalize(s; keywords...), where any number of the following boolean keywords options (which all default to false except for compose) are specified:\n\ncompose=false: do not perform canonical composition\ndecompose=true: do canonical decomposition instead of canonical composition (compose=true is ignored if present)\ncompat=true: compatibility equivalents are canonicalized\ncasefold=true: perform Unicode case folding, e.g. for case-insensitive string comparison\nnewline2lf=true, newline2ls=true, or newline2ps=true: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively\nstripmark=true: strip diacritical marks (e.g. accents)\nstripignore=true: strip Unicode's \"default ignorable\" characters (e.g. the soft hyphen or the left-to-right marker)\nstripcc=true: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified\nrejectna=true: throw an error if unassigned code points are found\nstable=true: enforce Unicode Versioning Stability\n\nFor example, NFKC corresponds to the options compose=true, compat=true, stable=true.\n\nExamples\n\njulia> using Unicode\n\njulia> \"μ\" == normalize(\"µ\", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5\ntrue\n\njulia> normalize(\"JuLiA\", casefold=true)\n\"julia\"\n\njulia> normalize(\"JúLiA\", stripmark=true)\n\"JuLiA\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/Unicode/#Base.Unicode.graphemes",
-    "page": "Unicode",
-    "title": "Base.Unicode.graphemes",
-    "category": "Function",
-    "text": "graphemes(s::AbstractString) -> GraphemeIterator\n\nReturns an iterator over substrings of s that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/Unicode/#Unicode-1",
-    "page": "Unicode",
-    "title": "Unicode",
-    "category": "section",
-    "text": "Unicode.isassigned\nUnicode.normalize\nUnicode.graphemes"
-},
-
-{
     "location": "stdlib/UUIDs/#",
     "page": "UUIDs",
     "title": "UUIDs",
@@ -19686,6 +19646,46 @@ var documenterSearchIndex = {"docs": [
     "title": "UUIDs",
     "category": "section",
     "text": "UUIDs.uuid1\nUUIDs.uuid4\nUUIDs.uuid_version"
+},
+
+{
+    "location": "stdlib/Unicode/#",
+    "page": "Unicode",
+    "title": "Unicode",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Unicode/#Base.Unicode.isassigned",
+    "page": "Unicode",
+    "title": "Base.Unicode.isassigned",
+    "category": "Function",
+    "text": "Unicode.isassigned(c) -> Bool\n\nReturns true if the given char or integer is an assigned Unicode code point.\n\nExamples\n\njulia> using Unicode\n\njulia> Unicode.isassigned(101)\ntrue\n\njulia> Unicode.isassigned('\\x01')\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Unicode/#Base.Unicode.normalize",
+    "page": "Unicode",
+    "title": "Base.Unicode.normalize",
+    "category": "Function",
+    "text": "Unicode.normalize(s::AbstractString, normalform::Symbol)\n\nNormalize the string s according to one of the four \"normal forms\" of the Unicode standard: normalform can be :NFC, :NFD, :NFKC, or :NFKD.  Normal forms C (canonical composition) and D (canonical decomposition) convert different visually identical representations of the same abstract string into a single canonical form, with form C being more compact.  Normal forms KC and KD additionally canonicalize \"compatibility equivalents\": they convert characters that are abstractly similar but visually distinct into a single canonical choice (e.g. they expand ligatures into the individual characters), with form KC being more compact.\n\nAlternatively, finer control and additional transformations may be be obtained by calling Unicode.normalize(s; keywords...), where any number of the following boolean keywords options (which all default to false except for compose) are specified:\n\ncompose=false: do not perform canonical composition\ndecompose=true: do canonical decomposition instead of canonical composition (compose=true is ignored if present)\ncompat=true: compatibility equivalents are canonicalized\ncasefold=true: perform Unicode case folding, e.g. for case-insensitive string comparison\nnewline2lf=true, newline2ls=true, or newline2ps=true: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively\nstripmark=true: strip diacritical marks (e.g. accents)\nstripignore=true: strip Unicode's \"default ignorable\" characters (e.g. the soft hyphen or the left-to-right marker)\nstripcc=true: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified\nrejectna=true: throw an error if unassigned code points are found\nstable=true: enforce Unicode Versioning Stability\n\nFor example, NFKC corresponds to the options compose=true, compat=true, stable=true.\n\nExamples\n\njulia> using Unicode\n\njulia> \"μ\" == normalize(\"µ\", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5\ntrue\n\njulia> normalize(\"JuLiA\", casefold=true)\n\"julia\"\n\njulia> normalize(\"JúLiA\", stripmark=true)\n\"JuLiA\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Unicode/#Base.Unicode.graphemes",
+    "page": "Unicode",
+    "title": "Base.Unicode.graphemes",
+    "category": "Function",
+    "text": "graphemes(s::AbstractString) -> GraphemeIterator\n\nReturns an iterator over substrings of s that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Unicode/#Unicode-1",
+    "page": "Unicode",
+    "title": "Unicode",
+    "category": "section",
+    "text": "Unicode.isassigned\nUnicode.normalize\nUnicode.graphemes"
 },
 
 {
