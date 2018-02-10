@@ -24,9 +24,9 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     stdin = Pipe()
     stdout = Pipe()
     stderr = Pipe()
-    Base.link_pipe(stdin, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(stdin, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stdout, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stderr, reader_supports_async=true, writer_supports_async=true)
 
     repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
     repl.options = options

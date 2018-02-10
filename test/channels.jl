@@ -365,3 +365,29 @@ end
     c.excp == nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
+
+# issue #12473
+# make sure 1-shot timers work
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0)
+    sleep(0.2)
+    @test a == [1]
+end
+
+# make sure repeating timers work
+@noinline function make_unrooted_timer(a)
+    t = Timer(0.0, interval = 0.1)
+    finalizer(t -> a[] += 1, t)
+    wait(t)
+    e = @elapsed for i = 1:5
+        wait(t)
+    end
+    @test 1.5 > e >= 0.4
+    @test a[] == 0
+    nothing
+end
+let a = Ref(0)
+    make_unrooted_timer(a)
+    GC.gc()
+    @test a[] == 1
+end

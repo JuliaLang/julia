@@ -890,7 +890,7 @@ end
 
 function static_shown(x)
     p = Pipe()
-    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), p.in, x)
     @async close(p.in)
     return read(p.out, String)

@@ -5,6 +5,7 @@
 */
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h> // printf
 
 #include "julia.h"
 #include "julia_internal.h"

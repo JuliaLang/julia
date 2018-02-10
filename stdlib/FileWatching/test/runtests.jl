@@ -1,14 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
+using Base: uv_error
 
 # This script does the following
-# Sets up n unix pipes
+# Sets up N unix pipes (or WSA sockets)
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
 # Nothing is written into the even numbered pipes
 # Odd numbered pipes are tested for reads
 # Even numbered pipes are tested for timeouts
-# Writable ends are always tested for writability before a write
+# Writable ends are always tested for write-ability before a write
 
 n = 20
 intvls = [2, .2, .1, .005]
@@ -17,10 +18,10 @@ pipe_fds = Vector{Any}(uninitialized, n)
 for i in 1:n
     @static if Sys.iswindows()
         pipe_fds[i] = Vector{Libc.WindowsRawSocket}(uninitialized, 2)
-        0 == ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i]) || error(Libc.FormatMessage())
+        uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{Libc.WindowsRawSocket}, Cint, Cint), 1, 6, pipe_fds[i], 0, 0))
     else
-        pipe_fds[i] = Array{RawFD}(uninitialized, 2)
-        @test 0 == ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
+        pipe_fds[i] = Vector{RawFD}(uninitialized, 2)
+        uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{RawFD}, Cint, Cint), pipe_fds[i], 0, 0))
     end
 end
 
@@ -120,32 +121,6 @@ for i in 1:n
             @test 0 == ccall(:close, Cint, (Cint,), pipe_fds[i][j])
         end
     end
-end
-
-# issue #12473
-# make sure 1-shot timers work
-let a = []
-    Timer(t -> push!(a, 1), 0.01, interval = 0)
-    sleep(0.2)
-    @test a == [1]
-end
-
-# make sure repeating timers work
-@noinline function make_unrooted_timer(a)
-    t = Timer(0.0, interval = 0.1)
-    finalizer(t -> a[] += 1, t)
-    wait(t)
-    e = @elapsed for i = 1:5
-        wait(t)
-    end
-    @test 1.5 > e >= 0.4
-    @test a[] == 0
-    nothing
-end
-let a = Ref(0)
-    make_unrooted_timer(a)
-    GC.gc()
-    @test a[] == 1
 end
 
 for f in (watch_file, poll_file)
