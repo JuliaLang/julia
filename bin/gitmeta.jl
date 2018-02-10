@@ -100,8 +100,12 @@ function gitmeta(pkgs::Dict{String,Package})
             # scan for stdlib dependencies
             v"0.7" in v.requires["julia"].versions || continue
             haskey(s[uuid], v.sha1) && continue
-            libs = [uses(repo_path, git_tree_hash, lib) for lib in STDLIBS]
-            s[uuid][v.sha1] = sum(d*2^(i-1) for (i,d) in enumerate(libs))
+            if pkg == "Compat"
+                s[uuid][v.sha1] = 2^length(STDLIBS)-1
+            else
+                libs = [uses(repo_path, git_tree_hash, lib) for lib in STDLIBS]
+                s[uuid][v.sha1] = sum(d*2^(i-1) for (i,d) in enumerate(libs))
+            end
         end
         isempty(s[uuid]) && continue
         println(io, "[$uuid]")
