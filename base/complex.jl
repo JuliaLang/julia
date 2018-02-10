@@ -457,7 +457,17 @@ function sqrt(z::Complex{<:AbstractFloat})
     end
     Complex(ξ,η)
 end
-sqrt(z::Complex) = sqrt(float(z))
+
+_sqrt(z::Complex{<:AbstractFloat}) = sqrt(z)
+
+function _sqrt(z)
+    ρ = abs(z)
+    θ = angle(z)
+
+    return sqrt(ρ) * cis(θ/2)
+end
+
+sqrt(z::Complex) = _sqrt(float(z))
 
 # function sqrt(z::Complex)
 #     rz = float(real(z))
@@ -534,7 +544,17 @@ function log(z::Complex{T}) where T<:AbstractFloat
     end
     Complex(ρρ, angle(z))
 end
-log(z::Complex) = log(float(z))
+
+_log(z::Complex{<:AbstractFloat}) = log(z)
+
+function _log(z::Complex)
+    ρ = abs(z)
+    θ = angle(z)
+
+    return Complex(log(ρ), θ)
+end
+
+log(z::Complex) = _log(float(z))
 
 # function log(z::Complex)
 #     ar = abs(real(z))
@@ -813,7 +833,7 @@ function asin(z::Complex)
     Complex(ξ,η)
 end
 
-function acos(z::Complex{<:AbstractFloat})
+function acos(z::Complex)
     zr, zi = reim(z)
     if isnan(zr)
         if isinf(zi) return Complex(zr, -zi)
@@ -834,7 +854,6 @@ function acos(z::Complex{<:AbstractFloat})
     if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
 end
-acos(z::Complex) = acos(float(z))
 
 function atan(z::Complex)
     w = atanh(Complex(-imag(z),real(z)))
@@ -852,7 +871,7 @@ function cosh(z::Complex)
     cos(Complex(zi,-zr))
 end
 
-function tanh(z::Complex{T}) where T<:AbstractFloat
+function tanh(z::Complex{T}) where {T<:AbstractFloat}
     Ω = prevfloat(typemax(T))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
@@ -860,18 +879,29 @@ function tanh(z::Complex{T}) where T<:AbstractFloat
         Complex(copysign(one(T),ξ),
                 copysign(zero(T),η*(isfinite(η) ? sin(2*abs(η)) : one(η))))
     else
-        t = tan(η)
-        β = 1+t*t #sec(η)^2
-        s = sinh(ξ)
-        ρ = sqrt(1 + s*s) #cosh(ξ)
-        if isinf(t)
-            Complex(ρ/s,1/t)
-        else
-            Complex(β*ρ*s,t)/(1+β*s*s)
-        end
+        return __tanh(z)
+
     end
 end
-tanh(z::Complex) = tanh(float(z))
+
+function __tanh(z::Complex)
+    ξ, η = reim(z)
+
+    t = tan(η)
+    β = 1+t*t #sec(η)^2
+    s = sinh(ξ)
+    ρ = sqrt(1 + s*s) #cosh(ξ)
+    if isinf(t)
+        Complex(ρ/s, 1/t)
+    else
+        Complex(β*ρ*s, t) / (1 + β*s*s)
+    end
+end
+
+_tanh(z::Complex{<:AbstractFloat}) = tanh(z)
+_tanh(z::Complex) = __tanh(z)
+
+tanh(z::Complex) = _tanh(float(z))
 
 function asinh(z::Complex)
     w = asin(Complex(-imag(z),real(z)))
