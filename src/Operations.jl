@@ -446,16 +446,16 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
         @schedule begin
             for (pkg, path) in jobs
                 if env.preview[]
-                    put!(results, (pkg, true, nothing))
+                    put!(results, (pkg, true, path))
                     continue
                 end
                 if GLOBAL_SETTINGS.use_libgit2_for_all_downloads
-                    put!(results, (pkg, false, nothing))
+                    put!(results, (pkg, false, path))
                     continue
                 end
                 try
                     success = install_archive(urls[pkg.uuid], pkg.version::VersionNumber, path)
-                    put!(results, (pkg, success, nothing))
+                    put!(results, (pkg, success, path))
                 catch err
                     put!(results, (pkg, err, catch_backtrace()))
                 end
@@ -465,19 +465,19 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
 
     missed_packages = Tuple{PackageSpec, String}[]
     for i in 1:length(pkgs_to_install)
-        pkg, exc_or_success, bt = take!(results)
+        pkg, exc_or_success, bt_or_path = take!(results)
         exc_or_success isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt))
-        success = exc_or_success
+        success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
             @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
         else
-            push!(missed_packages, pkgs_to_install[i])
+            push!(missed_packages, (pkg, path))
         end
     end
 
     ##################################################
-    # Use LibGit2 to download any reamining packages #
+    # Use LibGit2 to download any remaining packages #
     ##################################################
     for (pkg, path) in missed_packages
         uuid = pkg.uuid
