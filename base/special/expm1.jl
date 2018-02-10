@@ -1,4 +1,3 @@
-# Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
 # ====================================================
 # Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 #
@@ -7,6 +6,7 @@
 # software is freely granted, provided that this notice
 # is preserved.
 # ====================================================
+# Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
 
 
 # expm1(x)
