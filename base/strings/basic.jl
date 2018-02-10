@@ -483,7 +483,7 @@ last(e::EachStringIndex) = lastindex(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
-eltype(::Type{EachStringIndex}) = Int
+eltype(::Type{<:EachStringIndex}) = Int
 
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
