@@ -288,84 +288,83 @@ function get_archive_url_for_version(url::String, version)
     return nothing
 end
 
-function install(
-    env::EnvCache,
+# Returns if archive successfully installed
+function install_archive(
+    urls::Vector{String},
+    version::Union{VersionNumber,Nothing},
+    version_path::String
+)::Bool
+    for url in urls
+        archive_url = get_archive_url_for_version(url, version)
+        if archive_url != nothing
+            path = tempname() * randstring(6) * ".tar.gz"
+            url_success = true
+            try
+                cmd = BinaryProvider.gen_download_cmd(archive_url, path);
+                run(cmd, (DevNull, DevNull, DevNull))
+            catch e
+                e isa InterruptException && rethrow(e)
+                url_success = false
+            end
+            url_success || continue
+            dir = joinpath(tempdir(), randstring(12))
+            mkpath(dir)
+            cmd = BinaryProvider.gen_unpack_cmd(path, dir);
+            run(cmd, (DevNull, DevNull, DevNull))
+            dirs = readdir(dir)
+            # 7z on Win might create this spurious file
+            filter!(x -> x != "pax_global_header", dirs)
+            @assert length(dirs) == 1
+            !isdir(version_path) && mkpath(version_path)
+            mv(joinpath(dir, dirs[1]), version_path; remove_destination=true)
+            Base.rm(path; force = true)
+            return true
+        end
+    end
+    return false
+end
+
+function install_git(
     uuid::UUID,
     name::String,
     hash::SHA1,
     urls::Vector{String},
-    version::Union{VersionNumber,Nothing} = nothing
-)::Tuple{String,Bool}
-    # returns path to version & if it's newly installed
-    version_path = find_installed(uuid, hash)
-    ispath(version_path) && return version_path, false
-    http_download_successful = false
-    env.preview[] && return version_path, true
-    if !GLOBAL_SETTINGS.use_libgit2_for_all_downloads && version != nothing
-        for url in urls
-            archive_url = get_archive_url_for_version(url, version)
-            if archive_url != nothing
-                path = joinpath(tempdir(), name * "_" * randstring(6) * ".tar.gz")
-                url_success = true
-                try
-                    cmd = BinaryProvider.gen_download_cmd(archive_url, path);
-                    run(cmd, (DevNull, DevNull, DevNull))
-                catch e
-                    e isa InterruptException && rethrow(e)
-                    url_success = false
-                end
-                url_success || continue
-                http_download_successful = true
-                dir = joinpath(tempdir(), randstring(12))
-                mkpath(dir)
-                cmd = BinaryProvider.gen_unpack_cmd(path, dir);
-                run(cmd, (DevNull, DevNull, DevNull))
-                dirs = readdir(dir)
-                # 7z on Win might create this spurious file
-                filter!(x -> x != "pax_global_header", dirs)
-                @assert length(dirs) == 1
-                !isdir(version_path) && mkpath(version_path)
-                mv(joinpath(dir, dirs[1]), version_path; remove_destination=true)
-                Base.rm(path; force = true)
-                break # object was found, we can stop
-            end
-        end
+    version::Union{VersionNumber,Nothing},
+    version_path::String
+)::Nothing
+    upstream_dir = joinpath(depots()[1], "upstream")
+    ispath(upstream_dir) || mkpath(upstream_dir)
+    repo_path = joinpath(upstream_dir, string(uuid))
+    repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+        @info("Cloning [$uuid] $name from $(urls[1])")
+        LibGit2.clone(urls[1], repo_path, isbare=true)
     end
-    if !http_download_successful || GLOBAL_SETTINGS.use_libgit2_for_all_downloads
-        upstream_dir = joinpath(depots()[1], "upstream")
-        ispath(upstream_dir) || mkpath(upstream_dir)
-        repo_path = joinpath(upstream_dir, string(uuid))
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-            # info("Cloning [$uuid] $name")
-            LibGit2.clone(urls[1], repo_path, isbare=true)
-        end
-        git_hash = LibGit2.GitHash(hash.bytes)
-        for i = 2:length(urls)
-            try LibGit2.GitObject(repo, git_hash)
-                break # object was found, we can stop
-            catch err
-                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            end
-            url = urls[i]
-            LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
-        end
-        tree = try
-            LibGit2.GitObject(repo, git_hash)
+    git_hash = LibGit2.GitHash(hash.bytes)
+    for i = 2:length(urls)
+        try LibGit2.GitObject(repo, git_hash)
+            break # object was found, we can stop
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            error("$name: git object $(string(hash)) could not be found")
         end
-        tree isa LibGit2.GitTree ||
-            error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
-        mkpath(version_path)
-        opts = LibGit2.CheckoutOptions(
-            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-            target_directory = Base.unsafe_convert(Cstring, version_path)
-        )
-        h = string(hash)[1:16]
-        LibGit2.checkout_tree(repo, tree, options=opts)
+        url = urls[i]
+        LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
     end
-    return version_path, true
+    tree = try
+        LibGit2.GitObject(repo, git_hash)
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        error("$name: git object $(string(hash)) could not be found")
+    end
+    tree isa LibGit2.GitTree ||
+        error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
+    mkpath(version_path)
+    opts = LibGit2.CheckoutOptions(
+        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+        target_directory = Base.unsafe_convert(Cstring, version_path)
+    )
+    h = string(hash)[1:16]
+    LibGit2.checkout_tree(repo, tree, options=opts)
+    return
 end
 
 function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber)
@@ -415,53 +414,88 @@ function prune_manifest(env::EnvCache)
     end
 end
 
+# install & update manifest
 function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
     names, hashes, urls = version_data(env, pkgs)
-    # install & update manifest
     new_versions = UUID[]
 
+    pkgs_to_install = Tuple{PackageSpec, String}[]
+    for pkg in pkgs
+        path = find_installed(pkg.uuid, hashes[pkg.uuid])
+        if !ispath(path)
+            push!(pkgs_to_install, (pkg, path))
+            push!(new_versions, pkg.uuid)
+        end
+    end
+
+    widths = [textwidth(names[pkg.uuid]) for (pkg, _) in pkgs_to_install if haskey(names, pkg.uuid)]
+    max_name = length(widths) == 0 ? 0 : maximum(widths)
+
+    ########################################
+    # Install from archives asynchronously #
+    ########################################
     jobs = Channel(GLOBAL_SETTINGS.num_concurrent_downloads);
     results = Channel(GLOBAL_SETTINGS.num_concurrent_downloads);
     @schedule begin
-        for pkg in pkgs
+        for pkg in pkgs_to_install
             put!(jobs, pkg)
         end
     end
 
     for i in 1:GLOBAL_SETTINGS.num_concurrent_downloads
         @schedule begin
-            for pkg in jobs
-                uuid = pkg.uuid
-                version = pkg.version::VersionNumber
-                name, hash = names[uuid], hashes[uuid]
+            for (pkg, path) in jobs
+                if env.preview[]
+                    put!(results, (pkg, true, nothing))
+                    continue
+                end
+                if GLOBAL_SETTINGS.use_libgit2_for_all_downloads
+                    put!(results, (pkg, false, nothing))
+                    continue
+                end
                 try
-                    version_path, new = install(env, uuid, name, hash, urls[uuid], version)
-                    put!(results, (pkg, version_path, version, hash, new))
-                catch e
-                    put!(results, e)
+                    success = install_archive(urls[pkg.uuid], pkg.version::VersionNumber, path)
+                    put!(results, (pkg, success, nothing))
+                catch err
+                    put!(results, (pkg, err, catch_backtrace()))
                 end
             end
         end
     end
 
-    textwidth = VERSION < v"0.7.0-DEV.1930" ? Base.strwidth : Base.textwidth
-    widths = [textwidth(names[pkg.uuid]) for pkg in pkgs if haskey(names, pkg.uuid)]
-    max_name = length(widths) == 0 ? 0 : maximum(widths)
-
-    for _ in 1:length(pkgs)
-        r = take!(results)
-        r isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, r))
-        pkg, path, version, hash, new = r
-        if new
-            vstr = version != nothing ? "v$version" : "[$h]"
-            new && @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
+    missed_packages = Tuple{PackageSpec, String}[]
+    for i in 1:length(pkgs_to_install)
+        pkg, exc_or_success, bt = take!(results)
+        exc_or_success isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt))
+        success = exc_or_success
+        if success
+            vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
+            @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
+        else
+            push!(missed_packages, pkgs_to_install[i])
         end
-        uuid = pkg.uuid
-        version = pkg.version::VersionNumber
-        name, hash = names[uuid], hashes[uuid]
-        update_manifest(env, uuid, name, hash, version)
-        new && push!(new_versions, uuid)
     end
+
+    ##################################################
+    # Use LibGit2 to download any reamining packages #
+    ##################################################
+    for (pkg, path) in missed_packages
+        uuid = pkg.uuid
+        if !env.preview[]
+            install_git(pkg.uuid, names[uuid], hashes[uuid], urls[uuid], pkg.version::VersionNumber, path)
+        end
+        vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
+        @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
+    end
+
+    ##########################################
+    # Installation done, update the manifest #
+    ##########################################
+    for pkg in pkgs
+        uuid = pkg.uuid
+        update_manifest(env, uuid, names[uuid], hashes[uuid], pkg.version::VersionNumber)
+    end
+
     prune_manifest(env)
     return new_versions
 end
