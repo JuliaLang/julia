@@ -165,10 +165,12 @@ end
     @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
     @test Dict(1=>1.0, 2.0=>2) isa Dict{Real,Real}
 
-    @test Dict(1=>1, 2=>missing) isa Dict{Int,Union{Int,Missing}}
-    @test Dict(1=>1, 2=>nothing) isa Dict{Int,Union{Int,Nothing}}
-    @test Dict(1=>1, missing=>2) isa Dict{Union{Int,Missing},Int}
-    @test Dict(1=>1, nothing=>2) isa Dict{Union{Int,Nothing},Int}
+    for T in (Nothing, Missing)
+        @test Dict(1=>1, 2=>T()) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>T(), 2=>2) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>1, T()=>2) isa Dict{Union{Int,T},Int}
+        @test Dict(T()=>1, 2=>2) isa Dict{Union{Int,T},Int}
+    end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
