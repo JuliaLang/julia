@@ -5005,7 +5005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
 },
 
 {
@@ -5381,7 +5381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.maxintfloat",
     "category": "Function",
-    "text": "maxintfloat(T)\n\nThe largest integer losslessly representable by the given floating-point DataType T.\n\n\n\n\n\nmaxintfloat(T, S)\n\nThe largest integer losslessly representable by the given floating-point DataType T that also does not exceed the maximum integer representable by the integer DataType S.\n\n\n\n\n\n"
+    "text": "maxintfloat(T=Float64)\n\nThe largest consecutive integer that is exactly represented in the given floating-point type T (which defaults to Float64).\n\nThat is, maxintfloat returns the smallest positive integer n such that n+1 is not exactly representable in the type T.\n\n\n\n\n\nmaxintfloat(T, S)\n\nThe largest consecutive integer representable in the given floating-point type T that also does not exceed the maximum integer representable by the integer type S.  Equivalently, it is the minimum of maxintfloat(T) and typemax(S).\n\n\n\n\n\n"
 },
 
 {
