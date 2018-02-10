@@ -296,9 +296,9 @@ export conv, conv2, deconv, filt, filt!, xcorr
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, vardim, corrected=corrected)
+@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
 @deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, vardim, corrected=corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
 
 # PR #22325
 # TODO: when this replace is removed from deprecated.jl:
@@ -781,8 +781,8 @@ findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, 
 # issue #20899
 # TODO: delete JULIA_HOME deprecation in src/init.c
 
-@deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
-@deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
+# cumsum and cumprod have deprecations in multidimensional.jl
+# when the message is removed, the `dims` keyword argument should become required.
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
@@ -1304,6 +1304,47 @@ export readandwrite
 @deprecate function_name(f::Function) nameof(f) false
 @deprecate datatype_name(t::DataType) nameof(t) false
 @deprecate datatype_name(t::UnionAll) nameof(t) false
+
+# issue #25501
+@deprecate sum(a::AbstractArray, dims)        sum(a, dims=dims)
+@deprecate sum(f, a::AbstractArray, dims)     sum(f, a, dims=dims)
+@deprecate prod(a::AbstractArray, dims)       prod(a, dims=dims)
+@deprecate prod(f, a::AbstractArray, dims)    prod(f, a, dims=dims)
+@deprecate maximum(a::AbstractArray, dims)    maximum(a, dims=dims)
+@deprecate maximum(f, a::AbstractArray, dims) maximum(f, a, dims=dims)
+@deprecate minimum(a::AbstractArray, dims)    minimum(a, dims=dims)
+@deprecate minimum(f, a::AbstractArray, dims) minimum(f, a, dims=dims)
+@deprecate all(a::AbstractArray, dims)        all(a, dims=dims)
+@deprecate all(f, a::AbstractArray, dims)     all(f, a, dims=dims)
+@deprecate any(a::AbstractArray, dims)        any(a, dims=dims)
+@deprecate any(f, a::AbstractArray, dims)     any(f, a, dims=dims)
+@deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
+@deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
+
+@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
+@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
+@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
+@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
+@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
+@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
+@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
+@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
+@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
+
+@deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+
+@deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
+
+@deprecate accumulate(op, A, dim::Integer)               accumulate(op, A, dims=dim)
+@deprecate accumulate!(op, B, A, dim::Integer)           accumulate!(op, B, A, dims=dim)
+@deprecate cumsum(A::AbstractArray, dim::Integer)        cumsum(A, dims=dim)
+@deprecate cumsum!(B, A, dim::Integer)                   cumsum!(B, A, dims=dim)
+@deprecate cumsum!(out, A::AbstractVector, dim::Integer) cumsum!(out, A, dims=dim)
+@deprecate cumprod(A::AbstractArray, dim::Integer)       cumprod(A, dims=dim)
+@deprecate cumprod!(B, A, dim::Integer)                  cumprod!(B, A, dims=dim)
 
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}

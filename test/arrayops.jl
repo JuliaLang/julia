@@ -627,13 +627,13 @@ end
     A1 = reshape(repeat([1,2],1,12),2,3,4)
     A2 = reshape(repeat([1 2 3],2,4),2,3,4)
     A3 = reshape(repeat([1 2 3 4],6,1),2,3,4)
-    @test isequal(cumsum(A,1),A1)
-    @test isequal(cumsum(A,2),A2)
-    @test isequal(cumsum(A,3),A3)
+    @test isequal(cumsum(A,dims=1),A1)
+    @test isequal(cumsum(A,dims=2),A2)
+    @test isequal(cumsum(A,dims=3),A3)
 
     # issue 20112
     A3 = reshape(repeat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
-    @test isequal(cumsum(A,3),A3)
+    @test isequal(cumsum(A,dims=3),A3)
     @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
     @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
 
@@ -852,13 +852,13 @@ end
 
     A = rand(4,4)
     for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
-        c = cumsum(s, 1)
+        c = cumsum(s, dims=1)
         @test c[1,1] == A[1,1]
         @test c[2,1] == A[1,1]+A[3,1]
         @test c[1,2] == A[1,3]
         @test c[2,2] == A[1,3]+A[3,3]
 
-        c = cumsum(s, 2)
+        c = cumsum(s, dims=2)
         @test c[1,1] == A[1,1]
         @test c[2,1] == A[3,1]
         @test c[1,2] == A[1,1]+A[1,3]
@@ -902,7 +902,7 @@ end
 end
 
 # issue #2342
-@test isequal(cumsum([1 2 3], 1), [1 2 3])
+@test isequal(cumsum([1 2 3], dims=1), [1 2 3])
 
 @testset "set-like operations" begin
     @test isequal(union([1,2,3], [4,3,4]), [1,2,3,4])
@@ -1062,31 +1062,31 @@ end
     @test isless(asc[:,2],asc[:,1])
     @test isless(asc[:,3],asc[:,2])
 
-    as = sort(a, 1)
+    as = sort(a, dims=1)
     @test issorted(as[:,1])
     @test issorted(as[:,2])
     @test issorted(as[:,3])
 
-    as = sort(a, 2)
+    as = sort(a, dims=2)
     @test issorted(as[1,:])
     @test issorted(as[2,:])
     @test issorted(as[3,:])
 
     local b = rand(21,21,2)
 
-    bs = sort(b, 1)
+    bs = sort(b, dims=1)
     for i in 1:21
         @test issorted(bs[:,i,1])
         @test issorted(bs[:,i,2])
     end
 
-    bs = sort(b, 2)
+    bs = sort(b, dims=2)
     for i in 1:21
         @test issorted(bs[i,:,1])
         @test issorted(bs[i,:,2])
     end
 
-    bs = sort(b, 3)
+    bs = sort(b, dims=3)
     @test all(bs[:,:,1] .<= bs[:,:,2])
 end
 
@@ -1851,8 +1851,8 @@ copyto!(S, A)
 @test cat(1, A, B, S) == cat(1, A, A, A)
 @test cat(2, A, B, S) == cat(2, A, A, A)
 
-@test cumsum(A, 1) == cumsum(B, 1) == cumsum(S, 1)
-@test cumsum(A, 2) == cumsum(B, 2) == cumsum(S, 2)
+@test cumsum(A, dims=1) == cumsum(B, dims=1) == cumsum(S, dims=1)
+@test cumsum(A, dims=2) == cumsum(B, dims=2) == cumsum(S, dims=2)
 
 @test mapslices(sort, A, 1) == mapslices(sort, B, 1) == mapslices(sort, S, 1)
 @test mapslices(sort, A, 2) == mapslices(sort, B, 2) == mapslices(sort, S, 2)
@@ -1944,15 +1944,15 @@ let f = OOB_Functor([1,2])
 end
 
 # issue 15654
-@test cumprod([5], 2) == [5]
-@test cumprod([1 2; 3 4], 3) == [1 2; 3 4]
-@test cumprod([1 2; 3 4], 1) == [1 2; 3 8]
-@test cumprod([1 2; 3 4], 2) == [1 2; 3 12]
+@test cumprod([5], dims=2) == [5]
+@test cumprod([1 2; 3 4], dims=3) == [1 2; 3 4]
+@test cumprod([1 2; 3 4], dims=1) == [1 2; 3 8]
+@test cumprod([1 2; 3 4], dims=2) == [1 2; 3 12]
 
-@test cumsum([5], 2) == [5]
-@test cumsum([1 2; 3 4], 1) == [1 2; 4 6]
-@test cumsum([1 2; 3 4], 2) == [1 3; 3 7]
-@test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
+@test cumsum([5], dims=2) == [5]
+@test cumsum([1 2; 3 4], dims=1) == [1 2; 4 6]
+@test cumsum([1 2; 3 4], dims=2) == [1 3; 3 7]
+@test cumsum([1 2; 3 4], dims=3) == [1 2; 3 4]
 
 # issue #18363
 @test_throws DimensionMismatch cumsum!([0,0], 1:4)
@@ -2111,8 +2111,8 @@ end
 
 @testset "accumulate, accumulate!" begin
     @test accumulate(+, [1,2,3]) == [1, 3, 6]
-    @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]
-    @test accumulate(max, [1 2; 3 0], 2) == [1 2; 3 3]
+    @test accumulate(min, [1 2; 3 4], dims=1) == [1 2; 1 2]
+    @test accumulate(max, [1 2; 3 0], dims=2) == [1 2; 3 3]
     @test accumulate(+, Bool[]) == Int[]
     @test accumulate(*, Bool[]) == Bool[]
     @test accumulate(+, Float64[]) == Float64[]
@@ -2120,10 +2120,10 @@ end
     @test accumulate(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
     @test accumulate(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
 
-    @test accumulate(max, [1 0; 0 1], 1) == [1 0; 1 1]
-    @test accumulate(max, [1 0; 0 1], 2) == [1 1; 0 1]
-    @test accumulate(min, [1 0; 0 1], 1) == [1 0; 0 0]
-    @test accumulate(min, [1 0; 0 1], 2) == [1 0; 0 0]
+    @test accumulate(max, [1 0; 0 1], dims=1) == [1 0; 1 1]
+    @test accumulate(max, [1 0; 0 1], dims=2) == [1 1; 0 1]
+    @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
+    @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
     @test isa(accumulate(+,     Int[]) , Vector{Int})
     @test isa(accumulate(+, 1., Int[]) , Vector{Float64})
@@ -2139,7 +2139,7 @@ end
             @test accumulate_arr ≈ cumop(arr)
             @test accumulate_arr[end] ≈ reduce(op, arr)
             @test accumulate_arr[1] ≈ arr[1]
-            @test accumulate(op, arr, 10) ≈ arr
+            @test accumulate(op, arr, dims=10) ≈ arr
 
             if eltype(arr) in [Int, Float64] # eltype of out easy
                 out = similar(arr)
@@ -2160,7 +2160,7 @@ end
     # asymmetric operation
     op(x,y) = 2x+y
     @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
-    @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
+    @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
