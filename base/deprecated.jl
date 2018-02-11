@@ -1365,6 +1365,11 @@ end
            link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write),
            false)
 
+# Remember to delete the module when removing this
+@eval Base.Math module JuliaLibm
+    Base.@deprecate log Base.log
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
