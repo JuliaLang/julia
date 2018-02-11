@@ -75,3 +75,11 @@ end
         @test hash(base64decode(base64encode(data))) == hash(data)
     end
 end
+
+@testset "stringmime" begin
+    @test stringmime("text/plain", [1 2;3 4]) == repr("text/plain", [1 2;3 4])
+    @test stringmime("text/html", "raw html data") == "raw html data"
+    @test stringmime("text/plain", "string") == "\"string\""
+    @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
+    @test stringmime("text/plain", 3.141592653589793, :compact=>true) == "3.14159"
+end
