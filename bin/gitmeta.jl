@@ -34,7 +34,7 @@ const STDLIBS = [
 ]
 
 function uses(repo::String, tree::String, lib::String)
-    pattern = "\\b(import|using)\\s+$lib\\b"
+    pattern = string(raw"\b(import|using)\s+((\w|\.)+\s*,\s*)*", lib, raw"\b")
     success(`git -C $repo grep -Eq $pattern $tree`)
 end
 
@@ -100,12 +100,8 @@ function gitmeta(pkgs::Dict{String,Package})
             # scan for stdlib dependencies
             v"0.7" in v.requires["julia"].versions || continue
             haskey(s[uuid], v.sha1) && continue
-            if pkg == "Compat"
-                s[uuid][v.sha1] = 2^length(STDLIBS)-1
-            else
-                libs = [uses(repo_path, git_tree_hash, lib) for lib in STDLIBS]
-                s[uuid][v.sha1] = sum(d*2^(i-1) for (i,d) in enumerate(libs))
-            end
+            libs = [uses(repo_path, git_tree_hash, lib) for lib in STDLIBS]
+            s[uuid][v.sha1] = sum(d*2^(i-1) for (i,d) in enumerate(libs))
         end
         isempty(s[uuid]) && continue
         println(io, "[$uuid]")
