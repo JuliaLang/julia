@@ -153,6 +153,14 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+### random rationals
+
+rand(r::AbstractRNG, ::SamplerType{Rational{T}}) where {T<:Integer} =
+    Rational(rand(r, T), rand(r, T))
+
+rand(r::AbstractRNG, ::SamplerType{Rational}) =
+    Rational(rand(r, Int), rand(r, Int)) # allows rand(Rational) to work
+
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)

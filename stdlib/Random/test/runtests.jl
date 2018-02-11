@@ -32,6 +32,10 @@ end
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
 @test rand(MersenneTwister(42)) == 0.5331830160438613
+
+@test rand(MersenneTwister(42), Rational{Int32}) == -368374157//235696739
+@test rand(MersenneTwister(42), Rational) == 5590813852184710015//3569577920569690638
+
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
