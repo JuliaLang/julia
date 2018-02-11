@@ -115,26 +115,22 @@ repr(m::MIME, x, context::Pair{Symbol}...) = istextmime(m) ? _textrepr(m, x, con
 repr(m::AbstractString, x, context::Pair{Symbol}...) = repr(MIME(m), x, context...)
 
 # strings are shown escaped for text/plain
-_textrepr(m::MIME, x) = sprint(show, m, x)
+_textrepr(m::MIME, x, context::Pair{Symbol}...) = String(__binrepr(m, x, context...))
 _textrepr(::MIME, x::AbstractString, context::Pair{Symbol}...) = x
-_textrepr(m::MIME"text/plain", x::AbstractString) =
-    sprint(show, m, x)
-function _textrepr(m::MIME"text/plain", x, context::Pair{Symbol}...)
-    s = IOBuffer()
-    show(IOContext(s, context...), m, x)
-    String(take!(s))
-end
+_textrepr(m::MIME"text/plain", x::AbstractString, context::Pair{Symbol}...) =
+    String(__binrepr(m, x, context...))
 
-function _binrepr(m::MIME, x)
+function __binrepr(m::MIME, x)
     s = IOBuffer()
     show(s, m, x)
     take!(s)
 end
-function _binrepr(m::MIME, x, context::Pair{Symbol}...)
+function __binrepr(m::MIME, x, context::Pair{Symbol}...)
     s = IOBuffer()
     show(IOContext(s, context...), m, x)
     take!(s)
 end
+_binrepr(m::MIME, x, context::Pair{Symbol}...) = __binrepr(m, x, context...)
 _binrepr(m::MIME, x::Vector{UInt8}, context::Pair{Symbol}...) = x
 
 # resolve method ambiguities with repr(x, context...):
