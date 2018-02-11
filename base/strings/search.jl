@@ -426,10 +426,12 @@ julia> findprev("Julia", "JuliaLang", 6)
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 
 """
-    contains(haystack::AbstractString, needle::Union{AbstractString,Regex,Char})
+    contains(haystack::AbstractString, needle::Union{AbstractString,Char})
+    contains(haystack::AbstractString, needle::Regex, [idx::Integer])
 
 Determine whether the second argument is a substring of the first. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
+The optional `idx` argument specifies an index at which to start the search.
 
 # Examples
 ```jldoctest
@@ -441,6 +443,9 @@ true
 
 julia> contains("aba", r"a.a")
 true
+
+julia> contains("aba", r"a.a", 2)
+false
 
 julia> contains("abba", r"a.a")
 false

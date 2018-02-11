@@ -141,15 +141,15 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-function contains(s::AbstractString, r::Regex, offset::Integer=0)
+function contains(s::AbstractString, r::Regex, idx::Integer=firstindex(s))
     compile(r)
-    return PCRE.exec(r.regex, String(s), offset, r.match_options,
+    return PCRE.exec(r.regex, String(s), idx-1, r.match_options,
                      r.match_data)
 end
 
-function contains(s::SubString, r::Regex, offset::Integer=0)
+function contains(s::SubString{String}, r::Regex, idx::Integer=firstindex(s))
     compile(r)
-    return PCRE.exec(r.regex, s, offset, r.match_options,
+    return PCRE.exec(r.regex, s, idx-1, r.match_options,
                      r.match_data)
 end
 
@@ -161,7 +161,7 @@ end
 Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+`m.captures`. The optional `idx` argument specifies an index at which to start the search.
 
 # Examples
 ```jldoctest
@@ -184,7 +184,8 @@ true
 """
 function match end
 
-function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
+function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
+               add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
@@ -192,18 +193,18 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
+    # thisind is needed to correct for the fact that ovec is 0-based
+    # and that ovec[2] is pointing at the last byte of the match
+    mat = SubString(str, ovec[1]+1, thisind(str, ovec[2]))
     cap = Union{Nothing,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
-                                        SubString(str, ovec[2i+1]+1,
-                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
+                                           SubString(str, ovec[2i+1]+1,
+                                                     thisind(str, ovec[2i+2])) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
-match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String type; use String(s) to convert"
-))
+match(r::Regex, s::AbstractString, i::Integer) = match(r, String(s), i)
 
 """
     matchall(r::Regex, s::AbstractString; overlap::Bool = false]) -> Vector{AbstractString}
@@ -228,11 +229,11 @@ julia> matchall(rx, "a1a2a3a", overlap = true)
  "a3a"
 ```
 """
-function matchall(re::Regex, str::String; overlap::Bool = false)
+function matchall(re::Regex, str::Union{SubString{String},String}; overlap::Bool = false)
     regex = compile(re).regex
     n = sizeof(str)
     matches = SubString{String}[]
-    offset = UInt32(0)
+    offset = Csize_t(0)
     opts = re.match_options
     opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
     prevempty = false
@@ -241,7 +242,7 @@ function matchall(re::Regex, str::String; overlap::Bool = false)
         result = PCRE.exec(regex, str, offset, prevempty ? opts_nonempty : opts, re.match_data)
         if !result
             if prevempty && offset < n
-                offset = UInt32(nextind(str, offset + 1) - 1)
+                offset = Csize_t(nextind(str, offset + 1) - 1)
                 prevempty = false
                 continue
             else
@@ -249,11 +250,13 @@ function matchall(re::Regex, str::String; overlap::Bool = false)
             end
         end
 
-        push!(matches, SubString(str, ovec[1]+1, ovec[2]))
+        # thisind is needed to correct for the fact that ovec is 0-based
+        # and that ovec[2] is pointing at the last byte of the match
+        push!(matches, SubString(str, ovec[1]+1, thisind(str, ovec[2])))
         prevempty = offset == ovec[2]
         if overlap
             if !prevempty
-                offset = UInt32(ovec[1]+1)
+                offset = Csize_t(ovec[1]+1)
             end
         else
             offset = ovec[2]
@@ -262,22 +265,22 @@ function matchall(re::Regex, str::String; overlap::Bool = false)
     matches
 end
 
-matchall(re::Regex, str::SubString; overlap::Bool = false) =
+matchall(re::Regex, str::AbstractString; overlap::Bool = false) =
     matchall(re, String(str), overlap = overlap)
 
 # TODO: return only start index and update deprecation
-function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
+function findnext(re::Regex, str::Union{String,SubString{String}}, idx::Integer)
     if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end
     opts = re.match_options
     compile(re)
+    # thisind is needed to correct for the fact that ovec is 0-based
+    # and that ovec[2] is pointing at the last byte of the match
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
-        ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
+        ((Int(re.ovec[1])+1):thisind(str,Int(re.ovec[2]))) : (0:-1)
 end
-findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
-    "regex search is only available for the String type; use String(s) to convert"
-))
+findnext(r::Regex, s::AbstractString, idx::Integer) = findnext(String(s), r, idx)
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
 struct SubstitutionString{T<:AbstractString} <: AbstractString

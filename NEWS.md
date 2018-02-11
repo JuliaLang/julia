@@ -984,6 +984,9 @@ Deprecated or removed
     predicates for some methods ([#24673]
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+    `idx` argument in `contains(str, regex, idx)` now specifies an index at which to start
+    the search. In `ismatch` it was undocumented and was interpreted as an offset from the
+    start of the string where the search should start.
 
   * `linspace` and `logspace` now require an explicit number of elements to be
     supplied rather than defaulting to `50`([#24794], [#24805]).
