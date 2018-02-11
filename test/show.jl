@@ -850,7 +850,7 @@ test_repr("a.:(begin
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
-@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
+@test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
@@ -1036,10 +1036,10 @@ end
     anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 

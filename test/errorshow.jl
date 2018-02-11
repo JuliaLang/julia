@@ -318,8 +318,8 @@ let err_str,
     err_str = @except_str randn(1)() MethodError
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
-@test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
-@test contains(stringmime("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
+@test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
+@test contains(repr("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
 
 method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
@@ -356,8 +356,8 @@ let err_str,
                      "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
-    @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
-    @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
+    @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
+    @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
     @test err_str == "Symbol() at $sn:$(method_defs_lineno + 0)"
