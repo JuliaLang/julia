@@ -5,7 +5,8 @@ import Base64:
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
-    base64decode
+    base64decode,
+    stringmime
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
 const encodedMaxLine76 = """
