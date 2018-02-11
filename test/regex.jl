@@ -39,11 +39,11 @@ show(buf, r"")
 
 # regex match / findfirst string must be a String
 @test match(r"test", GenericString("some test")).match == match(r"test", "some test").match
-@test findfirst(GenericString("this is a test"), r"test") == findfirst("this is a test", r"test")
-@test findfirst("", r"ABC") == 0:-1
-@test findnext("", r"ABC", 1) == 0:-1
-@test findfirst("_ABC_", r"A.C") == 2:4
-@test findnext("_ABC_", r"A.C", 3) == 0:-1
+@test findfirst(r"test", GenericString("this is a test")) == findfirst(r"test", "this is a test")
+@test findfirst(r"ABC", "") == 0:-1
+@test findnext(r"ABC", "", 1) == 0:-1
+@test findfirst(r"A.C", "_ABC_") == 2:4
+@test findnext(r"A.C", "_ABC_", 3) == 0:-1
 
 # Named subpatterns
 let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")

@@ -141,16 +141,14 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-function contains(s::AbstractString, r::Regex, idx::Integer=firstindex(s))
+function contains(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, String(s), idx-1, r.match_options,
-                     r.match_data)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options, r.match_data)
 end
 
-function contains(s::SubString{String}, r::Regex, idx::Integer=firstindex(s))
+function contains(s::SubString{String}, r::Regex)
     compile(r)
-    return PCRE.exec(r.regex, s, idx-1, r.match_options,
-                     r.match_data)
+    return PCRE.exec(r.regex, s, 0, r.match_options, r.match_data)
 end
 
 (r::Regex)(s) = contains(s, r)
@@ -280,8 +278,8 @@ function findnext(re::Regex, str::Union{String,SubString{String}}, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):thisind(str,Int(re.ovec[2]))) : (0:-1)
 end
-findnext(r::Regex, s::AbstractString, idx::Integer) = findnext(String(s), r, idx)
-findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
+findnext(r::Regex, s::AbstractString, idx::Integer) = findnext(r, String(s), idx)
+findfirst(r::Regex, s::AbstractString) = findnext(r, s, firstindex(s))
 
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T

@@ -1240,6 +1240,14 @@ end
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
+function ismatch(r::Regex, s::AbstractString, offset::Integer)
+    depwarn("`ismatch(regex, str, offset)` is deprecated. " *
+            "You can use `contains(SubString(str, offset+1), regex)` instead.", :ismatch)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), offset, r.match_options,
+                     r.match_data)
+end
+
 @deprecate findin(a, b) findall(occursin(b), a)
 
 @deprecate find findall
