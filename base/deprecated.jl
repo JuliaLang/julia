@@ -1239,14 +1239,7 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
-
-function ismatch(r::Regex, s::AbstractString, offset::Integer)
-    depwarn("`ismatch(regex, str, offset)` is deprecated. " *
-            "You can use `contains(SubString(str, offset+1), regex)` instead.", :ismatch)
-    compile(r)
-    return PCRE.exec(r.regex, String(s), offset, r.match_options,
-                     r.match_data)
-end
+@deprecate ismatch(r::Regex, s::AbstractString, offset::Integer) contains(SubString(s, offset+1), r)
 
 @deprecate findin(a, b) findall(occursin(b), a)
 
