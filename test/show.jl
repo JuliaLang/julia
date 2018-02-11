@@ -1156,3 +1156,14 @@ end
         @test contains(str, "(intrinsic function")
     end
 end
+
+@testset "repr(mime, x)" begin
+    @test repr("text/plain", UInt8[1 2;3 4]) == "2×2 Array{UInt8,2}:\n 0x01  0x02\n 0x03  0x04"
+    @test repr("text/html", "raw html data") == "raw html data"
+    @test repr("text/plain", "string") == "\"string\""
+    @test repr("image/png", UInt8[2,3,4,7]) == UInt8[2,3,4,7]
+    @test repr("text/plain", 3.141592653589793) == "3.141592653589793"
+    @test repr("text/plain", 3.141592653589793, :compact=>true) == "3.14159"
+    @test repr("text/plain", :compact=>true) == "\"text/plain\""
+    @test repr(MIME("text/plain"), :compact=>true) == ":compact => true"
+end
