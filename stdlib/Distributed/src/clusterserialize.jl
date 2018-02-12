@@ -10,7 +10,7 @@ import Serialization: object_number, lookup_object_number, remember_object
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::IdDict
+    table::IdDict{Any,Any}
     pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
@@ -50,18 +50,18 @@ end
 
 function remember_object(s::ClusterSerializer, @nospecialize(o), n::UInt64)
     known_object_data[n] = o
-    if isa(o, TypeName) && !haskey(object_numbers, o)
+    if isa(o, Core.TypeName) && !haskey(object_numbers, o)
         # set up reverse mapping for serialize
         object_numbers[o] = n
     end
     return nothing
 end
 
-function deserialize(s::ClusterSerializer, ::Type{TypeName})
+function deserialize(s::ClusterSerializer, ::Type{Core.TypeName})
     full_body_sent = deserialize(s)
     number = read(s.io, UInt64)
     if !full_body_sent
-        tn = lookup_object_number(s, number)::TypeName
+        tn = lookup_object_number(s, number)::Core.TypeName
         remember_object(s, tn, number)
         deserialize_cycle(s, tn)
     else
@@ -73,7 +73,7 @@ function deserialize(s::ClusterSerializer, ::Type{TypeName})
     return tn
 end
 
-function serialize(s::ClusterSerializer, t::TypeName)
+function serialize(s::ClusterSerializer, t::Core.TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
 

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifdef __clang_analyzer__
 
 #define JL_PROPAGATES_ROOT __attribute__((annotate("julia_propagates_root")))

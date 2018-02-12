@@ -1472,20 +1472,20 @@ end
 
 # scaling
 
-function mul1!(x::SparseVectorUnion, a::Real)
-    mul1!(nonzeros(x), a)
+function rmul!(x::SparseVectorUnion, a::Real)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul1!(x::SparseVectorUnion, a::Complex)
-    mul1!(nonzeros(x), a)
+function rmul!(x::SparseVectorUnion, a::Complex)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul2!(a::Real, x::SparseVectorUnion)
-    mul1!(nonzeros(x), a)
+function lmul!(a::Real, x::SparseVectorUnion)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul2!(a::Complex, x::SparseVectorUnion)
-    mul1!(nonzeros(x), a)
+function lmul!(a::Complex, x::SparseVectorUnion)
+    rmul!(nonzeros(x), a)
     return x
 end
 
@@ -1588,7 +1588,7 @@ function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number,
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1627,7 +1627,7 @@ function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractS
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1685,7 +1685,7 @@ function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Numbe
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1729,7 +1729,7 @@ function _At_or_Ac_mul_B!(tfun::Function,
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 

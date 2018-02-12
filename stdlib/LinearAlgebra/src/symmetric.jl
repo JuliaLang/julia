@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Symmetric and Hermitian matrices
-struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
@@ -40,9 +40,38 @@ julia> Slower = Symmetric(A, :L)
 
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == transpose(A)`).
 """
-Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
+function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
+    checksquare(A)
+    symmetric_type(typeof(A))(A, char_uplo(uplo))
+end
 
-struct Hermitian{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+"""
+    symmetric(A, uplo=:U)
+
+Construct a symmetric view of `A`. If `A` is a matrix, `uplo` controls whether the upper
+(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+other one. If `A` is a `Number`, it is returned as is.
+
+If a symmetric view of a matrix is to be constructed of which the elements are neither
+matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
+case, `symmetric_type` has to be implemented, too.
+"""
+symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
+symmetric(A::Number, ::Symbol) = A
+
+"""
+    symmetric_type(T::Type)
+
+The type of the object returned by `symmetric(::T, ::Symbol)`. For matrices, this is an
+appropriately typed `Symmetric`, for `Number`s, it is the original type. If `symmetric` is
+implemented for a custom type, so should be `symmetric_type`, and vice versa.
+"""
+function symmetric_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
+    Symmetric{Union{S,promote_op(transpose, S),symmetric_type(S)},T}
+end
+symmetric_type(::Type{T}) where {T<:Number} = T
+
+struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
@@ -83,8 +112,35 @@ Hermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)
 """
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     n = checksquare(A)
-    Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
+    hermitian_type(typeof(A))(A, char_uplo(uplo))
 end
+
+"""
+    hermitian(A, uplo=:U)
+
+Construct a hermitian view of `A`. If `A` is a matrix, `uplo` controls whether the upper
+(if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
+other one. If `A` is a `Number`, its real part is returned converted back to the input
+type.
+
+If a hermitian view of a matrix is to be constructed of which the elements are neither
+matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
+case, `hermitian_type` has to be implemented, too.
+"""
+hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
+hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+
+"""
+    hermitian_type(T::Type)
+
+The type of the object returned by `hermitian(::T, ::Symbol)`. For matrices, this is an
+appropriately typed `Hermitian`, for `Number`s, it is the original type. If `hermitian` is
+implemented for a custom type, so should be `hermitian_type`, and vice versa.
+"""
+function hermitian_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
+    Hermitian{Union{S,promote_op(adjoint, S),hermitian_type(S)},T}
+end
+hermitian_type(::Type{T}) where {T<:Number} = T
 
 for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     @eval begin
@@ -115,20 +171,22 @@ size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
+    @inbounds if i == j
+        return symmetric(A.data[i, j], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
         return A.data[i, j]
     else
-        return A.data[j, i]
+        return transpose(A.data[j, i])
     end
 end
 @inline function getindex(A::Hermitian, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
+    @inbounds if i == j
+        return hermitian(A.data[i, j], Symbol(A.uplo))::hermitian_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
         return A.data[i, j]
-    elseif i == j
-        return eltype(A)(real(A.data[i, j]))
     else
-        return conj(A.data[j, i])
+        return adjoint(A.data[j, i])
     end
 end
 
@@ -162,11 +220,17 @@ end
 similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
 # Conversion
-Matrix(A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
+function Matrix(A::Symmetric)
+    B = copytri!(convert(Matrix, copy(A.data)), A.uplo)
+    for i = 1:size(A, 1)
+        B[i,i] = symmetric(B[i,i], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+    end
+    return B
+end
 function Matrix(A::Hermitian)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
     for i = 1:size(A, 1)
-        B[i,i] = real(B[i,i])
+        B[i,i] = hermitian(B[i,i], Symbol(A.uplo))::hermitian_type(eltype(A.data))
     end
     return B
 end

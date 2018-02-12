@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # RUN: julia --startup-file=no %s | opt -load libjulia.so -AllocOpt -S - | FileCheck %s
 
 isz = sizeof(UInt) == 8 ? "i64" : "i32"

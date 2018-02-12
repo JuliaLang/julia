@@ -79,6 +79,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [The Julia REPL](@ref)
   * [Base64](@ref)
   * [CRC32c](@ref)
+  * [SHA](@ref)
   * [Dates and Time](@ref stdlib-dates)
   * [Delimited Files](@ref)
   * [Distributed Computing](@ref)
@@ -115,7 +116,6 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
       * [Bounds checking](@ref)
       * [Proper maintenance and care of multi-threading locks](@ref)
       * [Arrays with custom indices](@ref)
-      * [Base.LibGit2](@ref)
       * [Module loading](@ref)
       * [Inference](@ref)
   * Developing/debugging Julia's C code

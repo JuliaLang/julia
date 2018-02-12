@@ -170,7 +170,7 @@ let oldout = STDOUT
         redirect_stdout(oldout)
         close(wrout)
 
-        @test wait(out) == """
+        @test fetch(out) == """
             Expr
               head: Symbol call
               args: Array{Any}((3,))

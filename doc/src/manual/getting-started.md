@@ -117,8 +117,8 @@ julia [switches] -- [programfile] [args...]
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
  -q, --quiet               Quiet startup: no banner, suppress REPL warnings
- --banner={yes|no}         Enable or disable startup banner
- --color={yes|no}          Enable or disable color text
+ --banner={yes|no|auto}    Enable or disable startup banner
+ --color={yes|no|auto}     Enable or disable color text
  --history-file={yes|no}   Load or save history
 
  --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)

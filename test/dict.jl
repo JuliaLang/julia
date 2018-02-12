@@ -91,6 +91,8 @@ end
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
+    # test rethrow of error in ctor
+    @test_throws DomainError Dict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
@@ -323,6 +325,13 @@ end
         @test !isempty(summary(keys(d)))
         @test !isempty(summary(values(d)))
     end
+    # show on empty Dict
+    io = IOBuffer()
+    d = Dict{Int, String}()
+    show(io, d)
+    str = String(take!(io))
+    @test str == "Dict{$(Int),String}()"
+    close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
@@ -430,6 +439,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict{Any,Any}(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -470,6 +480,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -535,6 +546,11 @@ end
     end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
+
+    # not an iterator of tuples or pairs
+    @test_throws ArgumentError IdDict([1, 2, 3, 4])
+    # test rethrow of error in ctor
+    @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 
@@ -642,6 +658,10 @@ end
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
+    d = Dict(zip(-1:3,-1:3))
+    f = p -> sqrt(p.second) > 2
+    # test rethrowing error from f
+    @test_throws DomainError filter(f, d)
 end
 
 struct MyString <: AbstractString
@@ -923,4 +943,3 @@ end
     @test String(take!(buf)) ==
         "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
-

@@ -3,7 +3,8 @@
 # tests for Core.Compiler correctness and precision
 import Core.Compiler: Const, Conditional, ⊑
 
-using Random
+using Random, Core.IR
+using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
@@ -186,7 +187,7 @@ result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtyp
 # issue #10878
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
-@code_typed invoke_g10878()
+code_typed(invoke_g10878, ())
 code_llvm(DevNull, invoke_g10878, ())
 
 
@@ -409,8 +410,8 @@ gpure(x::Irrational) = fpure(x)
 @test which(fpure, (typeof(pi),)).pure
 @test !which(gpure, ()).pure
 @test !which(gpure, (typeof(pi),)).pure
-@test @code_typed(gpure())[1].pure
-@test @code_typed(gpure(π))[1].pure
+@test code_typed(gpure, ())[1][1].pure
+@test code_typed(gpure, (typeof(π),))[1][1].pure
 @test gpure() == gpure() == gpure()
 @test gpure(π) == gpure(π) == gpure(π)
 
@@ -488,10 +489,10 @@ function g19348(x)
 end
 
 for codetype in Any[
-        @code_typed(f18679()),
-        @code_typed(g18679()),
-        @code_typed(h18679()),
-        @code_typed(g19348((1, 2.0)))]
+        code_typed(f18679, ())[1],
+        code_typed(g18679, ())[1],
+        code_typed(h18679, ())[1],
+        code_typed(g19348, (typeof((1, 2.0)),))[1]]
     # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
     @test all(x->isa(x, Type), code.slottypes)
@@ -925,7 +926,7 @@ end
 @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
 @test isdefined_tfunc(Const(Base), Symbol) == Bool
 @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
-@test isdefined_tfunc(SimpleVector, Const(1)) === Const(false)
+@test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Bool
@@ -960,7 +961,7 @@ typeargs = (Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int})
 # while doing constant propagation
 Base.@pure plus1(x) = x + 1
 f21933(x::Val{T}) where {T} = f(Val(plus1(T)))
-@code_typed f21933(Val(1))
+code_typed(f21933, (Val{1},))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
@@ -1018,7 +1019,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
     precompile(tt)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{SimpleVector}, (Any, Any), tt, meth.sig)
+    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
     meth = Base.func_for_method_checked(meth, tt)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                  (Any, Any, Any, UInt), meth, tt, env, world)
@@ -1097,14 +1098,14 @@ function sizeof_typeref(typeref)
     Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]).code, Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
     Core.sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_call(first(@code_typed sizeof_constvec()).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_constvec, ())[1]).code, Core.sizeof, 2)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 

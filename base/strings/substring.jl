@@ -79,26 +79,8 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
-function thisind(s::SubString, i::Int)
-    @boundscheck 0 ≤ i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return thisind(s.string, s.offset + i) - s.offset
-end
-function nextind(s::SubString, i::Int, n::Int)
-    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return nextind(s.string, s.offset + i, n) - s.offset
-end
-function nextind(s::SubString, i::Int)
-    @boundscheck 0 ≤ i < ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return nextind(s.string, s.offset + i) - s.offset
-end
-function prevind(s::SubString, i::Int, n::Int)
-    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return prevind(s.string, s.offset + i, n) - s.offset
-end
-function prevind(s::SubString, i::Int)
-    @boundscheck 0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-    @inbounds return prevind(s.string, s.offset + i) - s.offset
-end
+thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
@@ -149,7 +131,7 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 """
 function reverse(s::Union{String,SubString{String}})::String
     sprint() do io
-        i, j = start(s), lastindex(s)
+        i, j = firstindex(s), lastindex(s)
         while i ≤ j
             c, j = s[j], prevind(s, j)
             write(io, c)

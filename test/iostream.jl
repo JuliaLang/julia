@@ -51,6 +51,14 @@ end
         b = UInt8[0]
         readbytes!(file, b, all=false)
         @test String(b) == "a"
+        # with resizing of b
+        b = UInt8[]
+        readbytes!(file, b, 2, all=false)
+        @test String(b) == "aa"
+        # readbytes_all with resizing
+        b = UInt8[]
+        readbytes!(file, b, 15)
+        @test String(b) == "aaaaaaaaaaaaaa"
     end
 end
 @testset "issue #18755" begin

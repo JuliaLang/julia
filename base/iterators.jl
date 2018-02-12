@@ -153,15 +153,15 @@ end
 @inline done(r::Reverse{<:Enumerate}, state) = state[1] < 1
 
 """
-    Iterators.IndexValue(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into an Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
-struct IndexValue{K, V, I, A} <: AbstractDict{K, V}
+struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
-    IndexValue(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
+    Pairs(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
 end
 
 """
@@ -210,42 +210,42 @@ CartesianIndex(2, 2) e
 
 See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
-pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianIndices(axes(A)))
+pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, linearindices(A))
+pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
-pairs(tuple::Tuple) = IndexValue(tuple, keys(tuple))
-pairs(nt::NamedTuple) = IndexValue(nt, keys(nt))
-# pairs(v::IndexValue) = v # listed for reference, but already defined from being an AbstractDict
+pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
+pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+# pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-length(v::IndexValue)  = length(v.itr)
-axes(v::IndexValue) = axes(v.itr)
-size(v::IndexValue)    = size(v.itr)
-@inline start(v::IndexValue) = start(v.itr)
-@propagate_inbounds function next(v::IndexValue, state)
+length(v::Pairs)  = length(v.itr)
+axes(v::Pairs) = axes(v.itr)
+size(v::Pairs)    = size(v.itr)
+@inline start(v::Pairs) = start(v.itr)
+@propagate_inbounds function next(v::Pairs, state)
     indx, n = next(v.itr, state)
     item = v.data[indx]
     return (Pair(indx, item), n)
 end
-@inline done(v::IndexValue, state) = done(v.itr, state)
+@inline done(v::Pairs, state) = done(v.itr, state)
 
-eltype(::Type{IndexValue{K, V}}) where {K, V} = Pair{K, V}
+eltype(::Type{Pairs{K, V}}) where {K, V} = Pair{K, V}
 
-IteratorSize(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{IndexValue{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
+IteratorSize(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
 
-reverse(v::IndexValue) = IndexValue(v.data, reverse(v.itr))
+reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 
-haskey(v::IndexValue, key) = (key in v.itr)
-keys(v::IndexValue) = v.itr
-values(v::IndexValue) = v.data
-getindex(v::IndexValue, key) = v.data[key]
-setindex!(v::IndexValue, value, key) = (v.data[key] = value; v)
-get(v::IndexValue, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::IndexValue, key) = get(f, v.data, key)
+haskey(v::Pairs, key) = (key in v.itr)
+keys(v::Pairs) = v.itr
+values(v::Pairs) = v.data
+getindex(v::Pairs, key) = v.data[key]
+setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
+get(v::Pairs, key, default) = get(v.data, key, default)
+get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
 
 # zip
 
@@ -441,6 +441,31 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 ```
 """
 rest(itr,state) = Rest(itr,state)
+
+"""
+    peel(iter)
+
+Returns the first element and an iterator over the remaining elements.
+
+# Example
+```jldoctest
+julia> (a, rest) = Iterators.peel("abc");
+
+julia> a
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> collect(rest)
+2-element Array{Char,1}:
+ 'b'
+ 'c'
+```
+"""
+function peel(itr)
+    s = start(itr)
+    done(itr, s) && throw(BoundsError())
+    val, s = next(itr, s)
+    val, rest(itr, s)
+end
 
 start(i::Rest) = i.st
 @propagate_inbounds next(i::Rest, st) = next(i.itr, st)
@@ -1009,51 +1034,63 @@ julia> Base.peek(a)
 # Sum the remaining elements
 julia> sum(a)
 7
-````
+```
 """
 mutable struct Stateful{T, VS}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
     taken::Int
-    # Try to find an appropriate type for the (value, state tuple),
-    # by doing a recursive unrolling of the iteration protocol up to
-    # fixpoint.
-    function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
-        nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
-        nextvalstate <: Tuple{Any, Any} || return Any
-        nextvalstate = Tuple{
-            typejoin(valT, fieldtype(nextvalstate, 1)),
-            typejoin(stateT, fieldtype(nextvalstate, 2))}
-        return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
-            fixpoint_iter_type(itrT,
-                fieldtype(nextvalstate, 1),
-                fieldtype(nextvalstate, 2)))
-    end
-    function Stateful(itr::T) where {T}
+    @inline function Stateful(itr::T) where {T}
         state = start(itr)
         VS = fixpoint_iter_type(T, Union{}, typeof(state))
-        vs = done(itr, state) ? nothing : next(itr, state)::VS
-        new{T, VS}(itr, vs, 0)
+        if done(itr, state)
+            new{T, VS}(itr, nothing, 0)
+        else
+            new{T, VS}(itr, next(itr, state)::VS, 0)
+        end
     end
+end
+
+# Try to find an appropriate type for the (value, state tuple),
+# by doing a recursive unrolling of the iteration protocol up to
+# fixpoint.
+function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
+    nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
+    nextvalstate <: Tuple{Any, Any} || return Any
+    nextvalstate = Tuple{
+        typejoin(valT, fieldtype(nextvalstate, 1)),
+        typejoin(stateT, fieldtype(nextvalstate, 2))}
+    return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
+        fixpoint_iter_type(itrT,
+            fieldtype(nextvalstate, 1),
+            fieldtype(nextvalstate, 2)))
 end
 
 convert(::Type{Stateful}, itr) = Stateful(itr)
 
-isempty(s::Stateful) = s.nextvalstate === nothing
+@inline isempty(s::Stateful) = s.nextvalstate === nothing
 
-function popfirst!(s::Stateful)
-    isempty(s) && throw(EOFError())
-    val, state = s.nextvalstate
-    s.nextvalstate = done(s.itr, state) ? nothing : next(s.itr, state)
-    s.taken += 1
-    val
+@inline function popfirst!(s::Stateful)
+    vs = s.nextvalstate
+    if vs === nothing
+        throw(EOFError())
+    else
+        val, state = vs
+        if done(s.itr, state)
+            s.nextvalstate = nothing
+        else
+            s.nextvalstate = next(s.itr, state)
+        end
+        s.taken += 1
+        return val
+    end
 end
 
-peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
-start(s::Stateful) = nothing
-next(s::Stateful, state) = popfirst!(s), nothing
-done(s::Stateful, state) = isempty(s)
+@inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
+@inline start(s::Stateful) = nothing
+@inline next(s::Stateful, state) = popfirst!(s), nothing
+@inline done(s::Stateful, state) = isempty(s)
 IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
     isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
 eltype(::Type{Stateful{VS, T}} where VS) where {T} = eltype(T)

@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 using REPL
 using Random
@@ -23,9 +24,9 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     stdin = Pipe()
     stdout = Pipe()
     stderr = Pipe()
-    Base.link_pipe(stdin, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(stdin, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stdout, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stderr, reader_supports_async=true, writer_supports_async=true)
 
     repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
     repl.options = options
@@ -38,7 +39,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     end
     @test read(stderr.out, String) == ""
     #display(read(stdout.out, String))
-    wait(t)
+    Base._wait(t)
     nothing
 end
 
@@ -158,24 +159,33 @@ fake_repl() do stdin_write, stdout_read, repl
     # issue #10120
     # ensure that command quoting works correctly
     let s, old_stdout = STDOUT
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
         try
-            write(stdin_write, ";")
-            readuntil(stdout_read, "shell> ")
-            Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-            write(stdin_write, """ -e "println(\\"HI\\")"\n""")
-            while true
+            write(stdin_write, '\n')
+            s = readuntil(stdout_read, "\n", keep=true)
+            if s == "\n"
+                # if shell width is precisely the text width,
+                # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
-                s == "\e[0m\n" && break # the child has exited
-                @test contains(s, "shell> ") # check for the echo of the prompt
+                @test contains(s, "shell> ")
+                s = readuntil(stdout_read, "\n", keep=true)
+                @test s == "\r\r\n"
+            else
+                @test contains(s, "shell> ")
             end
+            s = readuntil(stdout_read, "\n", keep=true)
+            @test s == "\e[0m\n" # the child has exited
         finally
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
-        @test contains(wait(get_stdout), "HI\n")
-        @test wait(get_stdout) == "HI\n"
+        @test fetch(get_stdout) == "HI\n"
     end
 
     # Issue #7001
@@ -239,7 +249,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 function buffercontents(buf::IOBuffer)
@@ -608,7 +618,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close repl
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Simple non-standard REPL tests
@@ -648,7 +658,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
@@ -819,7 +829,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close REPL ^D
             write(stdin_write, '\x04')
-            wait(repltask)
+            Base._wait(repltask)
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
@@ -876,7 +886,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,

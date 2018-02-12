@@ -44,6 +44,9 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
+  * Keyword arguments can be required: if a default value is omitted, then an
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
+
 Language changes
 ----------------
 
@@ -56,6 +59,10 @@ Language changes
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
+
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
@@ -199,6 +206,9 @@ This section lists changes that do not have deprecation warnings.
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
+  * `countlines` now always counts the last non-empty line even if it does not
+    end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
@@ -258,6 +268,9 @@ This section lists changes that do not have deprecation warnings.
     to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
     `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035], [#23154]).
+
+  * The immediate supertype of `BitArray` is now simply `AbstractArray`. `BitArray` is no longer
+    considered a subtype of `DenseArray` and `StridedArray` ([#25858]).
 
   * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
     first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
@@ -404,8 +417,14 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
+
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
+
+  * The `fieldnames` and `propertynames` functions now return a tuple rather than
+    an array ([#25725]).
 
 Library improvements
 --------------------
@@ -451,7 +470,7 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
-  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
+  * `parse(Complex{T}, string)` can parse complex numbers in some common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
@@ -567,6 +586,9 @@ Library improvements
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
+
+  * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
+    the buffer ([#25944]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -695,7 +717,7 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
@@ -732,6 +754,10 @@ Deprecated or removed
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`,
+    `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are
+    deprecated in favor of constructors taking keyword arguments ([#25872]).
 
   * `Display` has been renamed to `AbstractDisplay` ([#24831]).
 
@@ -995,7 +1021,10 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
-  * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
+  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
@@ -1003,6 +1032,11 @@ Deprecated or removed
 
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
+
+  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
+    add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
+
+  * `wait` and `fetch` on `Task` now resemble the interface of `Future`
 
 Command-line option changes
 ---------------------------
@@ -1261,3 +1295,5 @@ Command-line option changes
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25725]: https://github.com/JuliaLang/julia/issues/25725
+[#25745]: https://github.com/JuliaLang/julia/issues/25745

@@ -22,6 +22,7 @@ using Random
     let ipv = parse(IPAddr, "127.0.0.1")
         @test isa(ipv, IPv4)
         @test ipv == ip"127.0.0.1"
+        @test sprint(show, ipv) == "ip\"127.0.0.1\""
     end
 
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFFF")
@@ -30,6 +31,12 @@ using Random
 
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFFFFF")
     @test_throws ArgumentError parse(IPv4, "192.")
+    @test_throws ArgumentError parse(IPv4, "256.256.256.256")
+    # too many fields
+    @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+
+    @test_throws ArgumentError IPv4(-1)
+    @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
 
     @test ip"::1" == IPv6(1)
     @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))
@@ -43,8 +50,14 @@ using Random
         @test ipv == ip"0:0:0:0:0:ffff:127.0.0.1"
     end
 
+    @test_throws ArgumentError IPv6(-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,-1)
     @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
+
+    @test IPv6(UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1)) == IPv6(1,1,1,1,1,1,1,1)
+
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), -1)
+    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), 9)
 end
 
 @testset "InetAddr constructor" begin
@@ -71,9 +84,6 @@ end
     @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
     @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 end
-
-# test show() function for UDPSocket()
-@test repr(UDPSocket()) == "UDPSocket(init)"
 
 defaultport = rand(2000:4000)
 @testset "writing to/reading from a socket, getsockname and getpeername" begin
@@ -120,7 +130,7 @@ defaultport = rand(2000:4000)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
-        wait(tsk)
+        Base._wait(tsk)
     end
 
     mktempdir() do tmpdir
@@ -136,7 +146,7 @@ defaultport = rand(2000:4000)
         end
         wait(c)
         @test read(connect(socketname), String) == "Hello World\n"
-        wait(tsk)
+        Base._wait(tsk)
     end
 end
 
@@ -194,7 +204,7 @@ end
     end
     @test fetch(r) === :start
     close(server)
-    wait(tsk)
+    Base._wait(tsk)
 end
 
 # test connecting to a named port
@@ -214,6 +224,8 @@ end
 @test_throws Base.DNSError connect(".invalid", 80)
 
 @testset "UDPSocket" begin
+    # test show() function for UDPSocket()
+    @test repr(UDPSocket()) == "UDPSocket(init)"
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"127.0.0.1", randport)
@@ -228,11 +240,11 @@ end
             notify(c)
         end
         send(b, ip"127.0.0.1", randport, "Hello World")
-        wait(tsk2)
+        Base._wait(tsk2)
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
     wait(c)
-    wait(tsk)
+    Base._wait(tsk)
 
     tsk = @async begin
         @test begin
@@ -241,7 +253,7 @@ end
         end
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
-    wait(tsk)
+    Base._wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
@@ -261,9 +273,9 @@ end
             end
         end
         send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
+        Base._wait(tsk)
         send(b, ip"::1", randport, "Hello World")
-        wait(tsk)
+        Base._wait(tsk)
     end
 end
 
@@ -321,7 +333,7 @@ end
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
-            map(wait, recvs)
+            map(Base._wait, recvs)
         end
 
         a, b, c = [create_socket() for i = 1:3]
@@ -346,7 +358,7 @@ end
 
 @testset "Pipe" begin
     P = Pipe()
-    Base.link_pipe(P)
+    Base.link_pipe!(P)
     write(P, "hello")
     @test bytesavailable(P) == 0
     @test !eof(P)
@@ -367,12 +379,12 @@ end
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    Sys.iswindows() || wait(t)
+    Sys.iswindows() || Base._wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llo"
-    Sys.iswindows() && wait(t)
+    Sys.iswindows() && Base._wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure

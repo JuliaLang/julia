@@ -14,7 +14,7 @@ end
 @test isequal(map(sqrt, 2:6), [sqrt(i) for i in 2:6])
 
 # map on ranges should evaluate first value only once (#4453)
-let io=IOBuffer(3)
+let io=IOBuffer(maxsize=3)
     map(x->print(io,x), 1:2)
     @test String(take!(io))=="12"
 end

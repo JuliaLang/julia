@@ -29,6 +29,7 @@ export guardsrand, TestSetException
 import Distributed: myid
 
 using Random: srand, AbstractRNG, GLOBAL_RNG
+using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
 
@@ -1237,7 +1238,7 @@ macro inferred(ex)
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(Base.gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1497,6 +1498,20 @@ then restoring the state of the global RNG as it was before."
 guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
     srand(seed)
     f()
+end
+
+function _check_bitarray_consistency(B::BitArray{N}) where N
+    n = length(B)
+    if N ≠ 1
+        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
+        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+    end
+    Bc = B.chunks
+    nc = length(Bc)
+    nc == Base.num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(Base.num_bit_chunks(n)) actual=$nc"); return false)
+    n == 0 && return true
+    Bc[end] & Base._msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
+    return true
 end
 
 # 0.7 deprecations

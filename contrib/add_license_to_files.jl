@@ -18,6 +18,7 @@ const rootdirs = [
     "../contrib",
     "../examples",
     "../src",
+    "../stdlib",
     "../test",
 ]
 
@@ -35,7 +36,6 @@ const skipfiles = [
     "../base/special/trig.jl",
     "../base/special/exp.jl",
     "../base/special/rem_pio2.jl",
-    "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
     "../src/abi_ppc64le.cpp",
@@ -63,11 +63,11 @@ const skipfiles = [
 ]
 
 const ext_prefix = Dict([
-(".jl", "# "),
-(".sh", "# "),
-(".h", "\/\/ "),
-(".c", "\/\/ "),
-(".cpp", "\/\/ "),
+    (".jl", "# "),
+    (".sh", "# "),
+    (".h", "// "),
+    (".c", "// "),
+    (".cpp", "// "),
 ])
 
 const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
@@ -136,7 +136,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f, chomp=false)
+                lines = readlines(f, keep=true)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)

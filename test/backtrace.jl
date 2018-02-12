@@ -145,7 +145,7 @@ lkup = map(StackTraces.lookup, bt)
 hastoplevel = false
 for sfs in lkup
     for sf in sfs
-        if sf.linfo isa CodeInfo
+        if sf.linfo isa Core.CodeInfo
             global hastoplevel = true
         end
     end
