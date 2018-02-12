@@ -855,16 +855,12 @@ pcnfloat(x) = prevfloat(x), x, nextfloat(x)
         @test isnan_type(T, sinh(T(NaN)))
     end
     for x in (pcnfloat(2.0^-28)..., pcnfloat(22.0)..., pcnfloat(709.7822265633563)...)
-        by = sinh(big(x))
-        @test Float64((sinh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = sinh(big(-x))
-        @test Float64(abs(sinh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+        @test sinh(x) ≈ sinh(big(x)) rtol=eps(Float64)
+        @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(Float64)
     end
     for x in (pcnfloat(2f-12)..., pcnfloat(9f0)..., pcnfloat(88.72283f0)...)
-        by = sinh(big(x))
-        @test Float32((sinh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = sinh(big(-x))
-        @test Float32(abs(sinh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        @test sinh(x) ≈ sinh(big(x)) rtol=eps(Float32)
+        @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(Float32)
     end
 end
 
@@ -879,16 +875,12 @@ end
         @test isnan_type(T, cosh(T(NaN)))
     end
     for x in (pcnfloat(2.7755602085408512e-17)..., pcnfloat(22.0)..., pcnfloat(709.7822265633563)...)
-        by = cosh(big(x))
-        @test Float64((cosh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = cosh(big(-x))
-        @test Float64(abs(cosh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+        @test cosh(x) ≈ cosh(big(x)) rtol=eps(Float64)
+        @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(Float64)
     end
     for x in (pcnfloat(0.00024414062f0)..., pcnfloat(9f0)..., pcnfloat(88.72283f0)...)
-        by = cosh(big(x))
-        @test Float32((cosh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = cosh(big(-x))
-        @test Float32(abs(cosh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        @test cosh(x) ≈ cosh(big(x)) rtol=eps(Float32)
+        @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(Float32)
     end
 end
 
@@ -901,18 +893,10 @@ end
         @test tanh(T(1000)) === one(T)
         @test tanh(-T(1000)) === -one(T)
         @test isnan_type(T, tanh(T(NaN)))
-    end
-    for x in (pcnfloat(2.0^-28)..., pcnfloat(1.0)..., pcnfloat(22.0)...)
-        by = tanh(big(x))
-        @test Float64((tanh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = tanh(big(-x))
-        @test Float64(abs(tanh(-x) - bym))/eps(abs(Float64(bym))) <= 1
-    end
-    for x in (pcnfloat(2f0^-12)..., pcnfloat(1f0)..., pcnfloat(9f0)...)
-        by = tanh(big(x))
-        @test Float32((tanh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = tanh(big(-x))
-        @test Float32(abs(tanh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,1.0,22.0] : [2f0^-12,1f0,9f0]))
+            @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
+            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+        end
     end
 end
 
@@ -923,18 +907,10 @@ end
         @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
         @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, asinh(T(NaN)))
-    end
-    for x in (pcnfloat(2.0^-28)..., pcnfloat(2.0)...,pcnfloat(2.0^28)...)
-        by = asinh(big(x))
-        @test Float64((asinh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = asinh(big(-x))
-        @test Float64(abs(asinh(-x) - bym))/eps(abs(Float64(bym))) <= 1
-    end
-    for x in (pcnfloat(2f0^-28)..., pcnfloat(2f0)...,pcnfloat(2f0^28)...)
-        by = asinh(big(x))
-        @test Float32((asinh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = asinh(big(-x))
-        @test Float32(abs(asinh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,2.0,2.0^28] : [2f0^-12,2f0,22f28]))
+            @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
+            @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
+        end
     end
 end
 
@@ -943,19 +919,14 @@ end
         @test_throws DomainError acosh(T(0.1))
         @test acosh(one(T)) === zero(T)
         @test isnan_type(T, acosh(T(NaN)))
-    end
-    for x in (nextfloat(1.0), pcnfloat(2.0)..., pcnfloat(2.0^28)...)
-        by = acosh(big(x))
-        @test Float64((acosh(x) - by))/eps(abs(Float64(by))) <= 1
-    end
-    for x in (nextfloat(1f0), pcnfloat(2f0)..., pcnfloat(2f0^28)...)
-        by = acosh(big(x))
-        @test Float32((acosh(x) - by))/eps(abs(Float32(by))) <= 1
+        for x in (nextfloat(T(1)), pcnfloat(T(2))..., pcnfloat(T(2^28))...)
+            @test acosh(x) ≈ acosh(big(x) rtol=eps(T)
+        end
     end
 end
 
 @testset "atanh" begin
-for T in (Float32, Float64)
+    for T in (Float32, Float64)
         @test_throws DomainError atanh(T(1.1))
         @test atanh(zero(T)) === zero(T)
         @test atanh(-zero(T)) === -zero(T)
@@ -964,18 +935,10 @@ for T in (Float32, Float64)
         @test atanh(nextfloat(zero(T))) === nextfloat(zero(T))
         @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, atanh(T(NaN)))
-    end
-    for x in (pcnfloat(2.0^-28)..., pcnfloat(0.5)...)
-        by = atanh(big(x))
-        @test Float64((atanh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = atanh(big(-x))
-        @test Float64(abs(atanh(-x) - bym))/eps(abs(Float64(bym))) <= 1
-    end
-    for x in (pcnfloat(2f0^-28)..., pcnfloat(0.5f0)...)
-        by = atanh(big(x))
-        @test Float32((atanh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = atanh(big(-x))
-        @test Float32(abs(atanh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,0.5] : [2f-28,0.5f0]))
+            @test atanh(x) ≈ atanh(big(x)) rtol=eps(T)
+            @test atanh(-x) ≈ atanh(big(-x)) rtol=eps(T)
+        end
     end
 end
 
