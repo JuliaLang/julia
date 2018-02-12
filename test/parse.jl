@@ -259,6 +259,7 @@ end
 let ½x = 1/2, ¹x = 12
     @test ½x === 1/2
     @test ¹x === 12
+    Meta.parse("½ = 0.5",raise=false) == Expr(:error, "invalid identifier ½")
 end
 
 # added ⟂ to operator precedence (#24404)
