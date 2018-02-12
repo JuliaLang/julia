@@ -223,7 +223,7 @@ end
 asinh(x::Real) = asinh(float(x))
 
 # acosh methods
-@noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x >= 1."))
+@noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
 function acosh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
@@ -262,7 +262,7 @@ end
 acosh(x::Real) = acosh(float(x))
 
 # atanh methods
-@noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for x <= 1."))
+@noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
 function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
