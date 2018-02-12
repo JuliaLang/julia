@@ -134,25 +134,25 @@ end
 
     writedlm(io, x, quotes=false)
     seek(io, 0)
-    (data, hdr) = readdlm(io, header=true, skipstart=3)
-    @test data == [1 2 3; 4 5 6; 7 8 9]
+    (hdr, data) = readdlm(io, header=true, skipstart=3)
     @test hdr == ["A" "B" "C"]
+    @test data == [1 2 3; 4 5 6; 7 8 9]
 
     x = ["a" "b" "\nc"; "d" "\ne" "f"; "g" "h" "i\n"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9]
     io = IOBuffer()
 
     writedlm(io, x, quotes=true)
     seek(io, 0)
-    (data, hdr) = readdlm(io, header=true, skipstart=6)
-    @test data == [1 2 3; 4 5 6; 7 8 9]
+    (hdr, data) = readdlm(io, header=true, skipstart=6)
     @test hdr == ["A" "B" "C"]
+    @test data == [1 2 3; 4 5 6; 7 8 9]
 
     io = IOBuffer()
     writedlm(io, x, quotes=false)
     seek(io, 0)
-    (data, hdr) = readdlm(io, header=true, skipstart=6)
-    @test data == [1 2 3; 4 5 6; 7 8 9]
+    (hdr, data) = readdlm(io, header=true, skipstart=6)
     @test hdr == ["A" "B" "C"]
+    @test data == [1 2 3; 4 5 6; 7 8 9]
 end
 
 @testset "i18n" begin
@@ -219,16 +219,16 @@ end
         hdr = i18n_arr[1:1, :]
         data = i18n_arr[2:end, :]
         writedlm(i18n_buff, i18n_arr, ',')
-        @test (data, hdr) == readdlm(i18n_buff, ',', header=true)
+        @test (hdr, data) == readdlm(i18n_buff, ',', header=true)
 
         writedlm(i18n_buff, i18n_arr, '\t')
-        @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
+        @test (hdr, data) == readdlm(i18n_buff, '\t', header=true)
     end
 end
 
 @testset "issue #13028" begin
     for data in ["A B C", "A B C\n"]
-        data,hdr = readdlm(IOBuffer(data), header=true)
+        hdr,data = readdlm(IOBuffer(data), header=true)
         @test hdr == AbstractString["A" "B" "C"]
         @test data == Matrix{Float64}(uninitialized, 0, 3)
     end
