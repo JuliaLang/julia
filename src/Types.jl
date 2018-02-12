@@ -45,7 +45,8 @@ const uuid_registry = uuid5(uuid_julia, "registry")
 ## user-friendly representation of package IDs ##
 
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
-    name = get(uuid_to_name, p, "UNKNOWN")
+    name = get(uuid_to_name, p, "")
+    isempty(name) && (name = "(unknown)")
     uuid_short = string(p)[1:8]
     return "$name [$uuid_short]"
 end
