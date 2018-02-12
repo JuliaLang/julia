@@ -33,7 +33,7 @@ New language features
 
   * Added `⟂` (`\perp`) operator with comparison precedence ([#24404]).
 
-  * The `missing` singleton object (of type `Missing`) has been added to (repr)esent
+  * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
 
