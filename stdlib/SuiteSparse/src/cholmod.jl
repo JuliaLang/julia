@@ -11,8 +11,6 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
 using SparseArrays
-using Printf: @printf
-
 import Libdl
 
 export
@@ -1198,11 +1196,13 @@ end
 
 function showfactor(io::IO, F::Factor)
     s = unsafe_load(pointer(F))
-    @printf(io, "type: %12s\n", s.is_ll!=0 ? "LLt" : "LDLt")
-    @printf(io, "method: %10s\n", s.is_super!=0 ? "supernodal" : "simplicial")
-    @printf(io, "maxnnz: %10d\n", Int(s.nzmax))
-    @printf(io, "nnz: %13d\n", nnz(F))
-    @printf(io, "success: %9s\n", "$(s.minor == size(F, 1))")
+    print(io, """
+        type:    $(s.is_ll!=0 ? "LLt" : "LDLt")
+        method:  $(s.is_super!=0 ? "supernodal" : "simplicial")
+        maxnnz:  $(Int(s.nzmax))
+        nnz:     $(nnz(F))
+        success: $(s.minor == size(F, 1))
+        """)
 end
 
 # getindex not defined for these, so don't use the normal array printer
