@@ -590,6 +590,8 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
+  * Switched the order of return values in function `readdlm` when receiving `header=true` as a parameter, now the function returns a tuple with `(header, data)`. ([#25328])
+
 Compiler/Runtime improvements
 -----------------------------
 
