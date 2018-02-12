@@ -1346,8 +1346,8 @@ in future releases.
 
 ## Multi-Threading (Experimental)
 
-In addition to tasks, remote calls, and remote references, Julia from `v0.5` forwards will natively
-support multi-threading. Note that this section is experimental and the interfaces may change
+In addition to tasks, remote calls, and remote references, Julia from `v0.5` forwards natively
+supports multi-threading. Note that this section is experimental and the interfaces may change
 in the future.
 
 ### Setup
@@ -1504,6 +1504,51 @@ julia> acc[]
     are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
     `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
     `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
+
+When using multi-threading we have to be careful when using functions that are not
+[pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
+For instance functions that have their
+[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+by convention modify their arguments and thus are not pure. However, there are
+functions that have side effects and their name does not end with `!`. For
+instance `rand()` changes `Base.GLOBAL_RNG` or `findfirst(regex, str)` mutates
+its `regex` argument:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreads()
+4
+
+julia> function f()
+           a = zeros(1000)
+           @threads for i in 1:1000
+               a[i] = rand()
+           end
+           length(unique(a))
+       end
+f (generic function with 1 method)
+
+julia> srand(1); f() # the result for a single thread is 1000
+781
+
+julia> function g()
+           s = repeat(["123", "213", "231"], outer=1000)
+           x = similar(s, Int)
+           rx = r"1"
+           @threads for i in 1:3000
+               x[i] = findfirst(rx, s[i]).start
+           end
+           count(v -> v == 1, x)
+       end
+g (generic function with 1 method)
+
+julia> g() # the correct result is 1000
+1017
+```
+
+In such cases one should redesign the code to avoid the possibility of a race condition or use
+[synchronization primitives](https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1).
 
 ## @threadcall (Experimental)
 
