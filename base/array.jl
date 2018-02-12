@@ -60,8 +60,8 @@ a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 const Matrix{T} = Array{T,2}
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
-const DenseVector{T} = DenseArray{T,1}
-const DenseMatrix{T} = DenseArray{T,2}
+const DenseVector{T} = AbstractStridedArray{T,1}
+const DenseMatrix{T} = AbstractStridedArray{T,2}
 const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##

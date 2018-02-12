@@ -99,7 +99,7 @@ UnionAll
       name: Symbol N
       lb: Core.TypeofBottom Union{}
       ub: Any
-    body: Array{T,N} <: DenseArray{T,N}
+    body: Array{T,N} <: AbstractStridedArray{T,N}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -185,7 +185,7 @@ TypeName
         name: Symbol N
         lb: Core.TypeofBottom Union{}
         ub: Any
-      body: Array{T,N} <: DenseArray{T,N}
+      body: Array{T,N} <: AbstractStridedArray{T,N}
   cache: SimpleVector
     ...
 

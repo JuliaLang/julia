@@ -697,7 +697,7 @@ object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) an
 the length of the tuple returned by [`size`](@ref). For more details on defining custom
 `AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
-`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
+`AbstractStridedArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
 laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
 functions expecting this memory layout. Subtypes should provide a [`strides(A)`](@ref) method
 that returns a tuple of "strides" for each dimension; a provided [`stride(A,k)`](@ref) method accesses
@@ -707,7 +707,7 @@ method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout s
 in the same way to these strides. More concrete examples can be found within the [interface guide
 for strided arrays](@ref man-interface-strided-arrays).
 
-The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
+The [`Array`](@ref) type is a specific instance of `AbstractStridedArray` where elements are stored in column-major
 order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
 basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so

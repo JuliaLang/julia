@@ -201,7 +201,7 @@ julia> LinearAlgebra.stride1(B)
 """
 stride1(x) = stride(x,1)
 stride1(x::Array) = 1
-stride1(x::DenseArray) = stride(x, 1)::Int
+stride1(x::AbstractStridedArray) = stride(x, 1)::Int
 
 @inline chkstride1(A...) = _chkstride1(true, A...)
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")

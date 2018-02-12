@@ -1933,7 +1933,7 @@ void jl_init_types(void)
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_densearray_type = (jl_unionall_t*)
-        jl_new_abstracttype((jl_value_t*)jl_symbol("DenseArray"), core,
+        jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractStridedArray"), core,
                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_abstractarray_type, jl_svec_data(tv), 2),
                             tv)->name->wrapper;
 

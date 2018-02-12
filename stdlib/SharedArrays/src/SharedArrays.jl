@@ -20,7 +20,7 @@ import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 
-mutable struct SharedArray{T,N} <: DenseArray{T,N}
+mutable struct SharedArray{T,N} <: AbstractStridedArray{T,N}
     id::RRID
     dims::NTuple{N,Int}
     pids::Vector{Int}
@@ -476,7 +476,7 @@ end
 
 function show(io::IO, S::SharedArray)
     if length(S.s) > 0
-        invoke(show, Tuple{IO,DenseArray}, io, S)
+        invoke(show, Tuple{IO,AbstractStridedArray}, io, S)
     else
         show(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
@@ -484,7 +484,7 @@ end
 
 function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     if length(S.s) > 0
-        invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
+        invoke(show, Tuple{IO,MIME"text/plain",AbstractStridedArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
         println(io, summary(S), ":")

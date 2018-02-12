@@ -1822,7 +1822,7 @@ end
 ###
 ### IndexCartesian workout
 ###
-struct LinSlowMatrix{T} <: DenseArray{T,2}
+struct LinSlowMatrix{T} <: AbstractStridedArray{T,2}
     data::Matrix{T}
 end
 

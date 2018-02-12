@@ -319,21 +319,21 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
     end
 end
 
-function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasReal
+function dot(DX::Union{AbstractStridedArray{T},AbstractVector{T}}, DY::Union{AbstractStridedArray{T},AbstractVector{T}}) where T<:BlasReal
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
+function dotc(DX::Union{AbstractStridedArray{T},AbstractVector{T}}, DY::Union{AbstractStridedArray{T},AbstractVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
+function dotu(DX::Union{AbstractStridedArray{T},AbstractVector{T}}, DY::Union{AbstractStridedArray{T},AbstractVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
@@ -372,7 +372,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{AbstractVector,AbstractStridedArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -405,7 +405,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
+asum(x::Union{AbstractVector,AbstractStridedArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
@@ -449,7 +449,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
+function axpy!(alpha::Number, x::Union{AbstractStridedArray{T},StridedVector{T}}, y::Union{AbstractStridedArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -513,7 +513,7 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
     end
 end
 
-function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
+function axpby!(alpha::Number, x::Union{AbstractStridedArray{T},AbstractVector{T}}, beta::Number, y::Union{AbstractStridedArray{T},AbstractVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -534,7 +534,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{AbstractVector,AbstractStridedArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
 
 # Level 2
 ## mv

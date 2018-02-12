@@ -361,7 +361,7 @@ end
 ##### Array : internal functions
 
 # internal array-like type to circumevent the lack of flexibility with reinterpret
-struct UnsafeView{T} <: DenseArray{T,1}
+struct UnsafeView{T} <: AbstractStridedArray{T,1}
     ptr::Ptr{T}
     len::Int
 end

@@ -50,9 +50,9 @@
 #const nothing = Nothing()
 
 #abstract type AbstractArray{T,N} end
-#abstract type DenseArray{T,N} <: AbstractArray{T,N} end
+#abstract type AbstractStridedArray{T,N} <: AbstractArray{T,N} end
 
-#mutable struct Array{T,N} <: DenseArray{T,N}
+#mutable struct Array{T,N} <: AbstractStridedArray{T,N}
 #end
 
 #mutable struct Module
@@ -123,7 +123,7 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
-    AbstractArray, DenseArray, NamedTuple,
+    AbstractArray, AbstractStridedArray, NamedTuple,
     # special objects
     Function, Method,
     Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
