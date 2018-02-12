@@ -1163,7 +1163,7 @@ _arrayparentoffset(::Array) = 1
 _arrayparentoffset(S::FastContiguousSubArray{<:Any,<:Any,<:Array}) = S.offset1+1
 function copyto!(dest::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}},
                  src::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}}) where {T}
-    checkbounds(dest, axes(src)...)
+    checkbounds(dest, linearindices(src))
     return unsafe_copyto!(parent(dest), _arrayparentoffset(dest),
                           parent(src), _arrayparentoffset(src), length(src))
 end
