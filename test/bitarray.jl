@@ -1033,7 +1033,7 @@ timesofar("binary comparison")
     for d = 1:4
         j = rand(1:size(b1, d))
         #for j = 1 : size(b1, d)
-            @check_bit_operation slicedim(b1, d, j) BitArray{3}
+            @check_bit_operation selectdim(b1, d, j) BitArray{3}
         #end
         @check_bit_operation flipdim(b1, d) BitArray{4}
     end
@@ -1071,9 +1071,9 @@ timesofar("binary comparison")
         i2 = circshift!(b1, -j)
         @test b2 == i2
 
-        @check_bit_operation slicedim(b1, 1, m) Bool
+        @check_bit_operation selectdim(b1, 1, m) Bool
     end
-    @check_bit_operation slicedim(b1, 1, :) BitVector
+    @check_bit_operation selectdim(b1, 1, :) BitVector
 end
 
 timesofar("datamove")

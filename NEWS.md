@@ -334,9 +334,9 @@ This section lists changes that do not have deprecation warnings.
     longer the case; now bindings will only exist for packages brought into scope by
     typing `using Package` or `import Package` ([#17997]).
 
-  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
-    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
-    `x` ([#20233]).
+  * `selectdim(b::BitVector, 1, x)` (previously known as `slicedim`) now consistently returns
+    the same thing that `b[x]` would, consistent with its documentation. Previously it would
+    return a `BitArray{0}` for scalar `x` ([#20233]).
 
   * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
     simplified: if the arguments have different sizes (in bits), then the type of the larger
@@ -645,6 +645,8 @@ Deprecated or removed
 
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
+  * `slicedim` has been deprecated in favor of `selectdim` ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
