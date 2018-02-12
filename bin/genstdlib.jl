@@ -26,6 +26,7 @@ for pkg in readdir(stdlibdir)
     append!(stdlib_deps[pkg], sort!(collect(keys(project["deps"]))))
 end
 
+#=
 write_toml(prefix, "registry") do io
     repo = "https://github.com/JuliaRegistries/Stdlib.git"
     uuid = string(uuid5(uuid_registry, repo))
@@ -80,3 +81,4 @@ for (pkg, uuid) in stdlib_uuids
         println(io, "julia = \"0.7\"")
     end
 end
+=#
