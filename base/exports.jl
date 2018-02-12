@@ -431,7 +431,7 @@ export
     shuffle,
     shuffle!,
     size,
-    slicedim,
+    selectdim,
     sort!,
     sort,
     sortcols,
