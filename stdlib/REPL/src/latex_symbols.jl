@@ -243,9 +243,6 @@ const latex_symbols = Dict(
     "\\P" => "¶",
     "\\cdotp" => "·",
     "\\ordmasculine" => "º",
-    "\\onequarter" => "¼",
-    "\\onehalf" => "½",
-    "\\threequarters" => "¾",
     "\\questiondown" => "¿",
     "\\AA" => "Å",
     "\\AE" => "Æ",
@@ -2578,4 +2575,27 @@ const latex_symbols = Dict(
     "\\leftmoon" => "☾",  # last quarter moon
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
+
+    # fractions
+    "\\1/4" => "¼", # vulgar fraction one quarter
+    "\\1/2" => "½", # vulgar fraction one half
+    "\\3/4" => "¾", # vulgar fraction three quarters
+    "\\1/7" => "⅐", # vulgar fraction one seventh
+    "\\1/9" => "⅑", # vulgar fraction one ninth
+    "\\1/10" => "⅒", # vulgar fraction one tenth
+    "\\1/3" => "⅓", # vulgar fraction one third
+    "\\2/3" => "⅔", # vulgar fraction two thirds
+    "\\1/5" => "⅕", # vulgar fraction one fifth
+    "\\2/5" => "⅖", # vulgar fraction two fifths
+    "\\3/5" => "⅗", # vulgar fraction three fifths
+    "\\4/5" => "⅘", # vulgar fraction four fifths
+    "\\1/6" => "⅙", # vulgar fraction one sixth
+    "\\5/6" => "⅚", # vulgar fraction five sixths
+    "\\1/8" => "⅛", # vulgar fraction one eigth
+    "\\3/8" => "⅜", # vulgar fraction three eigths
+    "\\5/8" => "⅝", # vulgar fraction five eigths
+    "\\7/8" => "⅞", # vulgar fraction seventh eigths
+    "\\1/" => "⅟", # fraction numerator one
+    "\\0/3" => "↉", # vulgar fraction zero thirds
+    "\\1/4" => "¼", # vulgar fraction one quarter
 )
