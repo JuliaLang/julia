@@ -4,6 +4,11 @@
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
 
+module HigherOrderFnsTests
+
+using Test
+using SparseArrays
+using LinearAlgebra
 using Random
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
@@ -548,3 +553,5 @@ end
     @test spzeros(1,2) .+ spzeros(0,1) == zeros(0,2)
     @test spzeros(1,2) .* spzeros(0,1) == zeros(0,2)
 end
+
+end # module

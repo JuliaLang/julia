@@ -90,16 +90,6 @@ end
 @test GC.enable(true) == false
 @test GC.enable(true)
 
-# test methodswith
-# `methodswith` relies on exported symbols
-export func4union, Base
-struct NoMethodHasThisType end
-@test isempty(methodswith(NoMethodHasThisType))
-@test !isempty(methodswith(Int))
-struct Type4Union end
-func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union, @__MODULE__))
-
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
 let
@@ -127,7 +117,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    wait(t)
+    Base._wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -137,9 +127,9 @@ end
 @noinline function f6597(c)
     t = @schedule nothing
     finalizer(t -> c[] += 1, t)
-    wait(t)
+    Base._wait(t)
     @test c[] == 0
-    wait(t)
+    Base._wait(t)
     nothing
 end
 let c = Ref(0),
@@ -202,18 +192,6 @@ let A = zeros(1000), B = reshape(A, (1,1000))
     @test summarysize(A) > sizeof(A)
 end
 
-module _test_varinfo_
-export x
-x = 1.0
-end
-@test repr(varinfo(Main, r"^$")) == """
-| name | size | summary |
-|:---- | ----:|:------- |
-"""
-let v = repr(varinfo(_test_varinfo_))
-    @test contains(v, "| x              |   8 bytes | Float64 |")
-end
-
 # issue #13021
 let ex = try
     Main.x13021 = 0
@@ -223,16 +201,6 @@ catch ex
 end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
-
-# Issue 14173
-module Tmp14173
-    using Random
-    export A
-    A = randn(2000, 2000)
-end
-varinfo(Tmp14173) # warm up
-const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 60000 : 20000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -441,11 +409,6 @@ let a = [1,2,3]
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
-let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
-    securezero!(cache)
-    @test cache["foo"].pass == "\0\0\0"
-end
 
 # Test that we can VirtualProtect jitted code to writable
 if Sys.iswindows()
@@ -641,9 +604,3 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
-
-# PR #24997: test that `varinfo` doesn't fail when encountering `missing`
-module A
-    export missing
-    varinfo(A)
-end

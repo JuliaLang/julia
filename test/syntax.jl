@@ -7,9 +7,9 @@ using Random
 import Base.Meta.ParseError
 
 function parseall(str)
-    pos = start(str)
+    pos = firstindex(str)
     exs = []
-    while !done(str, pos)
+    while pos <= lastindex(str)
         ex, pos = Meta.parse(str, pos)
         push!(exs, ex)
     end
@@ -500,10 +500,6 @@ let m_error, error_out, filename = Base.source_path()
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: invalid type for argument number 1 in method definition for method_c6 at $filename:")
 
-    m_error = try @eval method_c6(A; B) = 3; catch e; e; end
-    error_out = sprint(showerror, m_error)
-    @test error_out == "syntax: keyword argument \"B\" needs a default value"
-
     # issue #20614
     m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
@@ -638,7 +634,7 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test Meta.lower(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i, 3) && i\"")
+@test Meta.lower(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"(i == 3) && i\"")
 
 # issue #18667
 @test Meta.lower(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
@@ -655,7 +651,7 @@ end
 # Issue #16578 (Lowering) mismatch between push_loc and pop_loc
 module TestMeta_16578
 using Test
-function get_expr_list(ex::CodeInfo)
+function get_expr_list(ex::Core.CodeInfo)
     return ex.code::Array{Any,1}
 end
 function get_expr_list(ex::Expr)
@@ -684,7 +680,7 @@ function count_meta_loc(exprs)
 end
 
 function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], SSAValue)
+    ex.head === :return && isa(ex.args[1], Core.SSAValue)
 end
 
 function is_pop_loc(ex::Expr)
@@ -750,8 +746,8 @@ end
     end
 end
 
-f1_exprs = get_expr_list(@code_typed(f1(1))[1])
-f2_exprs = get_expr_list(@code_typed(f2(1))[1])
+f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
+f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
 @test is_pop_loc(f2_exprs[end])
@@ -1239,6 +1235,9 @@ end
     @test raw"x \\\ y" == "x \\\\\\ y"
 end
 
+@test_throws ParseError("expected \"}\" or separator in arguments to \"{ }\"; got \"V)\"") Meta.parse("f(x::V) where {V) = x")
+@test_throws ParseError("expected \"]\" or separator in arguments to \"[ ]\"; got \"1)\"") Meta.parse("[1)")
+
 # issue #9972
 @test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
 
@@ -1265,3 +1264,39 @@ function bar16239()
     f()
 end
 @test bar16239() == 0
+
+# issue #25020
+@test_throws ParseError Meta.parse("using Colors()")
+
+let ex = Meta.parse("md\"x\"
+                     f(x) = x", 1)[1]  # custom string literal is not a docstring
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] === Symbol("@md_str")
+    @test length(ex.args) == 3
+end
+
+let ex = Meta.parse("@doc raw\"
+                     \"
+                     f(x) = x")
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] === Symbol("@doc")
+    @test length(ex.args) == 4
+    @test Meta.isexpr(ex.args[4], :(=))
+end
+
+let ex = Meta.parse("@doc raw\"
+                     \"
+
+                     f(x) = x", 1)[1]
+    @test Meta.isexpr(ex, :macrocall)
+    @test ex.args[1] === Symbol("@doc")
+    @test length(ex.args) == 3
+end
+
+# TODO: enable when 0.7 deprecations are removed
+#@test Meta.parse("\"x\"
+#                  # extra line, not a doc string
+#                  f(x) = x", 1)[1] === "x"
+#@test Meta.parse("\"x\"
+#
+#                  f(x) = x", 1)[1] === "x"

@@ -2,7 +2,7 @@
 
 getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
 
-using Core.Intrinsics
+using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, STDOUT, STDERR,
              _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance

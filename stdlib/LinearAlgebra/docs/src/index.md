@@ -409,8 +409,6 @@ LinearAlgebra.istril
 LinearAlgebra.istriu
 LinearAlgebra.isdiag
 LinearAlgebra.ishermitian
-LinearAlgebra.RowVector
-LinearAlgebra.ConjArray
 Base.transpose
 LinearAlgebra.transpose!
 Base.adjoint
@@ -429,8 +427,8 @@ below (e.g. `mul!`) according to the usual Julia convention.
 
 ```@docs
 LinearAlgebra.mul!
-LinearAlgebra.mul1!
-LinearAlgebra.mul2!
+LinearAlgebra.lmul!
+LinearAlgebra.rmul!
 LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
 ```

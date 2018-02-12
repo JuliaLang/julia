@@ -3,7 +3,7 @@
 module BLAS
 @doc """
 Interface to BLAS subroutines.
-""" -> BLAS
+""" BLAS
 
 import ..axpy!, ..axpby!
 import Base: copyto!

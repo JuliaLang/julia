@@ -34,6 +34,7 @@ for T = types[2:end],
     x = vals,
     a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
 for T = types,
@@ -181,9 +182,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, TypedSlot(1, Any)),
-    b = Expr(:block, TypedSlot(1, Any)),
-    c = Expr(:block, TypedSlot(3, Any))
+let a = Expr(:block, Core.TypedSlot(1, Any)),
+    b = Expr(:block, Core.TypedSlot(1, Any)),
+    c = Expr(:block, Core.TypedSlot(3, Any))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)

@@ -246,7 +246,7 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [wait(t) for t in w_exec])
+    reduce(reducer, [fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)

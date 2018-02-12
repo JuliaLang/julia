@@ -461,10 +461,6 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls);
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
-
-JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
-                                               jl_value_t *data);
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 void jl_uv_flush(uv_stream_t *stream);
 
 typedef struct _typeenv {
@@ -1026,7 +1022,8 @@ extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
+extern jl_sym_t *inline_sym;  extern jl_sym_t *noinline_sym;
+extern jl_sym_t *polly_sym;
 extern jl_sym_t *propagate_inbounds_sym;
 extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *nospecialize_sym;

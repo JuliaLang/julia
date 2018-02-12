@@ -82,7 +82,6 @@ dimg  = randn(n)/2
         # compact printing
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
@@ -267,9 +266,9 @@ U factor:
 end
 
 @testset "propertynames" begin
-    names = sort!(string.(Base.propertynames(lufact(rand(3,3)))))
+    names = sort!(collect(string.(Base.propertynames(lufact(rand(3,3))))))
     @test names == ["L", "P", "U", "p"]
-    allnames = sort!(string.(Base.propertynames(lufact(rand(3,3)), true)))
+    allnames = sort!(collect(string.(Base.propertynames(lufact(rand(3,3)), true))))
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
 end
 

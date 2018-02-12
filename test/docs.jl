@@ -6,6 +6,7 @@ using Markdown
 using REPL
 
 using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
 
 # For curmod_*
 include("testenv.jl")
@@ -29,19 +30,19 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-@doc "Doc abstract type" ->
+@doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
 @test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
-@doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
+@doc "Helps test if macros can be documented with `@doc \"...\" @...`."
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
-doc"""
+@doc doc"""
 break me:
 
     code
@@ -601,7 +602,7 @@ end
 
 f1_11993()
 
-@doc "Document inline function with old syntax" ->
+@doc "Document inline function with old syntax"
 @inline f2_11993() = nothing
 
 @test (@doc f2_11993) !== nothing
@@ -838,7 +839,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
-let d = @doc Undocumented.f
+let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
@@ -848,7 +849,7 @@ let d = @doc Undocumented.f
     """)
 end
 
-let d = @doc Undocumented.undocumented
+let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
@@ -896,7 +897,7 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(Base.Iterators.@time) == x
 end
 
 let x = Binding(Iterators, :enumerate)
@@ -904,7 +905,7 @@ let x = Binding(Iterators, :enumerate)
     @test @var(enumerate) == x
     @test @var(Base.enumerate) == x
     @test @var(Iterators.enumerate) == x
-    @test @var(Base.Pkg.Dir.enumerate) == x
+    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -912,14 +913,13 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)

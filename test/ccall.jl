@@ -2,6 +2,7 @@
 
 import Base.copy, Base.==
 using Random
+using InteractiveUtils: code_llvm
 
 import Libdl
 

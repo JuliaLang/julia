@@ -3,6 +3,7 @@
 module REPL
 
 using Base.Meta
+import InteractiveUtils
 
 export
     AbstractREPL,
@@ -42,6 +43,7 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
+include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 function __init__()
@@ -905,10 +907,10 @@ function setup_interface(
             LineEdit.push_undo(s)
             edit_insert(sbuffer, input)
             input = String(take!(sbuffer))
-            oldpos = start(input)
+            oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            while !done(input, oldpos) # loop until all lines have been executed
+            while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
                     # skip it. But first skip whitespace
@@ -980,7 +982,7 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
-            Base.edit(linfos[n][1], linfos[n][2])
+            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
             LineEdit.refresh_line(s)
             return
             @label writeback

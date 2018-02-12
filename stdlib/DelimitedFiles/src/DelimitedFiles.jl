@@ -730,7 +730,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
 end
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"" => "\"\""), '"')

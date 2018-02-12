@@ -10,7 +10,7 @@ end
 
 Config() = Config(Function[], Function[], InnerConfig())
 
-const META = Dict{Function, Dict{Symbol, Any}}()
+const META = IdDict{Function, Dict{Symbol, Any}}()
 
 getset(coll, key, default) = coll[key] = get(coll, key, default)
 

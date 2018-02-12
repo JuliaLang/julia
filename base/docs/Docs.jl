@@ -64,7 +64,7 @@ import Base.Meta: quot, isexpr
 import Base: Callable, with_output_color
 import ..CoreDocs: lazy_iterpolate
 
-export doc, apropos
+export doc
 
 # Basic API / Storage
 
@@ -196,7 +196,7 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::IdDict
+    docs::IdDict{Any,Any}
 
     MultiDoc() = new(Type[], IdDict())
 end

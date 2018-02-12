@@ -564,7 +564,7 @@ end
 end
 
 @testset "log/log1p" begin
-    # if using Tang's algorithm, should be accurate to within 0.56 ulps
+    # using Tang's algorithm, should be accurate to within 0.56 ulps
     X = rand(100)
     for x in X
         for n = -5:5
@@ -573,16 +573,16 @@ end
             for T in (Float32,Float64)
                 xt = T(x)
 
-                y = Base.Math.JuliaLibm.log(xt)
+                y = log(xt)
                 yb = log(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
-                y = Base.Math.JuliaLibm.log1p(xt)
+                y = log1p(xt)
                 yb = log1p(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
                 if n <= 0
-                    y = Base.Math.JuliaLibm.log1p(-xt)
+                    y = log1p(-xt)
                     yb = log1p(big(-xt))
                     @test abs(y-yb) <= 0.56*eps(T(yb))
                 end

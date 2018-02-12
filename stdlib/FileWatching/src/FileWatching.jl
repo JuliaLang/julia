@@ -118,7 +118,7 @@ mutable struct _FDWatcher
                 if !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
                 end
-                fdnum = fd.fd + 1
+                fdnum = Core.Intrinsics.bitcast(Int32, fd) + 1
                 if fdnum > length(FDWatchers)
                     old_len = length(FDWatchers)
                     resize!(FDWatchers, fdnum)
@@ -128,8 +128,8 @@ mutable struct _FDWatcher
                     this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                     return this
                 end
-                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Cvoid}, Ptr{Cvoid}), fd.fd, C_NULL, eventloop()) == 1
-                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (RawFD, Ptr{Cvoid}, Ptr{Cvoid}), fd, C_NULL, eventloop()) == 1
+                    throw(ArgumentError("$(fd) is already being watched by libuv"))
                 end
 
                 handle = Libc.malloc(_sizeof_uv_poll)
@@ -141,7 +141,7 @@ mutable struct _FDWatcher
                     (false, false),
                     0)
                 associate_julia_struct(handle, this)
-                err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Int32), eventloop(), handle, fd.fd)
+                err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, RawFD), eventloop(), handle, fd)
                 if err != 0
                     Libc.free(handle)
                     throw(UVError("FDWatcher", err))
@@ -189,8 +189,8 @@ mutable struct _FDWatcher
                 (false, false),
                 0)
             associate_julia_struct(handle, this)
-            err = ccall(:uv_poll_init_socket, Int32, (Ptr{Cvoid},   Ptr{Cvoid}, Ptr{Cvoid}),
-                                                      eventloop(), handle,    fd.handle)
+            err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid},   Ptr{Cvoid}, WindowsRawSocket),
+                                               eventloop(), handle,    fd)
             if err != 0
                 Libc.free(handle)
                 throw(UVError("FDWatcher", err))

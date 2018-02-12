@@ -44,7 +44,7 @@ mutable struct MIState
     interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
-    mode_state::Dict
+    mode_state::IdDict{Any,Any}
     kill_ring::Vector{String}
     kill_idx::Int
     previous_key::Vector{Char}
@@ -2205,7 +2205,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, Dict{Any,Any}())
+    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end

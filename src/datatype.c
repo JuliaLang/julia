@@ -222,7 +222,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
     return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
-            d->uid != 0 && (d->types == jl_emptysvec || !d->mutabl));
+            d->uid != 0 && !d->mutabl);
 }
 
 STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)

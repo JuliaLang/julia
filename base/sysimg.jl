@@ -2,7 +2,7 @@
 
 baremodule Base
 
-using Core.Intrinsics
+using Core.Intrinsics, Core.IR
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 getproperty(x, f::Symbol) = getfield(x, f)
@@ -162,6 +162,10 @@ Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missi
 
 include("abstractdict.jl")
 
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
+
 include("namedtuple.jl")
 
 # numeric operations
@@ -207,9 +211,6 @@ include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")
@@ -346,7 +347,6 @@ include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
@@ -415,13 +415,12 @@ using .Enums
 # concurrency and parallelism
 include("channels.jl")
 
-# utilities - timing, help, edit
+# utilities
 include("deepcopy.jl")
-include("interactiveutil.jl")
+include("clipboard.jl")
+include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-include("i18n.jl")
-using .I18n
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -438,12 +437,6 @@ include("statistics.jl")
 
 # missing values
 include("missing.jl")
-
-# libgit2 support
-include("libgit2/libgit2.jl")
-
-# package manager
-include("pkg/pkg.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -485,7 +478,8 @@ function __init__()
     Csrand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
+    Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
+    global_logger(Logging.ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_depot_path()
@@ -505,6 +499,7 @@ pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 # load some stdlib packages but don't put their names in Main
 Base.require(Base, :Base64)
 Base.require(Base, :CRC32c)
+Base.require(Base, :SHA)
 Base.require(Base, :Dates)
 Base.require(Base, :DelimitedFiles)
 Base.require(Base, :Serialization)
@@ -524,6 +519,8 @@ Base.require(Base, :SparseArrays)
 Base.require(Base, :SuiteSparse)
 Base.require(Base, :Test)
 Base.require(Base, :Unicode)
+Base.require(Base, :LibGit2)
+Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
 
@@ -564,6 +561,9 @@ Base.require(Base, :Markdown)
     @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
     @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
+
+    @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
+    @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
@@ -739,7 +739,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib nullspace   LinearAlgebra true
     @deprecate_stdlib ordschur!   LinearAlgebra true
     @deprecate_stdlib ordschur    LinearAlgebra true
-    @deprecate_stdlib peakflops   LinearAlgebra true
     @deprecate_stdlib pinv        LinearAlgebra true
     @deprecate_stdlib qr          LinearAlgebra true
     @deprecate_stdlib qrfact!     LinearAlgebra true
@@ -834,6 +833,28 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib normalize_string Unicode true
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
+
+    @deprecate_stdlib whos          InteractiveUtils true
+    @deprecate_stdlib subtypes      InteractiveUtils true
+    @deprecate_stdlib apropos       InteractiveUtils true
+    @deprecate_stdlib edit          InteractiveUtils true
+    @deprecate_stdlib less          InteractiveUtils true
+    @deprecate_stdlib code_llvm     InteractiveUtils true
+    @deprecate_stdlib code_native   InteractiveUtils true
+    @deprecate_stdlib code_warntype InteractiveUtils true
+    @deprecate_stdlib methodswith   InteractiveUtils true
+    @deprecate_stdlib varinfo       InteractiveUtils true
+    @deprecate_stdlib versioninfo   InteractiveUtils true
+    @deprecate_stdlib peakflops     InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@functionloc"))   InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_typed"))    InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_warntype")) InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
+    @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
 
 empty!(DEPOT_PATH)

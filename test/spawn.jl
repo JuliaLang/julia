@@ -119,8 +119,8 @@ if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) 
         close(sock)
         return true
     end
-    @test wait(t1)
-    @test wait(t2)
+    @test fetch(t1)
+    @test fetch(t2)
 end
 
 @test read(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"]), String) == "Hello World\n"
@@ -175,7 +175,7 @@ let r, t
     yield()
     put!(r,11)
     yield()
-    @test wait(t)
+    @test fetch(t)
 end
 
 # Test marking of IO
@@ -207,8 +207,9 @@ let r, t, sock
     @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
-    @test wait(t)
+    @test fetch(t)
 end
+
 # issue #4535
 exename = Base.julia_cmd()
 if valgrind_off
@@ -221,9 +222,6 @@ if valgrind_off
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
-
-# issue #6310
-@test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
 # setup_stdio for AbstractPipe
 let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
@@ -359,7 +357,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
-    wait(t)
+    Base._wait(t)
 end
 
 # issue #8529
@@ -464,7 +462,7 @@ if Sys.isunix()
         try
             for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()
-                Base.link_pipe(p)
+                Base.link_pipe!(p)
                 push!(ps, p)
             end
             if ulimit_n === nothing
@@ -507,8 +505,8 @@ end
 ## Deadlock in spawning a cmd (#22832)
 # FIXME?
 #let stdout = Pipe(), stdin = Pipe()
-#    Base.link_pipe(stdout, julia_only_read=true)
-#    Base.link_pipe(stdin, julia_only_write=true)
+#    Base.link_pipe!(stdout, reader_supports_async=true)
+#    Base.link_pipe!(stdin, writer_supports_async=true)
 #    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
 #    @async begin # feed cat with 2 MB of data (zeros)
 #        write(stdin, zeros(UInt8, 1048576 * 2))

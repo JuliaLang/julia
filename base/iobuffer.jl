@@ -32,47 +32,17 @@ StringVector(n::Integer) = unsafe_wrap(Vector{UInt8}, _string_n(n))
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
 """
-    IOBuffer([data, ][readable::Bool=true, writable::Bool=false[, maxsize::Int=typemax(Int)]])
+    IOBuffer([data::AbstractVector{UInt8}]; keywords...) -> IOBuffer
 
-Create an `IOBuffer`, which may optionally operate on a pre-existing array. If the
-readable/writable arguments are given, they restrict whether or not the buffer may be read
-from or written to respectively. The last argument optionally specifies a size beyond which
-the buffer may not be grown.
+Create an in-memory I/O stream, which may optionally operate on a pre-existing array.
 
-# Examples
-```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization.")
-IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
+It may take optional keyword arguments:
+- `read`, `write`, `append`: restricts operations to the buffer; see `open` for details.
+- `truncate`: truncates the buffer size to zero length.
+- `maxsize`: specifies a size beyond which the buffer may not be grown.
+- `sizehint`: suggests a capacity of the buffer (`data` must implement `sizehint!(data, size)`).
 
-julia> read(io, String)
-"JuliaLang is a GitHub organization."
-
-julia> write(io, "This isn't writable.")
-ERROR: ArgumentError: ensureroom failed, IOBuffer is not writeable
-
-julia> io = IOBuffer(UInt8[], true, true, 34)
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=34, ptr=1, mark=-1)
-
-julia> write(io, "JuliaLang is a GitHub organization.")
-34
-
-julia> String(take!(io))
-"JuliaLang is a GitHub organization"
-```
-"""
-IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Integer=typemax(Int)) =
-    GenericIOBuffer(data, readable, writable, true, false, maxsize)
-function IOBuffer(readable::Bool, writable::Bool)
-    b = IOBuffer(StringVector(32), readable, writable)
-    b.data[:] = 0
-    b.size = 0
-    return b
-end
-
-"""
-    IOBuffer() -> IOBuffer
-
-Create an in-memory I/O stream, which is both readable and writable.
+When `data` is not given, the buffer will be both readable and writable by default.
 
 # Examples
 ```jldoctest
@@ -83,34 +53,73 @@ julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 
 julia> String(take!(io))
 "JuliaLang is a GitHub organization. It has many members."
-```
-"""
-IOBuffer() = IOBuffer(true, true)
 
-"""
-    IOBuffer(size::Integer)
+julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
 
-Create a fixed size IOBuffer. The buffer will not grow dynamically.
+julia> read(io, String)
+"JuliaLang is a GitHub organization."
 
-# Examples
-```jldoctest
-julia> io = IOBuffer(12)
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=12, ptr=1, mark=-1)
+julia> write(io, "This isn't writable.")
+ERROR: ArgumentError: ensureroom failed, IOBuffer is not writeable
 
-julia> write(io, "Hello world.")
-12
+julia> io = IOBuffer(UInt8[], read=true, write=true, maxsize=34)
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=34, ptr=1, mark=-1)
 
-julia> String(take!(io))
-"Hello world."
-
-julia> write(io, "Hello world again.")
-12
+julia> write(io, "JuliaLang is a GitHub organization.")
+34
 
 julia> String(take!(io))
-"Hello world "
+"JuliaLang is a GitHub organization"
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
+4
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=true)))
+0
 ```
 """
-IOBuffer(maxsize::Integer) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
+function IOBuffer(
+        data::AbstractVector{UInt8};
+        read::Union{Bool,Nothing}=nothing,
+        write::Union{Bool,Nothing}=nothing,
+        append::Union{Bool,Nothing}=nothing,
+        truncate::Union{Bool,Nothing}=nothing,
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
+    if maxsize < 0
+        throw(ArgumentError("negative maxsize: $(maxsize)"))
+    end
+    if sizehint !== nothing
+        sizehint!(data, sizehint)
+    end
+    flags = open_flags(read=read, write=write, append=append, truncate=truncate)
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize))
+    if flags.truncate
+        buf.size = 0
+    end
+    return buf
+end
+
+function IOBuffer(;
+        read::Union{Bool,Nothing}=true,
+        write::Union{Bool,Nothing}=true,
+        append::Union{Bool,Nothing}=nothing,
+        truncate::Union{Bool,Nothing}=true,
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
+    size = sizehint !== nothing ? Int(sizehint) : maxsize != typemax(Int) ? Int(maxsize) : 32
+    flags = open_flags(read=read, write=write, append=append, truncate=truncate)
+    buf = IOBuffer(
+        StringVector(size),
+        read=flags.read,
+        write=flags.write,
+        append=flags.append,
+        truncate=flags.truncate,
+        maxsize=maxsize)
+    buf.data[:] = 0
+    return buf
+end
 
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
 

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo
+using Core: CodeInfo, SimpleVector
 
 const Callable = Union{Function,Type}
 
@@ -620,16 +620,6 @@ struct Val{x}
 end
 
 Val(x) = (@_pure_meta; Val{x}())
-
-# used by keyword arg call lowering
-function vector_any(@nospecialize xs...)
-    n = length(xs)
-    a = Vector{Any}(uninitialized, n)
-    @inbounds for i = 1:n
-        Core.arrayset(false, a, xs[i], i)
-    end
-    a
-end
 
 """
     invokelatest(f, args...; kwargs...)

@@ -6,7 +6,7 @@ debug = false
 using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
-    mul!, rdiv!, mul1!, mul2!
+    mul!, rdiv!, rmul!, lmul!
 
 debug && println("Triangular matrices")
 
@@ -195,10 +195,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             ci = cr * im
             if elty1 <: Real
                 A1tmp = copy(A1)
-                mul1!(A1tmp, cr)
+                rmul!(A1tmp, cr)
                 @test A1tmp == cr*A1
                 A1tmp = copy(A1)
-                mul2!(cr, A1tmp)
+                lmul!(cr, A1tmp)
                 @test A1tmp == cr*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
@@ -206,10 +206,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1tmp == cr * A2tmp
             else
                 A1tmp = copy(A1)
-                mul1!(A1tmp, ci)
+                rmul!(A1tmp, ci)
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
-                mul2!(ci, A1tmp)
+                lmul!(ci, A1tmp)
                 @test A1tmp == ci*A1
                 A1tmp = copy(A1)
                 A2tmp = unitt(A1)
@@ -322,7 +322,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test mul2!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
+                @test lmul!(Tri,copy(A1)) ≈ Tri*Matrix(A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
@@ -360,12 +360,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             end
             #error handling
             Ann, Bmm, bm = A1, Matrix{eltyB}(uninitialized, n+1, n+1), Vector{eltyB}(uninitialized, n+1)
-            @test_throws DimensionMismatch mul2!(Ann, bm)
-            @test_throws DimensionMismatch mul1!(Bmm, Ann)
-            @test_throws DimensionMismatch mul2!(transpose(Ann), bm)
-            @test_throws DimensionMismatch mul2!(adjoint(Ann), bm)
-            @test_throws DimensionMismatch mul1!(Bmm, adjoint(Ann))
-            @test_throws DimensionMismatch mul1!(Bmm, transpose(Ann))
+            @test_throws DimensionMismatch lmul!(Ann, bm)
+            @test_throws DimensionMismatch rmul!(Bmm, Ann)
+            @test_throws DimensionMismatch lmul!(transpose(Ann), bm)
+            @test_throws DimensionMismatch lmul!(adjoint(Ann), bm)
+            @test_throws DimensionMismatch rmul!(Bmm, adjoint(Ann))
+            @test_throws DimensionMismatch rmul!(Bmm, transpose(Ann))
 
             # ... and division
             @test A1\B[:,1] ≈ Matrix(A1)\B[:,1]
@@ -539,14 +539,14 @@ end
 end
 
 @testset "special printing of Lower/UpperTriangular" begin
-    @test sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))) ==
-        "3×3 LinearAlgebra.LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2"
-    @test sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))) ==
-        "3×3 LinearAlgebra.UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1"
-    @test sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))) ==
-        "3×3 LinearAlgebra.UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2"
-    @test sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))) ==
-        "3×3 LinearAlgebra.UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1"
+    @test contains(sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))),
+        r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2")
+    @test contains(sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))),
+        r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1")
+    @test contains(sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))),
+        r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2")
+    @test contains(sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))),
+        r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1")
 end
 
 end # module TestTriangular

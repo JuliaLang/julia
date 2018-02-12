@@ -185,7 +185,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
-show(io::IO, mt::MethodTable) = show_method_table(io, MethodList(mt))
+show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
     if m == Base
@@ -204,6 +204,7 @@ function url(m::Method)
     line = m.line
     line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -211,7 +212,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    else
+    elseif root_module_exists(libgit2_id)
+        LibGit2 = root_module(libgit2_id)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -230,6 +232,8 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
+    else
+        return fileurl(file)
     end
 end
 
@@ -299,9 +303,9 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     print(io, "</ul>")
 end
 
-show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
+show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of AbstractVector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
     first = true

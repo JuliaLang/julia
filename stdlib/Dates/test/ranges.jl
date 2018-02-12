@@ -5,6 +5,8 @@ module RangesTest
 using Test
 using Dates
 
+using InteractiveUtils: subtypes
+
 let
     for T in (Dates.Date, Dates.DateTime)
         f1 = T(2014); l1 = T(2013, 12, 31)
