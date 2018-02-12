@@ -237,6 +237,7 @@ const latex_symbols = Dict(
     "\\ordfeminine" => "ª",
     "\\neg" => "¬",
     "\\circledR" => "®",
+    "\\highminus" => "¯", # APL "high minus", or non-combining macron above
     "\\degree" => "°",
     "\\pm" => "±",
     "\\P" => "¶",
@@ -256,6 +257,7 @@ const latex_symbols = Dict(
     "\\aa" => "å",
     "\\ae" => "æ",
     "\\eth" => "ð",
+    "\\dh" => "ð",
     "\\div" => "÷",
     "\\o" => "ø",
     "\\th" => "þ",
@@ -2576,5 +2578,4 @@ const latex_symbols = Dict(
     "\\leftmoon" => "☾",  # last quarter moon
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
-
 )
