@@ -72,7 +72,7 @@ The singular values in `S` are sorted in descending order.
 If `full = false` (default), a "thin" SVD is returned. For a ``M
 \\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
 and `V` is `N \\times N`, while in the thin factorization `U` is `M
-\\times K` and `V` is `K \\times N`, where `K = \\min(M,N)` is the
+\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
 number of singular values.
 
 # Examples
@@ -134,7 +134,7 @@ Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 If `full = false` (default), a "thin" SVD is returned. For a ``M
 \\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
 and `V` is `N \\times N`, while in the thin factorization `U` is `M
-\\times K` and `V` is `K \\times N`, where `K = \\min(M,N)` is the
+\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
 number of singular values.
 
 `svd` is a wrapper around [`svdfact`](@ref), extracting all parts
