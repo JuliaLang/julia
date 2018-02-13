@@ -247,8 +247,10 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
 end
 
+
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
+        pkg.uuid in ctx.stdlib_uuids && continue
         info = manifest_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
@@ -258,7 +260,6 @@ function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID}
         end
     end
 end
-
 
 build(pkgs...) = build([PackageSpec(pkg) for pkg in pkgs])
 build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
@@ -280,7 +281,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ensure_resolved(ctx.env, pkgs)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
-    length(uuids) == 0 && (info("no packages to build"); return)
+    length(uuids) == 0 && (@info("no packages to build"); return)
     Pkg3.Operations.build_versions(ctx, uuids)
 end
 

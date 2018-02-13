@@ -128,6 +128,12 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
                 deps_u_allvers = get_or_make!(all_deps_u, VersionRange())
                 deps_u_allvers["julia"] = uuid_julia
             end
+
+            if uuid in ctx.stdlib_uuids
+                push!(all_versions_u, VERSION)
+                continue
+            end
+
             for path in registered_paths(ctx.env, uuid)
                 version_info = load_versions(path)
                 versions = sort!(collect(keys(version_info)))
@@ -212,6 +218,7 @@ function version_data(ctx::Context, pkgs::Vector{PackageSpec})
     hashes = Dict{UUID,SHA1}()
     upstreams = Dict{UUID,Vector{String}}()
     for pkg in pkgs
+        pkg.uuid in ctx.stdlib_uuids && continue
         uuid = pkg.uuid
         ver = pkg.version::VersionNumber
         upstreams[uuid] = String[]
@@ -341,6 +348,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
 
     pkgs_to_install = Tuple{PackageSpec, String}[]
     for pkg in pkgs
+        pkg.uuid in ctx.stdlib_uuids && continue
         path = find_installed(pkg.uuid, hashes[pkg.uuid])
         if !ispath(path)
             push!(pkgs_to_install, (pkg, path))
@@ -413,6 +421,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     ##########################################
     for pkg in pkgs
         uuid = pkg.uuid
+        uuid in ctx.stdlib_uuids && continue
         update_manifest(ctx.env, uuid, names[uuid], hashes[uuid], pkg.version::VersionNumber)
     end
 
@@ -476,12 +485,16 @@ end
 function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,Int}
     order = Dict{UUID,Int}()
     seen = UUID[]
-    k::Int = 0
+    k = 0
+    warned = false
     function visit(uuid::UUID)
-        uuid in seen &&
-            return @warn("Dependency graph not a DAG, linearizing anyway")
+        if uuid in seen
+            warned || @warn("Dependency graph not a DAG, linearizing anyway")
+            warned = true
+        end
         haskey(order, uuid) && return
         push!(seen, uuid)
+        uuid in ctx.stdlib_uuids && return
         info = manifest_info(ctx.env, uuid)
         haskey(info, "deps") &&
             foreach(visit, values(info["deps"]))
@@ -498,6 +511,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
     ctx.preview && (@info "Skipping building in preview mode"; return)
     builds = Tuple{UUID,String,SHA1,String}[]
     for uuid in uuids
+        uuid in ctx.stdlib_uuids && continue
         info = manifest_info(ctx.env, uuid)
         name = info["name"]
         # TODO: handle development packages?

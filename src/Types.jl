@@ -475,16 +475,25 @@ EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
+function gather_stdlib_uuids()
+    stdlib_uuids = UUID[]
+    stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+    for stdlib in readdir(stdlib_dir)
+        proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
+        push!(stdlib_uuids, UUID(proj["uuid"]))
+    end
+    return stdlib_uuids
+end
+
 # ENV variables to set some of these defaults?
 Base.@kwdef mutable struct Context
     env::EnvCache = EnvCache()
     preview::Bool = false
-    resolver_verbose::Bool = false
     load_error_choice::LoadErrorChoice = LOAD_ERROR_QUERY # query, install, or error, when not finding package on import
     use_libgit2_for_all_downloads::Bool = false
     num_concurrent_downloads::Int = 8
     graph_verbose::Bool = false
-    output_stream::IO = STDOUT
+    stdlib_uuids::Vector{UUID} = gather_stdlib_uuids()
 end
 
 function Context!(ctx::Context; kwargs...)
@@ -492,6 +501,7 @@ function Context!(ctx::Context; kwargs...)
         setfield!(ctx, k, v)
     end
 end
+
 
 function write_env_usage(manifest_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
