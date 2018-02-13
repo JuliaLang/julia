@@ -7133,7 +7133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "Method",
-    "text": "replace(A, old_new::Pair...; [count::Integer])\n\nReturn a copy of collection A where, for each pair old=>new in old_new, all occurrences of old are replaced by new. If count is specified, then replace at most count occurrences in total. See also replace!.\n\nExamples\n\njulia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)\n4-element Array{Int64,1}:\n 0\n 4\n 1\n 3\n\n\n\n\n\n"
+    "text": "replace(A, old_new::Pair...; [count::Integer])\n\nReturn a copy of collection A where, for each pair old=>new in old_new, all occurrences of old are replaced by new. Equality is determined using isequal. If count is specified, then replace at most count occurrences in total. See also replace!.\n\nExamples\n\njulia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)\n4-element Array{Int64,1}:\n 0\n 4\n 1\n 3\n\n\n\n\n\n"
 },
 
 {
@@ -7141,7 +7141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "Method",
-    "text": "replace(pred::Function, A, new; [count::Integer])\n\nReturn a copy of collection A where all occurrences x for which pred(x) is true are replaced by new.\n\nExamples\n\njulia> replace(isodd, [1, 2, 3, 1], 0, count=2)\n4-element Array{Int64,1}:\n 0\n 2\n 0\n 1\n\n\n\n\n\n"
+    "text": "replace(pred::Function, A, new; [count::Integer])\n\nReturn a copy of collection A where all occurrences x for which pred(x) is true are replaced by new. If count is specified, then replace at most count occurrences in total.\n\nExamples\n\njulia> replace(isodd, [1, 2, 3, 1], 0, count=2)\n4-element Array{Int64,1}:\n 0\n 2\n 0\n 1\n\n\n\n\n\n"
 },
 
 {
@@ -7149,7 +7149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "Method",
-    "text": "replace(new::Function, A; [count::Integer])\n\nReturn a copy of A where each value x in A is replaced by new(x)\n\nExamples\n\njulia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])\n4-element Array{Int64,1}:\n 2\n 2\n 6\n 4\n\njulia> replace(Dict(1=>2, 3=>4)) do kv\n           first(kv) < 3 ? first(kv)=>3 : kv\n       end\nDict{Int64,Int64} with 2 entries:\n  3 => 4\n  1 => 3\n\n\n\n\n\n"
+    "text": "replace(new::Function, A; [count::Integer])\n\nReturn a copy of A where each value x in A is replaced by new(x) If count is specified, then replace at most count values in total (replacements being defined as new(x) !== x).\n\nExamples\n\njulia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])\n4-element Array{Int64,1}:\n 2\n 2\n 6\n 4\n\njulia> replace(Dict(1=>2, 3=>4)) do kv\n           first(kv) < 3 ? first(kv)=>3 : kv\n       end\nDict{Int64,Int64} with 2 entries:\n  3 => 4\n  1 => 3\n\n\n\n\n\n"
 },
 
 {
@@ -7157,7 +7157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.replace!",
     "category": "Function",
-    "text": "replace!(A, old_new::Pair...; [count::Integer])\n\nFor each pair old=>new in old_new, replace all occurrences of old in collection A by new. If count is specified, then replace at most count occurrences in total. See also replace.\n\nExamples\n\njulia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)\n4-element Array{Int64,1}:\n 0\n 4\n 1\n 3\n\njulia> replace!(Set([1, 2, 3]), 1=>0)\nSet([0, 2, 3])\n\n\n\n\n\nreplace!(pred::Function, A, new; [count::Integer])\n\nReplace all occurrences x in collection A for which pred(x) is true by new.\n\nExamples\n\njulia> A = [1, 2, 3, 1];\n\njulia> replace!(isodd, A, 0, count=2)\n4-element Array{Int64,1}:\n 0\n 2\n 0\n 1\n\n\n\n\n\nreplace!(new::Function, A; [count::Integer])\n\nReplace each element x in collection A by new(x). If count is specified, then replace at most count values in total (replacements being defined as new(x) !== x).\n\nExamples\n\njulia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])\n4-element Array{Int64,1}:\n 2\n 2\n 6\n 4\n\njulia> replace!(Dict(1=>2, 3=>4)) do kv\n           first(kv) < 3 ? first(kv)=>3 : kv\n       end\nDict{Int64,Int64} with 2 entries:\n  3 => 4\n  1 => 3\n\njulia> replace!(x->2x, Set([3, 6]))\nSet([6, 12])\n\n\n\n\n\n"
+    "text": "replace!(A, old_new::Pair...; [count::Integer])\n\nFor each pair old=>new in old_new, replace all occurrences of old in collection A by new. Equality is determined using isequal. If count is specified, then replace at most count occurrences in total. See also replace.\n\nExamples\n\njulia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)\n4-element Array{Int64,1}:\n 0\n 4\n 1\n 3\n\njulia> replace!(Set([1, 2, 3]), 1=>0)\nSet([0, 2, 3])\n\n\n\n\n\nreplace!(pred::Function, A, new; [count::Integer])\n\nReplace all occurrences x in collection A for which pred(x) is true by new.\n\nExamples\n\njulia> A = [1, 2, 3, 1];\n\njulia> replace!(isodd, A, 0, count=2)\n4-element Array{Int64,1}:\n 0\n 2\n 0\n 1\n\n\n\n\n\nreplace!(new::Function, A; [count::Integer])\n\nReplace each element x in collection A by new(x). If count is specified, then replace at most count values in total (replacements being defined as new(x) !== x).\n\nExamples\n\njulia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])\n4-element Array{Int64,1}:\n 2\n 2\n 6\n 4\n\njulia> replace!(Dict(1=>2, 3=>4)) do kv\n           first(kv) < 3 ? first(kv)=>3 : kv\n       end\nDict{Int64,Int64} with 2 entries:\n  3 => 4\n  1 => 3\n\njulia> replace!(x->2x, Set([3, 6]))\nSet([6, 12])\n\n\n\n\n\n"
 },
 
 {
