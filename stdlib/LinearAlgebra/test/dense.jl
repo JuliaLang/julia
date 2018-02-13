@@ -72,7 +72,9 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, 100*eps(eltyb)), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
+                @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
