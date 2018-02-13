@@ -10,7 +10,7 @@ get_str(i) = String(vcat(map(x->[x>>4; x&0x0F], reinterpret(UInt8, [Int32(i)])).
 isbounded(::Type{L}) where {L<:LRUExample.LRU} = any(map(n->n==:maxsize, fieldnames(L)))
 isbounded(l::L) where {L<:LRUExample.LRU} = isbounded(L)
 
-nmax = round.(Int, logspace(2, 5, 4))
+nmax = map(x->round(Int, exp10(x)), range(2, stop=5, length=4))
 
 function lrutest()
     #println("LRU consistency tests")

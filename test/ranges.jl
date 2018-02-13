@@ -1209,17 +1209,6 @@ end
     @test Float32(linsp.ref) ≈ linsp.ref.hi + linsp.ref.lo
 end
 
-@testset "logspace" begin
-    n = 10; a = 2; b = 4
-    # test default values; base = 10
-    @test logspace(a, b, 50) == 10 .^ range(a, stop=b, length=50)
-    @test logspace(a, b, n) == 10 .^ range(a, stop=b, length=n)
-    for base in (10, 2, ℯ)
-        @test logspace(a, b, 50, base=base) == base.^range(a, stop=b, length=50)
-        @test logspace(a, b, n, base=base) == base.^range(a, stop=b, length=n)
-    end
-end
-
 @testset "issue #23300" begin
     x = -5:big(1.0):5
     @test map(Float64, x) === -5.0:1.0:5.0

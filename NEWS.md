@@ -1042,6 +1042,8 @@ Deprecated or removed
 
   * `LinSpace` has been renamed to `LinRange` ([#25896]).
 
+  * `logspace` has been deprecated to its definition ([#25896]).
+
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
     where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).

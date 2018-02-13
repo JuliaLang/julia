@@ -235,7 +235,7 @@ StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S}(ref, step, len, offset)
 
-## range with computed step, and logspace
+## range with computed step
 
 struct LinRange{T} <: AbstractRange{T}
     start::T
@@ -334,31 +334,6 @@ function print_range(io::IO, r::AbstractRange,
         print(io, post)  # post chars
     end
 end
-
-"""
-    logspace(start::Real, stop::Real, n::Integer; base=10)
-
-Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
-
-```jldoctest
-julia> logspace(1.,10.,5)
-5-element Array{Float64,1}:
-     10.0
-   1778.2794100389228
- 316227.7660168379
-      5.623413251903491e7
-      1.0e10
-
-julia> logspace(1.,10.,5,base=2)
-5-element Array{Float64,1}:
-    2.0
-    9.513656920021768
-   45.254833995939045
-  215.2694823049509
- 1024.0
-```
-"""
-logspace(start::Real, stop::Real, n::Integer; base=10) = base.^range(start, stop=stop, length=n)
 
 ## interface implementations
 

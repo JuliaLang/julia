@@ -841,7 +841,7 @@ end
 
 # issue #24794
 @deprecate linspace(start, stop)     range(start, stop=stop, length=50)
-@deprecate logspace(start, stop)     logspace(start, stop, 50)
+@deprecate logspace(start, stop)     exp10.(range(start, stop=stop, length=50))
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
@@ -1318,6 +1318,7 @@ export readandwrite
 @deprecate linspace(start, stop, length::Integer) range(start, stop=stop, length=length)
 @deprecate linspace(start, stop, length::Real) range(start, stop=stop, length=Int(length))
 @deprecate_binding LinSpace LinRange
+@deprecate logspace(start, stop, n; base=10) base.^range(start, stop=stop, length=n)
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
