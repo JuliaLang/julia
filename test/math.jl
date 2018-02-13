@@ -922,7 +922,7 @@ end
         @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
         @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, asinh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)]))
+        for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)^28]))
             @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
             @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
         end
