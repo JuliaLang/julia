@@ -646,7 +646,9 @@ Deprecated or removed
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
 
-  * `slicedim` has been deprecated in favor of `selectdim` ([#26009]).
+  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i)`. The new
+    `selectdim` function now always returns a view into `A`; in many cases the `copy` is
+	not necessary ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).

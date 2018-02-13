@@ -1360,8 +1360,18 @@ end
 # issue #25928
 @deprecate wait(t::Task) fetch(t)
 
-# PR #26008
-@deprecate slicedim(A::AbstractArray, d::Integer, i) selectdim(A, d, i)
+# issue #18326
+@deprecate slicedim(A::AbstractArray, d::Integer, i) copy(selectdim(A, d, i))
+function slicedim(A::AbstractVector, d::Integer, i::Number)
+    if d == 1
+        # slicedim would have returned a scalar value, selectdim always returns views
+        depwarn("`slicedim(A::AbstractVector, d::Integer, i)` is deprecated, use `selectdim(A, d, i)[]` instead.", :slicedim)
+        selectdim(A, d, i)[]
+    else
+        depwarn("`slicedim(A::AbstractArray, d::Integer, i)` is deprecated, use `copy(selectdim(A, d, i))` instead.", :slicedim)
+        copy(selectdim(A, d, i))
+    end
+end
 
 # PR 25062
 @deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),
