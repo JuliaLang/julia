@@ -675,13 +675,13 @@ _iterable(v) = Iterators.repeated(v)
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        X = _iterable(unalias(A, x))
+        x′ = _iterable(unalias(A, x))
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
-        @ncall $N setindex_shape_check X (d->idxlens[d])
-        Xs = start(X)
+        @ncall $N setindex_shape_check x′ (d->idxlens[d])
+        xs = start(x′)
         @inbounds @nloops $N i d->I_d begin
-            v, Xs = next(X, Xs)
+            v, xs = next(x′, xs)
             @ncall $N setindex! A v i
         end
         A
@@ -1154,36 +1154,36 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T,N}, source::AbstractArray{T,N}) where {T,N}
-    checkbounds(dest, axes(source)...)
-    src = unalias(dest, source)
-    for I in eachindex(IndexStyle(src,dest), src)
-        @inbounds dest[I] = src[I]
+function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+    checkbounds(dest, axes(src)...)
+    src′ = unalias(dest, src)
+    for I in eachindex(IndexStyle(src′,dest), src′)
+        @inbounds dest[I] = src′[I]
     end
     dest
 end
 
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-               source::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+                  src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
         throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
     end
     checkbounds(dest, first(Rdest))
     checkbounds(dest, last(Rdest))
-    checkbounds(source, first(Rsrc))
-    checkbounds(source, last(Rsrc))
-    src = unalias(dest, source)
+    checkbounds(src, first(Rsrc))
+    checkbounds(src, last(Rsrc))
+    src′ = unalias(dest, src)
     ΔI = first(Rdest) - first(Rsrc)
     if @generated
         quote
             @nloops $N i (n->Rsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src,i)
+                @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src′,i)
             end
         end
     else
         for I in Rsrc
-            @inbounds dest[I + ΔI] = src[I]
+            @inbounds dest[I + ΔI] = src′[I]
         end
     end
     dest

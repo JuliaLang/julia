@@ -473,14 +473,14 @@ end
 end
 
 # This indirection allows size-dependent implementations.
-@inline function _broadcast!(f, C, _A, _Bs::Vararg{Any,N}) where N
+@inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
-    @boundscheck check_broadcast_indices(shape, _A, _Bs...)
-    A = unalias(C, _A)
-    Bs = unalias(C, _Bs)
-    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    @boundscheck check_broadcast_indices(shape, A, Bs...)
+    A′ = unalias(C, A)
+    Bs′ = map(B->unalias(C, B), Bs)
+    keeps, Idefaults = map_newindexer(shape, A′, Bs′)
     iter = CartesianIndices(shape)
-    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
+    _broadcast!(f, C, keeps, Idefaults, A′, Bs′, Val(N), iter)
     return C
 end
 

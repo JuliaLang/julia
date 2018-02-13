@@ -142,7 +142,7 @@ julia> A # Note A has changed even though we modified b
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     @_inline_meta
-    J = unalias(A, to_indices(A, I))
+    J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end

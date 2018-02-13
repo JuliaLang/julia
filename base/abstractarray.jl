@@ -1062,8 +1062,6 @@ See also [`mightalias`](@ref) and [`dataids`](@ref).
 """
 unalias(dest, A) = A
 unalias(dest, A::Array) = mightalias(dest, A) ? copy(A) : A
-@inline unalias(dest, As::Tuple) = (unalias(dest, As[1]), unalias(dest, tail(As))...)
-unalias(dest, As::Tuple{}) = ()
 
 """
     mightalias(A::AbstractArray, B::AbstractArray)
