@@ -857,10 +857,10 @@ end
             bym = acos(big(T(-x)))
             @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
         end
+        @test_throws DomainError acos(-T(Inf))
+        @test_throws DomainError acos(T(Inf))
+        @test isnan_type(T, acos(T(NaN)))
     end
-    @test_throws DomainError acos(-T(Inf))
-    @test_throws DomainError acos(T(Inf))
-    @test isnan_type(T, acos(T(NaN)))
 end
 
 #prev, current, next float
