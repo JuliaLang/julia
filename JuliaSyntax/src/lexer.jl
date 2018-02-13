@@ -16,7 +16,7 @@ export tokenize
 @inline ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 @inline isbinary(c::Char) = c == '0' || c == '1'
 @inline isoctal(c::Char) =  '0' ≤ c ≤ '7'
-@inline iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
+@inline iswhitespace(c::Char) = Base.isspace(c)
 
 mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     io::IO_t
@@ -53,8 +53,8 @@ tokenize(x, ::Type{RawToken}) = Lexer(x, RawToken)
 tokenize(x) = Lexer(x, Token)
 
 # Iterator interface
-Base.iteratorsize(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.SizeUnknown()
-Base.iteratoreltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.HasEltype()
+Base.IteratorSize(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.SizeUnknown()
+Base.IteratorEltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.HasEltype()
 Base.eltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = T
 
 

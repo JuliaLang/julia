@@ -26,17 +26,42 @@ The JuliaParser.jl package is licensed under the MIT "Expat" License:
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 =#
 
-import Base.UTF8proc
+import Base.Unicode
 
-const EOF_CHAR = convert(Char,typemax(UInt32))
+
+@inline function utf8_trailing(i)
+    if i < 193
+        return 0
+    elseif i < 225
+        return 1
+    elseif i < 241
+        return 2
+    elseif i < 249
+        return 3
+    elseif i < 253
+        return 4
+    else
+        return 5
+    end
+end
+
+const utf8_offset = [0x00000000
+                    0x00003080
+                    0x000e2080
+                    0x03c82080
+                    0xfa082080
+                    0x82082080]
+# const EOF_CHAR = convert(Char,typemax(UInt32))
+const EOF_CHAR = typemax(Char)
+
 
 function is_cat_id_start(ch::Char, cat::Integer)
     c = UInt32(ch)
-    return (cat == UTF8proc.UTF8PROC_CATEGORY_LU || cat == UTF8proc.UTF8PROC_CATEGORY_LL ||
-            cat == UTF8proc.UTF8PROC_CATEGORY_LT || cat == UTF8proc.UTF8PROC_CATEGORY_LM ||
-            cat == UTF8proc.UTF8PROC_CATEGORY_LO || cat == UTF8proc.UTF8PROC_CATEGORY_NL ||
-            cat == UTF8proc.UTF8PROC_CATEGORY_SC ||  # allow currency symbols
-            cat == UTF8proc.UTF8PROC_CATEGORY_SO ||  # other symbols
+    return (cat == Unicode.UTF8PROC_CATEGORY_LU || cat == Unicode.UTF8PROC_CATEGORY_LL ||
+            cat == Unicode.UTF8PROC_CATEGORY_LT || cat == Unicode.UTF8PROC_CATEGORY_LM ||
+            cat == Unicode.UTF8PROC_CATEGORY_LO || cat == Unicode.UTF8PROC_CATEGORY_NL ||
+            cat == Unicode.UTF8PROC_CATEGORY_SC ||  # allow currency symbols
+            cat == Unicode.UTF8PROC_CATEGORY_SO ||  # other symbols
 
             # math symbol (category Sm) whitelist
             (c >= 0x2140 && c <= 0x2a1c &&
@@ -85,6 +110,7 @@ function is_cat_id_start(ch::Char, cat::Integer)
 end
 
 function is_identifier_char(c::Char)
+    c == EOF_CHAR && return false
     if ((c >= 'A' && c <= 'Z') ||
         (c >= 'a' && c <= 'z') || c == '_' ||
         (c >= '0' && c <= '9') || c == '!')
@@ -92,12 +118,12 @@ function is_identifier_char(c::Char)
     elseif (UInt32(c) < 0xA1 || UInt32(c) > 0x10ffff)
         return false
     end
-    cat = UTF8proc.category_code(c)
+    cat = Unicode.category_code(c)
     is_cat_id_start(c, cat) && return true
-    if cat == UTF8proc.UTF8PROC_CATEGORY_MN || cat == UTF8proc.UTF8PROC_CATEGORY_MC ||
-        cat == UTF8proc.UTF8PROC_CATEGORY_ND || cat == UTF8proc.UTF8PROC_CATEGORY_PC ||
-        cat == UTF8proc.UTF8PROC_CATEGORY_SK || cat == UTF8proc.UTF8PROC_CATEGORY_ME ||
-        cat == UTF8proc.UTF8PROC_CATEGORY_NO ||
+    if cat == Unicode.UTF8PROC_CATEGORY_MN || cat == Unicode.UTF8PROC_CATEGORY_MC ||
+        cat == Unicode.UTF8PROC_CATEGORY_ND || cat == Unicode.UTF8PROC_CATEGORY_PC ||
+        cat == Unicode.UTF8PROC_CATEGORY_SK || cat == Unicode.UTF8PROC_CATEGORY_ME ||
+        cat == Unicode.UTF8PROC_CATEGORY_NO ||
         (0x2032 <= UInt32(c) <= 0x2034) || # primes
         UInt32(c) == 0x0387 || UInt32(c) == 0x19da ||
         (0x1369 <= UInt32(c) <= 0x1371)
@@ -107,18 +133,18 @@ function is_identifier_char(c::Char)
 end
 
 function is_identifier_start_char(c::Char)
+    c == EOF_CHAR && return false
     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')
         return true
     elseif (UInt32(c) < 0xA1 || UInt32(c) > 0x10ffff)
         return false
     end
-    cat = UTF8proc.category_code(c)
+    cat = Unicode.category_code(c)
     return is_cat_id_start(c, cat)
 end
 
 
-function peekchar(io::(isdefined(Base, :GenericIOBuffer) ?
-                       Base.GenericIOBuffer : Base.AbstractIOBuffer))
+function peekchar(io::Base.GenericIOBuffer)
     if !io.readable || io.ptr > io.size
         return EOF_CHAR
     end
@@ -131,7 +157,7 @@ function readutf(io, offset = 0)
     if ch < 0x80
         return convert(Char, ch), 0
     end
-    trailing = Base.utf8_trailing[ch + 1]
+    trailing = utf8_trailing(ch + 1)
     c::UInt32 = 0
     for j = 1:trailing
         c += ch
@@ -139,7 +165,7 @@ function readutf(io, offset = 0)
         ch = convert(UInt8, io.data[io.ptr + j + offset])
     end
     c += ch
-    c -= Base.utf8_offset[trailing + 1]
+    c -= utf8_offset[trailing + 1]
     return convert(Char, c), trailing
 end
 
@@ -149,23 +175,22 @@ function dpeekchar(io::IOBuffer)
     end
     ch1, trailing = readutf(io)
     offset = trailing + 1
-    
+
     if io.ptr + offset > io.size
         return ch1, EOF_CHAR
     end
     ch2, _ = readutf(io, offset)
-    
+
     return ch1, ch2
 end
 
 # this implementation is copied from Base
-const _CHTMP = Vector{Char}(1)
-
 peekchar(s::IOStream) = begin
-    if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Char}), s, _CHTMP) < 0
+    _CHTMP = Ref{Char}()
+    if ccall(:ios_peekutf8, Int32, (Ptr{Nothing}, Ptr{Char}), s, _CHTMP) < 0
         return EOF_CHAR
     end
-    return _CHTMP[1]
+    return _CHTMP[]
 end
 
 eof(io::IO) = Base.eof(io)

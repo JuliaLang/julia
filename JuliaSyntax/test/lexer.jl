@@ -1,6 +1,6 @@
 using Tokenize
 using Tokenize.Lexers
-using Base.Test
+using Test
 
 const T = Tokenize.Tokens
 
