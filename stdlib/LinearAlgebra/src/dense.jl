@@ -1342,7 +1342,7 @@ julia> nullspace(M, 2)
 function nullspace(A::StridedMatrix, tol::Real = max(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
-    SVD = svdfact(A, full = true)
+    SVD = svdfact(A)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
