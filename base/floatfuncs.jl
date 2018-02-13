@@ -219,7 +219,7 @@ is equivalent to `x == 0` since the default `atol` is `0`.  You must either supp
 appropriate `atol` (equivalent to `norm(x) ≤ atol`) or rearrange your code (e.g.
 use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `atol`
 automatically because it depends on the overall scaling (the "units") of your problem:
-for example, `atol=1e-8` is an absurdly small tolerance if `x` is the
+for example, in `x - y ≈ 0`, `atol=1e-8` is an absurdly small tolerance if `x` is the
 [radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in centimeters,
 but an absurdly large tolerance if `x` is the
 [radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in kilometers.
