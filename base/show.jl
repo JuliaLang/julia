@@ -5,8 +5,8 @@
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for linspace, e.g.
-    # linspace(1,3,7)
+    # show for LinSpace, e.g.
+    # range(1, stop=3, length=7)
     # 7-element LinSpace{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     print(io, summary(r))

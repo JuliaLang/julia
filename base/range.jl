@@ -60,7 +60,10 @@ end
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
 optionally with a given step (defaults to 1). One of `length` or `step` is required.
-If both are specified, they must agree.
+If `length`, `stop`, and `step` are all specified, they must agree.
+
+If `length` and `stop` are provided and `step` is not, the step size will be computed
+automatically such that there are `length` linearly spaced elements in the range.
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
     _range(start, step, stop, length)
@@ -232,7 +235,7 @@ StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S}(ref, step, len, offset)
 
-## linspace and logspace
+## range with computed step, and logspace
 
 struct LinSpace{T} <: AbstractRange{T}
     start::T
@@ -241,9 +244,9 @@ struct LinSpace{T} <: AbstractRange{T}
     lendiv::Int
 
     function LinSpace{T}(start,stop,len) where T
-        len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
+        len >= 0 || throw(ArgumentError("range($start, stop=$stop, length=$len): negative length"))
         if len == 1
-            start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ"))
+            start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
             return new(start, stop, 1, 1)
         end
         new(start,stop,len,max(len-1,1))
@@ -255,31 +258,22 @@ function LinSpace(start, stop, len::Integer)
     LinSpace{T}(start, stop, len)
 end
 
-"""
-    linspace(start, stop, n)
-
-Construct a range of `n` linearly spaced elements from `start` to `stop`.
-
-```jldoctest
-julia> linspace(1.3,2.9,9)
-1.3:0.2:2.9
-```
-"""
-linspace(start, stop, len::Real) = linspace(promote(start, stop)..., Int(len))
-linspace(start::T, stop::T, len::Real) where {T} = linspace(start, stop, Int(len))
-
-linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
-linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
-# for Float16, Float32, and Float64 see twiceprecision.jl
-linspace(start::T, stop::T, len::Integer) where {T<:Real} = LinSpace{T}(start, stop, len)
-linspace(start::T, stop::T, len::Integer) where {T} = LinSpace{T}(start, stop, len)
+function _range(start::T, ::Nothing, stop::S, len::Integer) where {T,S}
+    a, b = promote(start, stop)
+    _range(a, nothing, b, len)
+end
+_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Real} = LinSpace{T}(start, stop, len)
+_range(start::T, ::Nothing, stop::T, len::Integer) where {T} = LinSpace{T}(start, stop, len)
+_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
+    _linspace(Float64, start, stop, len, 1)
+## for Float16, Float32, and Float64 see twiceprecision.jl
 
 function show(io::IO, r::LinSpace)
-    print(io, "linspace(")
+    print(io, "range(")
     show(io, first(r))
-    print(io, ',')
+    print(io, ", stop=")
     show(io, last(r))
-    print(io, ',')
+    print(io, ", length=")
     show(io, length(r))
     print(io, ')')
 end
@@ -364,7 +358,7 @@ julia> logspace(1.,10.,5,base=2)
  1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer; base=10) = base.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer; base=10) = base.^range(start, stop=stop, length=n)
 
 ## interface implementations
 
@@ -390,7 +384,7 @@ julia> step(1:2:10)
 julia> step(2.5:0.3:10.9)
 0.3
 
-julia> step(linspace(2.5,10.9,85))
+julia> step(range(2.5, stop=10.9, length=85))
 0.1
 ```
 """
@@ -976,8 +970,8 @@ function _define_range_op(@nospecialize f)
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))
-            linspace(convert(T, $f(first(r1), first(r2))),
-                     convert(T, $f(last(r1), last(r2))), len)
+            LinSpace{T}(convert(T, $f(first(r1), first(r2))),
+                        convert(T, $f(last(r1), last(r2))), len)
         end
 
         $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},

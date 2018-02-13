@@ -840,7 +840,7 @@ end
 @deprecate trues(A::AbstractArray) trues(size(A))
 
 # issue #24794
-@deprecate linspace(start, stop)     linspace(start, stop, 50)
+@deprecate linspace(start, stop)     range(start, stop=stop, length=50)
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
 # 24490 - warnings and messages
@@ -1315,6 +1315,8 @@ export readandwrite
 # PR #25896
 @deprecate range(start, length) range(start, length=length)
 @deprecate range(start, step, length) range(start, step=step, length=length)
+@deprecate linspace(start, stop, length::Integer) range(start, stop=stop, length=length)
+@deprecate linspace(start, stop, length::Real) range(start, stop=stop, length=Int(length))
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)

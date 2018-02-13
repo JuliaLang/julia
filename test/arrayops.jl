@@ -147,7 +147,7 @@ end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
-    let A = linspace(1, 60, 60)
+    let A = range(1, stop=60, length=60)
         @test size(reshape(A, :))         == (60,)
         @test size(reshape(A, :, 1))      == (60, 1)
         @test size(reshape(A, (:, 2)))    == (30, 2)

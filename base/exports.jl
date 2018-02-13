@@ -395,7 +395,6 @@ export
     issorted,
     last,
     linearindices,
-    linspace,
     logspace,
     mapslices,
     max,
