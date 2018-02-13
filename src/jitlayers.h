@@ -228,6 +228,7 @@ private:
     DenseMap<void*, StringRef> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
+JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
