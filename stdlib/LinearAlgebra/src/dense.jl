@@ -1315,7 +1315,7 @@ end
 Computes a basis for the nullspace of `M` by including the singular
 vectors of A whose singular have magnitude are greater than `tol*σ₁`,
 where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the largest dimension of `A` multiplied by the [`eps`](@ref)
+`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
@@ -1339,7 +1339,7 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = max(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A)
