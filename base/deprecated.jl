@@ -1328,6 +1328,8 @@ function lastindex(a, n)
     last(axes(a, n))
 end
 
+@deprecate_binding repmat repeat
+
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Timer(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)

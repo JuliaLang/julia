@@ -341,7 +341,7 @@ end
         @inferred cor(X, Y, vd)
     end
 
-    @test cor(repmat(1:17, 1, 17))[2] <= 1.0
+    @test cor(repeat(1:17, 1, 17))[2] <= 1.0
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
     let tmp = linspace(1, 85, 100)

@@ -421,7 +421,6 @@ export
     promote_shape,
     range,
     reducedim,
-    repmat,
     reshape,
     reverse!,
     reverse,
