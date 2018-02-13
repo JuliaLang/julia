@@ -1362,6 +1362,7 @@ end
 
 # issue #18326
 @deprecate slicedim(A::AbstractArray, d::Integer, i) copy(selectdim(A, d, i))
+@deprecate slicedim(A::BitVector, d::Integer, i) copy(selectdim(A, d, i))
 function slicedim(A::AbstractVector, d::Integer, i::Number)
     if d == 1
         # slicedim would have returned a scalar value, selectdim always returns views

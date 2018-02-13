@@ -1806,16 +1806,18 @@ end
 # range, range ops
 @test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
-@testset "slicedim" begin
+@testset "selectdim" begin
+    f26009(A, i) = selectdim(A, 1, i)
     for A in (reshape(Vector(1:20), 4, 5),
               reshape(1:20, 4, 5))
         local A
-        @test slicedim(A, 1, 2) == 2:4:20
-        @test slicedim(A, 2, 2) == 5:8
-        @test_throws ArgumentError slicedim(A,0,1)
-        @test slicedim(A, 3, 1) == A
-        @test_throws BoundsError slicedim(A, 3, 2)
-        @test @inferred(slicedim(A, 1, 2:2)) == Vector(2:4:20)'
+        @test selectdim(A, 1, 2) == 2:4:20
+        @test selectdim(A, 2, 2) == 5:8
+        @test_throws ArgumentError selectdim(A,0,1)
+        @test selectdim(A, 3, 1) == A
+        @test_throws BoundsError selectdim(A, 3, 2)
+        @test @inferred(f26009(A, 2:2)) == reshape(2:4:20, 1, :)
+        @test @inferred(f26009(A, 2)) == 2:4:20
     end
 end
 
