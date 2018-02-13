@@ -89,6 +89,8 @@ end
 exactkind(t::AbstractToken) = t.kind
 startpos(t::AbstractToken) = t.startpos
 endpos(t::AbstractToken) = t.endpos
+startbyte(t::AbstractToken) = t.startbyte
+endbyte(t::AbstractToken) = t.endbyte
 function untokenize(t::Token)
     if t.kind == IDENTIFIER || isliteral(t.kind) || t.kind == COMMENT || t.kind == WHITESPACE || t.kind == ERROR
         return t.val
