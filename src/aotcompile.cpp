@@ -231,10 +231,11 @@ static void makeSafeName(GlobalObject &G)
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C" JL_DLLEXPORT
-void *jl_create_native(jl_array_t *methods)
+void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams)
 {
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     jl_codegen_params_t params;
+    params.params = &cgparams;
     std::map<jl_method_instance_t *, jl_compile_result_t> emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;

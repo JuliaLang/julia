@@ -357,7 +357,7 @@ void *jl_precompile(int all)
             jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
     }
     m = NULL;
-    void *native_code = jl_create_native(m2);
+    void *native_code = jl_create_native(m2, jl_default_cgparams);
     JL_GC_POP();
     return native_code;
 }
