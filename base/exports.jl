@@ -52,7 +52,7 @@ export
     BitSet,
     IOBuffer,
     IOStream,
-    LinSpace,
+    LinRange,
     Irrational,
     Matrix,
     MergeSort,

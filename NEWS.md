@@ -1040,6 +1040,8 @@ Deprecated or removed
   * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
     arguments ([#25896]).
 
+  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
     where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).

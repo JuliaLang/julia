@@ -567,7 +567,7 @@ function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwiceP
     StepRangeLen{T,typeof(ref),typeof(step)}(ref, step, len, imid)
 end
 
-## LinSpace
+## LinRange
 
 # For Float16, Float32, and Float64, this returns a StepRangeLen
 function _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:IEEEFloat}

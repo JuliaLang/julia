@@ -670,8 +670,8 @@ end
 end
 
 # issue #20380
-let r = LinSpace(1,4,4)
-    @test isa(r[1:4], LinSpace)
+let r = LinRange(1,4,4)
+    @test isa(r[1:4], LinRange)
 end
 
 @testset "range with 1 or 0 elements (whose step length is NaN)" begin
@@ -866,23 +866,23 @@ end
     @test convert(StepRangeLen, 0:5) == 0:5
     @test convert(StepRangeLen, 0:1:5) == 0:1:5
 
-    @test convert(LinSpace{Float64}, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
-    @test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
-    @test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
+    @test convert(LinRange{Float64}, 0.0:0.1:0.3) === LinRange{Float64}(0.0, 0.3, 4)
+    @test convert(LinRange, 0.0:0.1:0.3) === LinRange{Float64}(0.0, 0.3, 4)
+    @test convert(LinRange, 0:3) === LinRange{Int}(0, 3, 4)
 
     @test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
-@testset "LinSpace ops" begin
-    @test start(LinSpace(0,3,4)) == 1
-    @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
-    @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
-    @test LinSpace(0,3,4)/3 == LinSpace(0,1,4)
-    @test broadcast(-, 2, LinSpace(0,3,4)) == LinSpace(2,-1,4)
-    @test broadcast(+, 2, LinSpace(0,3,4)) == LinSpace(2,5,4)
-    @test -LinSpace(0,3,4) == LinSpace(0,-3,4)
-    @test reverse(LinSpace(0,3,4)) == LinSpace(3,0,4)
+@testset "LinRange ops" begin
+    @test start(LinRange(0,3,4)) == 1
+    @test 2*LinRange(0,3,4) == LinRange(0,6,4)
+    @test LinRange(0,3,4)*2 == LinRange(0,6,4)
+    @test LinRange(0,3,4)/3 == LinRange(0,1,4)
+    @test broadcast(-, 2, LinRange(0,3,4)) == LinRange(2,-1,4)
+    @test broadcast(+, 2, LinRange(0,3,4)) == LinRange(2,5,4)
+    @test -LinRange(0,3,4) == LinRange(0,-3,4)
+    @test reverse(LinRange(0,3,4)) == LinRange(3,0,4)
 end
 @testset "Issue #11245" begin
     io = IOBuffer()
@@ -910,15 +910,15 @@ end
     @test replstrmime(1:4) == "1:4"
     @test stringmime("text/plain", 1:4) == "1:4"
     @test stringmime("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test stringmime("text/plain", LinSpace{Float64}(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test stringmime("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr(LinSpace{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
+    @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
     @test replstrmime(0:100.) == "0.0:1.0:100.0"
     # next is to test a very large range, which should be fast because print_range
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replstrmime(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replstrmime(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -927,15 +927,15 @@ end
 @testset "Issue 11049 and related" begin
     @test promote(range(0f0, stop=1f0, length=3), range(0., stop=5., length=2)) ===
         (range(0., stop=1., length=3), range(0., stop=5., length=2))
-    @test convert(LinSpace{Float64}, range(0., stop=1., length=3)) === LinSpace(0., 1., 3)
-    @test convert(LinSpace{Float64}, range(0f0, stop=1f0, length=3)) === LinSpace(0., 1., 3)
+    @test convert(LinRange{Float64}, range(0., stop=1., length=3)) === LinRange(0., 1., 3)
+    @test convert(LinRange{Float64}, range(0f0, stop=1f0, length=3)) === LinRange(0., 1., 3)
 
     @test promote(range(0., stop=1., length=3), 0:5) === (range(0., stop=1., length=3),
                                                  range(0., stop=5., length=6))
-    @test convert(LinSpace{Float64}, 0:5) === LinSpace(0., 5., 6)
-    @test convert(LinSpace{Float64}, 0:1:5) === LinSpace(0., 5., 6)
-    @test convert(LinSpace, 0:5) === LinSpace{Int}(0, 5, 6)
-    @test convert(LinSpace, 0:1:5) === LinSpace{Int}(0, 5, 6)
+    @test convert(LinRange{Float64}, 0:5) === LinRange(0., 5., 6)
+    @test convert(LinRange{Float64}, 0:1:5) === LinRange(0., 5., 6)
+    @test convert(LinRange, 0:5) === LinRange{Int}(0, 5, 6)
+    @test convert(LinRange, 0:1:5) === LinRange{Int}(0, 5, 6)
 
     function test_range_index(r, s)
         @test typeof(r[s]) == typeof(r)

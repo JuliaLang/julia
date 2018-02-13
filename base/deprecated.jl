@@ -1317,6 +1317,7 @@ export readandwrite
 @deprecate range(start, step, length) range(start, step=step, length=length)
 @deprecate linspace(start, stop, length::Integer) range(start, stop=stop, length=length)
 @deprecate linspace(start, stop, length::Real) range(start, stop=stop, length=Int(length))
+@deprecate_binding LinSpace LinRange
 
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)

@@ -883,8 +883,8 @@ of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
-function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
-    LinSpace(T(r.start), T(r.stop), length(r))
+function map(::Type{T}, r::LinRange) where T<:AbstractFloat
+    LinRange(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##

@@ -4,10 +4,10 @@
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for LinSpace, e.g.
+function show(io::IO, ::MIME"text/plain", r::LinRange)
+    # show for LinRange, e.g.
     # range(1, stop=3, length=7)
-    # 7-element LinSpace{Float64}:
+    # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     print(io, summary(r))
     if !isempty(r)
