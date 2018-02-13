@@ -244,7 +244,7 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :atan, :exp2, :expm1)
+for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)

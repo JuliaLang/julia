@@ -844,6 +844,8 @@ end
 end
 #prev, current, next float
 pcnfloat(x) = prevfloat(x), x, nextfloat(x)
+import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
+
 @testset "sinh" begin
     for T in (Float32, Float64)
         @test sinh(zero(T)) === zero(T)
@@ -853,14 +855,10 @@ pcnfloat(x) = prevfloat(x), x, nextfloat(x)
         @test sinh(T(1000)) === T(Inf)
         @test sinh(-T(1000)) === -T(Inf)
         @test isnan_type(T, sinh(T(NaN)))
-    end
-    for x in (pcnfloat(2.0^-28)..., pcnfloat(22.0)..., pcnfloat(709.7822265633563)...)
-        @test sinh(x) ≈ sinh(big(x)) rtol=eps(Float64)
-        @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(Float64)
-    end
-    for x in (pcnfloat(2f-12)..., pcnfloat(9f0)..., pcnfloat(88.72283f0)...)
-        @test sinh(x) ≈ sinh(big(x)) rtol=eps(Float32)
-        @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(Float32)
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
+            @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+        end
     end
 end
 
@@ -873,14 +871,10 @@ end
         @test cosh(T(1000)) === T(Inf)
         @test cosh(-T(1000)) === T(Inf)
         @test isnan_type(T, cosh(T(NaN)))
-    end
-    for x in (pcnfloat(2.7755602085408512e-17)..., pcnfloat(22.0)..., pcnfloat(709.7822265633563)...)
-        @test cosh(x) ≈ cosh(big(x)) rtol=eps(Float64)
-        @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(Float64)
-    end
-    for x in (pcnfloat(0.00024414062f0)..., pcnfloat(9f0)..., pcnfloat(88.72283f0)...)
-        @test cosh(x) ≈ cosh(big(x)) rtol=eps(Float32)
-        @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(Float32)
+        for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
+            @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+        end
     end
 end
 
@@ -893,7 +887,7 @@ end
         @test tanh(T(1000)) === one(T)
         @test tanh(-T(1000)) === -one(T)
         @test isnan_type(T, tanh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,1.0,22.0] : [2f0^-12,1f0,9f0]))
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
             @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
             @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
         end
@@ -907,7 +901,7 @@ end
         @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
         @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, asinh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,2.0,2.0^28] : [2f0^-12,2f0,22f28]))
+        for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)]))
             @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
             @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
         end
@@ -919,7 +913,7 @@ end
         @test_throws DomainError acosh(T(0.1))
         @test acosh(one(T)) === zero(T)
         @test isnan_type(T, acosh(T(NaN)))
-        for x in (nextfloat(T(1)), pcnfloat(T(2))..., pcnfloat(T(2^28))...)
+        for x in Iterators.flatten(pcnfloat.([T(1) T(2), T(2^28)]))
             @test acosh(x) ≈ acosh(big(x) rtol=eps(T)
         end
     end
@@ -935,7 +929,7 @@ end
         @test atanh(nextfloat(zero(T))) === nextfloat(zero(T))
         @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, atanh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.(T == Float64 ? [2.0^-28,0.5] : [2f-28,0.5f0]))
+        for x in Iterators.flatten(pcnfloat.([T(2.0)^-28, T(0.5)]))
             @test atanh(x) ≈ atanh(big(x)) rtol=eps(T)
             @test atanh(-x) ≈ atanh(big(-x)) rtol=eps(T)
         end

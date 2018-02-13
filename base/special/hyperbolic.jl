@@ -18,10 +18,10 @@ _ldexp_exp(x::Real, i) = _ldexp_exp(float(x, i))
 
 # Hyperbolic functions
 # sinh methods
-SINH_SMALL_X(::Type{Float64}) = 2.0^-28
+H_SMALL_X(::Type{Float64}) = 2.0^-28
 H_MEDIUM_X(::Type{Float64}) = 22.0
 
-SINH_SMALL_X(::Type{Float32}) = 2f-12
+H_SMALL_X(::Type{Float32}) = 2f-12
 H_MEDIUM_X(::Type{Float32}) = 9f0
 
 H_LARGE_X(::Type{Float64}) = 709.7822265633563 # nextfloat(709.7822265633562)
@@ -34,9 +34,9 @@ function sinh(x::T) where T <: Union{Float32, Float64}
     # mathematically sinh(x) is defined to be (exp(x)-exp(-x))/2
     #    1. Replace x by |x| (sinh(-x) = -sinh(x)).
     #    2. Find the branch and the expression to calculate and return it
-    #      a)   0 <= x < SINH_SMALL_X
+    #      a)   0 <= x < H_SMALL_X
     #               return x
-    #      b)   SINH_SMALL_X <= x < H_MEDIUM_X
+    #      b)   H_SMALL_X <= x < H_MEDIUM_X
     #               return sinh(x) = (E + E/(E+1))/2, where E=expm1(x)
     #      c)   H_MEDIUM_X <= x < H_LARGE_X
     #               return sinh(x) = exp(x)/2
@@ -59,7 +59,7 @@ function sinh(x::T) where T <: Union{Float32, Float64}
     # in a) or b)
     if absx < H_MEDIUM_X(T)
         # in a)
-        if absx < SINH_SMALL_X(T)
+        if absx < H_SMALL_X(T)
             return x
         end
         t = expm1(absx)
@@ -137,16 +137,14 @@ cosh(x::Real) = cosh(float(x))
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 22.0
 TANH_LARGE_X(::Type{Float32}) = 9.0f0
-TANH_SMALL_X(::Type{Float64}) = 2.0^-28
-TANH_SMALL_X(::Type{Float32}) = 2f0^-12
 function tanh(x::T) where T<:Union{Float32, Float64}
     # Method
     # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
     #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
     #    2. Find the branch and the expression to calculate and return it
-    #      a) 0 <= x < TANH_SMALL_X
+    #      a) 0 <= x < H_SMALL_X
     #             return x
-    #      b) TANH_SMALL_X <= x < 1
+    #      b) H_SMALL_X <= x < 1
     #            -expm1(-2x)/(expm1(-2x) + 2)
     #      c) 1 <= x < TANH_LARGE_X
     #           1 - 2/(expm1(2x) + 2)
@@ -161,7 +159,7 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < TANH_LARGE_X(T)
         # in a)
-        if absx < TANH_SMALL_X(T)
+        if absx < H_SMALL_X(T)
             return x
         end
         if absx >= T(1)
