@@ -522,7 +522,8 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
             arrayset(false, flds, getfield(args, i), i)
             i = add_int(i, 1)
         end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
+        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
+              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
     end
 end
 
