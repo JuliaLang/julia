@@ -1004,18 +1004,18 @@ broadcast(f, ::PromoteToSparse, ::Nothing, ::Nothing, As::Vararg{Any,N}) where {
 # For broadcast! with ::Any inputs, we need a layer of indirection to determine whether
 # the inputs can be promoted to SparseVecOrMat. If it's just SparseVecOrMat and scalars,
 # we can handle it here, otherwise see below for the promotion machinery.
-function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, _A::SparseVecOrMat, _Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(_A)
-        return copyto!(dest, _A)
+function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
+    if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(A)
+        return copyto!(dest, A)
     end
-    A = Base.unalias(dest, _A)
-    Bs = Base.unalias(dest, _Bs)
-    _aresameshape(dest, A, Bs...) && return _noshapecheck_map!(f, dest, A, Bs...)
-    Base.Broadcast.check_broadcast_indices(axes(dest), A, Bs...)
-    fofzeros = f(_zeros_eltypes(A, Bs...)...)
+    A′ = Base.unalias(dest, A)
+    Bs′ = map(B->Base.unalias(dest, B), Bs)
+    _aresameshape(dest, A′, Bs′...) && return _noshapecheck_map!(f, dest, A′, Bs′...)
+    Base.Broadcast.check_broadcast_indices(axes(dest), A′, Bs′...)
+    fofzeros = f(_zeros_eltypes(A′, Bs′...)...)
     fpreszeros = _iszero(fofzeros)
-    fpreszeros ? _broadcast_zeropres!(f, dest, A, Bs...) :
-                        _broadcast_notzeropres!(f, fofzeros, dest, A, Bs...)
+    fpreszeros ? _broadcast_zeropres!(f, dest, A′, Bs′...) :
+                        _broadcast_notzeropres!(f, fofzeros, dest, A′, Bs′...)
     return dest
 end
 function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, mixedsrcargs::Vararg{Any,N}) where {Tf,N}
