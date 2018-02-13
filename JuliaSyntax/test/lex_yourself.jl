@@ -1,6 +1,6 @@
 @testset "lex yourself" begin
 
-const PKGPATH = joinpath(dirname(@__FILE__), "..")
+PKGPATH = joinpath(dirname(@__FILE__), "..")
 
 global tot_files = 0
 global tot_time = 0.0

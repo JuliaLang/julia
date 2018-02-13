@@ -99,11 +99,14 @@
             BACKSLASH_EQ, # \=
             AND_EQ, # &=
             COLON_EQ, # :=
-            PAIR_ARROW, # =>
             APPROX, # ~
             EX_OR_EQ, # $=
             XOR_EQ, # ⊻=
         end_assignments,
+
+        begin_pairarrow,
+            PAIR_ARROW, # =>
+        end_pairarrow,
 
         # Level 2
         begin_conditional,

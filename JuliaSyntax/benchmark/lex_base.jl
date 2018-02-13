@@ -11,7 +11,7 @@ function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.
             if endswith(file, ".jl")
                 tot_files += 1
                 file = joinpath(root, file)
-                str = readstring(file)
+                str = read(file, String)::String
                 l = tokenize(str, T)
                 while !Tokenize.Lexers.eof(l)
                     t = Tokenize.Lexers.next_token(l)

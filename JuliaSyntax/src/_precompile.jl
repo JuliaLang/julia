@@ -1,4 +1,4 @@
-isdefined(Base, :GenericIOBuffer) ? (import Base.GenericIOBuffer) : (GenericIOBuffer{T} = Base.AbstractIOBuffer{T})
+import Base: GenericIOBuffer
 
 function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
@@ -20,8 +20,6 @@ function _precompile_()
     precompile(Tokenize.Lexers.is_identifier_start_char, (Char,))
     precompile(Tokenize.Lexers.peekchar, (GenericIOBuffer{Array{UInt8, 1}},))
     precompile(Tokenize.Lexers.dpeekchar, (GenericIOBuffer{Array{UInt8, 1}},))
-    precompile(Tokenize.Lexers.readutf, (GenericIOBuffer{Array{UInt8, 1}},))
-    precompile(Tokenize.Lexers.readutf, (GenericIOBuffer{Array{UInt8, 1}},Int))
     precompile(Tokenize.Lexers.readchar, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.readchar, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.RawToken},))
     precompile(Tokenize.Lexers.next_token, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
@@ -49,7 +47,7 @@ function _precompile_()
     precompile(Tokenize.Lexers.startpos!, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.RawToken},Int))
     precompile(Tokenize.Lexers.start_token!, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.start_token!, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.RawToken},))
-    
+
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char}, Tokenize.Tokens.Kind,Char))
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char,Char}, Tokenize.Tokens.Kind,Char))
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char,Char,Char}, Tokenize.Tokens.Kind,Char))
@@ -58,7 +56,7 @@ function _precompile_()
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char,Char,Char,Char,Char,Char}, Tokenize.Tokens.Kind,Char))
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char,Char,Char,Char,Char,Char,Char}, Tokenize.Tokens.Kind,Char))
     precompile(Tokenize.Lexers.tryread, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tuple{Char,Char,Char,Char,Char,Char,Char,Char}, Tokenize.Tokens.Kind,Char))
-    
+
 
     precompile(Tokenize.Lexers.lex_greater, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.lex_prime, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
@@ -84,14 +82,14 @@ function _precompile_()
     precompile(Tokenize.Lexers.lex_backslash, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.lex_star, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.lex_amper, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
-    
+
     precompile(Tokenize.Lexers.lex_whitespace, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers.read_string, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Tokenize.Tokens.Kind,))
     precompile(Tokenize.Lexers.readrest, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},Char))
-    
+
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, Char,))
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, String,))
-    precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},typeof( Base.UTF8proc.isdigit),))
+    precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},typeof( Base.isdigit),))
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},typeof( Tokenize.Lexers.iswhitespace),))
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},typeof( Tokenize.Lexers.is_identifier_char),))
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},typeof(Tokenize.Lexers.ishex),))
@@ -99,5 +97,5 @@ function _precompile_()
     precompile(Tokenize.Lexers.accept_batch, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token}, typeof(Tokenize.Lexers.isdigit),))
     precompile(Tokenize.Lexers._doret, (Char, Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.Token},))
     precompile(Tokenize.Lexers._doret, (Char, Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}},Tokenize.Tokens.RawToken},))
-    
+
 end
