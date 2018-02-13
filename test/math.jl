@@ -842,6 +842,27 @@ end
         @test atan2(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN2_PI_LO(T)))
     end
 end
+
+@testset "acos #23283" begin
+    for T in (Float32, Float64)
+        @test acos(zero(T)) === T(pi)/2
+        @test acos(-zero(T)) === T(pi)/2
+        @test acos(nextfloat(zero(T))) === T(pi)/2
+        @test acos(prevfloat(zero(T))) === T(pi)/2
+        @test acos(one(T)) === T(0.0)
+        @test acos(-one(T)) === T(pi)
+        for x in (0.45, 0.6, 0.98)
+            by = acos(big(T(x)))
+            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
+            bym = acos(big(T(-x)))
+            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
+        end
+    end
+    @test_throws DomainError acos(-T(Inf))
+    @test_throws DomainError acos(T(Inf))
+    @test isnan_type(T, acos(T(NaN)))
+end
+
 #prev, current, next float
 pcnfloat(x) = prevfloat(x), x, nextfloat(x)
 import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
@@ -913,8 +934,8 @@ end
         @test_throws DomainError acosh(T(0.1))
         @test acosh(one(T)) === zero(T)
         @test isnan_type(T, acosh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.([T(1) T(2), T(2^28)]))
-            @test acosh(x) ≈ acosh(big(x) rtol=eps(T)
+        for x in Iterators.flatten(pcnfloat.([nextfloat(T(1.0)), T(2), T(2)^28]))
+            @test acosh(x) ≈ acosh(big(x)) rtol=eps(T)
         end
     end
 end
