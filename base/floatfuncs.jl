@@ -214,15 +214,15 @@ approximately equal component-wise.
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
 
-Note that comparing `x ≈ 0` (i.e., comparing to zero with the default tolerances)
-is equivalent to `x == 0` since the default `atol` is `0`.  You must either supply an
-appropriate `atol` (equivalent to `norm(x) ≤ atol`) or rearrange your code (e.g.
+Note that `x ≈ 0` (i.e., comparing to zero with the default tolerances) is
+equivalent to `x == 0` since the default `atol` is `0`.  In such cases, you should either
+supply an appropriate `atol` (or use `norm(x) ≤ atol`) or rearrange your code (e.g.
 use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `atol`
 automatically because it depends on the overall scaling (the "units") of your problem:
 for example, in `x - y ≈ 0`, `atol=1e-8` is an absurdly small tolerance if `x` is the
-[radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in centimeters,
+[radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in meters,
 but an absurdly large tolerance if `x` is the
-[radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in kilometers.
+[radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
 
 
 # Examples
