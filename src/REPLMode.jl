@@ -143,16 +143,15 @@ function do_cmd!(tokens, repl; preview = false)
     cmd == :init && return do_init!(tokens)
     cmd == :preview && return do_preview!(tokens, repl)
     local env_opt::Union{String,Nothing} = get(ENV, "JULIA_ENV", nothing)
-    env = EnvCache(env_opt)
-    preview && (env.preview[] = true)
-    cmd == :help    ?    do_help!(env, tokens, repl) :
-    cmd == :rm      ?      do_rm!(env, tokens) :
-    cmd == :add     ?     do_add!(env, tokens) :
-    cmd == :up      ?      do_up!(env, tokens) :
-    cmd == :status  ?  do_status!(env, tokens) :
-    cmd == :test    ?    do_test!(env, tokens) :
-    cmd == :gc      ?      do_gc!(env, tokens) :
-    cmd == :build   ?   do_build!(env, tokens) :
+    ctx = Context(env = EnvCache(env_opt), preview = preview)
+    cmd == :help    ?    do_help!(ctx, tokens, repl) :
+    cmd == :rm      ?      do_rm!(ctx, tokens) :
+    cmd == :add     ?     do_add!(ctx, tokens) :
+    cmd == :up      ?      do_up!(ctx, tokens) :
+    cmd == :status  ?  do_status!(ctx, tokens) :
+    cmd == :test    ?    do_test!(ctx, tokens) :
+    cmd == :gc      ?      do_gc!(ctx, tokens) :
+    cmd == :build   ?   do_build!(ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
 end
 
@@ -306,7 +305,7 @@ const helps = Dict(
 )
 
 function do_help!(
-    env::EnvCache,
+    ctk::Context,
     tokens::Vector{Tuple{Symbol,Vararg{Any}}},
     repl::REPL.AbstractREPL,
 )
@@ -332,7 +331,7 @@ function do_help!(
     Base.display(disp, help_md)
 end
 
-function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_rm!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids
     mode = :project
     pkgs = PackageSpec[]
@@ -355,10 +354,10 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     isempty(pkgs) &&
         cmderror("`rm` – list packages to remove")
-    Pkg3.API.rm(env, pkgs)
+    Pkg3.API.rm(ctx, pkgs)
 end
 
-function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_add!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
         cmderror("`add` – list packages to add")
@@ -377,10 +376,10 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`add` doesn't take options: --$(join(token[2:end], '='))")
         end
     end
-    Pkg3.API.add(env, pkgs)
+    Pkg3.API.add(ctx, pkgs)
 end
 
-function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_up!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens:
     #  - upgrade levels as options: --[fixed|patch|minor|major]
     #  - package names and/or uuids, optionally followed by version specs
@@ -412,10 +411,10 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
         last_token_type = token[1]
     end
-    Pkg3.API.up(env, pkgs; level=level, mode=mode)
+    Pkg3.API.up(ctx, pkgs; level=level, mode=mode)
 end
 
-function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_status!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     mode = :combined
     while !isempty(tokens)
         token = popfirst!(tokens)
@@ -431,11 +430,11 @@ function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`status` does not take arguments")
         end
     end
-    Pkg3.Display.status(env, mode)
+    Pkg3.Display.status(ctx, mode)
 end
 
 # TODO , test recursive dependencies as on option.
-function do_test!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_test!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     pkgs = PackageSpec[]
     coverage = false
     while !isempty(tokens)
@@ -460,15 +459,15 @@ function do_test!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
     end
     isempty(pkgs) && cmderror("`test` takes a set of packages")
-    Pkg3.API.test(env, pkgs; coverage = coverage)
+    Pkg3.API.test(ctx, pkgs; coverage = coverage)
 end
 
-function do_gc!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_gc!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     !isempty(tokens) && cmderror("`gc` does not take any arguments")
-    Pkg3.API.gc(env)
+    Pkg3.API.gc(ctx)
 end
 
-function do_build!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_build!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     pkgs = PackageSpec[]
     while !isempty(tokens)
         token = popfirst!(tokens)
@@ -478,7 +477,7 @@ function do_build!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`build` only takes a list of packages")
         end
     end
-    Pkg3.API.build(env, pkgs)
+    Pkg3.API.build(ctx, pkgs)
 end
 
 function do_init!(tokens::Vector{Tuple{Symbol,Vararg{Any}}})
@@ -495,10 +494,7 @@ function create_mode(repl, main)
         prompt_suffix = "",
         sticky = true)
 
-    if VERSION >= v"0.7.0-DEV.1747"
-        pkg_mode.repl = repl
-    end
-
+    pkg_mode.repl = repl
     hp = main.hist
     hp.mode_mapping[:pkg] = pkg_mode
     pkg_mode.hist = hp

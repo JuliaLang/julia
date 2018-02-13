@@ -12,48 +12,48 @@ using Pkg3.Types
 using Pkg3.TOML
 
 
-previewmode_info() = @info("In preview mode")
+preview_info() = @info("In preview mode")
 
 add(pkg::String; kwargs...)               = add([pkg]; kwargs...)
 add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-add(pkgs::Vector{PackageSpec}; kwargs...) = add(EnvCache(), pkgs; kwargs...)
+add(pkgs::Vector{PackageSpec}; kwargs...) = add(Context(), pkgs; kwargs...)
 
-function add(env::EnvCache, pkgs::Vector{PackageSpec}; preview::Bool=env.preview[])
-    env.preview[] = preview
-    preview && previewmode_info()
-    project_resolve!(env, pkgs)
-    registry_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs, true)
-    Pkg3.Operations.add(env, pkgs)
+function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    project_resolve!(ctx.env, pkgs)
+    registry_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs, true)
+    Pkg3.Operations.add(ctx, pkgs)
 end
 
 
 rm(pkg::String; kwargs...)               = rm([pkg]; kwargs...)
 rm(pkgs::Vector{String}; kwargs...)      = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(EnvCache(), pkgs; kwargs...)
+rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(Context(), pkgs; kwargs...)
 
-function rm(env::EnvCache, pkgs::Vector{PackageSpec}; preview::Bool=env.preview[])
-    env.preview[] = preview
-    preview && previewmode_info()
-    project_resolve!(env, pkgs)
-    manifest_resolve!(env, pkgs)
-    Pkg3.Operations.rm(env, pkgs)
+function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    project_resolve!(ctx.env, pkgs)
+    manifest_resolve!(ctx.env, pkgs)
+    Pkg3.Operations.rm(ctx, pkgs)
 end
 
 
 up(;kwargs...)                           = up(PackageSpec[], kwargs...)
 up(pkg::String; kwargs...)               = up([pkg]; kwargs...)
 up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-up(pkgs::Vector{PackageSpec}; kwargs...) = up(EnvCache(), pkgs; kwargs...)
+up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
 
-function up(env::EnvCache, pkgs::Vector{PackageSpec};
-            level::UpgradeLevel=UpgradeLevel(:major), mode::Symbol=:project, preview::Bool=env.preview[])
-    env.preview[] = preview
-    preview && previewmode_info()
+function up(ctx::Context, pkgs::Vector{PackageSpec};
+            level::UpgradeLevel=UpgradeLevel(:major), mode::Symbol=:project, kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
 
     # Update the registry
     errors = Tuple{String, String}[]
-    if env.preview[]
+    if ctx.preview
         info("Skipping updating registry in preview mode")
     else
         for reg in registries()
@@ -102,36 +102,36 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec};
 
     if isempty(pkgs)
         if mode == :project
-            for (name::String, uuidstr::String) in env.project["deps"]
+            for (name::String, uuidstr::String) in ctx.env.project["deps"]
                 uuid = UUID(uuidstr)
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
         elseif mode == :manifest
-            for (name, infos) in env.manifest, info in infos
+            for (name, infos) in ctx.env.manifest, info in infos
                 uuid = UUID(info["uuid"])
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
         end
     else
-        project_resolve!(env, pkgs)
-        manifest_resolve!(env, pkgs)
-        ensure_resolved(env, pkgs)
+        project_resolve!(ctx.env, pkgs)
+        manifest_resolve!(ctx.env, pkgs)
+        ensure_resolved(ctx.env, pkgs)
     end
-    Pkg3.Operations.up(env, pkgs)
+    Pkg3.Operations.up(ctx, pkgs)
 end
 
 test(;kwargs...)                           = test(PackageSpec[], kwargs...)
 test(pkg::String; kwargs...)               = test([pkg]; kwargs...)
 test(pkgs::Vector{String}; kwargs...)      = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-test(pkgs::Vector{PackageSpec}; kwargs...) = test(EnvCache(), pkgs; kwargs...)
+test(pkgs::Vector{PackageSpec}; kwargs...) = test(Context(), pkgs; kwargs...)
 
-function test(env::EnvCache, pkgs::Vector{PackageSpec}; coverage=false, preview=env.preview[])
-    env.preview[] = preview
-    preview && previewmode_info()
-    project_resolve!(env, pkgs)
-    manifest_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs)
-    Pkg3.Operations.test(env, pkgs; coverage=coverage)
+function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    project_resolve!(ctx.env, pkgs)
+    manifest_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    Pkg3.Operations.test(ctx, pkgs; coverage=coverage)
 end
 
 
@@ -145,23 +145,24 @@ function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEnt
 end
 
 function installed(mode::Symbol=:manifest)::Dict{String, VersionNumber}
-    diff = Pkg3.Display.status(EnvCache(), mode, true)
+    diff = Pkg3.Display.status(Context(), mode, true)
     convert(Dict{String, VersionNumber}, diff)
 end
 
 function recursive_dir_size(path)
     sz = 0
     for (root, dirs, files) in walkdir(path)
-      for file in files
-          sz += stat(joinpath(root, file)).size
-      end
+        for file in files
+            sz += stat(joinpath(root, file)).size
+        end
     end
     return sz
 end
 
-function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
-    env.preview[] = preview
-    preview && previewmode_info()
+function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    env = ctx.env
 
     # If the manifest was not used
     gc_time = Dates.now() - period
@@ -217,7 +218,7 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
     sz = 0
     for path in paths_to_delete
         sz += recursive_dir_size(path)
-        if !env.preview[]
+        if !ctx.preview
             Base.rm(path; recursive=true)
         end
     end
@@ -229,59 +230,59 @@ function gc(env::EnvCache=EnvCache(); period = Week(6), preview=env.preview[])
             for uuidslug in readdir(packagedir)
                 uuidslug_path = joinpath(packagedir, uuidslug)
                 if isempty(readdir(uuidslug_path))
-                    !env.preview[] && Base.rm(uuidslug_path)
+                    !ctx.preview && Base.rm(uuidslug_path)
                 end
             end
         end
     end
 
     # Write the new condensed usage file
-    if !env.preview[]
+    if !ctx.preview
         open(usage_file, "w") do io
             TOML.print(io, new_usage, sorted=true)
         end
     end
     bytes, mb = Base.prettyprint_getunits(sz, length(Base._mem_units), Int64(1024))
     byte_save_str = length(paths_to_delete) == 0 ? "" : (" saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
-    info("Deleted $(length(paths_to_delete)) package installations", byte_save_str)
+    @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
 end
 
-function _get_deps!(env::EnvCache, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
-   for pkg in pkgs
-       info = manifest_info(env, pkg.uuid)
-       pkg.uuid in uuids && continue
-       push!(uuids, pkg.uuid)
-       if haskey(info, "deps")
-           pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
-           _get_deps!(env, pkgs, uuids)
-       end
-   end
+function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
+    for pkg in pkgs
+        info = manifest_info(ctx.env, pkg.uuid)
+        pkg.uuid in uuids && continue
+        push!(uuids, pkg.uuid)
+        if haskey(info, "deps")
+            pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
+            _get_deps!(ctx, pkgs, uuids)
+        end
+    end
 end
 
 
 build(pkgs...) = build([PackageSpec(pkg) for pkg in pkgs])
 build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
 build(pkg::PackageSpec) = build([pkg])
-build(pkgs::Vector{PackageSpec}) = build(EnvCache(), pkgs)
+build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 
-function build(env::EnvCache, pkgs::Vector{PackageSpec})
-   if isempty(pkgs)
-       for (name, infos) in env.manifest, info in infos
-           uuid = UUID(info["uuid"])
-           push!(pkgs, PackageSpec(name, uuid))
-       end
-   end
-   for pkg in pkgs
-       pkg.mode = :manifest
-   end
-   manifest_resolve!(env, pkgs)
-   ensure_resolved(env, pkgs)
-   uuids = Random.UUID[]
-   _get_deps!(env, pkgs, uuids)
-   length(uuids) == 0 && (info("No packages to build!"); return)
-   Pkg3.Operations.build_versions(env, uuids)
+function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    Context!(ctx; kwargs...)
+    if isempty(pkgs)
+        for (name, infos) in ctx.env.manifest, info in infos
+            uuid = UUID(info["uuid"])
+            push!(pkgs, PackageSpec(name, uuid))
+        end
+    end
+    for pkg in pkgs
+        pkg.mode = :manifest
+    end
+    manifest_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    uuids = UUID[]
+    _get_deps!(ctx, pkgs, uuids)
+    length(uuids) == 0 && (info("no packages to build"); return)
+    Pkg3.Operations.build_versions(ctx, uuids)
 end
-
 
 function init(path = pwd())
     Pkg3.Operations.init(path)

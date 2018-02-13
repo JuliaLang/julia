@@ -44,9 +44,7 @@ temp_pkg_dir() do project_path
     @test_broken Pkg3.test(TEST_PKG)
     Pkg3.test(TEST_PKG; preview = true)
 
-    Pkg3.GLOBAL_SETTINGS.use_libgit2_for_all_downloads = true
-    Pkg3.add("Example")
-    Pkg3.GLOBAL_SETTINGS.use_libgit2_for_all_downloads = false
+    Pkg3.add("Example"; use_libgit2_for_all_downloads = true)
 
     try
         Pkg3.add([PackageSpec(TEST_PKG, VersionSpec(v"55"))])

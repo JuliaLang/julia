@@ -15,7 +15,7 @@ using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, PkgError,
-    PackageSpec, UpgradeLevel, EnvCache,
+    PackageSpec, UpgradeLevel, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
@@ -43,7 +43,6 @@ const uuid_registry = uuid5(uuid_julia, "registry")
 
 
 ## user-friendly representation of package IDs ##
-
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
     name = get(uuid_to_name, p, "")
     isempty(name) && (name = "(unknown)")
@@ -52,7 +51,6 @@ function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
 end
 
 ## SHA1 ##
-
 struct SHA1
     bytes::Vector{UInt8}
     function SHA1(bytes::Vector{UInt8})
@@ -84,7 +82,6 @@ struct VersionBound
     end
 end
 VersionBound(t::Integer...) = VersionBound(t)
-
 VersionBound(v::VersionNumber) = VersionBound(v.major, v.minor, v.patch)
 
 Base.getindex(b::VersionBound, i::Int) = b.t[i]
@@ -445,8 +442,6 @@ struct EnvCache
     uuids::Dict{String,Vector{UUID}}
     paths::Dict{UUID,Vector{String}}
 
-    preview::Ref{Bool}
-
     function EnvCache(env::Union{Nothing,String})
         project_file, git_repo = find_project(env)
         project = read_project(project_file)
@@ -463,7 +458,6 @@ struct EnvCache
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
-        preview = Ref(false)
         return new(
             env,
             git_repo,
@@ -473,11 +467,31 @@ struct EnvCache
             manifest,
             uuids,
             paths,
-            preview,
         )
     end
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
+
+
+@enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
+
+# ENV variables to set some of these defaults?
+Base.@kwdef mutable struct Context
+    env::EnvCache = EnvCache()
+    preview::Bool = false
+    resolver_verbose::Bool = false
+    load_error_choice::LoadErrorChoice = LOAD_ERROR_QUERY # query, install, or error, when not finding package on import
+    use_libgit2_for_all_downloads::Bool = false
+    num_concurrent_downloads::Int = 8
+    graph_verbose::Bool = false
+    output_stream::IO = STDOUT
+end
+
+function Context!(ctx::Context; kwargs...)
+    for (k, v) in kwargs
+        setfield!(ctx, k, v)
+    end
+end
 
 function write_env_usage(manifest_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
@@ -523,7 +537,9 @@ function read_manifest(file::String)
     end
 end
 
-function write_env(env::EnvCache)
+
+function write_env(ctx::Context)
+    env = ctx.env
     # load old environment for comparison
     old_env = EnvCache(env.env)
     # update the project file
@@ -532,7 +548,7 @@ function write_env(env::EnvCache)
     if !isempty(project) || ispath(env.project_file)
         @info "Updating $(pathrepr(env, env.project_file))"
         Pkg3.Display.print_project_diff(old_env, env)
-        if !env.preview[]
+        if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
                 TOML.print(io, project, sorted=true)
@@ -553,7 +569,7 @@ function write_env(env::EnvCache)
             all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
             info["deps"] = sort!(collect(keys(deps)))
         end
-        if !env.preview[]
+        if !ctx.preview
             open(env.manifest_file, "w") do io
                 TOML.print(io, manifest, sorted=true)
             end

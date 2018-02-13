@@ -18,7 +18,8 @@ const colors = Dict(
 )
 const color_dark = :light_black
 
-function status(env::EnvCache, mode::Symbol, use_as_api=false)
+function status(ctx::Context, mode::Symbol, use_as_api=false)
+    env = ctx.env
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest
     diff = nothing
@@ -50,7 +51,7 @@ function status(env::EnvCache, mode::Symbol, use_as_api=false)
         if !isempty(c_diff)
             @info "Status $(pathrepr(env, env.manifest_file))"
             use_as_api || print_diff(c_diff)
-            diff =  Base.vcat(c_diff, diff)
+            diff = Base.vcat(c_diff, diff)
         end
     end
     return diff

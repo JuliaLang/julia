@@ -638,7 +638,7 @@ end
 
 function log_event_global!(graph::Graph, msg::String)
     rlog = graph.data.rlog
-    rlog.verbose && info(msg)
+    rlog.verbose && @info(msg)
     push!(rlog.globals, (nothing, msg))
 end
 
