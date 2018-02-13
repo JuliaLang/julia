@@ -1344,7 +1344,7 @@ function nullspace(A::StridedMatrix, tol::Real = max(size(A)...)*eps(real(float(
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full = true)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
-    return copy(SVD.Vt[indstart:end,:]')    
+    return copy(SVD.Vt[indstart:end,:]')
 end
 nullspace(a::StridedVector, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A)))))) = nullspace(reshape(a, length(a), 1), tol)
 
