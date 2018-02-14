@@ -1085,6 +1085,10 @@ end
 
 ### from abstractarray.jl
 
+_increasingrange(a, b) = min(a,b):max(a,b)
+dataids(A::StridedArray) = (_increasingrange(UInt(pointer(A, firstindex(A))), UInt(pointer(A, lastindex(A)))),)
+dataids(A::StridedSubArray) = (_increasingrange(UInt(pointer(A, firstindex(A))), UInt(pointer(A, lastindex(A)))), _indicesids(A.indices...)...)
+
 """
     fill!(A, x)
 
