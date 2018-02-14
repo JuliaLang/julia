@@ -113,6 +113,15 @@ function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {name
     NamedTuple{names,T}(T(nt))
 end
 
+function Tuple(nt::NamedTuple{names}) where {names}
+    if @generated
+        return Expr(:tuple, Any[:(getfield(nt, $(QuoteNode(n)))) for n in names]...)
+    else
+        return tuple(nt...)
+    end
+end
+(::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
+
 function show(io::IO, t::NamedTuple)
     n = nfields(t)
     for i = 1:n
