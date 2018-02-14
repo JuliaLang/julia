@@ -4,7 +4,7 @@
 
 abstract type Factorization{T} end
 
-eltype(::Type{Factorization{T}}) where {T} = T
+eltype(::Type{<:Factorization{T}}) where {T} = T
 size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
