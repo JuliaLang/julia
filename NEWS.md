@@ -439,6 +439,9 @@ Library improvements
 
   * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
 
+  * REPL LaTeX-like tab completions have been simplified for several Unicode characters,
+    e.g. `𝔸` is now `\bbA` rather than `\BbbA` ([#25980]).
+
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
 
