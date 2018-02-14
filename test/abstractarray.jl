@@ -882,3 +882,29 @@ end
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end
+
+@testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
+    let A = [1.0 2; 3 4]
+        @test Base.MemoryLayout(A)                   == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,:,:))         == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,:))           == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,:,1))         == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,:,1:1))       == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,1:1,1))       == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(view(A,1,1:1))       == Base.StridedLayout{Float64}()
+        @test Base.MemoryLayout(view(A,1,:))         == Base.StridedLayout{Float64}()
+        @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.DenseColumnsStridedRows{Float64}()
+        @test Base.MemoryLayout(view(A,1:1,:))       == Base.DenseColumnsStridedRows{Float64}()
+        @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == Base.StridedLayout{Float64}()
+        @test Base.MemoryLayout(view(A,1:2:1,:))     == Base.StridedLayout{Float64}()
+        @test Base.MemoryLayout(view(A,[1,2],:))     == Base.UnknownLayout{Float64}()
+
+        @test Base.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == Base.DenseColumnMajor{Float64}()
+
+        @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == Base.DenseColumnMajor{ComplexF64}()
+
+        Base.MemoryLayout(BitArray([true,true,false])) == Base.UnknownLayout{Bool}()
+    end
+end

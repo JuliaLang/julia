@@ -556,17 +556,17 @@ end
                                  (UnitUpperTriangular, LinearAlgebra.UnitUpperTriangularLayout, LinearAlgebra.UnitLowerTriangularLayout),
                                  (LowerTriangular, LinearAlgebra.LowerTriangularLayout, LinearAlgebra.UpperTriangularLayout),
                                  (UnitLowerTriangular, LinearAlgebra.UnitLowerTriangularLayout, LinearAlgebra.UnitUpperTriangularLayout))
-        @test Base.MemoryLayout(TriType(A)) == TriLayout(LinearAlgebra.DenseColumnMajor{Float64}())
+        @test Base.MemoryLayout(TriType(A)) == TriLayout(Base.DenseColumnMajor{Float64}())
         @test Base.MemoryLayout(TriType(transpose(A))) == Base.UnknownLayout{Float64}()
         @test Base.MemoryLayout(TriType(A')) == Base.UnknownLayout{Float64}()
-        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans(LinearAlgebra.DenseRowMajor{Float64}())
-        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans(LinearAlgebra.DenseRowMajor{Float64}())
+        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans(Base.DenseRowMajor{Float64}())
+        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans(Base.DenseRowMajor{Float64}())
 
-        @test Base.MemoryLayout(TriType(B)) == TriLayout(LinearAlgebra.DenseColumnMajor{ComplexF64}())
+        @test Base.MemoryLayout(TriType(B)) == TriLayout(Base.DenseColumnMajor{ComplexF64}())
         @test Base.MemoryLayout(TriType(transpose(B))) == Base.UnknownLayout{ComplexF64}()
         @test Base.MemoryLayout(TriType(B')) == Base.UnknownLayout{ComplexF64}()
-        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans(LinearAlgebra.DenseRowMajor{ComplexF64}())
-        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans(conj(LinearAlgebra.DenseRowMajor{ComplexF64}()))
+        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans(Base.DenseRowMajor{ComplexF64}())
+        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans(conj(Base.DenseRowMajor{ComplexF64}()))
     end
 
     A = randn(Float64, 100, 100)

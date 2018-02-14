@@ -149,7 +149,7 @@ adjoint(::MemoryLayout{T}) where T = UnknownLayout{T}()
 adjoint(M::MemoryLayout{T}) where T<:Real = transpose(M)
 adjoint(M::ConjLayout{T}) where T<:Complex = transpose(conj(M))
 adjoint(M::MemoryLayout{T}) where T<:Complex = conj(transpose(M))
-submemorylayout(M::ConjLayout{T}, t::Tuple) where T<:Complex = conj(submemorylayout(conj(M), t))
+Base.submemorylayout(M::ConjLayout{T}, t::Tuple) where T<:Complex = conj(Base.submemorylayout(conj(M), t))
 
 # Adjoints and transposes conform to the strided array interface if their parent does
 Base.unsafe_convert(::Type{Ptr{T}}, A::AdjOrTrans{T,S}) where {T,S} = Base.unsafe_convert(Ptr{T}, parent(A))

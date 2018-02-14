@@ -41,6 +41,10 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     tuple(size1, tail(psize)...)
 end
 
+MemoryLayout(A::ReinterpretArray{V}) where V = reinterpretedmemorylayout(MemoryLayout(parent(A)), V)
+reinterpretedmemorylayout(::MemoryLayout{T}, ::Type{V}) where {T,V} = UnknownLayout{V}()
+reinterpretedmemorylayout(::DenseColumnMajor{T}, ::Type{V}) where {T,V} = DenseColumnMajor{V}()
+
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @inline @propagate_inbounds getindex(a::ReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])

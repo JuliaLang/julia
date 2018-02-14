@@ -273,14 +273,82 @@ size_to_strides(s) = ()
 
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
+abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
+abstract type DenseColumns{T} <: AbstractStridedLayout{T} end
+struct DenseColumnMajor{T} <: DenseColumns{T} end
+struct DenseColumnsStridedRows{T} <: DenseColumns{T} end
+abstract type DenseRows{T} <: AbstractStridedLayout{T} end
+struct DenseRowMajor{T} <: DenseRows{T} end
+struct DenseRowsStridedColumns{T} <: DenseRows{T} end
+struct StridedLayout{T} <: AbstractStridedLayout{T} end
 
 """
     UnknownLayout{T}()
 
-is returned by `MemoryLayout(A)` is unknown if or how the entries of an array `A`
+is returned by `MemoryLayout(A)` if it is unknown how the entries of an array `A`
 are stored in memory.
 """
 UnknownLayout
+
+"""
+    AbstractStridedLayout{T}
+
+is an abstract type whose subtypes are returned by `MemoryLayout(A)`
+if a matrix or vector `A` have storage laid out at regular offsets in memory,
+and which can therefore be passed to external C and Fortran functions expecting
+this memory layout.
+"""
+AbstractStridedLayout
+
+"""
+    DenseColumnMajor{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
+equivalent to an `Array`, so that `stride(A,1) == 1` and `stride(A,2) == size(A,1)`.
+Arrays with `DenseColumnMajor` must conform to the `DenseArray` interface.
+"""
+DenseColumnMajor
+
+"""
+    DenseColumnsStridedRows{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
+as a column major matrix. In other words, the columns are stored in memory with
+offsets of one, while the rows are stored with offsets given by `stride(A,2)`.
+Arrays with `DenseColumnsStridedRows` must conform to the `DenseArray` interface.
+"""
+DenseColumnsStridedRows
+
+"""
+    DenseRowMajor{T}()
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+equivalent to the transpose of an `Array`, so that `stride(A,1) == size(A,1)` and
+`stride(A,2) == 1`. Arrays with `DenseRowMajor` must conform to the
+`DenseArray` interface.
+"""
+DenseRowMajor
+
+"""
+    DenseRowsStridedColumns{T}()
+
+is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
+as a row major matrix. In other words, the rows are stored in memory with
+offsets of one, while the columns are stored with offsets given by `stride(A,1)`.
+Arrays with `DenseRowsStridedColumns` must conform to the `DenseArray` interface,
+and `transpose(A)` should return a matrix whose layout is `DenseColumnsStridedRows{T}()`.
+"""
+DenseRowsStridedColumns
+
+"""
+    StridedLayout{T}()
+
+is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage laid out at regular
+offsets in memory. In other words, the columns are stored with offsets given
+by `stride(A,1)` and for matrices the rows are stored in memory with offsets
+of `stride(A,2)`. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
+"""
+StridedLayout
 
 """
     MemoryLayout(A)
@@ -290,20 +358,25 @@ UnknownLayout
 you define a new `AbstractArray` type, you can choose to implement
 memory layout to indicate that an array is strided in memory. If you decide to
 implement memory layout, then you must set this trait for your array
-type:
+type: for example, if your matrix is column major with `stride(A,2) == size(A,1)`,
+then override as follows:
 
-    Base.MemoryLayout(::Type{M}) where M <: MyArray{T,N} where {T} = LinearAlgebra.StridedLayout{T}()
+    Base.MemoryLayout(::Type{M}) where M <: MyMatrix{T} where {T} = Base.DenseColumnMajor{T}()
 
-The default is `Base.UnknownLayout{T,N}()` to indicate that the layout
+The default is `Base.UnknownLayout{T}()` to indicate that the layout
 in memory is unknown.
 
 Julia's internal linear algebra machinery will automatically (and invisibly)
 dispatch to BLAS and LAPACK routines if the memory layout is BLAS and
 the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
 In this case, one must implement the strided array interface, which requires
-overrides of `strides(A::MyArray)` and `unknown_convert(::Type{Ptr{T}}, A::MyArray)`.
+overrides of `strides(A::MyMatrix)` and `unknown_convert(::Type{Ptr{T}}, A::MyMatrix)`.
 """
 MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout{T}()
+
+MemoryLayout(A::Vector{T}) where T = DenseColumnMajor{T}()
+MemoryLayout(A::Matrix{T}) where T = DenseColumnMajor{T}()
+
 
 
 function isassigned(a::AbstractArray, i::Int...)

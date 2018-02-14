@@ -845,31 +845,7 @@ end
     end
 end
 
-@testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
-    A = [1.0 2; 3 4]
-
-    @test Base.MemoryLayout(A)                   == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,:,:))         == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,:))           == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,:,1))         == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,:,1:1))       == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,1:1,1))       == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(view(A,1,1:1))       == LinearAlgebra.StridedLayout{Float64}()
-    @test Base.MemoryLayout(view(A,1,:))         == LinearAlgebra.StridedLayout{Float64}()
-    @test Base.MemoryLayout(view(A,1:1,1:2))     == LinearAlgebra.DenseColumnsStridedRows{Float64}()
-    @test Base.MemoryLayout(view(A,1:1,:))       == LinearAlgebra.DenseColumnsStridedRows{Float64}()
-    @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == LinearAlgebra.StridedLayout{Float64}()
-    @test Base.MemoryLayout(view(A,1:2:1,:))     == LinearAlgebra.StridedLayout{Float64}()
-    @test Base.MemoryLayout(view(A,[1,2],:))     == LinearAlgebra.UnknownLayout{Float64}()
-
-    @test Base.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == LinearAlgebra.DenseColumnMajor{Float64}()
-    @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == LinearAlgebra.DenseColumnMajor{Float64}()
-
-    @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == LinearAlgebra.DenseColumnMajor{ComplexF64}()
-
-    Base.MemoryLayout(BitArray([true,true,false])) == LinearAlgebra.UnknownLayout{Bool}()
-
+@testset "Dispatch to BLAS routines" begin
     A = rand(100,100)
     x = rand(100)
     @test all(A*x .=== view(A,:,:)*x .=== view(A',:,:)'*x .===

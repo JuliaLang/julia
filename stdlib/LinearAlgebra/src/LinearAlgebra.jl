@@ -17,7 +17,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, ReshapedArray, ReinterpretArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec,
-    MemoryLayout, UnknownLayout
+    MemoryLayout, UnknownLayout, AbstractStridedLayout, DenseRows, DenseColumns, DenseRowMajor, DenseColumnMajor,
+    DenseColumnsStridedRows, DenseRowsStridedColumns, StridedLayout
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex, RangeIndex, Slice
 # We use `_length` because of non-1 indices; releases after julia 0.5
@@ -170,114 +171,6 @@ if USE_BLAS64
 else
     const BlasInt = Int32
 end
-
-## Traits for memory layouts ##
-abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
-abstract type DenseColumns{T} <: AbstractStridedLayout{T} end
-struct DenseColumnMajor{T} <: DenseColumns{T} end
-struct DenseColumnsStridedRows{T} <: DenseColumns{T} end
-abstract type DenseRows{T} <: AbstractStridedLayout{T} end
-struct DenseRowMajor{T} <: DenseRows{T} end
-struct DenseRowsStridedColumns{T} <: DenseRows{T} end
-struct StridedLayout{T} <: AbstractStridedLayout{T} end
-
-"""
-    AbstractStridedLayout{T}
-
-is an abstract type whose subtypes are returned by `MemoryLayout(A)`
-if a matrix or vector `A` have storage laid out at regular offsets in memory,
-and which can therefore be passed to external C and Fortran functions expecting
-this memory layout.
-"""
-AbstractStridedLayout
-
-"""
-    DenseColumnMajor{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-equivalent to an `Array`, so that `stride(A,1) == 1` and `stride(A,2) == size(A,1)`.
-Arrays with `DenseColumnMajor` must conform to the `DenseArray` interface.
-"""
-DenseColumnMajor
-
-"""
-    DenseColumnsStridedRows{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-as a column major matrix. In other words, the columns are stored in memory with
-offsets of one, while the rows are stored with offsets given by `stride(A,2)`.
-Arrays with `DenseColumnsStridedRows` must conform to the `DenseArray` interface.
-"""
-DenseColumnsStridedRows
-
-"""
-    DenseRowMajor{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-equivalent to the transpose of an `Array`, so that `stride(A,1) == size(A,1)` and
-`stride(A,2) == 1`. Arrays with `DenseRowMajor` must conform to the
-`DenseArray` interface.
-"""
-DenseRowMajor
-
-"""
-    DenseRowsStridedColumns{T}()
-
-is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
-as a row major matrix. In other words, the rows are stored in memory with
-offsets of one, while the columns are stored with offsets given by `stride(A,1)`.
-`Array`s with `DenseRowsStridedColumns` must conform to the `DenseArray` interface,
-and `transpose(A)` should return a matrix whose layout is `DenseColumnsStridedRows{T}()`.
-"""
-DenseRowsStridedColumns
-
-"""
-    StridedLayout{T}()
-
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage laid out at regular
-offsets in memory. In other words, the columns are stored with offsets given
-by `stride(A,1)` and for matrices the rows are stored in memory with offsets
-of `stride(A,2)`. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
-"""
-StridedLayout
-
-MemoryLayout(A::Vector{T}) where T = DenseColumnMajor{T}()
-MemoryLayout(A::Matrix{T}) where T = DenseColumnMajor{T}()
-
-MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
-submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-submemorylayout(::DenseColumns{T}, ::Tuple{I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex,AbstractCartesianIndex}} =
-    StridedLayout{T}()
-submemorylayout(::DenseColumns{T}, ::Tuple{I,Int}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseColumns{T}, ::Tuple{I,Int}) where {T,I<:Slice} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseRows{T}, ::Tuple{Int,I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseRows{T}, ::Tuple{Int,I}) where {T,I<:Slice} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseColumnMajor{T}, ::Tuple{I1,I2}) where {T,I1<:Slice,I2<:AbstractUnitRange{Int}} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseColumnMajor{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    DenseColumnsStridedRows{T}()
-submemorylayout(::DenseColumns{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    DenseColumnsStridedRows{T}()
-submemorylayout(::DenseRows{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:Slice} =
-    DenseRowMajor{T}()
-submemorylayout(::DenseRows{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    DenseRowsStridedColumns{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
-    StridedLayout{T}()
-
-MemoryLayout(A::ReshapedArray) = reshapedmemorylayout(MemoryLayout(parent(A)))
-reshapedmemorylayout(::MemoryLayout{T}) where T = UnknownLayout{T}()
-reshapedmemorylayout(::DenseColumnMajor{T}) where T = DenseColumnMajor{T}()
-
-MemoryLayout(A::ReinterpretArray{V}) where V = reinterpretedmemorylayout(MemoryLayout(parent(A)), V)
-reinterpretedmemorylayout(::MemoryLayout{T}, ::Type{V}) where {T,V} = UnknownLayout{V}()
-reinterpretedmemorylayout(::DenseColumnMajor{T}, ::Type{V}) where {T,V} = DenseColumnMajor{V}()
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
