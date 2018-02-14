@@ -262,7 +262,7 @@ function install_archive(
     for url in urls
         archive_url = get_archive_url_for_version(url, version)
         if archive_url != nothing
-            path = tempname() * randstring(6) * ".tar.gz"
+            path = tempname() * randstring(6) * ".tar.gz"
             url_success = true
             try
                 cmd = BinaryProvider.gen_download_cmd(archive_url, path);
