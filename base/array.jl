@@ -2139,7 +2139,7 @@ argmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Return an array containing the highest index in `b` for
+Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
 
@@ -2160,15 +2160,18 @@ julia> indexin(a, b)
 
 julia> indexin(b, a)
 3-element Array{Union{Nothing, Int64},1}:
- 6
- 4
+ 1
+ 2
  3
 ```
 """
 function indexin(a, b::AbstractArray)
-    indexes = keys(b)
-    bdict = Dict(zip(b, indexes))
-    return Union{eltype(indexes), Nothing}[
+    inds = keys(b)
+    bdict = Dict{eltype(b),eltype(inds)}()
+    for (val, ind) in zip(b, inds)
+        get!(bdict, val, ind)
+    end
+    return Union{eltype(inds), Nothing}[
         get(bdict, i, nothing) for i in a
     ]
 end

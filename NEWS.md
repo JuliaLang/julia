@@ -426,6 +426,8 @@ This section lists changes that do not have deprecation warnings.
   * The `fieldnames` and `propertynames` functions now return a tuple rather than
     an array ([#25725]).
 
+  * `indexin` now returns the first rather than the last matching index ([#25998]).
+
 Library improvements
 --------------------
 
@@ -1300,3 +1302,4 @@ Command-line option changes
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
 [#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
+[#25998]: https://github.com/JuliaLang/julia/issues/25998
