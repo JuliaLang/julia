@@ -1777,29 +1777,6 @@ end
     @test 0x1.fffffffffffffp1023 == realmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
 end
-@testset "significant digits" begin
-    # (would be nice to have a smart vectorized
-    # version of signif)
-    @test signif(123.456,1) ≈ 100.
-    @test signif(123.456,3) ≈ 123.
-    @test signif(123.456,5) ≈ 123.46
-    @test signif(123.456,8,2) ≈ 123.5
-    @test signif(0.0, 1) === 0.0
-    @test signif(-0.0, 1) === -0.0
-    @test signif(1.2, 2) === 1.2
-    @test signif(1.0, 6) === 1.0
-    @test signif(0.6, 1) === 0.6
-    @test signif(7.262839104539736, 2) === 7.3
-    @test isinf(signif(Inf, 3))
-    @test isnan(signif(NaN, 3))
-    @test signif(1.12312, 1000) === 1.12312
-    @test signif(Float32(7.262839104539736), 3) === Float32(7.26)
-    @test signif(Float32(7.262839104539736), 4) === Float32(7.263)
-    @test signif(Float32(1.2), 3) === Float32(1.2)
-    @test signif(Float32(1.2), 5) === Float32(1.2)
-    @test signif(Float16(0.6), 2) === Float16(0.6)
-    @test signif(Float16(1.1), 70) === Float16(1.1)
-end
 @testset "issue #1308" begin
     @test hex(~UInt128(0)) == "f"^32
     @test (~0)%UInt128 == ~UInt128(0)
