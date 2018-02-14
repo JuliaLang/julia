@@ -460,32 +460,48 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base = base)`](@ref)
-interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
-can be expressed concisely as:
+be passed explicitly in every call. For example, the library function [`base(b, n, pad)`](@ref)
+converts an integer `n` to a string in the given base `b`, optionally specifying a number of
+digits `pad` to pad to. The `pad` argument defaults to `1`.
+This behavior can be expressed concisely as:
 
 ```julia
-function parse(T, num; base = 10)
-    ###
-end
+base(b::Integer, n::Integer, pad::Integer=1) =
+    base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
 ```
 
-With this definition, the function can be called with either two or three arguments, and `10`
+Observe, that this definition calls another method of `base` function that takes four arguments.
+
+With this definition, the function can be called with either two or three arguments, and `1`
 is automatically passed when a third argument is not specified:
 
 ```jldoctest
-julia> parse(Int, "12", base = 10)
-12
+julia> base(3, 10, 10)
+"0000000101"
 
-julia> parse(Int, "12", base = 3)
-5
+julia> base(3, 10, 1)
+"101"
 
-julia> parse(Int, "12")
-12
+julia> base(3, 10)
+"101"
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
+This can be checked for our `base` function example by calling `methods` function:
+
+```jldoctest
+julia> methods(base)
+# 5 methods for generic function "base":
+[1] base(b::Int64, x::Integer, pad::Int64, neg::Bool) in Base at intfuncs.jl:616
+[2] base(b::Integer, n::BigInt) in Base.GMP at gmp.jl:610
+[3] base(b::Integer, n::BigInt, pad::Integer) in Base.GMP at gmp.jl:610
+[4] base(b::Integer, n::Integer) in Base at intfuncs.jl:649
+[5] base(b::Integer, n::Integer, pad::Integer) in Base at intfuncs.jl:649
+```
+
+We can see that line 649 of *intfuncs.jl* file defines two methods we have discussed here.
+There are additionally three other methods associated with this function defined elsewhere.
 
 ## Keyword Arguments
 
