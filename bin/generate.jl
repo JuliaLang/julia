@@ -110,12 +110,12 @@ for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
 
     # dependencies.toml
     write_versions_data("dependencies") do dep, d
-        dep != "julia" ? repr(string(pkgs[dep].uuid)) : nothing
+        dep == "julia" ? nothing : repr(string(pkgs[dep].uuid))
     end
 
     # compatibility.toml
     write_versions_data("compatibility", lt=packagelt) do dep, d
-        versions_repr(compress_versions(
+        dep in STDLIBS ? nothing : versions_repr(compress_versions(
             d.versions, collect(keys(pkgs[dep].versions))
         ))
     end
