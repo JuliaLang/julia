@@ -569,6 +569,21 @@ IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
 IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
 IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
 
+TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
+dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
+dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
+function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
+    T = @default_eltype(kv)
+    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
+        return dict_with_eltype(DT_apply, kv, T)
+    end
+    return grow_to!(dict_with_eltype(DT_apply, T), kv)
+end
+
 function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
@@ -668,3 +683,37 @@ get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
 filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
+
+# Like Set, but using IdDict
+mutable struct IdSet{T} <: AbstractSet{T}
+    dict::IdDict{T,Nothing}
+
+    IdSet{T}() where {T} = new(IdDict{T,Nothing}())
+    IdSet{T}(s::IdSet{T}) where {T} = new(IdDict{T,Nothing}(s.dict))
+end
+
+IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
+IdSet() = IdSet{Any}()
+
+copy(s::IdSet{T}) where {T} = IdSet{T}(s)
+copymutable(s::IdSet{T}) where {T} = IdSet{T}(s)
+
+isempty(s::IdSet) = isempty(s.dict)
+length(s::IdSet)  = length(s.dict)
+in(x, s::IdSet) = haskey(s.dict, x)
+push!(s::IdSet, x) = (s.dict[x] = nothing; s)
+pop!(s::IdSet, x) = (pop!(s.dict, x); x)
+pop!(s::IdSet, x, deflt) = x in s ? pop!(s, x) : deflt
+delete!(s::IdSet, x) = (delete!(s.dict, x); s)
+
+sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
+empty!(s::IdSet) = (empty!(s.dict); s)
+
+filter!(f, d::IdSet) = unsafe_filter!(f, d)
+
+start(s::IdSet)       = start(s.dict)
+done(s::IdSet, state) = done(s.dict, state)
+function next(s::IdSet, state)
+    ((k, _), i) = next(s.dict, state)
+    return (k, i)
+end
