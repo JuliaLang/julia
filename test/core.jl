@@ -138,6 +138,8 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, String) === Any
     @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
     @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(T, Union{}) === T
+    @test Base.promote_typejoin(Union{}, T) === T
 end
 
 @test promote_type(Bool,Bottom) === Bool
