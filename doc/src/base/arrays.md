@@ -102,7 +102,7 @@ Base.@view
 Base.@views
 Base.parent
 Base.parentindices
-Base.slicedim
+Base.selectdim
 Base.reinterpret
 Base.reshape
 Base.squeeze

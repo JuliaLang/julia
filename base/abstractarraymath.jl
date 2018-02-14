@@ -98,10 +98,11 @@ imag(x::AbstractArray{<:Real}) = zero(x)
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
 """
-    slicedim(A, d::Integer, i)
+    selectdim(A, d::Integer, i)
 
-Return all the data of `A` where the index for dimension `d` equals `i`. Equivalent to
-`A[:,:,...,i,:,:,...]` where `i` is in position `d`.
+Return a view of all the data of `A` where the index for dimension `d` equals `i`.
+
+Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
 
 # Examples
 ```jldoctest
@@ -110,17 +111,18 @@ julia> A = [1 2 3 4; 5 6 7 8]
  1  2  3  4
  5  6  7  8
 
-julia> slicedim(A,2,3)
-2-element Array{Int64,1}:
+julia> selectdim(A, 2, 3)
+2-element view(::Array{Int64,2}, Base.OneTo(2), 3) with eltype Int64:
  3
  7
 ```
 """
-function slicedim(A::AbstractArray, d::Integer, i)
+@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(axes(A), i, d))
+@noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
-    d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
-    A[setindex(axes(A), i, d)...]
+    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
+    return view(A, idxs...)
 end
 
 """
@@ -167,7 +169,7 @@ function flipdim(A::AbstractArray, d::Integer)
     let B=B # workaround #15276
         alli = [ axes(B,n) for n in 1:nd ]
         for i in indsd
-            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = selectdim(A, d, i)
         end
     end
     return B
