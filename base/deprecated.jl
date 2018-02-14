@@ -1318,7 +1318,7 @@ export readandwrite
 # PR 25458
 @deprecate endof(a) lastindex(a)
 function firstindex(a)
-    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :beginof)
+    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :firstindex)
     1
 end
 
