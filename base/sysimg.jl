@@ -92,6 +92,15 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
+"""
+    time_ns()
+
+Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+"""
+time_ns() = ccall(:jl_hrtime, UInt64, ())
+
+start_base_include = time_ns()
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -469,6 +478,8 @@ include("docs/Docs.jl")
 using .Docs
 isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 
+end_base_include = time_ns()
+
 function __init__()
     # for the few uses of Crand in Base:
     Csrand()
@@ -484,41 +495,62 @@ function __init__()
 end
 
 INCLUDE_STATE = 3 # include = include_relative
-
 end # baremodule Base
 
 using Base
+
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(Base, :Base64)
-Base.require(Base, :CRC32c)
-Base.require(Base, :SHA)
-Base.require(Base, :Dates)
-Base.require(Base, :DelimitedFiles)
-Base.require(Base, :Serialization)
-Base.require(Base, :Distributed)
-Base.require(Base, :FileWatching)
-Base.require(Base, :Future)
-Base.require(Base, :IterativeEigensolvers)
-Base.require(Base, :Libdl)
-Base.require(Base, :LinearAlgebra)
-Base.require(Base, :Logging)
-Base.require(Base, :Mmap)
-Base.require(Base, :Printf)
-Base.require(Base, :Profile)
-Base.require(Base, :Random)
-Base.require(Base, :SharedArrays)
-Base.require(Base, :SparseArrays)
-Base.require(Base, :SuiteSparse)
-Base.require(Base, :Test)
-Base.require(Base, :Unicode)
-Base.require(Base, :LibGit2)
-Base.require(Base, :Pkg)
-Base.require(Base, :REPL)
-Base.require(Base, :Markdown)
+tot_time_stdlib = 0.0
+let
+    # Stdlibs manually sorted in top down order
+    stdlibs = [
+            # No deps
+            :Base64,
+            :CRC32c,
+            :SHA,
+            :FileWatching,
+            :Unicode,
+            :Mmap,
+            :Serialization,
+            :Libdl,
+            :Markdown,
+            :LibGit2,
+            :Logging,
+
+            :Printf,
+            :Profile,
+            :Dates,
+            :DelimitedFiles,
+            :Random,
+            :Future,
+            :Pkg,
+            :LinearAlgebra,
+            :IterativeEigensolvers,
+            :SparseArrays,
+            :SuiteSparse,
+            :SharedArrays,
+            :Distributed,
+            :Test,
+            :REPL,
+        ]
+
+    maxlen = maximum(textwidth.(string.(stdlibs)))
+
+    print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
+    print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
+
+    global tot_time_stdlib = @elapsed for stdlib in stdlibs
+        tt = @elapsed Base.require(Base, stdlib)
+        print_time(stdlib, tt)
+    end
+
+    print_time("Stdlibs total", tot_time_stdlib)
+end
+
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -856,6 +888,17 @@ end
 empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
-Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+tot_time_precompile = @elapsed Base.include(Base, "precompile.jl")
 
-Base.include(Base, "precompile.jl")
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10^(-9)
+tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg + tot_time_precompile
+
+println("Sysimage built. Summary:")
+print("Total ─────── "); Base.time_print(tot_time            * 10^9); print(" \n");
+print("Base: ─────── "); Base.time_print(tot_time_base       * 10^9); print(" "); showcompact((tot_time_base       / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(tot_time_stdlib     * 10^9); print(" "); showcompact((tot_time_stdlib     / tot_time) * 100); println("%")
+if isfile("userimg.jl")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg    * 10^9); print(" "); showcompact((tot_time_userimg    / tot_time) * 100); println("%")
+end
+print("Precompile: ─ "); Base.time_print(tot_time_precompile * 10^9); print(" "); showcompact((tot_time_precompile / tot_time) * 100); println("%")
