@@ -521,6 +521,7 @@ Base.require(Base, :Test)
 Base.require(Base, :Unicode)
 Base.require(Base, :LibGit2)
 Base.require(Base, :Pkg)
+Base.require(Base, :Pkg3)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
 

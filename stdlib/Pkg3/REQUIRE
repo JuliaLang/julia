@@ -1,3 +1,0 @@
-julia 0.6
-SHA
-# Pkg.clone("https://github.com/StefanKarpinski/TOML.jl.git")
