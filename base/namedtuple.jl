@@ -106,10 +106,10 @@ isempty(::NamedTuple) = false
 promote_typejoin(::Type{NamedTuple{n, S}}, ::Type{NamedTuple{n, T}}) where {n, S, T} =
     NamedTuple{n, promote_typejoin(S, T)}
 
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T} = nt
+convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T}
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NamedTuple{names,T}(T(nt))
 end
 
