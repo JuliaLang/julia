@@ -561,7 +561,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef
