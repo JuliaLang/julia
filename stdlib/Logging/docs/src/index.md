@@ -26,7 +26,7 @@ the associated string processing will never be executed unless debug logging is
 enabled.
 
 Second, the logging tools allow you to attach arbitrary data to each event as a
-set of key value pairs. This allows you to capture local variables and other
+set of key--value pairs. This allows you to capture local variables and other
 program state for later analysis. For example, to attach the local array
 variable `A` and the sum of a vector `v` as the key `s` you can use
 
@@ -47,7 +47,7 @@ v = ones(100)
 ```
 
 All of the logging macros `@debug`, `@info`, `@warn` and `@error` share common
-features which are described in detail in the documentation for the more
+features that are described in detail in the documentation for the more
 general macro [`@logmsg`](@ref).
 
 ## Log event structure
@@ -55,10 +55,10 @@ general macro [`@logmsg`](@ref).
 Each event generates several pieces of data, some provided by the user and some
 automatically extracted. Let's examine the user-defined data first:
 
-* The *log level* is a broad category for the message which is used for early
+* The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
-  user defined levels are also possible.
-  - Use `Debug` for verbose information which could be useful when debugging an
+  user-defined levels are also possible.
+  - Use `Debug` for verbose information that could be useful when debugging an
     application or module. These events are disabled by default.
   - Use `Info` to inform the user about the normal operation of the program.
   - Use `Warn` when a potential problem is detected.
@@ -67,53 +67,61 @@ automatically extracted. Let's examine the user-defined data first:
     early return is more appropriate.)
 * The *message* is a human readable string describing the event in markdown
   format.
-* Optional *key value pairs* allow arbitrary data to be attached to each event.
-  Some keys have conventional meaning which can affect the way an event is
+* Optional *key--value pairs* allow arbitrary data to be attached to each event.
+  Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
 
 The system also generates some standard information for each event:
 
 * The `module` in which the logging macro was expanded.
 * The `file` and `line` where the logging macro occurs in the source code.
-* A message `id` which is unique for each logging macro invocation. This is
+* A message `id` that is unique for each logging macro invocation. This is
   very useful as a key for caching information or actions associated with an
   event. For instance, it can be used to limit the number of times a message
   is presented to the user.
-* A `group` for the event which is set to the base name of the file by default,
+* A `group` for the event, which is set to the base name of the file by default,
   without extension.  This can be used to group messages into categories more
   finely than the log level (for example, all deprecation warnings have group
   `:depwarn`), or into logical groupings across or within modules.
+
+Notice that some useful information such as the event time is not included by
+default. This is because such information can be expensive to extract and is
+also *dynamically* available to the current logger. It's simple to define a
+[custom logger](@ref AbstractLogger-interface) to augment event data with the
+time, backtrace, values of global variables and other useful information as
+required.
+
 
 ## Processing log events
 
 As you can see in the examples, logging statements make no mention of
 where log events go or how they are processed. This is a key design feature
-which makes the system composable and natural for concurrent use. It does this
+that makes the system composable and natural for concurrent use. It does this
 by separating two different concerns:
 
 * *Creating* log events is the concern of the module author who needs to
   decide where events are triggered and which information to include.
-* *Processing* of log events - that is, display, filtering, aggregation and
-  recording - is the concern of the application author who needs to bring
+* *Processing* of log events — that is, display, filtering, aggregation and
+  recording — is the concern of the application author who needs to bring
   multiple modules together into a cooperating application.
 
 ### Loggers
 
-Processing of events is performed by a *logger* which is the first piece of
+Processing of events is performed by a *logger*, which is the first piece of
 user configurable code to see the event. All loggers must be subtypes of
 [`AbstractLogger`](@ref).
 
 When an event is triggered, the appropriate logger is found by looking for a
-task local logger with the global logger as fallback.  The idea here is that
+task-local logger with the global logger as fallback.  The idea here is that
 the application code knows how log events should be processed and exists
 somewhere at the top of the call stack. So we should look up through the call
-stack to discover the logger - that is, the logger should be *dynamically
+stack to discover the logger — that is, the logger should be *dynamically
 scoped*. (This is a point of contrast with logging frameworks where the
-logger is *lexically scoped* - provided explicitly by the module author or a
+logger is *lexically scoped*; provided explicitly by the module author or as a
 simple global variable. In such a system it's awkward to control logging while
 composing functionality from multiple modules.)
 
-The global logger may be set with [`global_logger`](@ref), and task local
+The global logger may be set with [`global_logger`](@ref), and task-local
 loggers controlled using [`with_logger`](@ref).  Newly spawned tasks inherit
 the logger of the parent task.
 
@@ -125,10 +133,13 @@ messages where necessary; it is the logging equivalent of the [`DevNull`](@ref)
 stream.  [`SimpleLogger`](@ref) is a very simplistic text formatting logger,
 mainly useful for debugging the logging system itself.
 
+Custom loggers should come with overloads for the functions described in the
+[reference section](@ref AbstractLogger-interface).
+
 ### Early filtering and message handling
 
 When an event occurs, a few steps of early filtering occur to avoid generating
-messages which will be discarded:
+messages that will be discarded:
 
 1. The message log level is checked against a global minimum level (set via
    [`disable_logging`](@ref)).  This is a crude but extremely cheap global
@@ -136,18 +147,18 @@ messages which will be discarded:
 2. The current logger state is looked up and the message level checked against the
    logger's cached minimum level, as found by calling [`min_enabled_level`](@ref).
 3. The [`shouldlog`](@ref) function is called with the current logger, taking
-   some minimal information (module,group,id) which can be computed statically.
-   Most usefully, `shouldlog` is passed an event `id` which can be used to
-   discard events early based on a cached predicate.
+   some minimal information (level, module, group, id) which can be computed
+   statically.  Most usefully, `shouldlog` is passed an event `id` which can be
+   used to discard events early based on a cached predicate.
 
-If all these checks pass, the message and key value pairs are evaluated in full
+If all these checks pass, the message and key--value pairs are evaluated in full
 and passed to the current logger via the [`handle_message`](@ref) function.
 `handle_message()` may perform additional filtering as required and display the
 event to the screen, save it to a file, etc.
 
-Exceptions which occur while generating the log event are captured and logged
+Exceptions that occur while generating the log event are captured and logged
 by default.  This prevents individual broken events from crashing the
-application which is helpful when enabling little-used debug events in a
+application, which is helpful when enabling little-used debug events in a
 production system.  This behavior can be customized per logger type by
 extending [`catch_exceptions`](@ref).
 
@@ -155,7 +166,7 @@ extending [`catch_exceptions`](@ref).
 
 Log events are a side effect of running normal code, but you might find
 yourself wanting to test particular informational messages and warnings. The
-`Test` module provides a [`@test_logs`](@ref) macro which can be used to
+`Test` module provides a [`@test_logs`](@ref) macro that can be used to
 pattern match against the log event stream.
 
 
@@ -168,10 +179,19 @@ Logging.@logmsg
 Logging.LogLevel
 ```
 
-### Processing events
+### [Processing events with AbstractLogger](@id AbstractLogger-interface)
 
 Event processing is controlled by overriding functions associated with
 `AbstractLogger`:
+
+| Methods to implement          |                        | Brief description                        |
+|:----------------------------- |:---------------------- |:---------------------------------------- |
+| [`handle_message`](@ref)      |                        | Handle a log event                       |
+| [`shouldlog`](@ref)           |                        | Early filtering of events                |
+| [`min_enabled_level`](@ref)   |                        | Lower bound for log level of accepted events |
+| **Optional methods**          | **Default definition** | **Brief description**                    |
+| [`catch_exceptions`](@ref)    | `true`                 | Catch exceptions during event evaluation |
+
 
 ```@docs
 Logging.AbstractLogger
@@ -192,7 +212,7 @@ Logging.with_logger
 Logging.current_logger
 ```
 
-Loggers which are supplied with the system:
+Loggers that are supplied with the system:
 
 ```@docs
 Logging.NullLogger

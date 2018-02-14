@@ -44,7 +44,7 @@ function handle_message end
 Return true when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
-shouldlog(logger, level, _module, group, id) = true
+function shouldlog end
 
 """
     min_enabled_level(logger)
@@ -52,7 +52,7 @@ shouldlog(logger, level, _module, group, id) = true
 Return the maximum disabled level for `logger` for early filtering.  That is,
 the log level below or equal to which all messages are filtered.
 """
-min_enabled_level(logger) = Info
+function min_enabled_level end
 
 """
     catch_exceptions(logger)
@@ -169,9 +169,6 @@ overridden:
 
 There's also some key value pairs which have conventional meaning:
 
-  * `progress=fraction` should be used to indicate progress through an
-    algorithmic step named by `message`, it should be a value in the interval
-    [0,1], and would generally be used to drive a progress bar or meter.
   * `maxlog=integer` should be used as a hint to the backend that the message
     should be displayed no more than `maxlog` times.
   * `exception=ex` should be used to transport an exception with a log message,
