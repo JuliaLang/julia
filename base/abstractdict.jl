@@ -541,8 +541,9 @@ See [`Dict`](@ref) for further help.
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Vector{Any}
+    count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(uninitialized, 32), 0)
+    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(uninitialized, 32), 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
@@ -557,7 +558,7 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
         d
     end
 
-    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht))
+    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel)
 end
 
 IdDict() = IdDict{Any,Any}()
@@ -605,7 +606,9 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
         rehash!(d, max(length(d.ht)>>1, 32))
         d.ndel = 0
     end
-    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), d.ht, key, val)
+    inserted = RefValue{Cint}(0)
+    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    d.count += inserted[]
     return d
 end
 
@@ -620,12 +623,13 @@ function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
 end
 
 function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), d.ht, key, default)
-    # TODO: this can underestimate `ndel`
-    if val === default
+    found = RefValue{Cint}(0)
+    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
+    if found[] === Cint(0)
         return default
     else
-        (d.ndel += 1)
+        d.count -= 1
+        d.ndel += 1
         return val::V
     end
 end
@@ -645,6 +649,7 @@ function empty!(d::IdDict)
     resize!(d.ht, 32)
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
     d.ndel = 0
+    d.count = 0
     return d
 end
 
@@ -654,13 +659,7 @@ start(d::IdDict) = _oidd_nextind(d.ht, 0)
 done(d::IdDict, i) = (i == -1)
 next(d::IdDict{K,V}, i) where {K, V} = (Pair{K,V}(d.ht[i+1], d.ht[i+2]), _oidd_nextind(d.ht, i+2))
 
-function length(d::IdDict)
-    n = 0
-    for pair in d
-        n+=1
-    end
-    n
-end
+length(d::IdDict) = d.count
 
 copy(d::IdDict) = IdDict(d)
 

@@ -45,6 +45,9 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("refpointer.jl")
+
+# checked arithmetic
 const checked_add = +
 const checked_sub = -
 

@@ -443,7 +443,7 @@ static void foreach_mtable_in_module(
 {
     size_t i;
     void **table = m->bindings.table;
-    jl_eqtable_put(visited, m, jl_true);
+    jl_eqtable_put(visited, m, jl_true, NULL);
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
