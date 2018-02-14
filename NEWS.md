@@ -689,6 +689,8 @@ Deprecated or removed
   * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of
     `Meta.lower(module, ex)` ([#22064], [#24278]).
 
+  * The `DenseArray` abstract type has been deprecated in favor of `AbstractStridedArray` ([#26013]).
+
   * `ones(A::AbstractArray[, opts...])` and `zeros(A::AbstractArray[, opts...])` methods
     have been deprecated. For `zeros(A)`, consider `zero(A)`. For `ones(A)` or `zeros(A)`,
     consider `ones(size(A))`, `zeros(size(A))`, `fill(v, size(A))` for `v` an appropriate

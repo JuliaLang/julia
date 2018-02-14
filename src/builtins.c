@@ -1268,7 +1268,7 @@ void jl_init_primitives(void)
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
-    add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
+    add_builtin("AbstractStridedArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);

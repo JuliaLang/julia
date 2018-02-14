@@ -116,7 +116,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 # a tuple containing 1 and a cumulative product of the first N-1 sizes
 # this definition is also used for StridedReshapedArray and StridedReinterpretedArray
 # which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+function stride(a::Union{AbstractStridedArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
     if i > ndims(a)
         return length(a)
     end
@@ -126,7 +126,7 @@ function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray
     end
     return s
 end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+strides(a::Union{AbstractStridedArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)

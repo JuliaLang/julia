@@ -80,7 +80,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test_throws DimensionMismatch q*b[1:n1 + 1]
                     @test_throws DimensionMismatch adjoint(q) * Matrix{eltya}(uninitialized,n+2,n+2)
                     @test_throws DimensionMismatch Matrix{eltyb}(uninitialized,n+2,n+2)*q
-                    if isa(a, DenseArray) && isa(b, DenseArray)
+                    if isa(a, AbstractStridedArray) && isa(b, AbstractStridedArray)
                         # use this to test 2nd branch in mult code
                         pad_a = vcat(I, a)
                         pad_b = hcat(I, b)

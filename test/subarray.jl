@@ -567,7 +567,7 @@ end
 # issue #18034
 # ensure that it is possible to create an isbits, IndexLinear view of an immutable Array
 let
-    struct ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
+    struct ImmutableTestArray{T, N} <: Base.AbstractStridedArray{T, N}
     end
     Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
     Base.IndexStyle(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.IndexLinear()

@@ -5,7 +5,7 @@
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
 """
-    BitArray{N} <: DenseArray{Bool, N}
+    BitArray{N} <: AbstractStridedArray{Bool, N}
 
 Space-efficient `N`-dimensional boolean array, which stores one bit per boolean value.
 """
@@ -1181,8 +1181,8 @@ for f in (:&, :|, :xor)
             Fc[end] &= _msk_end(F)
             return F
         end
-        broadcast(::typeof($f), A::DenseArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
-        broadcast(::typeof($f), B::BitArray, A::DenseArray{Bool}) = broadcast($f, B, BitArray(A))
+        broadcast(::typeof($f), A::AbstractStridedArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
+        broadcast(::typeof($f), B::BitArray, A::AbstractStridedArray{Bool}) = broadcast($f, B, BitArray(A))
     end
 end
 
