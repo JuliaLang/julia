@@ -472,28 +472,23 @@ end
     return dest
 end
 
+# For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
+# appears on both the LHS and the RHS of the `.=`, then we know we're only
+# going to make one pass through the array, and even though `A` is aliasing
+# against itself, the mutations won't affect the result as the indices on the
+# LHS and RHS will always match. This is not true in general, but with the `.op=`
+# syntax it's fairly common for an argument to be `===` a source.
+broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
+
 # This indirection allows size-dependent implementations.
 @inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
-    A′ = unalias(C, A)
-    Bs′ = map(B->unalias(C, B), Bs)
+    A′ = broadcast_unalias(C, A)
+    Bs′ = map(B->broadcast_unalias(C, B), Bs)
     keeps, Idefaults = map_newindexer(shape, A′, Bs′)
     iter = CartesianIndices(shape)
     _broadcast!(f, C, keeps, Idefaults, A′, Bs′, Val(N), iter)
-    return C
-end
-
-# In the one-argument case, we can avoid de-aliasing `A` from `C` if
-# `A === C`. Otherwise `A` might be something like `transpose(C)` or
-# another such re-ordering that won't iterate the two safely.
-@inline function _broadcast!(f, C, A)
-    shape = broadcast_indices(C)
-    @boundscheck check_broadcast_indices(shape, A)
-    A !== C && (A = unalias(C, A))
-    keeps, Idefaults = map_newindexer(shape, A, ())
-    iter = CartesianIndices(shape)
-    _broadcast!(f, C, keeps, Idefaults, A, (), Val(0), iter)
     return C
 end
 
