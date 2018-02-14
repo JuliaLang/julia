@@ -426,6 +426,9 @@ This section lists changes that do not have deprecation warnings.
   * The `fieldnames` and `propertynames` functions now return a tuple rather than
     an array ([#25725]).
 
+  * Switched the order of return values in function `readdlm` when receiving `header=true` as
+    an argument, now the function returns a tuple with `(header, data)`. ([#25328])
+
 Library improvements
 --------------------
 

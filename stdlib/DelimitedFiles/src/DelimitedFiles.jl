@@ -435,7 +435,7 @@ function result(dlmstore::DLMStore{T}) where T
         dlmstore.lastrow = lastrow
         dlmstore.lastcol = ncols
     end
-    (dlmstore.hdr_offset > 0) ? (dlmstore.data, dlmstore.hdr) : dlmstore.data
+    (dlmstore.hdr_offset > 0) ? (dlmstore.hdr, dlmstore.data) : dlmstore.data
 end
 
 
