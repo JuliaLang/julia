@@ -147,7 +147,7 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 LinearAlgebra.diff
-Base.repeat(::AbstractArray)
+Base.repeat
 Base.rot180
 Base.rotl90
 Base.rotr90

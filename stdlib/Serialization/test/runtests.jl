@@ -255,7 +255,7 @@ end
 create_serialization_stream() do s # slices
     slc1 = view(UInt8[1,1,1,1], 2:3)
     serialize(s, slc1)
-    slc2 = view(repmat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
+    slc2 = view(repeat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)

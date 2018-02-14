@@ -644,7 +644,7 @@ let A, B, C, D
     @test unique(A, 2) == A
 
     # 10 repeats of each row
-    B = A[shuffle!(repmat(1:10, 10)), :]
+    B = A[shuffle!(repeat(1:10, 10)), :]
     C = unique(B, 1)
     @test sortrows(C) == sortrows(A)
     @test unique(B, 2) == B
@@ -666,25 +666,25 @@ end
     end
 end
 
-@testset "repmat and repeat" begin
+@testset "repeat" begin
     local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
     A = fill(1,2,3,4)
-    A1 = reshape(repmat([1,2],1,12),2,3,4)
-    A2 = reshape(repmat([1 2 3],2,4),2,3,4)
-    A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
+    A1 = reshape(repeat([1,2],1,12),2,3,4)
+    A2 = reshape(repeat([1 2 3],2,4),2,3,4)
+    A3 = reshape(repeat([1 2 3 4],6,1),2,3,4)
     @test isequal(cumsum(A,1),A1)
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
     # issue 20112
-    A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
+    A3 = reshape(repeat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,3),A3)
-    @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
-    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
+    @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
 
     # issue 20564
-    @test_throws MethodError repmat(1, 2, 3)
-    @test_throws MethodError repmat([1, 2], 1, 2, 3)
+    @test_throws MethodError repeat(1, 2, 3)
+    @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
 
     R = repeat([1, 2])
     @test R == [1, 2]

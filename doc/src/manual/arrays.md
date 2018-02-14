@@ -619,7 +619,7 @@ be to replicate the vector to the size of the matrix:
 ```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
-julia> repmat(a,1,3)+A
+julia> repeat(a,1,3)+A
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
