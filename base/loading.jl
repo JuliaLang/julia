@@ -191,6 +191,7 @@ function find_env(env::CurrentEnv, dir::AbstractString = pwd())
         old, dir = dir, dirname(dir)
         dir == old && break
     end
+    env.create ? joinpath(pwd(), project_names[end]) : nothing
 end
 
 find_env(env::Function) = find_env(env())
