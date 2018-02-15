@@ -1,33 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-colon(a::Real, b::Real) = colon(promote(a,b)...)
+(:)(a::Real, b::Real) = (:)(promote(a,b)...)
 
-colon(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
+(:)(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 
-colon(start::T, stop::T) where {T} = colon(start, oftype(stop-start, 1), stop)
+(:)(start::T, stop::T) where {T} = (:)(start, oftype(stop-start, 1), stop)
 
 range(a, len::Integer) = range(a, oftype(a-a, 1), len)
 
 # first promote start and stop, leaving step alone
-colon(start::A, step, stop::C) where {A<:Real,C<:Real} =
-    colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
-colon(start::T, step::Real, stop::T) where {T<:Real} = colon(promote(start, step, stop)...)
+(:)(start::A, step, stop::C) where {A<:Real,C<:Real} =
+    (:)(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
+(:)(start::T, step::Real, stop::T) where {T<:Real} = (:)(promote(start, step, stop)...)
 
-"""
-    colon(start, [step], stop)
-
-Called by `:` syntax for constructing ranges.
-
-```jldoctest
-julia> colon(1, 2, 5)
-1:2:5
-```
-"""
-colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
+(:)(start::T, step::T, stop::T) where {T<:AbstractFloat} =
     _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
-colon(start::T, step::T, stop::T) where {T<:Real} =
+(:)(start::T, step::T, stop::T) where {T<:Real} =
     _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 _colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
@@ -37,16 +27,17 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 
 """
-    :(start, [step], stop)
+    (:)(start, [step], stop)
 
 Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
-is similar but uses a step size of `s`. These syntaxes call the function `colon`. The colon
-is also used in indexing to select whole dimensions.
+is similar but uses a step size of `s`.
+
+`:` is also used in indexing to select whole dimensions.
 """
-colon(start::T, step, stop::T) where {T} = _colon(start, step, stop)
-colon(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
+(:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
+(:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
-# colon(start::A, step, stop::C) where {A<:Real,C<:Real}
+# (:)(start::A, step, stop::C) where {A<:Real,C<:Real}
 function _colon(start::T, step, stop::T) where T
     T′ = typeof(start+step)
     StepRange(convert(T′,start), step, convert(T′,stop))
@@ -64,12 +55,12 @@ _range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
 
 # AbstractFloat specializations
-colon(a::T, b::T) where {T<:AbstractFloat} = colon(a, T(1), b)
+(:)(a::T, b::T) where {T<:AbstractFloat} = (:)(a, T(1), b)
 range(a::AbstractFloat, len::Integer) = range(a, oftype(a, 1), len)
 
-colon(a::T, b::AbstractFloat, c::T) where {T<:Real} = colon(promote(a,b,c)...)
-colon(a::T, b::AbstractFloat, c::T) where {T<:AbstractFloat} = colon(promote(a,b,c)...)
-colon(a::T, b::Real, c::T) where {T<:AbstractFloat} = colon(promote(a,b,c)...)
+(:)(a::T, b::AbstractFloat, c::T) where {T<:Real} = (:)(promote(a,b,c)...)
+(:)(a::T, b::AbstractFloat, c::T) where {T<:AbstractFloat} = (:)(promote(a,b,c)...)
+(:)(a::T, b::Real, c::T) where {T<:AbstractFloat} = (:)(promote(a,b,c)...)
 
 range(a::AbstractFloat, st::AbstractFloat, len::Integer) = range(promote(a, st)..., len)
 range(a::Real, st::AbstractFloat, len::Integer) = range(float(a), st, len)
@@ -887,7 +878,7 @@ end
 Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
-reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
+reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
 reverse(r::StepRangeLen) = StepRangeLen(r.ref, -r.step, length(r), length(r)-r.offset+1)
 reverse(r::LinSpace)     = LinSpace(r.stop, r.start, length(r))
 

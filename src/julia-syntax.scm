@@ -1519,11 +1519,7 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x)
-                                   (or (eq? x 'end)
-                                       (eq? x ':)
-                                       (and (pair? x)
-                                            (eq? (car x) ':))))
+                       (contains (lambda (x) (eq? x 'end))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -1531,7 +1527,7 @@
        (new-idxs stuff) (process-indices arr idxs)
        `(block
          ,@(append stmts stuff)
-         (call getindex ,arr ,@new-idxs))))))
+         (call (top getindex) ,arr ,@new-idxs))))))
 
 (define (expand-update-operator op op= lhs rhs . declT)
   (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
@@ -1616,10 +1612,6 @@
                  ,(lower-tuple-assignment (list lhs state)
                                           `(call (top next) ,coll ,state))
                  ,body))))))
-
-;; convert an operator parsed as (op a b) to (call op a b)
-(define (syntactic-op-to-call e)
-  `(call ,(car e) ,@(map expand-forms (cdr e))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
@@ -1927,8 +1919,10 @@
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
 
-   '|<:| syntactic-op-to-call
-   '|>:| syntactic-op-to-call
+   '|<:|
+   (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
+   '|>:|
+   (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
@@ -2054,10 +2048,7 @@
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
-                               (contains (lambda (x)
-                                           (or (eq? x 'end)
-                                               (and (pair? x)
-                                                    (eq? (car x) ':))))
+                               (contains (lambda (x) (eq? x 'end))
                                          idxs)))
                    (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
@@ -2071,7 +2062,7 @@
                  ,.(map expand-forms stuff)
                  ,@rini
                  ,(expand-forms
-                   `(call setindex! ,arr ,r ,@new-idxs))
+                   `(call (top setindex!) ,arr ,r ,@new-idxs))
                  (unnecessary ,r))))))
          ((|::|)
           ;; (= (|::| x T) rhs)
@@ -2296,16 +2287,6 @@
    '>>>=   lower-update-op
    '.>>>=   lower-update-op
 
-   ':
-   (lambda (e)
-     (if (or (length= e 2)
-             (and (length= e 3)
-                  (eq? (caddr e) ':))
-             (and (length= e 4)
-                  (eq? (cadddr e) ':)))
-         (error "invalid \":\" outside indexing"))
-     (expand-forms `(call colon ,@(cdr e))))
-
    '|...|
    (lambda (e) (error "\"...\" expression outside call"))
 
@@ -2319,7 +2300,7 @@
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,@(cdr e))))
+   (lambda (e) (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
@@ -2336,10 +2317,10 @@
                                        (cdr x)
                                        (list x)))
                                  a)))
-                  `(call hvcat
+                  `(call (top hvcat)
                          (tuple ,.(map length rows))
                          ,.(apply append rows)))
-                `(call vcat ,@a))))))
+                `(call (top vcat) ,@a))))))
 
    'typed_hcat
    (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
@@ -2412,7 +2393,9 @@
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                                              (pair? (caddr x))
+                                              (eq? (car (caddr x)) 'call)
+                                              (eq? (cadr (caddr x)) ':)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler

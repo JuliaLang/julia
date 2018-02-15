@@ -971,8 +971,8 @@ end
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) &&
-            (func.head == :. || func.head == :curly))
+    if (isa(func, Symbol) && func !== :(:)) ||
+            (isa(func, Expr) && (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -1153,7 +1153,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x <: y" or "x = y")
-    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
+    elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
         if func_prec <= prec
@@ -1222,9 +1222,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
-                sep = " $func "
+                sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)

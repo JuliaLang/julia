@@ -367,7 +367,6 @@ export
     circshift,
     circshift!,
     clamp!,
-    colon,
     conj!,
     copy!,
     copyto!,
