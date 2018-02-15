@@ -426,9 +426,6 @@ using .StackTraces
 include("initdefs.jl")
 include("client.jl")
 
-# misc useful functions & macros
-include("util.jl")
-
 # statistics
 include("statistics.jl")
 
@@ -441,6 +438,9 @@ include("threadcall.jl")
 # code loading
 include("uuid.jl")
 include("loading.jl")
+
+# misc useful functions & macros
+include("util.jl")
 
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
