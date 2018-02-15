@@ -14,47 +14,13 @@ import Pkg3.BinaryProvider
 import Pkg3: depots
 import Pkg3.Types: uuid_julia
 
-#########
-# Slugs #
-#########
-const SlugInt = UInt32 # max p = 4
-const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-const nchars = SlugInt(length(chars))
-const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
-
-function slug(x::SlugInt, p::Int)
-    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
-        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
-    return sprint() do io
-        for i = 1:p
-            x, d = divrem(x, nchars)
-            write(io, chars[1+d])
-        end
-    end
-end
-slug(x::Integer, p::Int) = slug(SlugInt(x), p)
-
-function slug(bytes::Vector{UInt8}, p::Int)
-    n = nchars^p
-    x = zero(SlugInt)
-    for (i, b) in enumerate(bytes)
-        x = (x + b*powermod(2, 8(i-1), n)) % n
-    end
-    slug(x, p)
-end
-
-slug(uuid::UUID, p::Int=4) = slug(uuid.value % nchars^p, p)
-slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
-
-version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
-
-function find_installed(uuid::UUID, sha1::SHA1)
-    slug = version_slug(uuid, sha1)
+function find_installed(name::String, uuid::UUID, sha1::SHA1)
+    slug = Base.version_slug(uuid, sha1)
     for depot in depots()
-        path = abspath(depot, "packages", slug)
+        path = abspath(depot, "packages", name, slug)
         ispath(path) && return path
     end
-    return abspath(depots()[1], "packages", slug)
+    return abspath(depots()[1], "packages", name, slug)
 end
 
 function load_versions(path::String)
@@ -349,7 +315,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     pkgs_to_install = Tuple{PackageSpec, String}[]
     for pkg in pkgs
         pkg.uuid in ctx.stdlib_uuids && continue
-        path = find_installed(pkg.uuid, hashes[pkg.uuid])
+        path = find_installed(pkg.name, pkg.uuid, hashes[pkg.uuid])
         if !ispath(path)
             push!(pkgs_to_install, (pkg, path))
             push!(new_versions, pkg.uuid)
@@ -517,7 +483,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
         # TODO: handle development packages?
         haskey(info, "git-tree-sha1") || continue
         hash = SHA1(info["git-tree-sha1"])
-        path = find_installed(uuid, hash)
+        path = find_installed(name, uuid, hash)
         ispath(path) || error("Build path for $name does not exist: $path")
         build_file = joinpath(path, "deps", "build.jl")
         ispath(build_file) && push!(builds, (uuid, name, hash, build_file))
@@ -684,7 +650,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     for pkg in pkgs
         info = manifest_info(ctx.env, pkg.uuid)
         haskey(info, "git-tree-sha1") || cmderror("Could not find git-tree-sha1 for package $(pkg.name)")
-        version_path = find_installed(pkg.uuid, SHA1(info["git-tree-sha1"]))
+        version_path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
         testfile = joinpath(version_path, "test", "runtests.jl")
         if !isfile(testfile)
             push!(missing_runtests, pkg.name)

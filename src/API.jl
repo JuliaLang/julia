@@ -193,7 +193,8 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
             @assert length(_stanzas) == 1
             stanzas = _stanzas[1]
             if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
-                push!(paths_to_keep, Pkg3.Operations.find_installed(UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
+                push!(paths_to_keep,
+                      Pkg3.Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
             end
         end
     end
@@ -203,9 +204,9 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     for depot in depots()
         packagedir = abspath(depot, "packages")
         if isdir(packagedir)
-            for uuidslug in readdir(packagedir)
-                for shaslug in readdir(joinpath(packagedir, uuidslug))
-                    versiondir = joinpath(packagedir, uuidslug, shaslug)
+            for name in readdir(packagedir)
+                for slug in readdir(joinpath(packagedir, name))
+                    versiondir = joinpath(packagedir, name, slug)
                     if !(versiondir in paths_to_keep)
                         push!(paths_to_delete, versiondir)
                     end
@@ -227,10 +228,10 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     for depot in depots()
         packagedir = abspath(depot, "packages")
         if isdir(packagedir)
-            for uuidslug in readdir(packagedir)
-                uuidslug_path = joinpath(packagedir, uuidslug)
-                if isempty(readdir(uuidslug_path))
-                    !ctx.preview && Base.rm(uuidslug_path)
+            for name in readdir(packagedir)
+                name_path = joinpath(packagedir, name)
+                if isempty(readdir(name_path))
+                    !ctx.preview && Base.rm(name_path)
                 end
             end
         end

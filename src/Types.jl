@@ -11,6 +11,7 @@ using Pkg3.TOML
 import Pkg3
 import Pkg3: depots, logdir
 
+import Base: SHA1
 using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
@@ -49,23 +50,6 @@ function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
     uuid_short = string(p)[1:8]
     return "$name [$uuid_short]"
 end
-
-## SHA1 ##
-struct SHA1
-    bytes::Vector{UInt8}
-    function SHA1(bytes::Vector{UInt8})
-        length(bytes) == 20 ||
-            throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
-        return new(bytes)
-    end
-    SHA1(s::String) = SHA1(hex2bytes(s))
-end
-
-Base.string(hash::SHA1) = bytes2hex(hash.bytes)
-Base.show(io::IO, hash::SHA1) = print(io, "SHA1(", String(hash.bytes), ")")
-Base.isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
-Base.hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
-Base.:(==)(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
 ## VersionRange ##
 
