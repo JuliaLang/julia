@@ -428,8 +428,8 @@ atdoc!(λ) = global atdoc = λ
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
-mutable struct CoreSTDOUT <: IO end
-mutable struct CoreSTDERR <: IO end
+struct CoreSTDOUT <: IO end
+struct CoreSTDERR <: IO end
 const STDOUT = CoreSTDOUT()
 const STDERR = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
