@@ -1038,6 +1038,9 @@ Deprecated or removed
 
   * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
+    has been renamed to `force` ([#25979]).
+
   * The methods of `range` based on positional arguments have been deprecated in favor of
     keyword arguments ([#25896]).
 
