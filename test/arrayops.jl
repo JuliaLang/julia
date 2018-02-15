@@ -1117,6 +1117,29 @@ end
     @test A == [2,1,4,3] .+ 2^30
 end
 
+@testset "Base.mightalias unit tests" begin
+    using Base: mightalias
+    A = rand(5,4)
+    @test @views mightalias(A[:], A[:])
+    @test @views mightalias(A[:,:], A[:,:])
+    @test @views mightalias(A[1:2,1:2], A[1:2,1:2])
+    @test @views !mightalias(A[3:4,1:2], A[1:2,:])
+    @test @views mightalias(A[3,1:1], A)
+    @test @views mightalias(A[3,1:1], A[:])
+    @test @views mightalias(A[3,1:1], A[:,:])
+    @test @views mightalias(A, A[3,1:1])
+    @test @views mightalias(A[:], A[3,1:1])
+    @test @views mightalias(A[:,:], A[3,1:1])
+
+    B = reshape(A,10,2)
+    @test mightalias(A, A)
+    @test mightalias(A, B)
+    @test mightalias(B, A)
+    @test @views mightalias(B[:], A[:])
+    @test @views mightalias(B[1:2], A[1:2])
+    @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
+end
+
 @testset "lexicographic comparison" begin
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0

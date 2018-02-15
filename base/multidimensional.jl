@@ -1085,9 +1085,76 @@ end
 
 ### from abstractarray.jl
 
-_increasingrange(a, b) = min(a,b):max(a,b)
-dataids(A::StridedArray) = (_increasingrange(UInt(pointer(A, firstindex(A))), UInt(pointer(A, lastindex(A)))),)
-dataids(A::StridedSubArray) = (_increasingrange(UInt(pointer(A, firstindex(A))), UInt(pointer(A, lastindex(A)))), _indicesids(A.indices...)...)
+# Computes a range describing a strided array's location in memory for aliasing checks
+@inline function _memory_extents(A::StridedArray)
+    p = UInt(pointer(A, firstindex(A)))
+    return _memory_extents(p, p, size(A), strides(A), elsize(A))
+end
+_memory_extents(lower, upper, ::Tuple{}, ::Tuple{}, elsize) = lower:upper+elsize-1
+_memory_extents(lower, upper, ::Tuple{}, ::Tuple, elsize) = error("broken AbstractArray implementation: lengths of `size` and `strides` must match")
+_memory_extents(lower, upper, ::Tuple, ::Tuple{}, elsize) = error("broken AbstractArray implementation: lengths of `size` and `strides` must match")
+@inline function _memory_extents(lower, upper, size::Tuple, strides::Tuple, elsize)
+    size[1] == 0 && return lower:lower-1 # Empty array -> empty memory extents
+    offset = (size[1]-1) * strides[1] * elsize
+    if offset > 0
+        upper += offset
+    else
+        lower += offset
+    end
+    return _memory_extents(lower, upper, tail(size), tail(strides), elsize)
+end
+# Quicker answers for some known types
+_memory_extents(A::Array) = UInt(pointer(A, firstindex(A))):UInt(pointer(A, lastindex(A)))+elsize(A)-1
+_memory_extents(A::ReshapedArray) = _memory_extents(A.parent)
+
+dataids(A::StridedArray) = (_memory_extents(A),)
+dataids(A::StridedSubArray) = (_memory_extents(A), _indicesids(A.indices...)...)
+
+# In the common case where we have two views into the same parent, aliasing checks
+# are _much_ easier and more important to get right
+function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
+    if A.parent !== B.parent
+        # We cannot do any better than the usual dataids check
+        return dataidsoverlap(dataids(A), dataids(B))
+    end
+    # Now we know that A.parent === B.parent. This means that the indices of A
+    # and B are the same length and indexing into the same dimensions. We can
+    # just walk through them and check for overlaps: O(ndims(A)). We must finally
+    # ensure that A isn't used as an index into B
+    return _indicesmightoverlap(A.indices, B.indices) || dataidsoverlap(dataids(A), _indicesids(B.indices...))
+end
+
+_indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
+_indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
+_indicesmightoverlap(A::Tuple, B::Tuple{}) = error("malformed subarray")
+# For ranges, it's relatively cheap to construct the intersection
+@inline function _indicesmightoverlap(A::Tuple{AbstractRange, Vararg{Any}}, B::Tuple{AbstractRange, Vararg{Any}})
+    !isempty(intersect(A[1], B[1])) ? _indicesmightoverlap(tail(A), tail(B)) : false
+end
+# But in the common AbstractUnitRange case, there's an even faster shortcut
+@inline function _indicesmightoverlap(A::Tuple{AbstractUnitRange, Vararg{Any}}, B::Tuple{AbstractUnitRange, Vararg{Any}})
+    max(first(A[1]),first(B[1])) <= min(last(A[1]),last(B[1])) ? _indicesmightoverlap(tail(A), tail(B)) : false
+end
+# And we can check scalars against eachother and scalars against arrays quite easily
+@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
+    A[1] == B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
+@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}}) =
+    A[1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
+@inline _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
+    B[1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
+# And small arrays are quick, too
+@inline function _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}})
+    if length(A[1]) == 1
+        return A[1][1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
+    elseif length(B[1]) == 1
+        return B[1][1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
+    else
+        # But checking larger arrays requires constructing a Set and is too much work
+        return true
+    end
+end
+# And in general, checking the intersection is too much work
+_indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = true
 
 """
     fill!(A, x)

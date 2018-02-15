@@ -1088,7 +1088,7 @@ dataidsoverlap(::Tuple{}, ::Tuple{}) = false
 Return a tuple containing rough information about the memory region(s) the array `A` references.
 """
 dataids(A::AbstractArray) = ()
-dataids(A::Array) = (UInt(pointer(A, 1)):UInt(pointer(A, lastindex(A))),)
+dataids(A::Array) = (UInt(pointer(A, 1)):UInt(pointer(A, lastindex(A)))+elsize(A)-1,)
 
 ## get (getindex with a default value) ##
 
