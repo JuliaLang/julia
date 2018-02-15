@@ -6,7 +6,7 @@ import REPL
 
 function __init__()
     global terminal
-    terminal = REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+    terminal = REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr)
 end
 
 include("util.jl")

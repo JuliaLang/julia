@@ -93,7 +93,7 @@ end
 @test_broken  success(ignorestatus(pipeline(falsecmd, falsecmd)))
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
 
-# STDIN Redirection
+# stdin Redirection
 let file = tempname()
     run(pipeline(`$echocmd hello world`, file))
     @test read(pipeline(file, catcmd), String) == "hello world\n"
@@ -215,16 +215,16 @@ exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test read(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
+    @test read(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
     out = Pipe()
-    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr = out))
+    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr = out))
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
+let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)))
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
@@ -234,7 +234,7 @@ end
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
 
 @testset "redirect_*" begin
-    let OLD_STDOUT = STDOUT,
+    let OLD_STDOUT = stdout,
         fname = tempname(),
         f = open(fname,"w")
 
@@ -243,7 +243,7 @@ end
         redirect_stdout(OLD_STDOUT)
         close(f)
         @test "Hello World\n" == read(fname, String)
-        @test OLD_STDOUT === STDOUT
+        @test OLD_STDOUT === stdout
         rm(fname)
     end
 end
@@ -260,7 +260,7 @@ let fname = tempname(), p
         unsafe_store!(convert(Ptr{Cint}, handle + 2 * sizeof(Ptr{Cvoid})), 15)
         nothing
     end
-    OLD_STDERR = STDERR
+    OLD_STDERR = stderr
     redirect_stderr(open($(repr(fname)), "w"))
     # Usually this would be done by GC. Do it manually, to make the failure
     # case more reliable.
@@ -272,7 +272,7 @@ let fname = tempname(), p
     import Base.zzzInvalidIdentifier
     """
     try
-        io = open(pipeline(`$exename --startup-file=no`, stderr=STDERR), "w")
+        io = open(pipeline(`$exename --startup-file=no`, stderr=stderr), "w")
         write(io, cmd)
         close(io)
         wait(io)
@@ -292,7 +292,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", read(STDIN, String))'`, ready = Condition(), t, infd, outfd
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
@@ -369,7 +369,7 @@ let fname = tempname()
     else
         "cmd = pipeline(`echo asdf`, `cat`)"
     end)
-    for line in eachline(STDIN)
+    for line in eachline(stdin)
         run(cmd)
     end
     """

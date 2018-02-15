@@ -112,7 +112,7 @@ function setup_connection(zid, initiated_by)
         end
         (read_stream, write_stream)
     catch e
-        Base.show_backtrace(STDOUT,catch_backtrace())
+        Base.show_backtrace(stdout,catch_backtrace())
         println(e)
         rethrow(e)
     end
@@ -168,7 +168,7 @@ function recv_data()
 
         (from_zid, data)
     catch e
-        Base.show_backtrace(STDOUT,catch_backtrace())
+        Base.show_backtrace(stdout,catch_backtrace())
         println(e)
         rethrow(e)
     end
@@ -189,7 +189,7 @@ function start_master(np)
                 unsafe_write(r_s, pointer(data), length(data))
             end
         catch e
-            Base.show_backtrace(STDOUT,catch_backtrace())
+            Base.show_backtrace(stdout,catch_backtrace())
             println(e)
             rethrow(e)
         end

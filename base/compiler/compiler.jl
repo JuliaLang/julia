@@ -4,7 +4,7 @@ getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compi
 
 using Core.Intrinsics, Core.IR
 
-import Core: print, println, show, write, unsafe_write, STDOUT, STDERR,
+import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance
 
 const getproperty = getfield

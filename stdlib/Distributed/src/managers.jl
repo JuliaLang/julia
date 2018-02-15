@@ -129,7 +129,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
             launch_tasks[i] = @schedule try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
                 catch e
-                    print(STDERR, "exception launching on machine $(machine) : $(e)\n")
+                    print(stderr, "exception launching on machine $(machine) : $(e)\n")
                 end
         end
     end

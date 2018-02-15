@@ -2559,7 +2559,7 @@ end === nothing
 # issue #10221
 module GCbrokentype
 using InteractiveUtils
-OLD_STDOUT = STDOUT
+OLD_STDOUT = stdout
 fname = tempname()
 file = open(fname, "w")
 redirect_stdout(file)

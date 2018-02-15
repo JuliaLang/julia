@@ -173,24 +173,24 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 ## worker creation and setup ##
 """
-    start_worker([out::IO=STDOUT], cookie::AbstractString=readline(STDIN))
+    start_worker([out::IO=stdout], cookie::AbstractString=readline(stdin))
 
 `start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
 worker.
 
-host:port information is written to stream `out` (defaults to STDOUT).
+host:port information is written to stream `out` (defaults to stdout).
 
-The function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT,
+The function closes stdin (after reading the cookie if required), redirects stderr to stdout,
 listens on a free port (or if specified, the port in the `--bind-to` command
 line option) and schedules tasks to process incoming TCP connections and requests.
 
 It does not return.
 """
-start_worker(cookie::AbstractString=readline(STDIN)) = start_worker(STDOUT, cookie)
-function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
-    close(STDIN) # workers will not use it
-    redirect_stderr(STDOUT)
+start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
+function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+    close(stdin) # workers will not use it
+    redirect_stderr(stdout)
 
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
@@ -223,7 +223,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
         check_master_connect()
         while true; wait(); end
     catch err
-        print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
+        print(stderr, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -235,8 +235,8 @@ function redirect_worker_output(ident, stream)
     @schedule while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
-            # STDOUT's of "additional" workers started from an initial worker on a host are not available
-            # on the master directly - they are routed via the initial worker's STDOUT.
+            # stdout's of "additional" workers started from an initial worker on a host are not available
+            # on the master directly - they are routed via the initial worker's stdout.
             println(line)
         else
             println("      From worker $(ident):\t$line")
@@ -629,7 +629,7 @@ function check_master_connect()
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
             exit(1)
         end
     end

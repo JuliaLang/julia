@@ -3733,7 +3733,7 @@ macro check_ast(ctx, ex)
             println("Code:")
             println(ctx.sv.src)
             println("Value Info Map:")
-            show_info(STDOUT, ctx.infomap, ctx)
+            show_info(stdout, ctx.infomap, ctx)
             ccall(:abort, Union{}, ())
         end
     end

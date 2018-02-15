@@ -157,7 +157,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
-function cpu_summary(io::IO=STDOUT, cpu::AbstractVector{CPUinfo} = cpu_info())
+function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)

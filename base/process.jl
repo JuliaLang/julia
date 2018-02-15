@@ -562,7 +562,7 @@ function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
     end
     _stdout = Pipe()
-    processes = spawn(cmd, (devnull, _stdout, STDERR))
+    processes = spawn(cmd, (devnull, _stdout, stderr))
     close(_stdout.in)
     out = _stdout.out
     # implicitly close after reading lines, since we opened
@@ -585,13 +585,13 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=d
         other === devnull || throw(ArgumentError("no other stream for mode rw+"))
         in = Pipe()
         out = Pipe()
-        processes = spawn(cmds, (in,out,STDERR))
+        processes = spawn(cmds, (in,out,stderr))
         close(in.out)
         close(out.in)
     elseif mode == "r"
         in = other
         out = Pipe()
-        processes = spawn(cmds, (in,out,STDERR))
+        processes = spawn(cmds, (in,out,stderr))
         close(out.in)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :out)
@@ -601,7 +601,7 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=d
     elseif mode == "w"
         in = Pipe()
         out = other
-        processes = spawn(cmds, (in,out,STDERR))
+        processes = spawn(cmds, (in,out,stderr))
         close(in.out)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :in)

@@ -480,15 +480,15 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
-let oldout = STDOUT, olderr = STDERR
+let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
-        @test wrout === STDOUT
+        @test wrout === stdout
         out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
-        @test wrerr === STDERR
+        @test wrerr === stderr
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
@@ -496,7 +496,7 @@ let oldout = STDOUT, olderr = STDERR
             close(wrerr)
         end
 
-        for io in (Core.STDOUT, Core.STDERR)
+        for io in (Core.stdout, Core.stderr)
             Core.println(io, "TESTA")
             println(io, "TESTB")
             print(io, 'Α', 1)
@@ -531,13 +531,13 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            println(STDERR, "WARNING: hello")
+            println(stderr, "WARNING: hello")
             [2]
         end
     end
     @test ret == [2]
 
-    # STDIN is unavailable on the workers. Run test on master.
+    # stdin is unavailable on the workers. Run test on master.
     @test contains(read(filename, String), "WARNING: hello")
     ret = eval(Main, quote
         remotecall_fetch(1, $filename) do fname

@@ -73,7 +73,7 @@ function edit(path::AbstractString, line::Integer=0)
                                      (Ptr{Cvoid}, Cwstring, Cwstring, Ptr{Cvoid}, Ptr{Cvoid}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
-        spawn(pipeline(cmd, stderr=STDERR))
+        spawn(pipeline(cmd, stderr=stderr))
     else
         run(cmd)
     end

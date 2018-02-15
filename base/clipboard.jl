@@ -4,7 +4,7 @@
 
 if Sys.isapple()
     function clipboard(x)
-        open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
+        open(pipeline(`pbcopy`, stderr=stderr), "w") do io
             print(io, x)
         end
     end
@@ -43,7 +43,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
         if cmd === nothing
             error("unexpected clipboard command: $c")
         end
-        open(pipeline(cmd, stderr=STDERR), "w") do io
+        open(pipeline(cmd, stderr=stderr), "w") do io
             print(io, x)
         end
     end
@@ -53,7 +53,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
         if cmd === nothing
             error("unexpected clipboard command: $c")
         end
-        read(pipeline(cmd, stderr=STDERR), String)
+        read(pipeline(cmd, stderr=stderr), String)
     end
 
 elseif Sys.iswindows()

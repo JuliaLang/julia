@@ -173,19 +173,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = read(`$exename -g0 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g0 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g1 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g1 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g2 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g2 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -275,7 +275,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # test passing arguments
     mktempdir() do dir
         testfile = joinpath(dir, tempname())
-        # write a julia source file that just prints ARGS to STDOUT
+        # write a julia source file that just prints ARGS to stdout
         write(testfile, """
             println(ARGS)
             """)

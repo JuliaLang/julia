@@ -158,7 +158,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #10120
     # ensure that command quoting works correctly
-    let s, old_stdout = STDOUT
+    let s, old_stdout = stdout
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
@@ -905,7 +905,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
     buf = IOBuffer()
     @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

@@ -33,14 +33,14 @@ function disableRawMode(term)
 end
 
 
-# Reads a single byte from STDIN
-readNextChar(stream::IO=STDIN) = Char(read(stream,1)[1])
+# Reads a single byte from stdin
+readNextChar(stream::IO=stdin) = Char(read(stream,1)[1])
 
-# Read the next key from STDIN. It is also able to read several bytes for
+# Read the next key from stdin. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-readKey(stream::IO=STDIN) = UInt32(_readKey(stream))
-function _readKey(stream::IO=STDIN)
+readKey(stream::IO=stdin) = UInt32(_readKey(stream))
+function _readKey(stream::IO=stdin)
     c = readNextChar(stream)
 
 	# Escape characters

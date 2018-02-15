@@ -53,7 +53,7 @@ end
 end
 @testset "@test_warn" begin
     @test 1234 === @test_nowarn(1234)
-    @test 5678 === @test_warn("WARNING: foo", begin println(STDERR, "WARNING: foo"); 5678; end)
+    @test 5678 === @test_warn("WARNING: foo", begin println(stderr, "WARNING: foo"); 5678; end)
     let a
         @test_throws UndefVarError(:a) a
         @test_nowarn a = 1
@@ -204,8 +204,8 @@ end
 
 @test Test.finish(Test.FallbackTestSet()) !== nothing
 
-OLD_STDOUT = STDOUT
-OLD_STDERR = STDERR
+OLD_STDOUT = stdout
+OLD_STDERR = stderr
 catch_out = IOStream("")
 catch_err = IOStream("")
 rde, wre = redirect_stderr()
@@ -393,7 +393,7 @@ catch
 end
 @test ts isa Test.DefaultTestSet
 
-# now we're done running tests with DefaultTestSet so we can go back to STDOUT
+# now we're done running tests with DefaultTestSet so we can go back to stdout
 redirect_stdout(OLD_STDOUT)
 redirect_stderr(OLD_STDERR)
 

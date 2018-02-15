@@ -1036,8 +1036,8 @@ end
 # Test the following addprocs error conditions
 # - invalid host name - github issue #20372
 # - julia exe exiting with an error
-# - timeout reading host:port from worker STDOUT
-# - host:port not found in worker STDOUT in the first 1000 lines
+# - timeout reading host:port from worker stdout
+# - host:port not found in worker stdout in the first 1000 lines
 
 struct ErrorSimulator <: ClusterManager
     mode
@@ -1079,7 +1079,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
-    old_stdout = STDOUT
+    old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @schedule filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")

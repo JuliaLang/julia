@@ -5,7 +5,7 @@
 """
     print([io::IO], xs...)
 
-Write to `io` (or to the default output stream [`STDOUT`](@ref)
+Write to `io` (or to the default output stream [`stdout`](@ref)
 if `io` is not given) a canonical (un-decorated) text representation
 of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
@@ -49,7 +49,7 @@ end
     println([io::IO], xs...)
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`STDOUT`](@ref).
+If `io` is not supplied, prints to [`stdout`](@ref).
 
 # Examples
 ```jldoctest

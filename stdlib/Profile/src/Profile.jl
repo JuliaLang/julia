@@ -101,9 +101,9 @@ struct ProfileFormat
 end
 
 """
-    print([io::IO = STDOUT,] [data::Vector]; kwargs...)
+    print([io::IO = stdout,] [data::Vector]; kwargs...)
 
-Prints profiling results to `io` (by default, `STDOUT`). If you do not
+Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
 will be used.
 
@@ -156,7 +156,7 @@ function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::Prof
 end
 
 """
-    print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
+    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
 previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
@@ -165,7 +165,7 @@ a dictionary `lidict` of line information.
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
 print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
-    print(STDOUT, data, lidict; kwargs...)
+    print(stdout, data, lidict; kwargs...)
 
 """
     retrieve() -> data, lidict

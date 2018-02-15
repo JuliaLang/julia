@@ -45,7 +45,7 @@ end
 varinfo(pat::Regex) = varinfo(Main, pat)
 
 """
-    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
 Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
@@ -53,7 +53,7 @@ controlled with boolean keyword arguments:
 - `packages`: print information about installed packages
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")

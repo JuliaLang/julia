@@ -445,7 +445,7 @@ invoked, the order of executions on the remote worker is undetermined. For examp
 to `f1`, followed by `f2` and `f3` in that order. However, it is not guaranteed that `f1`
 is executed before `f3` on worker 2.
 
-Any exceptions thrown by `f` are printed to [`STDERR`](@ref) on the remote worker.
+Any exceptions thrown by `f` are printed to [`stderr`](@ref) on the remote worker.
 
 Keyword arguments, if any, are passed through to `f`.
 """

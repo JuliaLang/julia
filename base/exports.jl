@@ -134,9 +134,9 @@ export
     ENV,
     LOAD_PATH,
     PROGRAM_FILE,
-    STDERR,
-    STDIN,
-    STDOUT,
+    stderr,
+    stdin,
+    stdout,
     VERSION,
     devnull,
 

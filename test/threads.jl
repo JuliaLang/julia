@@ -27,7 +27,7 @@ function test_threaded_loop_and_atomic_add()
     # and were unique (via pigeon-hole principle).
     @test !(false in found)
     if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
+        println(stderr, "Warning: threaded loop executed in order")
     end
 end
 
@@ -463,7 +463,7 @@ test_nested_loops()
             ret void
         \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
     end
-    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
+    code_native(stdout, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
     """
 
     mktempdir() do dir

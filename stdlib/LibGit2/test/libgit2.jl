@@ -1802,7 +1802,7 @@ mktempdir() do dir
 
                 @test LibGit2.credential_helpers(cfg, GitCredential("https", "github.com")) == expected
 
-                println(STDERR, "The following 'Resetting the helper list...' warning is expected:")
+                println(stderr, "The following 'Resetting the helper list...' warning is expected:")
                 @test_broken LibGit2.credential_helpers(cfg, GitCredential("https", "mygithost")) == expected[2]
             end
         end
