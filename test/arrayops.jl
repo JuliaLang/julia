@@ -1130,6 +1130,8 @@ end
     @test @views mightalias(A, A[3,1:1])
     @test @views mightalias(A[:], A[3,1:1])
     @test @views mightalias(A[:,:], A[3,1:1])
+    @test @views !mightalias(A, A[1:0])
+    @test @views !mightalias(A[:], A[1:0])
 
     B = reshape(A,10,2)
     @test mightalias(A, A)

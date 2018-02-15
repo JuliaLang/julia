@@ -1087,6 +1087,7 @@ end
 
 # Computes a range describing a strided array's location in memory for aliasing checks
 @inline function _memory_extents(A::StridedArray)
+    isempty(A) && return UInt(1):UInt(0)
     p = UInt(pointer(A, firstindex(A)))
     return _memory_extents(p, p, size(A), strides(A), elsize(A))
 end
@@ -1104,7 +1105,6 @@ _memory_extents(lower, upper, ::Tuple, ::Tuple{}, elsize) = error("broken Abstra
     return _memory_extents(lower, upper, tail(size), tail(strides), elsize)
 end
 # Quicker answers for some known types
-_memory_extents(A::Array) = UInt(pointer(A, firstindex(A))):UInt(pointer(A, lastindex(A)))+elsize(A)-1
 _memory_extents(A::ReshapedArray) = _memory_extents(A.parent)
 
 dataids(A::StridedArray) = (_memory_extents(A),)
