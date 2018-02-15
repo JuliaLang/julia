@@ -561,10 +561,10 @@ function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
     end
-    stdout = Pipe()
-    processes = spawn(cmd, (DevNull,stdout,STDERR))
-    close(stdout.in)
-    out = stdout.out
+    _stdout = Pipe()
+    processes = spawn(cmd, (DevNull, _stdout, STDERR))
+    close(_stdout.in)
+    out = _stdout.out
     # implicitly close after reading lines, since we opened
     return EachLine(out, keep=keep,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine

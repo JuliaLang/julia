@@ -10,16 +10,16 @@ end
 
 @test length(ARGS) == 1
 @testset "embedding example" begin
-    stdout = Pipe()
-    stderr = Pipe()
-    p = spawn(pipeline(Cmd(ARGS), stdin=DevNull, stdout=stdout, stderr=stderr))
-    close(stdout.in)
-    close(stderr.in)
-    stdout_task = @async readlines(stdout)
-    stderr = read(stderr, String)
-    @test stderr == "MethodError: no method matching this_function_has_no_methods()\n"
+    out = Pipe()
+    err = Pipe()
+    p = spawn(pipeline(Cmd(ARGS), in=DevNull, stdout=out, stderr=err))
+    close(out.in)
+    close(err.in)
+    out_task = @async readlines(out)
+    err = read(err, String)
+    @test err == "MethodError: no method matching this_function_has_no_methods()\n"
     @test success(p)
-    lines = fetch(stdout_task)
+    lines = fetch(out_task)
     @test length(lines) == 10
     @test parse(Float64, lines[1]) ≈ sqrt(2)
     @test lines[8] == "called bar"

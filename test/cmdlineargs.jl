@@ -387,10 +387,10 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             joinpath(@__DIR__, "nonexistent"),
             "$sysname.nonexistent",
             )
-        let stderr = Pipe(),
-            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
-            close(stderr.in)
-            let s = read(stderr, String)
+        let err = Pipe(),
+            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err))
+            close(err.in)
+            let s = read(err, String)
                 @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
                 @test !contains(s, "Segmentation fault")
                 @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
@@ -400,10 +400,10 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             @test p.exitcode == 1
         end
     end
-    let stderr = Pipe(),
-        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
-        close(stderr.in)
-        let s = read(stderr, String)
+    let err = Pipe(),
+        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=err))
+        close(err.in)
+        let s = read(err, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test !success(p)

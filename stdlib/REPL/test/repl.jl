@@ -21,24 +21,24 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin = Pipe()
-    stdout = Pipe()
-    stderr = Pipe()
-    Base.link_pipe!(stdin, reader_supports_async=true, writer_supports_async=true)
-    Base.link_pipe!(stdout, reader_supports_async=true, writer_supports_async=true)
-    Base.link_pipe!(stderr, reader_supports_async=true, writer_supports_async=true)
+    input = Pipe()
+    output = Pipe()
+    err = Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
-    f(stdin.in, stdout.out, repl)
+    f(input.in, output.out, repl)
     t = @async begin
-        close(stdin.in)
-        close(stdout.in)
-        close(stderr.in)
+        close(input.in)
+        close(output.in)
+        close(err.in)
     end
-    @test read(stderr.out, String) == ""
-    #display(read(stdout.out, String))
+    @test read(err.out, String) == ""
+    #display(read(output.out, String))
     Base._wait(t)
     nothing
 end

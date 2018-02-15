@@ -504,17 +504,17 @@ end
 
 ## Deadlock in spawning a cmd (#22832)
 # FIXME?
-#let stdout = Pipe(), stdin = Pipe()
-#    Base.link_pipe!(stdout, reader_supports_async=true)
-#    Base.link_pipe!(stdin, writer_supports_async=true)
-#    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
+#let out = Pipe(), inpt = Pipe()
+#    Base.link_pipe!(out, reader_supports_async=true)
+#    Base.link_pipe!(inpt, writer_supports_async=true)
+#    p = spawn(pipeline(catcmd, stdin=inpt, stdout=out, stderr=DevNull))
 #    @async begin # feed cat with 2 MB of data (zeros)
-#        write(stdin, zeros(UInt8, 1048576 * 2))
-#        close(stdin)
+#        write(inpt, zeros(UInt8, 1048576 * 2))
+#        close(inpt)
 #    end
 #    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(stdout.in) # make sure we can still close the write end
-#    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
+#    close(out.in) # make sure we can still close the write end
+#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
 #    @test success(p)
 #end
 
