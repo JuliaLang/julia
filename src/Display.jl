@@ -18,6 +18,15 @@ const colors = Dict(
 )
 const color_dark = :light_black
 
+function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
+    blob = try LibGit2.GitBlob(repo, spec)
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        fakeit && return DevNull
+    end
+    return IOBuffer(LibGit2.rawcontent(blob))
+end
+
 function status(ctx::Context, mode::Symbol, use_as_api=false)
     env = ctx.env
     project₀ = project₁ = env.project

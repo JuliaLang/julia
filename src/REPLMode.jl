@@ -67,7 +67,7 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*\S+ | @\s*[^@\s]* | [^@\s]+"x
 
 function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
     tokens = Tuple{Symbol,Vararg{Any}}[]
@@ -122,7 +122,7 @@ function do_cmd(repl::REPL.AbstractREPL, input::String)
 end
 
 function do_cmd!(tokens, repl; preview = false)
-    local cmd::Symbol
+    cmd = env_opt = nothing
     while !isempty(tokens)
         token = popfirst!(tokens)
         if token[1] == :cmd
@@ -132,7 +132,7 @@ function do_cmd!(tokens, repl; preview = false)
             if token[2] == :env
                 length(token) == 3 ||
                     cmderror("the `--env` option requires a value")
-                env_opt = token[3]
+                env_opt = Base.parse_env(token[3])
             else
                 cmderror("unrecognized option: `--$(token[2])`")
             end
@@ -140,11 +140,10 @@ function do_cmd!(tokens, repl; preview = false)
             cmderror("misplaced token: ", token)
         end
     end
-    cmd == :init && return do_init!(tokens)
     cmd == :preview && return do_preview!(tokens, repl)
-    local env_opt::Union{String,Nothing} = get(ENV, "JULIA_ENV", nothing)
     ctx = Context(env = EnvCache(env_opt), preview = preview)
     cmd == :help    ?    do_help!(ctx, tokens, repl) :
+    cmd == :init    ?    do_init!(ctx, tokens) :
     cmd == :rm      ?      do_rm!(ctx, tokens) :
     cmd == :add     ?     do_add!(ctx, tokens) :
     cmd == :up      ?      do_up!(ctx, tokens) :
@@ -480,11 +479,11 @@ function do_build!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     Pkg3.API.build(ctx, pkgs)
 end
 
-function do_init!(tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+function do_init!(ctx::Context, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     if !isempty(tokens)
         cmderror("`init` does currently not take any arguments")
     end
-    Pkg3.API.init(pwd())
+    Pkg3.API.init(ctx)
 end
 
 

@@ -360,7 +360,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     missed_packages = Tuple{PackageSpec, String}[]
     for i in 1:length(pkgs_to_install)
         pkg, exc_or_success, bt_or_path = take!(results)
-        exc_or_success isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt))
+        exc_or_success isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt_or_path))
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
@@ -492,34 +492,32 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
     order = dependency_order_uuids(ctx, map(first, builds))
     sort!(builds, by = build -> order[first(build)])
     # build each package verions in a child process
-    withenv("JULIA_ENV" => ctx.env.project_file) do
-        for (uuid, name, hash, build_file) in builds
-            log_file = splitext(build_file)[1] * ".log"
-            @info "Building $name [$(string(hash)[1:16])]..."
-            @info " → $log_file"
-            code = """
-                empty!(Base.LOAD_PATH)
-                append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
-                empty!(Base.DEPOT_PATH)
-                append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-                empty!(Base.LOAD_CACHE_PATH)
-                append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
-                empty!(Base.DL_LOAD_PATH)
-                append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
-                cd($(repr(dirname(build_file))))
-                include($(repr(build_file)))
-                """
-            cmd = ```
-                $(Base.julia_cmd()) -O0 --color=no --history-file=no
-                --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-                --compilecache=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
-                --eval $code
-                ```
-            open(log_file, "w") do log
-                success(pipeline(cmd, stdout=log, stderr=log))
-            end ? Base.rm(log_file, force=true) :
-            @warn("Error building `$name`; see log file for further info")
-        end
+    for (uuid, name, hash, build_file) in builds
+        log_file = splitext(build_file)[1] * ".log"
+        @info "Building $name [$(string(hash)[1:16])]..."
+        @info " → $log_file"
+        code = """
+            empty!(Base.LOAD_PATH)
+            append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
+            empty!(Base.LOAD_CACHE_PATH)
+            append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+            empty!(Base.DL_LOAD_PATH)
+            append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+            cd($(repr(dirname(build_file))))
+            include($(repr(build_file)))
+            """
+        cmd = ```
+            $(Base.julia_cmd()) -O0 --color=no --history-file=no
+            --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+            --compilecache=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
+            --eval $code
+            ```
+        open(log_file, "w") do log
+            success(pipeline(cmd, stdout=log, stderr=log))
+        end ? Base.rm(log_file, force=true) :
+        @warn("Error building `$name`; see log file for further info")
     end
     return
 end
@@ -699,18 +697,13 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     end
 end
 
-function init(path::String)
-    gitpath = nothing
-    try
-        gitpath = git_discover(path, ceiling = homedir())
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-    end
-    path = gitpath == nothing ? path : dirname(dirname(gitpath))
-    mkpath(path)
-    isfile(joinpath(path, "Project.toml")) && cmderror("Environment already initialized at $path")
-    touch(joinpath(path, "Project.toml"))
-    @info("Initialized environment in $path by creating the file Project.toml")
+function init(ctx::Context)
+    project_file = ctx.env.project_file
+    isfile(project_file) &&
+        cmderror("Environment already initialized at $project_file")
+    mkpath(dirname(project_file))
+    touch(project_file)
+    @info "Initialized environment by creating $project_file"
 end
 
 end # module
