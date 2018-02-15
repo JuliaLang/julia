@@ -249,7 +249,7 @@ function diagind(m::Integer, n::Integer, k::Integer=0)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
             "at most $n in an $m-by-$n matrix")))
     end
-    k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
+    k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
 end
 
 """

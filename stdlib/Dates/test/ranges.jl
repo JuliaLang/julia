@@ -297,7 +297,7 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
 @test map(length, drs) == map(x->length(reverse(x)), drs)
 @test all(x->findall(occursin(x), x)==[1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(x->reverse(x) == range(last(x), -step(x), length(x)), drs)
+@test all(x->reverse(x) == range(last(x), step=-step(x), length=length(x)), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
 @test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
 @test all(drs[1:3]) do dd
@@ -441,11 +441,11 @@ c = Dates.Date(2013, 6, 1)
 @test [a:Dates.Month(2):Dates.Date(2013, 1, 2);] == [a]
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
-@test length(range(Date(2000), Dates.Day(1), 366)) == 366
+@test length(range(Date(2000), step=Dates.Day(1), length=366)) == 366
 let n = 100000
     local a = Dates.Date(2000)
     for i = 1:n
-        @test length(range(a, Dates.Day(1), i)) == i
+        @test length(range(a, step=Dates.Day(1), length=i)) == i
     end
     return a + Dates.Day(n)
 end
@@ -518,11 +518,11 @@ end
 @test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
-@test length(range(Dates.Date(2000), Dates.Day(1), 366)) == 366
-@test last(range(Dates.Date(2000), Dates.Day(1), 366)) == Dates.Date(2000, 12, 31)
-@test last(range(Dates.Date(2001), Dates.Day(1), 365)) == Dates.Date(2001, 12, 31)
-@test last(range(Dates.Date(2000), Dates.Day(1), 367)) == last(range(Dates.Date(2000), Dates.Month(12), 2)) == last(range(Dates.Date(2000), Dates.Year(1), 2))
-@test last(range(Dates.DateTime(2000), Dates.Day(366), 2)) == last(range(Dates.DateTime(2000), Dates.Hour(8784), 2))
+@test length(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == 366
+@test last(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == Dates.Date(2000, 12, 31)
+@test last(range(Dates.Date(2001), step=Dates.Day(1), length=365)) == Dates.Date(2001, 12, 31)
+@test last(range(Dates.Date(2000), step=Dates.Day(1), length=367)) == last(range(Dates.Date(2000), step=Dates.Month(12), length=2)) == last(range(Dates.Date(2000), step=Dates.Year(1), length=2))
+@test last(range(Dates.DateTime(2000), step=Dates.Day(366), length=2)) == last(range(Dates.DateTime(2000), step=Dates.Hour(8784), length=2))
 
 # Issue 5
 lastdaysofmonth = [Dates.Date(2014, i, Dates.daysinmonth(2014, i)) for i=1:12]

@@ -325,7 +325,7 @@ end
 end
 
 # allow construct from range
-@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
+@test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})

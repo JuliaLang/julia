@@ -874,8 +874,8 @@ float(r::StepRange) = float(r.start):float(r.step):float(last(r))
 float(r::UnitRange) = float(r.start):float(last(r))
 float(r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
-function float(r::LinSpace)
-    LinSpace(float(r.start), float(r.stop), length(r))
+function float(r::LinRange)
+    LinRange(float(r.start), float(r.stop), length(r))
 end
 
 # big, broadcast over arrays
@@ -884,6 +884,6 @@ function big end # no prior definitions of big in sysimg.jl, necessitating this
 broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
 broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
 broadcast(::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
-function broadcast(::typeof(big), r::LinSpace)
-    LinSpace(big(r.start), big(r.stop), length(r))
+function broadcast(::typeof(big), r::LinRange)
+    LinRange(big(r.start), big(r.stop), length(r))
 end
