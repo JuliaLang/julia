@@ -438,7 +438,7 @@ end
 function setup_stdio(stdio::PipeEndpoint, child_readable::Bool)
     if stdio.status == StatusInit
         rd, wr = link_pipe(!child_readable, child_readable)
-        open_pipe!(stdio, child_readable ? wr : rd)
+        open_pipe!(stdio, child_readable ? wr : rd, !child_readable, child_readable)
         return (child_readable ? rd : wr, true)
     end
     return (stdio, false)
