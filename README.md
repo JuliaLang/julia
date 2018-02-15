@@ -2,25 +2,23 @@
 
 [![Build Status](https://travis-ci.org/JuliaLang/Pkg3.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/Pkg3.jl) [![Build status](https://ci.appveyor.com/api/projects/status/ywiwk98gvye1ov6x/branch/master?svg=true)](https://ci.appveyor.com/project/KristofferC/pkg3-jl-li0m6/branch/master) [![codecov](https://codecov.io/gh/JuliaLang/Pkg3.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Pkg3.jl)
 
-Next-generation package manager for Julia. Still quite alpha.
+Next-generation package manager for Julia. Still quite alpha. The last commit that works on 0.6 is [4bd137919](https://github.com/JuliaLang/Pkg3.jl/commit/4bd1379195ce10056c26fb689f732907dd4f09fa).
 
-First, `Pkg.clone` the `Pkg3` repo itself to install it:
+To install, `Pkg.clone` the `Pkg3` repo itself:
 
 ```jl
 Pkg.clone("https://github.com/JuliaLang/Pkg3.jl.git")
 ```
 
-Now load `Pkg3` in Julia 0.6 to add packages and load them.
-Packages will be installed to `joinpath(homedir(), ".julia", "packages")`, so they won't influnce the packages that you already have installed.
+Packages are installed under `joinpath(homedir(), ".julia", "packages")`, so they won't influence the packages that you already have installed.
 
 ```jl
-$ path/to/julia.6/julia
+$ julia
 
 julia> using Pkg3
 ```
 
-
-This gives you a `pkg> ` REPL mode, activated (for now) by the `]` key. Currently, this supports three operations: `add`, `rm` and `up`:
+This gives you a `pkg> ` REPL mode, activated by the `]` key. Currently, this supports thee operations: `add`, `rm` and `up`:
 
 ```jl
 pkg> add JSON
