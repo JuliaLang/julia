@@ -19,15 +19,16 @@ multi_menu = MultiSelectMenu(string.(1:20))
 TerminalMenus.config() # Use default chars
 CONFIG = TerminalMenus.CONFIG
 
+term_width = 100
 multi_menu = MultiSelectMenu(string.(1:10))
 buf = IOBuffer()
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeLine(buf, multi_menu, 1, true, term_width)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 TerminalMenus.config(cursor='+')
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeLine(buf, multi_menu, 1, true, term_width)
 @test String(take!(buf)) == string("+ ", CONFIG[:unchecked], " 1")
 TerminalMenus.config(charset=:unicode)
-TerminalMenus.writeLine(buf, multi_menu, 1, true)
+TerminalMenus.writeLine(buf, multi_menu, 1, true, term_width)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 
 # Test SDTIN

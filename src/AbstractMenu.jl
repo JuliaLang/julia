@@ -252,7 +252,9 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
             print(buf, " ")
         end
 
-        writeLine(buf, m, i, i == cursor)
+        term_width = Base.Terminals.width(TerminalMenus.terminal)
+
+        writeLine(buf, m, i, i == cursor, term_width)
 
         # dont print an \r\n on the last line
         i != (m.pagesize+m.pageoffset) && print(buf, "\r\n")

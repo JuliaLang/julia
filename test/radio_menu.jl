@@ -22,15 +22,17 @@ TerminalMenus.cancel(radio_menu)
 TerminalMenus.config() # Use default chars
 CONFIG = TerminalMenus.CONFIG
 
+# Test writeLine function
+term_width = 100
 radio_menu = RadioMenu(string.(1:10))
 buf = IOBuffer()
-TerminalMenus.writeLine(buf, radio_menu, 1, true)
+TerminalMenus.writeLine(buf, radio_menu, 1, true, term_width)
 @test String(take!(buf)) == string(CONFIG[:cursor], " 1")
 TerminalMenus.config(cursor='+')
-TerminalMenus.writeLine(buf, radio_menu, 1, true)
+TerminalMenus.writeLine(buf, radio_menu, 1, true, term_width)
 @test String(take!(buf)) == "+ 1"
 TerminalMenus.config(charset=:unicode)
-TerminalMenus.writeLine(buf, radio_menu, 1, true)
+TerminalMenus.writeLine(buf, radio_menu, 1, true, term_width)
 @test String(take!(buf)) == string(CONFIG[:cursor], " 1")
 
 # Test using STDIN

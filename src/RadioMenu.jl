@@ -69,9 +69,14 @@ function pick(menu::RadioMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function writeLine(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool)
+function writeLine(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool, term_width::Int)
+    cursor_len = length(CONFIG[:cursor])
     # print a ">" on the selected entry
-    cursor ? print(buf, CONFIG[:cursor] ," ") : print(buf, "  ")
+    cursor ? print(buf, CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
+    print(buf, " ") # Space between cursor and text
 
-    print(buf, replace(menu.options[idx], "\n", "\\n"))
+    line = replace(menu.options[idx], "\n", "\\n")
+    line = trimWidth(line, term_width, !cursor, cursor_len)
+
+    print(buf, line)
 end
