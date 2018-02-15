@@ -1345,7 +1345,7 @@ end
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
-@deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate matchall(re, str, overlap) collect(m.match for m in eachmatch(re, str, overlap = overlap))
 @deprecate chop(s, head) chop(s, head = head)
 @deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 @deprecate tryparse(T::Type{<:Integer}, s, base) tryparse(T, s, base = base)
@@ -1403,6 +1403,10 @@ end
 @eval Base.Math module JuliaLibm
     Base.@deprecate log Base.log
 end
+
+# PR 26071
+@deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
+           collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
 # END 0.7 deprecations
 

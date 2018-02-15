@@ -205,66 +205,6 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
 
-"""
-    matchall(r::Regex, s::AbstractString; overlap::Bool = false]) -> Vector{AbstractString}
-
-Return a vector of the matching substrings from [`eachmatch`](@ref).
-
-
-# Examples
-```jldoctest
-julia> rx = r"a.a"
-r"a.a"
-
-julia> matchall(rx, "a1a2a3a")
-2-element Array{SubString{String},1}:
- "a1a"
- "a3a"
-
-julia> matchall(rx, "a1a2a3a", overlap = true)
-3-element Array{SubString{String},1}:
- "a1a"
- "a2a"
- "a3a"
-```
-"""
-function matchall(re::Regex, str::String; overlap::Bool = false)
-    regex = compile(re).regex
-    n = sizeof(str)
-    matches = SubString{String}[]
-    offset = UInt32(0)
-    opts = re.match_options
-    opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
-    prevempty = false
-    ovec = re.ovec
-    while true
-        result = PCRE.exec(regex, str, offset, prevempty ? opts_nonempty : opts, re.match_data)
-        if !result
-            if prevempty && offset < n
-                offset = UInt32(nextind(str, offset + 1) - 1)
-                prevempty = false
-                continue
-            else
-                break
-            end
-        end
-
-        push!(matches, SubString(str, ovec[1]+1, ovec[2]))
-        prevempty = offset == ovec[2]
-        if overlap
-            if !prevempty
-                offset = UInt32(ovec[1]+1)
-            end
-        else
-            offset = ovec[2]
-        end
-    end
-    matches
-end
-
-matchall(re::Regex, str::SubString; overlap::Bool = false) =
-    matchall(re, String(str), overlap = overlap)
-
 # TODO: return only start index and update deprecation
 function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     if idx > nextind(str,lastindex(str))

@@ -462,7 +462,6 @@ export
     findprev,
     occursin,
     match,
-    matchall,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
