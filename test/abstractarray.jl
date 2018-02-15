@@ -882,3 +882,33 @@ end
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end
+
+struct StridedWrapper{T,N,S} <: AbstractArray{T,N}
+    A::S
+end
+StridedWrapper(S::AbstractArray{T,N}) where {T,N} = StridedWrapper{T,N,typeof(S)}(S)
+Base.IndexStyle(::Type{<:StridedWrapper}) = Base.IndexLinear()
+Base.size(S::StridedWrapper) = size(S.A)
+Base.getindex(S::StridedWrapper, i::Int) = S.A[i]
+Base.strides(S::StridedWrapper) = strides(S.A)
+Base.unsafe_convert(::Type{Ptr{T}}, S::StridedWrapper) where {T} = Base.unsafe_convert(Ptr{T}, S.A)
+
+@testset "abstract pointer implementation" begin
+    for T in (Int16, Float64, Complex{Float64}, Union{Int16, Missing}, Union{Int16, Int128})
+        local A = Array{T}(uninitialized,7,5,3)
+        @views for V in (A[:], A[:,:,:], reshape(A[:,:,:], :))
+            W = StridedWrapper(V)
+            for i in 1:length(A)
+                @test pointer(A, i) == pointer(V, i) == pointer(W, i)
+            end
+        end
+        @views for V in (A[end:-1:1], A[1:2:end], A[end:-3:1],
+                         A[1:3:end, 1:2:end, :], A[:, 1:3:end, 1:2:end],
+                         A[end:-3:1, end:-2:1, :], A[end:-1:1, 1:2:end, end:-1:1])
+            W = StridedWrapper(V)
+            for i in 1:length(V)
+                @test pointer(V, i) == pointer(W, i)
+            end
+        end
+    end
+end
