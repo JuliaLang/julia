@@ -5,7 +5,7 @@ println(xs...) = println(STDOUT::IO, xs...)
 println(io::IO) = print(io, '\n')
 
 struct DevNullStream <: IO end
-const DevNull = DevNullStream()
+const devnull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
@@ -26,6 +26,6 @@ let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
 end
 
-STDIN = DevNull
+STDIN = devnull
 STDOUT = Core.STDOUT
 STDERR = Core.STDERR

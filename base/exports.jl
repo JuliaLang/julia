@@ -40,7 +40,6 @@ export
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
-    DevNull,
     Dict,
     Dims,
     Enum,
@@ -139,6 +138,7 @@ export
     STDIN,
     STDOUT,
     VERSION,
+    devnull,
 
 # Mathematical constants
     Inf,

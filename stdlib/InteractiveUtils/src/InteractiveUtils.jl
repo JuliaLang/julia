@@ -68,7 +68,7 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
         end
         if Sys.iswindows()
             try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end

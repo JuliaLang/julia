@@ -55,12 +55,12 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-Sys.isunix() && run(pipeline(yescmd, `head`, DevNull))
+Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
     @schedule begin
-        p = spawn(pipeline(yescmd,DevNull))
+        p = spawn(pipeline(yescmd,devnull))
         Base.notify(a,p)
         @test !success(p)
     end
@@ -414,7 +414,7 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=DevNull)))
+@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull)))
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
@@ -507,7 +507,7 @@ end
 #let out = Pipe(), inpt = Pipe()
 #    Base.link_pipe!(out, reader_supports_async=true)
 #    Base.link_pipe!(inpt, writer_supports_async=true)
-#    p = spawn(pipeline(catcmd, stdin=inpt, stdout=out, stderr=DevNull))
+#    p = spawn(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull))
 #    @async begin # feed cat with 2 MB of data (zeros)
 #        write(inpt, zeros(UInt8, 1048576 * 2))
 #        close(inpt)

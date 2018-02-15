@@ -230,7 +230,7 @@ Base.skipmissing
 ```@docs
 Base.run
 Base.spawn
-Base.DevNull
+Base.devnull
 Base.success
 Base.process_running
 Base.process_exited

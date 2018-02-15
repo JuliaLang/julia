@@ -189,7 +189,7 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
             ret void""",
         Cvoid, Tuple{})
     end
-    code_llvm(DevNull, foo, ())
+    code_llvm(devnull, foo, ())
 else
     @info "Skipping gep parentage test on llvm < 3.6"
 end

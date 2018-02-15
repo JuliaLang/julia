@@ -28,7 +28,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
-            success(pipeline(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
+            success(pipeline(`which $cmd`, devnull)) && return _clipboardcmd = cmd
         end
         pkgs = @static if Sys.islinux()
             "xsel or xclip"

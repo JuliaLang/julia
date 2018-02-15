@@ -1072,6 +1072,8 @@ Deprecated or removed
   * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
     add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
 
+  * `DevNull` has been renamed to `devnull` ([#25786]).
+
   * `wait` and `fetch` on `Task` now resemble the interface of `Future`
 
 Command-line option changes

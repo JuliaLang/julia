@@ -18,7 +18,7 @@ end
 function readchomperrors(exename::Cmd)
     out = Base.PipeEndpoint()
     err = Base.PipeEndpoint()
-    p = spawn(exename, DevNull, out, err)
+    p = spawn(exename, devnull, out, err)
     o = @async(readchomp(out))
     e = @async(readchomp(err))
     return (success(p), fetch(o), fetch(e))
@@ -429,7 +429,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, DevNull))
+run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
 
 # Test that `julia [some other option] --lisp` is disallowed
 @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
