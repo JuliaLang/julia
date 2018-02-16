@@ -79,8 +79,7 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
-dataids(B::BitArray) = (objectid(B):objectid(B),)
-unalias(dest, B::BitArray) = mightalias(dest, B) ? copy(B) : B
+copypreservingtype(B::BitArray) = copy(B)
 
 ## aux functions ##
 

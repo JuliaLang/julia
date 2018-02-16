@@ -1085,44 +1085,24 @@ end
 
 ### from abstractarray.jl
 
-# Computes a range describing a strided array's location in memory for aliasing checks
-@inline function _memory_extents(A::StridedArray)
-    isempty(A) && return UInt(1):UInt(0)
-    p = UInt(pointer(A, firstindex(A)))
-    return _memory_extents(p, p, size(A), strides(A), elsize(A))
-end
-_memory_extents(lower, upper, ::Tuple{}, ::Tuple{}, elsize) = lower:upper+elsize-1
-_memory_extents(lower, upper, ::Tuple{}, ::Tuple, elsize) = error("broken AbstractArray implementation: lengths of `size` and `strides` must match")
-_memory_extents(lower, upper, ::Tuple, ::Tuple{}, elsize) = error("broken AbstractArray implementation: lengths of `size` and `strides` must match")
-@inline function _memory_extents(lower, upper, size::Tuple, strides::Tuple, elsize)
-    size[1] == 0 && return lower:lower-1 # Empty array -> empty memory extents
-    offset = (size[1]-1) * strides[1] * elsize
-    if offset > 0
-        upper += offset
-    else
-        lower += offset
-    end
-    return _memory_extents(lower, upper, tail(size), tail(strides), elsize)
-end
-# Quicker answers for some known types
-_memory_extents(A::ReshapedArray) = _memory_extents(A.parent)
-
-dataids(A::StridedArray) = (_memory_extents(A),)
-dataids(A::StridedSubArray) = (_memory_extents(A), _indicesids(A.indices...)...)
-
 # In the common case where we have two views into the same parent, aliasing checks
 # are _much_ easier and more important to get right
 function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
-    if A.parent !== B.parent
+    if !_parentsmatch(A.parent, B.parent)
         # We cannot do any better than the usual dataids check
-        return dataidsoverlap(dataids(A), dataids(B))
+        return !_isdisjoint(dataids(A), dataids(B))
     end
     # Now we know that A.parent === B.parent. This means that the indices of A
     # and B are the same length and indexing into the same dimensions. We can
     # just walk through them and check for overlaps: O(ndims(A)). We must finally
-    # ensure that A isn't used as an index into B
-    return _indicesmightoverlap(A.indices, B.indices) || dataidsoverlap(dataids(A), _indicesids(B.indices...))
+    # ensure that the indices don't alias with either parent
+    return _indicesmightoverlap(A.indices, B.indices) ||
+        !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
+        !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end
+_parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
+# Two reshape(::Array)s of the same size aren't `===` because they have different headers
+_parentsmatch(A::Array, B::Array) = pointer(A) == pointer(B) && size(A) == size(B)
 
 _indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
 _indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
@@ -1149,7 +1129,7 @@ end
     elseif length(B[1]) == 1
         return B[1][1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
     else
-        # But checking larger arrays requires constructing a Set and is too much work
+        # But checking larger arrays requires O(m*n) and is too much work
         return true
     end
 end

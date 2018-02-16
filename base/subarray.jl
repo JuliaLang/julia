@@ -59,34 +59,9 @@ similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 
-"""
-    parent(A)
-
-Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
-it is not a view.
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> V = view(A, 1:2, :)
-2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
- 1  2
- 3  4
-
-julia> parent(V)
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-```
-"""
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
 
-parent(a::AbstractArray) = a
 """
     parentindices(A)
 
@@ -95,11 +70,22 @@ From an array view `A`, returns the corresponding indices in the parent.
 parentindices(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
 ## Aliasing detection
-unalias(dest, A::SubArray) = mightalias(dest, A) ? typeof(A)(unalias(dest, A.parent), unalias(dest, A.indices), A.offset1, A.stride1) : A
-dataids(A::SubArray) = (dataids(A.parent)..., _indicesids(A.indices...)...)
-_indicesids(x::AbstractArray, xs...) = (dataids(x)..., _indicesids(xs...)...)
-_indicesids(x, xs...) = _indicesids(xs...) # Skip non-array indices
-_indicesids() = ()
+dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
+_splatmap(f, ::Tuple{}) = ()
+_splatmap(f, t::Tuple) = (f(t[1])..., _splatmap(f, tail(t))...)
+copypreservingtype(A::SubArray) = typeof(A)(copypreservingtype(A.parent), map(copypreservingtype, A.indices), A.offset1, A.stride1)
+
+# When the parent is an Array we can trim the size down a bit. In the future this
+# could possibly be extended to any mutable array.
+function copypreservingtype(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
+    dest = Array{T}(uninitialized, index_lengths(V.indices...))
+    copyto!(dest, V)
+    SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
+end
+# Transform indices to be "dense"
+_trimmedindex(i::Real) = oftype(i, 1)
+_trimmedindex(i::AbstractUnitRange) = i
+_trimmedindex(i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of

@@ -47,9 +47,8 @@ end
 Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
-using Base: unalias, mightalias, dataids
-Base.unalias(dest, A::Union{Adjoint,Transpose}) = mightalias(dest, A) ? typeof(A)(unalias(dest, A.parent)) : A
-Base.dataids(A::Union{Adjoint,Transpose}) = dataids(A.parent)
+Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
+Base.copypreservingtype(A::Union{Adjoint,Transpose}) = typeof(A)(Base.copypreservingtype(A.parent))
 
 # wrapping lowercase quasi-constructors
 """

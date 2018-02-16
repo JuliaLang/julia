@@ -92,10 +92,10 @@ similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew, (m, n))
 
-## Alias detection
-using Base: dataids, unalias, mightalias
-@inline Base.dataids(S::SparseVector) = (dataids(S.nzind)..., dataids(S.nzval)...)
-Base.unalias(dest, S::SparseVector)::typeof(S) = mightalias(dest, S) ? typeof(S)(S.n, unalias(dest, S.nzind), unalias(dest, S.nzval)) : S
+## Alias detection and prevention
+using Base: dataids, copypreservingtype
+Base.dataids(S::SparseVector) = (dataids(S.nzind)..., dataids(S.nzval)...)
+Base.copypreservingtype(S::SparseVector) = typeof(S)(S.n, copypreservingtype(S.nzind), copypreservingtype(S.nzval))
 
 ### Construct empty sparse vector
 

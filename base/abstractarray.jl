@@ -1048,6 +1048,32 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
+"""
+    parent(A)
+
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+it is not a view.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> V = view(A, 1:2, :)
+2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
+ 1  2
+ 3  4
+
+julia> parent(V)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+parent(a::AbstractArray) = a
+
 ## rudimentary aliasing detection ##
 """
     unalias(dest, A)
@@ -1060,37 +1086,47 @@ This function must return an object of exactly the same type as `A` for performa
 
 See also [`mightalias`](@ref) and [`dataids`](@ref).
 """
-unalias(dest, A) = A
-unalias(dest, A::Array) = mightalias(dest, A) ? copy(A) : A
+unalias(dest, A) = mightalias(dest, A) ? copypreservingtype(A) : A
+
+copypreservingtype(A::Array) = copy(A)
+copypreservingtype(A::AbstractArray) = (@_noinline_meta; deepcopy(A)::typeof(A))
+copypreservingtype(A) = A
 
 """
     mightalias(A::AbstractArray, B::AbstractArray)
 
-Perform a rudimentary test to check if arrays `A` and `B` might share the same memory.
+Perform a conservative and rudimentary test to check if arrays `A` and `B` might share the same memory.
 
-Defaults to false unless `dataids` is specialized for both `A` and `B`.
+By default, this simply checks if either of the arrays reference the same memory
+regions, as identified by their [`dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = dataidsoverlap(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
-dataidsoverlap(a::AbstractRange, b::AbstractRange) = max(first(a),first(b)) <= min(last(a),last(b))
-dataidsoverlap(as::Tuple, bs::Tuple) = any(b->dataidsoverlap(as[1], b), bs) || dataidsoverlap(tail(as), bs)
-dataidsoverlap(as::Tuple{Any}, bs::Tuple{Any}) = dataidsoverlap(as[1], bs[1])
-dataidsoverlap(as::Tuple{Any,Any}, bs::Tuple{Any}) = dataidsoverlap(as[1], bs[1]) || dataidsoverlap(as[2], bs[1])
-dataidsoverlap(as::Tuple{Any}, bs::Tuple{Any,Any}) = dataidsoverlap(as[1], bs[1]) || dataidsoverlap(as[1], bs[2])
-dataidsoverlap(as::Tuple{}, bs::Tuple) = false
-dataidsoverlap(as::Tuple, bs::Tuple{}) = false
-dataidsoverlap(::Tuple{}, ::Tuple{}) = false
+_isdisjoint(as::Tuple{}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple, bs::Tuple{}) = true
+_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 """
-    dataids(A::AbstractArray) -> Tuple{Vararg{AbstractRange}}
+    dataids(A::AbstractArray)
 
-Return a tuple containing rough information about the memory region(s) the array `A` references.
+Return a tuple of `UInt`s that represent the mutable data segments of an array.
+
+Custom arrays that would like to opt-in to aliasing detection of their component
+parts can specialize this method to return the concatenation of the `dataids` of
+their component parts.  A typical definition for an array that wraps a parent is
+`dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = ()
-_memory_extents(A::Array) = isempty(A) ? (UInt(1):UInt(0)) :
-    (UInt(pointer(A, firstindex(A))):UInt(pointer(A, lastindex(A)))+elsize(A)-1)
-dataids(A::Array) = (_memory_extents(A),)
+dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::Array) = (UInt(pointer(A)),)
+dataids(::AbstractRange) = ()
+dataids(x) = ()
 
 ## get (getindex with a default value) ##
 
