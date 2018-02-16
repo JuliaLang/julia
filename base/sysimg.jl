@@ -495,6 +495,7 @@ function __init__()
 end
 
 INCLUDE_STATE = 3 # include = include_relative
+const tot_time_stdlib = Ref(0.0)
 end # baremodule Base
 
 using Base
@@ -504,7 +505,6 @@ using Base
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # load some stdlib packages but don't put their names in Main
-tot_time_stdlib = 0.0
 let
     # Stdlibs manually sorted in top down order
     stdlibs = [
@@ -543,12 +543,12 @@ let
     print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
     print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
-    global tot_time_stdlib = @elapsed for stdlib in stdlibs
+    Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
         tt = @elapsed Base.require(Base, stdlib)
         print_time(stdlib, tt)
     end
 
-    print_time("Stdlibs total", tot_time_stdlib)
+    print_time("Stdlibs total", Base.tot_time_stdlib[])
 end
 
 
@@ -889,18 +889,18 @@ empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
 let
-    tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
-    tot_time_precompile = @elapsed Base.include(Base, "precompile.jl")
+tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+tot_time_precompile = @elapsed Base.include(Base, "precompile.jl")
 
-    tot_time_base = (Base.end_base_include - Base.start_base_include) * 10^(-9)
-    tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg + tot_time_precompile
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10^(-9)
+tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
 
-    println("Sysimage built. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time            * 10^9); print(" \n");
-    print("Base: ─────── "); Base.time_print(tot_time_base       * 10^9); print(" "); showcompact((tot_time_base       / tot_time) * 100); println("%")
-    print("Stdlibs: ──── "); Base.time_print(tot_time_stdlib     * 10^9); print(" "); showcompact((tot_time_stdlib     / tot_time) * 100); println("%")
-    if isfile("userimg.jl")
-    print("Userimg: ──── "); Base.time_print(tot_time_userimg    * 10^9); print(" "); showcompact((tot_time_userimg    / tot_time) * 100); println("%")
-    end
-    print("Precompile: ─ "); Base.time_print(tot_time_precompile * 10^9); print(" "); showcompact((tot_time_precompile / tot_time) * 100); println("%")
+println("Sysimage built. Summary:")
+print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); showcompact((tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); showcompact((Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+if isfile("userimg.jl")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); showcompact((tot_time_userimg       / tot_time) * 100); println("%")
+end
+print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); showcompact((tot_time_precompile    / tot_time) * 100); println("%")
 end
