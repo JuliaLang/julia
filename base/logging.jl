@@ -307,15 +307,17 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 # Second chance at an early bail-out, based on arbitrary
                 # logger-specific logic.
                 if shouldlog(logger, level, _module, group, id)
-                    # Bind log record generation into a closure, allowing us to
-                    # defer creation of the records until after filtering.
-                    create_msg = function cm(logger, level, _module, group, id, file, line)
-                        msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
-                    end
                     file = $file
                     line = $line
-                    dispatch_message(logger, level, _module, group, id, file, line, create_msg)
+                    try
+                        msg = $(esc(message))
+                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                    catch err
+                        if !catch_exceptions(logger)
+                            rethrow(err)
+                        end
+                        logging_error(logger, level, _module, group, id, file, line, err)
+                    end
                 end
             end
         end
@@ -323,34 +325,21 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 end
 
-# Call the log message creation function, and dispatch the result to `logger`.
-# TODO: Consider some @nospecialize annotations here
-# TODO: The `logger` is loaded from global state and inherently non-inferrable,
-# so it might be nice to sever all back edges from `dispatch_message` to
-# functions which call it. This function should always return `nothing`.
-@noinline function dispatch_message(logger, level, _module, group, id,
-                                    filepath, line, create_msg)
+# Report an error in log message creation (or in the logger itself).
+@noinline function logging_error(logger, level, _module, group, id,
+                                 filepath, line, err)
     try
-        create_msg(logger, level, _module, group, id, filepath, line)
-    catch err
-        if !catch_exceptions(logger)
-            rethrow(err)
-        end
-        # Try really hard to get the message to the logger, with
-        # progressively less information.
+        msg = "Exception while generating log record in module $_module at $filepath:$line"
+        handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
+    catch err2
         try
-            msg = "Exception while generating log record in module $_module at $filepath:$line"
-            handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=err)
-        catch err2
-            try
-                # Give up and write to STDERR, in three independent calls to
-                # increase the odds of it getting through.
-                print(STDERR, "Exception handling log message: ")
-                println(STDERR, err)
-                println(STDERR, "  module=$_module  file=$filepath  line=$line")
-                println(STDERR, "  Second exception: ", err2)
-            catch
-            end
+            # Give up and write to STDERR, in three independent calls to
+            # increase the odds of it getting through.
+            print(STDERR, "Exception handling log message: ")
+            println(STDERR, err)
+            println(STDERR, "  module=$_module  file=$filepath  line=$line")
+            println(STDERR, "  Second exception: ", err2)
+        catch
         end
     end
     nothing
