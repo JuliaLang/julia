@@ -82,5 +82,5 @@ end
     @test stringmime("text/html", "raw html data") == "raw html data"
     @test stringmime("text/plain", "string") == "\"string\""
     @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
-    @test stringmime("text/plain", 3.141592653589793, :compact=>true) == "3.14159"
+    @test stringmime("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
 end

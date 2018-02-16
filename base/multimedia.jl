@@ -79,7 +79,7 @@ show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 """
-    repr(mime, x, context::Pair{Symbol}...)
+    repr(mime, x; context=nothing)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
 `x` in the requested `mime` type, as written by [`show(io, mime, x)`](@ref) (throwing a
@@ -89,8 +89,9 @@ returned for MIME types with textual representations (such as `"text/html"` or
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
 
-If `context` pairs are given, the IO buffer used to capture `show` output
-is wrapped in an [`IOContext`](@ref) object with those context pairs.
+The optional keyword argument `context` can be set to `:key=>value` pair
+or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
+stream passed to `show`.
 
 As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
 `Vector{UInt8}` (for binary MIME types), the `repr` function assumes that
@@ -111,36 +112,26 @@ julia> repr("text/plain", A)
 "2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
 ```
 """
-repr(m::MIME, x, context::Pair{Symbol}...) = istextmime(m) ? _textrepr(m, x, context...) : _binrepr(m, x, context...)
-repr(m::AbstractString, x, context::Pair{Symbol}...) = repr(MIME(m), x, context...)
+repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
+repr(m::AbstractString, x; context=nothing) = repr(MIME(m), x; context=context)
 
 # strings are shown escaped for text/plain
-_textrepr(m::MIME, x, context::Pair{Symbol}...) = String(__binrepr(m, x, context...))
-_textrepr(::MIME, x::AbstractString, context::Pair{Symbol}...) = x
-_textrepr(m::MIME"text/plain", x::AbstractString, context::Pair{Symbol}...) =
-    String(__binrepr(m, x, context...))
+_textrepr(m::MIME, x, context) = String(__binrepr(m, x, context))
+_textrepr(::MIME, x::AbstractString, context) = x
+_textrepr(m::MIME"text/plain", x::AbstractString, context) = String(__binrepr(m, x, context))
 
-function __binrepr(m::MIME, x)
+function __binrepr(m::MIME, x, ::Nothing)
     s = IOBuffer()
     show(s, m, x)
     take!(s)
 end
-function __binrepr(m::MIME, x, context::Pair{Symbol}...)
-    s = IOBuffer()
-    show(IOContext(s, context...), m, x)
+function __binrepr(m::MIME, x, context)
+    s = IOBuffer(sizehint=sizehint)
+    show(IOContext(s, context), m, x)
     take!(s)
 end
-_binrepr(m::MIME, x, context::Pair{Symbol}...) = __binrepr(m, x, context...)
-_binrepr(m::MIME, x::Vector{UInt8}, context::Pair{Symbol}...) = x
-
-# resolve method ambiguities with repr(x, context...):
-repr(m::MIME, x::Pair{Symbol}, context::Pair{Symbol}...) = istextmime(m) ? _textrepr(m, x, context...) : _binrepr(m, x, context...)
-function repr(x::AbstractString, c::Pair{Symbol}, context::Pair{Symbol}...)
-    s = IOBuffer()
-    show(IOContext(s, c, context...), x)
-    String(take!(s))
-end
-
+_binrepr(m::MIME, x, context) = __binrepr(m, x, context)
+_binrepr(m::MIME, x::Vector{UInt8}, context) = x
 
 """
     istextmime(m::MIME)

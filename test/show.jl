@@ -1164,6 +1164,6 @@ end
     @test repr("image/png", UInt8[2,3,4,7]) == UInt8[2,3,4,7]
     @test repr("text/plain", 3.141592653589793) == "3.141592653589793"
     @test repr("text/plain", 3.141592653589793, :compact=>true) == "3.14159"
-    @test repr("text/plain", :compact=>true) == "\"text/plain\""
-    @test repr(MIME("text/plain"), :compact=>true) == ":compact => true"
+    @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
+    @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end

@@ -25,20 +25,20 @@ include("encode.jl")
 include("decode.jl")
 
 """
-    stringmime(mime, x, context::Pair{Symbol,<:Any}...)
+    stringmime(mime, x; context=nothing)
 
 Returns an `AbstractString` containing the representation of `x` in the
 requested `mime` type. This is similar to [`repr(mime, x)`](@ref) except
 that binary data is base64-encoded as an ASCII string.
 
-If `context` pairs are given, the IO buffer used to capture `show` output
-is wrapped in an [`IOContext`](@ref) object with those context pairs.
+The optional keyword argument `context` can be set to `:key=>value` pair
+or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
+stream passed to `show`.
 """
-stringmime(m::MIME, x, context::Pair{Symbol}...) = istextmime(m) ? repr(m, x, context...) : _binstringmime(m, x, context...)
-stringmime(m::AbstractString, x, context::Pair{Symbol}...) = stringmime(MIME(m), x, context...)
+stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base._textrepr(m, x, context) : _binstringmime(m, x, context)
+stringmime(m::AbstractString, x; context=nothing) = stringmime(MIME(m), x; context=context)
 
-_binstringmime(m::MIME, x) = Base64.base64encode(show, m, x)
-_binstringmime(m::MIME, x, context::Pair{Symbol}...) = Base64.base64encode(io -> show(IOContext(io, m, x, context...)))
-_binstringmime(m::MIME, x::Vector{UInt8}, context::Pair{Symbol}...) = Base64.base64encode(write, x)
+_binstringmime(m::MIME, x, context) = Base64.base64encode(show, m, x; context=IOContext)
+_binstringmime(m::MIME, x::Vector{UInt8}, context) = Base64.base64encode(write, x; context=context)
 
 end
