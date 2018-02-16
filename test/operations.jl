@@ -1,10 +1,11 @@
 module OperationsTest
 
-import Random: randstring
 using Test
-
 using Pkg3
 using Pkg3.Types
+
+import Random: randstring
+import LibGit2
 
 function temp_pkg_dir(fn::Function)
     local project_path
@@ -66,12 +67,16 @@ temp_pkg_dir() do project_path
         cd(joinpath(tmp, "subfolder")) do
             # Haven't initialized here so using the default env
             @test isinstalled(TEST_PKG)
-            withenv("JULIA_ENV" => nothing) do
+            try
+                saved_load_path = copy(LOAD_PATH)
+                push!(empty!(LOAD_PATH), Base.CurrentEnv())
                 Pkg3.init()
                 @test !isinstalled(TEST_PKG)
                 @test isfile(joinpath(tmp, "Project.toml"))
                 Pkg3.add(TEST_PKG)
                 @test isinstalled(TEST_PKG)
+            finally
+                append!(LOAD_PATH, saved_load_path)
             end
         end
     end

@@ -11,7 +11,7 @@ using Pkg3.TOML
 import Pkg3
 import Pkg3: depots, logdir
 
-import Base: SHA1
+import Base: SHA1, AbstractEnv
 using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
@@ -20,7 +20,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    git_file_stream, git_discover, read_project, read_manifest, pathrepr, registries
+    read_project, read_manifest, pathrepr, registries
 
 
 ## ordering of UUIDs ##
@@ -411,7 +411,7 @@ const default_envs = [
 
 struct EnvCache
     # environment info:
-    env::Union{Nothing,String}
+    env::Union{Nothing,String,AbstractEnv}
     git::Union{Nothing,LibGit2.GitRepo}
 
     # paths for files:
@@ -426,8 +426,26 @@ struct EnvCache
     uuids::Dict{String,Vector{UUID}}
     paths::Dict{UUID,Vector{String}}
 
-    function EnvCache(env::Union{Nothing,String})
-        project_file, git_repo = find_project(env)
+    function EnvCache(env::Union{Nothing,String,AbstractEnv}=nothing)
+        if env isa Nothing
+            project_file = nothing
+            for entry in LOAD_PATH
+                project_file = Base.find_env(entry)
+                project_file isa String && !isdir(project_file) && break
+            end
+            project_file === nothing && error("No Pkg3 environment found in LOAD_PATH")
+        elseif env isa AbstractEnv
+            project_file = Base.find_env(env)
+            project_file === nothing && error("package environment does not exist: $env")
+        elseif env isa String
+            isdir(env) && error("environment is a package directory: $env")
+            project_file = endswith(env, ".toml") ? abspath(env) :
+                                                    abspath(env, Base.project_names[end])
+        end
+        @assert project_file isa String && (isfile(project_file) || !ispath(project_file))
+        project_dir = dirname(project_file)
+        git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
+
         project = read_project(project_file)
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
@@ -444,7 +462,7 @@ struct EnvCache
         paths = Dict{UUID,Vector{String}}()
         return new(
             env,
-            git_repo,
+            git,
             project_file,
             manifest_file,
             project,
@@ -454,8 +472,6 @@ struct EnvCache
         )
     end
 end
-EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
-
 
 @enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
 
@@ -569,131 +585,6 @@ function write_env(ctx::Context)
             end
         end
     end
-end
-
-# finding the current project file
-
-function git_discover(
-    start_path::AbstractString = pwd();
-    ceiling::Union{AbstractString,Vector} = "",
-    across_fs::Bool = false,
-)
-    sep = @static Sys.iswindows() ? ";" : ":"
-    ceil = ceiling isa AbstractString ? ceiling :
-        join(convert(Vector{String}, ceiling), sep)
-    buf_ref = Ref(LibGit2.Buffer())
-    @LibGit2.check ccall(
-        (:git_repository_discover, :libgit2), Cint,
-        (Ptr{LibGit2.Buffer}, Cstring, Cint, Cstring),
-        buf_ref, start_path, across_fs, ceil)
-    buf = buf_ref[]
-    str = unsafe_string(buf.ptr, buf.size)
-    LibGit2.free(buf_ref)
-    return str
-end
-
-function find_git_repo(path::String)
-    while !ispath(path)
-        prev = path
-        path = dirname(path)
-        path == prev && break
-    end
-    try return LibGit2.GitRepo(git_discover(path))
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-    end
-    return nothing
-end
-
-function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
-    blob = try LibGit2.GitBlob(repo, spec)
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        fakeit && return DevNull
-    end
-    return IOBuffer(LibGit2.rawcontent(blob))
-end
-
-function find_local_env(start_path::String)
-    work = nothing
-    repo = nothing
-    try
-        gitpath = git_discover(start_path, ceiling = homedir())
-        repo = LibGit2.GitRepo(gitpath)
-        work = LibGit2.workdir(repo)
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-    end
-    work = (work != nothing) ? work : start_path
-    for name in project_names
-        path = abspath(work, name)
-        isfile(path) && return path, repo
-    end
-    return nothing, repo
-end
-
-function find_named_env()
-    for depot in depots(), env in default_envs, name in project_names
-        path = abspath(depot, "environments", env, name)
-        isfile(path) && return path, find_git_repo(path)
-    end
-    env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    path = abspath(depots()[1], "environments", env, project_names[end])
-    return path, find_git_repo(path)
-end
-
-function find_project(env::String)
-    if isempty(env)
-        cmderror("invalid environment name: \"\"")
-    elseif env == "/"
-        return find_named_env()
-    elseif env == "."
-        path, gitrepo = find_local_env(pwd())
-        path == nothing && return init_if_interactive(pwd()), gitrepo
-        return path, gitrepo
-    elseif startswith(env, "/") || startswith(env, "./")
-        # path to project file or project directory
-        if splitext(env)[2] == ".toml"
-            path = abspath(env)
-            if isfile(env)
-                return path, find_git_repo(path)
-            else
-                return init_if_interactive(dirname(path)), find_git_repo(path)
-            end
-        end
-        for name in project_names
-            path = abspath(env, name)
-            isfile(path) && return path, find_git_repo(path)
-        end
-        return init_if_interactive(env), find_git_repo(path)
-    else # named environment
-        for depot in depots()
-            path = abspath(depot, "environments", env, project_names[end])
-            isfile(path) && return path, find_git_repo(path)
-        end
-        path = abspath(depots()[1], "environments", env, project_names[end])
-        return path, find_git_repo(path)
-    end
-end
-
-function init_if_interactive(path::String)
-    if isinteractive()
-        choice = TerminalMenus.request("Could not find local environment in $(path), do you want to create it?",
-                   TerminalMenus.RadioMenu(["yes", "no"]))
-        if choice == 1
-            Pkg3.Operations.init(path)
-            path, gitrepo = find_project(path)
-            return path
-        end
-    end
-    cmderror("did not find a local environment at $(path), run `init` to create one")
-end
-
-function find_project(::Nothing)
-    path, gitrepo = find_local_env(pwd())
-    path != nothing && return path, gitrepo
-    path, gitrepo = find_named_env()
-    return path, gitrepo
 end
 
 ## resolving packages from name or uuid ##

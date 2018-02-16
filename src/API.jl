@@ -286,8 +286,9 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Pkg3.Operations.build_versions(ctx, uuids)
 end
 
-function init(path = pwd())
-    Pkg3.Operations.init(path)
+function init(path::String)
+    ctx = Context(env = EnvCache(path))
+    Pkg3.Operations.init(ctx)
 end
 
 end # module
