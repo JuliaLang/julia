@@ -132,15 +132,19 @@ int main()
         // to a Julia function signature
 
         checked_eval_string(
-                "function bar()\n"
-                "    println(\"called bar\")\n"
-                "    random_return_value = 42\n"
-                "end");
+        "function bar()\n"
+        "    println(\"called bar\")\n"
+        "    random_return_value = 42\n"
+        "end"
+        );
+
         checked_eval_string(
-                "function bar_from_c()\n"
-                "    bar()\n"
-                "    nothing\n"
-                "end");
+        "function bar_from_c()\n"
+        "    bar()\n"
+        "    nothing\n"
+        "end"
+        );
+
         typedef void (*Func_VOID__VOID)(void);
         jl_value_t *pbar = jl_eval_string("cfunction(bar_from_c, Cvoid, Tuple{})");
         Func_VOID__VOID bar = (Func_VOID__VOID)jl_unbox_voidpointer(pbar);
@@ -152,22 +156,22 @@ int main()
     {
         // Importing a Julia package
 
-        checked_eval_string("let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
-                            // disable the package manager
-                            "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
-                            // locate files relative to the "embedding" executable
-                            "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
-                            "    empty!(LOAD_PATH)\n"
-                            "    push!(LOAD_PATH, dir, stdlib)\n"
-                            // this directory needs to be writable for the example,
-                            // although in real code it usually wouldn't necessarily be used that way
-                            "    empty!(Base.LOAD_CACHE_PATH)\n"
-                            "    push!(Base.LOAD_CACHE_PATH, tempdir())\n"
-                            "end");
+        checked_eval_string(
+        "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
+        // disable the package manager
+        "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
+        // locate files relative to the "embedding" executable
+        "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
+        "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
+        // this directory needs to be writable for the example,
+        // although in real code it usually wouldn't necessarily be used that way
+        "    empty!(Base.LOAD_CACHE_PATH)\n"
+        "    push!(Base.LOAD_CACHE_PATH, tempdir())\n"
+        "end"
+        );
         checked_eval_string("import LocalModule");
         checked_eval_string("LocalModule.myapp()");
     }
-
 
     int ret = 0;
     jl_atexit_hook(ret);
