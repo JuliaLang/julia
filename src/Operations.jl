@@ -254,7 +254,7 @@ function install_archive(
             filter!(x -> x != "pax_global_header", dirs)
             @assert length(dirs) == 1
             !isdir(version_path) && mkpath(version_path)
-            mv(joinpath(dir, dirs[1]), version_path; remove_destination=true)
+            mv(joinpath(dir, dirs[1]), version_path; force=true)
             Base.rm(path; force = true)
             return true
         end
@@ -498,13 +498,13 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
         @info " → $log_file"
         code = """
             empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+            append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
-            append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
+            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
-            append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
             cd($(repr(dirname(build_file))))
             include($(repr(build_file)))
             """
@@ -671,7 +671,18 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
         end
         # TODO, cd to test folder (need to be careful with getting the same EnvCache
         # as for this session in that case
-        testcmd = `"import Pkg3; include(\"$testfile\")"`
+        code = """
+            empty!(Base.LOAD_PATH)
+            append!(Base.LOAD_PATH, $(repr(Base.load_path())))
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
+            empty!(Base.LOAD_CACHE_PATH)
+            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
+            empty!(Base.DL_LOAD_PATH)
+            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            cd($(repr(dirname(testfile))))
+            include($(repr(testfile)))
+            """
         cmd = ```
             $(Base.julia_cmd())
             --code-coverage=$(coverage ? "user" : "none")
@@ -679,7 +690,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             --compiled-module=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --check-bounds=yes
             --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-            $testfile
+            --eval $code
         ```
         try
             run(cmd)

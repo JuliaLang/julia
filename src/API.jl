@@ -14,7 +14,7 @@ using Pkg3.TOML
 
 preview_info() = @info("In preview mode")
 
-add(pkg::String; kwargs...)               = add([pkg]; kwargs...)
+add(pkg::Union{String, PackageSpec}; kwargs...)               = add([pkg]; kwargs...)
 add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 add(pkgs::Vector{PackageSpec}; kwargs...) = add(Context(), pkgs; kwargs...)
 
@@ -28,7 +28,7 @@ function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
 end
 
 
-rm(pkg::String; kwargs...)               = rm([pkg]; kwargs...)
+rm(pkg::Union{String, PackageSpec}; kwargs...)               = rm([pkg]; kwargs...)
 rm(pkgs::Vector{String}; kwargs...)      = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(Context(), pkgs; kwargs...)
 
@@ -41,8 +41,8 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
 end
 
 
-up(;kwargs...)                           = up(PackageSpec[], kwargs...)
-up(pkg::String; kwargs...)               = up([pkg]; kwargs...)
+up(;kwargs...)                           = up(PackageSpec[]; kwargs...)
+up(pkg::Union{String, PackageSpec}; kwargs...)               = up([pkg]; kwargs...)
 up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
 
@@ -121,7 +121,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
 end
 
 test(;kwargs...)                           = test(PackageSpec[], kwargs...)
-test(pkg::String; kwargs...)               = test([pkg]; kwargs...)
+test(pkg::Union{String, PackageSpec}; kwargs...)               = test([pkg]; kwargs...)
 test(pkgs::Vector{String}; kwargs...)      = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 test(pkgs::Vector{PackageSpec}; kwargs...) = test(Context(), pkgs; kwargs...)
 
@@ -287,7 +287,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
 end
 
 function init(path::String)
-    ctx = Context(env = EnvCache(path))
+    ctx = Context(env = EnvCache(joinpath(path, "Project.toml")))
     Pkg3.Operations.init(ctx)
 end
 

@@ -5,8 +5,7 @@ import Random
 import REPL
 using REPL.TerminalMenus
 
-const _depots = [joinpath(homedir(), ".julia")]
-depots() = _depots
+depots() = Base.DEPOT_PATH
 logdir() = joinpath(depots()[1], "logs")
 
 # load snapshotted dependencies
