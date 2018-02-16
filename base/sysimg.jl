@@ -520,6 +520,7 @@ Base.require(Base, :LibGit2)
 Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
+Base.require(Base, :UUIDs)
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
