@@ -434,13 +434,14 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
+    size_t len = jl_array_len(a);
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
-         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (jl_array_len(a) + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
+         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
-            *(size_t*)o = jl_array_len(a);
+            *(size_t*)o = len;
             a->nrows = 0;
 #ifdef STORE_ARRAY_LEN
             a->length = 0;
@@ -449,7 +450,12 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
             return o;
         }
     }
-    return jl_pchar_to_string((const char*)jl_array_data(a), jl_array_len(a));
+    a->nrows = 0;
+#ifdef STORE_ARRAY_LEN
+    a->length = 0;
+#endif
+    a->maxsize = 0;
+    return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)

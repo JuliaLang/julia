@@ -3,8 +3,10 @@
 using Random
 
 @testset "constructors" begin
-    @test String([0x61,0x62,0x63,0x21]) == "abc!"
+    v = [0x61,0x62,0x63,0x21]
+    @test String(v) == "abc!" && isempty(v)
     @test String("abc!") == "abc!"
+    @test String(0x61:0x63) == "abc"
 
     @test isempty(string())
     @test eltype(GenericString) == Char
