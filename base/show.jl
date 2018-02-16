@@ -4,10 +4,10 @@
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for linspace, e.g.
-    # linspace(1,3,7)
-    # 7-element LinSpace{Float64}:
+function show(io::IO, ::MIME"text/plain", r::LinRange)
+    # show for LinRange, e.g.
+    # range(1, stop=3, length=7)
+    # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     print(io, summary(r))
     if !isempty(r)
@@ -441,7 +441,7 @@ isvisible(sym::Symbol, parent::Module, from::Module) =
     isdefined(from, sym) && !isdeprecated(from, sym) && !isdeprecated(parent, sym) &&
         getfield(from, sym) === getfield(parent, sym)
 
-function show_type_name(io::IO, tn::TypeName)
+function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
         # intercept this case and print `UnionAll` instead.
@@ -539,15 +539,14 @@ Show an expression and result, returning the result.
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
-        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
-        push!(blk.args, :(println()))
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
+                                  repr(begin value=$(esc(ex)) end))))
     end
     isempty(exs) || push!(blk.args, :value)
     return blk
 end
 
-function show(io::IO, tn::TypeName)
+function show(io::IO, tn::Core.TypeName)
     show_type_name(io, tn)
 end
 
@@ -1932,6 +1931,19 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret($T, ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+# pretty printing for Iterators.Pairs
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
+    print(io, "pairs(IndexLinear(), ::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+    print(io, "pairs(::NamedTuple)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
+    print(io, "Iterators.Pairs(::$D, ::$I)")
 end
 
 """

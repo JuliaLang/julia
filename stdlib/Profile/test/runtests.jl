@@ -19,7 +19,7 @@ let r = Profile.retrieve()
         serialize(io, r)
         close(io)
         open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{StackFrame}}})
+            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
         end
     end
 end

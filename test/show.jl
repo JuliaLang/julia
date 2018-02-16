@@ -503,8 +503,8 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
-        @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
+        @test fetch(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
         redirect_stderr(olderr)
@@ -755,7 +755,7 @@ end
 
 # PR 17117
 # test print_array
-let s = IOBuffer(Vector{UInt8}(), true, true)
+let s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
@@ -890,7 +890,7 @@ end
 
 function static_shown(x)
     p = Pipe()
-    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), p.in, x)
     @async close(p.in)
     return read(p.out, String)
@@ -919,7 +919,7 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = [0.0 0.0; 0.0 0.0]\n"
     finally
         rm(fname, force=true)
     end
@@ -1145,4 +1145,14 @@ end
     buf = IOBuffer()
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+
+@testset "Intrinsic printing" begin
+    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    let io = IOBuffer()
+        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        str = String(take!(io))
+        @test contains(str, "arraylen")
+        @test contains(str, "(intrinsic function")
+    end
 end

@@ -1721,7 +1721,7 @@ typedef struct {
     void *data;
     uv_loop_t *loop;
     uv_handle_type type;
-    uv_file file;
+    uv_os_fd_t file;
 } jl_uv_file_t;
 
 #ifdef __GNUC__

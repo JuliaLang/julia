@@ -76,17 +76,14 @@ LLVM_LIBS := support
 endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
+UV_HEADERS :=
 HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
-ifeq ($(OS),WINNT)
-HEADERS += $(build_includedir)/tree.h
-PUBLIC_HEADERS += $(build_includedir)/tree.h
+UV_HEADERS += uv.h
+UV_HEADERS += uv/*.h
 endif
-HEADERS += $(LIBUV_INC)/uv.h
-PUBLIC_HEADERS += $(LIBUV_INC)/uv*
-endif
-PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)))
+PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
 ifeq ($(JULIACODEGEN),LLVM)
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
@@ -143,11 +140,14 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLV
 # public header rules
 $(eval $(call dir_target,$(build_includedir)/julia))
 define public_header_target
-TARGET = $(build_includedir)/julia/$(notdir $(1))
-$$(TARGET): $(1) | $(build_includedir)/julia
-	$(INSTALL_F) $$^ $(build_includedir)/julia/
+$$(build_includedir)/julia/$$(notdir $(1)): $(1) | $$(build_includedir)/julia
+	$$(INSTALL_F) $$^ $$(build_includedir)/julia/
 endef
-$(foreach HEADER,$(PUBLIC_HEADERS),$(eval $(call public_header_target,$(HEADER))))
+$(foreach HEADER,$(PUBLIC_HEADERS) $(LIBUV_INC)/uv.h,$(eval $(call public_header_target,$(HEADER))))
+
+$(eval $(call dir_target,$(build_includedir)/julia/uv))
+$(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/julia/uv
+	$(INSTALL_F) $^ $(build_includedir)/julia/uv
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
 

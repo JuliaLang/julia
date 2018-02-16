@@ -2357,7 +2357,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     assert(jl_is_concrete_type(ty));
     jl_datatype_t *sty = (jl_datatype_t*)ty;
     size_t nf = jl_datatype_nfields(sty);
-    if (nf > 0) {
+    if (nf > 0 || sty->mutabl) {
         if (jl_justbits(ty)) {
             Type *lt = julia_type_to_llvm(ty);
             unsigned na = nargs < nf ? nargs : nf;
@@ -2475,7 +2475,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         }
         return strctinfo;
     }
-    else if (!sty->mutabl) {
+    else {
         // 0 fields, ghost or bitstype
         if (jl_datatype_nbits(sty) == 0)
             return ghostValue(sty);
@@ -2483,11 +2483,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         Type *lt = julia_type_to_llvm(ty, &isboxed);
         assert(!isboxed);
         return mark_julia_type(ctx, UndefValue::get(lt), false, ty);
-    }
-    else {
-        // 0 fields, singleton
-        assert(sty->instance != NULL);
-        return mark_julia_const(sty->instance);
     }
 }
 

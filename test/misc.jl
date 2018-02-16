@@ -117,7 +117,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    wait(t)
+    Base._wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -127,9 +127,9 @@ end
 @noinline function f6597(c)
     t = @schedule nothing
     finalizer(t -> c[] += 1, t)
-    wait(t)
+    Base._wait(t)
     @test c[] == 0
-    wait(t)
+    Base._wait(t)
     nothing
 end
 let c = Ref(0),
@@ -408,11 +408,6 @@ let a = [1,2,3]
     a[:] = 1:3
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
-end
-let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
-    securezero!(cache)
-    @test cache["foo"].pass == "\0\0\0"
 end
 
 # Test that we can VirtualProtect jitted code to writable

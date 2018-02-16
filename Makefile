@@ -177,24 +177,31 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/boot.jl \
 		base/docs/core.jl \
 		base/abstractarray.jl \
-		base/array.jl \
-		base/bool.jl \
 		base/abstractdict.jl \
+		base/array.jl \
+		base/bitarray.jl \
+		base/bitset.jl \
+		base/bool.jl \
+		base/ctypes.jl \
 		base/error.jl \
 		base/essentials.jl \
-		base/generator.jl \
 		base/expr.jl \
+		base/generator.jl \
 		base/hashing.jl \
 		base/int.jl \
-		base/bitset.jl \
+		base/indices.jl \
+		base/iterators.jl \
+		base/namedtuple.jl \
 		base/number.jl \
 		base/operators.jl \
 		base/options.jl \
+		base/pair.jl \
 		base/pointer.jl \
 		base/promotion.jl \
 		base/range.jl \
 		base/reduce.jl \
 		base/reflection.jl \
+		base/traits.jl \
 		base/tuple.jl)
 COMPILER_SRCS = $(sort $(shell find $(JULIAHOME)/base/compiler -name \*.jl))
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
@@ -338,7 +345,7 @@ endif
 endif
 
 	# Copy public headers
-	cp -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
+	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)

@@ -383,9 +383,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     i = a = firstindex(str)
     r = coalesce(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
-    out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
-    out.size = 0
-    out.ptr = 1
+    out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
             unsafe_write(out, pointer(str, i), UInt(j-i))

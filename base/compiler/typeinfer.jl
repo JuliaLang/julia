@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && frame.cached && frame.max_valid == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.max_valid == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1
@@ -15,7 +15,7 @@ function finalize_backedges(frame::InferenceState)
                     ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
-                    typeassert(to, MethodTable)
+                    typeassert(to, Core.MethodTable)
                     typ = edges[i + 1]
                     ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2

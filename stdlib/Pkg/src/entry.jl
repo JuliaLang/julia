@@ -5,7 +5,7 @@ module Entry
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import Pkg
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-using ...LibGit2
+using LibGit2
 import ..PkgError
 using ..Types
 using Base.Printf: @printf

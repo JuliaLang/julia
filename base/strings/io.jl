@@ -81,10 +81,7 @@ julia> sprint(showcompact, 66.66666)
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
-    s = IOBuffer(StringVector(sizehint), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
+    s = IOBuffer(sizehint=sizehint)
     if context !== nothing
         f(IOContext(s, context), args...)
     else
@@ -99,11 +96,11 @@ tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
 function print_to_string(xs...; env=nothing)
+    if isempty(xs)
+        return ""
+    end
     # specialized for performance reasons
-    s = IOBuffer(StringVector(tostr_sizehint(xs[1])), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
+    s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
     if env !== nothing
         env_io = IOContext(s, env)
         for x in xs
@@ -436,8 +433,7 @@ Returns:
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
     # Note: this loses the type of the original string
-    buf = IOBuffer(StringVector(sizeof(str)), true, true)
-    truncate(buf,0)
+    buf = IOBuffer(sizehint=sizeof(str))
     cutting = true
     col = 0     # current column (0 based)
     for ch in str

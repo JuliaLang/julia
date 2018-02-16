@@ -5,6 +5,7 @@ module PkgTests
 using Test
 import Pkg
 import Pkg.PkgError
+using LibGit2
 using Random: randstring
 
 function capture_stdout(f::Function)
@@ -328,7 +329,7 @@ temp_pkg_dir() do
         meth = first(methods(Example.domath))
         fname = string(meth.file)
         @test ('\\' in fname) == Sys.iswindows()
-        # @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
+        @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
     end
 
     # add a directory that is not a git repository

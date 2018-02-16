@@ -1,7 +1,8 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Code for searching and viewing documentation
 
 using Markdown
-import Pkg
 
 using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, namify, bindingexpr,
     defined, resolve, getdoc, meta, aliasof, signature

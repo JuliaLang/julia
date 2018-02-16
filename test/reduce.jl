@@ -45,7 +45,7 @@ using Random
 @test mapreduce(-, +, [-10]) == 10
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
-@test mapreduce(-, +, Vector(linspace(1.0, 10000.0, 10000))) == -50005000.0
+@test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
 @test mapreduce(abs2, max, Float64[]) === 0.0

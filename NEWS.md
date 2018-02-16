@@ -44,6 +44,9 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
+  * Keyword arguments can be required: if a default value is omitted, then an
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
+
 Language changes
 ----------------
 
@@ -56,6 +59,10 @@ Language changes
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
+
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
@@ -262,6 +269,9 @@ This section lists changes that do not have deprecation warnings.
     `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035], [#23154]).
 
+  * The immediate supertype of `BitArray` is now simply `AbstractArray`. `BitArray` is no longer
+    considered a subtype of `DenseArray` and `StridedArray` ([#25858]).
+
   * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
     first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
     The new behavior matches that of `min`, `max`, `minimum`, and `maximum`.
@@ -323,10 +333,6 @@ This section lists changes that do not have deprecation warnings.
   * All loaded packges used to have bindings in `Main` (e.g. `Main.Package`). This is no
     longer the case; now bindings will only exist for packages brought into scope by
     typing `using Package` or `import Package` ([#17997]).
-
-  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
-    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
-    `x` ([#20233]).
 
   * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
     simplified: if the arguments have different sizes (in bits), then the type of the larger
@@ -391,6 +397,10 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays insted of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
+  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+    and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
+    than 0 ([#25472], [#25662]).
+
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
     `size` ([#25655]).
@@ -407,8 +417,16 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
+
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
+
+  * The `fieldnames` and `propertynames` functions now return a tuple rather than
+    an array ([#25725]).
+
+  * `indexin` now returns the first rather than the last matching index ([#25998]).
 
 Library improvements
 --------------------
@@ -425,6 +443,9 @@ Library improvements
     empty container ([#24390]).
 
   * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
+
+  * REPL LaTeX-like tab completions have been simplified for several Unicode characters,
+    e.g. `𝔸` is now `\bbA` rather than `\BbbA` ([#25980]).
 
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
@@ -457,7 +478,7 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
-  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
+  * `parse(Complex{T}, string)` can parse complex numbers in some common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
@@ -574,6 +595,9 @@ Library improvements
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
 
+  * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
+    the buffer ([#25944]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -629,6 +653,13 @@ Deprecated or removed
 
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
+  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
+    `selectdim` function now always returns a view into `A`; in many cases the `copy` is
+    not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
+	index `i` would return the just selected element (unless `V` was a `BitVector`). This
+	has now been made consistent: `selectdim` now always returns a view into the original
+	array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
@@ -701,7 +732,7 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
@@ -738,6 +769,10 @@ Deprecated or removed
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`,
+    `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are
+    deprecated in favor of constructors taking keyword arguments ([#25872]).
 
   * `Display` has been renamed to `AbstractDisplay` ([#24831]).
 
@@ -1001,7 +1036,23 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
   * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
+
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
+    has been renamed to `force` ([#25979]).
+
+  * The methods of `range` based on positional arguments have been deprecated in favor of
+    keyword arguments ([#25896]).
+
+  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
+    arguments ([#25896]).
+
+  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+
+  * `logspace` has been deprecated to its definition ([#25896]).
 
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
@@ -1009,6 +1060,11 @@ Deprecated or removed
 
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
+
+  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
+    add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
+
+  * `wait` and `fetch` on `Task` now resemble the interface of `Future`
 
 Command-line option changes
 ---------------------------
@@ -1292,3 +1348,7 @@ Command-line option changes
 [#25763]: https://github.com/JuliaLang/julia/issues/25763
 [#25812]: https://github.com/JuliaLang/julia/issues/25812
 [#25846]: https://github.com/JuliaLang/julia/issues/25846
+[#25725]: https://github.com/JuliaLang/julia/issues/25725
+[#25745]: https://github.com/JuliaLang/julia/issues/25745
+[#25896]: https://github.com/JuliaLang/julia/issues/25896
+[#25998]: https://github.com/JuliaLang/julia/issues/25998

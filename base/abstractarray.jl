@@ -753,7 +753,7 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -883,8 +883,8 @@ of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
-function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
-    LinSpace(T(r.start), T(r.stop), length(r))
+function map(::Type{T}, r::LinRange) where T<:AbstractFloat
+    LinRange(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##

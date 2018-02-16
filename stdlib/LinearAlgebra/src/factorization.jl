@@ -5,8 +5,8 @@
 abstract type Factorization{T} end
 
 eltype(::Type{Factorization{T}}) where {T} = T
-transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
-adjoint(F::Factorization) = error("adjoint not implemented for $(typeof(F))")
+size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
+size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 macro assertposdef(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
@@ -81,11 +81,23 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copyto!(Y, B))
-ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = adjA.parent; ldiv!(adjoint(A), copyto!(Y, B)))
-ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = transA.parent; ldiv!(transpose(A), copyto!(Y, B)))
+function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+    m, n = size(A, 1), size(A, 2)
+    if m > n
+        ldiv!(A, B)
+        return copyto!(Y, view(B, 1:n, :))
+    else
+        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
+    end
+end
+function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    checksquare(adjA)
+    return ldiv!(adjA, copyto!(Y, B))
+end
+function ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    checksquare(transA)
+    return ldiv!(transA, copyto!(Y, B))
+end
 
 # fallback methods for transposed solves
 \(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B

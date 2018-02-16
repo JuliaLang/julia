@@ -291,6 +291,8 @@ end
         end
         # BigInt division
         @test a / BigInt(2) == c
+        # inv
+        @test inv(x) == one(x)/x == 1/x == x^-1 == Clong(1)/x
     end
     #^
     x = BigFloat(12)

@@ -138,6 +138,8 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, String) === Any
     @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
     @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(T, Union{}) === T
+    @test Base.promote_typejoin(Union{}, T) === T
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -2219,7 +2221,7 @@ t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
 g7652() = fieldtype(DataType, :types)
-@test g7652() == fieldtype(DataType, :types) == SimpleVector
+@test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
 h7652() = setfield!(a7652, 1, 2)
 h7652()
@@ -4297,7 +4299,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::CodeInfo)
+function metadata_matches(ast::Core.CodeInfo)
     inbounds_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
@@ -4530,7 +4532,7 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-mutable struct A12238{T} end
+struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
@@ -5977,3 +5979,17 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue 17149
+mutable struct Foo17149
+end
+@test Foo17149() !== Foo17149()
+let a = Foo17149()
+    @test a === a
+end
+
+# issue #25907
+g25907a(x) = x[1]::Integer
+@test g25907a(Union{Int, UInt, Nothing}[1]) === 1
+g25907b(x) = x[1]::Complex
+@test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
