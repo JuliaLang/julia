@@ -169,8 +169,8 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     # Windows has difficulties overwriting a file in use so we first link to a temp file
     if Sys.iswindows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
-            mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
-            mv("$sysimg_path.tmp", sysimg_file; remove_destination=true)
+            mv(sysimg_file, "$sysimg_file.old"; force=true)
+            mv("$sysimg_path.tmp", sysimg_file; force=true)
         end
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)

@@ -1367,6 +1367,12 @@ end
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
+# Issue #25979
+# The `remove_destination` keyword to `cp`, `mv`, and the unexported `cptree` has been
+# renamed to `force`. To remove this deprecation, remove the `remove_destination` keyword
+# argument from the function signatures as well as the internal logic that deals with the
+# renaming. These live in base/file.jl.
+
 # issue #25928
 @deprecate wait(t::Task) fetch(t)
 
