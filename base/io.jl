@@ -834,7 +834,7 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-mutable struct EachLine
+struct EachLine
     stream::IO
     ondone::Function
     keep::Bool
