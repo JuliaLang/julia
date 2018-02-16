@@ -35,7 +35,7 @@ The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
 stream passed to `show`.
 """
-stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base._textrepr(m, x, context) : _binstringmime(m, x, context)
+stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base.Multimedia._textrepr(m, x, context) : _binstringmime(m, x, context)
 stringmime(m::AbstractString, x; context=nothing) = stringmime(MIME(m), x; context=context)
 
 _binstringmime(m::MIME, x, context) = Base64.base64encode(show, m, x; context=IOContext)
