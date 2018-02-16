@@ -619,7 +619,6 @@ export
     println,
     printstyled,
     show,
-    showcompact,
     showerror,
     sprint,
     summary,

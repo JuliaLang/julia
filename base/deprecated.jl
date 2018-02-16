@@ -1495,6 +1495,10 @@ end
 # Issue #26248
 @deprecate conj(x) x
 
+@deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
+@deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
+@deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

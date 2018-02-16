@@ -205,8 +205,8 @@ IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(c
 Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
- - use `(key => value) in dict` to see if this particular combination is in the properties set
- - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+ - use `(key => value) in io` to see if this particular combination is in the properties set
+ - use `get(io, key, default)` to retrieve the most recent value for a particular key
 
 The following properties are in common use:
 
@@ -1944,41 +1944,6 @@ end
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
     print(io, "Iterators.Pairs(::$D, ::$I)")
 end
-
-"""
-    showcompact(x)
-    showcompact(io::IO, x)
-
-Show a compact representation of a value to `io`. If `io` is not specified, the
-default is to print to [`stdout`](@ref).
-
-This is used for printing array elements without repeating type information (which would
-be redundant with that printed once for the whole array), and without line breaks inside
-the representation of an element.
-
-To offer a compact representation different from its standard one, a custom type should
-test `get(io, :compact, false)` in its normal [`show`](@ref) method.
-
-# Examples
-```jldoctest
-julia> A = [1. 2.; 3. 4]
-2×2 Array{Float64,2}:
- 1.0  2.0
- 3.0  4.0
-
-julia> showcompact(A)
-[1.0 2.0; 3.0 4.0]
-```
-"""
-showcompact(x) = showcompact(stdout, x)
-function showcompact(io::IO, x)
-    if get(io, :compact, false)
-        show(io, x)
-    else
-        show(IOContext(io, :compact => true), x)
-    end
-end
-
 
 # printing BitArrays
 
