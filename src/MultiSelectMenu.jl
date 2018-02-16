@@ -85,16 +85,23 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
+function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool, term_width::Int)
+    cursor_len = length(CONFIG[:cursor])
     # print a ">" on the selected entry
-    cursor ? print(buf, CONFIG[:cursor]," ") : print(buf, "  ")
-    if idx in menu.selected
-        print(buf, CONFIG[:checked], " ")
-    else
-        print(buf, CONFIG[:unchecked], " ")
-    end
+    cursor ? print(buf, CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
+    print(buf, " ") # Space between cursor and text
 
-    print(buf, replace(menu.options[idx], "\n", "\\n"))
+    # Checked or unchecked?
+    status = idx in menu.selected ? :checked : :unchecked 
+
+    print(buf, CONFIG[status], " ")
+    padding = length(CONFIG[status]) + 1
+
+    line = replace(menu.options[idx], "\n", "\\n")
+    line = trimWidth(line, term_width, !cursor, cursor_len + padding)
+
+    print(buf, line)
+
 end
 
 # d: Done, return from request

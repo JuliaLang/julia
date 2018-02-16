@@ -32,6 +32,18 @@ function disableRawMode(term)
     return false
 end
 
+function trimWidth(str::String, term_width::Int, trim_right=true, pad::Int=2)
+    max_str_len = term_width - pad - 5
+    if length(str) <= max_str_len || length(str) < 6
+        return str
+    end
+    if trim_right
+        return string(str[1:max_str_len], "..")
+    else
+        return string("..", str[length(str) - max_str_len:end])
+    end
+end
+
 
 # Reads a single byte from STDIN
 readNextChar(stream::IO=STDIN) = Char(read(stream,1)[1])

@@ -34,7 +34,7 @@ These functions must be implemented for all subtypes of AbstractMenu.
   - `pick(m::AbstractMenu, cursor::Int)`
   - `cancel(m::AbstractMenu)`
   - `options(m::AbstractMenu)`
-  - `writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)`
+  - `writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool, term_width::Int)`
 
 ## Optional Functions
 
@@ -70,7 +70,7 @@ options(m::AbstractMenu) = error("unimplemented")
 # This function must be implemented for all menu types. It should write
 #   the option at index `idx` to the buffer. If cursor is `true` it
 #   should also display the cursor
-function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool, term_width::Int)
     error("unimplemented")
 end
 
@@ -252,7 +252,9 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
             print(buf, " ")
         end
 
-        writeLine(buf, m, i, i == cursor)
+        term_width = Base.Terminals.width(TerminalMenus.terminal)
+
+        writeLine(buf, m, i, i == cursor, term_width)
 
         # dont print an \r\n on the last line
         i != (m.pagesize+m.pageoffset) && print(buf, "\r\n")
