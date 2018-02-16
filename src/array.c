@@ -1022,6 +1022,8 @@ JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
         jl_bounds_error_int((jl_value_t*)a, dec);
     if (__unlikely(a->flags.isshared))
         array_try_unshare(a);
+    if (dec == 0)
+        return;
     jl_array_del_at_beg(a, 0, dec, n);
 }
 
@@ -1032,6 +1034,8 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
         jl_bounds_error_int((jl_value_t*)a, 0);
     if (__unlikely(a->flags.isshared))
         array_try_unshare(a);
+    if (dec == 0)
+        return;
     jl_array_del_at_end(a, n - dec, dec, n);
 }
 
