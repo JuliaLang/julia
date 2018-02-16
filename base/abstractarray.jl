@@ -122,7 +122,13 @@ prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
-elsize(::AbstractArray{T}) where {T} = sizeof(T)
+
+"""
+    Base.elsize(::Type{<:CustomArray})
+
+Return the distance (in bytes) between two successive elements with stride 1.
+"""
+elsize(a::AbstractArray) = elsize(typeof(a))
 
 """
     ndims(A::AbstractArray) -> Integer
@@ -270,6 +276,8 @@ stride(A::AbstractArray, k::Integer) = strides(A)[k]
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
+strides(a::DenseArray) = size_to_strides(1, size(a)...)
+stride(a::DenseArray, k::Integer) = ifelse(k == 1, 1, k == 2 ? size(a, 1) : strides(a)[k])
 
 function isassigned(a::AbstractArray, i::Int...)
     try

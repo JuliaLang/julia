@@ -772,7 +772,6 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
-    @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
 end
 
 @testset "Issue #17811" begin
@@ -891,10 +890,11 @@ Base.IndexStyle(::Type{<:StridedWrapper}) = Base.IndexLinear()
 Base.size(S::StridedWrapper) = size(S.A)
 Base.getindex(S::StridedWrapper, i::Int) = S.A[i]
 Base.strides(S::StridedWrapper) = strides(S.A)
+Base.elsize(::Type{<:StridedWrapper{<:Any,<:Any,P}}) where {P} = Base.elsize(P)
 Base.unsafe_convert(::Type{Ptr{T}}, S::StridedWrapper) where {T} = Base.unsafe_convert(Ptr{T}, S.A)
 
 @testset "abstract pointer implementation" begin
-    for T in (Int16, Float64, Complex{Float64}, Union{Int16, Missing}, Union{Int16, Int128})
+    for T in (Int16, Float64, Complex{Float64}, Union{Int16, Missing}, Union{Int16, Int128}, NTuple{7,UInt8})
         local A = Array{T}(uninitialized,7,5,3)
         @views for V in (A[:], A[:,:,:], reshape(A[:,:,:], :))
             W = StridedWrapper(V)
@@ -910,5 +910,21 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::StridedWrapper) where {T} = Base.unsafe_c
                 @test pointer(V, i) == pointer(W, i)
             end
         end
+    end
+    for T in (Int32, Float64, Complex{Float64})
+        local A = Array{T}(uninitialized,7,5,3)
+        for V in reinterpret.((UInt8,UInt16,UInt32), (A,))
+            W = StridedWrapper(V)
+            for i in 1:length(A)
+                j = Int((i-1)*sizeof(eltype(A))/sizeof(eltype(V))+1)
+                @test pointer(A, i) == pointer(V, j) == pointer(W, j)
+            end
+        end
+    end
+    local A = Array{Int}(uninitialized,7,5,3)
+    V = reinterpret(NTuple{7, UInt8}, A)
+    W = StridedWrapper(V)
+    for i in 1:length(A)
+        @test pointer(A, i) == pointer(V, i)+i-1 == pointer(W, i)+i-1
     end
 end

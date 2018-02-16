@@ -44,6 +44,13 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
 end
 
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
+function strides(a::ReinterpretArray{T,<:Any,S}) where {T,S}
+    pstrides = strides(a.parent)
+    (pstrides[1], _muldiv(sizeof(S), sizeof(T), tail(pstrides))...)
+end
+_muldiv(num,den,::Tuple{}) = ()
+_muldiv(num,den,t::Tuple) = (div(t[1]*num, den), _muldiv(num, den, tail(t))...)
+elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 
 @inline @propagate_inbounds getindex(a::ReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
 @inline @propagate_inbounds getindex(a::ReinterpretArray) = a[1]
