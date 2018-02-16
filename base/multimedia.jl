@@ -120,14 +120,14 @@ _textrepr(m::MIME, x, context) = String(__binrepr(m, x, context))
 _textrepr(::MIME, x::AbstractString, context) = x
 _textrepr(m::MIME"text/plain", x::AbstractString, context) = String(__binrepr(m, x, context))
 
-function __binrepr(m::MIME, x, ::Nothing)
-    s = IOBuffer()
-    show(s, m, x)
-    take!(s)
-end
+
 function __binrepr(m::MIME, x, context)
-    s = IOBuffer(sizehint=sizehint)
-    show(IOContext(s, context), m, x)
+    s = IOBuffer()
+    if context === nothing
+        show(s, m, x)
+    else
+        show(IOContext(s, context), m, x)
+    end
     take!(s)
 end
 _binrepr(m::MIME, x, context) = __binrepr(m, x, context)
