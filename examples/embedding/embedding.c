@@ -156,7 +156,7 @@ int main()
                             // disable the package manager
                             "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
                             // locate files relative to the "embedding" executable
-                            "    stdlib = pop!(LOAD_PATH)\n"
+                            "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
                             "    empty!(LOAD_PATH)\n"
                             "    push!(LOAD_PATH, dir, stdlib)\n"
                             // this directory needs to be writable for the example,
