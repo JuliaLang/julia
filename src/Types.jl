@@ -150,7 +150,7 @@ VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
 VersionRange(t::Integer...)                  = VersionRange(VersionBound(t...))
 VersionRange(v::VersionNumber)               = VersionRange(VersionBound(v))
 function VersionRange(s::AbstractString)
-    m = match(r"^\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
+    m = match(r"^\s*v?((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*)(?:\s*-\s*v?((?:\d+(?:\.\d+)?(?:\.\d+)?)|\*))?\s*$", s)
     m == nothing && throw(ArgumentError("invalid version range: $(repr(s))"))
     lower = VersionBound(m.captures[1])
     upper = m.captures[2] != nothing ? VersionBound(m.captures[2]) : lower
@@ -198,7 +198,7 @@ function Base.union!(ranges::Vector{<:VersionRange})
 
     k0 = 1
     ks = findfirst(!isempty, ranges)
-    ks == 0 && return empty!(ranges)
+    ks == nothing && return empty!(ranges)
 
     lo, up, k0 = ranges[ks].lower, ranges[ks].upper, 1
     for k = (ks+1):l
