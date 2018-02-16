@@ -52,7 +52,7 @@ temp_pkg_dir() do project_path
     end
 
     @testset "package with wrong UUID" begin
-        @test_throws PkgError Pkg3.add(PackageSpec(TEST_PKG.name, UUID(UInt128(1))))
+        @test_throws ResolverError Pkg3.add(PackageSpec(TEST_PKG.name, UUID(UInt128(1))))
     end
 
     @testset "adding and upgrading different versions" begin

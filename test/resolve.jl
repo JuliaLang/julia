@@ -302,7 +302,7 @@ end
         ["A", "1"],
         ["C", "2-*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
 
     VERBOSE && @info("SCHEME 4")
@@ -352,7 +352,7 @@ end
     reqs_data = Any[
         ["A", "2-*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
 
     VERBOSE && @info("SCHEME 6")
@@ -371,13 +371,13 @@ end
     reqs_data = Any[
         ["A", "*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
     # require B (impossible)
     reqs_data = Any[
         ["B", "*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
 
     VERBOSE && @info("SCHEME 7")
@@ -412,7 +412,7 @@ end
     reqs_data = Any[
         ["C", "1"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
 
     VERBOSE && @info("SCHEME 8")
@@ -434,19 +434,19 @@ end
     reqs_data = Any[
         ["A", "*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
     # require B (impossible)
     reqs_data = Any[
         ["B", "*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
     # require C (impossible)
     reqs_data = Any[
         ["C", "*"]
     ]
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 
     VERBOSE && @info("SCHEME 9")
     ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
@@ -583,7 +583,7 @@ end
     deps_data, reqs_data, want_data, problematic_data = NastyGenerator.generate_nasty(5, 20, q=20, d=4, sat = false)
 
     @test sanity_tst(deps_data, problematic_data)
-    @test_throws PkgError resolve_tst(deps_data, reqs_data)
+    @test_throws ResolverError resolve_tst(deps_data, reqs_data)
 end
 
 end # module

@@ -932,7 +932,7 @@ function check_constraints(graph::Graph)
             err_msg = "Resolve failed to satisfy requirements for package $(id(p0)):\n"
         end
         err_msg *= sprint(showlog, rlog, pkgs[p0])
-        throw(PkgError(err_msg))
+        throw(ResolverError(err_msg))
     end
     return true
 end
@@ -1002,7 +1002,7 @@ function propagate_constraints!(graph::Graph, sources::Set{Int} = Set{Int}(); lo
                         err_msg = "Resolve failed to satisfy requirements for package $(id(p1)):\n"
                     end
                     err_msg *= sprint(showlog, rlog, pkgs[p1])
-                    throw(PkgError(err_msg))
+                    throw(ResolverError(err_msg))
                 end
             end
         end
@@ -1079,7 +1079,7 @@ function deep_clean!(graph::Graph)
             try
                 propagate_constraints!(graph, Set{Int}([p0]), log_events = false)
             catch err
-                err isa PkgError || rethrow(err)
+                err isa ResolverError || rethrow(err)
                 gconstr_msk[p0][v0] = false
             end
             pop_snapshot!(graph)
@@ -1098,7 +1098,7 @@ function deep_clean!(graph::Graph)
             end
             if !any(gconstr0)
                 # TODO : what should we do here??
-                # throw(PkgError("aaaaaaaaaaaaaahhhhhhhh")) # XXX
+                # throw(ResolverError("aaaaaaaaaaaaaahhhhhhhh")) # XXX
             end
         end
         println("> affected = $(length(affected))")

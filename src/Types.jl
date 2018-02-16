@@ -15,12 +15,14 @@ import Base: SHA1, AbstractEnv
 using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
-    Requires, Fixed, merge_requires!, satisfies, PkgError,
-    PackageSpec, UpgradeLevel, EnvCache, Context, Context!,
+    Requires, Fixed, merge_requires!, satisfies, ResolverError,
+    PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    read_project, read_manifest, pathrepr, registries
+    read_project, read_manifest, pathrepr, registries,
+    PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
+    UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR
 
 
 ## ordering of UUIDs ##
@@ -51,8 +53,9 @@ function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
     return "$name [$uuid_short]"
 end
 
-## VersionRange ##
-
+################
+# VersionBound #
+################
 struct VersionBound
     t::NTuple{3,Int}
     n::Int
@@ -141,6 +144,9 @@ Base.hash(r::VersionBound, h::UInt) = hash(hash(r.t, h), r.n)
 VersionBound(s::AbstractString) =
     s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
 
+################
+# VersionRange #
+################
 struct VersionRange
     lower::VersionBound
     upper::VersionBound
@@ -223,6 +229,9 @@ function Base.union!(ranges::Vector{<:VersionRange})
     return ranges
 end
 
+###############
+# VersionSpec #
+###############
 struct VersionSpec
     ranges::Vector{VersionRange}
     VersionSpec(r::Vector{<:VersionRange}) = new(union!(r))
@@ -287,6 +296,9 @@ function Base.print(io::IO, s::VersionSpec)
 end
 Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 
+####################
+# Requires / Fixed #
+####################
 const Requires = Dict{UUID,VersionSpec}
 
 function merge_requires!(A::Requires, B::Requires)
@@ -313,13 +325,13 @@ Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
 
 
-struct PkgError <: Exception
+struct ResolverError <: Exception
     msg::AbstractString
     ex::Union{Exception, Nothing}
 end
-PkgError(msg::AbstractString) = PkgError(msg, nothing)
+ResolverError(msg::AbstractString) = ResolverError(msg, nothing)
 
-function Base.showerror(io::IO, pkgerr::PkgError)
+function Base.showerror(io::IO, pkgerr::ResolverError)
     print(io, pkgerr.msg)
     if pkgerr.ex !== nothing
         pkgex = pkgerr.ex
@@ -335,30 +347,34 @@ function Base.showerror(io::IO, pkgerr::PkgError)
     end
 end
 
-## command errors (no stacktrace) ##
-
+#################
+# Command Error #
+#################
 struct CommandError <: Exception
     msg::String
 end
 cmderror(msg::String...) = throw(CommandError(join(msg)))
 
+# No stacktrace shown
 Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
     printstyled(color = Base.error_color(), io, string(ex.msg))
 end
 
-## type for expressing operations ##
-
-@enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
+###############
+# PackageSpec #
+###############
+@enum(UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR)
 
 function UpgradeLevel(s::Symbol)
-    s == :fixed ? fixed :
-    s == :patch ? patch :
-    s == :minor ? minor :
-    s == :major ? major :
+    s == :fixed ? UPLEVEL_FIXED :
+    s == :patch ? UPLEVEL_PATCH :
+    s == :minor ? UPLEVEL_MINOR :
+    s == :major ? UPLEVEL_MAJOR :
     throw(ArgumentError("invalid upgrade bound: $s"))
 end
-UpgradeLevel(s::String) = UpgradeLevel(Symbol(s))
+
+@enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
@@ -366,9 +382,9 @@ mutable struct PackageSpec
     name::String
     uuid::UUID
     version::VersionTypes
-    mode::Symbol
-    PackageSpec(name::String, uuid::UUID, version::VersionTypes) =
-        new(name, uuid, version, :project)
+    mode::PackageMode
+    PackageSpec(name::String, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT) =
+        new(name, uuid, version, mode)
 end
 PackageSpec(name::String, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
@@ -393,7 +409,10 @@ function Base.show(io::IO, pkg::PackageSpec)
     print(io, ")")
 end
 
-## environment & registry loading & caching ##
+
+############
+# EnvCache #
+############
 
 function parse_toml(path::String...; fakeit::Bool=false)
     p = joinpath(path...)
@@ -473,36 +492,6 @@ struct EnvCache
     end
 end
 
-@enum LoadErrorChoice LOAD_ERROR_QUERY LOAD_ERROR_INSTALL LOAD_ERROR_ERROR
-
-function gather_stdlib_uuids()
-    stdlib_uuids = UUID[]
-    stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-    for stdlib in readdir(stdlib_dir)
-        proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
-        push!(stdlib_uuids, UUID(proj["uuid"]))
-    end
-    return stdlib_uuids
-end
-
-# ENV variables to set some of these defaults?
-Base.@kwdef mutable struct Context
-    env::EnvCache = EnvCache()
-    preview::Bool = false
-    load_error_choice::LoadErrorChoice = LOAD_ERROR_QUERY # query, install, or error, when not finding package on import
-    use_libgit2_for_all_downloads::Bool = false
-    num_concurrent_downloads::Int = 8
-    graph_verbose::Bool = false
-    stdlib_uuids::Vector{UUID} = gather_stdlib_uuids()
-end
-
-function Context!(ctx::Context; kwargs...)
-    for (k, v) in kwargs
-        setfield!(ctx, k, v)
-    end
-end
-
-
 function write_env_usage(manifest_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
     usage_file = joinpath(logdir(), "usage.toml")
@@ -548,57 +537,17 @@ function read_manifest(file::String)
 end
 
 
-function write_env(ctx::Context)
-    env = ctx.env
-    # load old environment for comparison
-    old_env = EnvCache(env.env)
-    # update the project file
-    project = deepcopy(env.project)
-    isempty(project["deps"]) && delete!(project, "deps")
-    if !isempty(project) || ispath(env.project_file)
-        @info "Updating $(pathrepr(env, env.project_file))"
-        Pkg3.Display.print_project_diff(old_env, env)
-        if !ctx.preview
-            mkpath(dirname(env.project_file))
-            open(env.project_file, "w") do io
-                TOML.print(io, project, sorted=true)
-            end
-        end
-    end
-    # update the manifest file
-    if !isempty(env.manifest) || ispath(env.manifest_file)
-        @info "Updating $(pathrepr(env, env.manifest_file))"
-        Pkg3.Display.print_manifest_diff(old_env, env)
-        manifest = deepcopy(env.manifest)
-        uniques = sort!(collect(keys(manifest)), by=lowercase)
-        filter!(name->length(manifest[name]) == 1, uniques)
-        uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
-        for (name, infos) in manifest, info in infos
-            haskey(info, "deps") || continue
-            deps = Dict{String,UUID}(n => UUID(u) for (n, u) in info["deps"])
-            all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
-            info["deps"] = sort!(collect(keys(deps)))
-        end
-        if !ctx.preview
-            open(env.manifest_file, "w") do io
-                TOML.print(io, manifest, sorted=true)
-            end
-        end
-    end
-end
-
-## resolving packages from name or uuid ##
-
-"""
-Disambiguate name/uuid package specifications using project info.
-"""
+########################################
+# Resolving packages from name or uuid #
+########################################
+# Disambiguate name/uuid package specifications using project info.
 function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
     names = Dict(uuid => name for (uuid, name) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
         @warn "duplicate UUID found in project file's [deps] section"
     for pkg in pkgs
-        pkg.mode == :project || continue
+        pkg.mode == PKGMODE_PROJECT || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
             pkg.uuid = UUID(uuids[pkg.name])
         end
@@ -609,9 +558,7 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     return pkgs
 end
 
-"""
-Disambiguate name/uuid package specifications using manifest info.
-"""
+# Disambiguate name/uuid package specifications using manifest info.
 function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = Dict{String,Vector{String}}()
     names = Dict{String,String}()
@@ -622,7 +569,7 @@ function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
         names[uuid] = name # can be duplicate but doesn't matter
     end
     for pkg in pkgs
-        pkg.mode == :manifest || continue
+        pkg.mode == PKGMODE_MANIFEST || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
             length(uuids[pkg.name]) == 1 && (pkg.uuid = UUID(uuids[pkg.name][1]))
         end
@@ -633,9 +580,7 @@ function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     return pkgs
 end
 
-"""
-Disambiguate name/uuid package specifications using registry info.
-"""
+# Disambiguate name/uuid package specifications using registry info.
 function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     # if there are no half-specified packages, return early
     any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
@@ -655,7 +600,7 @@ function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     return pkgs
 end
 
-"Ensure that all packages are fully resolved"
+# Ensure that all packages are fully resolved
 function ensure_resolved(
     env::EnvCache,
     pkgs::AbstractVector{PackageSpec},
@@ -698,7 +643,7 @@ const DEFAULT_REGISTRIES = Dict(
     "Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git"
 )
 
-"Return paths of all registries in a depot"
+# Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
     ispath(d) || return String[]
@@ -708,7 +653,7 @@ function registries(depot::String)::Vector{String}
     String[joinpath(depot, "registries", r) for r in regs]
 end
 
-"Return paths of all registries in all depots"
+# Return paths of all registries in all depots
 function registries()::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
@@ -733,9 +678,7 @@ const line_re = r"""
     \s* \} \s* $
 """x
 
-"""
-Lookup package names & uuids in a single pass through registries
-"""
+# Lookup package names & uuids in a single pass through registries
 function find_registered!(
     env::EnvCache,
     names::Vector{String},
@@ -831,29 +774,29 @@ end
 find_registered!(env::EnvCache, uuids::Vector{UUID}; force::Bool=false)::Nothing =
     find_registered!(env, String[], uuids, force=force)
 
-"Lookup all packages in project & manifest files"
+# Lookup all packages in project & manifest files
 find_registered!(env::EnvCache)::Nothing =
     find_registered!(env, String[], UUID[], force=true)
 
-"Get registered uuids associated with a package name"
+# Get registered uuids associated with a package name
 function registered_uuids(env::EnvCache, name::String)::Vector{UUID}
     find_registered!(env, [name], UUID[])
     return unique(env.uuids[name])
 end
 
-"Get registered paths associated with a package uuid"
+# Get registered paths associated with a package uuid
 function registered_paths(env::EnvCache, uuid::UUID)::Vector{String}
     find_registered!(env, String[], [uuid])
     return env.paths[uuid]
 end
 
-"Get registered names associated with a package uuid"
+#Get registered names associated with a package uuid
 function registered_names(env::EnvCache, uuid::UUID)::Vector{String}
     find_registered!(env, String[], [uuid])
     String[n for (n, uuids) in env.uuids for u in uuids if u == uuid]
 end
 
-"Determine a single UUID for a given name, prompting if needed"
+# Determine a single UUID for a given name, prompting if needed
 function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
@@ -882,7 +825,7 @@ function registered_uuid(env::EnvCache, name::String)::UUID
     return choices_cache[choice][1]
 end
 
-"Determine current name for a given package UUID"
+# Determine current name for a given package UUID
 function registered_name(env::EnvCache, uuid::UUID)::String
     names = registered_names(env, uuid)
     length(names) == 0 && return ""
@@ -896,7 +839,7 @@ function registered_name(env::EnvCache, uuid::UUID)::String
     return name
 end
 
-"Return most current package info for a registered UUID"
+# Return most current package info for a registered UUID
 function registered_info(env::EnvCache, uuid::UUID, key::String)
     paths = env.paths[uuid]
     isempty(paths) && cmderror("`$uuid` is not registered")
@@ -909,7 +852,7 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     return values
 end
 
-"Find package by UUID in the manifest file"
+# Find package by UUID in the manifest file
 function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothing}
     uuid in values(env.uuids) || find_registered!(env, [uuid])
     for (name, infos) in env.manifest, info in infos
@@ -919,7 +862,7 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
     return nothing
 end
 
-"Give a short path string representation"
+# Give a short path string representation
 function pathrepr(env::EnvCache, path::String, base::String=pwd())
     path = abspath(base, path)
     if env.git != nothing
@@ -939,6 +882,75 @@ function pathrepr(env::EnvCache, path::String, base::String=pwd())
         end
     end
     return repr(path)
+end
+
+
+###########
+# Context #
+###########
+function gather_stdlib_uuids()
+    stdlib_uuids = UUID[]
+    stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+    for stdlib in readdir(stdlib_dir)
+        proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
+        push!(stdlib_uuids, UUID(proj["uuid"]))
+    end
+    return stdlib_uuids
+end
+
+# ENV variables to set some of these defaults?
+Base.@kwdef mutable struct Context
+    env::EnvCache = EnvCache()
+    preview::Bool = false
+    use_libgit2_for_all_downloads::Bool = false
+    num_concurrent_downloads::Int = 8
+    graph_verbose::Bool = false
+    stdlib_uuids::Vector{UUID} = gather_stdlib_uuids()
+end
+
+function Context!(ctx::Context; kwargs...)
+    for (k, v) in kwargs
+        setfield!(ctx, k, v)
+    end
+end
+
+function write_env(ctx::Context)
+    env = ctx.env
+    # load old environment for comparison
+    old_env = EnvCache(env.env)
+    # update the project file
+    project = deepcopy(env.project)
+    isempty(project["deps"]) && delete!(project, "deps")
+    if !isempty(project) || ispath(env.project_file)
+        @info "Updating $(pathrepr(env, env.project_file))"
+        Pkg3.Display.print_project_diff(old_env, env)
+        if !ctx.preview
+            mkpath(dirname(env.project_file))
+            open(env.project_file, "w") do io
+                TOML.print(io, project, sorted=true)
+            end
+        end
+    end
+    # update the manifest file
+    if !isempty(env.manifest) || ispath(env.manifest_file)
+        @info "Updating $(pathrepr(env, env.manifest_file))"
+        Pkg3.Display.print_manifest_diff(old_env, env)
+        manifest = deepcopy(env.manifest)
+        uniques = sort!(collect(keys(manifest)), by=lowercase)
+        filter!(name->length(manifest[name]) == 1, uniques)
+        uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
+        for (name, infos) in manifest, info in infos
+            haskey(info, "deps") || continue
+            deps = Dict{String,UUID}(n => UUID(u) for (n, u) in info["deps"])
+            all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
+            info["deps"] = sort!(collect(keys(deps)))
+        end
+        if !ctx.preview
+            open(env.manifest_file, "w") do io
+                TOML.print(io, manifest, sorted=true)
+            end
+        end
+    end
 end
 
 end # module

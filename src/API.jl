@@ -47,7 +47,7 @@ up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]
 up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
-            level::UpgradeLevel=UpgradeLevel(:major), mode::Symbol=:project, kwargs...)
+            level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
 
@@ -101,12 +101,12 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     end
 
     if isempty(pkgs)
-        if mode == :project
+        if mode == PKGMODE_PROJECT
             for (name::String, uuidstr::String) in ctx.env.project["deps"]
                 uuid = UUID(uuidstr)
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
-        elseif mode == :manifest
+        elseif mode == PKGMODE_MANIFEST
             for (name, infos) in ctx.env.manifest, info in infos
                 uuid = UUID(info["uuid"])
                 push!(pkgs, PackageSpec(name, uuid, level))
@@ -135,7 +135,8 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
 end
 
 
-function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEntry}, Nothing})
+function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
+    diffs = Pkg3.Display.status(Context(), mode; use_as_api = true)
     version_status = Dict{String, VersionNumber}()
     diffs == nothing && return version_status
     for entry in diffs
@@ -144,22 +145,18 @@ function convert(::Type{Dict{String, VersionNumber}}, diffs::Union{Array{DiffEnt
     return version_status
 end
 
-function installed(mode::Symbol=:manifest)::Dict{String, VersionNumber}
-    diff = Pkg3.Display.status(Context(), mode, true)
-    convert(Dict{String, VersionNumber}, diff)
-end
-
-function recursive_dir_size(path)
-    sz = 0
-    for (root, dirs, files) in walkdir(path)
-        for file in files
-            sz += stat(joinpath(root, file)).size
-        end
-    end
-    return sz
-end
 
 function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
+    function recursive_dir_size(path)
+        sz = 0
+        for (root, dirs, files) in walkdir(path)
+            for file in files
+                sz += stat(joinpath(root, file)).size
+            end
+        end
+        return sz
+    end
+
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     env = ctx.env
@@ -276,7 +273,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
         end
     end
     for pkg in pkgs
-        pkg.mode = :manifest
+        pkg.mode = PKGMODE_MANIFEST
     end
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)

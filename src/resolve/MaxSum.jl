@@ -352,7 +352,7 @@ function try_simplify_graph_soft!(graph, sources)
     try
         simplify_graph_soft!(graph, sources, log_events = false)
     catch err
-        err isa PkgError || rethrow(err)
+        err isa ResolverError || rethrow(err)
         return false
     end
     return true
