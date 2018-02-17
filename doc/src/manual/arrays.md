@@ -715,7 +715,8 @@ block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
 A "strided" array is stored in memory and has its elements are laid out in regular offsets such that
-it can be passed to external C and Fortran functions that expect this memory layout. Strided arrays
+an instance with a supported `isbits` element type can be passed to
+external C and Fortran functions that expect this memory layout. Strided arrays
 must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
 provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
 index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
