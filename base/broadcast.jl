@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            isoperator, promote_typejoin
+            isoperator, promote_typejoin, @propagate_inbounds
 import Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
@@ -441,11 +441,11 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, combine_styles(As...), As...)
-@inline broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
+@propagate_inbounds broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, combine_styles(As...), As...)
+@propagate_inbounds broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
 
 # Default behavior (separated out so that it can be called by users who want to extend broadcast!).
-@inline function broadcast!(f, dest, ::Nothing, As::Vararg{Any, N}) where N
+@propagate_inbounds function broadcast!(f, dest, ::Nothing, As::Vararg{Any, N}) where N
     if f isa typeof(identity) && N == 1
         A = As[1]
         if A isa AbstractArray && Base.axes(dest) == Base.axes(A)
@@ -457,7 +457,7 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 end
 
 # Optimization for the all-Scalar case.
-@inline function broadcast!(f, dest, ::Scalar, As::Vararg{Any, N}) where N
+@propagate_inbounds function broadcast!(f, dest, ::Scalar, As::Vararg{Any, N}) where N
     if dest isa AbstractArray
         if f isa typeof(identity) && N == 1
             return fill!(dest, As[1])
