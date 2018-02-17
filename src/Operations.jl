@@ -452,15 +452,12 @@ function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,In
     order = Dict{UUID,Int}()
     seen = UUID[]
     k = 0
-    warned = false
     function visit(uuid::UUID)
-        if uuid in seen
-            warned || @warn("Dependency graph not a DAG, linearizing anyway")
-            warned = true
-        end
+        uuid in ctx.stdlib_uuids && return
+        uuid in seen &&
+            return @warn("Dependency graph not a DAG, linearizing anyway")
         haskey(order, uuid) && return
         push!(seen, uuid)
-        uuid in ctx.stdlib_uuids && return
         info = manifest_info(ctx.env, uuid)
         haskey(info, "deps") &&
             foreach(visit, values(info["deps"]))
