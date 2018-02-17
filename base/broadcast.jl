@@ -625,12 +625,12 @@ const NonleafHandlingTypes = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,M
         return broadcast_nonleaf(f, s, ElType, inds, As...)
     end
     dest = broadcast_similar(f, s, ElType, inds, As...)
-    broadcast!(f, dest, As...)
+    @inbounds broadcast!(f, dest, As...)
 end
 
 @inline function broadcast(f, s::BroadcastStyle, ::Type{ElType}, inds::Indices, As...) where ElType
     dest = broadcast_similar(f, s, ElType, inds, As...)
-    broadcast!(f, dest, As...)
+    @inbounds broadcast!(f, dest, As...)
 end
 
 # When ElType is not concrete, use narrowing. Use the first element of each input to determine
