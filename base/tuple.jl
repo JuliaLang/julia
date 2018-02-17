@@ -350,6 +350,9 @@ function isless(t1::Any16, t2::Any16)
     return n1 < n2
 end
 
+in(x, t::Tuple{}) = false
+in(x, t::Tuple  ) = x == t[1] || in(x, tail(t))
+
 ## functions ##
 
 isempty(x::Tuple{}) = true
