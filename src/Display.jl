@@ -53,7 +53,7 @@ function status(ctx::Context, mode::PackageMode; use_as_api=false)
         diff = manifest_diff(manifest₀, manifest₁)
         use_as_api || print_diff(diff)
     elseif mode == PKGMODE_COMBINED
-        p = !in_project(merge(project₀["deps"], project₁["deps"]))
+        p = not_in_project(merge(project₀["deps"], project₁["deps"]))
         m₀ = filter_manifest(p, manifest₀)
         m₁ = filter_manifest(p, manifest₁)
         c_diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
@@ -185,7 +185,7 @@ function manifest_diff(manifest₀::Dict, manifest₁::Dict)
     sort!(diff, by=x->(x.name, x.uuid))
 end
 
-function filter_manifest!(predicate::Function, manifest::Dict)
+function filter_manifest!(predicate, manifest::Dict)
     empty = String[]
     for (name, infos) in manifest
         filter!(infos) do info
@@ -198,10 +198,20 @@ function filter_manifest!(predicate::Function, manifest::Dict)
     end
     return manifest
 end
-filter_manifest(predicate::Function, manifest::Dict) =
+filter_manifest(predicate, manifest::Dict) =
     filter_manifest!(predicate, deepcopy(manifest))
 
-in_project(deps::Dict) = (name::String, info::Dict) ->
-    haskey(deps, name) && haskey(info, "uuid") && deps[name] == info["uuid"]
+# This is precompilable, an anonymous function is not.
+struct InProject{D <: Dict}
+    deps::D
+    neg::Bool
+end
+function (ip::InProject)(name::String, info::Dict)
+    v = haskey(ip.deps, name) && haskey(info, "uuid") && ip.deps[name] == info["uuid"]
+    return ip.neg ? !v : v
+end
+in_project(deps::Dict) = InProject(deps, false)
+not_in_project(deps::Dict) = InProject(deps, true)
+
 
 end # module

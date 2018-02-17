@@ -1,9 +1,8 @@
-authors = "Stefan Karpinski <stefan@karpinski.org>"
 desc = "The next-generation Julia package manager."
 keywords = ["package", "management"]
 license = "MIT"
 name = "Pkg3"
-repo = "https://github.com/StefanKarpinski/Pkg3.jl.git"
+uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
