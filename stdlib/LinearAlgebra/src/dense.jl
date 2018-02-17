@@ -72,7 +72,7 @@ end
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite by trying to perform a
+Test whether a matrix is positive definite (and hermitian) by trying to perform a
 Cholesky factorization of `A`, overwriting `A` in the process.
 See also [`isposdef`](@ref).
 
@@ -94,7 +94,7 @@ isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite by trying to perform a
+Test whether a matrix is positive definite (and hermitian) by trying to perform a
 Cholesky factorization of `A`.
 See also [`isposdef!`](@ref)
 
