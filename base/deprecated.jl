@@ -1367,6 +1367,7 @@ end
 @deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
 
 @deprecate reprmime(mime, x) repr(mime, x)
+@deprecate mimewritable(mime, x) showable(mime, x)
 
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)

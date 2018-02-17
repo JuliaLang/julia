@@ -93,7 +93,7 @@ Base.Multimedia.display
 Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
-Base.Multimedia.mimewritable
+Base.Multimedia.showable
 Base.repr(::Any, ::Any)
 ```
 
@@ -107,7 +107,7 @@ define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as th
 usually by calling [`show(io, mime, x)`](@ref) or [`repr(io, mime, x)`](@ref).
 A `MethodError` should be thrown if `x` cannot be displayed
 as that MIME type; this is automatic if one calls `show` or `repr`. Finally, one should define a function
-`display(d::D, x)` that queries [`mimewritable(mime, x)`](@ref) for the `mime` types supported by `D`
+`display(d::D, x)` that queries [`showable(mime, x)`](@ref) for the `mime` types supported by `D`
 and displays the "best" one; a `MethodError` should be thrown if no supported MIME types are found
 for `x`.  Similarly, some subtypes may wish to override [`redisplay(d::D, ...)`](@ref Base.Multimedia.redisplay). (Again, one should
 `import Base.display` to add new methods to `display`.) The return values of these functions are
