@@ -288,7 +288,7 @@ To keep things simple, we start with a 1D array. Creating an array containing Fl
 of length 10 is done by:
 
 ```c
-jl_value_t* array_type = jl_apply_array_type(jl_float64_type, 1);
+jl_value_t* array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);
 jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
 ```
 
