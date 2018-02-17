@@ -67,7 +67,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
-search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
+search: string String Cstring Cwstring RevString randstring bytestring SubString
 
   string(xs...)
 
@@ -220,7 +220,7 @@ or type and then press the tab key to get a list all matches:
 
 ```julia-repl
 julia> stri[TAB]
-stride     strides     string      stringmime  strip
+stride     strides     string      strip
 
 julia> Stri[TAB]
 StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String

@@ -384,7 +384,7 @@ if Sys.iswindows()
     end
 end
 
-let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
     @test !contains(optstring, "Ptr")
     @test endswith(optstring, "\n)")

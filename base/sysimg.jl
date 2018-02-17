@@ -448,12 +448,6 @@ let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
     init_load_path(BINDIR)
 end
 
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
-
 include("asyncmap.jl")
 
 include("multimedia.jl")
@@ -576,6 +570,7 @@ Base.require(Base, :UUIDs)
     @deprecate_stdlib base64decode Base64 true
     @deprecate_stdlib Base64EncodePipe Base64 true
     @deprecate_stdlib Base64DecodePipe Base64 true
+    @deprecate_stdlib stringmime Base64 true
 
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true

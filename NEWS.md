@@ -183,6 +183,10 @@ Language changes
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
 
+  * `reprmime(mime, x)` has been renamed to `repr(mime, x)`, and along with `repr(x)`
+    and `sprint` it now accepts an optional `context` keyword for `IOContext` attributes.
+    `stringmime` has been moved to the Base64 stdlib package ([#25990]).
+
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead ([#24452]).
 
   * Non-parenthesized interpolated variables in strings, e.g. `"$x"`, must be followed

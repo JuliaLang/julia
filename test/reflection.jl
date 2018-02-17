@@ -329,7 +329,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         must_used_checked[sym] = false
     end
     for str in (sprint(code_warntype, f, types),
-                stringmime("text/plain", src))
+                repr("text/plain", src))
         for var in must_used_vars
             @test contains(str, string(var))
         end
@@ -381,8 +381,8 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     lrepr = string(li),
     mrepr = string(li.def),
-    lmime = stringmime("text/plain", li),
-    mmime = stringmime("text/plain", li.def)
+    lmime = repr("text/plain", li),
+    mmime = repr("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for fieldtype(...)"
     @test mrepr == mmime == "fieldtype(...) in Core"
