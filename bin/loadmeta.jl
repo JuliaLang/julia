@@ -150,6 +150,9 @@ for pkg in [
     "CreateMacrosFrom"
     "GSDicts"
     "S3Dicts"
+    "BigArrays"
+    "ChainMap"
+    "PackageGenerator"
 ]
     delete!(pkgs, pkg)
 end

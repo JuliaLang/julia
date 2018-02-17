@@ -25,6 +25,7 @@ const STDLIBS = [
     "REPL"
     "Random"
     "Serialization"
+    "SHA"
     "SharedArrays"
     "SparseArrays"
     "SuiteSparse"
