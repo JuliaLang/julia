@@ -646,10 +646,9 @@ function shell_completions(string, pos)
 
         return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        r = first(last_parse):prevind(last_parse, last(last_parse))
-        partial = scs[r]
+        partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
-        range = range .+ (first(r) - 1)
+        range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

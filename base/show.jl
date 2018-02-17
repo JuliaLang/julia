@@ -766,15 +766,10 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
-    i = start(s)
-    done(s, i) && return false
-    (c, i) = next(s, i)
+    isempty(s) && return false
+    c, rest = Iterators.peel(s)
     is_id_start_char(c) || return false
-    while !done(s, i)
-        (c, i) = next(s, i)
-        is_id_char(c) || return false
-    end
-    return true
+    return all(is_id_char, rest)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 

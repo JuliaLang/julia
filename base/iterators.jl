@@ -1052,6 +1052,18 @@ mutable struct Stateful{T, VS}
     end
 end
 
+function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
+    s.itr = itr
+    state = start(itr)
+    if done(itr, state)
+        s.nextvalstate = nothing
+    else
+        s.nextvalstate = next(itr, state)::VS
+    end
+    s.taken = 0
+    s
+end
+
 # Try to find an appropriate type for the (value, state tuple),
 # by doing a recursive unrolling of the iteration protocol up to
 # fixpoint.
