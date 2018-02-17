@@ -23,7 +23,7 @@ julia&gt; ans
 &quot;12&quot;</code></pre><p>In Julia mode, the REPL supports something called <em>prompt pasting</em>. This activates when pasting text that starts with <code>julia&gt; </code> into the REPL. In that case, only expressions starting with <code>julia&gt; </code> are parsed, others are removed. This makes it is possible to paste a chunk of code that has been copied from a REPL session without having to scrub away prompts and outputs. This feature is enabled by default but can be disabled or enabled at will with <code>Base.REPL.enable_promptpaste(::Bool)</code>. If it is enabled, you can try it out by pasting the code block above this paragraph straight into the REPL. This feature does not work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.</p><h3><a class="nav-anchor" id="Help-mode-1" href="#Help-mode-1">Help mode</a></h3><p>When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing <code>?</code>. Julia will attempt to print help or documentation for anything entered in help mode:</p><pre><code class="language-julia-repl">julia&gt; ? # upon typing ?, the prompt changes (in place) to: help?&gt;
 
 help?&gt; string
-search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
+search: string String Cstring Cwstring RevString randstring bytestring SubString
 
   string(xs...)
 
@@ -59,7 +59,7 @@ function customize_keys(repl)
 end
 
 atreplinit(customize_keys)</code></pre><p>Users should refer to <code>LineEdit.jl</code> to discover the available actions on key input.</p><h2><a class="nav-anchor" id="Tab-completion-1" href="#Tab-completion-1">Tab completion</a></h2><p>In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches:</p><pre><code class="language-julia-repl">julia&gt; stri[TAB]
-stride     strides     string      stringmime  strip
+stride     strides     string      strip
 
 julia&gt; Stri[TAB]
 StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String</code></pre><p>The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents, and get a list of LaTeX matches as well:</p><pre><code class="language-julia-repl">julia&gt; \pi[TAB]
@@ -203,4 +203,4 @@ julia&gt; request(menu)
  ⧐ YEP! strawberry
 ↓  NOPE blueberry
 Set([4, 2])
-</code></pre><h1><a class="nav-anchor" id="References-1" href="#References-1">References</a></h1><section class="docstring"><div class="docstring-header"><a class="docstring-binding" id="Base.atreplinit" href="#Base.atreplinit"><code>Base.atreplinit</code></a> — <span class="docstring-category">Function</span>.</div><div><div><pre><code class="language-none">atreplinit(f)</code></pre><p>Register a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of <code>f</code> is the REPL object. This function should be called from within the <code>.juliarc.jl</code> initialization file.</p></div></div><a class="source-link" target="_blank" href="https://github.com/JuliaLang/julia/blob/aed88141e78862e791c76c5eb2ac3e965d9c6678/base/client.jl#L362-L369">source</a></section><footer><hr/><a class="previous" href="../Profile/"><span class="direction">Previous</span><span class="title">Profiling</span></a><a class="next" href="../Random/"><span class="direction">Next</span><span class="title">Random Numbers</span></a></footer></article></body></html>
+</code></pre><h1><a class="nav-anchor" id="References-1" href="#References-1">References</a></h1><section class="docstring"><div class="docstring-header"><a class="docstring-binding" id="Base.atreplinit" href="#Base.atreplinit"><code>Base.atreplinit</code></a> — <span class="docstring-category">Function</span>.</div><div><div><pre><code class="language-none">atreplinit(f)</code></pre><p>Register a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of <code>f</code> is the REPL object. This function should be called from within the <code>.juliarc.jl</code> initialization file.</p></div></div><a class="source-link" target="_blank" href="https://github.com/JuliaLang/julia/blob/15a345bf74a27429bc4bb0c33b99a9151d65a735/base/client.jl#L362-L369">source</a></section><footer><hr/><a class="previous" href="../Profile/"><span class="direction">Previous</span><span class="title">Profiling</span></a><a class="next" href="../Random/"><span class="direction">Next</span><span class="title">Random Numbers</span></a></footer></article></body></html>
