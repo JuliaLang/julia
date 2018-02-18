@@ -1511,8 +1511,8 @@ For instance functions that have their
 [name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`. For
-instance `rand()` changes `Base.GLOBAL_RNG` or `findfirst(regex, str)` mutates
-its `regex` argument:
+instance [`findfirst(regex, str)`](@Ref) mutates its `regex` argument or
+[`rand()`](@Ref) changes `Base.GLOBAL_RNG` :
 
 ```julia-repl
 julia> using Base.Threads
@@ -1521,18 +1521,6 @@ julia> nthreads()
 4
 
 julia> function f()
-           a = zeros(1000)
-           @threads for i in 1:1000
-               a[i] = rand()
-           end
-           length(unique(a))
-       end
-f (generic function with 1 method)
-
-julia> srand(1); f() # the result for a single thread is 1000
-781
-
-julia> function g()
            s = repeat(["123", "213", "231"], outer=1000)
            x = similar(s, Int)
            rx = r"1"
@@ -1541,14 +1529,71 @@ julia> function g()
            end
            count(v -> v == 1, x)
        end
+f (generic function with 1 method)
+
+julia> f() # the correct result is 1000
+1017
+
+julia> function g()
+           a = zeros(1000)
+           @threads for i in 1:1000
+               a[i] = rand()
+           end
+           length(unique(a))
+       end
 g (generic function with 1 method)
 
-julia> g() # the correct result is 1000
-1017
+julia> srand(1); g() # the result for a single thread is 1000
+781
 ```
 
 In such cases one should redesign the code to avoid the possibility of a race condition or use
 [synchronization primitives](https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1).
+
+For example in order to fix `findfirst` example above one needs to have a
+separate copy of `rx` variable for each thread:
+
+```julia-repl
+julia> function f_fix()
+             s = repeat(["123", "213", "231"], outer=1000)
+             x = similar(s, Int)
+             rx = [Regex("1") for i in 1:nthreads()]
+             @threads for i in 1:3000
+                 x[i] = findfirst(rx[threadid()], s[i]).start
+             end
+             count(v -> v == 1, x)
+         end
+f_fix (generic function with 1 method)
+
+julia> f_fix()
+1000
+```
+
+We now use `Regex("1")` instead of `r"1"` to make sure that Julia
+creates separate instances of `Regex` object for each entry of `rx` vector.
+
+The case of `rand` is a bit more complex as we have to ensure that each thread
+uses non-overlapping pseudorandom number sequences. This can be simply ensured
+by using [`randjump`](@Ref) function:
+
+
+```julia-repl
+julia> function g_fix(r)
+           a = zeros(1000)
+           @threads for i in 1:1000
+               a[i] = rand(r[threadid()])
+           end
+           length(unique(a))
+       end
+g_fix (generic function with 1 method)
+
+julia> r = randjump(MersenneTwister(1), big(10)^20, nthreads());
+julia> g_fix(r)
+1000
+```
+
+We pass `r` vector to `g_fix` as generating several RGNs is an expensive
+operation so we do not want to repeat it every time we run the function.
 
 ## @threadcall (Experimental)
 
