@@ -1143,7 +1143,4 @@ function start_repl_server(port::Int)
     end
 end
 
-include("precompile.jl")
-_precompile_()
-
 end # module
