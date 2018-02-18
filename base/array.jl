@@ -1500,7 +1500,8 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 """
     findnext(A, i)
 
-Find the next index after `i` of a `true` element of `A`, or `nothing` if not found.
+Find the next index after or including `i` of a `true` element of `A`,
+or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1601,8 +1602,8 @@ findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
 """
     findnext(predicate::Function, A, i)
 
-Find the next index after `i` of an element of `A` for which `predicate` returns `true`,
-or `nothing` if not found.
+Find the next index after or including `i` of an element of `A`
+for which `predicate` returns `true`, or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1693,7 +1694,8 @@ findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
 """
     findprev(A, i)
 
-Find the previous index before `i` of a `true` element of `A`, or `nothing` if not found.
+Find the previous index before or including `i` of a `true` element of `A`,
+or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1792,8 +1794,8 @@ findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
 """
     findprev(predicate::Function, A, i)
 
-Find the previous index before `i` of an element of `A` for which `predicate` returns `true`, or
-`nothing` if not found.
+Find the previous index before or including `i` of an element of `A`
+for which `predicate` returns `true`, or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
