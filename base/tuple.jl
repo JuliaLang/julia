@@ -352,6 +352,7 @@ end
 
 in(x, t::Tuple{}) = false
 in(x, t::Tuple  ) = x == t[1] || in(x, tail(t))
+in(x, t::Any16  ) = any(y -> y == x, t)
 
 ## functions ##
 
