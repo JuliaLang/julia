@@ -27,7 +27,7 @@ function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false
     return IOBuffer(LibGit2.rawcontent(blob))
 end
 
-function status(ctx::Context, mode::PackageMode; use_as_api=false)
+function status(ctx::Context, mode::PackageMode, use_as_api=false)
     env = ctx.env
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest

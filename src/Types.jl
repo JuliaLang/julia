@@ -497,10 +497,11 @@ function write_env_usage(manifest_file::AbstractString)
     usage_file = joinpath(logdir(), "usage.toml")
     touch(usage_file)
     !isfile(manifest_file) && return
-    open(usage_file, "a") do io
-        println(io, "[[\"", escape_string(manifest_file), "\"]]")
-        println(io, "time = ", now(), 'Z')
-    end
+    # Do not rewrite as do syntax (no longer precompilable)
+    io = open(usage_file, "a")
+    println(io, "[[\"", escape_string(manifest_file), "\"]]")
+    print(io, "time = ", now()); println(io, 'Z')
+    close(io)
 end
 
 function read_project(io::IO)
@@ -523,7 +524,11 @@ function read_manifest(io::IO)
             length(manifest[dep]) == 1 ||
                 error("ambiguious dependency for $name: $dep")
         end
-        info["deps"] = Dict(d => manifest[d][1]["uuid"] for d in info["deps"])
+        new_dict = Dict()
+        for d in info["deps"]
+            new_dict[d] = manifest[d][1]["uuid"]
+        end
+        info["deps"] = new_dict
     end
     return manifest
 end

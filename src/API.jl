@@ -136,7 +136,7 @@ end
 
 
 function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
-    diffs = Pkg3.Display.status(Context(), mode; use_as_api = true)
+    diffs = Pkg3.Display.status(Context(), mode, #=use_as_api=# true)
     version_status = Dict{String, VersionNumber}()
     diffs == nothing && return version_status
     for entry in diffs

@@ -224,15 +224,17 @@ function do_cmd!(tokens::Vector{Token}, repl)
         isempty(tokens) && cmderror("expected a command to preview")
         return do_cmd!(tokens, repl)
     end
-    cmd.kind == CMD_INIT    ?    do_init!(tokens) :
-    cmd.kind == CMD_HELP    ?    do_help!(ctx, tokens, repl) :
-    cmd.kind == CMD_RM      ?      do_rm!(ctx, tokens) :
-    cmd.kind == CMD_ADD     ?     do_add!(ctx, tokens) :
-    cmd.kind == CMD_UP      ?      do_up!(ctx, tokens) :
-    cmd.kind == CMD_STATUS  ?  do_status!(ctx, tokens) :
-    cmd.kind == CMD_TEST    ?    do_test!(ctx, tokens) :
-    cmd.kind == CMD_GC      ?      do_gc!(ctx, tokens) :
-    cmd.kind == CMD_BUILD   ?   do_build!(ctx, tokens) :
+    # Using invokelatest to hide the functions from inference.
+    # Otherwise it would try to infer everything here.
+    cmd.kind == CMD_INIT    ? Base.invokelatest(  do_init!, tokens) :
+    cmd.kind == CMD_HELP    ? Base.invokelatest(  do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM      ? Base.invokelatest(    do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD     ? Base.invokelatest(   do_add!, ctx, tokens) :
+    cmd.kind == CMD_UP      ? Base.invokelatest(    do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS  ? Base.invokelatest(do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST    ? Base.invokelatest(  do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC      ? Base.invokelatest(    do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD   ? Base.invokelatest( do_build!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
