@@ -714,7 +714,7 @@ array indirectly.  By putting the [`@views`](@ref) macro in front of an expressi
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
-A "strided" array is stored in memory and has its elements are laid out in regular offsets such that
+A "strided" array is stored in memory with elements laid out in regular offsets such that
 an instance with a supported `isbits` element type can be passed to
 external C and Fortran functions that expect this memory layout. Strided arrays
 must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
