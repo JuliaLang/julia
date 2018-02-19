@@ -863,6 +863,10 @@ function require(into::Module, mod::Symbol)
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
+    return require(uuidkey)
+end
+
+function require(uuidkey::PkgId)
     if !root_module_exists(uuidkey)
         _require(uuidkey)
         # After successfully loading, notify downstream consumers
