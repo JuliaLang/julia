@@ -475,51 +475,6 @@ end
     @test findnext(isodd, A, CartesianIndex(1, 2)) === nothing
     @test findprev(iseven, A, CartesianIndex(2, 1)) === nothing
 end
-@testset "find with general iterables" begin
-    s = "julia"
-    @test findall(c -> c == 'l', s) == [3]
-    @test findfirst(c -> c == 'l', s) == 3
-    @test findlast(c -> c == 'l', s) == 3
-    @test findnext(c -> c == 'l', s, 1) == 3
-    @test findprev(c -> c == 'l', s, 5) == 3
-    @test findnext(c -> c == 'l', s, 4) === nothing
-    @test findprev(c -> c == 'l', s, 2) === nothing
-
-    g = Base.Unicode.graphemes("日本語")
-    @test findall(!isempty, g) == 1:3
-    @test isempty(findall(isascii, g))
-    @test findfirst(!isempty, g) == 1
-    @test findfirst(isascii, g) === nothing
-    # Check that the last index isn't assumed to be typemax(Int)
-    @test_throws MethodError findlast(!iszero, g)
-
-    g2 = (i % 2 for i in 1:10)
-    @test findall(!iszero, g2) == 1:2:9
-    @test findfirst(!iszero, g2) == 1
-    @test findlast(!iszero, g2) == 9
-    @test findfirst(equalto(2), g2) === nothing
-    @test findlast(equalto(2), g2) === nothing
-
-    g3 = (i % 2 for i in 1:10, j in 1:2)
-    @test findall(!iszero, g3) == findall(!iszero, collect(g3))
-    @test findfirst(!iszero, g3) == CartesianIndex(1, 1)
-    @test findlast(!iszero, g3) == CartesianIndex(9, 2)
-    @test findfirst(equalto(2), g3) === nothing
-    @test findlast(equalto(2), g3) === nothing
-
-    g4 = (x for x in [true, false, true, false])
-    @test findall(g4) == [1, 3]
-    @test findfirst(g4) == 1
-    @test findlast(g4) == 3
-
-    g5 = (x for x in [true false; true false])
-    @test findall(g5) == findall(collect(g5))
-    @test findfirst(g5) == CartesianIndex(1, 1)
-    @test findlast(g5) == CartesianIndex(2, 1)
-
-    @test findfirst(x for x in Bool[]) === nothing
-    @test findlast(x for x in Bool[]) === nothing
-end
 
 @testset "findmin findmax argmin argmax" begin
     @test argmax([10,12,9,11]) == 2

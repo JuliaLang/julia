@@ -1497,17 +1497,11 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 ## find ##
 
-_pairs(A::Union{AbstractArray, AbstractDict, AbstractString, Tuple, NamedTuple}) = pairs(A)
-_pairs(iter) = _pairs(IteratorSize(iter), iter)
-# includes HasShape{1} for consistency with keys(::AbstractVector)
-_pairs(::Union{HasLength, HasShape{1}}, iter) = zip(1:length(iter), iter)
-_pairs(::HasShape, iter) = zip(CartesianIndices(size(iter)), iter)
-_pairs(::Union{SizeUnknown, IsInfinite}, iter) = zip(Iterators.countfrom(1), iter)
-
 """
-    findnext(A, i::Integer)
+    findnext(A, i)
 
-Find the next linear index >= `i` of a `true` element of `A`, or `nothing` if not found.
+Find the next index after or including `i` of a `true` element of `A`,
+or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1562,9 +1556,7 @@ Return `nothing` if no such value is found.
 To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1592,7 +1584,7 @@ CartesianIndex(2, 1)
 """
 function findfirst(A)
     warned = false
-    for (i, a) in _pairs(A)
+    for (i, a) in pairs(A)
         if !warned && !(a isa Bool)
             depwarn("In the future `findfirst` will only work on boolean collections. Use `findfirst(x->x!=0, A)` instead.", :findfirst)
             warned = true
@@ -1610,8 +1602,8 @@ findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
 """
     findnext(predicate::Function, A, i)
 
-Find the next index >= `i` of an element of `A` for which `predicate` returns `true`,
-or `nothing` if not found.
+Find the next index after or including `i` of an element of `A`
+for which `predicate` returns `true`, or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1659,9 +1651,7 @@ Return the index or key of the first element of `A` for which `predicate` return
 Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1691,7 +1681,7 @@ CartesianIndex(2, 1)
 ```
 """
 function findfirst(testf::Function, A)
-    for (i, a) in _pairs(A)
+    for (i, a) in pairs(A)
         testf(a) && return i
     end
     return nothing
@@ -1704,7 +1694,8 @@ findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
 """
     findprev(A, i)
 
-Find the previous index <= `i` of a `true` element of `A`, or `nothing` if not found.
+Find the previous index before or including `i` of a `true` element of `A`,
+or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1755,9 +1746,7 @@ Return the index or key of the last `true` value in `A`.
 Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1787,7 +1776,7 @@ CartesianIndex(2, 1)
 """
 function findlast(A)
     warned = false
-    for (i, a) in Iterators.reverse(_pairs(A))
+    for (i, a) in Iterators.reverse(pairs(A))
         if !warned && !(a isa Bool)
             depwarn("In the future `findlast` will only work on boolean collections. Use `findlast(x->x!=0, A)` instead.", :findlast)
             warned = true
@@ -1805,8 +1794,8 @@ findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
 """
     findprev(predicate::Function, A, i)
 
-Find the previous index <= `i` of an element of `A` for which `predicate` returns `true`, or
-`nothing` if not found.
+Find the previous index before or including `i` of an element of `A`
+for which `predicate` returns `true`, or `nothing` if not found.
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -1851,9 +1840,7 @@ Return the index or key of the last element of `A` for which `predicate` returns
 Return `nothing` if there is no such element.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1880,7 +1867,7 @@ CartesianIndex(2, 1)
 ```
 """
 function findlast(testf::Function, A)
-    for (i, a) in Iterators.reverse(_pairs(A))
+    for (i, a) in Iterators.reverse(pairs(A))
         testf(a) && return i
     end
     return nothing
@@ -1897,9 +1884,7 @@ Return a vector `I` of the indices or keys of `A` where `f(A[I])` returns `true`
 If there are no such elements of `A`, return an empty array.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1943,7 +1928,7 @@ julia> findall(x -> x >= 0, d)
 
 ```
 """
-findall(testf::Function, A) = collect(first(p) for p in _pairs(A) if testf(last(p)))
+findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
 
 """
     findall(A)
@@ -1953,9 +1938,7 @@ If there are no such elements of `A`, return an empty array.
 To search for other kinds of values, pass a predicate as the first argument.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
-and [`pairs(A)`](@ref) for `AbstractArray`, `AbstractDict`, `AbstractString`
-`Tuple` and [`NamedTuple`](@ref) objects, and are linear indices starting at `1`
-for other iterables.
+and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
@@ -1989,7 +1972,7 @@ function findall(A)
     if !(eltype(A) === Bool) && !all(x -> x isa Bool, A)
         depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :find)
     end
-    collect(first(p) for p in _pairs(A) if last(p) != 0)
+    collect(first(p) for p in pairs(A) if last(p) != 0)
 end
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})
