@@ -119,8 +119,8 @@ end
     @test [linreg(x,y)...] ≈ [2.5559090909090867, 1.6960139860139862]
     @test [linreg(view(x,1:6),view(y,1:6))...] ≈ [3.8366666666666642,1.3271428571428574]
 
-    # check (LinSpace, UnitRange)
-    x = linspace(1.0, 12.0, 100)
+    # check (LinRange, UnitRange)
+    x = range(1.0, stop=12.0, length=100)
     y = -100:-1
     @test [linreg(x, y)...] ≈ [-109.0, 9.0]
 
@@ -129,9 +129,9 @@ end
     y = 12:-1:1
     @test [linreg(x, y)...] ≈ [13.0, -1.0]
 
-    # check (LinSpace, LinSpace)
-    x = linspace(-5, 10, 100)
-    y = linspace(50, 200, 100)
+    # check (LinRange, LinRange)
+    x = range(-5, stop=10, length=100)
+    y = range(50, stop=200, length=100)
     @test [linreg(x, y)...] ≈ [100.0, 10.0]
 
     # check (Array, Array)

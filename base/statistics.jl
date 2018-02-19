@@ -546,8 +546,8 @@ cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1) =
 
 Compute the middle of a scalar value, which is equivalent to `x` itself, but of the type of `middle(x, x)` for consistency.
 """
-# Specialized functions for real types allow for improved performance
 middle(x::Union{Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128}) = Float64(x)
+# Specialized functions for real types allow for improved performance
 middle(x::AbstractFloat) = x
 middle(x::Real) = (x + zero(x)) / 1
 
@@ -697,7 +697,7 @@ function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
         hi = ceil(Int,1+maxp*(lv-1))
 
         # only need to perform partial sort
-        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
+        sort!(v, 1, lv, Sort.PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     return v

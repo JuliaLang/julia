@@ -841,7 +841,7 @@ Consider the following contrived example. Imagine we wanted to write a function 
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
-do this in at least four ways (in addition to the recommended call to the built-in [`repmat`](@ref)):
+do this in at least four ways (in addition to the recommended call to the built-in [`repeat`](@ref)):
 
 ```julia
 function copy_cols(x::Vector{T}) where T

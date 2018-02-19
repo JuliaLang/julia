@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # givensAlgorithm functions are derived from LAPACK, see below
 
 abstract type AbstractRotation{T} end
@@ -33,7 +34,7 @@ struct Givens{T} <: AbstractRotation{T}
     c::T
     s::T
 end
-mutable struct Rotation{T} <: AbstractRotation{T}
+struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 

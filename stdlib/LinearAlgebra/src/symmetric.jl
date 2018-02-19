@@ -171,20 +171,20 @@ size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
-        return A.data[i, j]
-    elseif i == j
+    @inbounds if i == j
         return symmetric(A.data[i, j], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
     else
         return transpose(A.data[j, i])
     end
 end
 @inline function getindex(A::Hermitian, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
-        return A.data[i, j]
-    elseif i == j
+    @inbounds if i == j
         return hermitian(A.data[i, j], Symbol(A.uplo))::hermitian_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
     else
         return adjoint(A.data[j, i])
     end

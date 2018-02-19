@@ -5,7 +5,7 @@
 _directives(::Type{DateFormat{S,T}}) where {S,T} = T.parameters
 
 character_codes(df::Type{DateFormat{S,T}}) where {S,T} = character_codes(_directives(df))
-function character_codes(directives::SimpleVector)
+function character_codes(directives::Core.SimpleVector)
     letters = sizehint!(Char[], length(directives))
     for (i, directive) in enumerate(directives)
         if directive <: DatePart

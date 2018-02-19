@@ -254,7 +254,7 @@ function diagind(m::Integer, n::Integer, k::Integer=0)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
             "at most $n in an $m-by-$n matrix")))
     end
-    k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
+    k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
 end
 
 """
@@ -1322,9 +1322,13 @@ end
 ## Basis for null space
 
 """
-    nullspace(M)
+    nullspace(M[, tol::Real])
 
-Basis for nullspace of `M`.
+Computes a basis for the nullspace of `M` by including the singular
+vectors of A whose singular have magnitude are greater than `tol*σ₁`,
+where `σ₁` is `A`'s largest singular values. By default, the value of
+`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
@@ -1339,16 +1343,26 @@ julia> nullspace(M)
  0.0
  0.0
  1.0
+
+julia> nullspace(M, 2)
+3×3 Array{Float64,2}:
+ 0.0  1.0  0.0
+ 1.0  0.0  0.0
+ 0.0  0.0  1.0
 ```
 """
+<<<<<<< HEAD
 function nullspace(A::AbstractMatrix{T}) where T
+=======
+function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+>>>>>>> 15a345bf74a27429bc4bb0c33b99a9151d65a735
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
-    SVD = svdfact(A, full = true)
-    indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
+    SVD = svdfact(A, full=true)
+    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
+nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
 
 """
     cond(M, p::Real=2)

@@ -179,7 +179,7 @@ readdlm(input, dlm::Char, eol::Char; opts...) =
     readdlm_auto(input, dlm, Float64, eol, true; opts...)
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
+    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=false, comment_char='#')
 
 Read a matrix from the source where each line (separated by `eol`) gives one row, with
 elements separated by the given delimiter. The source can be a text file, stream or byte
@@ -442,7 +442,7 @@ end
 function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm(Char))
     quotes = get(optsd, :quotes, true)
-    comments = get(optsd, :comments, true)
+    comments = get(optsd, :comments, false)
     comment_char = get(optsd, :comment_char, '#')
     dims = get(optsd, :dims, nothing)
 

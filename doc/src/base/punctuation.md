@@ -36,9 +36,9 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | ``` ` ` ``` | delimit external process (command) specifications                                           |
 | `...`       | splice arguments into a function call or declare a varargs function                         |
 | `.`         | access named fields in objects/modules (calling [`getproperty`](@ref Base.getproperty) or [`setproperty!`](@ref Base.setproperty!)), also prefixes elementwise function calls (calling [`broadcast`](@ref)) |
-| `a:b`       | range a, a+1, a+2, ..., b (calling [`colon`](@ref))                                         |
-| `a:s:b`     | range a, a+s, a+2s, ..., b (also calling [`colon`](@ref))                                   |
-| `:`         | index an entire dimension (firstindex:lastindex), see [`Colon`](@ref))                       |
+| `a:b`       | range a, a+1, a+2, ..., b                                                                   |
+| `a:s:b`     | range a, a+s, a+2s, ..., b                                                                  |
+| `:`         | index an entire dimension (firstindex:lastindex), see [`Colon`](@ref))                      |
 | `::`        | type annotation or [`typeassert`](@ref), depending on context                               |
 | `:( )`      | quoted expression                                                                           |
 | `:a`        | symbol a                                                                                    |

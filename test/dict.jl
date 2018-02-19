@@ -91,6 +91,8 @@ end
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
+    # test rethrow of error in ctor
+    @test_throws DomainError Dict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
@@ -158,6 +160,19 @@ end
     d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+end
+
+@testset "type of Dict constructed from varargs of Pairs" begin
+    @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
+    @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
+    @test Dict(1=>1.0, 2.0=>2) isa Dict{Real,Real}
+
+    for T in (Nothing, Missing)
+        @test Dict(1=>1, 2=>T()) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>T(), 2=>2) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>1, T()=>2) isa Dict{Union{Int,T},Int}
+        @test Dict(T()=>1, 2=>2) isa Dict{Union{Int,T},Int}
+    end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
@@ -323,6 +338,13 @@ end
         @test !isempty(summary(keys(d)))
         @test !isempty(summary(values(d)))
     end
+    # show on empty Dict
+    io = IOBuffer()
+    d = Dict{Int, String}()
+    show(io, d)
+    str = String(take!(io))
+    @test str == "Dict{$(Int),String}()"
+    close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate

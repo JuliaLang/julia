@@ -18,7 +18,6 @@ using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_
 import Serialization: serialize, deserialize
 import Distributed: RRID, procs
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
-using Printf: @sprintf
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
 
@@ -116,7 +115,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        shm_seg_name = @sprintf("/jl%06u%s", getpid() % 10^6, randstring(20))
+        shm_seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)

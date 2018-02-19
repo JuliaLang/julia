@@ -3,7 +3,7 @@
 module LAPACK
 @doc """
 Interfaces to LAPACK subroutines.
-""" -> LAPACK
+""" LAPACK
 
 const liblapack = Base.liblapack_name
 

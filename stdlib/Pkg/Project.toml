@@ -1,0 +1,5 @@
+name = "Pkg"
+uuid = "fe1c5a76-5840-53d2-82f9-288dd83ce2ce"
+
+[deps]
+LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"

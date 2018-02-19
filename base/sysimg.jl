@@ -2,7 +2,7 @@
 
 baremodule Base
 
-using Core.Intrinsics
+using Core.Intrinsics, Core.IR
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
 
 getproperty(x, f::Symbol) = getfield(x, f)
@@ -16,6 +16,7 @@ setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
+function include_relative end
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
@@ -162,6 +163,10 @@ Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missi
 
 include("abstractdict.jl")
 
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
+
 include("namedtuple.jl")
 
 # numeric operations
@@ -207,9 +212,6 @@ include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")
@@ -218,15 +220,11 @@ include("strings/string.jl")
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N,A}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1,A}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2,A}}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
+StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -420,8 +418,6 @@ include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-include("i18n.jl")
-using .I18n
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -429,9 +425,6 @@ using .StackTraces
 
 include("initdefs.jl")
 include("client.jl")
-
-# misc useful functions & macros
-include("util.jl")
 
 # statistics
 include("statistics.jl")
@@ -446,17 +439,14 @@ include("threadcall.jl")
 include("uuid.jl")
 include("loading.jl")
 
+# misc useful functions & macros
+include("util.jl")
+
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
     init_depot_path(BINDIR)
     init_load_path(BINDIR)
 end
-
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
 
 include("asyncmap.jl")
 
@@ -479,7 +469,8 @@ function __init__()
     Csrand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
+    Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
+    global_logger(Logging.ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_depot_path()
@@ -499,6 +490,7 @@ pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 # load some stdlib packages but don't put their names in Main
 Base.require(Base, :Base64)
 Base.require(Base, :CRC32c)
+Base.require(Base, :SHA)
 Base.require(Base, :Dates)
 Base.require(Base, :DelimitedFiles)
 Base.require(Base, :Serialization)
@@ -522,6 +514,7 @@ Base.require(Base, :LibGit2)
 Base.require(Base, :Pkg)
 Base.require(Base, :REPL)
 Base.require(Base, :Markdown)
+Base.require(Base, :UUIDs)
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -577,6 +570,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib base64decode Base64 true
     @deprecate_stdlib Base64EncodePipe Base64 true
     @deprecate_stdlib Base64DecodePipe Base64 true
+    @deprecate_stdlib stringmime Base64 true
 
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true
@@ -738,7 +732,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib nullspace   LinearAlgebra true
     @deprecate_stdlib ordschur!   LinearAlgebra true
     @deprecate_stdlib ordschur    LinearAlgebra true
-    @deprecate_stdlib peakflops   LinearAlgebra true
     @deprecate_stdlib pinv        LinearAlgebra true
     @deprecate_stdlib qr          LinearAlgebra true
     @deprecate_stdlib qrfact!     LinearAlgebra true
@@ -845,6 +838,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib methodswith   InteractiveUtils true
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
+    @deprecate_stdlib peakflops     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true

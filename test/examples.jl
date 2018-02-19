@@ -23,7 +23,7 @@ y = inv(x)
 @test_throws DomainError inv(ModInts.ModInt{8}(4))
 
 include(joinpath(dir, "ndgrid.jl"))
-r = repmat(1:10,1,10)
+r = repeat(1:10,1,10)
 r1, r2 = ndgrid(1:10, 1:10)
 @test r1 == r
 @test r2 == r'

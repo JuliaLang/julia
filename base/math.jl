@@ -244,16 +244,13 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :asinh, :exp2, :expm1)
+for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-exp(x::Real) = exp(float(x))
-exp10(x::Real) = exp10(float(x))
-atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -376,9 +373,6 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
-
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
 """
 log(x::Number)
 
@@ -422,9 +416,6 @@ log10(x)
 Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
-
 # Examples
 ```jldoctest
 julia> log1p(-0.5)
@@ -435,7 +426,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
+for f in (:log2, :log10, :lgamma)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
@@ -985,12 +976,10 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 # More special functions
 include(joinpath("special", "exp.jl"))
 include(joinpath("special", "exp10.jl"))
+include(joinpath("special", "hyperbolic.jl"))
 include(joinpath("special", "trig.jl"))
 include(joinpath("special", "gamma.jl"))
 include(joinpath("special", "rem_pio2.jl"))
-
-module JuliaLibm
 include(joinpath("special", "log.jl"))
-end
 
 end # module

@@ -125,7 +125,6 @@ export
     nullspace,
     ordschur!,
     ordschur,
-    peakflops,
     pinv,
     qr,
     qrfact!,

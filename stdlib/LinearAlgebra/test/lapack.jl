@@ -196,7 +196,7 @@ end
 
 @testset "gebal/gebak" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10) * Diagonal(exp10.(linspace(-10,10,10)))
+        A = rand(elty,10,10) * Diagonal(exp10.(range(-10, stop=10, length=10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
         Bvs = eigvecs(B)

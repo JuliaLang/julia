@@ -53,10 +53,12 @@ function run_test_server(srv, text)
         try
             sock = accept(srv)
             try
-                write(sock,text)
+                write(sock, text)
             catch e
-                if typeof(e) != Base.UVError
-                    rethrow(e)
+                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
+                        rethrow(e)
+                    end
                 end
             finally
                 close(sock)
@@ -130,7 +132,7 @@ function cleanup()
     end
     empty!(open_streams)
     for tsk in tasks
-        wait(tsk)
+        Base._wait(tsk)
     end
     empty!(tasks)
 end
@@ -343,7 +345,7 @@ for (name, f) in l
     @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(codeunits(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), read=false, write=true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -554,7 +556,7 @@ end # mktempdir() do dir
 end
 
 let p = Pipe()
-    Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     t = @schedule read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
@@ -563,7 +565,7 @@ let p = Pipe()
         end
         @async close(p.in)
     end
-    s = reinterpret(UInt16, wait(t))
+    s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end

@@ -498,6 +498,8 @@ atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
     # break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly
     atan_p(x², x⁴), atan_q(x⁴)
 end
+
+atan(x::Real) = atan(float(x))
 function atan(x::T) where T<:Union{Float32, Float64}
     # Method
     #   1. Reduce x to positive by atan(x) = -atan(-x).

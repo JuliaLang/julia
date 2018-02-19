@@ -69,10 +69,15 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 ## conversion of general objects to strings ##
 
 """
-    sprint(f::Function, args...)
+    sprint(f::Function, args...; context=nothing, sizehint=0)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
+
+The optional keyword argument `context` can be set to `:key=>value` pair
+or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
+stream passed to `f`.  The optional `sizehint` is a suggersted (in bytes)
+to allocate for the buffer used to write the string.
 
 # Examples
 ```jldoctest
@@ -81,10 +86,7 @@ julia> sprint(showcompact, 66.66666)
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
-    s = IOBuffer(StringVector(sizehint), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
+    s = IOBuffer(sizehint=sizehint)
     if context !== nothing
         f(IOContext(s, context), args...)
     else
@@ -99,11 +101,11 @@ tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
 function print_to_string(xs...; env=nothing)
+    if isempty(xs)
+        return ""
+    end
     # specialized for performance reasons
-    s = IOBuffer(StringVector(tostr_sizehint(xs[1])), true, true)
-    # specialized version of truncate(s,0)
-    s.size = 0
-    s.ptr = 1
+    s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
     if env !== nothing
         env_io = IOContext(s, env)
         for x in xs
@@ -150,12 +152,17 @@ function print_quoted_literal(io, s::AbstractString)
 end
 
 """
-    repr(x)
-    repr(x, context::Pair{Symbol,<:Any}...)
+    repr(x; context=nothing)
 
 Create a string from any value using the [`show`](@ref) function.
-If context pairs are given, the IO buffer used to capture `show` output
-is wrapped in an `IOContext` object with those context pairs.
+
+The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
+object whose attributes are used for the I/O stream passed to `show`.
+
+Note that `repr(x)` is usually similar to how the value of `x` would
+be entered in Julia.  See also [`repr("text/plain", x)`](@ref) to instead
+return a "pretty-printed" version of `x` designed more for human consumption,
+equivalent to the REPL display of `x`.
 
 # Examples
 ```jldoctest
@@ -167,17 +174,7 @@ julia> repr(zeros(3))
 
 ```
 """
-function repr(x)
-    s = IOBuffer()
-    show(s, x)
-    String(take!(s))
-end
-
-function repr(x, context::Pair{Symbol}...)
-    s = IOBuffer()
-    show(IOContext(s, context...), x)
-    String(take!(s))
-end
+repr(x; context=nothing) = sprint(show, x; context=context)
 
 # IOBuffer views of a (byte)string:
 
@@ -436,8 +433,7 @@ Returns:
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
     # Note: this loses the type of the original string
-    buf = IOBuffer(StringVector(sizeof(str)), true, true)
-    truncate(buf,0)
+    buf = IOBuffer(sizehint=sizeof(str))
     cutting = true
     col = 0     # current column (0 based)
     for ch in str

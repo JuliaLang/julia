@@ -166,8 +166,8 @@ struct StructInfo
 end
 
 struct InvokeData
-    mt::MethodTable
-    entry::TypeMapEntry
+    mt::Core.MethodTable
+    entry::Core.TypeMapEntry
     types0
     fexpr
     texpr
@@ -176,12 +176,12 @@ end
 struct AllocOptContext
     infomap::ValueInfoMap
     sv::OptimizationState
-    todo::IdDict
-    changes::IdDict
-    sym_count::IdDict
-    all_fld::IdDict
-    setfield_typ::IdDict
-    undef_fld::IdDict
+    todo::IdDict{Any,Any}
+    changes::IdDict{Any,Any}
+    sym_count::IdDict{Any,Any}
+    all_fld::IdDict{Any,Any}
+    setfield_typ::IdDict{Any,Any}
+    undef_fld::IdDict{Any,Any}
     structinfos::Vector{StructInfo}
     function AllocOptContext(infomap::ValueInfoMap, sv::OptimizationState)
         todo = IdDict()
@@ -2950,7 +2950,8 @@ function structinfo_constant(ctx::AllocOptContext, @nospecialize(v), vt::DataTyp
     if vt <: Tuple
         si = StructInfo(Vector{Any}(uninitialized, nf), Symbol[], vt, false, false)
     else
-        si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, false, false)
+        si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+                        vt, false, false)
     end
     for i in 1:nf
         if isdefined(v, i)
@@ -2966,7 +2967,8 @@ end
 structinfo_tuple(ex::Expr) = StructInfo(ex.args[2:end], Symbol[], Tuple, false, false)
 function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     nf = fieldcount(vt)
-    si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, vt.mutable, true)
+    si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+                    vt, vt.mutable, true)
     ninit = length(ex.args) - 1
     for i in 1:nf
         if i <= ninit

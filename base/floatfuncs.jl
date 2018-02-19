@@ -17,9 +17,13 @@ signbit(x::Float32) = signbit(bitcast(Int32, x))
 signbit(x::Float16) = signbit(bitcast(Int16, x))
 
 """
-    maxintfloat(T)
+    maxintfloat(T=Float64)
 
-The largest integer losslessly representable by the given floating-point DataType `T`.
+The largest consecutive integer that is exactly represented in the given floating-point type `T`
+(which defaults to `Float64`).
+
+That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
+is *not* exactly representable in the type `T`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -29,8 +33,9 @@ maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
 """
     maxintfloat(T, S)
 
-The largest integer losslessly representable by the given floating-point DataType `T` that
-also does not exceed the maximum integer representable by the integer DataType `S`.
+The largest consecutive integer representable in the given floating-point type `T` that
+also does not exceed the maximum integer representable by the integer type `S`.  Equivalently,
+it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
@@ -209,6 +214,17 @@ approximately equal component-wise.
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
 
+Note that `x ≈ 0` (i.e., comparing to zero with the default tolerances) is
+equivalent to `x == 0` since the default `atol` is `0`.  In such cases, you should either
+supply an appropriate `atol` (or use `norm(x) ≤ atol`) or rearrange your code (e.g.
+use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `atol`
+automatically because it depends on the overall scaling (the "units") of your problem:
+for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x` is the
+[radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in meters,
+but an absurdly large tolerance if `x` is the
+[radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
+
+
 # Examples
 ```jldoctest
 julia> 0.1 ≈ (0.1 - 1e-10)
@@ -218,6 +234,12 @@ julia> isapprox(10, 11; atol = 2)
 true
 
 julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+true
+
+julia> 1e-10 ≈ 0
+false
+
+julia> isapprox(1e-10, 0, atol=1e-8)
 true
 ```
 """

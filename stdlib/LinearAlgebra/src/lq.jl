@@ -85,7 +85,8 @@ function getproperty(F::LQ, d::Symbol)
     end
 end
 
-Base.propertynames(F::LQ, private::Bool=false) = append!([:L,:Q], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::LQ, private::Bool=false) =
+    (:L, :Q, (private ? fieldnames(typeof(F)) : ())...)
 
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]

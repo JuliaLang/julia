@@ -233,7 +233,7 @@ end
     end
 end
 
-@testset "comparison" begin
+@testset "comparison and hash" begin
     @test isequal((), ())
     @test isequal((1,2,3), (1,2,3))
     @test !isequal((1,2,3), (1,2,4))
@@ -253,8 +253,33 @@ end
     @test isless((1,), (1,2))
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
-end
 
+    @test hash(()) === Base.tuplehash_seed
+    @test hash((1,)) === hash(1, Base.tuplehash_seed)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+
+    # Test Any16 methods
+    t = ntuple(identity, 16)
+    @test isequal((t...,1,2,3), (t...,1,2,3))
+    @test !isequal((t...,1,2,3), (t...,1,2,4))
+    @test !isequal((t...,1,2,3), (t...,1,2))
+
+    @test ==((t...,1,2,3), (t...,1,2,3))
+    @test !==((t...,1,2,3), (t...,1,2,4))
+    @test !==((t...,1,2,3), (t...,1,2))
+
+    @test (t...,1,2) < (t...,1,3)
+    @test (t...,1,) < (t...,1,2)
+    @test !((t...,1,2) < (t...,1,2))
+    @test (t...,2,1) > (t...,1,2)
+
+    @test isless((t...,1,2), (t...,1,3))
+    @test isless((t...,1,), (t...,1,2))
+    @test !isless((t...,1,2), (t...,1,2))
+    @test !isless((t...,2,1), (t...,1,2))
+
+    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,(),UInt(0)])
+end
 
 @testset "functions" begin
     @test isempty(())

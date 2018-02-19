@@ -461,10 +461,6 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls);
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
-
-JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
-                                               jl_value_t *data);
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 void jl_uv_flush(uv_stream_t *stream);
 
 typedef struct _typeenv {

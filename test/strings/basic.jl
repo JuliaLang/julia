@@ -239,7 +239,10 @@ end
     @test first(eachindex("")) === 1
     @test last(eachindex("foobar")) === lastindex("foobar")
     @test done(eachindex("foobar"),7)
-    @test eltype(Base.EachStringIndex) == Int
+    @test Int == eltype(Base.EachStringIndex) ==
+                 eltype(Base.EachStringIndex{String}) ==
+                 eltype(Base.EachStringIndex{GenericString}) ==
+                 eltype(eachindex("foobar")) == eltype(eachindex(gstr))
     @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
@@ -262,7 +265,7 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
