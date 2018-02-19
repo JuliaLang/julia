@@ -16,7 +16,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/site $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf examples examples/embedding)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/embedding test/perf examples)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -62,14 +62,12 @@ clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
 
 $(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) \
-                           $(shell find $(JULIAHOME)/examples/clustermanager) \
-                           $(shell find $(JULIAHOME)/examples/embedding)
+                           $(shell find $(JULIAHOME)/examples/clustermanager)
 	@echo Copying in usr/share/doc/julia/examples
 	@-rm -fr $(build_docdir)/examples
 	@mkdir -p $(build_docdir)/examples
 	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
 	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
-	@cp -R $(JULIAHOME)/examples/embedding $(build_docdir)/examples
 	@echo 1 > $@
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)

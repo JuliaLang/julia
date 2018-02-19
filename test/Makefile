@@ -14,16 +14,22 @@ TESTS = all stdlib $(TESTGROUPS) \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
 # run `make print-TESTS` to see a list of all tests that can be run
 
+EMBEDDING_ARGS := JULIA=$(JULIA_EXECUTABLE) BIN=$(SRCDIR)/embedding
+
 default: all
 
 $(TESTS):
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
+embedding:
+	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
+
 perf:
 	@$(MAKE) -C $(SRCDIR)/perf all
 
 clean:
+	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C perf $@
 
-.PHONY: $(TESTS) perf clean
+.PHONY: $(TESTS) embedding perf clean
