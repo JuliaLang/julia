@@ -1351,11 +1351,7 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-<<<<<<< HEAD
-function nullspace(A::AbstractMatrix{T}) where T
-=======
 function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
->>>>>>> 15a345bf74a27429bc4bb0c33b99a9151d65a735
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svdfact(A, full=true)
