@@ -897,8 +897,11 @@ function gather_stdlib_uuids()
     stdlib_uuids = UUID[]
     stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
     for stdlib in readdir(stdlib_dir)
+        projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
+        if isfile(projfile)
         proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
         push!(stdlib_uuids, UUID(proj["uuid"]))
+    end
     end
     return stdlib_uuids
 end
