@@ -762,11 +762,16 @@ let io = IOBuffer()
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
 end
 
-# PR 17117
-# test print_array
-let s = IOBuffer(Vector{UInt8}(), read=true, write=true)
+@testset "PR 17117: print_array" begin
+    s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    close(s)
+    s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
+    z = zeros(0,0,0,0,0,0,0,0)
+    Base.print_array(s2, z)
+    @test String(resize!(s2.data, s2.size)) == ""
+    close(s2)
 end
 
 let repr = sprint(dump, :(x = 1))
