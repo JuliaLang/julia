@@ -1,3 +1,8 @@
+function needs_USE_GPL_LIBS(s::String)
+    contains(s, "CHOLMOD") && return true
+    return false
+end
+
 const HEADER = """
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
@@ -17,7 +22,8 @@ function fixup_precompile(new_precompile_file; merge=false)
 
     for file in [new_precompile_file; merge ? old_precompile_file : []]
         for line in eachline(file)
-            # filter out closures, which might have different generated names in different environments)
+            line = strip(line)
+            # filter out closures, which might have different generated names in different environments
             contains(line, r"#[0-9]") && continue
             # Other stuff than precompile statements might have been written to STDERR
             startswith(line, "precompile(Tuple{") || continue
@@ -38,7 +44,10 @@ function fixup_precompile(new_precompile_file; merge=false)
         end
         @eval PrecompileStagingArea begin""")
         for statement in sort(collect(precompile_statements))
+            isgpl = needs_USE_GPL_LIBS(statement)
+            isgpl && print(f, "if Base.USE_GPL_LIBS\n    ")
             println(f, statement)
+            isgpl && println(f, "end")
         end
         println(f, "end\nend")
     end
