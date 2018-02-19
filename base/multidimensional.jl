@@ -2,14 +2,14 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import Base: eltype, length, size, start, done, next, first, last, in, getindex,
+    import .Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, IteratorSize, convert, show
 
-    import Base: +, -, *
-    import Base: simd_outer_range, simd_inner_length, simd_index
-    using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
-    using Base.Iterators: Reverse
+    import .Base: +, -, *
+    import .Base: simd_outer_range, simd_inner_length, simd_index
+    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
+    using .Base.Iterators: Reverse
 
     export CartesianIndex, CartesianIndices, LinearIndices
 

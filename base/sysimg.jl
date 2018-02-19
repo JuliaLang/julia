@@ -3,7 +3,9 @@
 baremodule Base
 
 using Core.Intrinsics, Core.IR
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+
+const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
 getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -471,10 +473,13 @@ include("docs/basedocs.jl")
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
-isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+if isdefined(Core, :Compiler) && is_primary_base_module
+    Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+end
 
 end_base_include = time_ns()
 
+if is_primary_base_module
 function __init__()
     # for the few uses of Crand in Base:
     Csrand()
@@ -490,15 +495,19 @@ function __init__()
 end
 
 INCLUDE_STATE = 3 # include = include_relative
-const tot_time_stdlib = Ref(0.0)
+end
+
+const tot_time_stdlib = RefValue(0.0)
+
 end # baremodule Base
 
-using Base
+using .Base
 
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
+if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
     # Stdlibs manually sorted in top down order
@@ -880,15 +889,16 @@ end
     @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
+end
 
 empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
-tot_time_precompile = @elapsed Base.include(Base, "precompile.jl")
+tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
 
-tot_time_base = (Base.end_base_include - Base.start_base_include) * 10^(-9)
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
 tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
 
 println("Sysimage built. Summary:")

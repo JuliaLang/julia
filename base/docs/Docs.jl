@@ -60,8 +60,9 @@ function.
 
 include("bindings.jl")
 
-import Base.Meta: quot, isexpr
-import Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr
+import .Base: Callable, with_output_color
+using .Base: RefValue
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -390,7 +391,7 @@ end
 function multidoc(__source__, __module__, meta, ex, define)
     out = Expr(:toplevel)
     str = docexpr(__source__, __module__, lazy_iterpolate(meta), metadata(__source__, __module__, ex, false))
-    ref = Ref{DocStr}()
+    ref = RefValue{DocStr}()
     for (n, arg) in enumerate(ex.args)
         # The first `arg` to be documented needs to also create the docstring for the group.
         # Subsequent `arg`s just need `ref` to be able to find the docstring without having

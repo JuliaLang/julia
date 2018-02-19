@@ -2,7 +2,7 @@
 
 # Text / HTML objects
 
-import Base: print, show, ==, hash
+import .Base: print, show, ==, hash
 
 export HTML, @html_str
 

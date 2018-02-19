@@ -2,16 +2,16 @@
 
 module Sort
 
-using Base.Order, Base.Checked
-using Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+using .Base.Order, .Base.Checked
+using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
 
-import
-    Base.sort,
-    Base.sort!,
-    Base.issorted,
-    Base.sortperm,
-    Base.Slice,
-    Base.to_indices
+import .Base:
+    sort,
+    sort!,
+    issorted,
+    sortperm,
+    Slice,
+    to_indices
 
 export # also exported by Base
     # order-only:

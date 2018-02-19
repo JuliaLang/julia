@@ -2,11 +2,11 @@
 
 module Broadcast
 
-using Base.Cartesian
-using Base: Indices, OneTo, linearindices, tail, to_shape,
+using .Base.Cartesian
+using .Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             isoperator, promote_typejoin
-import Base: broadcast, broadcast!
+import .Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
