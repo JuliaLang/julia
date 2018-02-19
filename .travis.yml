@@ -144,7 +144,7 @@ script:
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - pushd /tmp/julia/share/julia/test
     - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-      /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download
+      /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&

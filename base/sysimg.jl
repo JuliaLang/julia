@@ -541,6 +541,7 @@ let
             :Distributed,
             :Test,
             :REPL,
+            :Pkg3,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
