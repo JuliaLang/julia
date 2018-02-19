@@ -2563,3 +2563,46 @@ end
         end
     end
 end
+
+# #25074
+@testset "Bool rounding" begin
+    @testset "round Bool" begin
+        @test_throws InexactError round(Bool, -4.1)
+        @test_throws InexactError round(Bool, 1.5)
+        @test true == round(Bool, 1.0)
+        @test false == round(Bool, 0.0)
+        @test true == round(Bool, 0.6)
+        @test false == round(Bool, 0.4)
+        @test false == round(Bool, 0.5)
+        @test false == round(Bool, -0.5)
+    end
+
+    @testset "trunc Bool" begin
+        @test_throws InexactError trunc(Bool, -4.1)
+        @test_throws InexactError trunc(Bool, 2.5)
+        @test true == trunc(Bool, 1.0)
+        @test false == trunc(Bool, 0.0)
+        @test false == trunc(Bool, 0.6)
+        @test false == trunc(Bool, 0.4)
+        @test true == trunc(Bool, 1.8)
+        @test false == trunc(Bool, -0.5)
+    end
+
+    @testset "floor Bool" begin
+        @test_throws InexactError floor(Bool, -0.1)
+        @test_throws InexactError floor(Bool, 2.5)
+        @test true == floor(Bool, 1.0)
+        @test false == floor(Bool, 0.0)
+        @test false == floor(Bool, 0.6)
+        @test true == floor(Bool, 1.8)
+    end
+
+    @testset "ceil Bool" begin
+        @test_throws InexactError ceil(Bool, -1.4)
+        @test_throws InexactError ceil(Bool, 1.5)
+        @test true == ceil(Bool, 1.0)
+        @test false == ceil(Bool, 0.0)
+        @test true == ceil(Bool, 0.6)
+        @test false == ceil(Bool, -0.7)
+    end
+end

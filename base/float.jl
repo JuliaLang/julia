@@ -355,6 +355,12 @@ ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
 round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
+# Bool
+trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
+floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
+ceil(::Type{Bool}, x::AbstractFloat)  = (-1 < x <= 1) ? 0 < x : throw(InexactError(:ceil, Bool, x))
+round(::Type{Bool}, x::AbstractFloat) = (-0.5 <= x < 1.5) ? 0.5 < x : throw(InexactError(:round, Bool, x))
+
 trunc(x::Float64) = trunc_llvm(x)
 trunc(x::Float32) = trunc_llvm(x)
 trunc(x::Float16) = Float16(trunc(Float32(x)))
