@@ -874,7 +874,9 @@ precompile(Tuple{typeof(REPL.send_to_backend), String, Base.Channel{Any}, Base.C
 precompile(Tuple{typeof(REPL.send_to_backend), String, REPL.REPLBackendRef})
 precompile(Tuple{typeof(Random.DSFMT.__init__)})
 precompile(Tuple{typeof(Random.__init__)})
-precompile(Tuple{typeof(SuiteSparse.CHOLMOD.__init__)})
+if Base.USE_GPL_LIBS
+    precompile(Tuple{typeof(SuiteSparse.CHOLMOD.__init__)})
+end
 precompile(Tuple{typeof(Test.get_test_result), Expr, LineNumberNode})
 precompile(Tuple{typeof(Test.get_test_result), Symbol, LineNumberNode})
 precompile(Tuple{typeof(Test.test_expr!), String, Expr})
