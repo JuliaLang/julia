@@ -159,7 +159,7 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
             if get(info, "pinned", false)
                 # This is a pinned package, fix its version
                 pkg = pkgs[uuid_idx]
-                @info ("Package $name [$(string(uuid)[1:6])] is pinned, keeping it at current version: $ver")
+                @info ("Package $name [$(string(uuid)[1:8])] is pinned, keeping it at current version: $ver")
                 pkg.version = ver
             end
         else
