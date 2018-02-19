@@ -51,7 +51,7 @@ end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
     (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2)), A, B, one(T), zero(T))))
+    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
     A = adjA.parent
