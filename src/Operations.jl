@@ -502,13 +502,15 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
             append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            m = Base.require(Base.PkgId(Base.UUID($(repr(string(uuid)))), $(repr(name))))
+            eval(m, :(module __build__ end))
             cd($(repr(dirname(build_file))))
-            include($(repr(build_file)))
+            Base.include_relative(m.__build__, $(repr(build_file)))
             """
         cmd = ```
             $(Base.julia_cmd()) -O0 --color=no --history-file=no
             --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-            --compilecache=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
+            --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
         open(log_file, "w") do log
@@ -677,14 +679,16 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            m = Base.require(Base.PkgId(Base.UUID($(repr(string(pkg.uuid)))), $(repr(pkg.name))))
+            eval(m, :(module __test__ end))
             cd($(repr(dirname(testfile))))
-            include($(repr(testfile)))
+            Base.include_relative(m.__test__, $(repr(testfile)))
             """
         cmd = ```
             $(Base.julia_cmd())
             --code-coverage=$(coverage ? "user" : "none")
             --color=$(Base.have_color ? "yes" : "no")
-            --compiled-module=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
+            --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --check-bounds=yes
             --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
             --eval $code
