@@ -17,8 +17,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, ReshapedArray, ReinterpretArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec,
-    MemoryLayout, UnknownLayout, AbstractStridedLayout, DenseRows, DenseColumns, DenseRowMajor, DenseColumnMajor,
-    DenseColumnsStridedRows, DenseRowsStridedColumns, StridedLayout
+    MemoryLayout, UnknownLayout, AbstractStridedLayout, AbstractRowMajor, AbstractColumnMajor, DenseRowMajor, DenseColumnMajor,
+    ColumnMajor, RowMajor, StridedLayout
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, AbstractCartesianIndex, RangeIndex, Slice
 # We use `_length` because of non-1 indices; releases after julia 0.5
@@ -204,7 +204,7 @@ julia> LinearAlgebra.stride1(B)
 stride1(x) = stride(x,1)
 stride1(x::AbstractArray) = _stride1(x, MemoryLayout(x))
 _stride1(x, _) = stride(x, 1)::Int
-_stride1(x, ::DenseColumns) = 1
+_stride1(x, ::AbstractColumnMajor) = 1
 
 @inline chkstride1(A...) = _chkstride1(true, A...)
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")

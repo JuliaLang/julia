@@ -274,12 +274,12 @@ size_to_strides(s) = ()
 abstract type MemoryLayout{T} end
 struct UnknownLayout{T} <: MemoryLayout{T} end
 abstract type AbstractStridedLayout{T} <: MemoryLayout{T} end
-abstract type DenseColumns{T} <: AbstractStridedLayout{T} end
-struct DenseColumnMajor{T} <: DenseColumns{T} end
-struct DenseColumnsStridedRows{T} <: DenseColumns{T} end
-abstract type DenseRows{T} <: AbstractStridedLayout{T} end
-struct DenseRowMajor{T} <: DenseRows{T} end
-struct DenseRowsStridedColumns{T} <: DenseRows{T} end
+abstract type AbstractColumnMajor{T} <: AbstractStridedLayout{T} end
+struct DenseColumnMajor{T} <: AbstractColumnMajor{T} end
+struct ColumnMajor{T} <: AbstractColumnMajor{T} end
+abstract type AbstractRowMajor{T} <: AbstractStridedLayout{T} end
+struct DenseRowMajor{T} <: AbstractRowMajor{T} end
+struct RowMajor{T} <: AbstractRowMajor{T} end
 struct StridedLayout{T} <: AbstractStridedLayout{T} end
 
 """
@@ -310,14 +310,14 @@ Arrays with `DenseColumnMajor` must conform to the `DenseArray` interface.
 DenseColumnMajor
 
 """
-    DenseColumnsStridedRows{T}()
+    ColumnMajor{T}()
 
 is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
 as a column major matrix. In other words, the columns are stored in memory with
 offsets of one, while the rows are stored with offsets given by `stride(A,2)`.
-Arrays with `DenseColumnsStridedRows` must conform to the `DenseArray` interface.
+Arrays with `ColumnMajor` must conform to the `DenseArray` interface.
 """
-DenseColumnsStridedRows
+ColumnMajor
 
 """
     DenseRowMajor{T}()
@@ -330,15 +330,15 @@ equivalent to the transpose of an `Array`, so that `stride(A,1) == size(A,1)` an
 DenseRowMajor
 
 """
-    DenseRowsStridedColumns{T}()
+    RowMajor{T}()
 
 is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
 as a row major matrix. In other words, the rows are stored in memory with
 offsets of one, while the columns are stored with offsets given by `stride(A,1)`.
-Arrays with `DenseRowsStridedColumns` must conform to the `DenseArray` interface,
-and `transpose(A)` should return a matrix whose layout is `DenseColumnsStridedRows{T}()`.
+Arrays with `RowMajor` must conform to the `DenseArray` interface,
+and `transpose(A)` should return a matrix whose layout is `ColumnMajor{T}()`.
 """
-DenseRowsStridedColumns
+RowMajor
 
 """
     StridedLayout{T}()
