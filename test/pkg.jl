@@ -85,6 +85,19 @@ temp_pkg_dir() do project_path
         pkgdir = Base.locate_package(Base.PkgId(TEST_PKG.uuid, TEST_PKG.name))
         # No coverage files being generated?
         @test_broken TEST_PKG.name * ".cov" in readdir(pkgdir)
+        Pkg3.rm(TEST_PKG.name)
+    end
+
+    @testset "pinning / freeing" begin
+        Pkg3.add(TEST_PKG.name)
+        old_v = Pkg3.installed()[TEST_PKG.name]
+        Pkg3.pin(PackageSpec(TEST_PKG.name, v"0.2"))
+        @test Pkg3.installed()[TEST_PKG.name].minor == 2
+        Pkg3.up(TEST_PKG.name)
+        @test Pkg3.installed()[TEST_PKG.name].minor == 2
+        Pkg3.free(TEST_PKG.name)
+        Pkg3.up()
+        @test Pkg3.installed()[TEST_PKG.name] == old_v
     end
 
     @testset "package name in resolver errors" begin

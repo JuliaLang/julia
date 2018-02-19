@@ -150,11 +150,21 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
     for (name::String, uuidstr::String) in ctx.env.project["deps"]
         uuid = UUID(uuidstr)
         uuid_to_name[uuid] = name
-        uuid in uuids && continue
         info = manifest_info(ctx.env, uuid)
+        info == nothing && continue
         haskey(info, "version") || continue
         ver = VersionNumber(info["version"])
-        push!(pkgs, PackageSpec(name, uuid, ver))
+        uuid_idx = findfirst(equalto(uuid), uuids)
+        if uuid_idx != nothing
+            if get(info, "pinned", false)
+                # This is a pinned package, fix its version
+                pkg = pkgs[uuid_idx]
+                @info ("Package $name [$(string(uuid)[1:6])] is pinned, keeping it at current version: $ver")
+                pkg.version = ver
+            end
+        else
+            push!(pkgs, PackageSpec(name, uuid, ver))
+        end
     end
     # construct data structures for resolver and call it
     reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
@@ -388,7 +398,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     for pkg in pkgs
         uuid = pkg.uuid
         uuid in ctx.stdlib_uuids && continue
-        update_manifest(ctx.env, uuid, names[uuid], hashes[uuid], pkg.version::VersionNumber)
+        update_manifest(ctx.env, uuid, names[uuid], hashes[uuid], pkg.version::VersionNumber, pkg.special_action)
     end
 
     prune_manifest(ctx.env)
@@ -398,7 +408,7 @@ end
 ################################
 # Manifest update and pruning #
 ################################
-function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber)
+function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber, special_action::PackageSpecialAction)
     infos = get!(env.manifest, name, Dict{String,Any}[])
     info = nothing
     for i in infos
@@ -412,6 +422,13 @@ function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, ve
     end
     info["version"] = string(version)
     info["git-tree-sha1"] = string(hash)
+    if special_action != PKGSPEC_FREED &&
+            (get(info, "pinned", false) || special_action == PKGSPEC_PINNED)
+        info["pinned"] = true
+    else
+        delete!(info, "pinned")
+    end
+
     delete!(info, "deps")
     for path in registered_paths(env, uuid)
         data = load_package_data(UUID, joinpath(path, "dependencies.toml"), version)
@@ -588,7 +605,7 @@ function add(ctx::Context, pkgs::Vector{PackageSpec})
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
     any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
-        error("Trying to add julia as a package")
+        cmderror("Trying to add julia as a package")
     # copy added name/UUIDs into project
     for pkg in pkgs
         ctx.env.project["deps"][pkg.name] = string(pkg.uuid)
@@ -635,6 +652,31 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
     new = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
     build_versions(ctx, new)
+end
+
+function pin(ctx::Context, pkgs::Vector{PackageSpec})
+    for pkg in pkgs
+        info = manifest_info(ctx.env, pkg.uuid)
+        if pkg.version == VersionSpec()
+            pkg.version = VersionNumber(info["version"])
+        end
+        pkg.special_action = PKGSPEC_PINNED
+    end
+    # resolve & apply package versions
+    resolve_versions!(ctx, pkgs)
+    new = apply_versions(ctx, pkgs)
+    write_env(ctx) # write env before building
+    build_versions(ctx, new)
+end
+
+function free(ctx::Context, pkgs::Vector{PackageSpec})
+    for pkg in pkgs
+        pkg.special_action = PKGSPEC_FREED
+        info = manifest_info(ctx.env, pkg.uuid)
+        pkg.version = VersionNumber(info["version"])
+    end
+    apply_versions(ctx, pkgs)
+    write_env(ctx)
 end
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
