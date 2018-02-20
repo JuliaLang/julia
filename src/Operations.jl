@@ -422,11 +422,10 @@ function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, ve
     end
     info["version"] = string(version)
     info["git-tree-sha1"] = string(hash)
-    if special_action != PKGSPEC_FREED &&
-            (get(info, "pinned", false) || special_action == PKGSPEC_PINNED)
-        info["pinned"] = true
-    else
+    if special_action == PKGSPEC_FREED
         delete!(info, "pinned")
+    elseif special_action == PKGSPEC_PINNED
+        info["pinned"] = true
     end
 
     delete!(info, "deps")
