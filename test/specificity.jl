@@ -134,7 +134,7 @@ f17016(f, t1::Tuple) = 1
 
 @test  args_morespecific(Tuple{Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S},
                                Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S}} where T,
-                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinSpace})
+                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinRange})
 
 @test args_morespecific(Tuple{Type{Tuple}, Any, Any},
                         Tuple{Type{Tuple{Vararg{E, N} where N}}, Any, Any} where E)

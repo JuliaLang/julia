@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
     Pkg
 
@@ -86,7 +88,7 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    pushfirst!(Base.LOAD_PATH, dir)
+    push!(Base.LOAD_PATH, dir)
     pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 

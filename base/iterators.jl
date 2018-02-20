@@ -947,7 +947,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
 
 
-mutable struct PartitionIterator{T}
+struct PartitionIterator{T}
     c::T
     n::Int
 end

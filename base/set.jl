@@ -2,7 +2,7 @@
 
 eltype(::Type{AbstractSet{T}}) where {T} = T
 
-mutable struct Set{T} <: AbstractSet{T}
+struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
 
     Set{T}() where {T} = new(Dict{T,Nothing}())

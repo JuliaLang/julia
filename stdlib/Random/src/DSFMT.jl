@@ -24,7 +24,7 @@ Size: (DSFMT state array of Int128 + 1)*4 + Int32 index + Int32 padding
 const JN32 = (N+1)*4+1+1
 
 
-mutable struct DSFMT_state
+struct DSFMT_state
     val::Vector{Int32}
 
     function DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32))

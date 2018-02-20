@@ -585,7 +585,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     code = """
         import Pkg
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.LOAD_CACHE_PATH)

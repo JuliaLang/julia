@@ -82,6 +82,9 @@ Language changes
 
   * The parsing of `<|` is now right associative. `|>` remains left associative ([#24153]).
 
+  * `:` now parses like other operators, as a call to a function named `:`, instead of
+    calling `colon` ([#25947]).
+
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
     of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
 
@@ -179,6 +182,10 @@ Language changes
     of backslashes precedes a quote character. Thus, 2n backslashes followed by a quote encodes n
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
+
+  * `reprmime(mime, x)` has been renamed to `repr(mime, x)`, and along with `repr(x)`
+    and `sprint` it now accepts an optional `context` keyword for `IOContext` attributes.
+    `stringmime` has been moved to the Base64 stdlib package ([#25990]).
 
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead ([#24452]).
 
@@ -334,10 +341,6 @@ This section lists changes that do not have deprecation warnings.
     longer the case; now bindings will only exist for packages brought into scope by
     typing `using Package` or `import Package` ([#17997]).
 
-  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
-    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
-    `x` ([#20233]).
-
   * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
     simplified: if the arguments have different sizes (in bits), then the type of the larger
     argument is used. If the arguments have the same size, the unsigned type is used ([#9292]).
@@ -401,6 +404,10 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays insted of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
+  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+    and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
+    than 0 ([#25472], [#25662]).
+
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
     `size` ([#25655]).
@@ -425,6 +432,8 @@ This section lists changes that do not have deprecation warnings.
 
   * The `fieldnames` and `propertynames` functions now return a tuple rather than
     an array ([#25725]).
+
+  * `indexin` now returns the first rather than the last matching index ([#25998]).
 
 Library improvements
 --------------------
@@ -648,6 +657,13 @@ Deprecated or removed
 
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
+  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
+    `selectdim` function now always returns a view into `A`; in many cases the `copy` is
+    not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
+	index `i` would return the just selected element (unless `V` was a `BitVector`). This
+	has now been made consistent: `selectdim` now always returns a view into the original
+	array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
@@ -1029,6 +1045,19 @@ Deprecated or removed
 
   * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
+    has been renamed to `force` ([#25979]).
+
+  * The methods of `range` based on positional arguments have been deprecated in favor of
+    keyword arguments ([#25896]).
+
+  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
+    arguments ([#25896]).
+
+  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+
+  * `logspace` has been deprecated to its definition ([#25896]).
+
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
     where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
@@ -1300,3 +1329,5 @@ Command-line option changes
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
 [#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
+[#25896]: https://github.com/JuliaLang/julia/issues/25896
+[#25998]: https://github.com/JuliaLang/julia/issues/25998

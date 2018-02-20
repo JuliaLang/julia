@@ -246,10 +246,11 @@ DEPRECATED: use @__MODULE__ instead
 end
 export current_module
 
+@deprecate_binding colon (:)
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
-               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
+               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^,
                :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
@@ -257,6 +258,7 @@ module Operators
             @eval Base.@deprecate_binding $op Base.$op
         end
     end
+    Base.@deprecate_binding colon (:)
 end
 export Operators
 
@@ -840,8 +842,8 @@ end
 @deprecate trues(A::AbstractArray) trues(size(A))
 
 # issue #24794
-@deprecate linspace(start, stop)     linspace(start, stop, 50)
-@deprecate logspace(start, stop)     logspace(start, stop, 50)
+@deprecate linspace(start, stop)     range(start, stop=stop, length=50)
+@deprecate logspace(start, stop)     exp10.(range(start, stop=stop, length=50))
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
@@ -1312,13 +1314,21 @@ export readandwrite
 @deprecate indmin argmin
 @deprecate indmax argmax
 
+# PR #25896
+@deprecate range(start, length) range(start, length=length)
+@deprecate range(start, step, length) range(start, step=step, length=length)
+@deprecate linspace(start, stop, length::Integer) range(start, stop=stop, length=length)
+@deprecate linspace(start, stop, length::Real) range(start, stop=stop, length=Int(length))
+@deprecate_binding LinSpace LinRange
+@deprecate logspace(start, stop, n; base=10) base.^range(start, stop=stop, length=n)
+
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
 
 # PR 25458
 @deprecate endof(a) lastindex(a)
 function firstindex(a)
-    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :beginof)
+    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :firstindex)
     1
 end
 
@@ -1327,6 +1337,8 @@ function lastindex(a, n)
     depwarn("if appropriate you should implement `lastindex(a, n)` for type $(typeof(a))`, which might just return `last(axes(a, n))`", :lastindex)
     last(axes(a, n))
 end
+
+@deprecate_binding repmat repeat
 
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
 @deprecate Timer(callback, delay, repeat) Timer(callback, delay, interval = repeat)
@@ -1354,11 +1366,33 @@ end
 @deprecate IOBuffer(read::Bool, write::Bool) IOBuffer(read=read, write=write)
 @deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
 
+@deprecate reprmime(mime, x) repr(mime, x)
+
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
+# Issue #25979
+# The `remove_destination` keyword to `cp`, `mv`, and the unexported `cptree` has been
+# renamed to `force`. To remove this deprecation, remove the `remove_destination` keyword
+# argument from the function signatures as well as the internal logic that deals with the
+# renaming. These live in base/file.jl.
+
 # issue #25928
 @deprecate wait(t::Task) fetch(t)
+
+# issue #18326
+@deprecate slicedim(A::AbstractArray, d::Integer, i) copy(selectdim(A, d, i))
+@deprecate slicedim(A::BitVector, d::Integer, i::Number) copy(selectdim(A, d, i))
+function slicedim(A::AbstractVector, d::Integer, i::Number)
+    if d == 1
+        # slicedim would have returned a scalar value, selectdim always returns views
+        depwarn("`slicedim(A::AbstractVector, d::Integer, i)` is deprecated, use `selectdim(A, d, i)[]` instead.", :slicedim)
+        selectdim(A, d, i)[]
+    else
+        depwarn("`slicedim(A::AbstractArray, d::Integer, i)` is deprecated, use `copy(selectdim(A, d, i))` instead.", :slicedim)
+        copy(selectdim(A, d, i))
+    end
+end
 
 # PR 25062
 @deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),

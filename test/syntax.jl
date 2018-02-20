@@ -1250,7 +1250,7 @@ end
 
 # issue #25391
 @test Meta.parse("0:-1, \"\"=>\"\"") == Meta.parse("(0:-1, \"\"=>\"\")") ==
-    Expr(:tuple, Expr(:(:), 0, -1), Expr(:call, :(=>), "", ""))
+    Expr(:tuple, Expr(:call, :(:), 0, -1), Expr(:call, :(=>), "", ""))
 @test Meta.parse("a => b = c") == Expr(:(=), Expr(:call, :(=>), :a, :b), Expr(:block, LineNumberNode(1, :none), :c))
 @test Meta.parse("a = b => c") == Expr(:(=), :a, Expr(:call, :(=>), :b, :c))
 
@@ -1264,6 +1264,12 @@ function bar16239()
     f()
 end
 @test bar16239() == 0
+
+# lowering of <: and >:
+let args = (Int, Any)
+    @test <:(args...)
+    @test >:(reverse(args)...)
+end
 
 # issue #25020
 @test_throws ParseError Meta.parse("using Colors()")

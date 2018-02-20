@@ -16,6 +16,7 @@ setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
+function include_relative end
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
@@ -434,9 +435,6 @@ using .StackTraces
 include("initdefs.jl")
 include("client.jl")
 
-# misc useful functions & macros
-include("util.jl")
-
 # statistics
 include("statistics.jl")
 
@@ -450,17 +448,14 @@ include("threadcall.jl")
 include("uuid.jl")
 include("loading.jl")
 
+# misc useful functions & macros
+include("util.jl")
+
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
     init_depot_path(BINDIR)
     init_load_path(BINDIR)
 end
-
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
 
 include("asyncmap.jl")
 
@@ -526,6 +521,7 @@ let
             :Dates,
             :DelimitedFiles,
             :Random,
+            :UUIDs,
             :Future,
             :Pkg,
             :LinearAlgebra,
@@ -550,7 +546,6 @@ let
 
     print_time("Stdlibs total", Base.tot_time_stdlib[])
 end
-
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -606,6 +601,7 @@ end
     @deprecate_stdlib base64decode Base64 true
     @deprecate_stdlib Base64EncodePipe Base64 true
     @deprecate_stdlib Base64DecodePipe Base64 true
+    @deprecate_stdlib stringmime Base64 true
 
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true

@@ -147,7 +147,7 @@ end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
-    let A = linspace(1, 60, 60)
+    let A = range(1, stop=60, length=60)
         @test size(reshape(A, :))         == (60,)
         @test size(reshape(A, :, 1))      == (60, 1)
         @test size(reshape(A, (:, 2)))    == (30, 2)
@@ -475,51 +475,6 @@ end
     @test findnext(isodd, A, CartesianIndex(1, 2)) === nothing
     @test findprev(iseven, A, CartesianIndex(2, 1)) === nothing
 end
-@testset "find with general iterables" begin
-    s = "julia"
-    @test findall(c -> c == 'l', s) == [3]
-    @test findfirst(c -> c == 'l', s) == 3
-    @test findlast(c -> c == 'l', s) == 3
-    @test findnext(c -> c == 'l', s, 1) == 3
-    @test findprev(c -> c == 'l', s, 5) == 3
-    @test findnext(c -> c == 'l', s, 4) === nothing
-    @test findprev(c -> c == 'l', s, 2) === nothing
-
-    g = Base.Unicode.graphemes("日本語")
-    @test findall(!isempty, g) == 1:3
-    @test isempty(findall(isascii, g))
-    @test findfirst(!isempty, g) == 1
-    @test findfirst(isascii, g) === nothing
-    # Check that the last index isn't assumed to be typemax(Int)
-    @test_throws MethodError findlast(!iszero, g)
-
-    g2 = (i % 2 for i in 1:10)
-    @test findall(!iszero, g2) == 1:2:9
-    @test findfirst(!iszero, g2) == 1
-    @test findlast(!iszero, g2) == 9
-    @test findfirst(equalto(2), g2) === nothing
-    @test findlast(equalto(2), g2) === nothing
-
-    g3 = (i % 2 for i in 1:10, j in 1:2)
-    @test findall(!iszero, g3) == findall(!iszero, collect(g3))
-    @test findfirst(!iszero, g3) == CartesianIndex(1, 1)
-    @test findlast(!iszero, g3) == CartesianIndex(9, 2)
-    @test findfirst(equalto(2), g3) === nothing
-    @test findlast(equalto(2), g3) === nothing
-
-    g4 = (x for x in [true, false, true, false])
-    @test findall(g4) == [1, 3]
-    @test findfirst(g4) == 1
-    @test findlast(g4) == 3
-
-    g5 = (x for x in [true false; true false])
-    @test findall(g5) == findall(collect(g5))
-    @test findfirst(g5) == CartesianIndex(1, 1)
-    @test findlast(g5) == CartesianIndex(2, 1)
-
-    @test findfirst(x for x in Bool[]) === nothing
-    @test findlast(x for x in Bool[]) === nothing
-end
 
 @testset "findmin findmax argmin argmax" begin
     @test argmax([10,12,9,11]) == 2
@@ -644,7 +599,7 @@ let A, B, C, D
     @test unique(A, 2) == A
 
     # 10 repeats of each row
-    B = A[shuffle!(repmat(1:10, 10)), :]
+    B = A[shuffle!(repeat(1:10, 10)), :]
     C = unique(B, 1)
     @test sortrows(C) == sortrows(A)
     @test unique(B, 2) == B
@@ -666,25 +621,25 @@ end
     end
 end
 
-@testset "repmat and repeat" begin
+@testset "repeat" begin
     local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
     A = fill(1,2,3,4)
-    A1 = reshape(repmat([1,2],1,12),2,3,4)
-    A2 = reshape(repmat([1 2 3],2,4),2,3,4)
-    A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
+    A1 = reshape(repeat([1,2],1,12),2,3,4)
+    A2 = reshape(repeat([1 2 3],2,4),2,3,4)
+    A3 = reshape(repeat([1 2 3 4],6,1),2,3,4)
     @test isequal(cumsum(A,1),A1)
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
     # issue 20112
-    A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
+    A3 = reshape(repeat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,3),A3)
-    @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
-    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
+    @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
 
     # issue 20564
-    @test_throws MethodError repmat(1, 2, 3)
-    @test_throws MethodError repmat([1, 2], 1, 2, 3)
+    @test_throws MethodError repeat(1, 2, 3)
+    @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
 
     R = repeat([1, 2])
     @test R == [1, 2]
@@ -1415,9 +1370,9 @@ end
 # PR #8622 and general indexin tests
 @test indexin([1,3,5,7], [5,4,3]) == [nothing,3,1,nothing]
 @test indexin([1 3; 5 7], [5 4; 3 2]) == [nothing CartesianIndex(2, 1); CartesianIndex(1, 1) nothing]
-@test indexin((2 * x + 1 for x in 0:3), [5,4,3,5,6]) == [nothing,3,4,nothing]
-@test indexin(6, [1,3,6,6,2]) == fill(4, ())
-@test indexin([6], [1,3,6,6,2]) == [4]
+@test indexin((2 * x + 1 for x in 0:3), [5,4,3,5,6]) == [nothing,3,1,nothing]
+@test indexin(6, [1,3,6,6,2]) == fill(3, ())
+@test indexin([6], [1,3,6,6,2]) == [3]
 @test indexin([3], 2:5) == [2]
 @test indexin([3.0], 2:5) == [2]
 
@@ -1806,16 +1761,18 @@ end
 # range, range ops
 @test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
-@testset "slicedim" begin
+@testset "selectdim" begin
+    f26009(A, i) = selectdim(A, 1, i)
     for A in (reshape(Vector(1:20), 4, 5),
               reshape(1:20, 4, 5))
         local A
-        @test slicedim(A, 1, 2) == 2:4:20
-        @test slicedim(A, 2, 2) == 5:8
-        @test_throws ArgumentError slicedim(A,0,1)
-        @test slicedim(A, 3, 1) == A
-        @test_throws BoundsError slicedim(A, 3, 2)
-        @test @inferred(slicedim(A, 1, 2:2)) == Vector(2:4:20)'
+        @test selectdim(A, 1, 2) == 2:4:20
+        @test selectdim(A, 2, 2) == 5:8
+        @test_throws ArgumentError selectdim(A,0,1)
+        @test selectdim(A, 3, 1) == A
+        @test_throws BoundsError selectdim(A, 3, 2)
+        @test @inferred(f26009(A, 2:2)) == reshape(2:4:20, 1, :)
+        @test @inferred(f26009(A, 2)) == 2:4:20
     end
 end
 
