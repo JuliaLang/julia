@@ -43,7 +43,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
+        p = run(detach(cmd), slave, slave, slave, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -2703,7 +2703,7 @@ mktempdir() do dir
                 # certificate. The minimal server can't actually serve a Git repository.
                 mkdir(joinpath(root, "Example.jl"))
                 pobj = cd(root) do
-                    spawn(`openssl s_server -key $key -cert $cert -WWW -accept $port`)
+                    run(`openssl s_server -key $key -cert $cert -WWW -accept $port`, wait=false)
                 end
 
                 errfile = joinpath(root, "error")

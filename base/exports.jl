@@ -946,7 +946,6 @@ export
     process_running,
     run,
     setenv,
-    spawn,
     success,
     withenv,
 

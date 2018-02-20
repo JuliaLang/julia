@@ -397,22 +397,22 @@ function _uv_hook_close(proc::Process)
     notify(proc.closenotify)
 end
 
-function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
-    spawn(redirect.cmd,
-          (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
-           redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
-           redirect.stream_no == STDERR_NO ? redirect.handle : stdios[3]),
+function _spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+    _spawn(redirect.cmd,
+           (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
+            redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
+            redirect.stream_no == STDERR_NO ? redirect.handle : stdios[3]),
            chain=chain)
 end
 
-function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+function _spawn(cmds::OrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     if chain === nothing
         chain = ProcessChain(stdios)
     end
     in_pipe, out_pipe = link_pipe(false, false)
     try
-        spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), chain=chain)
-        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
+        _spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), chain=chain)
+        _spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -420,14 +420,14 @@ function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothin
     return chain
 end
 
-function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+function _spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     if chain === nothing
         chain = ProcessChain(stdios)
     end
     in_pipe, out_pipe = link_pipe(false, false)
     try
-        spawn(cmds.a, (stdios[1], stdios[2], out_pipe), chain=chain)
-        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
+        _spawn(cmds.a, (stdios[1], stdios[2], out_pipe), chain=chain)
+        _spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -503,7 +503,7 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
     nothing
 end
 
-function spawn(cmd::Cmd, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+function _spawn(cmd::Cmd, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     if isempty(cmd.exec)
         throw(ArgumentError("cannot spawn empty command"))
     end
@@ -519,13 +519,13 @@ function spawn(cmd::Cmd, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=n
     return pp
 end
 
-function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
+function _spawn(cmds::AndCmds, stdios::StdIOSet; chain::Union{ProcessChain, Nothing}=nothing)
     if chain === nothing
         chain = ProcessChain(stdios)
     end
     setup_stdio(stdios) do stdios
-        spawn(cmds.a, stdios, chain=chain)
-        spawn(cmds.b, stdios, chain=chain)
+        _spawn(cmds.a, stdios, chain=chain)
+        _spawn(cmds.b, stdios, chain=chain)
     end
     return chain
 end
@@ -548,13 +548,8 @@ spawn_opts_inherit(stdios::StdIOSet) = (stdios,)
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), args...) =
     ((in, out, err), args...)
 
-"""
-    spawn(command)
-
-Run a command object asynchronously, returning the resulting `Process` object.
-"""
-spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
-    spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
+_spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
+    _spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
 function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
     if chomp !== nothing
@@ -562,7 +557,7 @@ function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
     end
     _stdout = Pipe()
-    processes = spawn(cmd, (devnull, _stdout, stderr))
+    processes = _spawn(cmd, (devnull, _stdout, stderr))
     close(_stdout.in)
     out = _stdout.out
     # implicitly close after reading lines, since we opened
@@ -570,38 +565,50 @@ function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 
+function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+    if mode == "r+" || mode == "w+"
+        return open(cmds, other, read = true, write = true)
+    elseif mode == "r"
+        return open(cmds, other)
+    elseif mode == "w"
+        return open(cmds, other, write = true)
+    else
+        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+    end
+end
+
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, mode::AbstractString="r", stdio=devnull)
+    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
 
-Start running `command` asynchronously, and return a tuple `(stream,process)`.  If `mode` is
-`"r"`, then `stream` reads from the process's standard output and `stdio` optionally
-specifies the process's standard input stream.  If `mode` is `"w"`, then `stream` writes to
+Start running `command` asynchronously, and return a tuple `(stream,process)`.  If `read` is
+true, then `stream` reads from the process's standard output and `stdio` optionally
+specifies the process's standard input stream.  If `write` is true, then `stream` writes to
 the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 """
-function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=devnull)
-    if mode == "r+" || mode == "w+"
-        other === devnull || throw(ArgumentError("no other stream for mode rw+"))
+function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = false, read::Bool = !write)
+    if read && write
+        other === devnull || throw(ArgumentError("no other stream can be specified in read-write mode"))
         in = Pipe()
         out = Pipe()
-        processes = spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,stderr))
         close(in.out)
         close(out.in)
-    elseif mode == "r"
+    elseif read
         in = other
         out = Pipe()
-        processes = spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,stderr))
         close(out.in)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :out)
         else
             processes.openstream = :out
         end
-    elseif mode == "w"
+    elseif write
         in = Pipe()
         out = other
-        processes = spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,stderr))
         close(in.out)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :in)
@@ -609,7 +616,7 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=d
             processes.openstream = :in
         end
     else
-        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+        processes = _spawn(cmds)
     end
     return processes
 end
@@ -645,14 +652,26 @@ end
 read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
 """
-    run(command, args...)
+    run(command, args...; wait::Bool = true)
 
 Run a command object, constructed with backticks. Throws an error if anything goes wrong,
-including the process exiting with a non-zero status.
+including the process exiting with a non-zero status (when `wait` is true).
+
+If `wait` is false, the process runs asynchronously. You can later wait for it and check
+its exit status by calling `success` on the returned process object.
+
+When `wait` is false, the process' I/O streams are directed to `devnull`.
+When `wait` is true, I/O streams are shared with the parent process.
+Use [`pipeline`](@ref) to control I/O redirection.
 """
-function run(cmds::AbstractCmd, args...)
-    ps = spawn(cmds, spawn_opts_inherit(args...)...)
-    success(ps) ? nothing : pipeline_error(ps)
+function run(cmds::AbstractCmd, args...; wait::Bool = true)
+    if wait
+        ps = _spawn(cmds, spawn_opts_inherit(args...)...)
+        success(ps) || pipeline_error(ps)
+    else
+        ps = _spawn(cmds, spawn_opts_swallow(args...)...)
+    end
+    return ps
 end
 
 # some common signal numbers that are usually available on all platforms
@@ -686,7 +705,7 @@ success(procs::ProcessChain) = success(procs.processes)
 Run a command object, constructed with backticks, and tell whether it was successful (exited
 with a code of 0). An exception is raised if the process cannot be started.
 """
-success(cmd::AbstractCmd) = success(spawn(cmd))
+success(cmd::AbstractCmd) = success(_spawn(cmd))
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus

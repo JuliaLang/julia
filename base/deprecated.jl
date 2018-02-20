@@ -1459,6 +1459,9 @@ end
 @deprecate round(x, digits, base) round(x, digits, base = base)
 @deprecate signif(x, digits, base) signif(x, digits, base = base)
 
+# issue #25965
+@deprecate spawn(cmds::AbstractCmd) run(cmds, wait = false)
+
 # Remember to delete the module when removing this
 @eval Base.Math module JuliaLibm
     Base.@deprecate log Base.log
