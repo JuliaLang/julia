@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-eltype(::Type{AbstractSet{T}}) where {T} = T
+eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 
 struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
