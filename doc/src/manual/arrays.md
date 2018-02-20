@@ -697,21 +697,13 @@ object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) an
 the length of the tuple returned by [`size`](@ref). For more details on defining custom
 `AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
-`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
-laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout. Subtypes should provide a [`strides(A)`](@ref) method
-that returns a tuple of "strides" for each dimension; a provided [`stride(A,k)`](@ref) method accesses
-the `k`th element within this tuple. Increasing the index of dimension `k` by `1` should
-increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
-method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
-in the same way to these strides. More concrete examples can be found within the [interface guide
-for strided arrays](@ref man-interface-strided-arrays).
-
-The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
-order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
-the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
-basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so
-that the rest of the array library can be implemented in a generic manner.
+`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
+elements are stored contiguously in column-major order (see additional notes in
+[Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
+of `DenseArray`  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
+Very few operations are implemented specifically for `Array` beyond those that are required
+for all `AbstractArrays`s; much of the array library is implemented in a generic
+manner that allows all custom arrays to behave similarly.
 
 `SubArray` is a specialization of `AbstractArray` that performs indexing by reference rather than
 by copying. A `SubArray` is created with the [`view`](@ref) function, which is called the same
@@ -722,9 +714,20 @@ array indirectly.  By putting the [`@views`](@ref) macro in front of an expressi
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
-`StridedVector` and `StridedMatrix` are convenient aliases defined to make it possible for Julia
-to call a wider range of BLAS and LAPACK functions by passing them either [`Array`](@ref) or
-`SubArray` objects, and thus saving inefficiencies from memory allocation and copying.
+A "strided" array is stored in memory with elements laid out in regular offsets such that
+an instance with a supported `isbits` element type can be passed to
+external C and Fortran functions that expect this memory layout. Strided arrays
+must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
+provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
+index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
+[`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
+provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
+very specific example of a strided array where the elements are arranged contiguously, thus it
+provides its subtypes with the approporiate definition of `strides`. More concrete examples
+can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
+`StridedVector` and `StridedMatrix` are convenient aliases for many of the builtin array types that
+are considered strided arrays, allowing them to dispatch to select specialized implementations that
+call highly tuned and optimized BLAS and LAPACK functions using just the pointer and strides.
 
 The following example computes the QR decomposition of a small section of a larger array, without
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
