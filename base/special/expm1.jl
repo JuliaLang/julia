@@ -179,7 +179,7 @@ function expm1(x::T) where T<:Union{Float32, Float64}
             # the next line could be replaced with the above but we don't need the
             # safety of round, so we round by adding one half with the appropriate
             # sign and truncate to Int32
-            k = unsafe_trunc(Int32, expm1_invln2(T)*x + ifelse(xsign, -T(0.5), 0.5))
+            k = unsafe_trunc(Int32, expm1_invln2(T)*x + ifelse(xsign, -T(0.5), T(0.5)))
             hi = x - k*expm1_ln2_hi(T) # t*expm1_ln2_hi is exact here
             lo = k*expm1_ln2_lo(T)
         end
@@ -204,7 +204,7 @@ function expm1(x::T) where T<:Union{Float32, Float64}
         if k == -1
             return T(0.5)*(x - e) - T(0.5)
         end
-        if k ==1
+        if k == 1
             if x < -T(0.25)
                 return -T(2.0)*(e - (x + T(0.5)))
             else
