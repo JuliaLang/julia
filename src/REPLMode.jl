@@ -293,7 +293,7 @@ const helps = Dict(
 
     Display usage information for commands listed.
 
-    Available commands: `help`, `status`, `add`, `rm`, `up`
+    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`.
     """, CMD_STATUS => md"""
 
         status
@@ -378,9 +378,19 @@ const helps = Dict(
 
         build pkg[=uuid] ...
 
-    Run the build script in deps/build.jl for each package in pkgs and all of their dependencies in depth-first recursive order.
+    Run the build script in deps/build.jl for each package in `pkg`` and all of their dependencies in depth-first recursive order.
     If no packages are given, runs the build scripts for all packages in the manifest.
-    """,
+    """, CMD_PIN => md"""
+
+        pin pkg[=uuid] ...
+
+    Pin packages to given versions, or the current version if no version is specified. A pinned package has its version fixed and will not be upgraded or downgraded.
+    A pinned package has the symbol `⚲` next to its version in the status list.
+    """, CMD_FREE => md"""
+        free pkg[=uuid] ...
+
+    Free package `pkg`, which allows it to be upgraded or downgraded again.
+    """
 )
 
 function do_help!(

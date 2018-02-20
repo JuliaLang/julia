@@ -903,7 +903,9 @@ function gather_stdlib_uuids()
         projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
         if isfile(projfile)
             proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
-            push!(stdlib_uuids, UUID(proj["uuid"]))
+            if haskey(proj, "uuid")
+                push!(stdlib_uuids, UUID(proj["uuid"]))
+            end
         end
     end
     return stdlib_uuids
