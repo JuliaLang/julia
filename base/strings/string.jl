@@ -167,10 +167,11 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function next(s::String, i::Int)
+@propagate_inbounds function next(sp::StringNext{String}, i::Int)
+    s = sp.data
     b = codeunit(s, i)
     u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
+    between(b, 0x80, 0xf7) || return ((reinterpret(Char, u), i + 1), i+1)
     return next_continued(s, i, u)
 end
 
@@ -193,7 +194,7 @@ function next_continued(s::String, i::Int, u::UInt32)
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b); i += 1
 @label ret
-    return reinterpret(Char, u), i
+    return (reinterpret(Char, u), i), i
 end
 
 @propagate_inbounds function getindex(s::String, i::Int)

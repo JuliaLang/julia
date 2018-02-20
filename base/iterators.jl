@@ -247,6 +247,60 @@ setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)
 get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
 
+"""
+    Iterators.Next(values::A, idx::eltype(I)=firstindex(values), itr::I=eachindex(values)) where {A,I}
+
+Returns a tuple of a value and the subsequent index. This iterator is useful for the
+implementation of variably-length encoded arrays where decoding the element and
+obtaining the offset or index of the next element generally involve the same computation.
+
+A default implementation is provided that simply iterates over `eachindex` and uses
+`getindex` to obtain the value corresponding to the index. It is allowed (and encouraged)
+to overload iteration for a specific `Next{A}` in order to provide a more efficient
+implementation that computes both in one step.
+
+The index in the last tuple will generally be equivalent to `lastindex(values)+1`
+though users should only rely on the fact that it is `> lastindex(values)` to allow
+implemntations the flexibility to choose a different value.
+
+The `idx` argument provides a means by which to resume this iterator from a given index.
+The first value returned by the `Next` iterator should correspond to the element at `idx`.
+Please note that if you override iteration for `Next{A}` and your iteration state is not
+the next index, you will have to additionally overload `Next(data::A, idx, itr::I)` for
+four `A`.
+
+# Examples:
+
+julia> first(Next(['a','b','c']))
+('a', 2)
+
+julia> first(Next(['a','b','c'], 3))
+('c', 4)
+"""
+struct Next{A, I}
+    data::A
+    itr::I
+    Next{A}(data::A, itr::I) where {A, I} = new{A, I}(data, itr)
+end
+Next(data, idx, itr) = Rest(Next{typeof(data)}(data, itr), idx)
+Next(data, idx) = Next(data, idx, eachindex(data))
+Next(data) = Next{typeof(data)}(data, eachindex(data))
+
+start(lip::Next) = start(lip.itr)
+done(lip::Next, state) = done(lip.itr, state)
+function next(lip::Next, state)
+    nidx = ns = next(lip.itr, state)
+    # A bit awkward now, done for consistency with the new iteration protocol
+    done(lip.itr, ns) && (nidx = lastindex(lip.itr)+1)
+    (lip.data[ns], nidx), ns
+end
+
+length(lip::Next) = length(lip.itr)
+eltype(::Type{Next{A, I}}) where {A, I} = Tuple{eltype(A), eltype(I)}
+
+IteratorSize(::Type{<:Next{I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{<:Next{I}}) where {I} = IteratorEltype(I)
+
 # zip
 
 abstract type AbstractZipIterator end
@@ -1070,6 +1124,7 @@ end
 function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
     nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
     nextvalstate <: Tuple{Any, Any} || return Any
+    nextvalstate === Union{} && return Union{}
     nextvalstate = Tuple{
         typejoin(valT, fieldtype(nextvalstate, 1)),
         typejoin(stateT, fieldtype(nextvalstate, 2))}
