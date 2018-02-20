@@ -527,3 +527,8 @@ let p = spawn(`$sleepcmd 100`)
     # Should not throw if already dead
     kill(p)
 end
+
+# Second argument of shell_parse
+let s = "   \$abc   "
+    @test s[Base.shell_parse(s)[2]] == "abc"
+end
