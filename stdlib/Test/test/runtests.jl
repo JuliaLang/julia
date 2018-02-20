@@ -757,6 +757,47 @@ end
     @test b == rand()
 end
 
+@testset "InterruptExceptions #21043" begin
+    @test_throws InterruptException (@test 1 == throw(InterruptException()))
+
+    @testset begin
+        @test_throws InterruptException throw(InterruptException())
+    end
+
+    f = tempname()
+
+    write(f,
+    """
+    using Test
+    @testset begin
+        try
+            @test_throws ErrorException throw(InterruptException())
+        catch e
+            @test e isa InterruptException
+        end
+    end
+
+    try
+        @testset begin
+            @test 1 == 1
+            throw(InterruptException())
+        end
+    catch e
+        @test e isa InterruptException
+    end
+
+    try
+        @testset for i in 1:1
+            @test 1 == 1
+            throw(InterruptException())
+        end
+    catch e
+        @test e isa InterruptException
+    end
+    """)
+    msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull))
+end
+
 @testset "non AbstractTestSet as testset" begin
     local f, err = tempname(), tempname()
     write(f,
