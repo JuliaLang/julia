@@ -90,16 +90,19 @@ end
 struct VerInfo
     hash::SHA1
     ver::Union{VersionNumber,Nothing}
+    pinned::Bool
 end
 
 vstring(a::VerInfo) =
-    a.ver == nothing ? "[$(string(a.hash)[1:16])]" : "v$(a.ver)"
+    string(a.ver == nothing ? "[$(string(a.hash)[1:16])]" : "v$(a.ver)",
+           a.pinned == true ? "⚲" : "")
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
-    a.hash == b.hash && a.ver == b.ver
+    a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
 
 ≈(a::VerInfo, b::VerInfo) = a.hash == b.hash &&
-    (a.ver == nothing || b.ver == nothing || a.ver == b.ver)
+    (a.ver == nothing || b.ver == nothing || a.ver == b.ver) &&
+    (a.pinned == b.pinned)
 
 struct DiffEntry
     uuid::UUID
@@ -121,6 +124,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
                     verb = x.old.ver == nothing || x.new.ver == nothing ||
                            x.old.ver == x.new.ver ? '~' :
                            x.old.ver < x.new.ver  ? '↑' : '↓'
+                elseif x.old.ver == x.new.ver && x.old.pinned != x.new.pinned
+                    verb = '~'
                 else
                     verb = '?'
                     msg = x.old.hash == x.new.hash ?
@@ -128,8 +133,9 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
                         "versions match but hashes don't: $(x.old.hash) ≠ $(x.new.hash)"
                     push!(warnings, msg)
                 end
-                vstr = x.old.ver == x.new.ver ? vstring(x.new) :
-                    vstring(x.old) * " ⇒ " * vstring(x.new)
+                vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned) ?
+                       vstring(x.new) :
+                       vstring(x.old) * " ⇒ " * vstring(x.new)
             end
         elseif x.new != nothing
             verb = '+'
@@ -162,7 +168,8 @@ function name_ver_info(info::Dict)
     name = info["name"]
     hash = haskey(info, "git-tree-sha1") ? SHA1(info["git-tree-sha1"]) : nothing
     ver = haskey(info, "version") ? VersionNumber(info["version"]) : nothing
-    name, VerInfo(hash, ver)
+    pin = get(info, "pinned", false)
+    name, VerInfo(hash, ver, pin)
 end
 
 function manifest_diff(manifest₀::Dict, manifest₁::Dict)

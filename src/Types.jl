@@ -22,7 +22,8 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
-    UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR
+    UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED
 
 
 ## ordering of UUIDs ##
@@ -375,6 +376,7 @@ function UpgradeLevel(s::Symbol)
 end
 
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
+@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
@@ -383,8 +385,9 @@ mutable struct PackageSpec
     uuid::UUID
     version::VersionTypes
     mode::PackageMode
-    PackageSpec(name::String, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT) =
-        new(name, uuid, version, mode)
+    special_action::PackageSpecialAction # If the package is currently being pinned, freed etc
+    PackageSpec(name::String, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT, special_action=PKGSPEC_NOTHING) =
+        new(name, uuid, version, mode, special_action)
 end
 PackageSpec(name::String, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
@@ -897,8 +900,11 @@ function gather_stdlib_uuids()
     stdlib_uuids = UUID[]
     stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
     for stdlib in readdir(stdlib_dir)
-        proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
-        push!(stdlib_uuids, UUID(proj["uuid"]))
+        projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
+        if isfile(projfile)
+            proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
+            push!(stdlib_uuids, UUID(proj["uuid"]))
+        end
     end
     return stdlib_uuids
 end

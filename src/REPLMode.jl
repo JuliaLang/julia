@@ -15,7 +15,7 @@ using Pkg3.Operations
 # Commands #
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
-                   CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD,)
+                   CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE, CMD_PIN)
 
 struct Command
     kind::CommandKind
@@ -47,6 +47,8 @@ const cmds = Dict(
     "preview"   => CMD_PREVIEW,
     "init"      => CMD_INIT,
     "build"     => CMD_BUILD,
+    "pin"       => CMD_PIN,
+    "free"      => CMD_FREE,
 )
 
 
@@ -235,6 +237,8 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_TEST    ? Base.invokelatest(  do_test!, ctx, tokens) :
     cmd.kind == CMD_GC      ? Base.invokelatest(    do_gc!, ctx, tokens) :
     cmd.kind == CMD_BUILD   ? Base.invokelatest( do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN     ? Base.invokelatest(   do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE    ? Base.invokelatest(  do_free!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -486,6 +490,43 @@ function do_up!(ctx::Context, tokens::Vector{Token})
         prev_token_was_package = parsed_package
     end
     Pkg3.API.up(ctx, pkgs; level=level, mode=mode)
+end
+
+function do_pin!(ctx::Context, tokens::Vector{Token})
+    pkgs = PackageSpec[]
+    prev_token_was_package = false
+    while !isempty(tokens)
+        token = popfirst!(tokens)
+        parsed_package = false
+        if token isa String
+            push!(pkgs, parse_package(token))
+            parsed_package = true
+        elseif token isa VersionRange
+            prev_token_was_package ||
+                cmderror("package name/uuid must precede version spec `@$token`")
+            if token.lower != token.upper
+                cmderror("pinning a package requires a single version, not a versionrange")
+            end
+            pkgs[end].version = VersionSpec(token)
+        else
+            cmderror("free only takes a list of packages ")
+        end
+        prev_token_was_package = parsed_package
+    end
+    Pkg3.API.pin(ctx, pkgs)
+end
+
+function do_free!(ctx::Context, tokens::Vector{Token})
+    pkgs = PackageSpec[]
+    while !isempty(tokens)
+        token = popfirst!(tokens)
+        if token isa String
+            push!(pkgs, parse_package(token))
+        else
+            cmderror("free only takes a list of packages")
+        end
+    end
+    Pkg3.API.free(ctx, pkgs)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})

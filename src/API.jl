@@ -120,6 +120,30 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     Pkg3.Operations.up(ctx, pkgs)
 end
 
+pin(pkg::Union{String, PackageSpec}; kwargs...) = pin([pkg]; kwargs...)
+pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+pin(pkgs::Vector{PackageSpec}; kwargs...)       = pin(Context(), pkgs; kwargs...)
+
+function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    project_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    Pkg3.Operations.pin(ctx, pkgs)
+end
+
+free(pkg::Union{String, PackageSpec}; kwargs...) = free([pkg]; kwargs...)
+free(pkgs::Vector{String}; kwargs...)            = free([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+free(pkgs::Vector{PackageSpec}; kwargs...)       = free(Context(), pkgs; kwargs...)
+
+function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    project_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    Pkg3.Operations.free(ctx, pkgs)
+end
+
 test(;kwargs...)                           = test(PackageSpec[], kwargs...)
 test(pkg::Union{String, PackageSpec}; kwargs...)               = test([pkg]; kwargs...)
 test(pkgs::Vector{String}; kwargs...)      = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
