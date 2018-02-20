@@ -2,27 +2,6 @@
 
 module Pkg2
 
-struct PkgError <: Exception
-    msg::AbstractString
-    ex::Union{Exception, Nothing}
-end
-PkgError(msg::AbstractString) = PkgError(msg, nothing)
-function Base.showerror(io::IO, pkgerr::PkgError)
-    print(io, pkgerr.msg)
-    if pkgerr.ex !== nothing
-        pkgex = get(pkgerr.ex)
-        if isa(pkgex, CompositeException)
-            for cex in pkgex
-                print(io, "\n=> ")
-                showerror(io, cex)
-            end
-        else
-            print(io, "\n")
-            showerror(io, pkgex)
-        end
-    end
-end
-
 # DIR
 const DIR_NAME = ".julia"
 _pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))

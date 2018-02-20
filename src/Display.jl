@@ -88,14 +88,16 @@ function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
 end
 
 struct VerInfo
-    hash::SHA1
+    hash::Union{SHA1,Nothing}
+    path::Union{String,Nothing}
     ver::Union{VersionNumber,Nothing}
     pinned::Bool
 end
 
 vstring(a::VerInfo) =
     string(a.ver == nothing ? "[$(string(a.hash)[1:16])]" : "v$(a.ver)",
-           a.pinned == true ? "⚲" : "")
+           a.pinned == true ? "⚲" : "",
+           a.path != nothing ? " [$(a.path)]" : "")
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
     a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
@@ -166,10 +168,11 @@ end
 
 function name_ver_info(info::Dict)
     name = info["name"]
-    hash = haskey(info, "git-tree-sha1") ? SHA1(info["git-tree-sha1"]) : nothing
-    ver = haskey(info, "version") ? VersionNumber(info["version"]) : nothing
-    pin = get(info, "pinned", false)
-    name, VerInfo(hash, ver, pin)
+    hash = haskey(info, "git-tree-sha1") ? SHA1(info["git-tree-sha1"])    : nothing
+    ver  = haskey(info, "version")       ? VersionNumber(info["version"]) : nothing
+    path =  get(info, "path", nothing)
+    pin  =  get(info, "pinned", false)
+    name, VerInfo(hash, path, ver, pin)
 end
 
 function manifest_diff(manifest₀::Dict, manifest₁::Dict)

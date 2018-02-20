@@ -23,7 +23,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT
 
 
 ## ordering of UUIDs ##
@@ -376,7 +376,7 @@ function UpgradeLevel(s::Symbol)
 end
 
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
-@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED)
+@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
@@ -385,11 +385,12 @@ mutable struct PackageSpec
     uuid::UUID
     version::VersionTypes
     mode::PackageMode
+    path::Union{Nothing, String}
     special_action::PackageSpecialAction # If the package is currently being pinned, freed etc
-    PackageSpec(name::String, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT, special_action=PKGSPEC_NOTHING) =
-        new(name, uuid, version, mode, special_action)
+    PackageSpec(name::AbstractString, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT, path=nothing, special_action=PKGSPEC_NOTHING) =
+        new(String(name), uuid, version, mode, path, special_action)
 end
-PackageSpec(name::String, uuid::UUID) =
+PackageSpec(name::AbstractString, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
 PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
     PackageSpec(name, UUID(zero(UInt128)), version)

@@ -3,8 +3,7 @@
 module Reqs
 
 import Base: ==
-import ..PkgError
-using ..Types
+using ..Pkg2Types
 
 # representing lines of REQUIRE files
 
@@ -42,5 +41,6 @@ function read(readable::Union{IO,Base.AbstractCmd})
     return lines
 end
 read(file::AbstractString) = isfile(file) ? open(read,file) : Line[]
+
 
 end # module

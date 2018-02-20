@@ -313,6 +313,7 @@ mutable struct Graph
         adjdict = [Dict{Int,Int}() for p0 = 1:np]
 
         for p0 = 1:np, v0 = 1:(spp[p0]-1), (p1,rmsk1) in extended_deps[p0][v0]
+            @assert p0 ≠ p1
             j0 = get(adjdict[p1], p0, length(gadj[p0]) + 1)
             j1 = get(adjdict[p0], p1, length(gadj[p1]) + 1)
 
