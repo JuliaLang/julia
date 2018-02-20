@@ -350,9 +350,9 @@ function isless(t1::Any16, t2::Any16)
     return n1 < n2
 end
 
-in(x, t::Tuple{}) = false
-in(x, t::Tuple  ) = x == t[1] || in(x, tail(t))
-in(x, t::Any16  ) = any(y -> y == x, t)
+#in(x, t::Tuple{}) = false
+#in(x, t::Tuple  ) = x == t[1] || in(x, tail(t))
+#in(x, t::Any16  ) = any(y -> y == x, t)
 
 ## functions ##
 

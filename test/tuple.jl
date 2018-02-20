@@ -426,3 +426,14 @@ end
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
 end
+
+@testset "membership" begin
+    @test !(42 in ())
+    @test 42 in (2, 42, 57)
+    @test !(0 in (1:1000...,))
+    @test 57 in (missing, 42, 57)
+    @test ismissing(10 in (missing, 42, 57))
+    @test ismissing(missing in (2, 42, 57))
+    @test ismissing(missing in (missing, 42, 57))
+    @test ismissing(0 in (1:1000...,missing))
+end
