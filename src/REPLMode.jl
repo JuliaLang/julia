@@ -7,6 +7,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 
 import Pkg3
+import Pkg3: devdir
 using Pkg3.Types
 using Pkg3.Display
 using Pkg3.Operations
@@ -15,7 +16,8 @@ using Pkg3.Operations
 # Commands #
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
-                   CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE, CMD_PIN)
+                   CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
+                   CMD_PIN, CMD_CHECKOUT)
 
 struct Command
     kind::CommandKind
@@ -49,14 +51,15 @@ const cmds = Dict(
     "build"     => CMD_BUILD,
     "pin"       => CMD_PIN,
     "free"      => CMD_FREE,
+    "checkout"  => CMD_CHECKOUT,
 )
-
 
 ###########
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH,
+                  OPT_BRANCH,)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -82,7 +85,7 @@ struct Option
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
-        elseif kind in (OPT_ENV, OPT_PATH) && argument == nothing
+        elseif kind in (OPT_ENV, OPT_PATH, OPT_BRANCH) && argument == nothing
             cmderror("the `$val` option requires an argument")
         end
         if kind == OPT_PATH
@@ -106,6 +109,7 @@ const opts = Dict(
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
     "path"     => OPT_PATH,
+    "branch"   => OPT_BRANCH,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -228,17 +232,18 @@ function do_cmd!(tokens::Vector{Token}, repl)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT    ? Base.invokelatest(  do_init!, tokens) :
-    cmd.kind == CMD_HELP    ? Base.invokelatest(  do_help!, ctx, tokens, repl) :
-    cmd.kind == CMD_RM      ? Base.invokelatest(    do_rm!, ctx, tokens) :
-    cmd.kind == CMD_ADD     ? Base.invokelatest(   do_add!, ctx, tokens) :
-    cmd.kind == CMD_UP      ? Base.invokelatest(    do_up!, ctx, tokens) :
-    cmd.kind == CMD_STATUS  ? Base.invokelatest(do_status!, ctx, tokens) :
-    cmd.kind == CMD_TEST    ? Base.invokelatest(  do_test!, ctx, tokens) :
-    cmd.kind == CMD_GC      ? Base.invokelatest(    do_gc!, ctx, tokens) :
-    cmd.kind == CMD_BUILD   ? Base.invokelatest( do_build!, ctx, tokens) :
-    cmd.kind == CMD_PIN     ? Base.invokelatest(   do_pin!, ctx, tokens) :
-    cmd.kind == CMD_FREE    ? Base.invokelatest(  do_free!, ctx, tokens) :
+    cmd.kind == CMD_INIT     ? Base.invokelatest(    do_init!, tokens) :
+    cmd.kind == CMD_HELP     ? Base.invokelatest(    do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM       ? Base.invokelatest(      do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD      ? Base.invokelatest(     do_add!, ctx, tokens) :
+    cmd.kind == CMD_UP       ? Base.invokelatest(      do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS   ? Base.invokelatest(  do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST     ? Base.invokelatest(    do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC       ? Base.invokelatest(      do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD    ? Base.invokelatest(   do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN      ? Base.invokelatest(     do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE     ? Base.invokelatest(    do_free!, ctx, tokens) :
+    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_checkout!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -277,9 +282,15 @@ What action you want the package manager to take:
 
 `gc`: garbage collect packages not used for a significant time
 
-`init` initializes an environment in the current, or git base, directory
+`init`: initializes an environment in the current, or git base, directory
 
-`build` run the build script for packages
+`build`: run the build script for packages
+
+`pin`: pins the version of packages
+
+`checkout`: clone the full package repo locally for development
+
+`free`: undos a `pin` or `checkout`
 """
 
 const helps = Dict(
@@ -293,7 +304,7 @@ const helps = Dict(
 
     Display usage information for commands listed.
 
-    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`.
+    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `checkout`.
     """, CMD_STATUS => md"""
 
         status
@@ -389,7 +400,22 @@ const helps = Dict(
     """, CMD_FREE => md"""
         free pkg[=uuid] ...
 
-    Free package `pkg`, which allows it to be upgraded or downgraded again.
+    Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help checkout`) then this command
+    makes the package no longer being checked out.
+    """, CMD_CHECKOUT => md"""
+        checkout pkg[=uuid] ...
+
+        opts: --path | --branch
+
+    Check out a package by cloning the registered repo at `branch` to `path`. By default, `path` is `~/.julia/dev/` and the `branch`
+    is the default for the repo. Each package can be given a different branch.
+    A checked out package is considered having a higher version than all the registered versions of the package.
+    This operation is undone by `free`.
+
+    *Example*
+    ```jl
+    pkg> checkout --path=~/mydevpackages Example --branch=devel ACME --branch=feature/branch
+    ```
     """
 )
 
@@ -537,6 +563,32 @@ function do_free!(ctx::Context, tokens::Vector{Token})
         end
     end
     Pkg3.API.free(ctx, pkgs)
+end
+
+function do_checkout!(ctx::Context, tokens::Vector{Token})
+    pkgs_branches = Tuple{PackageSpec, Union{String, Nothing}}[] # (package, branch?)
+    path = devdir()
+    prev_token_was_package = false
+    while !isempty(tokens)
+        token = popfirst!(tokens)
+        parsed_package = false
+        if token isa String
+            push!(pkgs_branches, (parse_package(token), nothing))
+            parsed_package = true
+        elseif token isa Option
+            if token.kind == OPT_PATH
+                path = token.argument
+            elseif token.kind == OPT_BRANCH
+                pkgs_branches[end] = (pkgs_branches[end][1], token.argument)
+            else
+                cmderror("invalid option for `checkout`: $token")
+            end
+        else
+            cmderror("unexpected token $token")
+        end
+        prev_token_was_package = parsed_package
+    end
+    Pkg3.API.checkout(ctx, pkgs_branches; path = path)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})

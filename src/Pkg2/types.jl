@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Types
+module Pkg2Types
 
 export VersionInterval, VersionSet
 import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal
+
+import Pkg3.Types: VersionBound, VersionRange
 
 struct VersionInterval
     lower::VersionNumber
@@ -18,6 +20,27 @@ in(v::VersionNumber, i::VersionInterval) = i.lower <= v < i.upper
 intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
 ==(a::VersionInterval, b::VersionInterval) = a.lower == b.lower && a.upper == b.upper
 hash(i::VersionInterval, h::UInt) = hash((i.lower, i.upper), h + (0x0f870a92db508386 % UInt))
+
+# Used to translate from Pkg2 intervals to Pkg3 ranges
+function Base.convert(::Type{VersionRange}, a::VersionInterval)
+    lower, upper = a.lower, a.upper
+
+    lb = VersionBound(lower.major, lower.minor, lower.patch)
+
+    vb = Int[upper.major, upper.minor, upper.patch]
+    i = 3
+    while i > 0 && vb[i] == 0
+        pop!(vb)
+        i -= 1
+    end
+    # NOTE: an upper bound of 0 could happen in principle, e.g. [v"0.0.0-", v"0.0.0")
+    #       but we just ignore this here...
+    i > 0 || error("invalid interval upper bound v$upper")
+    vb[i] -= 1
+    ub = VersionBound(vb...)
+
+    return VersionRange(lb, ub)
+end
 
 function normalize!(ivals::Vector{VersionInterval})
     # VersionSet internal normalization:

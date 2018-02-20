@@ -7,7 +7,7 @@ import Dates
 import LibGit2
 
 import Pkg3
-import Pkg3: depots, logdir, Display.DiffEntry
+import Pkg3: depots, logdir, devdir
 using Pkg3.Types
 using Pkg3.TOML
 
@@ -120,6 +120,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     Pkg3.Operations.up(ctx, pkgs)
 end
 
+
 pin(pkg::Union{String, PackageSpec}; kwargs...) = pin([pkg]; kwargs...)
 pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 pin(pkgs::Vector{PackageSpec}; kwargs...)       = pin(Context(), pkgs; kwargs...)
@@ -131,6 +132,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ensure_resolved(ctx.env, pkgs)
     Pkg3.Operations.pin(ctx, pkgs)
 end
+
 
 free(pkg::Union{String, PackageSpec}; kwargs...) = free([pkg]; kwargs...)
 free(pkgs::Vector{String}; kwargs...)            = free([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
@@ -144,10 +146,29 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Pkg3.Operations.free(ctx, pkgs)
 end
 
-test(;kwargs...)                           = test(PackageSpec[], kwargs...)
-test(pkg::Union{String, PackageSpec}; kwargs...)               = test([pkg]; kwargs...)
-test(pkgs::Vector{String}; kwargs...)      = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-test(pkgs::Vector{PackageSpec}; kwargs...) = test(Context(), pkgs; kwargs...)
+
+checkout(pkg::Union{String, PackageSpec}; kwargs...)  = checkout([pkg]; kwargs...)
+checkout(pkg::String, branch::String; kwargs...)      = checkout([(PackageSpec(pkg), branch)]; kwargs...)
+checkout(pkg::PackageSpec, branch::String; kwargs...) = checkout([(pkg, branch)]; kwargs...)
+checkout(pkgs::Vector{String}; kwargs...)             = checkout([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
+checkout(pkgs::Vector{PackageSpec}; kwargs...)        = checkout([(pkg, nothing) for pkg in pkgs]; kwargs...)
+checkout(pkgs_branches::Vector; kwargs...)            = checkout(Context(), pkgs_branches; kwargs...)
+
+function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    pkgs = [p[1] for p in pkgs_branches]
+    project_resolve!(ctx.env, pkgs)
+    registry_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    Pkg3.Operations.checkout(ctx, pkgs_branches; path = path)
+end
+
+
+test(;kwargs...)                                  = test(PackageSpec[], kwargs...)
+test(pkg::Union{String, PackageSpec}; kwargs...)  = test([pkg]; kwargs...)
+test(pkgs::Vector{String}; kwargs...)             = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+test(pkgs::Vector{PackageSpec}; kwargs...)        = test(Context(), pkgs; kwargs...)
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...)
     Context!(ctx; kwargs...)
