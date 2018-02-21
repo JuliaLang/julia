@@ -1002,12 +1002,12 @@ and can be converted to/from the latter via `Array(bitarray)` and `BitArray(arra
 
 A "strided" array is stored in memory with elements laid out in regular offsets such that
 an instance with a supported `isbits` element type can be passed to
-external C and Fortran functions that expect this memory layout. Strided arrays
-must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
-provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
-index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
-[`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
-provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
+external C and Fortran functions that expect this memory layout. Strided arrays must define a
+pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) and a [`strides(A)`](@ref)
+method to define the memory layout. A provided [`stride(A, k)`](@ref) method accesses the `k`th
+element within this tuple. Increasing the
+index of dimension `k` by `1` should increase `i` such that it's no longer accessing the `i`th
+consecuitive element from the base pointer, but rather the `i+stride(A,k)`th element. `DenseArray` is a
 very specific example of a strided array where the elements are arranged contiguously, thus it
 provides its subtypes with the appropriate definition of `strides`. More concrete examples
 can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
