@@ -292,24 +292,29 @@ function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:Future})
-    f = deserialize_rr(s,t)
-    Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
+    f = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
+    f2 = Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
+
+    # 1) send_add_client() is not executed when the ref is being serialized
+    #    to where it exists, hence do it here.
+    # 2) If we have recieved a 'fetch'ed Future or if the Future ctor found an
+    #    already 'fetch'ed instance in client_refs (Issue #25847), we should not
+    #    track it in the backing RemoteValue store.
+    if f2.where == myid() && f2.v === nothing
+        add_client(remoteref_id(f2), myid())
+    end
+    f2
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:RemoteChannel})
-    rr = deserialize_rr(s,t)
-    # call ctor to make sure this rr gets added to the client_refs table
-    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
-end
-
-function deserialize_rr(s, t)
     rr = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
     if rr.where == myid()
         # send_add_client() is not executed when the ref is being
         # serialized to where it exists
         add_client(remoteref_id(rr), myid())
     end
-    rr
+    # call ctor to make sure this rr gets added to the client_refs table
+    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 # Future and RemoteChannel are serializable only in a running cluster.
