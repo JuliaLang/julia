@@ -142,6 +142,15 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+# range syntax
+@test_repr "1:2"
+@test_repr "3:4:5"
+let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
+    ex1 = Expr(:call, :(:), 1)
+    @test eval(Meta.parse(repr(ex4))) == ex4
+    @test eval(Meta.parse(repr(ex1))) == ex1
+end
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
@@ -850,7 +859,7 @@ test_repr("a.:(begin
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
-@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
+@test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
@@ -1036,10 +1045,10 @@ end
     anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -1155,4 +1164,15 @@ end
         @test contains(str, "arraylen")
         @test contains(str, "(intrinsic function")
     end
+end
+
+@testset "repr(mime, x)" begin
+    @test repr("text/plain", UInt8[1 2;3 4]) == "2×2 Array{UInt8,2}:\n 0x01  0x02\n 0x03  0x04"
+    @test repr("text/html", "raw html data") == "raw html data"
+    @test repr("text/plain", "string") == "\"string\""
+    @test repr("image/png", UInt8[2,3,4,7]) == UInt8[2,3,4,7]
+    @test repr("text/plain", 3.141592653589793) == "3.141592653589793"
+    @test repr("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
+    @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
+    @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end

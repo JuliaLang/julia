@@ -148,7 +148,7 @@ script:
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
-        make check -C /tmp/julia/share/doc/julia/examples/embedding \
+        make check -C /tmp/julia/share/julia/test/embedding \
              JULIA="/tmp/julia/bin/julia" \
              BIN=/tmp/embedding-test \
              "$(cd julia2 && make print-CC)"

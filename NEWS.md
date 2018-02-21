@@ -82,6 +82,9 @@ Language changes
 
   * The parsing of `<|` is now right associative. `|>` remains left associative ([#24153]).
 
+  * `:` now parses like other operators, as a call to a function named `:`, instead of
+    calling `colon` ([#25947]).
+
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
     of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
 
@@ -179,6 +182,10 @@ Language changes
     of backslashes precedes a quote character. Thus, 2n backslashes followed by a quote encodes n
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
+
+  * `reprmime(mime, x)` has been renamed to `repr(mime, x)`, and along with `repr(x)`
+    and `sprint` it now accepts an optional `context` keyword for `IOContext` attributes.
+    `stringmime` has been moved to the Base64 stdlib package ([#25990]).
 
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead ([#24452]).
 
@@ -397,6 +404,10 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays insted of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
+  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+    and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
+    than 0 ([#25472], [#25662]).
+
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
     `size` ([#25655]).
@@ -496,9 +507,6 @@ Library improvements
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
     command line tool ([#22062]).
-
-  * `logspace` now accepts a `base` keyword argument to specify the base of the logarithmic
-    range. The base defaults to 10 ([#22310]).
 
   * Added `unique!` which is an inplace version of `unique` ([#20549]).
 
@@ -993,9 +1001,6 @@ Deprecated or removed
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
-  * `linspace` and `logspace` now require an explicit number of elements to be
-    supplied rather than defaulting to `50`([#24794], [#24805]).
-
   * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
@@ -1034,6 +1039,19 @@ Deprecated or removed
 
   * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
 
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
+    has been renamed to `force` ([#25979]).
+
+  * The methods of `range` based on positional arguments have been deprecated in favor of
+    keyword arguments ([#25896]).
+
+  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
+    arguments ([#25896]).
+
+  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+
+  * `logspace` has been deprecated to its definition ([#25896]).
+
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
     where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
@@ -1071,9 +1089,11 @@ Command-line option changes
 [#6614]: https://github.com/JuliaLang/julia/issues/6614
 [#8000]: https://github.com/JuliaLang/julia/issues/8000
 [#8470]: https://github.com/JuliaLang/julia/issues/8470
+[#9053]: https://github.com/JuliaLang/julia/issues/9053
 [#9292]: https://github.com/JuliaLang/julia/issues/9292
 [#10593]: https://github.com/JuliaLang/julia/issues/10593
 [#11310]: https://github.com/JuliaLang/julia/issues/11310
+[#12010]: https://github.com/JuliaLang/julia/issues/12010
 [#12131]: https://github.com/JuliaLang/julia/issues/12131
 [#13079]: https://github.com/JuliaLang/julia/issues/13079
 [#14770]: https://github.com/JuliaLang/julia/issues/14770
@@ -1095,7 +1115,6 @@ Command-line option changes
 [#19186]: https://github.com/JuliaLang/julia/issues/19186
 [#19987]: https://github.com/JuliaLang/julia/issues/19987
 [#20005]: https://github.com/JuliaLang/julia/issues/20005
-[#20233]: https://github.com/JuliaLang/julia/issues/20233
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20549]: https://github.com/JuliaLang/julia/issues/20549
 [#20575]: https://github.com/JuliaLang/julia/issues/20575
@@ -1141,7 +1160,6 @@ Command-line option changes
 [#22274]: https://github.com/JuliaLang/julia/issues/22274
 [#22281]: https://github.com/JuliaLang/julia/issues/22281
 [#22296]: https://github.com/JuliaLang/julia/issues/22296
-[#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22314]: https://github.com/JuliaLang/julia/issues/22314
 [#22324]: https://github.com/JuliaLang/julia/issues/22324
 [#22325]: https://github.com/JuliaLang/julia/issues/22325
@@ -1200,11 +1218,13 @@ Command-line option changes
 [#23235]: https://github.com/JuliaLang/julia/issues/23235
 [#23261]: https://github.com/JuliaLang/julia/issues/23261
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
+[#23332]: https://github.com/JuliaLang/julia/issues/23332
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
 [#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
+[#23393]: https://github.com/JuliaLang/julia/issues/23393
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23504]: https://github.com/JuliaLang/julia/issues/23504
@@ -1213,12 +1233,14 @@ Command-line option changes
 [#23528]: https://github.com/JuliaLang/julia/issues/23528
 [#23529]: https://github.com/JuliaLang/julia/issues/23529
 [#23530]: https://github.com/JuliaLang/julia/issues/23530
+[#23554]: https://github.com/JuliaLang/julia/issues/23554
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23628]: https://github.com/JuliaLang/julia/issues/23628
 [#23642]: https://github.com/JuliaLang/julia/issues/23642
 [#23665]: https://github.com/JuliaLang/julia/issues/23665
 [#23690]: https://github.com/JuliaLang/julia/issues/23690
 [#23716]: https://github.com/JuliaLang/julia/issues/23716
+[#23724]: https://github.com/JuliaLang/julia/issues/23724
 [#23750]: https://github.com/JuliaLang/julia/issues/23750
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23805]: https://github.com/JuliaLang/julia/issues/23805
@@ -1273,8 +1295,6 @@ Command-line option changes
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786
-[#24794]: https://github.com/JuliaLang/julia/issues/24794
-[#24805]: https://github.com/JuliaLang/julia/issues/24805
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#24831]: https://github.com/JuliaLang/julia/issues/24831
 [#24839]: https://github.com/JuliaLang/julia/issues/24839
@@ -1293,16 +1313,49 @@ Command-line option changes
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
+[#25210]: https://github.com/JuliaLang/julia/issues/25210
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
-[#25365]: https://github.com/JuliaLang/julia/issues/25365
+[#25249]: https://github.com/JuliaLang/julia/issues/25249
+[#25278]: https://github.com/JuliaLang/julia/issues/25278
+[#25311]: https://github.com/JuliaLang/julia/issues/25311
+[#25321]: https://github.com/JuliaLang/julia/issues/25321
+[#25368]: https://github.com/JuliaLang/julia/issues/25368
+[#25391]: https://github.com/JuliaLang/julia/issues/25391
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25429]: https://github.com/JuliaLang/julia/issues/25429
+[#25457]: https://github.com/JuliaLang/julia/issues/25457
+[#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25472]: https://github.com/JuliaLang/julia/issues/25472
+[#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25564]: https://github.com/JuliaLang/julia/issues/25564
+[#25567]: https://github.com/JuliaLang/julia/issues/25567
+[#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25633]: https://github.com/JuliaLang/julia/issues/25633
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25662]: https://github.com/JuliaLang/julia/issues/25662
+[#25667]: https://github.com/JuliaLang/julia/issues/25667
+[#25668]: https://github.com/JuliaLang/julia/issues/25668
+[#25701]: https://github.com/JuliaLang/julia/issues/25701
 [#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
+[#25763]: https://github.com/JuliaLang/julia/issues/25763
+[#25812]: https://github.com/JuliaLang/julia/issues/25812
+[#25830]: https://github.com/JuliaLang/julia/issues/25830
+[#25845]: https://github.com/JuliaLang/julia/issues/25845
+[#25854]: https://github.com/JuliaLang/julia/issues/25854
+[#25858]: https://github.com/JuliaLang/julia/issues/25858
+[#25872]: https://github.com/JuliaLang/julia/issues/25872
+[#25896]: https://github.com/JuliaLang/julia/issues/25896
+[#25944]: https://github.com/JuliaLang/julia/issues/25944
+[#25947]: https://github.com/JuliaLang/julia/issues/25947
+[#25979]: https://github.com/JuliaLang/julia/issues/25979
+[#25980]: https://github.com/JuliaLang/julia/issues/25980
+[#25990]: https://github.com/JuliaLang/julia/issues/25990
 [#25998]: https://github.com/JuliaLang/julia/issues/25998
+[#26009]: https://github.com/JuliaLang/julia/issues/26009

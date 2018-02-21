@@ -242,9 +242,8 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
-keytype(::Type{A}) where {A<:AbstractDict} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -257,8 +256,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{AbstractDict{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:AbstractDict} = valtype(supertype(A))
+valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -447,7 +445,19 @@ function filter(f, d::AbstractDict)
     return df
 end
 
-eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
+function eltype(::Type{<:AbstractDict{K,V}}) where {K,V}
+    if @isdefined(K)
+        if @isdefined(V)
+            return Pair{K,V}
+        else
+            return Pair{K}
+        end
+    elseif @isdefined(V)
+        return Pair{k,V} where k
+    else
+        return Pair
+    end
+end
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true

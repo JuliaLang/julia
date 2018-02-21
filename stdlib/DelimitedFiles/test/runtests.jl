@@ -120,12 +120,18 @@ isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 end
 
 @testset "comments" begin
-    @test isequaldlm(readdlm(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
-    @test isequaldlm(readdlm(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
-    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ','), [1. 2. "";4. 5. 6.], Any)
-    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ','), [1. "" "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6"), ',', comments=true), [1. 2. 3.;4. 5. 6.], Float64)
+    @test isequaldlm(readdlm(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6"), ',', comments=true), [1. 2. 3.;4. 5. 6.], Float64)
+    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ',', comments=true), [1. 2. "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ',', comments=true), [1. "" "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1,2,\"#3\"\n4,5,6"), ',', comments=true), [1. 2. "#3";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ',', comments=true), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
+end
+
+@testset "without comments" begin
+    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ','), [1. 2. "#3";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ','), ["1#" 2. 3.;4. 5. 6.], Any)
     @test isequaldlm(readdlm(IOBuffer("1,2,\"#3\"\n4,5,6"), ','), [1. 2. "#3";4. 5. 6.], Any)
-    @test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ','), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 end
 
 @testset "skipstart" begin
@@ -235,7 +241,7 @@ end
 end
 
 # fix #13179 parsing unicode lines with default delmiters
-@test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n")), Any[1 "α"; 2 "β"], Any)
+@test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n"), comments=true), Any[1 "α"; 2 "β"], Any)
 
 # BigInt parser
 let data = "1 2 3"

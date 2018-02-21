@@ -50,13 +50,7 @@ end
 RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
-Ref(x::Any) = RefValue(x)
-Ref{T}() where {T} = RefValue{T}() # Ref{T}()
-Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
-
-Ref(x::Ref, i::Integer) = (i != 1 && error("Ref only has one element"); x)
-Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if datatype_pointerfree(RefValue{T})
@@ -87,7 +81,6 @@ end
 RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
-Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if datatype_pointerfree(RefValue{T})
@@ -105,26 +98,38 @@ function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
 end
 unsafe_convert(::Type{Ptr{Cvoid}}, b::RefArray{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
-# convert Arrays to pointer arrays for ccall
-function Ref{P}(a::Array{<:Union{Ptr,Cwstring,Cstring}}) where P<:Union{Ptr,Cwstring,Cstring}
-    return RefArray(a) # effectively a no-op
-end
-function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
-    if (!isbits(T) && T <: eltype(P))
-        # this Array already has the right memory layout for the requested Ref
-        return RefArray(a,1,false) # root something, so that this function is type-stable
-    else
-        ptrs = Vector{P}(uninitialized, length(a)+1)
-        roots = Vector{Any}(uninitialized, length(a))
-        for i = 1:length(a)
-            root = cconvert(P, a[i])
-            ptrs[i] = unsafe_convert(P, root)::P
-            roots[i] = root
-        end
-        ptrs[length(a)+1] = C_NULL
-        return RefArray(ptrs,1,roots)
+###
+if is_primary_base_module
+    Ref(x::Any) = RefValue(x)
+    Ref{T}() where {T} = RefValue{T}() # Ref{T}()
+    Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
+
+    Ref(x::Ref, i::Integer) = (i != 1 && error("Ref only has one element"); x)
+    Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
+
+    # convert Arrays to pointer arrays for ccall
+    function Ref{P}(a::Array{<:Union{Ptr,Cwstring,Cstring}}) where P<:Union{Ptr,Cwstring,Cstring}
+        return RefArray(a) # effectively a no-op
     end
+    function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
+        if (!isbits(T) && T <: eltype(P))
+            # this Array already has the right memory layout for the requested Ref
+            return RefArray(a,1,false) # root something, so that this function is type-stable
+        else
+            ptrs = Vector{P}(uninitialized, length(a)+1)
+            roots = Vector{Any}(uninitialized, length(a))
+            for i = 1:length(a)
+                root = cconvert(P, a[i])
+                ptrs[i] = unsafe_convert(P, root)::P
+                roots[i] = root
+            end
+            ptrs[length(a)+1] = C_NULL
+            return RefArray(ptrs,1,roots)
+        end
+    end
+    Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 end
+
 cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)

@@ -11,7 +11,7 @@
       (string.join (map deparse l) sep)))
 
 (define (deparse-prefix-call head args opn cls)
-  (string (if (decl? head)
+  (string (if (or (decl? head) (eq? head ':))
               (string "(" (deparse head) ")")
               (deparse head))
           opn (deparse-arglist args) cls))
@@ -73,9 +73,15 @@
          (case (car e)
            ;; calls and operators
            ((call)
-            (if (and (length= e 4) (operator? (cadr e)))
-                (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) )
-                (deparse-prefix-call (cadr e) (cddr e) #\( #\))))
+            (cond ((and (eq? (cadr e) ':) (or (length= e 4) (length= e 5)))
+                   (string (deparse (caddr e)) ': (deparse (cadddr e))
+                           (if (length> e 4)
+                               (string ': (deparse (caddddr e)))
+                               "")))
+                  ((and (length= e 4) (operator? (cadr e)))
+                   (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) ))
+                  (else
+                   (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
            (($ &)          (if (pair? (cadr e))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
@@ -83,10 +89,6 @@
                                (string (car e) (deparse (cadr e)))
                                (string (deparse (cadr e)) (car e) (deparse (caddr e)))))
            ((comparison) (string.join (map deparse (cdr e)) " "))
-           ((:)          (string (deparse (cadr e)) ': (deparse (caddr e))
-                                 (if (length> e 3)
-                                     (string ': (deparse (cadddr e)))
-                                     "")))
            ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
            ((kw)        (string (deparse (cadr e)) " = " (deparse (caddr e))))
            ((where)     (string (deparse (cadr e)) " where "

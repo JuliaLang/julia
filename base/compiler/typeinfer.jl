@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && frame.cached && frame.max_valid == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.max_valid == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1

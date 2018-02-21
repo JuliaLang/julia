@@ -32,7 +32,7 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -559,7 +559,7 @@ REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needl
 end
 
 let d = @doc(I15424.LazyHelp)
-    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
 end
 
 # Issue #13385.

@@ -38,14 +38,14 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base:
+import .Base:
     UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
     rawhandle, OS_HANDLE, INVALID_OS_HANDLE
 
 if Sys.iswindows()
-    import Base: cwstring
+    import .Base: cwstring
 end
 
 include("path.jl")

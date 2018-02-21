@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module REPL
 
 using Base.Meta
@@ -1140,8 +1142,5 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
-
-include("precompile.jl")
-_precompile_()
 
 end # module

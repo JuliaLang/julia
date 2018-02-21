@@ -194,7 +194,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? √eps : 0, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword

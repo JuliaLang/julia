@@ -2,7 +2,7 @@
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 using Pkg
 Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
+cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
 Pkg.update()
 Pkg.resolve()
 

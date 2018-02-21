@@ -344,7 +344,7 @@ end
     @test cor(repeat(1:17, 1, 17))[2] <= 1.0
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
-    let tmp = linspace(1, 85, 100)
+    let tmp = range(1, stop=85, length=100)
         tmp2 = Vector(tmp)
         @test cor(tmp, tmp) <= 1.0
         @test cor(tmp, tmp2) <= 1.0
@@ -369,7 +369,7 @@ end
 
 # StatsBase issue 164
 let y = [0.40003674665581906, 0.4085630862624367, 0.41662034698690303, 0.41662034698690303, 0.42189053966652057, 0.42189053966652057, 0.42553514344518345, 0.43985732442991354]
-    @test issorted(quantile(y, linspace(0.01, 0.99, 17)))
+    @test issorted(quantile(y, range(0.01, stop=0.99, length=17)))
 end
 
 @testset "variance of complex arrays (#13309)" begin
