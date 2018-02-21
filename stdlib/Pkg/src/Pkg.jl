@@ -89,7 +89,6 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     push!(Base.LOAD_PATH, dir)
-    pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
 """
