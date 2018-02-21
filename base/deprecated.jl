@@ -1206,8 +1206,6 @@ end
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(occursin(c), s), 0)
 @deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) findprev(t, s, i)
 @deprecate rsearch(s::AbstractString, t::AbstractString) findlast(t, s)
-@deprecate rsearch(s::ByteArray, t::ByteArray, i::Integer) findprev(t, s, i)
-@deprecate rsearch(s::ByteArray, t::ByteArray) findlast(t, s)
 
 @deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) findprev(re, str, idx)
 @deprecate rsearch(str::Union{String,SubString}, re::Regex) findlast(re, str)
