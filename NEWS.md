@@ -421,9 +421,9 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays instead of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
-  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+  * The `find*` functions, i.e. `findnext`, `findprev`, `findfirst`,
     and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
-    than 0 ([#25472], [#25662]).
+    than `0` or `0:-1` ([#25472], [#25662], [#26149])
 
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
@@ -1388,3 +1388,4 @@ Command-line option changes
 [#25998]: https://github.com/JuliaLang/julia/issues/25998
 [#26009]: https://github.com/JuliaLang/julia/issues/26009
 [#26071]: https://github.com/JuliaLang/julia/issues/26071
+[#26149]: https://github.com/JuliaLang/julia/issues/26149

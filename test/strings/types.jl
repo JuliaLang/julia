@@ -118,7 +118,7 @@ end
 # search and SubString (issue #5679)
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
-    @test findlast("World", u) == 0:-1
+    @test findlast("World", u) == nothing
     @test findlast(equalto('z'), u) == nothing
     @test findlast("ll", u) == 3:4
 end

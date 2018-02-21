@@ -1182,9 +1182,9 @@ end
 @deprecate_binding HasOrder            Ordered
 @deprecate_binding ArithmeticOverflows ArithmeticWraps
 
-@deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) findnext(re, str, idx)
-@deprecate search(s::AbstractString, r::Regex, idx::Integer) findnext(r, s, idx)
-@deprecate search(s::AbstractString, r::Regex) findfirst(r, s)
+@deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) coalesce(findnext(re, str, idx), 0:-1)
+@deprecate search(s::AbstractString, r::Regex, idx::Integer) coalesce(findnext(r, s, idx), 0:-1)
+@deprecate search(s::AbstractString, r::Regex) coalesce(findfirst(r, s), 0:-1)
 @deprecate search(s::AbstractString, c::Char, i::Integer) coalesce(findnext(equalto(c), s, i), 0)
 @deprecate search(s::AbstractString, c::Char) coalesce(findfirst(equalto(c), s), 0)
 @deprecate search(a::ByteArray, b::Union{Int8,UInt8}, i::Integer) coalesce(findnext(equalto(b), a, i), 0)
@@ -1196,31 +1196,31 @@ end
 
 @deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findnext(occursin(c), s, i), 0)
 @deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findfirst(occursin(c), s), 0)
-@deprecate search(s::AbstractString, t::AbstractString, i::Integer) findnext(t, s, i)
-@deprecate search(s::AbstractString, t::AbstractString) findfirst(t, s)
+@deprecate search(s::AbstractString, t::AbstractString, i::Integer) coalesce(findnext(t, s, i), 0:-1)
+@deprecate search(s::AbstractString, t::AbstractString) coalesce(findfirst(t, s), 0:-1)
 
 @deprecate search(buf::IOBuffer, delim::UInt8) coalesce(findfirst(equalto(delim), buf), 0)
 @deprecate search(buf::Base.GenericIOBuffer, delim::UInt8) coalesce(findfirst(equalto(delim), buf), 0)
 
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findprev(occursin(c), s, i), 0)
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(occursin(c), s), 0)
-@deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) findprev(t, s, i)
-@deprecate rsearch(s::AbstractString, t::AbstractString) findlast(t, s)
+@deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) coalesce(findprev(t, s, i), 0:-1)
+@deprecate rsearch(s::AbstractString, t::AbstractString) coalesce(findlast(t, s), 0:-1)
 
-@deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) findprev(re, str, idx)
-@deprecate rsearch(str::Union{String,SubString}, re::Regex) findlast(re, str)
-@deprecate rsearch(s::AbstractString, r::Regex, idx::Integer) findprev(r, s, idx)
-@deprecate rsearch(s::AbstractString, r::Regex) findlast(r, s)
+@deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) coalesce(findprev(re, str, idx), 0:-1)
+@deprecate rsearch(str::Union{String,SubString}, re::Regex) coalesce(findlast(re, str), 0:-1)
+@deprecate rsearch(s::AbstractString, r::Regex, idx::Integer) coalesce(findprev(r, s, idx), 0:-1)
+@deprecate rsearch(s::AbstractString, r::Regex) coalesce(findlast(r, s), 0:-1)
 @deprecate rsearch(s::AbstractString, c::Char, i::Integer) coalesce(findprev(equalto(c), s, i), 0)
 @deprecate rsearch(s::AbstractString, c::Char) coalesce(findlast(equalto(c), s), 0)
 @deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) coalesce(findprev(equalto(b), a, i), 0)
 @deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) coalesce(findprev(equalto(Char(b)), a, i), 0)
 @deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) coalesce(findprev(equalto(UInt8(b)), a, i), 0)
 
-@deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
-@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
-@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(findlast(t, s))
-@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(findprev(t, s, i))
+@deprecate searchindex(s::AbstractString, t::AbstractString) first(coalesce(findfirst(t, s), 0:-1))
+@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(coalesce(findnext(t, s, i), 0:-1))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(coalesce(findlast(t, s), 0:-1))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(coalesce(findprev(t, s, i), 0:-1))
 
 @deprecate searchindex(s::AbstractString, c::Char) coalesce(findfirst(equalto(c), s), 0)
 @deprecate searchindex(s::AbstractString, c::Char, i::Integer) coalesce(findnext(equalto(c), s, i), 0)
