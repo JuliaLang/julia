@@ -53,7 +53,7 @@ end
 Scan the graph for (explicit or implicit) contradictions. Returns a list of problematic
 (package,version) combinations.
 """
-function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(); verbose = true)
+function sanity_check(graph::Graph, sources::Set{UUID} = Set{UUID}(), verbose::Bool = true)
     req_inds = graph.req_inds
     fix_inds = graph.fix_inds
 

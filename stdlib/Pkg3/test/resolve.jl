@@ -148,7 +148,7 @@ function graph_from_data(deps_data, uuid_to_name = Dict{UUID,String}(Types.uuid_
             end
         end
     end
-    return Graph(all_versions, all_deps, all_compat, uuid_to_name, Requires(), fixed; verbose = VERBOSE)
+    return Graph(all_versions, all_deps, all_compat, uuid_to_name, Requires(), fixed, VERBOSE)
 end
 function reqs_from_data(reqs_data, graph::Graph)
     reqs = Dict{UUID,VersionSpec}()
@@ -172,7 +172,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
     end
     graph = graph_from_data(deps_data)
     id(p) = pkgID(pkguuid(p), graph)
-    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs), verbose = VERBOSE)
+    result = sanity_check(graph, Set(pkguuid(p) for p in pkgs), VERBOSE)
 
     length(result) == length(expected_result) || return false
     expected_result_uuid = [(id(p), vn) for (p,vn) in expected_result]

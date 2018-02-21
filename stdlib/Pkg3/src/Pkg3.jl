@@ -38,4 +38,9 @@ function __init__()
     end
 end
 
+using Pkg3.Types
+using UUIDs
+import LibGit2
+include("precompile.jl")
+
 end # module

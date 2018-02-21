@@ -205,7 +205,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
         uuid_to_name[UUID(info["uuid"])] = info["name"]
     end
 
-    return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed; verbose=ctx.graph_verbose)
+    return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed, #=verbose=# ctx.graph_verbose)
 end
 
 # Resolve a set of versions given package version specs
