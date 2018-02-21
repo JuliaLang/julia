@@ -1103,18 +1103,7 @@
                               (set! a (cadr w))))
                     #f))
          (argl (if (pair? a)
-                   (if (eq? (car a) 'tuple)
-                       (map =-to-kw (cdr a))
-                       (if (eq? (car a) 'block)
-                           (cond ((length= a 1) '())
-                                 ((length= a 2) (list (cadr a)))
-                                 ((length= a 3)
-                                  (if (assignment? (caddr a))
-                                      `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
-                                      `((parameters ,(caddr a)) ,(cadr a))))
-                                 (else
-                                  (error "more than one semicolon in argument list")))
-                           (list (=-to-kw a))))
+                   (tuple-to-arglist a)
                    (list a)))
          ;; TODO: always use a specific special name like #anon# or _, then ignore
          ;; this as a local variable name.

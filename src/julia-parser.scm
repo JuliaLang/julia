@@ -1018,6 +1018,12 @@
               (parse-unary-call s op (unary-op? op) spc)))
         (parse-juxtapose (parse-factor s) s))))
 
+(define (fix-syntactic-unary e)
+  (let ((ce (car e)))
+    (if (or (eq? ce '|<:|) (eq? ce '|>:|))
+        e
+        (cons 'call e))))
+
 (define (parse-unary-call s op un spc)
   (let ((next (peek-token s)))
     (cond ((or (closing-token? next) (newline? next) (eq? next '=))
@@ -1026,17 +1032,25 @@
                (and (not un) (eqv? next #\( )))
            (ts:put-back! s op spc)
            (parse-factor s))
+          ((eqv? next #\( )
+           (take-token s)
+           (let* ((opspc  (ts:space? s))
+                  (parens (with-bindings ((accept-dots-without-comma #t))
+                                         (parse-paren- s #t))))
+             (if (cdr parens) ;; found an argument list
+                 (if opspc
+                     (disallowed-space op #\( )
+                     (parse-factor-with-initial-ex
+                      s
+                      (fix-syntactic-unary (cons op (tuple-to-arglist (car parens))))))
+                 (fix-syntactic-unary
+                  (list op (parse-factor-with-initial-ex s (car parens)))))))
           ((not un)
            (error (string "\"" op "\" is not a unary operator")))
           (else
-           (let* ((arg  (with-bindings ((accept-dots-without-comma #t))
-                                       (parse-unary s)))
-                  (args (if (and (pair? arg) (eq? (car arg) 'tuple))
-                            (cons op (cdr arg))
-                            (list op arg))))
-             (if (or (eq? op '|<:|) (eq? op '|>:|))
-                 args
-                 (cons 'call args)))))))
+           (let ((arg  (with-bindings ((accept-dots-without-comma #t))
+                                      (parse-unary s))))
+             (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
                                  try module)))
@@ -1084,11 +1098,24 @@
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
-(define (parse-factor s)       (parse-RtoL s parse-decl  is-prec-power? #f parse-factor-after))
+(define (parse-factor s)
+  (parse-factor-with-initial-ex s (parse-call s)))
+
+(define (parse-factor-with-initial-ex s ex0)
+  (let* ((ex (parse-decl-with-initial-ex s ex0))
+         (t  (peek-token s)))
+    (if (is-prec-power? t)
+        (begin (take-token s)
+               (list 'call t ex (parse-factor-after s)))
+        ex)))
+
 (define (parse-factor-after s) (parse-RtoL s parse-unary is-prec-power? #f parse-factor-after))
 
 (define (parse-decl s)
-  (let loop ((ex (parse-call s)))
+  (parse-decl-with-initial-ex s (parse-call s)))
+
+(define (parse-decl-with-initial-ex s ex)
+  (let loop ((ex ex))
     (let ((t (peek-token s)))
       (case t
         ((|::|) (take-token s)
@@ -1140,7 +1167,7 @@
 
 (define (disallowed-space ex t)
   (error (string "space before \"" t "\" not allowed in \""
-                 (deparse ex) " " (deparse t) "\"")))
+                 (deparse ex) " " t "\"")))
 
 ;; string macro suffix for given delimiter t
 (define (macsuffix t)
@@ -1918,6 +1945,89 @@
               `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
               `(tuple ,@first ,@(map kw-to-= args))))))
 
+(define (tuple-to-arglist e)
+  (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
+        ((eq? (car e) 'block)
+         (cond ((length= e 1) '())
+               ((length= e 2) (list (cadr e)))
+               ((length= e 3)
+                (if (assignment? (caddr e))
+                    `((parameters (kw ,@(cdr (caddr e)))) ,(cadr e))
+                    `((parameters ,(caddr e)) ,(cadr e))))
+               (else
+                (error "more than one semicolon in argument list"))))
+        (else
+         (list (=-to-kw e)))))
+
+(define (parse-paren s (checked #t)) (car (parse-paren- s checked)))
+
+;; return (expr . arglist) where arglist is #t iff this isn't just a parenthesized expr
+(define (parse-paren- s checked)
+  (with-bindings
+   ((range-colon-enabled #t)
+    (space-sensitive #f)
+    (where-enabled #t)
+    (whitespace-newline #t))
+   (let ((nxt (require-token s)))
+     (cond
+      ((eqv? nxt #\) )
+       ;; empty tuple ()
+       (begin (take-token s) '((tuple) . #t)))
+      ((syntactic-op? nxt)
+       ;; allow (=) etc.
+       (let ((tok (take-token s)))
+         (if (not (eqv? (require-token s) #\) ))
+             (error (string "invalid identifier name \"" tok "\""))
+             (take-token s))
+         (if checked (check-identifier tok))
+         (cons tok #f)))
+      ;; allow :(::) as a special case
+      ((and (not checked) (eq? nxt '|::|)
+            (let ((spc (ts:space? s)))
+              (or (and (take-token s) (eqv? (require-token s) #\) ))
+                  (and (ts:put-back! s '|::| spc) #f))))
+       (take-token s)  ;; take #\)
+       '(|::| . #f))
+      ((eqv? nxt #\;)
+       (cons (arglist-to-tuple #t #f (parse-arglist s #\) ))
+             #t))
+      (else
+       ;; here we parse the first subexpression separately, so
+       ;; we can look for a comma to see if it's a tuple.
+       ;; this lets us distinguish (x) from (x,)
+       (let* ((ex (parse-eq* s))
+              (t  (require-token s)))
+         (cond ((eqv? t #\) )
+                (take-token s)
+                ;; value in parentheses (x)
+                (if (and (pair? ex) (eq? (car ex) '...))
+                    (let ((lineno (input-port-line (ts:port s))))
+                      (if (or accept-dots-without-comma (eq? (with-bindings ((whitespace-newline #f))
+                                                                            (peek-token s))
+                                                             '->))
+                          (cons ex #t)
+                          (begin (parser-depwarn lineno
+                                                 (string "(" (deparse (cadr ex)) "...)")
+                                                 (string "(" (deparse (cadr ex)) "...,)"))
+                                 (cons `(tuple ,ex) #t))))
+                    (cons ex #f)))
+               ((eq? t 'for)
+                (expect-space-before s 'for)
+                (take-token s)
+                (let ((gen (parse-generator s ex)))
+                  (if (eqv? (require-token s) #\) )
+                      (take-token s)
+                      (error "expected \")\""))
+                  (cons gen #f)))
+               (else
+                ;; tuple (x,) (x,y) (x...) etc.
+                (if (eqv? t #\, )
+                    (take-token s)
+                    (if (not (eqv? t #\;))
+                        (error "missing comma or ) in argument list")))
+                (cons (arglist-to-tuple #f (eqv? t #\,) (parse-arglist s #\) ) ex)
+                      #t)))))))))
+
 (define (not-eof-for delim c)
   (if (eof-object? c)
       ;; NOTE: changing this may affect code in base/client.jl
@@ -2202,67 +2312,7 @@
           ;; parens or tuple
           ((eqv? t #\( )
            (take-token s)
-           (with-bindings ((range-colon-enabled #t)
-                           (space-sensitive #f)
-                           (where-enabled #t)
-                           (whitespace-newline #t))
-            (let ((nxt (require-token s)))
-             (cond
-              ((eqv? nxt #\) )
-               ;; empty tuple ()
-               (begin (take-token s) '(tuple)))
-              ((syntactic-op? nxt)
-               ;; allow (=) etc.
-               (let ((tok (take-token s)))
-                 (if (not (eqv? (require-token s) #\) ))
-                     (error (string "invalid identifier name \"" tok "\""))
-                     (take-token s))
-                 (if checked (check-identifier tok))
-                 tok))
-              ;; allow :(::) as a special case
-              ((and (not checked) (eq? nxt '|::|)
-                    (let ((spc (ts:space? s)))
-                      (or (and (take-token s) (eqv? (require-token s) #\) ))
-                          (and (ts:put-back! s '|::| spc) #f))))
-               (take-token s)  ;; take #\)
-               '|::|)
-              ((eqv? nxt #\;)
-               (arglist-to-tuple #t #f (parse-arglist s #\) )))
-              (else
-               ;; here we parse the first subexpression separately, so
-               ;; we can look for a comma to see if it's a tuple.
-               ;; this lets us distinguish (x) from (x,)
-               (let* ((ex (parse-eq* s))
-                      (t  (require-token s)))
-                 (cond ((eqv? t #\) )
-                        (take-token s)
-                        ;; value in parentheses (x)
-                        (if (and (pair? ex) (eq? (car ex) '...))
-                            (let ((lineno (input-port-line (ts:port s))))
-                              (if (or accept-dots-without-comma (eq? (with-bindings ((whitespace-newline #f))
-                                                                                    (peek-token s))
-                                                                     '->))
-                                  ex
-                                  (begin (parser-depwarn lineno
-                                                         (string "(" (deparse (cadr ex)) "...)")
-                                                         (string "(" (deparse (cadr ex)) "...,)"))
-                                         `(tuple ,ex))))
-                            ex))
-                       ((eq? t 'for)
-                        (expect-space-before s 'for)
-                        (take-token s)
-                        (let ((gen (parse-generator s ex)))
-                          (if (eqv? (require-token s) #\) )
-                              (take-token s)
-                              (error "expected \")\""))
-                          gen))
-                       (else
-                        ;; tuple (x,) (x,y) (x...) etc.
-                        (if (eqv? t #\, )
-                            (take-token s)
-                            (if (not (eqv? t #\;))
-                                (error "missing comma or ) in argument list")))
-                        (arglist-to-tuple #f (eqv? t #\,) (parse-arglist s #\) ) ex)))))))))
+           (parse-paren s checked))
 
           ;; cat expression
           ((eqv? t #\[ )

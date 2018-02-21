@@ -1306,3 +1306,17 @@ end
 #@test Meta.parse("\"x\"
 #
 #                  f(x) = x", 1)[1] === "x"
+
+# issue #26137
+@test Meta.parse("-()^2")     == Expr(:call, :^, Expr(:call, :-), 2)
+@test Meta.parse("-(x)^2")    == Expr(:call, :-, Expr(:call, :^, :x, 2))
+@test Meta.parse("-(x,)^2")   == Expr(:call, :^, Expr(:call, :-, :x), 2)
+@test Meta.parse("-(x,y)^2")  == Expr(:call, :^, Expr(:call, :-, :x, :y), 2)
+@test Meta.parse("+((1,2))")  == Expr(:call, :+, Expr(:tuple, 1, 2))
+@test Meta.parse("-(x;y)^2")  == Expr(:call, :^, Expr(:call, :-, Expr(:parameters, :y), :x), 2)
+@test Meta.parse("-(x...)^2") == Expr(:call, :^, Expr(:call, :-, Expr(:(...), :x)), 2)
+
+@test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+
+@test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
+                                           Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
