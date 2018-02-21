@@ -875,10 +875,10 @@ export
     istextmime,
     MIME,
     @MIME_str,
-    mimewritable,
     popdisplay,
     pushdisplay,
     redisplay,
+    showable,
     HTML,
     Text,
 

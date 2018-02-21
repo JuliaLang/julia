@@ -4,7 +4,7 @@ module Multimedia
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,
-    mimewritable, TextDisplay
+    showable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
@@ -25,23 +25,26 @@ print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 # in order to provide a way to export T as a given mime type.
 
 """
-    mimewritable(mime, x)
+    showable(mime, x)
 
-Returns a boolean value indicating whether or not the object `x` can be written as the given
-`mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](@ref) method for `typeof(x)`.)
+Returns a boolean value indicating whether or not the object `x` can be written
+as the given `mime` type.
+
+(By default, this is determined automatically by the existence of the
+corresponding [`show`](@ref) method for `typeof(x)`.  Some types provide custom `showable`
+methods; for example, if the available MIME formats depend on the *value* of `x`.)
 
 # Examples
 ```jldoctest
-julia> mimewritable(MIME("text/plain"), rand(5))
+julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> mimewritable(MIME("img/png"), rand(5))
+julia> showable("img/png", rand(5))
 false
 ```
 """
-mimewritable(::MIME{mime}, x) where {mime} =
-    hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(::MIME{mime}, x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(m::AbstractString, x) = showable(MIME(m), x)
 
 """
     show(io, mime, x)
@@ -73,10 +76,7 @@ The first argument to `show` can be an [`IOContext`](@ref) specifying output for
 See [`IOContext`](@ref) for details.
 """
 show(stream, mime, x)
-
-# it is convenient to accept strings instead of ::MIME
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
-mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 """
     repr(mime, x; context=nothing)
