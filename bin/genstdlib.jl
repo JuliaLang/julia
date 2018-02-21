@@ -27,7 +27,7 @@ for pkg in readdir(stdlibdir)
 end
 
 #=
-write_toml(prefix, "registry") do io
+write_toml(prefix, "Registry") do io
     repo = "https://github.com/JuliaRegistries/Stdlib.git"
     uuid = string(uuid5(uuid_registry, repo))
     println(io, "name = ", repr("Stdlib"))
@@ -50,24 +50,24 @@ for (pkg, uuid) in stdlib_uuids
     tree = stdlib_trees[pkg]
     deps = stdlib_deps[pkg]
 
-    # package.toml
-    write_toml(prefix, pkg, "package") do io
+    # Package.toml
+    write_toml(prefix, pkg, "Package") do io
         println(io, "name = ", repr(pkg))
         println(io, "uuid = ", repr(uuid))
         println(io, "repo = ", repr(url))
     end
 
-    # versions.toml
-    write_toml(prefix, pkg, "versions") do io
+    # Versions.toml
+    write_toml(prefix, pkg, "Versions") do io
         println(io, "[", toml_key("0.7.0-DEV+r$(tree[1:8])"), "]")
-        println(io, "git-tree-sha1 = ", repr(tree))
+        println(io, "tree.git.sha1 = ", repr(tree))
     end
 
-    # dependencies.toml
+    # Deps.toml
     if isempty(deps)
-        rm(joinpath(prefix, pkg, "dependencies.toml"), force=true)
+        rm(joinpath(prefix, pkg, "Deps.toml"), force=true)
     else
-        write_toml(prefix, pkg, "dependencies") do io
+        write_toml(prefix, pkg, "Deps") do io
             println(io, "[", toml_key("0.7"), "]")
             for dep in sort!(deps, by=lowercase)
                 println(io, "$dep = ", repr(stdlib_uuids[dep]))
@@ -75,8 +75,8 @@ for (pkg, uuid) in stdlib_uuids
         end
     end
 
-    # compatibility.toml
-    write_toml(prefix, pkg, "compatibility") do io
+    # Compat.toml
+    write_toml(prefix, pkg, "Compat") do io
         println(io, "[", toml_key("0.7"), "]")
         println(io, "julia = \"0.7\"")
     end

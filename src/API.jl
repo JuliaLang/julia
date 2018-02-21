@@ -216,7 +216,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
 
     # If the manifest was not used
     gc_time = Dates.now() - period
-    usage_file = joinpath(logdir(), "usage.toml")
+    usage_file = joinpath(logdir(), "manifest_usage.toml")
 
     # Collect only the manifest that is least recently used
     manifest_date = Dict{String, Dates.DateTime}()
