@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Printf
-using Base.Grisu
-using Base.GMP
+using .Base.Grisu
+using .Base.GMP
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
