@@ -25,7 +25,7 @@ function find_installed(name::String, uuid::UUID, sha1::SHA1)
 end
 
 function load_versions(path::String)
-    toml = parse_toml(path, "versions.toml")
+    toml = parse_toml(path, "Versions.toml")
     return Dict{VersionNumber, SHA1}(VersionNumber(ver) => SHA1(info["git-tree-sha1"]) for (ver, info) in toml)
 end
 
@@ -172,8 +172,8 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
             for path in registered_paths(ctx.env, uuid)
                 version_info = load_versions(path)
                 versions = sort!(collect(keys(version_info)))
-                deps_data = load_package_data_raw(UUID, joinpath(path, "dependencies.toml"))
-                compatibility_data = load_package_data_raw(VersionSpec, joinpath(path, "compatibility.toml"))
+                deps_data = load_package_data_raw(UUID, joinpath(path, "Deps.toml"))
+                compat_data = load_package_data_raw(VersionSpec, joinpath(path, "Compat.toml"))
 
                 union!(all_versions_u, versions)
 
@@ -185,7 +185,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
                         other_uuid in uuids || push!(uuids, other_uuid)
                     end
                 end
-                for (vr, cd) in compatibility_data
+                for (vr, cd) in compat_data
                     all_compat_u_vr = get_or_make!(all_compat_u, vr)
                     for (name,vs) in cd
                         # check conflicts??
@@ -260,15 +260,15 @@ end
 function version_data(ctx::Context, pkgs::Vector{PackageSpec})
     names = Dict{UUID,String}()
     hashes = Dict{UUID,SHA1}()
-    upstreams = Dict{UUID,Vector{String}}()
+    clones = Dict{UUID,Vector{String}}()
     for pkg in pkgs
         pkg.uuid in ctx.stdlib_uuids && continue
         pkg.path == nothing || continue
         uuid = pkg.uuid
         ver = pkg.version::VersionNumber
-        upstreams[uuid] = String[]
+        clones[uuid] = String[]
         for path in registered_paths(ctx.env, uuid)
-            info = parse_toml(path, "package.toml")
+            info = parse_toml(path, "Package.toml")
             if haskey(names, uuid)
                 names[uuid] == info["name"] ||
                     cmderror("$uuid: name mismatch between registries: ",
@@ -277,7 +277,7 @@ function version_data(ctx::Context, pkgs::Vector{PackageSpec})
                 names[uuid] = info["name"]
             end
             repo = info["repo"]
-            repo in upstreams[uuid] || push!(upstreams[uuid], repo)
+            repo in clones[uuid] || push!(clones[uuid], repo)
             vers = load_versions(path)
             if haskey(vers, ver)
                 h = vers[ver]
@@ -291,8 +291,8 @@ function version_data(ctx::Context, pkgs::Vector{PackageSpec})
         end
         @assert haskey(hashes, uuid)
     end
-    foreach(sort!, values(upstreams))
-    return names, hashes, upstreams
+    foreach(sort!, values(clones))
+    return names, hashes, clones
 end
 
 ########################
@@ -350,9 +350,9 @@ function install_git(
     version::Union{VersionNumber,Nothing},
     version_path::String
 )::Nothing
-    upstream_dir = joinpath(depots()[1], "upstream")
-    ispath(upstream_dir) || mkpath(upstream_dir)
-    repo_path = joinpath(upstream_dir, string(uuid))
+    clones_dir = joinpath(depots()[1], "clones")
+    ispath(clones_dir) || mkpath(clones_dir)
+    repo_path = joinpath(clones_dir, string(uuid))
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
         @info("Cloning [$uuid] $name from $(urls[1])")
         LibGit2.clone(urls[1], repo_path, isbare=true)
@@ -527,7 +527,7 @@ function update_manifest(env::EnvCache, pkg::PackageSpec, hash::Union{SHA1, Noth
         end
     else
         for path in registered_paths(env, uuid)
-            data = load_package_data(UUID, joinpath(path, "dependencies.toml"), version)
+            data = load_package_data(UUID, joinpath(path, "Deps.toml"), version)
             data == nothing && continue
             info["deps"] = Dict(string(k) => string(v) for (k,v) in data)
             break

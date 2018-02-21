@@ -498,7 +498,7 @@ end
 
 function write_env_usage(manifest_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
-    usage_file = joinpath(logdir(), "usage.toml")
+    usage_file = joinpath(logdir(), "manifest_usage.toml")
     touch(usage_file)
     !isfile(manifest_file) && return
     # Do not rewrite as do syntax (no longer precompilable)
@@ -657,7 +657,7 @@ function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
     ispath(d) || return String[]
     regs = filter!(readdir(d)) do r
-        isfile(joinpath(d, r, "registry.toml"))
+        isfile(joinpath(d, r, "Registry.toml"))
     end
     String[joinpath(depot, "registries", r) for r in regs]
 end
@@ -759,7 +759,7 @@ function find_registered!(
 
     # search through all registries
     for registry in registries()
-        open(joinpath(registry, "registry.toml")) do io
+        open(joinpath(registry, "Registry.toml")) do io
             # skip forward until [packages] section
             for line in eachline(io)
                 contains(line, r"^ \s* \[ \s* packages \s* \] \s* $"x) && break
@@ -854,7 +854,7 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     isempty(paths) && cmderror("`$uuid` is not registered")
     values = []
     for path in paths
-        info = parse_toml(path, "package.toml")
+        info = parse_toml(path, "Package.toml")
         value = get(info, key, nothing)
         push!(values, (path, value))
     end

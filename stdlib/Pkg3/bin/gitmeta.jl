@@ -48,7 +48,7 @@ function gitmeta(pkgs::Dict{String,Package})
     if ispath(fs)
         s = TOML.parsefile(fs)
         get(s, "STDLIBS", nothing) == STDLIBS || empty!(s)
-        mv(fs, "$fs.old", remove_destination=true)
+        mv(fs, "$fs.old", force=true)
     end
     s["STDLIBS"] = STDLIBS
     io = open(fs, "w")
@@ -65,7 +65,7 @@ function gitmeta(pkgs::Dict{String,Package})
         haskey(d, uuid) || (d[uuid] = Dict())
         haskey(s, uuid) || (s[uuid] = Dict())
         updated = false
-        repo_path = joinpath(homedir(), ".julia", "upstream", uuid)
+        repo_path = joinpath(homedir(), ".julia", "clones", uuid)
         repo = nothing
         for (ver, v) in p.versions
             haskey(d[uuid], v.sha1) &&

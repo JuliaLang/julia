@@ -138,7 +138,7 @@ temp_pkg_dir() do project_path
     end
 
     @testset "check logging" begin
-        usage = Pkg3.TOML.parse(String(read(joinpath(Pkg3.logdir(), "usage.toml"))))
+        usage = Pkg3.TOML.parse(String(read(joinpath(Pkg3.logdir(), "manifest_usage.toml"))))
         @test any(x -> startswith(x, joinpath(project_path, "Manifest.toml")), keys(usage))
     end
 
