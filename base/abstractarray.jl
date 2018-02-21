@@ -1081,7 +1081,7 @@ Return either `A` or a copy of `A`, in a rough effort to prevent modifications t
 affecting the returned object. No guarantees are provided, and each custom array must
 opt-into aliasing detection by overloading this method by specializing on the second argument.
 
-This function must return an object of exactly the same type as `A` for performance and type-stability.
+This function must return an object of exactly the same type as `A` for performance and type stability.
 
 See also [`mightalias`](@ref) and [`dataids`](@ref).
 """
