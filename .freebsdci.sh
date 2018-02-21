@@ -45,7 +45,7 @@ test-embedding(){
     export BIN='../../tmp'
 
     mkdir -vp tmp
-    gmake -C examples/embedding check
+    gmake -C test embedding
 }
 
 
