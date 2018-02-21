@@ -248,10 +248,10 @@ for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
+        # fallback definitions to prevent infinite loop from $f(x::Real) def above
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
     cbrt(x::Real)
