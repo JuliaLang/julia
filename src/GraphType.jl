@@ -125,7 +125,7 @@ mutable struct GraphData
             versions::Dict{UUID,Set{VersionNumber}},
             deps::Dict{UUID,Dict{VersionRange,Dict{String,UUID}}},
             compat::Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}},
-            uuid_to_name::Dict{UUID,String};
+            uuid_to_name::Dict{UUID,String},
             verbose::Bool = false
         )
         # generate pkgs
@@ -246,7 +246,7 @@ mutable struct Graph
             compat::Dict{UUID,Dict{VersionRange,Dict{String,VersionSpec}}},
             uuid_to_name::Dict{UUID,String},
             reqs::Requires = Requires(),
-            fixed::Dict{UUID,Fixed} = Dict{UUID,Fixed}(uuid_julia=>Fixed(VERSION));
+            fixed::Dict{UUID,Fixed} = Dict{UUID,Fixed}(uuid_julia=>Fixed(VERSION)),
             verbose::Bool = false
         )
 
@@ -254,7 +254,7 @@ mutable struct Graph
         extra_uuids ⊆ keys(versions) || error("unknown UUID found in reqs/fixed") # TODO?
 
         # Type assert below due to https://github.com/JuliaLang/julia/issues/25918
-        data = GraphData(versions, deps, compat, uuid_to_name, verbose = verbose)::GraphData
+        data = GraphData(versions, deps, compat, uuid_to_name, verbose)::GraphData
         pkgs, np, spp, pdict, pvers, vdict, rlog = data.pkgs, data.np, data.spp, data.pdict, data.pvers, data.vdict, data.rlog
 
         local extended_deps
