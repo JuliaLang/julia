@@ -24,5 +24,6 @@ git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
     Qux = "b5ec9b9c-e354-47fd-b367-a348bdc8f909"
 
 [[Qux]]
+deps = []
 uuid = "b5ec9b9c-e354-47fd-b367-a348bdc8f909"
 path = "deps/Qux.jl"
