@@ -30,8 +30,10 @@ function __init__()
         REPLMode.repl_init(Base.active_repl)
     else
         atreplinit() do repl
-            repl.interface = REPL.setup_interface(repl)
-            REPLMode.repl_init(repl)
+            if isinteractive() && repl isa REPL.LineEditREPL
+                repl.interface = REPL.setup_interface(repl)
+                REPLMode.repl_init(repl)
+            end
         end
     end
 end
