@@ -118,11 +118,15 @@ temp_pkg_dir() do project_path
             )
             Pkg3.build(TEST_PKG.name)
             @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "I_got_built"))
-            @test_broken Pkg3.test(TEST_PKG.name)
+            Pkg3.test(TEST_PKG.name)
             Pkg3.free(TEST_PKG.name)
             @test Pkg3.installed()[TEST_PKG.name] == old_v
         end
-        @test_throws CommandError Pkg3.checkout(TEST_PKG.name, "nonexisting_branch",)
+        mktempdir() do tmp
+            withenv("JULIA_PKG_DEVDIR" => tmp) do
+                @test_throws CommandError Pkg3.checkout(TEST_PKG.name, "nonexisting_branch",)
+            end
+        end
     end
 
     @testset "package name in resolver errors" begin

@@ -27,7 +27,7 @@ function Base.convert(::Type{VersionRange}, a::VersionInterval)
 
     lb = VersionBound(lower.major, lower.minor, lower.patch)
 
-    vb = Int[upper.major, upper.minor, upper.patch]
+    vb = UInt32[upper.major, upper.minor, upper.patch]
     i = 3
     while i > 0 && vb[i] == 0
         pop!(vb)

@@ -58,7 +58,7 @@ end
 # VersionBound #
 ################
 struct VersionBound
-    t::NTuple{3,Int}
+    t::NTuple{3,UInt32}
     n::Int
     function VersionBound(tin::NTuple{n,Integer}) where n
         n <= 3 || throw(ArgumentError("VersionBound: you can only specify major, minor and patch versions"))
@@ -93,7 +93,7 @@ end
 
 function isless_ll(a::VersionBound, b::VersionBound)
     m, n = a.n, b.n
-    for i = 1:min(m,n)
+    for i = 1:min(m, n)
         a[i] < b[i] && return true
         a[i] > b[i] && return false
     end
