@@ -215,6 +215,18 @@ rdo, wro = redirect_stdout()
 cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error test_exec.jl`
 @test !success(pipeline(cmd))
 
+@testset "FallbackTestSet holds state" begin
+    ts = Test.FallbackTestSet()
+    @test ts.is_empty
+    Test.record(ts, @test true)
+    @test !ts.is_empty
+
+    ts = Test.FallbackTestSet()
+    @test ts.is_empty
+    Test.record(ts, @testset "hi" begin end)
+    @test !ts.is_empty
+end
+
 @testset "no errors" begin
     @test true
     @test 1 == 1

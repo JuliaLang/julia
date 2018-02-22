@@ -717,6 +717,7 @@ function test!(pkg::AbstractString,
     else
         @info "Testing $pkg"
         cd(dirname(test_path)) do
+            script = "using Test; include(\"$test_path\"); if Test.fallback_testset.is_empty; throw(Test.FallbackTestSetException(\"No Tests Found\")); end"
             try
                 cmd = ```
                     $(Base.julia_cmd())
@@ -726,7 +727,7 @@ function test!(pkg::AbstractString,
                     --check-bounds=yes
                     --warn-overwrite=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-                    $test_path
+                    -e $script
                     ```
                 run(cmd)
                 @info "$pkg tests passed"

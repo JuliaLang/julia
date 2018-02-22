@@ -626,7 +626,10 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-struct FallbackTestSet <: AbstractTestSet end
+mutable struct FallbackTestSet <: AbstractTestSet
+    is_empty::Bool
+ end
+FallbackTestSet()=FallbackTestSet(true)
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
@@ -639,14 +642,19 @@ end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
-record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
+function record(ts::FallbackTestSet, t::Union{Pass,Broken})
+    ts.is_empty = false
+    t
+end
+
+record(ts::FallbackTestSet, t::AbstractTestSet) = ts.is_empty = false
+
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
-
 #-----------------------------------------------------------------------
 
 """
@@ -761,10 +769,11 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 function finish(ts::DefaultTestSet)
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
+
+    # Attach this test set to the parent test set
+    parent_ts = get_testset()
+    record(parent_ts, ts)
     if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
         return ts
     end
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)

@@ -550,6 +550,26 @@ temp_pkg_dir() do
         @test contains(msg, Regex("- $package.*Restart Julia to use the updated versions","s"))
     end
 
+    let package = "RuntestsError"
+        test_filename = Pkg.dir(package, "test", "runtests.jl")
+
+        write(test_filename, "")
+
+        code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.test(\"$package\")"
+        msg = read(`$(Base.julia_cmd()) -e $code`, String)
+        @test contains(msg, "No Tests Found")
+
+        write(test_filename, "@test 1==1")
+        msg = read(`$(Base.julia_cmd()) -e $code`, String)
+        @test !contains(msg, "No Tests Found")
+        @test contains(msg, "tests passed")
+
+        rm(test_filename)
+        write(test_filename, "@testset \"hi\" begin end")
+        @test !contains(msg, "No Tests Found")
+        @test contains(msg, "tests passed")
+    end
+
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
     let package = "StartupFile"
         content = """
