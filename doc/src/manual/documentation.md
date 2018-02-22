@@ -338,7 +338,7 @@ function f end
 f
 ```
 
-Adds docstring `"..."` to the `Function` `f`. The first version is the preferred syntax, however both
+Adds docstring `"..."` to the function `f`. The first version is the preferred syntax, however both
 are equivalent.
 
 ```julia
@@ -354,7 +354,7 @@ end
 f(x)
 ```
 
-Adds docstring `"..."` to the `Method` `f(::Any)`.
+Adds docstring `"..."` to the method `f(::Any)`.
 
 ```julia
 "..."
