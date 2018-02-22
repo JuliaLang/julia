@@ -183,11 +183,31 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+    @test eltype(Tuple{Int, Float64, Missing}) === Any
+    @test eltype(Tuple{Int, Float64, Nothing}) === Any
+end
+
+@testset "promotion" begin
+    @test promote_type(Tuple{Int}, Tuple{Float64}) === Tuple{Real}
+    @test promote_type(Tuple{Int,Float64}, Tuple{Float64,Int}) === Tuple{Real,Real}
+    @test promote_type(Tuple{Int,String}, Tuple{Float64,Int}) === Tuple{Real,Any}
+
+    @test promote_type(Tuple{Any}, Tuple{Int}) === Tuple{Any}
+    @test promote_type(Tuple{Any,Any}, Tuple{Float64,Int}) === Tuple{Any,Any}
+
+    for T in (Nothing, Missing)
+        @test promote_type(Tuple{Int}, Tuple{T}) === Tuple{Union{T,Int}}
+        @test promote_type(Tuple{Int,T}, Tuple{T,Float64}) ===
+            Tuple{Union{T,Int},Union{T,Float64}}
+        @test promote_type(Tuple{Int}, Tuple{Float64}, Tuple{T}) === Tuple{Any}
+    end
 end
 
 @testset "map with Nothing and Missing" begin
     for T in (Nothing, Missing)
         x = [(1, T()), (1, 2)]
+        @test x isa Vector{Tuple{Int,Union{Int,T}}}
+
         y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
         @test y isa Vector{Tuple{Int,Union{T,Int}}}
         @test isequal(x, y)
