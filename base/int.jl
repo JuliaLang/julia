@@ -478,7 +478,7 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits;] base = 10)
+    trunc([T,] x, [digits; base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -491,7 +491,7 @@ not representable.
 function trunc end
 
 """
-    floor([T,] x, [digits;] base = 10)
+    floor([T,] x, [digits; base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -504,7 +504,7 @@ not representable.
 function floor end
 
 """
-    ceil([T,] x, [digits;] base = 10)
+    ceil([T,] x, [digits; base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.

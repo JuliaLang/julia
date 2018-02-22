@@ -43,7 +43,8 @@ maxintfloat() = maxintfloat(Float64)
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
-    round([T,] x, [digits,] [r::RoundingMode;] base = 10)
+    round([T,] x, [r::RoundingMode])
+    round(x, [digits; base = 10])
 
 Rounds `x` to an integer value according to the provided
 [`RoundingMode`](@ref), returning a value of the same type as `x`. When not
@@ -171,7 +172,7 @@ end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x::Real, digits::Integer; base::Integer=10)
+        function ($f)(x::Real, digits::Integer; base::Integer = 10)
             x = float(x)
             og = convert(eltype(x),base)^digits
             r = ($f)(x * og) / og
