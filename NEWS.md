@@ -596,6 +596,10 @@ Library improvements
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
 
+  * `broadcast` and `broadcast!` now work with dictionaries and named tuples, matching up
+    the indices as appropriate and broadcasting over scalars, `Ref`s, and arrays/tuples
+    containing a single element. ([#??])
+
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 

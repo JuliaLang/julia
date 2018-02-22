@@ -119,6 +119,19 @@ BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
 # 3 or more arguments still return an `ArrayConflict`.
 struct ArrayConflict <: AbstractArrayStyle{Any} end
 
+BroadcastStyle(::Type{<:NamedTuple}) = Broadcast.Style{NamedTuple}()
+BroadcastStyle(::Style{NamedTuple}, ::Scalar) = Style{NamedTuple}()
+BroadcastStyle(::Style{NamedTuple}, ::Style{Tuple}) = Style{NamedTuple}()
+BroadcastStyle(::Style{NamedTuple}, ::AbstractArrayStyle) = Style{NamedTuple}()
+
+"""
+`Broadcast.DictStyle()` is a [`BroadcastStyle`](@ref) indicating that an object behaves as
+a dictionary for broadcasting.
+"""
+struct DictStyle <: BroadcastStyle end
+
+BroadcastStyle(::Type{<:AbstractDict}) = DictStyle()
+
 ### Binary BroadcastStyle rules
 """
     BroadcastStyle(::Style1, ::Style2) = Style3()
@@ -159,6 +172,11 @@ BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
 BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
     typeof(a)(_max(Val(M),Val(N)))
+# dictionaries
+BroadcastStyle(::DictStyle, ::Scalar) = DictStyle()
+BroadcastStyle(::DictStyle, ::Style{Tuple}) = DictStyle()
+BroadcastStyle(::DictStyle, ::Style{NamedTuple}) = DictStyle()
+BroadcastStyle(::DictStyle, ::AbstractArrayStyle) = DictStyle()
 
 # FIXME
 # The following definitions are necessary to limit SparseArray broadcasting to "plain Arrays"
@@ -216,6 +234,9 @@ broadcast_similar(f, ::MatrixStyle, ::Type{Bool}, inds::Indices{2}, As...) =
     similar(BitArray, inds)
 # end FIXME
 
+broadcast_similar(f, ::DictStyle, ::Type{ElType}, inds::Tuple{Any}, As...) where {ElType} =
+    Dict{eltype(inds[1]), ElType}(uninitialized, inds[1])
+
 ## Computing the result's indices. Most types probably won't need to specialize this.
 broadcast_indices() = ()
 broadcast_indices(::Type{T}) where T = ()
@@ -224,6 +245,8 @@ broadcast_indices(::Scalar, A) = ()
 broadcast_indices(::Style{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::DefaultArrayStyle{0}, A::Ref) = ()
 broadcast_indices(::AbstractArrayStyle, A) = Base.axes(A)
+@inline broadcast_indices(::Broadcast.Style{NamedTuple}, ::NamedTuple{names}) where {names} = (names,)
+broadcast_indices(::DictStyle, d) = (Base.keys(d),)
 """
     Base.broadcast_indices(::SrcStyle, A)
 
@@ -285,8 +308,8 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
-combine_indices(A, B...) = broadcast_shape(broadcast_indices(A), combine_indices(B...))
-combine_indices(A) = broadcast_indices(A)
+@inline combine_indices(A, B...) = broadcast_shape(broadcast_indices(A), combine_indices(B...))
+@inline combine_indices(A) = broadcast_indices(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -303,10 +326,29 @@ _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(D
 _bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
 _bcs1(a, b) = _bcsm(b, a) ? b : (_bcsm(a, b) ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a::AbstractSet, b::AbstractSet) = _bcsm(a, b) ? a : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a, b::AbstractSet) = _bcsm(a, b) ? b : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a::AbstractSet, b) = _bcsm(a, b) ? a : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+
+@inline _bcs1(a::Tuple{Vararg{Symbol}}, b::Tuple{Vararg{Symbol}}) = _bcsm(a, b) ? a : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a::Tuple{Vararg{Symbol}}, b::AbstractSet) = _bcsm(a, b) ? b : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a::AbstractSet, b::Tuple{Vararg{Symbol}}) = _bcsm(a, b) ? a : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a::Tuple{Vararg{Symbol}}, b) = _bcsm(a, b) ? a : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+_bcs1(a, b::Tuple{Vararg{Symbol}}) = _bcsm(a, b) ? b : throw(DimensionMismatch("containers could not be broadcast to a common size"))
+
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
 _bcsm(a::Number, b::Number) = a == b || b == 1
+
+_bcsm(a::AbstractSet, b::AbstractUnitRange) = length(b) == 1 || issetequal(a, b)
+_bcsm(a::AbstractUnitRange, b::AbstractSet) = length(a) == 1 || issetequal(a, b)
+_bcsm(a::AbstractSet, b::AbstractSet) = a == b
+
+_bcsm(a::AbstractSet, b::Tuple{Vararg{Symbol}}) = issetequal(a, b)
+_bcsm(a::Tuple{Vararg{Symbol}}, b::AbstractSet) = issetequal(a, b)
+@inline _bcsm(a::Tuple{Vararg{Symbol}}, b::Tuple{Vararg{Symbol}}) = _issetequal(a, b)
+Base.@pure _issetequal(a::Tuple{Vararg{Symbol}}, b::Tuple{Vararg{Symbol}}) = issetequal(a, b) # Is there a better way?
 
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
@@ -324,6 +366,36 @@ check_broadcast_indices(shp, A) = check_broadcast_shape(shp, broadcast_indices(A
     check_broadcast_indices(shp, A)
     check_broadcast_indices(shp, As...)
 end
+
+function check_broadcast_indices(out_inds::AbstractSet, d::AbstractDict)
+    if !issetequal(out_inds, keys(d))
+        throw(ErrorException("Output broadcast indices $out_inds do not match input $(keys(d))"))
+    end
+end
+function check_broadcast_indices(out_inds::AbstractSet, d::AbstractVector)
+    if !(length(d) === 1 || issetequal(out_inds, keys(d)))
+        throw(ErrorException("Output broadcast indices $out_inds do not match input $(keys(d))"))
+    end
+end
+function check_broadcast_indices(out_inds::AbstractSet, t::Tuple)
+    if !(length(t) === 1 || issetequal(out_inds, keys(t)))
+        throw(ErrorException("Output broadcast indices $out_inds do not match input $(keys(t))"))
+    end
+end
+function check_broadcast_indices(out_inds::AbstractSet, d::NamedTuple)
+    if !issetequal(out_inds, keys(d))
+        throw(ErrorException("Output broadcast indices $out_inds do not match input $(keys(d))"))
+    end
+end
+function check_broadcast_indices(out_inds::AbstractUnitRange, d::AbstractDict)
+    if !issetequal(out_inds, keys(d))
+        throw(ErrorException("Output broadcast indices $out_inds do not match input $(keys(d))"))
+    end
+end
+check_broadcast_indices(::AbstractSet, ::Any) = nothing
+check_broadcast_indices(::AbstractSet, ::AbstractArray{<:Any,0}) = nothing
+check_broadcast_indices(::AbstractSet, ::AbstractArray) = throw(ErrorException("Broadcasting between dictionaries and multidimensional arrays is not supported"))
+
 
 ## Indexing manipulations
 
@@ -436,7 +508,7 @@ end
     broadcast!(f, dest, As...)
 
 Like [`broadcast`](@ref), but store the result of
-`broadcast(f, As...)` in the `dest` array.
+`broadcast(f, As...)` in the `dest` array or dictionary.
 Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
@@ -469,6 +541,34 @@ end
         end
     end
     _broadcast!(f, dest, As...)
+    return dest
+end
+
+# Broadcasting with dictionaries
+@inline function broadcast!(f, dest::AbstractDict, ::Scalar, As::Vararg{Any, N}) where N
+    @inbounds for i in keys(dest)
+        dest[i] = f(As...)
+    end
+    return dest
+end
+
+@inline function broadcast!(f, dest::AbstractDict, ::BroadcastStyle, As::Vararg{Any, N}) where N
+    inds = keys(dest)
+    @boundscheck map(a -> check_broadcast_indices(inds, a), As)
+
+    @inbounds for i in inds
+        dest[i] = f(map(a -> _getindex(a, i), As)...)
+    end
+    return dest
+end
+
+@inline function broadcast!(f, dest::AbstractVector, ::DictStyle, As::Vararg{Any, N}) where N
+    inds = keys(dest)
+    @boundscheck map(a -> check_broadcast_indices(inds, a), As)
+
+    @inbounds for i in inds
+        dest[i] = f(map(a -> _getindex(a, i), As)...)
+    end
     return dest
 end
 
@@ -519,8 +619,20 @@ end
     end
 end
 
-maptoTuple(f) = Tuple{}
-maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
+# Simplified _broadcast_getindex for dictionary broadcasting (0D and 1D containers only)
+@inline _getindex(a, i) = a
+@inline _getindex(a::AbstractDict, i) = @inbounds a[i]
+@inline function _getindex(a::AbstractVector, i)
+    if length(a) === 1
+        return @inbounds first(a)
+    else
+        return @inbounds a[i]
+    end
+end
+@inline _getindex(a::AbstractArray{<:Any, 0}, i) = @inbounds a[]
+@inline _getindex(a::Tuple, i) = @inbounds a[i]
+@inline _getindex(a::Tuple{Any}, i) = @inbounds a[1]
+@inline _getindex(a::NamedTuple, i) = @inbounds a[i]
 
 # An element type satisfying for all A:
 # broadcast_getindex(
@@ -531,25 +643,32 @@ _broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(combine_styles(A), A)
 _broadcast_getindex_eltype(::Scalar, ::Type{T}) where T = Type{T}
 _broadcast_getindex_eltype(::Union{Unknown,Scalar}, A) = typeof(A)
 _broadcast_getindex_eltype(::BroadcastStyle, A) = eltype(A)  # Tuple, Array, etc.
+_broadcast_getindex_eltype(::DictStyle, d) = valtype(d) # Dict, etc
 
 # Inferred eltype of result of broadcast(f, xs...)
 combine_eltypes(f, A, As...) =
     Base._return_type(f, maptoTuple(_broadcast_getindex_eltype, A, As...))
 
+maptoTuple(f) = Tuple{}
+maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
+
+
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref`s and/or scalars `As` to a
+Broadcasts the arrays, tuples, named tuples, dictionaries, `Ref`s and/or scalars `As` to a
 container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`
-is considered a scalar. The resulting container is established by
-the following rules:
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`, `NamedTuple`
+or `AbstractDict` is considered a scalar. The resulting container is established by the
+following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
    and tuples as 1-dimensional arrays.
+ - If the arguments are named tuples and zero or more scalars, it returns a named tuple.
+ - If the arguments contain at least one dictionary, it returns a dictionary.
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -609,6 +728,13 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
  "three: 3"
  "four: 4"
 
+julia> (*).((a = 1, b = 2), 2)
+(a = 2, b = 4)
+
+julia> (+).(Dict(1 => 1, 2 => 2), [10, 20])
+Dict{Int64,Int64} with 2 entries:
+  2 => 22
+  1 => 11
 ```
 """
 @inline broadcast(f, A, Bs...) =
@@ -632,6 +758,23 @@ end
     dest = broadcast_similar(f, s, ElType, inds, As...)
     broadcast!(f, dest, As...)
 end
+
+@inline function broadcast(f, s::BroadcastStyle, ::Type{ElType}, inds::Tuple{AbstractSet}, As...) where ElType
+    dest = broadcast_similar(f, s, ElType, inds, As...)
+    @inbounds broadcast!(f, dest, As...)
+end
+
+@inline function broadcast(f, s::Style{NamedTuple}, ::Type{ElType}, inds::Tuple{Tuple{Vararg{Symbol}}}, As...) where ElType
+    NamedTuple{inds[1]}(_broadcast(f, s, inds[1], As...))
+end
+
+@inline function _broadcast(f, s::Style{NamedTuple}, inds::Tuple{Vararg{Symbol}}, As...)
+    i1 = inds[1]
+    i_tail = Base.tail(inds)
+    (f(map(a -> _getindex(a, i1), As)...), _broadcast(f, s, i_tail, As...)...)
+end
+@inline _broadcast(f, s::Style{NamedTuple}, inds::Tuple{}, As...) = ()
+
 
 # When ElType is not concrete, use narrowing. Use the first element of each input to determine
 # the starting output eltype; the _broadcast! method will widen `dest` as needed to

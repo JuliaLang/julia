@@ -612,3 +612,56 @@ let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
 end
+
+@testset "Broadcast dictionaries" begin
+    d = Dict(1 => 10, 2 => 20)
+
+    # Single argument `broadcast`
+    @test (d .* 2)::Dict{Int, Int} == Dict(1 => 20, 2 => 40)
+    @test (d .* 2.0)::Dict{Int, Float64} == Dict(1 => 20.0, 2 => 40.0)
+
+    # Two argument `broacast`
+    x = 2
+    @test (d .* x)::Dict{Int, Int} == Dict(1 => 20, 2 => 40)
+    @test (d .* d)::Dict{Int, Int} == Dict(1 => 100, 2 => 400)
+    @test (d .+ [1, 2])::Dict{Int, Int} == Dict(1 => 11, 2 => 22)
+    @test (d .+ (1, 2))::Dict{Int, Int} == Dict(1 => 11, 2 => 22)
+    @test (d .+ [1])::Dict{Int, Int} == Dict(1 => 11, 2 => 21)
+    @test (d .+ (1,))::Dict{Int, Int} == Dict(1 => 11, 2 => 21)
+    @test (d .+ fill(1))::Dict{Int, Int} == Dict(1 => 11, 2 => 21) # zero-dimensional array
+
+    @test Dict(:a=>1, :b=>2) .+ (a=1, b=2) == Dict(:a=>2, :b=>4)
+
+    # Mutating `broadcast!`
+    d2 = copy(d)
+    d2 .= 0
+    @test d2 == Dict(1 => 0, 2 => 0)
+    d2 .= [1]
+    @test d2 == Dict(1 => 1, 2 => 1)
+    d2 .= (2,)
+    @test d2 == Dict(1 => 2, 2 => 2)
+    d2 .= Dict(1 => 3, 2 => 4)
+    @test d2 == Dict(1 => 3, 2 => 4)
+    d2 .= [5, 6]
+    @test d2 == Dict(1 => 5, 2 => 6)
+    d2 .= (7, 8)
+    @test d2 == Dict(1 => 7, 2 => 8)
+
+    d3 = Dict(:a=>0, :b=>0)
+    d3 .= (a=1, b=2)
+    @test d3 == Dict(:a=>1, :b=>2)
+
+    # `broadcast!` into an array
+    a = [0, 0]
+    a .= d
+    @test a == [10, 20]
+end
+
+@testset "Broadcast named tuples" begin
+    @test (a=1, b=2) .+ 1 === (a=2, b=3)
+    @test (a=1, b=2) .+ [1] === (a=2, b=3)
+    @test (a=1, b=2) .+ fill(1) === (a=2, b=3)
+    @test (a=1, b=2) .+ (1,) === (a=2, b=3)
+    @test (a=1, b=2) .+ (a=1, b=2) === (a=2, b=4)
+    @test (a=1, b=2) .+ (b=2, a=1) === (a=2, b=4)
+end
