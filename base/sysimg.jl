@@ -2,8 +2,10 @@
 
 baremodule Base
 
-using Core.Intrinsics
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+using Core.Intrinsics, Core.IR
+
+const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
 getproperty(x, f::Symbol) = getfield(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
@@ -16,6 +18,7 @@ setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
+function include_relative end
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
@@ -92,6 +95,15 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
+"""
+    time_ns()
+
+Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+"""
+time_ns() = ccall(:jl_hrtime, UInt64, ())
+
+start_base_include = time_ns()
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -162,6 +174,10 @@ Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missi
 
 include("abstractdict.jl")
 
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
+
 include("namedtuple.jl")
 
 # numeric operations
@@ -207,9 +223,6 @@ include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")
@@ -218,15 +231,11 @@ include("strings/string.jl")
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N,A}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1,A}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2,A}}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
+StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -346,7 +355,6 @@ include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
@@ -422,8 +430,6 @@ include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-include("i18n.jl")
-using .I18n
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -432,17 +438,11 @@ using .StackTraces
 include("initdefs.jl")
 include("client.jl")
 
-# misc useful functions & macros
-include("util.jl")
-
 # statistics
 include("statistics.jl")
 
 # missing values
 include("missing.jl")
-
-# libgit2 support
-include("libgit2/libgit2.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -451,17 +451,14 @@ include("threadcall.jl")
 include("uuid.jl")
 include("loading.jl")
 
+# misc useful functions & macros
+include("util.jl")
+
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
     init_depot_path(BINDIR)
     init_load_path(BINDIR)
 end
-
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
 
 include("asyncmap.jl")
 
@@ -477,14 +474,20 @@ include("docs/basedocs.jl")
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
-isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+if isdefined(Core, :Compiler) && is_primary_base_module
+    Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+end
 
+end_base_include = time_ns()
+
+if is_primary_base_module
 function __init__()
     # for the few uses of Crand in Base:
     Csrand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
+    Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
+    global_logger(Logging.ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_depot_path()
@@ -493,39 +496,66 @@ function __init__()
 end
 
 INCLUDE_STATE = 3 # include = include_relative
+end
+
+const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base
 
-using Base
+using .Base
+
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
+if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
-Base.require(Base, :Base64)
-Base.require(Base, :CRC32c)
-Base.require(Base, :Dates)
-Base.require(Base, :DelimitedFiles)
-Base.require(Base, :Serialization)
-Base.require(Base, :Distributed)
-Base.require(Base, :FileWatching)
-Base.require(Base, :Future)
-Base.require(Base, :IterativeEigensolvers)
-Base.require(Base, :Libdl)
-Base.require(Base, :LinearAlgebra)
-Base.require(Base, :Logging)
-Base.require(Base, :Mmap)
-Base.require(Base, :Printf)
-Base.require(Base, :Profile)
-Base.require(Base, :Random)
-Base.require(Base, :SharedArrays)
-Base.require(Base, :SparseArrays)
-Base.require(Base, :SuiteSparse)
-Base.require(Base, :Test)
-Base.require(Base, :Unicode)
-Base.require(Base, :Pkg)
-Base.require(Base, :REPL)
-Base.require(Base, :Markdown)
+let
+    # Stdlibs manually sorted in top down order
+    stdlibs = [
+            # No deps
+            :Base64,
+            :CRC32c,
+            :SHA,
+            :FileWatching,
+            :Unicode,
+            :Mmap,
+            :Serialization,
+            :Libdl,
+            :Markdown,
+            :LibGit2,
+            :Logging,
+
+            :Printf,
+            :Profile,
+            :Dates,
+            :DelimitedFiles,
+            :Random,
+            :UUIDs,
+            :Future,
+            :Pkg,
+            :LinearAlgebra,
+            :IterativeEigensolvers,
+            :SparseArrays,
+            :SuiteSparse,
+            :SharedArrays,
+            :Distributed,
+            :Test,
+            :REPL,
+        ]
+
+    maxlen = maximum(textwidth.(string.(stdlibs)))
+
+    print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
+    print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
+
+    Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
+        tt = @elapsed Base.require(Base, stdlib)
+        print_time(stdlib, tt)
+    end
+
+    print_time("Stdlibs total", Base.tot_time_stdlib[])
+end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -566,6 +596,7 @@ Base.require(Base, :Markdown)
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
 
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
+    @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
@@ -580,6 +611,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib base64decode Base64 true
     @deprecate_stdlib Base64EncodePipe Base64 true
     @deprecate_stdlib Base64DecodePipe Base64 true
+    @deprecate_stdlib stringmime Base64 true
 
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true
@@ -741,7 +773,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib nullspace   LinearAlgebra true
     @deprecate_stdlib ordschur!   LinearAlgebra true
     @deprecate_stdlib ordschur    LinearAlgebra true
-    @deprecate_stdlib peakflops   LinearAlgebra true
     @deprecate_stdlib pinv        LinearAlgebra true
     @deprecate_stdlib qr          LinearAlgebra true
     @deprecate_stdlib qrfact!     LinearAlgebra true
@@ -848,6 +879,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib methodswith   InteractiveUtils true
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
+    @deprecate_stdlib peakflops     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -858,10 +890,24 @@ Base.require(Base, :Markdown)
     @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
 end
+end
 
 empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
 
-Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+let
+tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
 
-Base.include(Base, "precompile.jl")
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
+tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
+
+println("Sysimage built. Summary:")
+print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); showcompact((tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); showcompact((Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+if isfile("userimg.jl")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); showcompact((tot_time_userimg       / tot_time) * 100); println("%")
+end
+print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); showcompact((tot_time_precompile    / tot_time) * 100); println("%")
+end

@@ -114,8 +114,8 @@ end # module WarnType
 # Adds test for PR #17636
 let a = @code_typed 1 + 1
     b = @code_lowered 1 + 1
-    @test isa(a, Pair{CodeInfo, DataType})
-    @test isa(b, CodeInfo)
+    @test isa(a, Pair{Core.CodeInfo, DataType})
+    @test isa(b, Core.CodeInfo)
     @test isa(a[1].code, Array{Any,1})
     @test isa(b.code, Array{Any,1})
 

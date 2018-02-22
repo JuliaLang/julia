@@ -2,11 +2,11 @@
 
 module Broadcast
 
-using Base.Cartesian
-using Base: Indices, OneTo, linearindices, tail, to_shape,
+using .Base.Cartesian
+using .Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             isoperator, promote_typejoin
-import Base: broadcast, broadcast!
+import .Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
@@ -500,14 +500,13 @@ end
             @nexprs $nargs i->(@inbounds val_i = _broadcast_getindex(A_i, I_i))
             # call the function
             V = @ncall $nargs f val
-            S = typeof(V)
             # store the result
-            if S <: eltype(B)
+            if V isa eltype(B)
                 @inbounds B[I] = V
             else
                 # This element type doesn't fit in B. Allocate a new B with wider eltype,
                 # copy over old values, and continue
-                newB = Base.similar(B, promote_typejoin(eltype(B), S))
+                newB = Base.similar(B, promote_typejoin(eltype(B), typeof(V)))
                 for II in Iterators.take(iter, count)
                     newB[II] = B[II]
                 end
@@ -818,7 +817,8 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 # broadcasting "dot" calls/assignments:
 
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
-dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
+# don't add dots to dot operators
+dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
 dottable(x::Expr) = x.head != :$
 undot(x) = x
 function undot(x::Expr)

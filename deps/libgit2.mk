@@ -73,10 +73,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-e
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
-	$(JLDOWNLOAD) $(shell pwd)/cacert-2017-09-20.pem https://curl.haxx.se/ca/cacert-2017-09-20.pem
-	$(JLCHECKSUM) $(shell pwd)/cacert-2017-09-20.pem
+	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-01-17.pem https://curl.haxx.se/ca/cacert-2018-01-17.pem
+	$(JLCHECKSUM) $(shell pwd)/cacert-2018-01-17.pem
 	mkdir -p $(build_datarootdir)/julia
-	mv $(shell pwd)/cacert-2017-09-20.pem $@
+	mv $(shell pwd)/cacert-2018-01-17.pem $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \

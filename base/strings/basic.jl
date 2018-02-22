@@ -256,15 +256,12 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    i = start(a)
-    j = start(b)
-    while !done(a, i)
-        done(b, j) && return 1
-        c, i = next(a, i)
-        d, j = next(b, j)
+    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
+    for (c, d) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
-    return ifelse(done(b, j), 0, -1)
+    isempty(a) && return ifelse(isempty(b), 0, -1)
+    return 1
 end
 
 """
@@ -486,7 +483,7 @@ last(e::EachStringIndex) = lastindex(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
-eltype(::Type{EachStringIndex}) = Int
+eltype(::Type{<:EachStringIndex}) = Int
 
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
@@ -515,8 +512,7 @@ isascii(s::AbstractString) = all(isascii, s)
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), true, true)
-    truncate(out, 0)
+    out = IOBuffer(sizehint=sizeof(s))
     for c in s
         c′ = f(c)
         isa(c′, Char) || throw(ArgumentError(
@@ -528,8 +524,7 @@ function map(f, s::AbstractString)
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), true, true)
-    truncate(out, 0)
+    out = IOBuffer(sizehint=sizeof(s))
     for c in s
         f(c) && write(out, c)
     end

@@ -32,8 +32,6 @@ Base.fill
 Base.fill!
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
-Base.linspace
-Base.logspace
 ```
 
 ## Basic functions
@@ -102,7 +100,7 @@ Base.@view
 Base.@views
 Base.parent
 Base.parentindices
-Base.slicedim
+Base.selectdim
 Base.reinterpret
 Base.reshape
 Base.squeeze
@@ -147,7 +145,7 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 LinearAlgebra.diff
-Base.repeat(::AbstractArray)
+Base.repeat
 Base.rot180
 Base.rotl90
 Base.rotr90

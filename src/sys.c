@@ -97,9 +97,13 @@ JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
 #else
-JL_DLLEXPORT int64_t jl_lseek(int fd, int64_t offset, int whence)
+JL_DLLEXPORT int64_t jl_lseek(HANDLE fd, int64_t offset, int whence)
 {
-    return _lseeki64(fd, offset, whence);
+    LARGE_INTEGER tell;
+    tell.QuadPart = offset;
+    if (SetFilePointerEx(fd, tell, &tell, whence) == 0)
+        return -1;
+    return tell.QuadPart;
 }
 #endif
 JL_DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
@@ -116,7 +120,7 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT ssize_t jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
@@ -147,7 +151,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     return ret;
 }
 
-JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
 {
     uv_fs_t req;
     int ret;

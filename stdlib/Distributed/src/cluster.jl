@@ -273,7 +273,7 @@ function read_worker_host_port(io::IO)
             end
             !istaskdone(readtask) && break
 
-            conninfo = wait(readtask)
+            conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
                 error("Unable to read host:port string from worker. Launch command exited with error?")
             end
@@ -416,7 +416,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    wait(t_launch)      # catches any thrown errors from the launch task
+    Base._wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.

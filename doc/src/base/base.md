@@ -74,7 +74,6 @@ primitive type
 ```@docs
 Base.Docs
 Base.Iterators
-Base.LibGit2
 Base.Libc
 Base.Meta
 Base.StackTraces
@@ -298,6 +297,7 @@ Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
 Base.InitError

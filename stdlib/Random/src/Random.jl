@@ -95,7 +95,7 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 abstract type Sampler{E} end
 
-Base.eltype(::Type{Sampler{E}}) where {E} = E
+Base.eltype(::Type{<:Sampler{E}}) where {E} = E
 
 # temporarily for BaseBenchmarks
 RangeGenerator(x) = Sampler(GLOBAL_RNG, x)

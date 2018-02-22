@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Logging
 
 import Logging: min_enabled_level, shouldlog, handle_message

@@ -5,7 +5,7 @@ module Entry
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import Pkg
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-using ...LibGit2
+using LibGit2
 import ..PkgError
 using ..Types
 using Base.Printf: @printf
@@ -585,7 +585,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     code = """
         import Pkg
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.LOAD_CACHE_PATH)

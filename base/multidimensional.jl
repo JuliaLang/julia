@@ -2,14 +2,14 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import Base: eltype, length, size, start, done, next, first, last, in, getindex,
+    import .Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, IteratorSize, convert, show
 
-    import Base: +, -, *
-    import Base: simd_outer_range, simd_inner_length, simd_index
-    using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
-    using Base.Iterators: Reverse
+    import .Base: +, -, *
+    import .Base: simd_outer_range, simd_inner_length, simd_index
+    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
+    using .Base.Iterators: Reverse
 
     export CartesianIndex, CartesianIndices, LinearIndices
 
@@ -1066,7 +1066,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::StridedArray, J0::Union{Colon,UnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,UnitRange{Int}})
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1077,13 +1077,13 @@ end
     return B
 end
 
-@inline function setindex!(B::BitArray, X::StridedArray,
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
         I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
 end
-@generated function _unsafe_setindex!(B::BitArray, X::StridedArray,
+@generated function _unsafe_setindex!(B::BitArray, X::Union{StridedArray,BitArray},
         I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
     N = length(I)
     quote
@@ -1124,6 +1124,11 @@ end
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, x, J...)
 end
+@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
+        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+    _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
+end
+
 @generated function _unsafe_setindex!(B::BitArray, x,
         I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
     N = length(I)
@@ -1205,16 +1210,12 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
             checkdims_perm(P, B, perm)
 
             #calculates all the strides
+            native_strides = size_to_strides(1, size(B)...)
             strides_1 = 0
-            @nexprs $N d->(strides_{d+1} = stride(B, perm[d]))
+            @nexprs $N d->(strides_{d+1} = native_strides[perm[d]])
 
             #Creates offset, because indexing starts at 1
             offset = 1 - sum(@ntuple $N d->strides_{d+1})
-
-            if isa(B, SubArray)
-                offset += first_index(B::SubArray) - 1
-                B = B.parent
-            end
 
             ind = 1
             @nexprs 1 d->(counts_{$N+1} = strides_{$N+1}) # a trick to set counts_($N+1)
@@ -1403,4 +1404,14 @@ end
         end
     end
     return B
+end
+
+# Show for pairs() with Cartesian indicies. Needs to be here rather than show.jl for bootstrap order
+function Base.showarg(io::IO, r::Union{Iterators.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
+                                       Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
+    print(io, "pairs(::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+    print(io, "pairs(IndexCartesian(), ::$T)")
 end

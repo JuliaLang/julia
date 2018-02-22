@@ -5,7 +5,7 @@ using Random
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
 
-@doc """
+"""
 
 `tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
@@ -30,7 +30,7 @@ in the `choices` argument:
    - "--seed=SEED", which sets the value of `seed` to `SEED`
      (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
      This option can be used to reproduce failed tests.
-""" ->
+"""
 function choosetests(choices = [])
     testnames = [
         "subarray", "core", "compiler", "worlds",
@@ -38,7 +38,7 @@ function choosetests(choices = [])
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
-        "intfuncs", "simdloop", "vecelement",
+        "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
@@ -48,9 +48,9 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "some", "meta", "stacktraces", "libgit2", "docs",
+        "some", "meta", "stacktraces", "docs",
         "misc", "threads",
-        "enums", "cmdlineargs", "i18n", "int",
+        "enums", "cmdlineargs", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "specificity", "codegen",
@@ -130,6 +130,7 @@ function choosetests(choices = [])
 
 
     explicit_pkg =  "Pkg/pkg" in tests
+    explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
     for test in tests
         if test in STDLIBS
@@ -143,9 +144,8 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     prepend!(tests, new_tests)
-    if !explicit_pkg
-        filter!(x -> x != "Pkg/pkg", tests)
-    end
+    explicit_pkg || filter!(x -> x != "Pkg/pkg", tests)
+    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     if "ambiguous" in skip_tests
@@ -162,7 +162,7 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["socket", "libgit2"]
+    net_required_for = ["socket", "LibGit2"]
     net_on = true
     try
         ipa = getipaddr()

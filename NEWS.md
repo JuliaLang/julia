@@ -44,6 +44,9 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
+  * Keyword arguments can be required: if a default value is omitted, then an
+    exception is thrown if the caller does not assign the keyword a value ([#25830]).
+
 Language changes
 ----------------
 
@@ -56,6 +59,10 @@ Language changes
 
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
+
+  * Mutable structs with no fields are no longer singletons; it is now possible to make
+    multiple instances of them that can be distinguished by `===` ([#25854]).
+    Zero-size immutable structs are still singletons.
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
@@ -74,6 +81,9 @@ Language changes
     `(1<<2)*3` in a future version ([#13079]).
 
   * The parsing of `<|` is now right associative. `|>` remains left associative ([#24153]).
+
+  * `:` now parses like other operators, as a call to a function named `:`, instead of
+    calling `colon` ([#25947]).
 
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
     of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
@@ -155,7 +165,7 @@ Language changes
     expressions) ([#23885]).
 
   * The `+` and `-` methods for `Number` and `UniformScaling` are not ambiguous anymore since `+`
-    and `-` no longer do automatic broadcasting. Hence the methods for `UniformScaling` and `Number` are
+    and `-` no longer do automatic broadcasting. Hence, the methods for `UniformScaling` and `Number` are
     no longer deprecated ([#23923]).
 
   * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
@@ -172,6 +182,10 @@ Language changes
     of backslashes precedes a quote character. Thus, 2n backslashes followed by a quote encodes n
     backslashes and the end of the literal while 2n+1 backslashes followed by a quote encodes n
     backslashes followed by a quote character ([#22926]).
+
+  * `reprmime(mime, x)` has been renamed to `repr(mime, x)`, and along with `repr(x)`
+    and `sprint` it now accepts an optional `context` keyword for `IOContext` attributes.
+    `stringmime` has been moved to the Base64 stdlib package ([#25990]).
 
   * The syntax `(x...)` for constructing a tuple is deprecated; use `(x...,)` instead ([#24452]).
 
@@ -199,6 +213,9 @@ This section lists changes that do not have deprecation warnings.
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
+  * `countlines` now always counts the last non-empty line even if it does not
+    end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
+
   * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
@@ -209,7 +226,7 @@ This section lists changes that do not have deprecation warnings.
 
   * `finalizer(function, object)` now returns `object` rather than `nothing` ([#24679]).
 
-  * The constructor of `SubString` now checks if the requsted view range
+  * The constructor of `SubString` now checks if the requested view range
     is defined by valid indices in the parent `AbstractString` ([#22511]).
 
   * Macro calls with `for` expressions are now parsed as generators inside
@@ -242,7 +259,7 @@ This section lists changes that do not have deprecation warnings.
     returned ([#21825]).
 
   * Using `ARGS` within the ~/.juliarc.jl or within a .jl file loaded with `--load` will no
-    longer contain the script name as the first argument. Instead the script name will be
+    longer contain the script name as the first argument. Instead, the script name will be
     assigned to `PROGRAM_FILE`. ([#22092])
 
   * The format for a `ClusterManager` specifying the cookie on the command line is now
@@ -258,6 +275,9 @@ This section lists changes that do not have deprecation warnings.
     to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
     `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035], [#23154]).
+
+  * The immediate supertype of `BitArray` is now simply `AbstractArray`. `BitArray` is no longer
+    considered a subtype of `DenseArray` and `StridedArray` ([#25858]).
 
   * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
     first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
@@ -317,13 +337,9 @@ This section lists changes that do not have deprecation warnings.
   * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
     used internally ([#22390]).
 
-  * All loaded packges used to have bindings in `Main` (e.g. `Main.Package`). This is no
+  * All loaded packages used to have bindings in `Main` (e.g. `Main.Package`). This is no
     longer the case; now bindings will only exist for packages brought into scope by
     typing `using Package` or `import Package` ([#17997]).
-
-  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
-    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
-    `x` ([#20233]).
 
   * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
     simplified: if the arguments have different sizes (in bits), then the type of the larger
@@ -385,8 +401,12 @@ This section lists changes that do not have deprecation warnings.
     now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
     In particular, this means that they use `CartesianIndex` objects for matrices
-    and higher-dimensional arrays insted of linear indices as was previously the case.
+    and higher-dimensional arrays instead of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
+
+  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+    and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
+    than 0 ([#25472], [#25662]).
 
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
@@ -404,8 +424,16 @@ This section lists changes that do not have deprecation warnings.
       to get the old behavior (only "space" characters are considered as
       word separators), use the keyword `wordsep=isspace`.
 
+  * `writedlm` in the standard library module DelimitedFiles now writes numeric values
+    using `print` rather than `print_shortest` ([#25745]).
+
   * The `tempname` function used to create a file on Windows but not on other
     platforms. It now never creates a file ([#9053]).
+
+  * The `fieldnames` and `propertynames` functions now return a tuple rather than
+    an array ([#25725]).
+
+  * `indexin` now returns the first rather than the last matching index ([#25998]).
 
 Library improvements
 --------------------
@@ -419,6 +447,9 @@ Library improvements
     empty container ([#24390]).
 
   * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
+
+  * REPL LaTeX-like tab completions have been simplified for several Unicode characters,
+    e.g. `𝔸` is now `\bbA` rather than `\BbbA` ([#25980]).
 
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
@@ -451,7 +482,7 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
-  * `parse(Complex{T}, string)` can parse complex numbers in common formats ([#24713]).
+  * `parse(Complex{T}, string)` can parse complex numbers in some common formats ([#24713]).
 
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
@@ -476,9 +507,6 @@ Library improvements
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
     command line tool ([#22062]).
-
-  * `logspace` now accepts a `base` keyword argument to specify the base of the logarithmic
-    range. The base defaults to 10 ([#22310]).
 
   * Added `unique!` which is an inplace version of `unique` ([#20549]).
 
@@ -562,11 +590,14 @@ Library improvements
       Use `unique` to get the old behavior.
 
   * The type `LinearIndices` has been added, providing conversion from
-    cartesian incices to linear indices using the normal indexing operation. ([#24715])
+    cartesian indices to linear indices using the normal indexing operation. ([#24715])
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
+
+  * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
+    the buffer ([#25944]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -623,6 +654,13 @@ Deprecated or removed
 
   * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
     them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
+  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
+    `selectdim` function now always returns a view into `A`; in many cases the `copy` is
+    not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
+	index `i` would return the just selected element (unless `V` was a `BitVector`). This
+	has now been made consistent: `selectdim` now always returns a view into the original
+	array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
@@ -695,7 +733,7 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
@@ -732,6 +770,10 @@ Deprecated or removed
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`,
+    `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are
+    deprecated in favor of constructors taking keyword arguments ([#25872]).
 
   * `Display` has been renamed to `AbstractDisplay` ([#24831]).
 
@@ -962,8 +1004,7 @@ Deprecated or removed
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
-  * `linspace` and `logspace` now require an explicit number of elements to be
-    supplied rather than defaulting to `50`([#24794], [#24805]).
+  * `matchall` has been deprecated in favor of `collect(m.match for m in eachmatch(r, s))` ([#26071]).
 
   * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
@@ -998,7 +1039,23 @@ Deprecated or removed
 
   * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
 
-  * `scale!` has been deprecated in favor of `mul!`, `mul1!`, and `mul2!` ([#25701]).
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
+    submodule ([#25745]).
+
+  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
+
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
+    has been renamed to `force` ([#25979]).
+
+  * The methods of `range` based on positional arguments have been deprecated in favor of
+    keyword arguments ([#25896]).
+
+  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
+    arguments ([#25896]).
+
+  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+
+  * `logspace` has been deprecated to its definition ([#25896]).
 
   * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
     lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
@@ -1006,6 +1063,11 @@ Deprecated or removed
 
   * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
     and `Time(0)` respectively ([#23724]).
+
+  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
+    add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
+
+  * `wait` and `fetch` on `Task` now resemble the interface of `Future`
 
 Command-line option changes
 ---------------------------
@@ -1032,9 +1094,11 @@ Command-line option changes
 [#6614]: https://github.com/JuliaLang/julia/issues/6614
 [#8000]: https://github.com/JuliaLang/julia/issues/8000
 [#8470]: https://github.com/JuliaLang/julia/issues/8470
+[#9053]: https://github.com/JuliaLang/julia/issues/9053
 [#9292]: https://github.com/JuliaLang/julia/issues/9292
 [#10593]: https://github.com/JuliaLang/julia/issues/10593
 [#11310]: https://github.com/JuliaLang/julia/issues/11310
+[#12010]: https://github.com/JuliaLang/julia/issues/12010
 [#12131]: https://github.com/JuliaLang/julia/issues/12131
 [#13079]: https://github.com/JuliaLang/julia/issues/13079
 [#14770]: https://github.com/JuliaLang/julia/issues/14770
@@ -1056,7 +1120,6 @@ Command-line option changes
 [#19186]: https://github.com/JuliaLang/julia/issues/19186
 [#19987]: https://github.com/JuliaLang/julia/issues/19987
 [#20005]: https://github.com/JuliaLang/julia/issues/20005
-[#20233]: https://github.com/JuliaLang/julia/issues/20233
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20549]: https://github.com/JuliaLang/julia/issues/20549
 [#20575]: https://github.com/JuliaLang/julia/issues/20575
@@ -1102,7 +1165,6 @@ Command-line option changes
 [#22274]: https://github.com/JuliaLang/julia/issues/22274
 [#22281]: https://github.com/JuliaLang/julia/issues/22281
 [#22296]: https://github.com/JuliaLang/julia/issues/22296
-[#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22314]: https://github.com/JuliaLang/julia/issues/22314
 [#22324]: https://github.com/JuliaLang/julia/issues/22324
 [#22325]: https://github.com/JuliaLang/julia/issues/22325
@@ -1161,11 +1223,13 @@ Command-line option changes
 [#23235]: https://github.com/JuliaLang/julia/issues/23235
 [#23261]: https://github.com/JuliaLang/julia/issues/23261
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
+[#23332]: https://github.com/JuliaLang/julia/issues/23332
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
 [#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
+[#23393]: https://github.com/JuliaLang/julia/issues/23393
 [#23404]: https://github.com/JuliaLang/julia/issues/23404
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23504]: https://github.com/JuliaLang/julia/issues/23504
@@ -1174,12 +1238,14 @@ Command-line option changes
 [#23528]: https://github.com/JuliaLang/julia/issues/23528
 [#23529]: https://github.com/JuliaLang/julia/issues/23529
 [#23530]: https://github.com/JuliaLang/julia/issues/23530
+[#23554]: https://github.com/JuliaLang/julia/issues/23554
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23628]: https://github.com/JuliaLang/julia/issues/23628
 [#23642]: https://github.com/JuliaLang/julia/issues/23642
 [#23665]: https://github.com/JuliaLang/julia/issues/23665
 [#23690]: https://github.com/JuliaLang/julia/issues/23690
 [#23716]: https://github.com/JuliaLang/julia/issues/23716
+[#23724]: https://github.com/JuliaLang/julia/issues/23724
 [#23750]: https://github.com/JuliaLang/julia/issues/23750
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23805]: https://github.com/JuliaLang/julia/issues/23805
@@ -1234,8 +1300,6 @@ Command-line option changes
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
 [#24785]: https://github.com/JuliaLang/julia/issues/24785
 [#24786]: https://github.com/JuliaLang/julia/issues/24786
-[#24794]: https://github.com/JuliaLang/julia/issues/24794
-[#24805]: https://github.com/JuliaLang/julia/issues/24805
 [#24808]: https://github.com/JuliaLang/julia/issues/24808
 [#24831]: https://github.com/JuliaLang/julia/issues/24831
 [#24839]: https://github.com/JuliaLang/julia/issues/24839
@@ -1254,14 +1318,51 @@ Command-line option changes
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
+[#25210]: https://github.com/JuliaLang/julia/issues/25210
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
-[#25365]: https://github.com/JuliaLang/julia/issues/25365
+[#25249]: https://github.com/JuliaLang/julia/issues/25249
+[#25278]: https://github.com/JuliaLang/julia/issues/25278
+[#25311]: https://github.com/JuliaLang/julia/issues/25311
+[#25321]: https://github.com/JuliaLang/julia/issues/25321
+[#25368]: https://github.com/JuliaLang/julia/issues/25368
+[#25391]: https://github.com/JuliaLang/julia/issues/25391
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25429]: https://github.com/JuliaLang/julia/issues/25429
+[#25457]: https://github.com/JuliaLang/julia/issues/25457
+[#25459]: https://github.com/JuliaLang/julia/issues/25459
+[#25472]: https://github.com/JuliaLang/julia/issues/25472
+[#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
+[#25564]: https://github.com/JuliaLang/julia/issues/25564
+[#25567]: https://github.com/JuliaLang/julia/issues/25567
+[#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25633]: https://github.com/JuliaLang/julia/issues/25633
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
 [#25655]: https://github.com/JuliaLang/julia/issues/25655
+[#25662]: https://github.com/JuliaLang/julia/issues/25662
+[#25667]: https://github.com/JuliaLang/julia/issues/25667
+[#25668]: https://github.com/JuliaLang/julia/issues/25668
+[#25701]: https://github.com/JuliaLang/julia/issues/25701
+[#25725]: https://github.com/JuliaLang/julia/issues/25725
+[#25745]: https://github.com/JuliaLang/julia/issues/25745
+[#25763]: https://github.com/JuliaLang/julia/issues/25763
 [#25766]: https://github.com/JuliaLang/julia/issues/25766
+[#25812]: https://github.com/JuliaLang/julia/issues/25812
+[#25830]: https://github.com/JuliaLang/julia/issues/25830
+[#25845]: https://github.com/JuliaLang/julia/issues/25845
+[#25854]: https://github.com/JuliaLang/julia/issues/25854
+[#25858]: https://github.com/JuliaLang/julia/issues/25858
+[#25872]: https://github.com/JuliaLang/julia/issues/25872
+[#25896]: https://github.com/JuliaLang/julia/issues/25896
+[#25944]: https://github.com/JuliaLang/julia/issues/25944
+[#25947]: https://github.com/JuliaLang/julia/issues/25947
+[#25979]: https://github.com/JuliaLang/julia/issues/25979
+[#25980]: https://github.com/JuliaLang/julia/issues/25980
+[#25990]: https://github.com/JuliaLang/julia/issues/25990
+[#25998]: https://github.com/JuliaLang/julia/issues/25998
+[#26009]: https://github.com/JuliaLang/julia/issues/26009
+[#26071]: https://github.com/JuliaLang/julia/issues/26071

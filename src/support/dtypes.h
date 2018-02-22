@@ -103,13 +103,10 @@
 
 #if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
 #  define STATIC_INLINE static
-#  define INLINE
 #elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
 #  define STATIC_INLINE static __inline
-#  define INLINE __inline
 #else
 #  define STATIC_INLINE static inline
-#  define INLINE inline
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)

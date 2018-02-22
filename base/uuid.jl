@@ -23,23 +23,6 @@ function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
     return (hh, hl, lh, ll)
 end
 
-# TODO: update documentation for new location
-"""
-    uuid_version(u::UUID) -> Int
-
-Inspects the given UUID and returns its version
-(see [RFC 4122](https://www.ietf.org/rfc/rfc4122)).
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> Random.uuid_version(Random.uuid4(rng))
-4
-```
-"""
-uuid_version(u::UUID) = Int((u.value >> 76) & 0xf)
-
 UInt128(u::UUID) = u.value
 
 let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]

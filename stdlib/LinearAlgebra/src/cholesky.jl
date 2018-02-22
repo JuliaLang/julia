@@ -393,7 +393,8 @@ function getproperty(C::Cholesky, d::Symbol)
         return getfield(C, d)
     end
 end
-Base.propertynames(F::Cholesky, private::Bool=false) = append!([:U,:L,:UL], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::Cholesky, private::Bool=false) =
+    (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
@@ -415,13 +416,15 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
         return getfield(C, d)
     end
 end
-Base.propertynames(F::CholeskyPivoted, private::Bool=false) = append!([:U,:L,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
+    (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, summary(C), "\n$(C.uplo) factor:")
+        println(io, summary(C))
+        println(io, "$(C.uplo) factor:")
         show(io, mime, C.UL)
     else
         print(io, "Failed factorization of type $(typeof(C))")
@@ -429,7 +432,8 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
 end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
-    println(io, summary(C), "\n$(C.uplo) factor with rank $(rank(C)):")
+    println(io, summary(C))
+    println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
     println(io, "\npermutation:")
     show(io, mime, C.p)

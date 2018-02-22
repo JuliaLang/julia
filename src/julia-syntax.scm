@@ -644,12 +644,22 @@
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
             (error "more than one semicolon in argument list")
-            (cond ((symbol? (car invalid))
-                   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
-                  (else
-                   (error (string "invalid keyword argument syntax \""
-                                  (deparse (car invalid))
-                                  "\" (expected assignment)"))))))))
+            (error (string "invalid keyword argument syntax \""
+                           (deparse (car invalid)) "\""))))))
+
+; replace unassigned kw args with assignment to throw() call (forcing the caller to assign the keyword)
+(define (throw-unassigned-kw-args argl)
+  (define (throw-unassigned argname)
+    `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
+  (if (has-parameters? argl)
+      (cons (cons 'parameters
+                  (map (lambda (x)
+                         (cond ((symbol? x) `(kw ,x ,(throw-unassigned x)))
+                               ((decl? x) `(kw ,x ,(throw-unassigned (cadr x))))
+                               (else x)))
+                       (cdar argl)))
+            (cdr argl))
+      argl))
 
 ;; method-def-expr checks for keyword arguments, and if there are any, calls
 ;; keywords-method-def-expr to expand the definition into several method
@@ -658,7 +668,7 @@
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
 (define (method-def-expr name sparams argl body rett)
-  (let ((argl (remove-empty-parameters argl)))
+  (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
@@ -1191,11 +1201,21 @@
                      (eq? (caadar binds) 'tuple))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           ,@(map (lambda (v) `(local-def ,v)) vars)
-                           ,(car binds)
-                           ,blk)))))
+                        (if (expr-contains-p (lambda (x) (memq x vars)) (caddr (car binds)))
+                            ;; use more careful lowering if there are name conflicts. issue #25652
+                            (let ((temp (make-ssavalue)))
+                              `(block
+                                (= ,temp ,(caddr (car binds)))
+                                (scope-block
+                                 (block
+                                  ,@(map (lambda (v) `(local-def ,v)) vars)
+                                  (= ,(cadr (car binds)) ,temp)
+                                  ,blk))))
+                            `(scope-block
+                              (block
+                               ,@(map (lambda (v) `(local-def ,v)) vars)
+                               ,(car binds)
+                               ,blk))))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
@@ -1499,11 +1519,7 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x)
-                                   (or (eq? x 'end)
-                                       (eq? x ':)
-                                       (and (pair? x)
-                                            (eq? (car x) ':))))
+                       (contains (lambda (x) (eq? x 'end))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -1596,10 +1612,6 @@
                  ,(lower-tuple-assignment (list lhs state)
                                           `(call (top next) ,coll ,state))
                  ,body))))))
-
-;; convert an operator parsed as (op a b) to (call op a b)
-(define (syntactic-op-to-call e)
-  `(call ,(car e) ,@(map expand-forms (cdr e))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
@@ -1907,8 +1919,10 @@
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
 
-   '|<:| syntactic-op-to-call
-   '|>:| syntactic-op-to-call
+   '|<:|
+   (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
+   '|>:|
+   (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
@@ -2034,10 +2048,7 @@
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
-                               (contains (lambda (x)
-                                           (or (eq? x 'end)
-                                               (and (pair? x)
-                                                    (eq? (car x) ':))))
+                               (contains (lambda (x) (eq? x 'end))
                                          idxs)))
                    (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
@@ -2276,16 +2287,6 @@
    '>>>=   lower-update-op
    '.>>>=   lower-update-op
 
-   ':
-   (lambda (e)
-     (if (or (length= e 2)
-             (and (length= e 3)
-                  (eq? (caddr e) ':))
-             (and (length= e 4)
-                  (eq? (cadddr e) ':)))
-         (error "invalid \":\" outside indexing"))
-     (expand-forms `(call colon ,@(cdr e))))
-
    '|...|
    (lambda (e) (error "\"...\" expression outside call"))
 
@@ -2392,7 +2393,9 @@
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                                              (pair? (caddr x))
+                                              (eq? (car (caddr x)) 'call)
+                                              (eq? (cadr (caddr x)) ':)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
@@ -3995,7 +3998,7 @@ f(x) = yt(x)
                      (if (has? vars (cadr e))
                          (begin (del! vars (cadr e))
                                 (put! di (cadr e) #t))))
-                    ((and (pair? e) (memq (car e) '(goto gotoifnot)))
+                    ((and (pair? e) (memq (car e) '(goto gotoifnot enter)))
                      (set! vars (table)))))
             (loop (cdr stmts)))))))
 

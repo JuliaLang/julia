@@ -4,10 +4,10 @@
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for linspace, e.g.
-    # linspace(1,3,7)
-    # 7-element LinSpace{Float64}:
+function show(io::IO, ::MIME"text/plain", r::LinRange)
+    # show for LinRange, e.g.
+    # range(1, stop=3, length=7)
+    # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     print(io, summary(r))
     if !isempty(r)
@@ -441,7 +441,7 @@ isvisible(sym::Symbol, parent::Module, from::Module) =
     isdefined(from, sym) && !isdeprecated(from, sym) && !isdeprecated(parent, sym) &&
         getfield(from, sym) === getfield(parent, sym)
 
-function show_type_name(io::IO, tn::TypeName)
+function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
         # intercept this case and print `UnionAll` instead.
@@ -539,15 +539,14 @@ Show an expression and result, returning the result.
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
-        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
-        push!(blk.args, :(println()))
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
+                                  repr(begin value=$(esc(ex)) end))))
     end
     isempty(exs) || push!(blk.args, :value)
     return blk
 end
 
-function show(io::IO, tn::TypeName)
+function show(io::IO, tn::Core.TypeName)
     show_type_name(io, tn)
 end
 
@@ -767,15 +766,10 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
-    i = start(s)
-    done(s, i) && return false
-    (c, i) = next(s, i)
+    isempty(s) && return false
+    c, rest = Iterators.peel(s)
     is_id_start_char(c) || return false
-    while !done(s, i)
-        (c, i) = next(s, i)
-        is_id_char(c) || return false
-    end
-    return true
+    return all(is_id_char, rest)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
@@ -972,8 +966,8 @@ end
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) &&
-            (func.head == :. || func.head == :curly))
+    if (isa(func, Symbol) && func !== :(:)) ||
+            (isa(func, Expr) && (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -1154,7 +1148,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x <: y" or "x = y")
-    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
+    elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
         if func_prec <= prec
@@ -1223,9 +1217,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
-                sep = " $func "
+                sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -1932,6 +1926,19 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret($T, ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+# pretty printing for Iterators.Pairs
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
+    print(io, "pairs(IndexLinear(), ::$T)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+    print(io, "pairs(::NamedTuple)")
+end
+
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
+    print(io, "Iterators.Pairs(::$D, ::$I)")
 end
 
 """

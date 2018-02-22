@@ -15,17 +15,17 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        beta, lbeta, @evalpoly
 
-import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one,
+using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base: IEEEFloat
+using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -244,16 +244,13 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :asinh, :exp2, :expm1)
+for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-exp(x::Real) = exp(float(x))
-exp10(x::Real) = exp10(float(x))
-atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -376,9 +373,6 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
-
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
 """
 log(x::Number)
 
@@ -422,9 +416,6 @@ log10(x)
 Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
-
 # Examples
 ```jldoctest
 julia> log1p(-0.5)
@@ -435,7 +426,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
+for f in (:log2, :log10, :lgamma)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
@@ -737,19 +728,6 @@ end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
-function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
-
-    y = 2*floor(theta/(2*pi))
-    r = ((theta - y*P1) - y*P2) - y*P3
-    if (r > pi)
-        r -= (2*pi)
-    end
-    return r
-end
-
 ## rem2pi-related calculations ##
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
@@ -985,12 +963,10 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 # More special functions
 include(joinpath("special", "exp.jl"))
 include(joinpath("special", "exp10.jl"))
+include(joinpath("special", "hyperbolic.jl"))
 include(joinpath("special", "trig.jl"))
 include(joinpath("special", "gamma.jl"))
 include(joinpath("special", "rem_pio2.jl"))
-
-module JuliaLibm
 include(joinpath("special", "log.jl"))
-end
 
 end # module

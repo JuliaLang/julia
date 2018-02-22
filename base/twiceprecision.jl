@@ -380,7 +380,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
     steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), Int(len), 1)
 end
 
-function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -421,7 +421,7 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
     steprangelen_hp(T, start, step, 0, len, 1)
 end
 
-function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
@@ -567,10 +567,10 @@ function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwiceP
     StepRangeLen{T,typeof(ref),typeof(step)}(ref, step, len, imid)
 end
 
-## LinSpace
+## LinRange
 
-# For Float16, Float32, and Float64, linspace returns a StepRangeLen
-function linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
+# For Float16, Float32, and Float64, this returns a StepRangeLen
+function _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:IEEEFloat}
     len < 2 && return _linspace1(T, start, stop, len)
     if start == stop
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
@@ -585,7 +585,7 @@ function linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
             start_n = round(Int, den*start)
             stop_n = round(Int, den*stop)
             if T(start_n/den) == start && T(stop_n/den) == stop
-                return linspace(T, start_n, stop_n, len, den)
+                return _linspace(T, start_n, stop_n, len, den)
             end
         end
     end
@@ -634,9 +634,9 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     steprangelen_hp(T, (ref, ref_lo), (step_hi, step_lo), 0, Int(len), imin)
 end
 
-# linspace for rational numbers, start = start_n/den, stop = stop_n/den
+# range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T
+function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
     start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len)
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
@@ -651,9 +651,9 @@ end
 
 # For len < 2
 function _linspace1(::Type{T}, start, stop, len::Integer) where T
-    len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
+    len >= 0 || throw(ArgumentError("range($start, stop=$stop, length=$len): negative length"))
     if len <= 1
-        len == 1 && (start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ")))
+        len == 1 && (start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ")))
         # Ensure that first(r)==start and last(r)==stop even for len==0
         # The output type must be consistent with steprangelen_hp
         if T<:Union{Float32,Float16}

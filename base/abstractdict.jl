@@ -30,9 +30,10 @@ function in(p, a::AbstractDict)
              function if you are looking for a key or value respectively.""")
 end
 
-function summary(t::AbstractDict)
+function summary(io::IO, t::AbstractDict)
     n = length(t)
-    return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+    showarg(io, t, true)
+    print(io, " with ", n, (n==1 ? " entry" : " entries"))
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
@@ -241,9 +242,8 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
-keytype(::Type{A}) where {A<:AbstractDict} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -256,8 +256,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{AbstractDict{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:AbstractDict} = valtype(supertype(A))
+valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -446,7 +445,19 @@ function filter(f, d::AbstractDict)
     return df
 end
 
-eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
+function eltype(::Type{<:AbstractDict{K,V}}) where {K,V}
+    if @isdefined(K)
+        if @isdefined(V)
+            return Pair{K,V}
+        else
+            return Pair{K}
+        end
+    elseif @isdefined(V)
+        return Pair{k,V} where k
+    else
+        return Pair
+    end
+end
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true

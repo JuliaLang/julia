@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo
+using Core: CodeInfo, SimpleVector
 
 const Callable = Union{Function,Type}
 
@@ -591,8 +591,11 @@ Colons (:) are used to signify indexing entire objects or dimensions at once.
 Very few operations are defined on Colons directly; instead they are converted
 by [`to_indices`](@ref) to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
+
+The singleton instance of `Colon` is also a function used to construct ranges;
+see [`:`](@ref).
 """
-struct Colon
+struct Colon <: Function
 end
 const (:) = Colon()
 
@@ -620,16 +623,6 @@ struct Val{x}
 end
 
 Val(x) = (@_pure_meta; Val{x}())
-
-# used by keyword arg call lowering
-function vector_any(@nospecialize xs...)
-    n = length(xs)
-    a = Vector{Any}(uninitialized, n)
-    @inbounds for i = 1:n
-        Core.arrayset(false, a, xs[i], i)
-    end
-    a
-end
 
 """
     invokelatest(f, args...; kwargs...)

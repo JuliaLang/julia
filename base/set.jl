@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-eltype(::Type{AbstractSet{T}}) where {T} = T
+eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 
-mutable struct Set{T} <: AbstractSet{T}
+struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
 
     Set{T}() where {T} = new(Dict{T,Nothing}())
@@ -564,8 +564,18 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 ## replace/replace! ##
 
+# TODO: use copy!, which is currently unavailable from here since it is defined in Future
+_copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
+# TODO: use similar() once deprecation is removed and it preserves keys
+_copy_oftype(x::AbstractDict, ::Type{T}) where {T} = merge!(empty(x, T), x)
+_copy_oftype(x::AbstractSet, ::Type{T}) where {T} = union!(empty(x, T), x)
+
+_copy_oftype(x::AbstractArray{T}, ::Type{T}) where {T} = copy(x)
+_copy_oftype(x::AbstractDict{K,V}, ::Type{Pair{K,V}}) where {K,V} = copy(x)
+_copy_oftype(x::AbstractSet{T}, ::Type{T}) where {T} = copy(x)
+
 # to make replace/replace! work for a new container type Cont, only
-# replace!(prednew::Callable, A::Cont; count::Integer=typemax(Int))
+# replace!(new::Callable, A::Cont; count::Integer=typemax(Int))
 # has to be implemented
 
 """
@@ -573,6 +583,7 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 For each pair `old=>new` in `old_new`, replace all occurrences
 of `old` in collection `A` by `new`.
+Equality is determined using [`isequal`](@ref).
 If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
@@ -589,17 +600,16 @@ julia> replace!(Set([1, 2, 3]), 1=>0)
 Set([0, 2, 3])
 ```
 """
-replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, eltype(A), count, old_new)
+replace!(A, old_new::Pair...; count::Integer=typemax(Int)) = _replace!(A, count, old_new)
 
-# we use this wrapper because using directly eltype(A) as the type
-# parameter below for Some degrades performance
-function _replace!(A, ::Type{K}, count::Integer, old_new::Tuple{Vararg{Pair}}) where K
-    @inline function prednew(x)
+function _replace!(A, count::Integer, old_new::Tuple{Vararg{Pair}})
+    @inline function new(x)
         for o_n in old_new
-            first(o_n) == x && return Some{K}(last(o_n))
+            isequal(first(o_n), x) && return last(o_n)
         end
+        return x # no replace
     end
-    replace!(prednew, A, count=count)
+    replace!(new, A, count=count)
 end
 
 """
@@ -621,37 +631,26 @@ julia> replace!(isodd, A, 0, count=2)
 ```
 """
 replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> if pred(x) Some(new) end, A, count=count)
+    replace!(x -> ifelse(pred(x), new, x), A, count=count)
 
 """
-    replace!(prednew::Function, A; [count::Integer])
+    replace!(new::Function, A; [count::Integer])
 
-For each value `x` in `A`, `prednew(x)` is called and must
-return either `nothing`, in which case no replacement occurs,
-or a value, possibly wrapped as a [`Some`](@ref) object, which
-will be used as a replacement for `x`.
+Replace each element `x` in collection `A` by `new(x)`.
+If `count` is specified, then replace at most `count` values in total
+(replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
-julia> replace!(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Array{Int64,1}:
  2
  2
  6
  4
 
-julia> replace!(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : nothing
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
- 4
-
 julia> replace!(Dict(1=>2, 3=>4)) do kv
-           if first(kv) < 3; first(kv)=>3 end
+           first(kv) < 3 ? first(kv)=>3 : kv
        end
 Dict{Int64,Int64} with 2 entries:
   3 => 4
@@ -661,10 +660,10 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-function replace!(prednew::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
+function replace!(new::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
                   count::Integer=typemax(Int))
     count < 0 && throw(DomainError(count, "`count` must not be negative"))
-    count != 0 && _replace!(prednew, A, min(count, typemax(Int)) % Int)
+    count != 0 && _replace!(new, A, min(count, typemax(Int)) % Int)
     A
 end
 
@@ -673,6 +672,7 @@ end
 
 Return a copy of collection `A` where, for each pair `old=>new` in `old_new`,
 all occurrences of `old` are replaced by `new`.
+Equality is determined using [`isequal`](@ref).
 If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace!`](@ref).
 
@@ -686,14 +686,22 @@ julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
  3
 ```
 """
-replace(A, old_new::Pair...; count::Integer=typemax(Int)) =
-    _replace!(copy(A), eltype(A), count, old_new)
+function replace(A, old_new::Pair...; count::Integer=typemax(Int))
+    V = promote_valuetype(old_new...)
+    T = promote_type(eltype(A), V)
+    _replace!(_copy_oftype(A, T), count, old_new)
+end
+
+promote_valuetype(x::Pair{K, V}) where {K, V} = V
+promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
+    promote_type(V, promote_valuetype(y...))
 
 """
     replace(pred::Function, A, new; [count::Integer])
 
 Return a copy of collection `A` where all occurrences `x` for which
 `pred(x)` is true are replaced by `new`.
+If `count` is specified, then replace at most `count` occurrences in total.
 
 # Examples
 ```jldoctest
@@ -705,45 +713,36 @@ julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
  1
 ```
 """
-replace(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> if pred(x) Some(new) end, copy(A), count=count)
+function replace(pred::Callable, A, new; count::Integer=typemax(Int))
+    T = promote_type(eltype(A), typeof(new))
+    replace!(pred, _copy_oftype(A, T), new, count=count)
+end
 
 """
-    replace(prednew::Function, A; [count::Integer])
+    replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where for each value `x` in `A`, `prednew(x)` is called
-and must return  either `nothing`, in which case no replacement occurs,
-or a value, possibly wrapped as a [`Some`](@ref) object, which
-will be used as a replacement for `x`.
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+If `count` is specified, then replace at most `count` values in total
+(replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
-julia> replace(x -> isodd(x) ? 2x : nothing, [1, 2, 3, 4])
+julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Array{Int64,1}:
  2
  2
  6
  4
 
-julia> replace(Union{Int,Nothing}[0, 1, 2, nothing, 4], count=2) do x
-           x !== nothing && iseven(x) ? Some(nothing) : nothing
-       end
-5-element Array{Union{Nothing,Int64},1}:
-  nothing
- 1
-  nothing
-  nothing
- 4
-
 julia> replace(Dict(1=>2, 3=>4)) do kv
-           if first(kv) < 3; first(kv)=>3 end
+           first(kv) < 3 ? first(kv)=>3 : kv
        end
 Dict{Int64,Int64} with 2 entries:
   3 => 4
   1 => 3
 ```
 """
-replace(prednew::Callable, A; count::Integer=typemax(Int)) = replace!(prednew, copy(A), count=count)
+replace(new::Callable, A; count::Integer=typemax(Int)) = replace!(new, copy(A), count=count)
 
 # Handle ambiguities
 replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
@@ -758,19 +757,15 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace_update_dict!(repl::Vector{<:Pair}, x, y::Some)
-    push!(repl, x => y.value)
-    true
-end
-
-_replace_update_dict!(repl::Vector{<:Pair}, x, ::Nothing) = false
-_replace_update_dict!(repl::Vector{<:Pair}, x, y) = _replace_update_dict!(repl, x, Some(y))
-
-function _replace!(prednew::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
+function _replace!(new::Callable, A::Union{AbstractDict,AbstractSet}, count::Int)
     repl = Pair{eltype(A),eltype(A)}[]
     c = 0
     for x in A
-        c += _replace_update_dict!(repl, x, prednew(x))
+        y = new(x)
+        if x !== y
+            push!(repl, x => y)
+            c += 1
+        end
         c == count && break
     end
     for oldnew in repl
@@ -783,18 +778,15 @@ end
 
 ### AbstractArray
 
-function _replace_update!(A::AbstractArray, i::Integer, y::Some)
-    @inbounds A[i] = y.value
-    true
-end
-
-_replace_update!(A::AbstractArray, i::Integer, ::Nothing) = false
-_replace_update!(A::AbstractArray, i::Integer, y) = _replace_update!(A, i, Some(y))
-
-function _replace!(prednew::Callable, A::AbstractArray, count::Int)
+function _replace!(new::Callable, A::AbstractArray, count::Int)
     c = 0
     for i in eachindex(A)
-        c += _replace_update!(A, i, prednew(A[i]))
+        @inbounds Ai = A[i]
+        y = new(Ai)
+        if Ai !== y
+            @inbounds A[i] = y
+            c += 1
+        end
         c == count && break
     end
 end

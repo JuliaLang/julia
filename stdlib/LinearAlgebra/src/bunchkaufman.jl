@@ -205,7 +205,8 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     end
 end
 
-Base.propertynames(B::BunchKaufman, private::Bool=false) = append!([:p,:P,:L,:U,:D], private ? fieldnames(typeof(B)) : Symbol[])
+Base.propertynames(B::BunchKaufman, private::Bool=false) =
+    (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
 issuccess(B::BunchKaufman) = B.info == 0
 

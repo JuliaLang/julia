@@ -27,7 +27,7 @@ end
 #    # May assume x is `Float` now
 # end
 # ```
-mutable struct Conditional
+struct Conditional
     var::Slot
     vtype
     elsetype
@@ -49,7 +49,7 @@ struct PartialTypeVar
 end
 
 # The type of a variable load is either a value or an UndefVarError
-mutable struct VarState
+struct VarState
     typ
     undef::Bool
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
@@ -57,7 +57,7 @@ end
 
 const VarTable = Array{Any,1}
 
-mutable struct StateUpdate
+struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype::VarState
     state::VarTable

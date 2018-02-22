@@ -306,7 +306,7 @@ end
 ###################
 
 #Needed for inv_usmani()
-mutable struct ZeroOffsetVector
+struct ZeroOffsetVector
     data::Vector
 end
 getindex(a::ZeroOffsetVector, i) = a.data[i+1]

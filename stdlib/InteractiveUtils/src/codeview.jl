@@ -23,7 +23,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
 
     function scan_exprs!(used, exprs)
         for ex in exprs
-            if isa(ex, Slot)
+            if isa(ex, Core.Slot)
                 used[ex.id] = true
             elseif isa(ex, Expr)
                 scan_exprs!(used, ex.args)
@@ -75,7 +75,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     meth = which(f, t)
     t = to_tuple_type(t)
     tt = signature_type(f, t)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::SimpleVector
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
     meth = Base.func_for_method_checked(meth, ti)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
     # get the code for it

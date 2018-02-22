@@ -69,9 +69,11 @@ Compute the singular value decomposition (SVD) of `A` and return an `SVD` object
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
 The singular values in `S` are sorted in descending order.
 
-If `full = false` (default), a "thin" SVD is returned. For a
-``M \\times N`` matrix `A`, `U` is ``M \\times M`` for a "full" SVD (`full = true`) and
-``M \\times \\min(M, N)`` for a "thin" SVD.
+If `full = false` (default), a "thin" SVD is returned. For a ``M
+\\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
+and `V` is `N \\times N`, while in the thin factorization `U` is `M
+\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
+number of singular values.
 
 # Examples
 ```jldoctest
@@ -129,9 +131,11 @@ end
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U * Diagonal(S) * V'`. The singular values in `S` are sorted in descending order.
 
-If `full = false` (default), a "thin" SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a "full" SVD (`full = true`) and
-``M \\times \\min(M, N)`` for a "thin" SVD.
+If `full = false` (default), a "thin" SVD is returned. For a ``M
+\\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
+and `V` is `N \\times N`, while in the thin factorization `U` is `M
+\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
+number of singular values.
 
 `svd` is a wrapper around [`svdfact`](@ref), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
@@ -186,7 +190,8 @@ function getproperty(F::SVD, d::Symbol)
     end
 end
 
-Base.propertynames(F::SVD, private::Bool=false) = private ? append!([:V], fieldnames(typeof(F))) : [:U,:S,:V,:Vt]
+Base.propertynames(F::SVD, private::Bool=false) =
+    private ? (:V, fieldnames(typeof(F))...) : (:U, :S, :V, :Vt)
 
 """
     svdvals!(A)
@@ -463,7 +468,8 @@ svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
     end
 end
 
-Base.propertynames(F::GeneralizedSVD) = append!([:alpha,:beta,:vals,:S,:D1,:D2,:R0], fieldnames(typeof(F)))
+Base.propertynames(F::GeneralizedSVD) =
+    (:alpha, :beta, :vals, :S, :D1, :D2, :R0, fieldnames(typeof(F))...)
 
 """
     svdvals!(A, B)

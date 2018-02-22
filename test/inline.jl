@@ -25,10 +25,10 @@ function test_inlined_symbols(func, argtypes)
     ast.args = src.code
     ast.typ = rettype
     walk(ast) do e
-        if isa(e, Slot)
+        if isa(e, Core.Slot)
             @test 1 <= e.id <= nl
         end
-        if isa(e, NewvarNode)
+        if isa(e, Core.NewvarNode)
             @test 1 <= e.slot.id <= nl
         end
     end

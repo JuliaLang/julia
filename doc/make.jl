@@ -2,7 +2,7 @@
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 using Pkg
 Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
+cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
 Pkg.update()
 Pkg.resolve()
 
@@ -23,11 +23,12 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
 const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
-for dir in readdir(STDLIB_DIR)
-    sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
-    if isfile(sourcefile)
-        cd(joinpath(@__DIR__, "src")) do
-            isdir("stdlib") || mkdir("stdlib")
+cd(joinpath(@__DIR__, "src")) do
+    Base.rm("stdlib"; recursive=true, force=true)
+    mkdir("stdlib")
+    for dir in readdir(STDLIB_DIR)
+        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+        if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
             if Sys.iswindows()
@@ -130,7 +131,6 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
-            "devdocs/libgit2.md",
             "devdocs/require.md",
             "devdocs/inference.md",
         ],
@@ -154,7 +154,7 @@ makedocs(
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    strict    = true,
+    strict    = false,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",
