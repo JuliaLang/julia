@@ -600,7 +600,7 @@ Library improvements
     the buffer ([#25944]).
 
   * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
-    keyword argument. ([#xxxxx])
+    keyword argument. ([#26156])
 
 Compiler/Runtime improvements
 -----------------------------

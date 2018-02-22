@@ -1400,7 +1400,7 @@ end
            link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write),
            false)
 
-# PR xxxxx
+# PR 26156
 @deprecate trunc(x, digits, base) trunc(x, digits, base = base)
 @deprecate floor(x, digits, base) floor(x, digits, base = base)
 @deprecate ceil(x, digits, base) ceil(x, digits, base = base)
