@@ -165,7 +165,7 @@ Language changes
     expressions) ([#23885]).
 
   * The `+` and `-` methods for `Number` and `UniformScaling` are not ambiguous anymore since `+`
-    and `-` no longer do automatic broadcasting. Hence the methods for `UniformScaling` and `Number` are
+    and `-` no longer do automatic broadcasting. Hence, the methods for `UniformScaling` and `Number` are
     no longer deprecated ([#23923]).
 
   * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
@@ -226,7 +226,7 @@ This section lists changes that do not have deprecation warnings.
 
   * `finalizer(function, object)` now returns `object` rather than `nothing` ([#24679]).
 
-  * The constructor of `SubString` now checks if the requsted view range
+  * The constructor of `SubString` now checks if the requested view range
     is defined by valid indices in the parent `AbstractString` ([#22511]).
 
   * Macro calls with `for` expressions are now parsed as generators inside
@@ -259,7 +259,7 @@ This section lists changes that do not have deprecation warnings.
     returned ([#21825]).
 
   * Using `ARGS` within the ~/.juliarc.jl or within a .jl file loaded with `--load` will no
-    longer contain the script name as the first argument. Instead the script name will be
+    longer contain the script name as the first argument. Instead, the script name will be
     assigned to `PROGRAM_FILE`. ([#22092])
 
   * The format for a `ClusterManager` specifying the cookie on the command line is now
@@ -337,7 +337,7 @@ This section lists changes that do not have deprecation warnings.
   * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
     used internally ([#22390]).
 
-  * All loaded packges used to have bindings in `Main` (e.g. `Main.Package`). This is no
+  * All loaded packages used to have bindings in `Main` (e.g. `Main.Package`). This is no
     longer the case; now bindings will only exist for packages brought into scope by
     typing `using Package` or `import Package` ([#17997]).
 
@@ -401,7 +401,7 @@ This section lists changes that do not have deprecation warnings.
     now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
     In particular, this means that they use `CartesianIndex` objects for matrices
-    and higher-dimensional arrays insted of linear indices as was previously the case.
+    and higher-dimensional arrays instead of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
   * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
@@ -590,7 +590,7 @@ Library improvements
       Use `unique` to get the old behavior.
 
   * The type `LinearIndices` has been added, providing conversion from
-    cartesian incices to linear indices using the normal indexing operation. ([#24715])
+    cartesian indices to linear indices using the normal indexing operation. ([#24715])
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
