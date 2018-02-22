@@ -372,7 +372,6 @@ LinearAlgebra.logabsdet
 Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
-Base.repmat
 Base.kron
 LinearAlgebra.linreg
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})

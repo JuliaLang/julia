@@ -715,7 +715,7 @@ julia> broadcast_getindex(A, 1:2, 2:-1:1)
 2-element Array{Int64,1}:
  12
  21
- ```
+```
 Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
 where `i` and `j` are the two index vectors.
 

@@ -108,9 +108,7 @@ mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVect
 # Matrix-matrix multiplication
 
 """
-```
-*(A::AbstractMatrix, B::AbstractMatrix)
-```
+    *(A::AbstractMatrix, B::AbstractMatrix)
 
 Matrix multiplication.
 
