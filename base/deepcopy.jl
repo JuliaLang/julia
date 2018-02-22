@@ -96,7 +96,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
     return dest
 end
 
-function deepcopy_internal(x::Dict, stackdict::IdDict)
+function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
