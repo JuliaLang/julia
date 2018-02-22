@@ -406,6 +406,7 @@
                            (eq? (cadr (caddr x)) 'Vararg)))))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
 (define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
+(define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))

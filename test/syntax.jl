@@ -176,13 +176,21 @@ macro test999_str(args...); args; end
 @test_throws ParseError Meta.parse("(,)")
 @test_throws ParseError Meta.parse("(;,)")
 @test_throws ParseError Meta.parse("(,;)")
+# TODO: would be nice to make these errors, but needed to parse e.g. `(x;y,)->x`
+#@test_throws ParseError Meta.parse("(1;2,)")
+#@test_throws ParseError Meta.parse("(1;2,;)")
+#@test_throws ParseError Meta.parse("(1;2,;3)")
 @test Meta.parse("(x;)") == Expr(:block, :x)
 @test Meta.parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(x,)") == Expr(:tuple, :x)
 @test Meta.parse("(x,;)") == Expr(:tuple, Expr(:parameters), :x)
-@test Meta.parse("(x;y)") == Expr(:block, :x, :y)
-@test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2))
+@test Meta.parse("(x;y)") == Expr(:block, :x, LineNumberNode(1,:none), :y)
+@test Meta.parse("(x...;)") == Expr(:tuple, Expr(:parameters), Expr(:(...), :x))
+@test Meta.parse("(;x...)") == Expr(:tuple, Expr(:parameters, Expr(:(...), :x)))
+@test Meta.parse("(x...;y)") == Expr(:tuple, Expr(:parameters, :y), Expr(:(...), :x))
+@test Meta.parse("(x;y...)") == Expr(:block, :x, LineNumberNode(1,:none), Expr(:(...), :y))
+@test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
 @test Meta.parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
 @test Meta.parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
 @test Meta.parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
@@ -1310,13 +1318,24 @@ end
 #                  f(x) = x", 1)[1] === "x"
 
 # issue #26137
-@test Meta.parse("-()^2")     == Expr(:call, :^, Expr(:call, :-), 2)
-@test Meta.parse("-(x)^2")    == Expr(:call, :-, Expr(:call, :^, :x, 2))
-@test Meta.parse("-(x,)^2")   == Expr(:call, :^, Expr(:call, :-, :x), 2)
-@test Meta.parse("-(x,y)^2")  == Expr(:call, :^, Expr(:call, :-, :x, :y), 2)
-@test Meta.parse("+((1,2))")  == Expr(:call, :+, Expr(:tuple, 1, 2))
-@test Meta.parse("-(x;y)^2")  == Expr(:call, :^, Expr(:call, :-, Expr(:parameters, :y), :x), 2)
-@test Meta.parse("-(x...)^2") == Expr(:call, :^, Expr(:call, :-, Expr(:(...), :x)), 2)
+# cases where parens enclose argument lists
+@test Meta.parse("-()^2")      == Expr(:call, :^, Expr(:call, :-), 2)
+@test Meta.parse("-(x,)^2")    == Expr(:call, :^, Expr(:call, :-, :x), 2)
+@test Meta.parse("-(x,;)^2")   == Expr(:call, :^, Expr(:call, :-, Expr(:parameters), :x), 2)
+@test Meta.parse("-(;x)^2")    == Expr(:call, :^, Expr(:call, :-, Expr(:parameters, :x)), 2)
+@test Meta.parse("-(x,y)^2")   == Expr(:call, :^, Expr(:call, :-, :x, :y), 2)
+@test Meta.parse("-(x...)^2")  == Expr(:call, :^, Expr(:call, :-, Expr(:(...), :x)), 2)
+@test Meta.parse("-(x...;)^2") == Expr(:call, :^, Expr(:call, :-, Expr(:parameters), Expr(:(...), :x)), 2)
+@test Meta.parse("-(x...;)")   == Expr(:call, :-, Expr(:parameters), Expr(:(...), :x))
+
+# cases where parens are just grouping
+@test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
+@test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
+@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
+@test Meta.parse("-(;)^2")     == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
+@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
+@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
+@test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
 

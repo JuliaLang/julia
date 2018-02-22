@@ -766,7 +766,7 @@
   (if (and (pair? body) (eq? (car body) 'block))
       (cond ((atom? (cdr body))
              `(block ,stmt (null)))
-            ((and (pair? (cadr body)) (eq? (caadr body) 'line))
+            ((linenum? (cadr body))
              `(block ,(cadr body) ,stmt ,@(cddr body)))
             (else
              `(block ,stmt ,@(cdr body))))
@@ -805,8 +805,7 @@
                       ,(ctor-body body curlyargs))))))
 
 (define (function-body-lineno body)
-  (let ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
-                      body)))
+  (let ((lnos (filter linenum? body)))
     (if (null? lnos) '() (car lnos))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
@@ -863,7 +862,7 @@
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
                            fields0)
    (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
-          (locs        (if (and (pair? fields0) (pair? (car fields0)) (eq? (caar fields0) 'line))
+          (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
           (field-names (map decl-var fields))
@@ -1103,7 +1102,7 @@
                               (set! a (cadr w))))
                     #f))
          (argl (if (pair? a)
-                   (tuple-to-arglist a)
+                   (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) a))
                    (list a)))
          ;; TODO: always use a specific special name like #anon# or _, then ignore
          ;; this as a local variable name.
@@ -1238,7 +1237,7 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symbol? x) (decl? x) (and (pair? x) (eq? (car x) 'line)))
+            (cond ((or (symbol? x) (decl? x) (linenum? x))
                    (loop (cdr f)))
                   ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
@@ -1893,8 +1892,7 @@
    (lambda (e)
      (cond ((null? (cdr e)) '(null))
            ((and (null? (cddr e))
-                 (not (and (pair? (cadr e))
-                           (eq? (car (cadr e)) 'line))))
+                 (not (linenum? (cadr e))))
             (expand-forms (cadr e)))
            (else
             (cons 'block
@@ -3608,7 +3606,7 @@ f(x) = yt(x)
             ((block body)
              (let* ((last-fname filename)
                     (fnm        (first-non-meta e))
-                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                    (fname      (if (and (length> e 1) (linenum? fnm)
                                          (length> fnm 2))
                                     (caddr fnm)
                                     filename))

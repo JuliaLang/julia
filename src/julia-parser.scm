@@ -675,8 +675,7 @@
                              (memv (peek-token s) ops))
                          (loop ex #f (peek-token s))
                          (if (and add-linenums
-                                  (not (and (pair? (car ex))
-                                            (eq? (caar ex) 'line))))
+                                  (not (linenum? (car ex))))
                              (let ((loc (line-number-node s)))
                                (loop (list* (down s) loc ex) #f (peek-token s)))
                              (loop (cons (down s) ex) #f (peek-token s))))))))))
@@ -1350,7 +1349,7 @@
               (blk  (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (expect-end s word)
           (let ((blk  (if (and (length> blk 1)
-                               (pair? (cadr blk)) (eq? (caadr blk) 'line))
+                               (linenum? (cadr blk)))
                           (list* 'block loc (cddr blk))
                           blk)))
             (if (eq? word 'quote)
@@ -1374,7 +1373,7 @@
               (error "let variables should end in \";\" or newline"))
           (let* ((ex (begin0 (parse-block s)
                              (expect-end s word)))
-                 (ex (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
+                 (ex (if (and (length= ex 2) (linenum? (cadr ex)))
                          `(block)  ;; don't need line info in an empty let block
                          ex)))
             `(let ,(if (and (length= binds 1) (or (assignment? (car binds)) (decl? (car binds))
@@ -1527,8 +1526,7 @@
                                 catch-block
                                 `(block ,loc ,var
                                         ,@(if (and (length= catch-block 2)
-                                                   (pair? (cadr catch-block))
-                                                   (eq? (caadr catch-block) 'line))
+                                                   (linenum? (cadr catch-block)))
                                               '()
                                               (cdr catch-block))))
                             (if var? var 'false)
@@ -1725,7 +1723,7 @@
 ;; . an extra comma at the end is allowed
 ;; . expressions after a ; are enclosed in (parameters ...)
 ;; . an expression followed by ... becomes (... x)
-(define (parse-arglist s closer)
+(define (parse-arglist s closer (add-linenums #f))
 (with-bindings ((range-colon-enabled #t)
                 (space-sensitive #f)
                 (where-enabled #t)
@@ -1739,12 +1737,17 @@
                      (to-kws (reverse! lst))
                      (reverse! lst)))
           (if (eqv? t #\;)
-              (begin (take-token s)
-                     (let ((params (loop '()))
+              (begin (take-token s) (require-token s)
+                     (let ((loc (line-number-node s))
+                           (params (loop '()))
                            (lst    (if (eqv? closer #\) )
                                        (to-kws (reverse lst))
                                        (reverse lst))))
-                       (cons (cons 'parameters params)
+                       (cons `(parameters
+                               ,@(if add-linenums
+                                     (list loc)
+                                     '())
+                               ,@params)
                              lst)))
               (let* ((nxt (parse-eq* s))
                      (c (require-token s)))
@@ -1910,19 +1913,35 @@
 ;; this allows us to first parse tuples using parse-arglist
 (define (parameters-to-block e)
   (if (and (pair? e) (eq? (car e) 'parameters))
-      (cond ((length= e 1) '())
-            ((length= e 2) (parameters-to-block (cadr e)))
-            ((length= e 3)
-             (let ((fst (cadr e))
-                   (snd (caddr e)))
-               (if (and (pair? fst) (eq? (car fst) 'parameters))
-                   (let ((rec (parameters-to-block fst))
-                         (snd (parameters-to-block snd)))
-                     (and rec snd
-                          (cons (car snd) rec)))
-                   #f)))
-            (else #f))
+      (let ((e2   (filter (lambda (x) (not (linenum? x))) e))
+            (lnum (if (and (pair? (cdr e))
+                           (linenum? (cadr e)))
+                      (cadr e)
+                      #f)))
+        (cond ((length= e2 1) '())
+              ((length= e2 2)
+               (let ((rec (parameters-to-block (cadr e2))))
+                 (if (null? rec)
+                     rec
+                     (cons lnum rec))))
+              ((length= e2 3)
+               (let ((fst (cadr e2))
+                     (snd (caddr e2)))
+                 (if (and (pair? fst) (eq? (car fst) 'parameters))
+                     (let ((rec (parameters-to-block fst))
+                           (snd (parameters-to-block snd)))
+                       (and rec snd
+                            (append (if lnum (list lnum) '()) (cons (car snd) rec))))
+                     #f)))
+              (else #f)))
       (list (kw-to-= e))))
+
+(define (rm-linenums e)
+  (if (atom? e) e
+      (map rm-linenums
+           (if (eq? (car e) 'parameters)
+               (filter (lambda (x) (not (linenum? x))) e)
+               e))))
 
 ;; convert an arglist to a tuple or block expr
 ;; leading-semi? means we saw (; ...)
@@ -1938,9 +1957,10 @@
                                    `(block))))))  ;; all semicolons inside ()
           (and (null? first) (null? args) (not comma?)
                `(block))  ;; this case is (;)
-          (if (and (pair? args) (pair? (car args)) (eq? (caar args) 'parameters))
-              `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
-              `(tuple ,@first ,@(map kw-to-= args))))))
+          (rm-linenums
+           (if (and (pair? args) (pair? (car args)) (eq? (caar args) 'parameters))
+               `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
+               `(tuple ,@first ,@(map kw-to-= args)))))))
 
 (define (tuple-to-arglist e)
   (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
@@ -1986,8 +2006,8 @@
        (take-token s)  ;; take #\)
        '(|::| . #f))
       ((eqv? nxt #\;)
-       (cons (arglist-to-tuple #t #f (parse-arglist s #\) ))
-             #t))
+       (let ((ex (arglist-to-tuple #t #f (parse-arglist s #\) ))))
+         (cons ex (eq? (car ex) 'tuple))))
       (else
        ;; here we parse the first subexpression separately, so
        ;; we can look for a comma to see if it's a tuple.
@@ -1997,7 +2017,7 @@
          (cond ((eqv? t #\) )
                 (take-token s)
                 ;; value in parentheses (x)
-                (if (and (pair? ex) (eq? (car ex) '...))
+                (if (vararg? ex)
                     (let ((lineno (input-port-line (ts:port s))))
                       (if (or accept-dots-without-comma (eq? (with-bindings ((whitespace-newline #f))
                                                                             (peek-token s))
@@ -2008,6 +2028,19 @@
                                                  (string "(" (deparse (cadr ex)) "...,)"))
                                  (cons `(tuple ,ex) #t))))
                     (cons ex #f)))
+               ((eqv? t #\,)
+                ;; tuple (x,) (x,y) etc.
+                (take-token s)
+                (cons (arglist-to-tuple #f #t (parse-arglist s #\) ) ex)
+                      #t))
+               ((eqv? t #\;)
+                (cons (arglist-to-tuple
+                       #f
+                       ;; consider `(x...; ` the start of an arglist, since it's not useful as a block
+                       (vararg? ex)
+                       (parse-arglist s #\) #t)
+                       ex)
+                      (vararg? ex)))
                ((eq? t 'for)
                 (expect-space-before s 'for)
                 (take-token s)
@@ -2017,13 +2050,7 @@
                       (error "expected \")\""))
                   (cons gen #f)))
                (else
-                ;; tuple (x,) (x,y) (x...) etc.
-                (if (eqv? t #\, )
-                    (take-token s)
-                    (if (not (eqv? t #\;))
-                        (error "missing comma or ) in argument list")))
-                (cons (arglist-to-tuple #f (eqv? t #\,) (parse-arglist s #\) ) ex)
-                      #t)))))))))
+                (error "missing comma or ) in argument list")))))))))
 
 (define (not-eof-for delim c)
   (if (eof-object? c)
