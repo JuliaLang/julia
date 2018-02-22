@@ -180,7 +180,7 @@ macro test999_str(args...); args; end
 @test Meta.parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(x,)") == Expr(:tuple, :x)
-@test Meta.parse("(x,;)") == Expr(:tuple, :x)
+@test Meta.parse("(x,;)") == Expr(:tuple, Expr(:parameters), :x)
 @test Meta.parse("(x;y)") == Expr(:block, :x, :y)
 @test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2))
 @test Meta.parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
@@ -189,6 +189,8 @@ macro test999_str(args...); args; end
 @test Meta.parse("(x,a;y=1,z=2)") == Expr(:tuple, Expr(:parameters, Expr(:kw,:y,1), Expr(:kw,:z,2)), :x, :a)
 @test Meta.parse("(a=1, b=2)") == Expr(:tuple, Expr(:(=), :a, 1), Expr(:(=), :b, 2))
 @test_throws ParseError Meta.parse("(1 2)") # issue #15248
+
+@test Meta.parse("f(x;)") == Expr(:call, :f, Expr(:parameters), :x)
 
 @test Meta.parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
 
