@@ -1400,6 +1400,13 @@ end
            link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write),
            false)
 
+# PR xxxxx
+@deprecate trunc(x, digits, base) trunc(x, digits, base = base)
+@deprecate floor(x, digits, base) floor(x, digits, base = base)
+@deprecate ceil(x, digits, base) ceil(x, digits, base = base)
+@deprecate round(x, digits, base) round(x, digits, base = base)
+@deprecate signif(x, digits, base) signif(x, digits, base = base)
+
 # Remember to delete the module when removing this
 @eval Base.Math module JuliaLibm
     Base.@deprecate log Base.log

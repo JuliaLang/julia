@@ -599,6 +599,9 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
+  * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
+    keyword argument. ([#xxxxx])
+
 Compiler/Runtime improvements
 -----------------------------
 

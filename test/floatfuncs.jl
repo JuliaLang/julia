@@ -79,11 +79,11 @@ end
 @testset "significant digits" begin
     # (would be nice to have a smart vectorized
     # version of signif)
-    @test signif(123.456,1) ≈ 100.
-    @test signif(123.456,3) ≈ 123.
-    @test signif(123.456,5) ≈ 123.46
-    @test signif(123.456,8,2) ≈ 123.5
-    @test signif(123.456,2,4) ≈ 128.0
+    @test signif(123.456, 1) ≈ 100.
+    @test signif(123.456, 3) ≈ 123.
+    @test signif(123.456, 5) ≈ 123.46
+    @test signif(123.456, 8, base = 2) ≈ 123.5
+    @test signif(123.456, 2, base = 4) ≈ 128.0
     @test signif(0.0, 1) === 0.0
     @test signif(-0.0, 1) === -0.0
     @test signif(1.2, 2) === 1.2
