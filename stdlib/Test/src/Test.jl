@@ -1200,8 +1200,6 @@ Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
 ```jldoctest
-julia> using Test
-
 julia> f(a,b,c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 

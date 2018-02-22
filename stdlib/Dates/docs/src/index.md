@@ -1,5 +1,9 @@
 # [Dates and Time](@id stdlib-dates)
 
+```@meta
+DocTestSetup = :(using Dates)
+```
+
 Functionality to handle time and dates is defined in the standard library module `Dates`.
 You'll need to import the module using `import Dates` and prefix each
 function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternatively, you can write
@@ -192,3 +196,7 @@ Months of the Year:
 | `October`   | `Oct` | 10          |
 | `November`  | `Nov` | 11          |
 | `December`  | `Dec` | 12          |
+
+```@meta
+DocTestSetup = nothing
+```

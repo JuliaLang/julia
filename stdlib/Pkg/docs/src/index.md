@@ -1,5 +1,9 @@
 # Package Manager Functions
 
+```@meta
+DocTestSetup = :(using Pkg)
+```
+
 All package manager functions are defined in the `Pkg` module. None of the `Pkg` module's functions
 are exported; to use them, you'll need to prefix each function call with an explicit `Pkg.`, e.g.
 [`Pkg.status()`](@ref) or [`Pkg.dir()`](@ref).
@@ -27,4 +31,8 @@ Pkg.free
 Pkg.build
 Pkg.test
 Pkg.dependents
+```
+
+```@meta
+DocTestSetup = nothing
 ```
