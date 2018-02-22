@@ -563,10 +563,11 @@ temp_pkg_dir() do
         mkpath(dirname(test_filename))
         write(test_filename, content)
 
-        # Make a .juliarc.jl
+        # Make a ~/.julia/config/startup.jl
         home = Pkg.dir(".home")
-        mkdir(home)
-        write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
+        mkpath(joinpath(home, ".julia", "config"))
+        write(joinpath(home, ".julia", "config", "startup.jl"),
+            "const JULIA_RC_LOADED = true")
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
             code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.build(\"$package\")"
@@ -585,7 +586,7 @@ temp_pkg_dir() do
             @test contains(msg, "Main.JULIA_RC_LOADED defined false")
 
             # Note: Since both the startup-file and "runtests.jl" are run in the Main
-            # module any global variables created in the .juliarc.jl can be referenced.
+            # module any global variables created in the startup file can be referenced.
             msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
             @test contains(msg, "JULIA_RC_LOADED defined true")
             @test contains(msg, "Main.JULIA_RC_LOADED defined true")

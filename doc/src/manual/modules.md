@@ -191,8 +191,9 @@ The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches 
 push!(LOAD_PATH, "/Path/To/My/Module/")
 ```
 
-Putting this statement in the file `~/.juliarc.jl` will extend [`LOAD_PATH`](@ref) on every Julia startup.
-Alternatively, the module load path can be extended by defining the environment variable `JULIA_LOAD_PATH`.
+Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
+every Julia startup. Alternatively, the module load path can be extended by defining the environment
+variable `JULIA_LOAD_PATH`.
 
 ### Namespace miscellanea
 

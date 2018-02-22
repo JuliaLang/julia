@@ -279,7 +279,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         write(testfile, """
             println(ARGS)
             """)
-        cp(testfile, joinpath(dir, ".juliarc.jl"))
+        mkpath(joinpath(dir, ".julia", "config"))
+        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
@@ -304,7 +305,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     mktempdir() do dir
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".juliarc.jl")
+        c = joinpath(dir, ".julia", "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
@@ -315,6 +316,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             println(@__FILE__)
             println(PROGRAM_FILE)
             """)
+        mkpath(dirname(c))
         cp(b, c)
 
         readsplit(cmd) = split(readchomp(cmd), '\n')
@@ -416,7 +418,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        # `HOME=$tmpdir` to avoid errors in the user .juliarc.jl, which hangs the tests.  Issue #17642
+        # `HOME=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
         mktempdir() do tmpdir
             withenv("HOME"=>tmpdir) do
                 @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON

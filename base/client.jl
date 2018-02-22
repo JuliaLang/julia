@@ -295,8 +295,8 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
-    # load ~/.juliarc file
-    startup && load_juliarc()
+    # load ~/.julia/config/startup.jl file
+    startup && load_julia_startup()
 
     if repl || is_interactive
         # load interactive-only libraries
@@ -345,16 +345,16 @@ function exec_options(opts)
     nothing
 end
 
-function load_juliarc()
-    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
+function load_julia_startup()
+    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
-        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
+        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
     else
-        include_ifexists(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "juliarc.jl"))
+        include_ifexists(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    include_ifexists(Main, abspath(homedir(), ".juliarc.jl"))
-    nothing
+    include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
+    return nothing
 end
 
 const repl_hooks = []
@@ -364,8 +364,8 @@ const repl_hooks = []
 
 Register a one-argument function to be called before the REPL interface is initialized in
 interactive sessions; this is useful to customize the interface. The argument of `f` is the
-REPL object. This function should be called from within the `.juliarc.jl` initialization
-file.
+REPL object. This function should be called from within the `.julia/config/startup.jl`
+initialization file.
 """
 atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
@@ -400,7 +400,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                 active_repl = REPL.LineEditREPL(term, have_color, true)
                 active_repl.history_file = history_file
             end
-            # Make sure any displays pushed in .juliarc.jl ends up above the
+            # Make sure any displays pushed in .julia/config/startup.jl ends up above the
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(active_repl))
             _atreplinit(active_repl)
