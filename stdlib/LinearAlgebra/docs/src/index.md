@@ -1,5 +1,9 @@
 # Linear Algebra
 
+```@meta
+DocTestSetup = :(using LinearAlgebra)
+```
+
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
 of many common and useful linear algebra operations. Basic operations, such as [`trace`](@ref), [`det`](@ref),
 and [`inv`](@ref) are all supported:
@@ -619,4 +623,8 @@ LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!
 LinearAlgebra.LAPACK.trsyl!
+```
+
+```@meta
+DocTestSetup = nothing
 ```

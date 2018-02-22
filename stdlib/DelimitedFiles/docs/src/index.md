@@ -1,5 +1,9 @@
 # Delimited Files
 
+```@meta
+DocTestSetup = :(using DelimitedFiles)
+```
+
 ```@docs
 DelimitedFiles.readdlm(::Any, ::Char, ::Type, ::Char)
 DelimitedFiles.readdlm(::Any, ::Char, ::Char)
@@ -8,4 +12,8 @@ DelimitedFiles.readdlm(::Any, ::Char)
 DelimitedFiles.readdlm(::Any, ::Type)
 DelimitedFiles.readdlm(::Any)
 DelimitedFiles.writedlm
+```
+
+```@meta
+DocTestSetup = nothing
 ```

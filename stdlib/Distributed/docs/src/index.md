@@ -1,5 +1,9 @@
 # Distributed Computing
 
+```@meta
+DocTestSetup = :(using Distributed)
+```
+
 ```@docs
 Distributed.addprocs
 Distributed.nprocs
@@ -66,4 +70,8 @@ Distributed.connect(::ClusterManager, ::Int, ::WorkerConfig)
 Distributed.init_worker
 Distributed.start_worker
 Distributed.process_messages
+```
+
+```@meta
+DocTestSetup = nothing
 ```

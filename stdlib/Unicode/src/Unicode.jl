@@ -43,8 +43,6 @@ For example, NFKC corresponds to the options `compose=true, compat=true, stable=
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> "μ" == Unicode.normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
 
@@ -66,8 +64,6 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 
 # Examples
 ```jldoctest
-julia> using Unicode
-
 julia> Unicode.isassigned(101)
 true
 
