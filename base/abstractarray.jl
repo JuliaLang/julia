@@ -1088,7 +1088,7 @@ See also [`mightalias`](@ref) and [`dataids`](@ref).
 unalias(dest, A) = mightalias(dest, A) ? copypreservingtype(A) : A
 
 copypreservingtype(A::Array) = copy(A)
-copypreservingtype(A::AbstractArray) = (@_noinline_meta; deepcopy(A)::typeof(A))
+copypreservingtype(A::AbstractArray)::typeof(A) = (@_noinline_meta; copy(A))
 copypreservingtype(A) = A
 
 """
