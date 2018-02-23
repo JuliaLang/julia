@@ -898,18 +898,18 @@ end
 # Context #
 ###########
 function gather_stdlib_uuids()
-    stdlib_uuids = UUID[]
+    stdlibs = Dict{UUID, String}()
     stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
     for stdlib in readdir(stdlib_dir)
         projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
         if isfile(projfile)
             proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
             if haskey(proj, "uuid")
-                push!(stdlib_uuids, UUID(proj["uuid"]))
+                stdlibs[UUID(proj["uuid"])] = stdlib
             end
         end
     end
-    return stdlib_uuids
+    return stdlibs
 end
 
 # ENV variables to set some of these defaults?
@@ -919,7 +919,7 @@ Base.@kwdef mutable struct Context
     use_libgit2_for_all_downloads::Bool = false
     num_concurrent_downloads::Int = 8
     graph_verbose::Bool = false
-    stdlib_uuids::Vector{UUID} = gather_stdlib_uuids()
+    stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
 end
 
 function Context!(ctx::Context; kwargs...)

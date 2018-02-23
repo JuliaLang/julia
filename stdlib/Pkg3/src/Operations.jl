@@ -164,7 +164,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
                 deps_u_allvers["julia"] = uuid_julia
             end
 
-            if uuid in ctx.stdlib_uuids
+            if uuid in keys(ctx.stdlibs)
                 push!(all_versions_u, VERSION)
                 continue
             end
@@ -213,7 +213,9 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
     @info("Resolving package versions")
     # anything not mentioned is fixed
     uuids = UUID[pkg.uuid for pkg in pkgs]
-    uuid_to_name = Dict{UUID,String}(uuid_julia => "julia")
+    uuid_to_name = Dict{UUID, String}(uuid => stdlib for (uuid, stdlib) in ctx.stdlibs)
+    uuid_to_name[uuid_julia] = "julia"
+
     for (name::String, uuidstr::String) in ctx.env.project["deps"]
         uuid = UUID(uuidstr)
         uuid_to_name[uuid] = name
@@ -262,7 +264,7 @@ function version_data(ctx::Context, pkgs::Vector{PackageSpec})
     hashes = Dict{UUID,SHA1}()
     clones = Dict{UUID,Vector{String}}()
     for pkg in pkgs
-        pkg.uuid in ctx.stdlib_uuids && continue
+        pkg.uuid in keys(ctx.stdlibs) && continue
         pkg.path == nothing || continue
         uuid = pkg.uuid
         ver = pkg.version::VersionNumber
@@ -393,7 +395,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
 
     pkgs_to_install = Tuple{PackageSpec, String}[]
     for pkg in pkgs
-        pkg.uuid in ctx.stdlib_uuids && continue
+        pkg.uuid in keys(ctx.stdlibs) && continue
         pkg.path == nothing || continue
         path = find_installed(pkg.name, pkg.uuid, hashes[pkg.uuid])
         if !ispath(path)
@@ -467,14 +469,14 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     ##########################################
     for pkg in pkgs
         uuid = pkg.uuid
-        uuid in ctx.stdlib_uuids && continue
+        uuid in keys(ctx.stdlibs) && continue
         if pkg.path == nothing
             pkg.name = names[uuid]
             hash = hashes[uuid]
         else
             hash = nothing
         end
-        update_manifest(ctx.env, pkg, hash)
+        update_manifest(ctx, pkg, hash)
     end
 
     prune_manifest(ctx.env)
@@ -484,7 +486,25 @@ end
 ################################
 # Manifest update and pruning #
 ################################
-function update_manifest(env::EnvCache, pkg::PackageSpec, hash::Union{SHA1, Nothing})
+function find_stdlib_deps(ctx::Context, path::String)
+    stdlib_deps = Dict{UUID, String}()
+    regexps = [Regex("\\b(import|using)\\s+((\\w|\\.)+\\s*,\\s*)*$lib\\b") for lib in values(ctx.stdlibs)]
+    for (root, dirs, files) in walkdir(path)
+        for file in files
+            endswith(file, ".jl") || continue
+            filecontent = read(joinpath(root, file), String)
+            for ((uuid, stdlib), r) in zip(ctx.stdlibs, regexps)
+                if contains(filecontent, r)
+                    stdlib_deps[uuid] = stdlib
+                end
+            end
+        end
+    end
+    return stdlib_deps
+end
+
+function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
+    env = ctx.env
     uuid, name, version, path, special_action = pkg.uuid, pkg.name, pkg.version, pkg.path, pkg.special_action
     hash == nothing && @assert path != nothing
     infos = get!(env.manifest, name, Dict{String,Any}[])
@@ -509,15 +529,21 @@ function update_manifest(env::EnvCache, pkg::PackageSpec, hash::Union{SHA1, Noth
 
     delete!(info, "deps")
     if path != nothing
-        reqfile = joinpath(path, "REQUIRE")
-        !isfile(reqfile) && return
-        deps = Dict{String,String}()
+        # Remove when packages uses Project files properly
         dep_pkgs = PackageSpec[]
-        for r in filter!(r->r isa Pkg2.Reqs.Requirement, Pkg2.Reqs.read(reqfile))
-            push!(dep_pkgs, PackageSpec(r.package))
+        stdlib_deps = find_stdlib_deps(ctx, path)
+        for (stdlib_uuid, stdlib) in stdlib_deps
+            push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
         end
-        registry_resolve!(env, dep_pkgs)
+        reqfile = joinpath(path, "REQUIRE")
+        if isfile(reqfile)
+            for r in filter!(r->r isa Pkg2.Reqs.Requirement, Pkg2.Reqs.read(reqfile))
+                push!(dep_pkgs, PackageSpec(r.package))
+            end
+            registry_resolve!(env, dep_pkgs)
+        end
         ensure_resolved(env, dep_pkgs)
+        deps = Dict{String,String}()
         for dep_pkg in dep_pkgs
             dep_pkg.name == "julia" && continue
             deps[dep_pkg.name] = string(dep_pkg.uuid)
@@ -567,7 +593,7 @@ function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,In
     seen = UUID[]
     k = 0
     function visit(uuid::UUID)
-        uuid in ctx.stdlib_uuids && return
+        uuid in keys(ctx.stdlibs) && return
         uuid in seen &&
             return @warn("Dependency graph not a DAG, linearizing anyway")
         haskey(order, uuid) && return
@@ -588,7 +614,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
     ctx.preview && (@info "Skipping building in preview mode"; return)
     builds = Tuple{UUID,String,Union{String,SHA1},String}[]
     for uuid in uuids
-        uuid in ctx.stdlib_uuids && continue
+        uuid in keys(ctx.stdlibs) && continue
         info = manifest_info(ctx.env, uuid)
         name = info["name"]
         if haskey(info, "git-tree-sha1")
