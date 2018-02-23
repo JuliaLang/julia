@@ -108,6 +108,14 @@ const latex_symbols = Dict(
     "\\to" => "→",
     "\\euler" => "ℯ",
 
+    # Accented characters missing from unicode.xml
+    "\\\"a" => "ä",
+    "\\\"o" => "ö",
+    "\\\"u" => "ü",
+    "\\\"A" => "Ä",
+    "\\\"O" => "Ö",
+    "\\\"U" => "Ü",
+
     # Superscripts
     "\\^0" => "⁰",
     "\\^1" => "¹",
