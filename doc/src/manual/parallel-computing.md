@@ -1511,8 +1511,8 @@ For instance functions that have their
 [name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`. For
-instance [`findfirst(regex, str)`](@Ref) mutates its `regex` argument or
-[`rand()`](@Ref) changes `Base.GLOBAL_RNG` :
+instance [`findfirst`](@ref) mutates its `regex` argument or
+[`rand`](@ref) changes `Base.GLOBAL_RNG` :
 
 ```julia-repl
 julia> using Base.Threads
@@ -1574,7 +1574,7 @@ creates separate instances of `Regex` object for each entry of `rx` vector.
 
 The case of `rand` is a bit more complex as we have to ensure that each thread
 uses non-overlapping pseudorandom number sequences. This can be simply ensured
-by using [`randjump`](@Ref) function:
+by using [`randjump`](@ref) function:
 
 
 ```julia-repl
