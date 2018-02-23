@@ -91,9 +91,9 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting STDERR.
+# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
-    redir_err = "redirect_stderr(STDOUT)"
+    redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
@@ -452,14 +452,14 @@ let buf_color = IOBuffer()
     @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
-if STDOUT isa Base.TTY
-    @test haskey(STDOUT, :color) == true
-    @test haskey(STDOUT, :bar) == false
-    @test (:color=>Base.have_color) in STDOUT
-    @test (:color=>!Base.have_color) ∉ STDOUT
-    @test STDOUT[:color] == get(STDOUT, :color, nothing) == Base.have_color
-    @test get(STDOUT, :bar, nothing) === nothing
-    @test_throws KeyError STDOUT[:bar]
+if stdout isa Base.TTY
+    @test haskey(stdout, :color) == true
+    @test haskey(stdout, :bar) == false
+    @test (:color=>Base.have_color) in stdout
+    @test (:color=>!Base.have_color) ∉ stdout
+    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:bar]
 end
 
 let
@@ -597,7 +597,7 @@ include("testenv.jl")
 let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
     local cmd = `$test_exename $flags deprecation_exec.jl`
 
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
     end
 end

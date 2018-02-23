@@ -86,7 +86,7 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
     if myid() == 1
         printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly

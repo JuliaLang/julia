@@ -122,12 +122,12 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
-macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
+macro deprecate_binding(old, new, export_old=true, dep_message=nothing, constant=true)
     dep_message == nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
-         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         constant ? Expr(:const, Expr(:(=), esc(old), esc(new))) : Expr(:(=), esc(old), esc(new)),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
@@ -961,14 +961,14 @@ function info(io::IO, msg...; prefix="INFO: ")
     print(io, String(take!(buf)))
     return
 end
-info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+info(msg...; prefix="INFO: ") = info(stderr, msg..., prefix=prefix)
 
 # print a warning only once
 
 const have_warned = Set()
 
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
-warn_once(msg...) = warn(STDERR, msg..., once=true)
+warn_once(msg...) = warn(stderr, msg..., once=true)
 
 """
     warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
@@ -1018,19 +1018,19 @@ julia> warn("Beep Beep")
 WARNING: Beep Beep
 ```
 """
-warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+warn(msg...; kw...) = warn(stderr, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     warn(io, sprint(showerror, err), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
-    warn(STDERR, err, prefix=prefix; kw...)
+    warn(stderr, err, prefix=prefix; kw...)
 
 info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     info(io, sprint(showerror, err), prefix=prefix; kw...)
 
 info(err::Exception; prefix="ERROR: ", kw...) =
-    info(STDERR, err, prefix=prefix; kw...)
+    info(stderr, err, prefix=prefix; kw...)
 
 # issue #25082
 @deprecate_binding Void Nothing
@@ -1435,6 +1435,13 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
         copy(selectdim(A, d, i))
     end
 end
+
+# Issue #25786
+@deprecate_binding DevNull devnull
+# TODO: When these are removed, also remove the uppercase variants in libuv.jl and stream.jl
+@deprecate_binding STDIN stdin true nothing false
+@deprecate_binding STDOUT stdout true nothing false
+@deprecate_binding STDERR stderr true nothing false
 
 # PR 25062
 @deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),

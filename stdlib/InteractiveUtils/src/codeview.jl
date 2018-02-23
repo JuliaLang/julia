@@ -6,7 +6,7 @@
     code_warntype([io::IO], f, types)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
-and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in such a way
+and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
@@ -58,7 +58,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
     end
     nothing
 end
-code_warntype(f, @nospecialize(t)) = code_warntype(STDOUT, f, t)
+code_warntype(f, @nospecialize(t)) = code_warntype(stdout, f, t)
 
 import Base.CodegenParams
 
@@ -111,7 +111,7 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
 end
 
 """
-    code_llvm([io=STDOUT,], f, types)
+    code_llvm([io=stdout,], f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
@@ -120,11 +120,11 @@ All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm
 """
 code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types)
-code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
+code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types)
+code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types, false)
 
 """
-    code_native([io=STDOUT,], f, types; syntax = :att)
+    code_native([io=stdout,], f, types; syntax = :att)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
@@ -132,5 +132,5 @@ Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T sy
 """
 code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) = code_native(STDOUT, f, types, syntax = syntax)
+code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol = :att) = code_native(stdout, f, types, syntax = syntax)
 code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call

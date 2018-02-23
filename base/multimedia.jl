@@ -251,7 +251,7 @@ function popdisplay(d::AbstractDisplay)
 end
 function reinit_displays()
     empty!(displays)
-    pushdisplay(TextDisplay(STDOUT))
+    pushdisplay(TextDisplay(stdout))
 end
 
 xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
@@ -263,15 +263,15 @@ xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
     display(d::AbstractDisplay, mime, x)
 
 AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
+richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
 
-In general, you cannot assume that `display` output goes to `STDOUT` (unlike [`print(x)`](@ref) or
+In general, you cannot assume that `display` output goes to `stdout` (unlike [`print(x)`](@ref) or
 [`show(x)`](@ref)).  For example, `display(x)` may open up a separate window with an image.
 `display(x)` means "show `x` in the best way you can for the current output device(s)."
-If you want REPL-like text output that is guaranteed to go to `STDOUT`, use
-[`show(STDOUT, "text/plain", x)`](@ref) instead.
+If you want REPL-like text output that is guaranteed to go to `stdout`, use
+[`show(stdout, "text/plain", x)`](@ref) instead.
 
 There are also two variants with a `mime` argument (a MIME type string, such as
 `"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing

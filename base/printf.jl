@@ -1198,7 +1198,7 @@ end
 macro printf(args...)
     isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
-        _printf("@printf", :STDOUT, args[1], args[2:end])
+        _printf("@printf", :stdout, args[1], args[2:end])
     else
         (length(args) >= 2 && (isa(args[2], AbstractString) || is_str_expr(args[2]))) ||
             throw(ArgumentError("@printf: first or second argument must be a format string"))

@@ -334,7 +334,7 @@ If the keyword `bold` is given as `true`, the result will be printed in bold.
 printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(STDOUT, msg...; bold=bold, color=color)
+    printstyled(stdout, msg...; bold=bold, color=color)
 
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -385,7 +385,7 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
-    flush(STDOUT)
+    flush(stdout)
     p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try

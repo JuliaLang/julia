@@ -169,12 +169,12 @@ mutable struct A14009{T}; end
 A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 
 # issue #9232
@@ -188,7 +188,7 @@ result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtyp
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 code_typed(invoke_g10878, ())
-code_llvm(DevNull, invoke_g10878, ())
+code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930

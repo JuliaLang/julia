@@ -375,7 +375,7 @@ for result in eachrow(results)
 end
 ```
 
-This will write color-coded lines to STDOUT.
+This will write color-coded lines to `stdout`.
 All lines in red must be investigated as they signify potential breakages caused by the
 backport version.
 Lines in yellow should be looked into since it means a package ran on one version but

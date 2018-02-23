@@ -1248,8 +1248,8 @@ end
 
 @noinline f21104at(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0))
 @noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
-@test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
-@test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing
+@test code_llvm(devnull, f21104at, (Type{Float64},)) === nothing
+@test code_llvm(devnull, f21104rt, (Type{Float64},)) === nothing
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
              f21104at(Float64))
 @test_throws(ErrorException("ccall: return type doesn't correspond to a C type"),

@@ -693,7 +693,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(STDOUT, string(i), " Foo ", " Bar ")
+           @async write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -706,7 +706,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(STDOUT, string(i), " Foo ", " Bar ")
+           @async println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -723,7 +723,7 @@ julia> @sync for i in 1:3
            @async begin
                lock(l)
                try
-                   write(STDOUT, string(i), " Foo ", " Bar ")
+                   write(stdout, string(i), " Foo ", " Bar ")
                finally
                    unlock(l)
                end

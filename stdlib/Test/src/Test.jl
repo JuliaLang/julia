@@ -531,7 +531,7 @@ contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(ou
 """
     @test_warn msg expr
 
-Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+Test whether evaluating `expr` results in [`stderr`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
 a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
 tuple or array, checks that the error output contains/matches each item in `msg`.
@@ -560,7 +560,7 @@ end
 """
     @test_nowarn expr
 
-Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 """
 macro test_nowarn(expr)
@@ -684,7 +684,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
             # don't print the backtrace for Errors because it gets printed in the show
             # method
             if !isa(t, Error)
-                Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
@@ -702,7 +702,7 @@ function print_test_errors(ts::DefaultTestSet)
     for t in ts.results
         if (isa(t, Error) || isa(t, Fail)) && myid() == 1
             println("Error in testset $(ts.description):")
-            Base.show(STDOUT,t)
+            Base.show(stdout,t)
             println()
         elseif isa(t, DefaultTestSet)
             print_test_errors(t)

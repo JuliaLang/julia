@@ -616,7 +616,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --eval $code
         ```
 
-    success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
+    success(pipeline(cmd, stdout=stdout, stderr=stderr))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
@@ -683,7 +683,7 @@ function updatehook(pkgs::Vector)
     errs = Dict()
     updatehook!(pkgs,errs)
     isempty(errs) && return
-    println(STDERR)
+    println(stderr)
     @warn """
         ------------------------------------------------------------
         # Update hook summary

@@ -430,8 +430,8 @@ atdoc!(λ) = global atdoc = λ
 abstract type IO end
 struct CoreSTDOUT <: IO end
 struct CoreSTDERR <: IO end
-const STDOUT = CoreSTDOUT()
-const STDERR = CoreSTDERR()
+const stdout = CoreSTDOUT()
+const stderr = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
 io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
@@ -455,9 +455,9 @@ print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a
 println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
 println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
 
-show(@nospecialize a) = show(STDOUT, a)
-print(@nospecialize a...) = print(STDOUT, a...)
-println(@nospecialize a...) = println(STDOUT, a...)
+show(@nospecialize a) = show(stdout, a)
+print(@nospecialize a...) = print(stdout, a...)
+println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen

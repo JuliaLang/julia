@@ -1004,13 +1004,13 @@ function test_13559()
             write(x, 0xaa)
         end
         flush(x)
-        Test.@test read(STDIN, Int8) == 31
+        Test.@test read(stdin, Int8) == 31
         for i in 1:7
             write(x, 0xaa)
         end
         close(x)
     """
-    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR), "w")
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=stderr), "w")
     # quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
@@ -1040,11 +1040,11 @@ if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
             x = open($(repr(fn)), "w")
             write(x, 0x42)
             flush(x)
-            Test.@test read(STDIN, Int8) == 21
+            Test.@test read(stdin, Int8) == 21
             close(x)
         """
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        p = open(pipeline(cmd, stderr=STDERR), "w")
+        p = open(pipeline(cmd, stderr=stderr), "w")
 
         r = open(fn, "r")
         @test read(r, Int8) == 66
