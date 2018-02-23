@@ -301,7 +301,7 @@ end
 
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
-        pkg.uuid in ctx.stdlib_uuids && continue
+        pkg.uuid in keys(ctx.stdlibs) && continue
         info = manifest_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
