@@ -638,15 +638,17 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? base_path : nothing
 end
 
-cache_file_entry(pkg::PkgId) =
-    pkg.uuid === nothing ? "$(pkg.name).ji" :
-        joinpath(pkg.name, "$(package_slug(pkg.uuid)).ji")
+cache_file_entry(pkg::PkgId) = joinpath(
+    "compiled",
+    "v$(VERSION.major).$(VERSION.minor)",
+    pkg.uuid === nothing ? "$(pkg.name).ji" : joinpath(pkg.name, "$(package_slug(pkg.uuid)).ji")
+)
 
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
-    suffix = cache_file_entry(pkg)
-    for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, suffix)
+    entry = cache_file_entry(pkg)
+    for depot in DEPOT_PATH
+        path = joinpath(depot, entry)
         isfile_casesensitive(path) && push!(paths, path)
     end
     return paths
@@ -1133,8 +1135,6 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $(repr(LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
         Base._track_dependencies[] = true
@@ -1173,11 +1173,9 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for
-a module and all of its dependencies.
+Creates a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
-`LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
-[Module initialization and precompilation](@ref)
+`DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
 function compilecache(pkg::PkgId)
@@ -1186,7 +1184,7 @@ function compilecache(pkg::PkgId)
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$name not found in path"))
     # decide where to put the resulting cache file
-    cachefile = abspath(LOAD_CACHE_PATH[1], cache_file_entry(pkg))
+    cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)
     isdir(cachepath) || mkpath(cachepath)
     # build up the list of modules that we want the precompile process to preserve

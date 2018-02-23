@@ -221,7 +221,7 @@ versions of modules to reduce this time.
 To create an incremental precompiled module file, add `__precompile__()` at the top of your module
 file (before the `module` starts). This will cause it to be automatically compiled the first time
 it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
-cache files will be stored in `Base.LOAD_CACHE_PATH[1]`. Subsequently, the module is automatically
+cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
 in the module file(s).
