@@ -1511,8 +1511,8 @@ For instance functions that have their
 [name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
 by convention modify their arguments and thus are not pure. However, there are
 functions that have side effects and their name does not end with `!`. For
-instance [`findfirst`](@ref) mutates its `regex` argument or
-[`rand`](@ref) changes `Base.GLOBAL_RNG` :
+instance [`findfirst(regex, str)`](@ref) mutates its `regex` argument or
+[`rand()`](@ref) changes `Base.GLOBAL_RNG` :
 
 ```julia-repl
 julia> using Base.Threads
