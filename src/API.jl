@@ -337,9 +337,11 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Pkg3.Operations.build_versions(ctx, uuids)
 end
 
-function init(path::String)
+init() = init(Context())
+init(path::String) = init(Context(), path)
+function init(ctx::Context, path::String=pwd())
     print_first_command_header()
-    ctx = Context(env = EnvCache(joinpath(path, "Project.toml")))
+    Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Pkg3.Operations.init(ctx)
 end
 
