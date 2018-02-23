@@ -450,8 +450,7 @@ function add_history(hist::REPLHistoryProvider, s)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    !isempty(hist.history) &&
-    isequal(mode, hist.modes[end]) && str ∈ hist.history && return
+    !isempty(hist.history) && isequal(mode, hist.modes[end]) && str ∈ hist.history && return
     push!(hist.modes, mode)
     push!(hist.history, str)
     hist.history_file === nothing && return
