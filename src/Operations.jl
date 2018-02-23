@@ -621,8 +621,6 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
             append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
             m = Base.require(Base.PkgId(Base.UUID($(repr(string(uuid)))), $(repr(name))))
@@ -871,15 +869,11 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             @info("In preview mode, skipping tests for $(pkg.name)")
             continue
         end
-        # TODO, cd to test folder (need to be careful with getting the same EnvCache
-        # as for this session in that case
         code = """
             empty!(Base.LOAD_PATH)
             append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
             m = Base.require(Base.PkgId(Base.UUID($(repr(string(pkg.uuid)))), $(repr(pkg.name))))
