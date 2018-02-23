@@ -94,4 +94,4 @@ function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false)
 end
 
 print(io::IO, a::AbstractDict; sorted=false) = _print(io, a, sorted=sorted)
-print(a::AbstractDict; sorted=false) = print(STDOUT, a, sorted=sorted)
+print(a::AbstractDict; sorted=false) = print(stdout, a, sorted=sorted)

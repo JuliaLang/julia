@@ -516,7 +516,7 @@ function read_project(io::IO)
     return project
 end
 function read_project(file::String)
-    isfile(file) ? open(read_project, file) : read_project(DevNull)
+    isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
 function read_manifest(io::IO)
@@ -537,7 +537,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-    try isfile(file) ? open(read_manifest, file) : read_manifest(DevNull)
+    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
