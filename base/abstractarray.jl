@@ -1085,7 +1085,9 @@ This function must return an object of exactly the same type as `A` for performa
 
 See also [`mightalias`](@ref) and [`dataids`](@ref).
 """
-unalias(dest, A) = mightalias(dest, A) ? copypreservingtype(A) : A
+unalias(dest, A::AbstractArray) = mightalias(dest, A) ? copypreservingtype(A) : A
+unalias(dest, A::AbstractRange) = A
+unalias(dest, A) = A
 
 copypreservingtype(A::Array) = copy(A)
 copypreservingtype(A::AbstractArray)::typeof(A) = (@_noinline_meta; copy(A))
