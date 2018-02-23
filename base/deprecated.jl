@@ -1245,6 +1245,10 @@ end
 @deprecate findin(a, b) findall(occursin(b), a)
 
 @deprecate find findall
+@deprecate find(A::AbstractVector) findall(A)
+@deprecate find(A::AbstractArray) LinearIndices(A)[findall(A)]
+@deprecate find(f::Function, A::AbstractVector) findall(f, A)
+@deprecate find(f::Function, A::AbstractArray) LinearIndices(A)[findall(f, A)]
 
 @deprecate findn(x::AbstractVector) (findall(!iszero, x),)
 @deprecate findn(x::AbstractMatrix) (I = findall(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
