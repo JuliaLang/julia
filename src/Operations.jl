@@ -205,7 +205,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
         uuid_to_name[UUID(info["uuid"])] = info["name"]
     end
 
-    return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed; verbose=ctx.graph_verbose)
+    return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed, #=verbose=# ctx.graph_verbose)
 end
 
 # Resolve a set of versions given package version specs
@@ -318,7 +318,7 @@ function install_archive(
             url_success = true
             try
                 cmd = BinaryProvider.gen_download_cmd(archive_url, path);
-                run(cmd, (DevNull, DevNull, DevNull))
+                run(cmd, (devnull, devnull, devnull))
             catch e
                 e isa InterruptException && rethrow(e)
                 url_success = false
@@ -327,7 +327,7 @@ function install_archive(
             dir = joinpath(tempdir(), randstring(12))
             mkpath(dir)
             cmd = BinaryProvider.gen_unpack_cmd(path, dir);
-            run(cmd, (DevNull, DevNull, DevNull))
+            run(cmd, (devnull, devnull, devnull))
             dirs = readdir(dir)
             # 7z on Win might create this spurious file
             filter!(x -> x != "pax_global_header", dirs)
@@ -621,8 +621,6 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
             append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
             m = Base.require(Base.PkgId(Base.UUID($(repr(string(uuid)))), $(repr(name))))
@@ -871,15 +869,11 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             @info("In preview mode, skipping tests for $(pkg.name)")
             continue
         end
-        # TODO, cd to test folder (need to be careful with getting the same EnvCache
-        # as for this session in that case
         code = """
             empty!(Base.LOAD_PATH)
             append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(map(abspath, Base.LOAD_CACHE_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
             m = Base.require(Base.PkgId(Base.UUID($(repr(string(pkg.uuid)))), $(repr(pkg.name))))

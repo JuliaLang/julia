@@ -7,7 +7,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 
 import Pkg3
-import Pkg3: devdir
+import Pkg3: devdir, print_first_command_header
 using Pkg3.Types
 using Pkg3.Display
 using Pkg3.Operations
@@ -151,6 +151,7 @@ const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\
 const Token = Union{Command, Option, VersionRange, String}
 
 function tokenize(cmd::String)::Vector{Token}
+    print_first_command_header()
     tokens = Token[]
     words = map(m->m.match, eachmatch(lex_re, cmd))
     help_mode = false
