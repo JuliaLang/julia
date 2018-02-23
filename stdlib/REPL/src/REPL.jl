@@ -671,16 +671,8 @@ function return_callback(s)
     end
 end
 
-function find_hist_file()
-    filename = ".julia_history"
-    if isfile(filename)
-        return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
-        return ENV["JULIA_HISTORY"]
-    else
-        return joinpath(homedir(), filename)
-    end
-end
+find_hist_file() = get(ENV, "JULIA_HISTORY",
+    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -837,6 +829,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)

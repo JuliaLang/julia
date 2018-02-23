@@ -235,7 +235,7 @@ Here is the standard procedure:
 2. Start a Julia REPL session. Then issue the following commands:
 
 ```julia
-using Revise    # if you aren't launching it in your .juliarc.jl
+using Revise    # if you aren't launching it in your `.julia/config/startup.jl`
 Revise.track(Base)
 ```
 

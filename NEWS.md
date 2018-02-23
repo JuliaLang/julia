@@ -263,7 +263,10 @@ This section lists changes that do not have deprecation warnings.
     of the socket. Previously the address of the remote endpoint was being
     returned ([#21825]).
 
-  * Using `ARGS` within the ~/.juliarc.jl or within a .jl file loaded with `--load` will no
+  * The `~/.juliarc.jl` file has been moved to `~/.julia/config/startup.jl` and
+    `/etc/julia/juliarc.jl` file has been renamed to `/etc/julia/startup.jl` ([#26161]).
+
+  * Using `ARGS` within `startup.jl` files or within a .jl file loaded with `--load` will no
     longer contain the script name as the first argument. Instead, the script name will be
     assigned to `PROGRAM_FILE`. ([#22092])
 
@@ -801,7 +804,7 @@ Deprecated or removed
   * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
     `serialize` ([#6466]).
 
-  * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
+  * The default `startup.jl` file on Windows has been removed. Now must explicitly include the
     full path if you need access to executables or libraries in the `Sys.BINDIR` directory, e.g.
     `joinpath(Sys.BINDIR, "7z.exe")` for `7z.exe` ([#21540]).
 

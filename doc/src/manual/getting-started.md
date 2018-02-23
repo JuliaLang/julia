@@ -80,10 +80,11 @@ takes the form `[count*][user@]host[:port] [bind_addr[:port]]` . `user` defaults
 to 1. The optional `bind-to bind_addr[:port]` specifies the ip-address and port that other workers
 should use to connect to this worker.
 
-If you have code that you want executed whenever Julia is run, you can put it in `~/.juliarc.jl`:
+If you have code that you want executed whenever Julia is run, you can put it in
+`~/.julia/config/startup.jl`:
 
 ```
-$ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
+$ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.julia/config/startup.jl
 $ julia
 Greetings! 你好! 안녕하세요?
 
@@ -100,7 +101,7 @@ julia [switches] -- [programfile] [args...]
 
  -J, --sysimage <file>     Start up with the given system image file
  -H, --home <dir>          Set location of `julia` executable
- --startup-file={yes|no}   Load ~/.juliarc.jl
+ --startup-file={yes|no}   Load `~/.julia/config/startup.jl`
  --handle-signals={yes|no} Enable or disable Julia's default signal handlers
  --sysimage-native-code={yes|no}
                            Use native code from system image if available

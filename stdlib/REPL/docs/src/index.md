@@ -191,7 +191,7 @@ Meta plus `x` can be written `"\\Mx"`. The values of the custom keymap must be `
 that the input should be ignored) or functions that accept the signature `(PromptState, AbstractREPL, Char)`.
 The `REPL.setup_interface` function must be called before the REPL is initialized, by registering
 the operation with [`atreplinit`](@ref) . For example, to bind the up and down arrow keys to move through
-history without prefix search, one could put the following code in `.juliarc.jl`:
+history without prefix search, one could put the following code in `~/.julia/config/startup.jl`:
 
 ```julia
 import REPL
@@ -324,7 +324,7 @@ fields if the function is type stable.
 
 The colors used by Julia and the REPL can be customized, as well. To change the
 color of the Julia prompt you can add something like the following to your
-`.juliarc.jl` file, which is to be placed inside your home directory:
+`~/.julia/config/startup.jl` file, which is to be placed inside your home directory:
 
 ```julia
 function customize_colors(repl)
@@ -345,7 +345,7 @@ latter two, be sure that the `envcolors` field is also set to false.
 
 It is also possible to apply boldface formatting by using
 `Base.text_colors[:bold]` as a color. For instance, to print answers in
-boldface font, one can use the following as a `.juliarc.jl`:
+boldface font, one can use the following as a `~/.julia/config/startup.jl`:
 
 ```julia
 function customize_colors(repl)
@@ -358,7 +358,8 @@ atreplinit(customize_colors)
 
 You can also customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
-messages respectively in magenta, yellow, and cyan you can add the following to your `.juliarc.jl` file:
+messages respectively in magenta, yellow, and cyan you can add the following to your
+`~/.julia/config/startup.jl` file:
 
 ```julia
 ENV["JULIA_ERROR_COLOR"] = :magenta
