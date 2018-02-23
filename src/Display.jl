@@ -22,7 +22,7 @@ function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false
     blob = try LibGit2.GitBlob(repo, spec)
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        fakeit && return DevNull
+        fakeit && return devnull
     end
     return IOBuffer(LibGit2.rawcontent(blob))
 end
@@ -154,7 +154,7 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
         printstyled(color = colors[verb], "$v $(x.name) $vstr\n")
     end
 end
-print_diff(diff::Vector{DiffEntry}) = print_diff(STDOUT, diff)
+print_diff(diff::Vector{DiffEntry}) = print_diff(stdout, diff)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()

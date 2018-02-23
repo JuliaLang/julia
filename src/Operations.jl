@@ -318,7 +318,7 @@ function install_archive(
             url_success = true
             try
                 cmd = BinaryProvider.gen_download_cmd(archive_url, path);
-                run(cmd, (DevNull, DevNull, DevNull))
+                run(cmd, (devnull, devnull, devnull))
             catch e
                 e isa InterruptException && rethrow(e)
                 url_success = false
@@ -327,7 +327,7 @@ function install_archive(
             dir = joinpath(tempdir(), randstring(12))
             mkpath(dir)
             cmd = BinaryProvider.gen_unpack_cmd(path, dir);
-            run(cmd, (DevNull, DevNull, DevNull))
+            run(cmd, (devnull, devnull, devnull))
             dirs = readdir(dir)
             # 7z on Win might create this spurious file
             filter!(x -> x != "pax_global_header", dirs)
