@@ -1012,7 +1012,8 @@ chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse ma
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
 
-function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
+function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
+    vardim = dims
     a, b = size(X)
     n, p = vardim == 1 ? (a, b) : (b, a)
 
@@ -1024,7 +1025,7 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     out = Matrix(Base.unscaled_covzm(X, vardim))
 
     # Compute x̄
-    x̄ᵀ = mean(X, vardim)
+    x̄ᵀ = mean(X, dims=vardim)
 
     # Subtract n*x̄*x̄' from X'X
     @inbounds for j in 1:p, i in 1:p

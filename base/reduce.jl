@@ -353,10 +353,9 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     end
 end
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
-
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 """
     reduce(op, v0, itr)
@@ -639,7 +638,9 @@ julia> any(i -> (println(i); i > 3), 1:10)
 true
 ```
 """
-function any(f, itr)
+any(f, itr) = _any(f, itr, :)
+
+function _any(f, itr, ::Colon)
     anymissing = false
     for x in itr
         v = f(x)
@@ -673,7 +674,9 @@ julia> all(i -> (println(i); i < 3), 1:10)
 false
 ```
 """
-function all(f, itr)
+all(f, itr) = _all(f, itr, :)
+
+function _all(f, itr, ::Colon)
     anymissing = false
     for x in itr
         v = f(x)

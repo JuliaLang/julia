@@ -2013,7 +2013,9 @@ julia> findmax([1,7,7,NaN])
 (NaN, 4)
 ```
 """
-function findmax(a)
+findmax(a) = _findmax(a, :)
+
+function _findmax(a, ::Colon)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
@@ -2054,7 +2056,9 @@ julia> findmin([7,1,1,NaN])
 (NaN, 4)
 ```
 """
-function findmin(a)
+findmin(a) = _findmin(a, :)
+
+function _findmin(a, ::Colon)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end

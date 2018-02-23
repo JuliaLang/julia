@@ -487,10 +487,10 @@ end
         for f in (sum, prod, minimum, maximum, var)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)
-            @test f(arr, 1) ≈ f(farr, 1)
-            @test f(arr, 2) ≈ f(farr, 2)
-            @test f(arr, (1, 2)) ≈ [f(farr)]
-            @test isequal(f(arr, 3), f(farr, 3))
+            @test f(arr, dims=1) ≈ f(farr, dims=1)
+            @test f(arr, dims=2) ≈ f(farr, dims=2)
+            @test f(arr, dims=(1, 2)) ≈ [f(farr)]
+            @test isequal(f(arr, dims=3), f(farr, dims=3))
         end
     end
 
@@ -503,9 +503,9 @@ end
         # case where f(0) would throw
         @test f(x->sqrt(x-1), pA .+ 1) ≈ f(sqrt.(pA))
         # these actually throw due to #10533
-        # @test f(x->sqrt(x-1), pA .+ 1, 1) ≈ f(sqrt(pA), 1)
-        # @test f(x->sqrt(x-1), pA .+ 1, 2) ≈ f(sqrt(pA), 2)
-        # @test f(x->sqrt(x-1), pA .+ 1, 3) ≈ f(pA)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=1) ≈ f(sqrt(pA), dims=1)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=2) ≈ f(sqrt(pA), dims=2)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=3) ≈ f(pA)
     end
 
     @testset "empty cases" begin
@@ -516,16 +516,16 @@ end
         @test var(sparse(Int[])) === NaN
 
         for f in (sum, prod, var)
-            @test isequal(f(spzeros(0, 1), 1), f(Matrix{Int}(I, 0, 1), 1))
-            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
-            @test isequal(f(spzeros(0, 1), (1, 2)), f(Matrix{Int}(I, 0, 1), (1, 2)))
-            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
+            @test isequal(f(spzeros(0, 1), dims=1), f(Matrix{Int}(I, 0, 1), dims=1))
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test isequal(f(spzeros(0, 1), dims=(1, 2)), f(Matrix{Int}(I, 0, 1), dims=(1, 2)))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
         for f in (minimum, maximum, findmin, findmax)
-            @test_throws ArgumentError f(spzeros(0, 1), 1)
-            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
-            @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
-            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
+            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
     end
 end
@@ -582,9 +582,9 @@ end
     @test minimum(-P) === -3.0
     @test maximum(-P) === 0.0
 
-    @test maximum(P, (1,)) == [1.0 2.0 3.0]
-    @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
-    @test maximum(P, (1,2)) == reshape([3.0],1,1)
+    @test maximum(P, dims=(1,)) == [1.0 2.0 3.0]
+    @test maximum(P, dims=(2,)) == reshape([1.0,2.0,3.0],3,1)
+    @test maximum(P, dims=(1,2)) == reshape([3.0],1,1)
 
     @test maximum(sparse(fill(-1,3,3))) == -1
     @test minimum(sparse(fill(1,3,3))) == 1
@@ -1035,7 +1035,7 @@ end
     @test findmin(S) == findmin(A)
     @test findmax(S) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
-        @test m(S, region) == m(A, region)
+        @test m(S, dims=region) == m(A, dims=region)
     end
 
     S = spzeros(10,8)
@@ -1114,33 +1114,33 @@ end
 
     A = sparse([BigInt(10)])
     for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse([BigInt(-10)])
     for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse([BigInt(10) BigInt(-10)])
     for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse(["a", "b"])
-    @test_throws MethodError findmin(A, 1)
+    @test_throws MethodError findmin(A, dims=1)
 end
 
 # Support the case when user defined `zero` and `isless` for non-numerical type
@@ -1153,11 +1153,11 @@ Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
     A = sparse([CustomType("a"), CustomType("b")])
 
     for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 end
 
@@ -2043,8 +2043,8 @@ end
     x_dense  = convert(Matrix{elty}, x_sparse)
     @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
                                                                                  corrected in (true, false)
-        @test cov(x_sparse, vardim, corrected=corrected) ≈
-              cov(x_dense , vardim, corrected=corrected)
+        @test cov(x_sparse, dims=vardim, corrected=corrected) ≈
+              cov(x_dense , dims=vardim, corrected=corrected)
     end
 
     @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
@@ -2053,8 +2053,8 @@ end
         x_sparse[1,1] = x11
         x_dense[1 ,1] = x11
 
-        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
         @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
@@ -2067,8 +2067,8 @@ end
         x_sparse[2,1] = NaN
         x_dense[2 ,1] = NaN
 
-        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
         @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
               cov_dense[ (1 + vardim):end, (1 + vardim):end]
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
@@ -2217,7 +2217,7 @@ end
 # #25943
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
-    @test sum(s, 2) == reshape([1, 2, 3], 3, 1)
+    @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
 end
 
 end # module
