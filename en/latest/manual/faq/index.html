@@ -280,10 +280,10 @@ julia&gt; remotecall_fetch(anon_bar, 2)
     end
     x
 end</code></pre><p>After a call like <code>x = 5; y = power_by_squaring(x, 4)</code>, you would get the expected result: <code>x == 5 &amp;&amp; y == 625</code>.  However, now suppose that <code>*=</code>, when used with matrices, instead mutated the left hand side.  There would be two problems:</p><ul><li><p>For general square matrices, <code>A = A*B</code> cannot be implemented without temporary storage: <code>A[1,1]</code> gets computed and stored on the left hand side before you&#39;re done using it on the right hand side.</p></li><li><p>Suppose you were willing to allocate a temporary for the computation (which would eliminate most of the point of making <code>*=</code> work in-place); if you took advantage of the mutability of <code>x</code>, then this function would behave differently for mutable vs. immutable inputs. In particular, for immutable <code>x</code>, after the call you&#39;d have (in general) <code>y != x</code>, but for mutable <code>x</code> you&#39;d have <code>y == x</code>.</p></li></ul><p>Because supporting generic programming is deemed more important than potential performance optimizations that can be achieved by other means (e.g., using explicit loops), operators like <code>+=</code> and <code>*=</code> work by rebinding new values.</p><h2><a class="nav-anchor" id="Asynchronous-IO-and-concurrent-synchronous-writes-1" href="#Asynchronous-IO-and-concurrent-synchronous-writes-1">Asynchronous IO and concurrent synchronous writes</a></h2><h3><a class="nav-anchor" id="Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1" href="#Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1">Why do concurrent writes to the same stream result in inter-mixed output?</a></h3><p>While the streaming I/O API is synchronous, the underlying implementation is fully asynchronous.</p><p>Consider the printed output from the following:</p><pre><code class="language-julia-repl">julia&gt; @sync for i in 1:3
-           @async write(STDOUT, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+           @async write(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar</code></pre><p>This is happening because, while the <code>write</code> call is synchronous, the writing of each argument yields to other tasks while waiting for that part of the I/O to complete.</p><p><code>print</code> and <code>println</code> &quot;lock&quot; the stream during a call. Consequently changing <code>write</code> to <code>println</code> in the above example results in:</p><pre><code class="language-julia-repl">julia&gt; @sync for i in 1:3
-           @async println(STDOUT, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+           @async println(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -294,7 +294,7 @@ julia&gt; @sync for i in 1:3
            @async begin
                lock(l)
                try
-                   write(STDOUT, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+                   write(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
                finally
                    unlock(l)
                end
