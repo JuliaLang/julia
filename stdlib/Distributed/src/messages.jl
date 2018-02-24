@@ -201,7 +201,7 @@ function flush_gc_msgs()
         end
     catch e
         bt = catch_backtrace()
-        @schedule showerror(STDERR, e, bt)
+        @schedule showerror(stderr, e, bt)
     end
 end
 

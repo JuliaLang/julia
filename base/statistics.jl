@@ -33,7 +33,6 @@ function mean(f::Callable, iterable)
 end
 mean(iterable) = mean(identity, iterable)
 mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
-mean(A::AbstractArray) = sum(A) / _length(A)
 
 """
     mean!(r, v)
@@ -65,16 +64,18 @@ function mean!(R::AbstractArray, A::AbstractArray)
 end
 
 """
-    mean(v[, region])
+    mean(v; dims)
 
-Compute the mean of whole array `v`, or optionally along the dimensions in `region`.
+Compute the mean of whole array `v`, or optionally along the given dimensions.
 
 !!! note
     Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
     to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-mean(A::AbstractArray{T}, region) where {T} =
-    mean!(reducedim_init(t -> t/2, +, A, region), A)
+mean(A::AbstractArray; dims=:) = _mean(A, dims)
+
+_mean(A::AbstractArray{T}, region) where {T} = mean!(reducedim_init(t -> t/2, +, A, region), A)
+_mean(A::AbstractArray, ::Colon) = sum(A) / _length(A)
 
 ##### variances #####
 
@@ -82,7 +83,9 @@ mean(A::AbstractArray{T}, region) where {T} =
 realXcY(x::Real, y::Real) = x*y
 realXcY(x::Complex, y::Complex) = real(x)*real(y) + imag(x)*imag(y)
 
-function var(iterable; corrected::Bool=true, mean=nothing)
+var(iterable; corrected::Bool=true, mean=nothing) = _var(iterable, corrected, mean)
+
+function _var(iterable, corrected::Bool, mean)
     state = start(iterable)
     if done(iterable, state)
         throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
@@ -165,12 +168,6 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     return R
 end
 
-function varm(A::AbstractArray{T}, m; corrected::Bool=true) where T
-    n = _length(A)
-    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
-    return centralize_sumabs2(A, m) / (n - Int(corrected))
-end
-
 function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true) where S
     if isempty(A)
         fill!(R, convert(S, NaN))
@@ -183,10 +180,10 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
 end
 
 """
-    varm(v, m[, region]; corrected::Bool=true)
+    varm(v, m; dims, corrected::Bool=true)
 
 Compute the sample variance of a collection `v` with known mean(s) `m`,
-optionally over `region`. `m` may contain means for each dimension of
+optionally over the given dimensions. `m` may contain means for each dimension of
 `v`. If `corrected` is `true`, then the sum is scaled with `n-1`,
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
@@ -194,18 +191,25 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
     Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
     to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
+varm(A::AbstractArray, m::AbstractArray; corrected::Bool=true, dims=:) = _varm(A, m, corrected, dims)
+
+_varm(A::AbstractArray{T}, m, corrected::Bool, region) where {T} =
     varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
 
+varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
-var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
+function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
+    n = _length(A)
+    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+    return centralize_sumabs2(A, m) / (n - Int(corrected))
+end
+
 
 """
-    var(v[, region]; corrected::Bool=true, mean=nothing)
+    var(v; dims, corrected::Bool=true, mean=nothing)
 
-Compute the sample variance of a vector or array `v`, optionally along dimensions in
-`region`. The algorithm will return an estimator of the generative distribution's variance
+Compute the sample variance of a vector or array `v`, optionally along the given dimensions.
+The algorithm will return an estimator of the generative distribution's variance
 under the assumption that each entry of `v` is an IID drawn from that generative
 distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
 (length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
@@ -216,15 +220,22 @@ The mean `mean` over the region may be provided.
     Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
     to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
-    varm(A, coalesce(mean, Base.mean(A, region)), region; corrected=corrected)
+var(A::AbstractArray; corrected::Bool=true, mean=nothing, dims=:) = _var(A, corrected, mean, dims)
 
-varm(iterable, m; corrected::Bool=true) =
-    var(iterable, corrected=corrected, mean=m)
+_var(A::AbstractArray, corrected::Bool, mean, dims) =
+    varm(A, coalesce(mean, Base.mean(A, dims=dims)); corrected=corrected, dims=dims)
+
+_var(A::AbstractArray, corrected::Bool, mean, ::Colon) =
+    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
+
+varm(iterable, m; corrected::Bool=true) = _var(iterable, corrected, m)
 
 ## variances over ranges
 
-function varm(v::AbstractRange, m)
+varm(v::AbstractRange, m::AbstractArray) = range_varm(v, m)
+varm(v::AbstractRange, m) = range_varm(v, m)
+
+function range_varm(v::AbstractRange, m)
     f  = first(v) - m
     s  = step(v)
     l  = length(v)
@@ -258,14 +269,11 @@ end
 stdm(A::AbstractArray, m; corrected::Bool=true) =
     sqrt.(varm(A, m; corrected=corrected))
 
-std(A::AbstractArray; corrected::Bool=true, mean=nothing) =
-    sqrt.(var(A; corrected=corrected, mean=mean))
-
 """
-    std(v[, region]; corrected::Bool=true, mean=nothing)
+    std(v; corrected::Bool=true, mean=nothing, dims)
 
-Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
-in `region`. The algorithm returns an estimator of the generative distribution's standard
+Compute the sample standard deviation of a vector or array `v`, optionally along the given
+dimensions. The algorithm returns an estimator of the generative distribution's standard
 deviation under the assumption that each entry of `v` is an IID drawn from that generative
 distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
 (length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
@@ -276,11 +284,19 @@ then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `correc
     Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
     to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
-    sqrt.(var(A, region; corrected=corrected, mean=mean))
+std(A::AbstractArray; corrected::Bool=true, mean=nothing, dims=:) = _std(A, corrected, mean, dims)
 
-std(A::AbstractArray{<:AbstractFloat}, region; corrected::Bool=true, mean=nothing) =
-    sqrt!(var(A, region; corrected=corrected, mean=mean))
+_std(A::AbstractArray, corrected::Bool, mean, dims) =
+    sqrt.(var(A; corrected=corrected, mean=mean, dims=dims))
+
+_std(A::AbstractArray, corrected::Bool, mean, ::Colon) =
+    sqrt.(var(A; corrected=corrected, mean=mean))
+
+_std(A::AbstractArray{<:AbstractFloat}, corrected::Bool, mean, dims) =
+    sqrt!(var(A; corrected=corrected, mean=mean, dims=dims))
+
+_std(A::AbstractArray{<:AbstractFloat}, corrected::Bool, mean, ::Colon) =
+    sqrt!(var(A; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
@@ -318,7 +334,7 @@ function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
 end
 
 _vmean(x::AbstractVector, vardim::Int) = mean(x)
-_vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
+_vmean(x::AbstractMatrix, vardim::Int) = mean(x, dims=vardim)
 
 # core functions
 
@@ -378,14 +394,14 @@ is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `fals
 cov(x::AbstractVector; corrected::Bool=true) = covm(x, Base.mean(x); corrected=corrected)
 
 """
-    cov(X::AbstractMatrix[, vardim::Int=1]; corrected::Bool=true)
+    cov(X::AbstractMatrix; dims::Int=1, corrected::Bool=true)
 
-Compute the covariance matrix of the matrix `X` along the dimension `vardim`. If `corrected`
+Compute the covariance matrix of the matrix `X` along the dimension `dims`. If `corrected`
 is `true` (the default) then the sum is scaled with `n-1`, whereas the sum is scaled with `n`
-if `corrected` is `false` where `n = size(X, vardim)`.
+if `corrected` is `false` where `n = size(X, dims)`.
 """
-cov(X::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
-    covm(X, _vmean(X, vardim), vardim; corrected=corrected)
+cov(X::AbstractMatrix; dims::Int=1, corrected::Bool=true) =
+    covm(X, _vmean(X, dims), dims; corrected=corrected)
 
 """
     cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true)
@@ -399,14 +415,14 @@ cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected)
 
 """
-    cov(X::AbstractVecOrMat, Y::AbstractVecOrMat[, vardim::Int=1]; corrected::Bool=true)
+    cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; dims::Int=1, corrected::Bool=true)
 
 Compute the covariance between the vectors or matrices `X` and `Y` along the dimension
-`vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1`, whereas
-the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim) = size(Y, vardim)`.
+`dims`. If `corrected` is `true` (the default) then the sum is scaled with `n-1`, whereas
+the sum is scaled with `n` if `corrected` is `false` where `n = size(X, dims) = size(Y, dims)`.
 """
-cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true) =
-    covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), vardim; corrected=corrected)
+cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; dims::Int=1, corrected::Bool=true) =
+    covm(X, _vmean(X, dims), Y, _vmean(Y, dims), dims; corrected=corrected)
 
 ##### correlation #####
 
@@ -474,11 +490,11 @@ function corzm(x::AbstractMatrix, vardim::Int=1)
     return cov2cor!(c, collect(sqrt(c[i,i]) for i in 1:min(size(c)...)))
 end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, dims=vardim)))
 corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt(sum(abs2, y)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, dims=vardim)), sqrt(sum(abs2, y)))
 corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt!(sum(abs2, y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, dims=vardim)), sqrt!(sum(abs2, y, dims=vardim)))
 
 # corm
 
@@ -518,11 +534,11 @@ Return the number one.
 cor(x::AbstractVector) = one(real(eltype(x)))
 
 """
-    cor(X::AbstractMatrix[, vardim::Int=1])
+    cor(X::AbstractMatrix; dims::Int=1)
 
-Compute the Pearson correlation matrix of the matrix `X` along the dimension `vardim`.
+Compute the Pearson correlation matrix of the matrix `X` along the dimension `dims`.
 """
-cor(X::AbstractMatrix, vardim::Int=1) = corm(X, _vmean(X, vardim), vardim)
+cor(X::AbstractMatrix; dims::Int=1) = corm(X, _vmean(X, dims), dims)
 
 """
     cor(x::AbstractVector, y::AbstractVector)
@@ -532,12 +548,12 @@ Compute the Pearson correlation between the vectors `x` and `y`.
 cor(x::AbstractVector, y::AbstractVector) = corm(x, Base.mean(x), y, Base.mean(y))
 
 """
-    cor(X::AbstractVecOrMat, Y::AbstractVecOrMat[, vardim=1])
+    cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; dims=1)
 
-Compute the Pearson correlation between the vectors or matrices `X` and `Y` along the dimension `vardim`.
+Compute the Pearson correlation between the vectors or matrices `X` and `Y` along the dimension `dims`.
 """
-cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1) =
-    corm(x, _vmean(x, vardim), y, _vmean(y, vardim), vardim)
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat; dims::Int=1) =
+    corm(x, _vmean(x, dims), y, _vmean(y, dims), dims)
 
 ##### median & quantiles #####
 
@@ -615,13 +631,12 @@ function median!(v::AbstractVector)
     end
 end
 median!(v::AbstractArray) = median!(vec(v))
-median(v::AbstractArray{T}) where {T} = median!(copyto!(Array{T,1}(uninitialized, _length(v)), v))
 
 """
-    median(v[, region])
+    median(v; dims)
 
 Compute the median of an entire array `v`, or, optionally,
-along the dimensions in `region`. For an even number of
+along the given dimensions. For an even number of
 elements no exact median element exists, so the result is
 equivalent to calculating mean of two median elements.
 
@@ -629,7 +644,11 @@ equivalent to calculating mean of two median elements.
     Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
     to represent missing values, and the [`skipmissing`](@ref) function to omit them.
 """
-median(v::AbstractArray, region) = mapslices(median!, v, region)
+median(v::AbstractArray; dims=:) = _median(v, dims)
+
+_median(v::AbstractArray, dims) = mapslices(median!, v, dims)
+
+_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(uninitialized, _length(v)), v))
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7

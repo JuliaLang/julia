@@ -17,7 +17,7 @@ using InteractiveUtils: subtypes
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
 helpmode(io::IO, line::AbstractString) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line))))
-helpmode(line::AbstractString) = helpmode(STDOUT, line)
+helpmode(line::AbstractString) = helpmode(stdout, line)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
@@ -39,7 +39,7 @@ function _helpmode(io::IO, line::AbstractString)
     # so that the resulting expressions are evaluated in the Base.Docs namespace
     :($REPL.@repl $io $expr)
 end
-_helpmode(line::AbstractString) = _helpmode(STDOUT, line)
+_helpmode(line::AbstractString) = _helpmode(stdout, line)
 
 # Print vertical lines along each docstring if there are multiple docs
 function insert_hlines(io::IO, docs)
@@ -224,14 +224,14 @@ function repl_search(io::IO, s)
     printmatches(io, s, doc_completions(s), cols = displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
-repl_search(s) = repl_search(STDOUT, s)
+repl_search(s) = repl_search(stdout, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
     printstyled(io, s, '\n', color=:cyan)
     print_correction(io, s)
 end
-repl_corrections(s) = repl_corrections(STDOUT, s)
+repl_corrections(s) = repl_corrections(stdout, s)
 
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
@@ -268,7 +268,7 @@ function repl_latex(io::IO, s::String)
         println(io, '\n')
     end
 end
-repl_latex(s::String) = repl_latex(STDOUT, s)
+repl_latex(s::String) = repl_latex(stdout, s)
 
 macro repl(ex) repl(ex) end
 macro repl(io, ex) repl(io, ex) end
@@ -290,7 +290,7 @@ repl(io::IO, str::AbstractString) = :(apropos($io, $str))
 repl(io::IO, other) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
-repl(x) = repl(STDOUT, x)
+repl(x) = repl(stdout, x)
 
 function _repl(x)
     if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
@@ -430,7 +430,7 @@ function printmatch(io::IO, word, match)
     end
 end
 
-printmatch(args...) = printfuzzy(STDOUT, args...)
+printmatch(args...) = printfuzzy(stdout, args...)
 
 function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
     total = 0
@@ -443,7 +443,7 @@ function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
     end
 end
 
-printmatches(args...; cols = displaysize(STDOUT)[2]) = printmatches(STDOUT, args..., cols = cols)
+printmatches(args...; cols = displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
 function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displaysize(io)[2])
     i = 0
@@ -455,7 +455,7 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
     join(io, ss[1:i], delim, last)
 end
 
-print_joined_cols(args...; cols = displaysize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)
+print_joined_cols(args...; cols = displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
 function print_correction(io, word)
     cors = levsort(word, accessible(Main))
@@ -466,7 +466,7 @@ function print_correction(io, word)
     return
 end
 
-print_correction(word) = print_correction(STDOUT, word)
+print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
@@ -566,7 +566,7 @@ stripmd(x::Markdown.Table) =
 
 Search through all documentation for a string, ignoring case.
 """
-apropos(string) = apropos(STDOUT, string)
+apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 function apropos(io::IO, needle::Regex)
     for mod in modules

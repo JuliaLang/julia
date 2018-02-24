@@ -55,7 +55,7 @@ which you can run on startup by issuing the command:
 julia -L _init.jl
 ```
 
-If you further add the following to your `.juliarc.jl` file
+If you further add the following to your `~/.julia/config/startup.jl` file
 
 ```julia
 isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))

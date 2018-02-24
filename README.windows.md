@@ -63,7 +63,7 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
  3. Julia's home directory is the location pointed to by the Windows environment
     variable `%HOME%`: this directory is for instance where the startup file
-    `.juliarc.jl` resides. `%HOMEDRIVE%\%HOMEPATH%` is used as a fallback if
+    `.julia/config/startup.jl` resides. `%HOMEDRIVE%\%HOMEPATH%` is used as a fallback if
     `%HOME%` is not defined.
 
 ## Source distribution

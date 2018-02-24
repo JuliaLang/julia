@@ -221,11 +221,11 @@ end
 
 @testset "SimpleLogger" begin
     # Log level limiting
-    @test min_enabled_level(SimpleLogger(DevNull, Debug)) == Debug
-    @test min_enabled_level(SimpleLogger(DevNull, Error)) == Error
+    @test min_enabled_level(SimpleLogger(devnull, Debug)) == Debug
+    @test min_enabled_level(SimpleLogger(devnull, Error)) == Error
 
     # Log limiting
-    logger = SimpleLogger(DevNull)
+    logger = SimpleLogger(devnull)
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Info, Base, :group, :asdf) === true

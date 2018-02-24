@@ -321,7 +321,7 @@ include("weakkeydict.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
-global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
+global_logger(SimpleLogger(Core.stderr, CoreLogging.Info))
 
 # To limit dependency on rand functionality (implemented in the Random
 # module), Crand is used in file.jl, and could be used in error.jl
@@ -487,8 +487,8 @@ function __init__()
     # Base library init
     reinit_stdio()
     Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
-    global_logger(Logging.ConsoleLogger(STDERR))
-    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
+    global_logger(Logging.ConsoleLogger(stderr))
+    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     early_init()
     init_depot_path()
     init_load_path()
@@ -542,6 +542,7 @@ let
             :Distributed,
             :Test,
             :REPL,
+            :Pkg3,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))

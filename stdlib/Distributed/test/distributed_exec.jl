@@ -180,6 +180,25 @@ testval = remotecall_fetch(wid2, fstore) do x
 end
 @test testval == 1
 
+# Issue number #25847
+@everywhere function f25847(ref)
+    fetch(ref)
+    return true
+end
+
+f = remotecall_wait(identity, id_other, ones(10))
+rrid = Distributed.RRID(f.whence, f.id)
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+finalize(f)
+yield() # flush gc msgs
+@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
+
+
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
     rr = RemoteChannel(id)
@@ -1036,8 +1055,8 @@ end
 # Test the following addprocs error conditions
 # - invalid host name - github issue #20372
 # - julia exe exiting with an error
-# - timeout reading host:port from worker STDOUT
-# - host:port not found in worker STDOUT in the first 1000 lines
+# - timeout reading host:port from worker stdout
+# - host:port not found in worker stdout in the first 1000 lines
 
 struct ErrorSimulator <: ClusterManager
     mode
@@ -1079,7 +1098,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
-    old_stdout = STDOUT
+    old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @schedule filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")

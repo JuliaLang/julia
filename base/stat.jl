@@ -137,14 +137,14 @@ filesize(st::StatStruct) = st.size
 
 Equivalent to `stat(file).mtime`.
 """
-   mtime(st::StatStruct) = st.mtime
+mtime(st::StatStruct) = st.mtime
 
 """
     ctime(file)
 
 Equivalent to `stat(file).ctime`
 """
-   ctime(st::StatStruct) = st.ctime
+ctime(st::StatStruct) = st.ctime
 
 # mode type predicates
 
@@ -153,14 +153,14 @@ Equivalent to `stat(file).ctime`
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
 """
-    ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
 """
     isfifo(path) -> Bool
 
 Returns `true` if `path` is a FIFO, `false` otherwise.
 """
-    isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
+isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
     ischardev(path) -> Bool
@@ -179,16 +179,11 @@ Returns `true` if `path` is a directory, `false` otherwise.
 julia> isdir(homedir())
 true
 
-julia> f = open("test_file.txt", "w")
-IOStream(<file test_file.txt>)
-
-julia> isdir(f)
+julia> isdir("not/a/directory")
 false
-
-julia> close(f)
 ```
 """
-    isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
     isblockdev(path) -> Bool
@@ -215,21 +210,21 @@ true
 julia> close(f)
 ```
 """
-    isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
+isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
     islink(path) -> Bool
 
 Returns `true` if `path` is a symbolic link, `false` otherwise.
 """
-    islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
+islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
     issocket(path) -> Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
 """
-  issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
+issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 # mode permission predicates
 

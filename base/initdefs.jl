@@ -101,7 +101,6 @@ function and `using` and `import` statements to consider when loading
 code.
 """
 const LOAD_PATH = Any[]
-const LOAD_CACHE_PATH = String[]
 
 function parse_load_path(str::String)
     envs = Any[split(str, Sys.iswindows() ? ';' : ':');]
@@ -149,8 +148,8 @@ function _atexit()
         try
             f()
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            show(stderr, err)
+            println(stderr)
         end
     end
 end

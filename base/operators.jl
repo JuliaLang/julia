@@ -163,9 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
-objects by address in memory and immutable objects (such as numbers) by contents at the bit
-level. This function is sometimes called "egal".
+them. First the types of `x` and `y` are compared. If those are identical, mutable objects
+are compared by address in memory and immutable objects (such as numbers) are compared by
+contents at the bit level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest

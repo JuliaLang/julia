@@ -163,10 +163,6 @@ int main()
         // locate files relative to the "embedding" executable
         "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
         "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
-        // this directory needs to be writable for the example,
-        // although in real code it usually wouldn't necessarily be used that way
-        "    empty!(Base.LOAD_CACHE_PATH)\n"
-        "    push!(Base.LOAD_CACHE_PATH, tempdir())\n"
         "end"
         );
         checked_eval_string("import LocalModule");

@@ -824,6 +824,8 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)

@@ -261,6 +261,14 @@ end
 
     # Issue 25741
     @test replace("abc", ['a', 'd'] => 'A') == "Abc"
+
+    # for Char pattern call Char replacement function
+    @test replace("a", "a" => typeof) == "SubString{String}"
+    @test replace("a", r"a" => typeof) == "SubString{String}"
+    @test replace("a", 'a' => typeof) == "Char"
+    @test replace("a", occursin("a") => typeof) == "Char"
+    @test replace("a", ['a'] => typeof) == "Char"
+
 end
 
 @testset "chomp/chop" begin

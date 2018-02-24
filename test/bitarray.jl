@@ -13,9 +13,9 @@ tc(r1,r2) = false
 bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
 
-function check_bitop_call(ret_type, func, args...)
-    r1 = func(args...)
-    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
+function check_bitop_call(ret_type, func, args...; kwargs...)
+    r1 = func(args...; kwargs...)
+    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
     ret_type ≢ nothing && @test isa(r1, ret_type)
     @test tc(r1, r2)
@@ -1230,9 +1230,9 @@ end
     b1 = bitrand(s1, s2, s3, s4)
     m1 = 1
     m2 = 3
-    @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
+    @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
     @check_bit_operation minimum(b1) Bool

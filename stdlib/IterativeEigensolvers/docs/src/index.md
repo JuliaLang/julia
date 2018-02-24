@@ -1,5 +1,9 @@
 # [Iterative Eigensolvers](@id lib-itereigen)
 
+```@meta
+DocTestSetup = :(using IterativeEigensolvers)
+```
+
 Julia provides bindings to [ARPACK](http://www.caam.rice.edu/software/ARPACK/), which
 can be used to perform iterative solutions for eigensystems (using [`eigs`](@ref))
 or singular value decompositions (using [`svds`](@ref)).
@@ -206,4 +210,8 @@ julia> λ
 IterativeEigensolvers.eigs(::Any)
 IterativeEigensolvers.eigs(::Any, ::Any)
 IterativeEigensolvers.svds
+```
+
+```@meta
+DocTestSetup = nothing
 ```

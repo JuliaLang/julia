@@ -10,11 +10,11 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @testset "ConsoleLogger" begin
     # First pass log limiting
-    @test min_enabled_level(ConsoleLogger(DevNull, Logging.Debug)) == Logging.Debug
-    @test min_enabled_level(ConsoleLogger(DevNull, Logging.Error)) == Logging.Error
+    @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
+    @test min_enabled_level(ConsoleLogger(devnull, Logging.Error)) == Logging.Error
 
     # Second pass log limiting
-    logger = ConsoleLogger(DevNull)
+    logger = ConsoleLogger(devnull)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === true
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === true

@@ -326,10 +326,10 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
 
 """
-    readline(io::IO=STDIN; keep::Bool=false)
+    readline(io::IO=stdin; keep::Bool=false)
     readline(filename::AbstractString; keep::Bool=false)
 
-Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
+Read a single line of text from the given I/O stream or file (defaults to `stdin`).
 When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
 input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` is
 false (as it is by default), these trailing newline characters are removed from the
@@ -362,7 +362,7 @@ function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
     end
 end
 
-function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
+function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
     if chomp !== nothing
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
@@ -379,7 +379,7 @@ function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
 end
 
 """
-    readlines(io::IO=STDIN; keep::Bool=false)
+    readlines(io::IO=stdin; keep::Bool=false)
     readlines(filename::AbstractString; keep::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
@@ -411,7 +411,7 @@ function readlines(filename::AbstractString; kw...)
         readlines(f; kw...)
     end
 end
-readlines(s=STDIN; kw...) = collect(eachline(s; kw...))
+readlines(s=stdin; kw...) = collect(eachline(s; kw...))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -839,12 +839,12 @@ struct EachLine
     ondone::Function
     keep::Bool
 
-    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, keep::Bool=false) =
+    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
         new(stream, ondone, keep)
 end
 
 """
-    eachline(io::IO=STDIN; keep::Bool=false)
+    eachline(io::IO=stdin; keep::Bool=false)
     eachline(filename::AbstractString; keep::Bool=false)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
@@ -868,7 +868,7 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=STDIN; chomp=nothing, keep::Bool=false)
+function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
     if chomp !== nothing
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)

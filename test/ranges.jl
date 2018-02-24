@@ -906,7 +906,7 @@ end
 @testset "repr" begin
     # repr/show should display the range nicely
     # to test print_range in range.jl
-    replrepr(x) = repr("text/plain", x; context=IOContext(STDOUT, :limit=>true, :displaysize=>(24, 80)))
+    replrepr(x) = repr("text/plain", x; context=IOContext(stdout, :limit=>true, :displaysize=>(24, 80)))
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"

@@ -18,7 +18,7 @@ end
 function readchomperrors(exename::Cmd)
     out = Base.PipeEndpoint()
     err = Base.PipeEndpoint()
-    p = spawn(exename, DevNull, out, err)
+    p = spawn(exename, devnull, out, err)
     o = @async(readchomp(out))
     e = @async(readchomp(err))
     return (success(p), fetch(o), fetch(e))
@@ -173,19 +173,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = read(`$exename -g0 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g0 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g1 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g1 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g2 -i -e "code_llvm(STDOUT, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = read(`$exename -g2 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -275,11 +275,12 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # test passing arguments
     mktempdir() do dir
         testfile = joinpath(dir, tempname())
-        # write a julia source file that just prints ARGS to STDOUT
+        # write a julia source file that just prints ARGS to stdout
         write(testfile, """
             println(ARGS)
             """)
-        cp(testfile, joinpath(dir, ".juliarc.jl"))
+        mkpath(joinpath(dir, ".julia", "config"))
+        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
@@ -304,7 +305,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     mktempdir() do dir
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".juliarc.jl")
+        c = joinpath(dir, ".julia", "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
@@ -315,6 +316,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             println(@__FILE__)
             println(PROGRAM_FILE)
             """)
+        mkpath(dirname(c))
         cp(b, c)
 
         readsplit(cmd) = split(readchomp(cmd), '\n')
@@ -387,10 +389,10 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             joinpath(@__DIR__, "nonexistent"),
             "$sysname.nonexistent",
             )
-        let stderr = Pipe(),
-            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
-            close(stderr.in)
-            let s = read(stderr, String)
+        let err = Pipe(),
+            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err))
+            close(err.in)
+            let s = read(err, String)
                 @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
                 @test !contains(s, "Segmentation fault")
                 @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
@@ -400,10 +402,10 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             @test p.exitcode == 1
         end
     end
-    let stderr = Pipe(),
-        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
-        close(stderr.in)
-        let s = read(stderr, String)
+    let err = Pipe(),
+        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=err))
+        close(err.in)
+        let s = read(err, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test !success(p)
@@ -416,7 +418,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        # `HOME=$tmpdir` to avoid errors in the user .juliarc.jl, which hangs the tests.  Issue #17642
+        # `HOME=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
         mktempdir() do tmpdir
             withenv("HOME"=>tmpdir) do
                 @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
@@ -429,7 +431,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, DevNull))
+run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
 
 # Test that `julia [some other option] --lisp` is disallowed
 @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==

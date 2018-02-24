@@ -89,7 +89,6 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     push!(Base.LOAD_PATH, dir)
-    pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
 """
@@ -152,14 +151,14 @@ installed(pkg::AbstractString) = cd(Entry.installed,splitjl(pkg))
 
 Prints out a summary of what packages are installed and what version and state they're in.
 """
-status(io::IO=STDOUT) = cd(Entry.status,io)
+status(io::IO=stdout) = cd(Entry.status,io)
 
 """
     status(pkg)
 
 Prints out a summary of what version and state `pkg`, specifically, is in.
 """
-status(pkg::AbstractString, io::IO=STDOUT) = cd(Entry.status,io,splitjl(pkg))
+status(pkg::AbstractString, io::IO=stdout) = cd(Entry.status,io,splitjl(pkg))
 
 """
     clone(pkg)
