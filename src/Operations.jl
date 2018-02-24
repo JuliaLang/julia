@@ -585,21 +585,37 @@ function prune_manifest(env::EnvCache)
     end
 end
 
-function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=true)
+function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=true, do_resolve=false)
     localctx = deepcopy(ctx)
     empty!(localctx.env.project["deps"])
     info = manifest_info(localctx.env, pkg.uuid)
-    allow_self_load && (localctx.env.project["deps"][pkg.name] = string(pkg.uuid))
-    # Allow to load dependent packages at top level
+    # If package or its dependencies are checked out, will need to resolve
+    # unless we already have resolved for the current environment
+    if allow_self_load
+        localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
+    end
+    need_to_resolve = haskey(info, "path")
+    # Allow to load dependent packages at top level by putting them in the project
     deps = PackageSpec[]
     for (dpkg, duuid) in get(info, "deps", [])
+        dinfo = manifest_info(localctx.env, UUID(duuid))
+        dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
         localctx.env.project["deps"][dpkg] = string(duuid)
     end
-    prune_manifest(localctx.env)
+    local new
+    will_resolve = do_resolve && need_to_resolve
+    if will_resolve
+        pkgs = PackageSpec[]
+        resolve_versions!(localctx, pkgs)
+        new = apply_versions(localctx, pkgs)
+    else
+        prune_manifest(localctx.env)
+    end
     mktempdir() do tmpdir
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
         localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
         write_env(localctx, no_output = true)
+        will_resolve && build_versions(localctx, new)
         withenv("JULIA_LOAD_PATH" => joinpath(tmpdir)) do
             f()
         end
@@ -630,7 +646,7 @@ function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,In
     return order
 end
 
-function build_versions(ctx::Context, uuids::Vector{UUID})
+function build_versions(ctx::Context, uuids::Vector{UUID}; do_resolve=false)
     # collect builds for UUIDs with `deps/build.jl` files
     ctx.preview && (@info "Skipping building in preview mode"; return)
     builds = Tuple{UUID,String,Union{String,SHA1},String}[]
@@ -677,7 +693,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
             --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
-        with_local_project(ctx, PackageSpec(name, uuid); allow_self_load=false) do
+        with_local_project(ctx, PackageSpec(name, uuid); allow_self_load=false, do_resolve=do_resolve) do
             open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
             end ? Base.rm(log_file, force=true) :
@@ -932,7 +948,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             --eval $code
         ```
         try
-            with_local_project(ctx, pkg) do
+            with_local_project(ctx, pkg; do_resolve=true) do
                 run(cmd)
                 @info("$(pkg.name) tests passed")
             end
