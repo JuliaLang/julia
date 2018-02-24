@@ -21,7 +21,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Manual",
     "category": "section",
-    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nMissing Values\nNetworking and Streams\nParallel Computing\nDate and DateTime\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nEnvironment Variables\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
+    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nMissing Values\nNetworking and Streams\nParallel Computing\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nEnvironment Variables\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
 },
 
 {
@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "The Julia REPL\nBase64\nCRC32c\nSHA\nDates and Time\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
+    "text": "The Julia REPL\nBase64\nCRC32c\nSHA\nDates\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
 },
 
 {
@@ -85,7 +85,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia v0.7.0 Release Notes",
     "title": "Breaking changes",
     "category": "section",
-    "text": "This section lists changes that do not have deprecation warnings.replace(s::AbstractString, pat=>repl) for function repl arguments formerly passed a substring to repl in all cases.  It now passes substrings for string patterns pat, but a Char for character patterns (when pat is a Char, collection of Char, or a character predicate) (#25815).\nreaduntil now does not include the delimiter in its result, matching the behavior of readline. Pass keep=true to get the old behavior (#25633).\ncountlines now always counts the last non-empty line even if it does not end with EOL, matching the behavior of eachline and readlines (#25845).\ngetindex(s::String, r::UnitRange{Int}) now throws UnicodeError if last(r) is not a valid index into s (#22572).\nntuple(f, n::Integer) throws ArgumentError if n is negative. Previously an empty tuple was returned (#21697).\nJuxtaposing string literals (e.g. \"x\"y) is now a syntax error (#20575).\nfinalizer(function, object) now returns object rather than nothing (#24679).\nThe constructor of SubString now checks if the requested view range is defined by valid indices in the parent AbstractString (#22511).\nMacro calls with for expressions are now parsed as generators inside function argument lists (#18650). Examples:\nsum(@inbounds a[i] for i = 1:n) used to give a syntax error, but is now parsed as sum(@inbounds(a[i]) for i = 1:n).\nsum(@m x for i = 1:n end) used to parse the argument to sum as a 2-argument call to macro @m, but now parses it as a generator plus a syntax error for the dangling end.\n@__DIR__ returns the current working directory rather than nothing when not run from a file (#21759).\n@__FILE__ and @__DIR__ return information relative to the file that it was parsed from, rather than from the task-local SOURCE_PATH global when it was expanded.\nAll macros receive an extra argument __source__::LineNumberNode which describes the parser location in the source file for the @ of the macro call. It can be accessed as a normal argument variable in the body of the macro. This is implemented by inserting an extra leading argument into the Expr(:macrocall, :@name, LineNumberNode(...), args...) surface syntax. (#21746)\nPassing the same keyword argument multiple times is now a syntax error (#16937).\ngetsockname on a TCPSocket now returns the locally bound address and port of the socket. Previously the address of the remote endpoint was being returned (#21825).\nUsing ARGS within the ~/.juliarc.jl or within a .jl file loaded with --load will no longer contain the script name as the first argument. Instead, the script name will be assigned to PROGRAM_FILE. (#22092)\nThe format for a ClusterManager specifying the cookie on the command line is now --worker=<cookie>. --worker <cookie> will not work as it is now an optional argument.\nThe representation of CartesianRange has changed to a tuple-of-AbstractUnitRanges; the start and stop fields are no longer present. Use first(R) and last(R) to obtain start/stop. (#20974)\nThe Diagonal, Bidiagonal, Tridiagonal and SymTridiagonal type definitions have changed from Diagonal{T}, Bidiagonal{T}, Tridiagonal{T} and SymTridiagonal{T} to Diagonal{T,V<:AbstractVector{T}}, Bidiagonal{T,V<:AbstractVector{T}}, Tridiagonal{T,V<:AbstractVector{T}} and SymTridiagonal{T,V<:AbstractVector{T}} respectively (#22718, #22925, #23035, #23154).\nThe immediate supertype of BitArray is now simply AbstractArray. BitArray is no longer considered a subtype of DenseArray and StridedArray (#25858).\nWhen called with an argument that contains NaN elements, findmin and findmax now return the first NaN found and its corresponding index. Previously, NaN elements were ignored. The new behavior matches that of min, max, minimum, and maximum.\nisapprox(x,y) now tests norm(x-y) <= max(atol, rtol*max(norm(x), norm(y))) rather than norm(x-y) <= atol + ..., and rtol defaults to zero if an atol > 0 is specified (#22742).\nSpaces are no longer allowed between @ and the name of a macro in a macro call (#22868).\nJuxtaposition of a non-literal with a macro call (x@macro) is no longer valid syntax (#22868).\nOn a cluster, all files are now loaded from the local file system rather than node 1 (#22588). To load the same file everywhere from node 1, one possible alternative is to broadcast a call to include_string: @everywhere include_string(Main, $(read(\"filename\", String)), \"filename\"). Improving upon this API is left as an opportunity for packages.\nrandperm(n) and randcycle(n) now always return a Vector{Int} (independent of the type of n). Use the corresponding mutating functions randperm! and randcycle! to control the array type (#22723).\nHermitian now ignores any imaginary components in the diagonal instead of checking the diagonal. (#17367)\nWorker-worker connections are setup lazily for an :all_to_all topology. Use keyword arg lazy=false to force all connections to be setup during a addprocs call. (#22814)\nIn joinpath(a, b) on Windows, if the drive specifications of a and b do not match, joinpath now returns b instead of throwing an ArgumentError. joinpath(path...) is defined to be left associative, so if any argument has a drive path which does not match the drive of the join of the preceding paths, the prior ones are dropped. (#20912)\n^(A::AbstractMatrix{<:Integer}, p::Integer) now throws a DomainError if p < 0, unless A == one(A) or A == -one(A) (same as for ^(A::Integer, p::Integer)) (#23366).\n^(A::AbstractMatrix{<:Integer}, p::Integer) now promotes the element type in the same way as ^(A::Integer, p::Integer). This means, for instance, that [1 1; 0 1]^big(1) will return a Matrix{BigInt} instead of a Matrix{Int} (#23366).\nThe element type of the input is now preserved in unique. Previously the element type of the output was shrunk to fit the union of the type of each element in the input. (#22696)\nThe promote function now raises an error if its arguments are of different types and if attempting to convert them to a common type fails to change any of their types. This avoids stack overflows in the common case of definitions like f(x, y) = f(promote(x, y)...) (#22801).\nindmin and indmax have been renamed to argmin and argmax, respectively (#25654).\nfindmin, findmax, argmin, and argmax used to always return linear indices. They now return CartesianIndexes for all but 1-d arrays, and in general return the keys of indexed collections (e.g. dictionaries) (#22907).\nThe openspecfun library is no longer built and shipped with Julia, as it is no longer used internally (#22390).\nAll loaded packages used to have bindings in Main (e.g. Main.Package). This is no longer the case; now bindings will only exist for packages brought into scope by typing using Package or import Package (#17997).\nThe rules for mixed-signedness integer arithmetic (e.g. Int32(1) + UInt64(1)) have been simplified: if the arguments have different sizes (in bits), then the type of the larger argument is used. If the arguments have the same size, the unsigned type is used (#9292).\nAll command line arguments passed via -e, -E, and -L will be executed in the order given on the command line (#23665).\nI now yields UniformScaling{Bool}(true) rather than UniformScaling{Int64}(1) to better preserve types in operations involving I (#24396).\nThe return type of reinterpret has changed to ReinterpretArray. reinterpret on sparse arrays has been discontinued.\nBase.find_in_path is now Base.find_package or Base.find_source_file (#24320).\nfinalizer now takes functions or pointers as its first argument, and the object being finalized as its second (rather than the reverse). For the majority of use cases deprecation warnings will be triggered. However, deprecation warnings will not trigger where (1) the callable argument is not a subtype of Function; or (2) both arguments are Functions or Ptr{Cvoid}s (#24605).\nThe kill function now throws errors on user error (e.g. on permission errors), but returns successfully if the process had previously exited. Its return value has been removed. Use the process_running function to determine if a process has already exited.\nBroadcasting has been redesigned with an extensible public interface. The new API is documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1. AbstractArray types that specialized broadcasting using the old internal API will need to switch to the new API. (#20740)\nThe logging system has been redesigned - info and warn are deprecated and replaced with the logging macros @info, @warn, @debug and @error.  The logging function is also deprecated and replaced with AbstractLogger and the functions from the new standard Logging library. (#24490)\nThe RevString type has been removed from the language; reverse(::String) returns a String with code points (or fragments thereof) in reverse order. In general, reverse(s) should return a string of the same type and encoding as s with code points in reverse order; any string type overrides reverse to return a different type of string must also override reverseind to compute reversed indices correctly.\neachindex(A, B...) now requires that all inputs have the same number of elements. When the chosen indexing is Cartesian, they must have the same axes.\nAbstractRange objects are now considered as equal to other AbstractArray objects by == and isequal if all of their elements are equal (#16401). This has required changing the hashing algorithm: ranges now use an O(N) fallback instead of a O(1) specialized method unless they define the Base.RangeStepStyle trait; see its documentation for details. Types which support subtraction (operator -) must now implement widen for hashing to work inside heterogeneous arrays.\nfindn(x::AbstractArray) has been deprecated in favor of findall(!iszero, x), which now returns cartesian indices for multidimensional arrays (see below, #25532).\nfind has been renamed to findall. findall, findfirst, findlast, findnext now take and/or return the same type of indices as keys/pairs for AbstractArray, AbstractDict, AbstractString, Tuple and NamedTuple objects (#24774, #25545). In particular, this means that they use CartesianIndex objects for matrices and higher-dimensional arrays instead of linear indices as was previously the case. Use LinearIndices(a)[findall(f, a)] and similar constructs to compute linear indices.\nThe find* functions which return scalars, i.e. findnext, findprev, findfirst, and findlast, as well as indexin, now return nothing when no match is found rather than 0 (#25472, #25662).\nThe Base.HasShape iterator trait has gained a type parameter N indicating the number of dimensions, which must correspond to the length of the tuple returned by size (#25655).\nAbstractSet objects are now considered equal by == and isequal if all of their elements are equal (#25368). This has required changing the hashing algorithm for BitSet.\nthe default behavior of titlecase is changed in two ways (#23393):\ncharacters not starting a word are converted to lowercase; a new keyword argument strict is added which allows to get the old behavior when it\'s false.\nany non-letter character is considered as a word separator; to get the old behavior (only \"space\" characters are considered as word separators), use the keyword wordsep=isspace.\nwritedlm in the standard library module DelimitedFiles now writes numeric values using print rather than print_shortest (#25745).\nThe tempname function used to create a file on Windows but not on other platforms. It now never creates a file (#9053).\nThe fieldnames and propertynames functions now return a tuple rather than an array (#25725).\nindexin now returns the first rather than the last matching index (#25998)."
+    "text": "This section lists changes that do not have deprecation warnings.replace(s::AbstractString, pat=>repl) for function repl arguments formerly passed a substring to repl in all cases.  It now passes substrings for string patterns pat, but a Char for character patterns (when pat is a Char, collection of Char, or a character predicate) (#25815).\nreaduntil now does not include the delimiter in its result, matching the behavior of readline. Pass keep=true to get the old behavior (#25633).\ncountlines now always counts the last non-empty line even if it does not end with EOL, matching the behavior of eachline and readlines (#25845).\ngetindex(s::String, r::UnitRange{Int}) now throws UnicodeError if last(r) is not a valid index into s (#22572).\nntuple(f, n::Integer) throws ArgumentError if n is negative. Previously an empty tuple was returned (#21697).\nJuxtaposing string literals (e.g. \"x\"y) is now a syntax error (#20575).\nfinalizer(function, object) now returns object rather than nothing (#24679).\nThe constructor of SubString now checks if the requested view range is defined by valid indices in the parent AbstractString (#22511).\nMacro calls with for expressions are now parsed as generators inside function argument lists (#18650). Examples:\nsum(@inbounds a[i] for i = 1:n) used to give a syntax error, but is now parsed as sum(@inbounds(a[i]) for i = 1:n).\nsum(@m x for i = 1:n end) used to parse the argument to sum as a 2-argument call to macro @m, but now parses it as a generator plus a syntax error for the dangling end.\n@__DIR__ returns the current working directory rather than nothing when not run from a file (#21759).\n@__FILE__ and @__DIR__ return information relative to the file that it was parsed from, rather than from the task-local SOURCE_PATH global when it was expanded.\nAll macros receive an extra argument __source__::LineNumberNode which describes the parser location in the source file for the @ of the macro call. It can be accessed as a normal argument variable in the body of the macro. This is implemented by inserting an extra leading argument into the Expr(:macrocall, :@name, LineNumberNode(...), args...) surface syntax. (#21746)\nPassing the same keyword argument multiple times is now a syntax error (#16937).\ngetsockname on a TCPSocket now returns the locally bound address and port of the socket. Previously the address of the remote endpoint was being returned (#21825).\nThe ~/.juliarc.jl file has been moved to ~/.julia/config/startup.jl and /etc/julia/juliarc.jl file has been renamed to /etc/julia/startup.jl (#26161).\nUsing ARGS within startup.jl files or within a .jl file loaded with --load will no longer contain the script name as the first argument. Instead, the script name will be assigned to PROGRAM_FILE. (#22092)\nThe format for a ClusterManager specifying the cookie on the command line is now --worker=<cookie>. --worker <cookie> will not work as it is now an optional argument.\nThe representation of CartesianRange has changed to a tuple-of-AbstractUnitRanges; the start and stop fields are no longer present. Use first(R) and last(R) to obtain start/stop. (#20974)\nThe Diagonal, Bidiagonal, Tridiagonal and SymTridiagonal type definitions have changed from Diagonal{T}, Bidiagonal{T}, Tridiagonal{T} and SymTridiagonal{T} to Diagonal{T,V<:AbstractVector{T}}, Bidiagonal{T,V<:AbstractVector{T}}, Tridiagonal{T,V<:AbstractVector{T}} and SymTridiagonal{T,V<:AbstractVector{T}} respectively (#22718, #22925, #23035, #23154).\nThe immediate supertype of BitArray is now simply AbstractArray. BitArray is no longer considered a subtype of DenseArray and StridedArray (#25858).\nWhen called with an argument that contains NaN elements, findmin and findmax now return the first NaN found and its corresponding index. Previously, NaN elements were ignored. The new behavior matches that of min, max, minimum, and maximum.\nisapprox(x,y) now tests norm(x-y) <= max(atol, rtol*max(norm(x), norm(y))) rather than norm(x-y) <= atol + ..., and rtol defaults to zero if an atol > 0 is specified (#22742).\nSpaces are no longer allowed between @ and the name of a macro in a macro call (#22868).\nJuxtaposition of a non-literal with a macro call (x@macro) is no longer valid syntax (#22868).\nOn a cluster, all files are now loaded from the local file system rather than node 1 (#22588). To load the same file everywhere from node 1, one possible alternative is to broadcast a call to include_string: @everywhere include_string(Main, $(read(\"filename\", String)), \"filename\"). Improving upon this API is left as an opportunity for packages.\nrandperm(n) and randcycle(n) now always return a Vector{Int} (independent of the type of n). Use the corresponding mutating functions randperm! and randcycle! to control the array type (#22723).\nHermitian now ignores any imaginary components in the diagonal instead of checking the diagonal. (#17367)\nWorker-worker connections are setup lazily for an :all_to_all topology. Use keyword arg lazy=false to force all connections to be setup during a addprocs call. (#22814)\nIn joinpath(a, b) on Windows, if the drive specifications of a and b do not match, joinpath now returns b instead of throwing an ArgumentError. joinpath(path...) is defined to be left associative, so if any argument has a drive path which does not match the drive of the join of the preceding paths, the prior ones are dropped. (#20912)\n^(A::AbstractMatrix{<:Integer}, p::Integer) now throws a DomainError if p < 0, unless A == one(A) or A == -one(A) (same as for ^(A::Integer, p::Integer)) (#23366).\n^(A::AbstractMatrix{<:Integer}, p::Integer) now promotes the element type in the same way as ^(A::Integer, p::Integer). This means, for instance, that [1 1; 0 1]^big(1) will return a Matrix{BigInt} instead of a Matrix{Int} (#23366).\nThe element type of the input is now preserved in unique. Previously the element type of the output was shrunk to fit the union of the type of each element in the input. (#22696)\nThe promote function now raises an error if its arguments are of different types and if attempting to convert them to a common type fails to change any of their types. This avoids stack overflows in the common case of definitions like f(x, y) = f(promote(x, y)...) (#22801).\nindmin and indmax have been renamed to argmin and argmax, respectively (#25654).\nfindmin, findmax, argmin, and argmax used to always return linear indices. They now return CartesianIndexes for all but 1-d arrays, and in general return the keys of indexed collections (e.g. dictionaries) (#22907).\nThe openspecfun library is no longer built and shipped with Julia, as it is no longer used internally (#22390).\nAll loaded packages used to have bindings in Main (e.g. Main.Package). This is no longer the case; now bindings will only exist for packages brought into scope by typing using Package or import Package (#17997).\nThe rules for mixed-signedness integer arithmetic (e.g. Int32(1) + UInt64(1)) have been simplified: if the arguments have different sizes (in bits), then the type of the larger argument is used. If the arguments have the same size, the unsigned type is used (#9292).\nAll command line arguments passed via -e, -E, and -L will be executed in the order given on the command line (#23665).\nI now yields UniformScaling{Bool}(true) rather than UniformScaling{Int64}(1) to better preserve types in operations involving I (#24396).\nThe return type of reinterpret has changed to ReinterpretArray. reinterpret on sparse arrays has been discontinued.\nBase.find_in_path is now Base.find_package or Base.find_source_file (#24320).\nfinalizer now takes functions or pointers as its first argument, and the object being finalized as its second (rather than the reverse). For the majority of use cases deprecation warnings will be triggered. However, deprecation warnings will not trigger where (1) the callable argument is not a subtype of Function; or (2) both arguments are Functions or Ptr{Cvoid}s (#24605).\nThe kill function now throws errors on user error (e.g. on permission errors), but returns successfully if the process had previously exited. Its return value has been removed. Use the process_running function to determine if a process has already exited.\nBroadcasting has been redesigned with an extensible public interface. The new API is documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1. AbstractArray types that specialized broadcasting using the old internal API will need to switch to the new API. (#20740)\nThe logging system has been redesigned - info and warn are deprecated and replaced with the logging macros @info, @warn, @debug and @error.  The logging function is also deprecated and replaced with AbstractLogger and the functions from the new standard Logging library. (#24490)\nThe RevString type has been removed from the language; reverse(::String) returns a String with code points (or fragments thereof) in reverse order. In general, reverse(s) should return a string of the same type and encoding as s with code points in reverse order; any string type overrides reverse to return a different type of string must also override reverseind to compute reversed indices correctly.\neachindex(A, B...) now requires that all inputs have the same number of elements. When the chosen indexing is Cartesian, they must have the same axes.\nAbstractRange objects are now considered as equal to other AbstractArray objects by == and isequal if all of their elements are equal (#16401). This has required changing the hashing algorithm: ranges now use an O(N) fallback instead of a O(1) specialized method unless they define the Base.RangeStepStyle trait; see its documentation for details. Types which support subtraction (operator -) must now implement widen for hashing to work inside heterogeneous arrays.\nfindn(x::AbstractArray) has been deprecated in favor of findall(!iszero, x), which now returns cartesian indices for multidimensional arrays (see below, #25532).\nfind has been renamed to findall. findall, findfirst, findlast, findnext now take and/or return the same type of indices as keys/pairs for AbstractArray, AbstractDict, AbstractString, Tuple and NamedTuple objects (#24774, #25545). In particular, this means that they use CartesianIndex objects for matrices and higher-dimensional arrays instead of linear indices as was previously the case. Use LinearIndices(a)[findall(f, a)] and similar constructs to compute linear indices.\nThe find* functions which return scalars, i.e. findnext, findprev, findfirst, and findlast, as well as indexin, now return nothing when no match is found rather than 0 (#25472, #25662).\nThe Base.HasShape iterator trait has gained a type parameter N indicating the number of dimensions, which must correspond to the length of the tuple returned by size (#25655).\nAbstractSet objects are now considered equal by == and isequal if all of their elements are equal (#25368). This has required changing the hashing algorithm for BitSet.\nthe default behavior of titlecase is changed in two ways (#23393):\ncharacters not starting a word are converted to lowercase; a new keyword argument strict is added which allows to get the old behavior when it\'s false.\nany non-letter character is considered as a word separator; to get the old behavior (only \"space\" characters are considered as word separators), use the keyword wordsep=isspace.\nwritedlm in the standard library module DelimitedFiles now writes numeric values using print rather than print_shortest (#25745).\nThe tempname function used to create a file on Windows but not on other platforms. It now never creates a file (#9053).\nThe fieldnames and propertynames functions now return a tuple rather than an array (#25725).\nindexin now returns the first rather than the last matching index (#25998)."
 },
 
 {
@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia v0.7.0 Release Notes",
     "title": "Deprecated or removed",
     "category": "section",
-    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nslicedim(A, d, i) has been deprecated in favor of copy(selectdim(A, d, i)). The new selectdim function now always returns a view into A; in many cases the copy is not necessary. Previously, slicedim on a vector V over dimension d=1 and scalarindex `i` would return the just selected element (unless `V` was a `BitVector`). This\nhas now been made consistent: `selectdim` now always returns a view into the original\narray, with a zero-dimensional view in this specific case ([#26009](https://github.com/JuliaLang/julia/issues/26009)).whos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, \',\'; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, \',\'[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(uninitialized, dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nnb_available is now bytesavailable (#25634).\nskipchars(io::IO, predicate; linecomment=nothing) is deprecated in favor of skipchars(predicate, io::IO; linecomment=nothing) (#25667).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nIOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer), IOBuffer(read::Bool, write::Bool), and IOBuffer(maxsize::Integer) are deprecated in favor of constructors taking keyword arguments (#25872).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default juliarc.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler\'s number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of the simpler predicates isconcretetype and isdispatchtuple. Concrete types are those that might equal typeof(x) for some x; isleaftype included some types for which this is not true. Those are now categorized more precisely as \"dispatch tuple types\" and \"!hasfreetypevars\" (not exported). (#17086, #25496)\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe Libdl module has moved to the Libdl standard library module (#25459).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nmatchall has been deprecated in favor of collect(m.match for m in eachmatch(r, s)) (#26071).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nmodule_name has been deprecated in favor of a new, general nameof function. Similarly, the unexported Base.function_name and Base.datatype_name have been deprecated in favor of nameof methods (#25622).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nRandom.RandomDevice(unlimited::Bool) (on non-Windows systems) is deprecated in favor of Random.RandomDevice(; unlimited=unlimited) (#25668).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nThe assert function (and @assert macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616).\nprint_shortest has been discontinued, but is still available in the Base.Grisu submodule (#25745).\nscale! has been deprecated in favor of mul!, lmul!, and rmul! (#25701, #25812).\nThe remove_destination keyword argument to cp, mv, and the unexported cptree has been renamed to force (#25979).\nThe methods of range based on positional arguments have been deprecated in favor of keyword arguments (#25896).\nlinspace has been deprecated in favor of range with stop and length keyword arguments (#25896).\nLinSpace has been renamed to LinRange (#25896).\nlogspace has been deprecated to its definition (#25896).\nendof(a) has been renamed to lastindex(a), and the end keyword in indexing expressions now lowers to either lastindex(a) (in the case with only one index) or lastindex(a, d) (in cases where there is more than one index and end appears at dimension d) (#23554, #25763).\nDateTime(), Date(), and Time() have been deprecated, instead use DateTime(1), Date(1) and Time(0) respectively (#23724).\nThe fallback method ^(x, p::Integer) is deprecated. If your type relied on this definition, add a method such as ^(x::MyType, p::Integer) = Base.power_by_squaring(x, p) (#23332).\nDevNull, STDIN, STDOUT, and STDERR have been renamed to devnull, stdin, stdout, and stderr, respectively (#25786).\nwait and fetch on Task now resemble the interface of Future"
+    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in Array[{T,N}](uninitialized, shape...). For example, Vector(3) is now Vector(uninitialized, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(uninitialized, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(uninitialized, 11, 13, 17) (#24781).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nslicedim(A, d, i) has been deprecated in favor of copy(selectdim(A, d, i)). The new selectdim function now always returns a view into A; in many cases the copy is not necessary. Previously, slicedim on a vector V over dimension d=1 and scalarindex `i` would return the just selected element (unless `V` was a `BitVector`). This\nhas now been made consistent: `selectdim` now always returns a view into the original\narray, with a zero-dimensional view in this specific case ([#26009](https://github.com/JuliaLang/julia/issues/26009)).whos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting uninitialized (an alias for Uninitialized()) as their first argument, as in RowVector{T}(uninitialized, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(uninitialized, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(uninitialized, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, \',\'; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, \',\'[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(uninitialized, dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nnb_available is now bytesavailable (#25634).\nskipchars(io::IO, predicate; linecomment=nothing) is deprecated in favor of skipchars(predicate, io::IO; linecomment=nothing) (#25667).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nIOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer), IOBuffer(read::Bool, write::Bool), and IOBuffer(maxsize::Integer) are deprecated in favor of constructors taking keyword arguments (#25872).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default startup.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler\'s number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of the simpler predicates isconcretetype and isdispatchtuple. Concrete types are those that might equal typeof(x) for some x; isleaftype included some types for which this is not true. Those are now categorized more precisely as \"dispatch tuple types\" and \"!hasfreetypevars\" (not exported). (#17086, #25496)\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe Libdl module has moved to the Libdl standard library module (#25459).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with the new equalto and occursin predicates for some methods (#24673\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nmatchall has been deprecated in favor of collect(m.match for m in eachmatch(r, s)) (#26071).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(occursin(b), a) (#24673).\nmodule_name has been deprecated in favor of a new, general nameof function. Similarly, the unexported Base.function_name and Base.datatype_name have been deprecated in favor of nameof methods (#25622).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nRandom.RandomDevice(unlimited::Bool) (on non-Windows systems) is deprecated in favor of Random.RandomDevice(; unlimited=unlimited) (#25668).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nThe assert function (and @assert macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616).\nprint_shortest has been discontinued, but is still available in the Base.Grisu submodule (#25745).\nscale! has been deprecated in favor of mul!, lmul!, and rmul! (#25701, #25812).\nThe remove_destination keyword argument to cp, mv, and the unexported cptree has been renamed to force (#25979).\nThe methods of range based on positional arguments have been deprecated in favor of keyword arguments (#25896).\nlinspace has been deprecated in favor of range with stop and length keyword arguments (#25896).\nLinSpace has been renamed to LinRange (#25896).\nlogspace has been deprecated to its definition (#25896).\nendof(a) has been renamed to lastindex(a), and the end keyword in indexing expressions now lowers to either lastindex(a) (in the case with only one index) or lastindex(a, d) (in cases where there is more than one index and end appears at dimension d) (#23554, #25763).\nDateTime(), Date(), and Time() have been deprecated, instead use DateTime(1), Date(1) and Time(0) respectively (#23724).\nThe fallback method ^(x, p::Integer) is deprecated. If your type relied on this definition, add a method such as ^(x::MyType, p::Integer) = Base.power_by_squaring(x, p) (#23332).\nDevNull, STDIN, STDOUT, and STDERR have been renamed to devnull, stdin, stdout, and stderr, respectively (#25786).\nwait and fetch on Task now resemble the interface of Future"
 },
 
 {
@@ -149,7 +149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Getting Started",
     "title": "Getting Started",
     "category": "section",
-    "text": "Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at https://julialang.org/downloads/.The easiest way to learn and experiment with Julia is by starting an interactive session (also known as a read-eval-print loop or \"repl\") by double-clicking the Julia executable or running julia from the command line:$ julia\n               _\n   _       _ _(_)_     |  A fresh approach to technical computing\n  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org\n   _ _   _| |_  __ _   |  Type \"?help\" for help.\n  | | | | | | |/ _` |  |\n  | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)\n _/ |\\__\'_|_|_|\\__\'_|  |  Commit 2bb94d6 (11 days old master)\n|__/                   |  x86_64-apple-darwin13.1.0\n\njulia> 1 + 2\n3\n\njulia> ans\n3To exit the interactive session, type ^D – the control key together with the d key or type quit(). When run in interactive mode, julia displays a banner and prompts the user for input. Once the user has entered a complete expression, such as 1 + 2, and hits enter, the interactive session evaluates the expression and shows its value. If an expression is entered into an interactive session with a trailing semicolon, its value is not shown. The variable ans is bound to the value of the last evaluated expression whether it is shown or not. The ans variable is only bound in interactive sessions, not when Julia code is run in other ways.To evaluate expressions written in a source file file.jl, write include(\"file.jl\").To run code in a file non-interactively, you can give it as the first argument to the julia command:$ julia script.jl arg1 arg2...As the example implies, the following command-line arguments to julia are taken as command-line arguments to the program script.jl, passed in the global constant ARGS. The name of the script itself is passed in as the global PROGRAM_FILE. Note that ARGS is also set when script code is given using the -e option on the command line (see the julia help output below) but PROGRAM_FILE will be empty. For example, to just print the arguments given to a script, you could do this:$ julia -e \'println(PROGRAM_FILE); for x in ARGS; println(x); end\' foo bar\n\nfoo\nbarOr you could put that code into a script and run it:$ echo \'println(PROGRAM_FILE); for x in ARGS; println(x); end\' > script.jl\n$ julia script.jl foo bar\nscript.jl\nfoo\nbarThe -- delimiter can be used to separate command-line args to the scriptfile from args to Julia:$ julia --color=yes -O -- foo.jl arg1 arg2..Julia can be started in parallel mode with either the -p or the --machine-file options. -p n will launch an additional n worker processes, while --machine-file file will launch a worker for each line in file file. The machines defined in file must be accessible via a passwordless ssh login, with Julia installed at the same location as the current host. Each machine definition takes the form [count*][user@]host[:port] [bind_addr[:port]] . user defaults to current user, port to the standard ssh port. count is the number of workers to spawn on the node, and defaults to 1. The optional bind-to bind_addr[:port] specifies the ip-address and port that other workers should use to connect to this worker.If you have code that you want executed whenever Julia is run, you can put it in ~/.juliarc.jl:$ echo \'println(\"Greetings! 你好! 안녕하세요?\")\' > ~/.juliarc.jl\n$ julia\nGreetings! 你好! 안녕하세요?\n\n...There are various ways to run Julia code and provide options, similar to those available for the perl and ruby programs:julia [switches] -- [programfile] [args...]\n -v, --version             Display version information\n -h, --help                Print this message\n\n -J, --sysimage <file>     Start up with the given system image file\n -H, --home <dir>          Set location of `julia` executable\n --startup-file={yes|no}   Load ~/.juliarc.jl\n --handle-signals={yes|no} Enable or disable Julia\'s default signal handlers\n --sysimage-native-code={yes|no}\n                           Use native code from system image if available\n --compiled-modules={yes|no}\n                           Enable or disable incremental precompilation of modules\n\n -e, --eval <expr>         Evaluate <expr>\n -E, --print <expr>        Evaluate <expr> and display the result\n -L, --load <file>         Load <file> immediately on all processors\n\n -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n                           \"auto\" launches as many workers as the number of local cores\n --machine-file <file>     Run processes on hosts listed in <file>\n\n -i                        Interactive mode; REPL runs and isinteractive() is true\n -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n --banner={yes|no|auto}    Enable or disable startup banner\n --color={yes|no|auto}     Enable or disable color text\n --history-file={yes|no}   Load or save history\n\n --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n -C, --cpu-target <target> Limit usage of cpu features up to <target>; set to \"help\" to see the available options\n -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n -g, -g <level>            Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)\n --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n --code-coverage={none|user|all}, --code-coverage\n                           Count executions of source lines (omitting setting is equivalent to \"user\")\n --track-allocation={none|user|all}, --track-allocation\n                           Count bytes allocated by each source line"
+    "text": "Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at https://julialang.org/downloads/.The easiest way to learn and experiment with Julia is by starting an interactive session (also known as a read-eval-print loop or \"repl\") by double-clicking the Julia executable or running julia from the command line:$ julia\n               _\n   _       _ _(_)_     |  A fresh approach to technical computing\n  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org\n   _ _   _| |_  __ _   |  Type \"?help\" for help.\n  | | | | | | |/ _` |  |\n  | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)\n _/ |\\__\'_|_|_|\\__\'_|  |  Commit 2bb94d6 (11 days old master)\n|__/                   |  x86_64-apple-darwin13.1.0\n\njulia> 1 + 2\n3\n\njulia> ans\n3To exit the interactive session, type ^D – the control key together with the d key or type quit(). When run in interactive mode, julia displays a banner and prompts the user for input. Once the user has entered a complete expression, such as 1 + 2, and hits enter, the interactive session evaluates the expression and shows its value. If an expression is entered into an interactive session with a trailing semicolon, its value is not shown. The variable ans is bound to the value of the last evaluated expression whether it is shown or not. The ans variable is only bound in interactive sessions, not when Julia code is run in other ways.To evaluate expressions written in a source file file.jl, write include(\"file.jl\").To run code in a file non-interactively, you can give it as the first argument to the julia command:$ julia script.jl arg1 arg2...As the example implies, the following command-line arguments to julia are taken as command-line arguments to the program script.jl, passed in the global constant ARGS. The name of the script itself is passed in as the global PROGRAM_FILE. Note that ARGS is also set when script code is given using the -e option on the command line (see the julia help output below) but PROGRAM_FILE will be empty. For example, to just print the arguments given to a script, you could do this:$ julia -e \'println(PROGRAM_FILE); for x in ARGS; println(x); end\' foo bar\n\nfoo\nbarOr you could put that code into a script and run it:$ echo \'println(PROGRAM_FILE); for x in ARGS; println(x); end\' > script.jl\n$ julia script.jl foo bar\nscript.jl\nfoo\nbarThe -- delimiter can be used to separate command-line args to the scriptfile from args to Julia:$ julia --color=yes -O -- foo.jl arg1 arg2..Julia can be started in parallel mode with either the -p or the --machine-file options. -p n will launch an additional n worker processes, while --machine-file file will launch a worker for each line in file file. The machines defined in file must be accessible via a passwordless ssh login, with Julia installed at the same location as the current host. Each machine definition takes the form [count*][user@]host[:port] [bind_addr[:port]] . user defaults to current user, port to the standard ssh port. count is the number of workers to spawn on the node, and defaults to 1. The optional bind-to bind_addr[:port] specifies the ip-address and port that other workers should use to connect to this worker.If you have code that you want executed whenever Julia is run, you can put it in ~/.julia/config/startup.jl:$ echo \'println(\"Greetings! 你好! 안녕하세요?\")\' > ~/.julia/config/startup.jl\n$ julia\nGreetings! 你好! 안녕하세요?\n\n...There are various ways to run Julia code and provide options, similar to those available for the perl and ruby programs:julia [switches] -- [programfile] [args...]\n -v, --version             Display version information\n -h, --help                Print this message\n\n -J, --sysimage <file>     Start up with the given system image file\n -H, --home <dir>          Set location of `julia` executable\n --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n --handle-signals={yes|no} Enable or disable Julia\'s default signal handlers\n --sysimage-native-code={yes|no}\n                           Use native code from system image if available\n --compiled-modules={yes|no}\n                           Enable or disable incremental precompilation of modules\n\n -e, --eval <expr>         Evaluate <expr>\n -E, --print <expr>        Evaluate <expr> and display the result\n -L, --load <file>         Load <file> immediately on all processors\n\n -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n                           \"auto\" launches as many workers as the number of local cores\n --machine-file <file>     Run processes on hosts listed in <file>\n\n -i                        Interactive mode; REPL runs and isinteractive() is true\n -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n --banner={yes|no|auto}    Enable or disable startup banner\n --color={yes|no|auto}     Enable or disable color text\n --history-file={yes|no}   Load or save history\n\n --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n -C, --cpu-target <target> Limit usage of cpu features up to <target>; set to \"help\" to see the available options\n -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n -g, -g <level>            Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)\n --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n --code-coverage={none|user|all}, --code-coverage\n                           Count executions of source lines (omitting setting is equivalent to \"user\")\n --track-allocation={none|user|all}, --track-allocation\n                           Count bytes allocated by each source line"
 },
 
 {
@@ -1589,7 +1589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Modules",
     "title": "Module file paths",
     "category": "section",
-    "text": "The global variable LOAD_PATH contains the directories Julia searches for modules when calling require. It can be extended using push!:push!(LOAD_PATH, \"/Path/To/My/Module/\")Putting this statement in the file ~/.juliarc.jl will extend LOAD_PATH on every Julia startup. Alternatively, the module load path can be extended by defining the environment variable JULIA_LOAD_PATH."
+    "text": "The global variable LOAD_PATH contains the directories Julia searches for modules when calling require. It can be extended using push!:push!(LOAD_PATH, \"/Path/To/My/Module/\")Putting this statement in the file ~/.julia/config/startup.jl will extend LOAD_PATH on every Julia startup. Alternatively, the module load path can be extended by defining the environment variable JULIA_LOAD_PATH."
 },
 
 {
@@ -2405,7 +2405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Code Availability and Loading Packages",
     "category": "section",
-    "text": "Your code must be available on any process that runs it. For example, type the following into the Julia prompt:julia> function rand2(dims...)\n           return 2*rand(dims...)\n       end\n\njulia> rand2(2,2)\n2×2 Array{Float64,2}:\n 0.153756  0.368514\n 1.15119   0.918912\n\njulia> fetch(@spawn rand2(2,2))\nERROR: RemoteException(2, CapturedException(UndefVarError(Symbol(\"#rand2\"))\nStacktrace:\n[...]Process 1 knew about the function rand2, but process 2 did not.Most commonly you\'ll be loading code from files or packages, and you have a considerable amount of flexibility in controlling which processes load code. Consider a file, DummyModule.jl, containing the following code:module DummyModule\n\nexport MyType, f\n\nmutable struct MyType\n    a::Int\nend\n\nf(x) = x^2+1\n\nprintln(\"loaded\")\n\nendStarting Julia with julia -p 2, you can use this to verify the following:include(\"DummyModule.jl\") loads the file on just a single process (whichever one executes the statement).\nusing DummyModule causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.\nAs long as DummyModule is loaded on process 2, commands like\nrr = RemoteChannel(2)\nput!(rr, MyType(7))\nallow you to store an object of type MyType on process 2 even if DummyModule is not in scope on process 2.You can force a command to run on all processes using the @everywhere macro. For example, @everywhere can also be used to directly define a function on all processes:julia> @everywhere id = myid()\n\njulia> remotecall_fetch(()->id, 2)\n2A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation:julia -p <n> -L file1.jl -L file2.jl driver.jlThe Julia process running the driver script in the example above has an id equal to 1, just like a process providing an interactive prompt.The base Julia installation has in-built support for two types of clusters:A local cluster specified with the -p option as shown above.\nA cluster spanning machines using the --machine-file option. This uses a passwordless ssh login to start Julia worker processes (from the same path as the current host) on the specified machines.Functions addprocs, rmprocs, workers, and others are available as a programmatic means of adding, removing and querying the processes in a cluster.julia> using Distributed\n\njulia> addprocs(2)\n2-element Array{Int64,1}:\n 2\n 3Module Distributed must be explicitly loaded on the master process before invoking addprocs. It is automatically made available on the worker processes.Note that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.Other types of clusters can be supported by writing your own custom ClusterManager, as described below in the ClusterManagers section."
+    "text": "Your code must be available on any process that runs it. For example, type the following into the Julia prompt:julia> function rand2(dims...)\n           return 2*rand(dims...)\n       end\n\njulia> rand2(2,2)\n2×2 Array{Float64,2}:\n 0.153756  0.368514\n 1.15119   0.918912\n\njulia> fetch(@spawn rand2(2,2))\nERROR: RemoteException(2, CapturedException(UndefVarError(Symbol(\"#rand2\"))\nStacktrace:\n[...]Process 1 knew about the function rand2, but process 2 did not.Most commonly you\'ll be loading code from files or packages, and you have a considerable amount of flexibility in controlling which processes load code. Consider a file, DummyModule.jl, containing the following code:module DummyModule\n\nexport MyType, f\n\nmutable struct MyType\n    a::Int\nend\n\nf(x) = x^2+1\n\nprintln(\"loaded\")\n\nendStarting Julia with julia -p 2, you can use this to verify the following:include(\"DummyModule.jl\") loads the file on just a single process (whichever one executes the statement).\nusing DummyModule causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.\nAs long as DummyModule is loaded on process 2, commands like\nrr = RemoteChannel(2)\nput!(rr, MyType(7))\nallow you to store an object of type MyType on process 2 even if DummyModule is not in scope on process 2.You can force a command to run on all processes using the @everywhere macro. For example, @everywhere can also be used to directly define a function on all processes:julia> @everywhere id = myid()\n\njulia> remotecall_fetch(()->id, 2)\n2A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation:julia -p <n> -L file1.jl -L file2.jl driver.jlThe Julia process running the driver script in the example above has an id equal to 1, just like a process providing an interactive prompt.The base Julia installation has in-built support for two types of clusters:A local cluster specified with the -p option as shown above.\nA cluster spanning machines using the --machine-file option. This uses a passwordless ssh login to start Julia worker processes (from the same path as the current host) on the specified machines.Functions addprocs, rmprocs, workers, and others are available as a programmatic means of adding, removing and querying the processes in a cluster.julia> using Distributed\n\njulia> addprocs(2)\n2-element Array{Int64,1}:\n 2\n 3Module Distributed must be explicitly loaded on the master process before invoking addprocs. It is automatically made available on the worker processes.Note that workers do not run a ~/.julia/config/startup.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.Other types of clusters can be supported by writing your own custom ClusterManager, as described below in the ClusterManagers section."
 },
 
 {
@@ -2566,94 +2566,6 @@ var documenterSearchIndex = {"docs": [
     "title": "@threadcall (Experimental)",
     "category": "section",
     "text": "All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event loop. A patched version of libuv (http://docs.libuv.org/en/v1.x/) provides this functionality. Yield points provide for co-operatively scheduling multiple tasks onto the same OS thread. I/O tasks and timers yield implicitly while waiting for the event to occur. Calling yield explicitly allows for other tasks to be scheduled.Thus, a task executing a ccall effectively prevents the Julia scheduler from executing any other tasks till the call returns. This is true for all calls into external libraries. Exceptions are calls into custom C code that call back into Julia (which may then yield) or C code that calls jl_yield() (C equivalent of yield).Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch their own internal threads. For example, the BLAS library may start as many threads as there are cores on a machine.The @threadcall macro addresses scenarios where we do not want a ccall to block the main Julia event loop. It schedules a C function for execution in a separate thread. A threadpool with a default size of 4 is used for this. The size of the threadpool is controlled via environment variable UV_THREADPOOL_SIZE. While waiting for a free thread, and during function execution once a thread is available, the requesting task (on the main Julia event loop) yields to other tasks. Note that @threadcall does not return till the execution is complete. From a user point of view, it is therefore a blocking call like other Julia APIs.It is very important that the called function does not call back into Julia.@threadcall may be removed/changed in future versions of Julia.[1]: In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://mpi-forum.org/docs."
-},
-
-{
-    "location": "manual/dates/#",
-    "page": "Date and DateTime",
-    "title": "Date and DateTime",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "manual/dates/#Date-and-DateTime-1",
-    "page": "Date and DateTime",
-    "title": "Date and DateTime",
-    "category": "section",
-    "text": "CurrentModule = DatesThe Dates module provides two types for working with dates: Date and DateTime, representing day and millisecond precision, respectively; both are subtypes of the abstract TimeType. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don\'t have to be dealt with. For example, since the Date type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.Both Date and DateTime are basically immutable Int64 wrappers. The single instant field of either type is actually a UTInstant{P} type, which represents a continuously increasing machine timeline based on the UT second [1]. The DateTime type is not aware of time zones (naive, in Python parlance), analogous to a LocalDateTime in Java 8. Additional time zone functionality can be added through the TimeZones.jl package, which compiles the IANA time zone database. Both Date and DateTime are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so 0000-12-31 is the day before 0001-01-01, and year -0001 (yes, negative one for the year) is 2 BC/BCE, year -0002 is 3 BC/BCE, etc.[1]: The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a \"UT second\", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that Date and DateTime are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called UT or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates."
-},
-
-{
-    "location": "manual/dates/#Constructors-1",
-    "page": "Date and DateTime",
-    "title": "Constructors",
-    "category": "section",
-    "text": "Date and DateTime types can be constructed by integer or Period types, by parsing, or through adjusters (more on those later):julia> DateTime(2013)\n2013-01-01T00:00:00\n\njulia> DateTime(2013,7)\n2013-07-01T00:00:00\n\njulia> DateTime(2013,7,1)\n2013-07-01T00:00:00\n\njulia> DateTime(2013,7,1,12)\n2013-07-01T12:00:00\n\njulia> DateTime(2013,7,1,12,30)\n2013-07-01T12:30:00\n\njulia> DateTime(2013,7,1,12,30,59)\n2013-07-01T12:30:59\n\njulia> DateTime(2013,7,1,12,30,59,1)\n2013-07-01T12:30:59.001\n\njulia> Date(2013)\n2013-01-01\n\njulia> Date(2013,7)\n2013-07-01\n\njulia> Date(2013,7,1)\n2013-07-01\n\njulia> Date(Dates.Year(2013),Dates.Month(7),Dates.Day(1))\n2013-07-01\n\njulia> Date(Dates.Month(7),Dates.Year(2013))\n2013-07-01Date or DateTime parsing is accomplished by the use of format strings. Format strings work by the notion of defining delimited or fixed-width \"slots\" that contain a period to parse and passing the text to parse and format string to a Date or DateTime constructor, of the form Date(\"2015-01-01\",\"y-m-d\") or DateTime(\"20150101\",\"yyyymmdd\").Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so \"y-m-d\" lets the parser know that between the first and second slots in a date string like \"2014-07-16\", it should find the - character. The y, m, and d characters let the parser know which periods to parse in each slot.Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So \"yyyymmdd\" would correspond to a date string like \"20140716\". The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition \"yyyymm\" from one period character to the next.Support for text-form month parsing is also supported through the u and U characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so u corresponds to \"Jan\", \"Feb\", \"Mar\", etc. And U corresponds to \"January\", \"February\", \"March\", etc. Similar to other name=>value mapping functions dayname and monthname, custom locales can be loaded by passing in the locale=>Dict{String,Int} mapping to the MONTHTOVALUEABBR and MONTHTOVALUE dicts for abbreviated and full-name month names, respectively.One note on parsing performance: using the Date(date_string,format_string) function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a Dates.DateFormat, and pass it instead of a raw format string.julia> df = DateFormat(\"y-m-d\");\n\njulia> dt = Date(\"2015-01-01\",df)\n2015-01-01\n\njulia> dt2 = Date(\"2015-01-02\",df)\n2015-01-02You can also use the dateformat\"\" string macro. This macro creates the DateFormat object once when the macro is expanded and uses the same DateFormat object even if a code snippet is run multiple times.julia> for i = 1:10^5\n           Date(\"2015-01-01\", dateformat\"y-m-d\")\n       endA full suite of parsing and formatting tests and examples is available in stdlib/Dates/test/io.jl."
-},
-
-{
-    "location": "manual/dates/#Durations/Comparisons-1",
-    "page": "Date and DateTime",
-    "title": "Durations/Comparisons",
-    "category": "section",
-    "text": "Finding the length of time between two Date or DateTime is straightforward given their underlying representation as UTInstant{Day} and UTInstant{Millisecond}, respectively. The difference between Date is returned in the number of Day, and DateTime in the number of Millisecond. Similarly, comparing TimeType is a simple matter of comparing the underlying machine instants (which in turn compares the internal Int64 values).julia> dt = Date(2012,2,29)\n2012-02-29\n\njulia> dt2 = Date(2000,2,1)\n2000-02-01\n\njulia> dump(dt)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 734562\n\njulia> dump(dt2)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 730151\n\njulia> dt > dt2\ntrue\n\njulia> dt != dt2\ntrue\n\njulia> dt + dt2\nERROR: MethodError: no method matching +(::Date, ::Date)\n[...]\n\njulia> dt * dt2\nERROR: MethodError: no method matching *(::Date, ::Date)\n[...]\n\njulia> dt / dt2\nERROR: MethodError: no method matching /(::Date, ::Date)\n[...]\n\njulia> dt - dt2\n4411 days\n\njulia> dt2 - dt\n-4411 days\n\njulia> dt = DateTime(2012,2,29)\n2012-02-29T00:00:00\n\njulia> dt2 = DateTime(2000,2,1)\n2000-02-01T00:00:00\n\njulia> dt - dt2\n381110400000 milliseconds"
-},
-
-{
-    "location": "manual/dates/#Accessor-Functions-1",
-    "page": "Date and DateTime",
-    "title": "Accessor Functions",
-    "category": "section",
-    "text": "Because the Date and DateTime types are stored as single Int64 values, date parts or fields can be retrieved through accessor functions. The lowercase accessors return the field as an integer:julia> t = Date(2014, 1, 31)\n2014-01-31\n\njulia> Dates.year(t)\n2014\n\njulia> Dates.month(t)\n1\n\njulia> Dates.week(t)\n5\n\njulia> Dates.day(t)\n31While propercase return the same value in the corresponding Period type:julia> Dates.Year(t)\n2014 years\n\njulia> Dates.Day(t)\n31 daysCompound methods are provided, as they provide a measure of efficiency if multiple fields are needed at the same time:julia> Dates.yearmonth(t)\n(2014, 1)\n\njulia> Dates.monthday(t)\n(1, 31)\n\njulia> Dates.yearmonthday(t)\n(2014, 1, 31)One may also access the underlying UTInstant or integer value:julia> dump(t)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 735264\n\njulia> t.instant\nDates.UTInstant{Dates.Day}(735264 days)\n\njulia> Dates.value(t)\n735264"
-},
-
-{
-    "location": "manual/dates/#Query-Functions-1",
-    "page": "Date and DateTime",
-    "title": "Query Functions",
-    "category": "section",
-    "text": "Query functions provide calendrical information about a TimeType. They include information about the day of the week:julia> t = Date(2014, 1, 31)\n2014-01-31\n\njulia> Dates.dayofweek(t)\n5\n\njulia> Dates.dayname(t)\n\"Friday\"\n\njulia> Dates.dayofweekofmonth(t) # 5th Friday of January\n5Month of the year:julia> Dates.monthname(t)\n\"January\"\n\njulia> Dates.daysinmonth(t)\n31As well as information about the TimeType\'s year and quarter:julia> Dates.isleapyear(t)\nfalse\n\njulia> Dates.dayofyear(t)\n31\n\njulia> Dates.quarterofyear(t)\n1\n\njulia> Dates.dayofquarter(t)\n31The dayname and monthname methods can also take an optional locale keyword that can be used to return the name of the day or month of the year for other languages/locales. There are also versions of these functions returning the abbreviated names, namely dayabbr and monthabbr. First the mapping is loaded into the LOCALES variable:julia> french_months = [\"janvier\", \"février\", \"mars\", \"avril\", \"mai\", \"juin\",\n                        \"juillet\", \"août\", \"septembre\", \"octobre\", \"novembre\", \"décembre\"];\n\njulia> french_monts_abbrev = [\"janv\",\"févr\",\"mars\",\"avril\",\"mai\",\"juin\",\n                              \"juil\",\"août\",\"sept\",\"oct\",\"nov\",\"déc\"];\n\njulia> french_days = [\"lundi\",\"mardi\",\"mercredi\",\"jeudi\",\"vendredi\",\"samedi\",\"dimanche\"];\n\njulia> Dates.LOCALES[\"french\"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [\"\"]);The above mentioned functions can then be used to perform the queries:julia> Dates.dayname(t;locale=\"french\")\n\"vendredi\"\n\njulia> Dates.monthname(t;locale=\"french\")\n\"janvier\"\n\njulia> Dates.monthabbr(t;locale=\"french\")\n\"janv\"Since the abbreviated versions of the days are not loaded, trying to use the function dayabbr will error.julia> Dates.dayabbr(t;locale=\"french\")\nERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]\nStacktrace:\n[...]"
-},
-
-{
-    "location": "manual/dates/#TimeType-Period-Arithmetic-1",
-    "page": "Date and DateTime",
-    "title": "TimeType-Period Arithmetic",
-    "category": "section",
-    "text": "It\'s good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some tricky issues to deal with (though much less so for day-precision types).The Dates module approach tries to follow the simple principle of trying to change as little as possible when doing Period arithmetic. This approach is also often known as calendrical arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let\'s take a classic example: add 1 month to January 31st, 2014. What\'s the answer? Javascript will say March 3 (assumes 31 days). PHP says March 2 (assumes 30 days). The fact is, there is no right answer. In the Dates module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31. When you ask to add 1 month to this date, the month slot is incremented, so now we have 2014-02-31. Then the day number is checked if it is greater than the last valid day of the new month; if it is (as in the case above), the day number is adjusted down to the last valid day (28). What are the ramifications with this approach? Go ahead and add another month to our date, 2014-02-28 + Month(1) == 2014-03-28. What? Were you expecting the last day of March? Nope, sorry, remember the 7-7-7 slots. As few slots as possible are going to change, so we first increment the month slot by 1, 2014-03-28, and boom, we\'re done because that\'s a valid date. On the other hand, if we were to add 2 months to our original date, 2014-01-31, then we end up with 2014-03-31, as expected. The other ramification of this approach is a loss in associativity when a specific ordering is forced (i.e. adding things in different orders results in different outcomes). For example:julia> (Date(2014,1,29)+Dates.Day(1)) + Dates.Month(1)\n2014-02-28\n\njulia> (Date(2014,1,29)+Dates.Month(1)) + Dates.Day(1)\n2014-03-01What\'s going on there? In the first line, we\'re adding 1 day to January 29th, which results in 2014-01-30; then we add 1 month, so we get 2014-02-30, which then adjusts down to 2014-02-28. In the second example, we add 1 month first, where we get 2014-02-29, which adjusts down to 2014-02-28, and then add 1 day, which results in 2014-03-01. One design principle that helps in this case is that, in the presence of multiple Periods, the operations will be ordered by the Periods\' types, not their value or positional order; this means Year will always be added first, then Month, then Week, etc. Hence the following does result in associativity and Just Works:julia> Date(2014,1,29) + Dates.Day(1) + Dates.Month(1)\n2014-03-01\n\njulia> Date(2014,1,29) + Dates.Month(1) + Dates.Day(1)\n2014-03-01Tricky? Perhaps. What is an innocent Dates user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that\'s pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the \"joys\" of dealing with daylight savings, leap seconds, etc.).As a bonus, all period arithmetic objects work directly with ranges:julia> dr = Date(2014,1,29):Date(2014,2,3)\n2014-01-29:1 day:2014-02-03\n\njulia> collect(dr)\n6-element Array{Date,1}:\n 2014-01-29\n 2014-01-30\n 2014-01-31\n 2014-02-01\n 2014-02-02\n 2014-02-03\n\njulia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)\n2014-01-29:1 month:2014-07-29\n\njulia> collect(dr)\n7-element Array{Date,1}:\n 2014-01-29\n 2014-02-28\n 2014-03-29\n 2014-04-29\n 2014-05-29\n 2014-06-29\n 2014-07-29"
-},
-
-{
-    "location": "manual/dates/#Adjuster-Functions-1",
-    "page": "Date and DateTime",
-    "title": "Adjuster Functions",
-    "category": "section",
-    "text": "As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a calendrical or temporal nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as \"Memorial Day = Last Monday of May\", or \"Thanksgiving = 4th Thursday of November\". These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.The Dates module provides the adjuster API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single TimeType as input and return or adjust to the first or last of the desired period relative to the input.julia> Dates.firstdayofweek(Date(2014,7,16)) # Adjusts the input to the Monday of the input\'s week\n2014-07-14\n\njulia> Dates.lastdayofmonth(Date(2014,7,16)) # Adjusts to the last day of the input\'s month\n2014-07-31\n\njulia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the input\'s quarter\n2014-09-30The next two higher-order methods, tonext, and toprev, generalize working with temporal expressions by taking a DateFunction as first argument, along with a starting TimeType. A DateFunction is just a function, usually anonymous, that takes a single TimeType as input and returns a Bool, true indicating a satisfied adjustment criterion. For example:julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday\n\njulia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday\n2014-07-15\n\njulia> Dates.tonext(Date(2014,7,13), Dates.Tuesday) # Convenience method provided for day of the week adjustments\n2014-07-15This is useful with the do-block syntax for more complex temporal expressions:julia> Dates.tonext(Date(2014,7,13)) do x\n           # Return true on the 4th Thursday of November (Thanksgiving)\n           Dates.dayofweek(x) == Dates.Thursday &&\n           Dates.dayofweekofmonth(x) == 4 &&\n           Dates.month(x) == Dates.November\n       end\n2014-11-27The Base.filter method can be used to obtain all valid dates/moments in a specified range:# Pittsburgh street cleaning; Every 2nd Tuesday from April to November\n# Date range from January 1st, 2014 to January 1st, 2015\njulia> dr = Dates.Date(2014):Dates.Date(2015);\n\njulia> filter(dr) do x\n           Dates.dayofweek(x) == Dates.Tue &&\n           Dates.April <= Dates.month(x) <= Dates.Nov &&\n           Dates.dayofweekofmonth(x) == 2\n       end\n8-element Array{Date,1}:\n 2014-04-08\n 2014-05-13\n 2014-06-10\n 2014-07-08\n 2014-08-12\n 2014-09-09\n 2014-10-14\n 2014-11-11Additional examples and tests are available in stdlib/Dates/test/adjusters.jl."
-},
-
-{
-    "location": "manual/dates/#Period-Types-1",
-    "page": "Date and DateTime",
-    "title": "Period Types",
-    "category": "section",
-    "text": "Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. Period types are simple Int64 wrappers and are constructed by wrapping any Int64 convertible type, i.e. Year(1) or Month(3.0). Arithmetic between Period of the same type behave like integers, and limited Period-Real arithmetic is available.julia> y1 = Dates.Year(1)\n1 year\n\njulia> y2 = Dates.Year(2)\n2 years\n\njulia> y3 = Dates.Year(10)\n10 years\n\njulia> y1 + y2\n3 years\n\njulia> div(y3,y2)\n5\n\njulia> y3 - y2\n8 years\n\njulia> y3 % y2\n0 years\n\njulia> div(y3,3) # mirrors integer division\n3 years"
-},
-
-{
-    "location": "manual/dates/#Rounding-1",
-    "page": "Date and DateTime",
-    "title": "Rounding",
-    "category": "section",
-    "text": "Date and DateTime values can be rounded to a specified resolution (e.g., 1 month or 15 minutes) with floor, ceil, or round:julia> floor(Date(1985, 8, 16), Dates.Month)\n1985-08-01\n\njulia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))\n2013-02-13T00:45:00\n\njulia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)\n2016-08-07T00:00:00Unlike the numeric round method, which breaks ties toward the even number by default, the TimeTyperound method uses the RoundNearestTiesUp rounding mode. (It\'s difficult to guess what breaking ties to nearest \"even\" TimeType would entail.) Further details on the available RoundingMode s can be found in the API reference.Rounding should generally behave as expected, but there are a few cases in which the expected behaviour is not obvious."
-},
-
-{
-    "location": "manual/dates/#Rounding-Epoch-1",
-    "page": "Date and DateTime",
-    "title": "Rounding Epoch",
-    "category": "section",
-    "text": "In many cases, the resolution specified for rounding (e.g., Dates.Second(30)) divides evenly into the next largest period (in this case, Dates.Minute(1)). But rounding behaviour in cases in which this is not true may lead to confusion. What is the expected result of rounding a DateTime to the nearest 10 hours?julia> round(DateTime(2016, 7, 17, 11, 55), Dates.Hour(10))\n2016-07-17T12:00:00That may seem confusing, given that the hour (12) is not divisible by 10. The reason that 2016-07-17T12:00:00 was chosen is that it is 17,676,660 hours after 0000-01-01T00:00:00, and 17,676,660 is divisible by 10.As Julia Date and DateTime values are represented according to the ISO 8601 standard, 0000-01-01T00:00:00 was chosen as base (or \"rounding epoch\") from which to begin the count of days (and milliseconds) used in rounding calculations. (Note that this differs slightly from Julia\'s internal representation of Date s using Rata Die notation; but since the ISO 8601 standard is most visible to the end user, 0000-01-01T00:00:00 was chosen as the rounding epoch instead of the 0000-12-31T00:00:00 used internally to minimize confusion.)The only exception to the use of 0000-01-01T00:00:00 as the rounding epoch is when rounding to weeks. Rounding to the nearest week will always return a Monday (the first day of the week as specified by ISO 8601). For this reason, we use 0000-01-03T00:00:00 (the first day of the first week of year 0000, as defined by ISO 8601) as the base when rounding to a number of weeks.Here is a related case in which the expected behaviour is not necessarily obvious: What happens when we round to the nearest P(2), where P is a Period type? In some cases (specifically, when P <: Dates.TimePeriod) the answer is clear:julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Hour(2))\n2016-07-17T08:00:00\n\njulia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Minute(2))\n2016-07-17T08:56:00This seems obvious, because two of each of these periods still divides evenly into the next larger order period. But in the case of two months (which still divides evenly into one year), the answer may be surprising:julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Month(2))\n2016-07-01T00:00:00Why round to the first day in July, even though it is month 7 (an odd number)? The key is that months are 1-indexed (the first month is assigned 1), unlike hours, minutes, seconds, and milliseconds (the first of which are assigned 0).This means that rounding a DateTime to an even multiple of seconds, minutes, hours, or years (because the ISO 8601 specification includes a year zero) will result in a DateTime with an even value in that field, while rounding a DateTime to an even multiple of months will result in the months field having an odd value. Because both months and years may contain an irregular number of days, whether rounding to an even number of days will result in an even value in the days field is uncertain.See the API reference for additional information on methods exported from the Dates module."
 },
 
 {
@@ -2965,7 +2877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "Environment Variables",
     "category": "section",
-    "text": "Julia may be configured with a number of environment variables, either in the usual way of the operating system, or in a portable way from within Julia. Suppose you want to set the environment variable JULIA_EDITOR to vim, then either type ENV[\"JULIA_EDITOR\"] = \"vim\" for instance in the REPL to make this change on a case by case basis, or add the same to the user configuration file .juliarc.jl in the user\'s home directory to have a permanent effect. The current value of the same environment variable is determined by evaluating ENV[\"JULIA_EDITOR\"].The environment variables that Julia uses generally start with JULIA. If InteractiveUtils.versioninfo is called with verbose equal to true, then the output will list defined environment variables relevant for Julia, including those for which JULIA appears in the name."
+    "text": "Julia may be configured with a number of environment variables, either in the usual way of the operating system, or in a portable way from within Julia. Suppose you want to set the environment variable JULIA_EDITOR to vim, then either type ENV[\"JULIA_EDITOR\"] = \"vim\" for instance in the REPL to make this change on a case by case basis, or add the same to the user configuration file ~/.julia/config/startup.jl in the user\'s home directory to have a permanent effect. The current value of the same environment variable is determined by evaluating ENV[\"JULIA_EDITOR\"].The environment variables that Julia uses generally start with JULIA. If InteractiveUtils.versioninfo is called with verbose equal to true, then the output will list defined environment variables relevant for Julia, including those for which JULIA appears in the name."
 },
 
 {
@@ -2981,7 +2893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "JULIA_BINDIR",
     "category": "section",
-    "text": "The absolute path of the directory containing the Julia executable, which sets the global variable Sys.BINDIR. If $JULIA_BINDIR is not set, then Julia determines the value Sys.BINDIR at run-time.The executable itself is one of$JULIA_BINDIR/julia\n$JULIA_BINDIR/julia-debugby default.The global variable Base.DATAROOTDIR determines a relative path from Sys.BINDIR to the data directory associated with Julia. Then the path$JULIA_BINDIR/$DATAROOTDIR/julia/basedetermines the directory in which Julia initially searches for source files (via Base.find_source_file()).Likewise, the global variable Base.SYSCONFDIR determines a relative path to the configuration file directory. Then Julia searches for a juliarc.jl file at$JULIA_BINDIR/$SYSCONFDIR/julia/juliarc.jl\n$JULIA_BINDIR/../etc/julia/juliarc.jlby default (via Base.load_juliarc()).For example, a Linux installation with a Julia executable located at /bin/julia, a DATAROOTDIR of ../share, and a SYSCONFDIR of ../etc will have JULIA_BINDIR set to /bin, a source-file search path of/share/julia/baseand a global configuration search path of/etc/julia/juliarc.jl"
+    "text": "The absolute path of the directory containing the Julia executable, which sets the global variable Sys.BINDIR. If $JULIA_BINDIR is not set, then Julia determines the value Sys.BINDIR at run-time.The executable itself is one of$JULIA_BINDIR/julia\n$JULIA_BINDIR/julia-debugby default.The global variable Base.DATAROOTDIR determines a relative path from Sys.BINDIR to the data directory associated with Julia. Then the path$JULIA_BINDIR/$DATAROOTDIR/julia/basedetermines the directory in which Julia initially searches for source files (via Base.find_source_file()).Likewise, the global variable Base.SYSCONFDIR determines a relative path to the configuration file directory. Then Julia searches for a startup.jl file at$JULIA_BINDIR/$SYSCONFDIR/julia/startup.jl\n$JULIA_BINDIR/../etc/julia/startup.jlby default (via Base.load_julia_startup()).For example, a Linux installation with a Julia executable located at /bin/julia, a DATAROOTDIR of ../share, and a SYSCONFDIR of ../etc will have JULIA_BINDIR set to /bin, a source-file search path of/share/julia/baseand a global configuration search path of/etc/julia/startup.jl"
 },
 
 {
@@ -3941,7 +3853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Workflow Tips",
     "title": "Simplify initialization",
     "category": "section",
-    "text": "To simplify restarting the REPL, put project-specific initialization code in a file, say _init.jl, which you can run on startup by issuing the command:julia -L _init.jlIf you further add the following to your .juliarc.jl fileisfile(\"_init.jl\") && include(joinpath(pwd(), \"_init.jl\"))then calling julia from that directory will run the initialization code without the additional command line argument."
+    "text": "To simplify restarting the REPL, put project-specific initialization code in a file, say _init.jl, which you can run on startup by issuing the command:julia -L _init.jlIf you further add the following to your ~/.julia/config/startup.jl fileisfile(\"_init.jl\") && include(joinpath(pwd(), \"_init.jl\"))then calling julia from that directory will run the initialization code without the additional command line argument."
 },
 
 {
@@ -13738,23 +13650,103 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#",
-    "page": "Dates and Time",
-    "title": "Dates and Time",
+    "page": "Dates",
+    "title": "Dates",
     "category": "page",
     "text": ""
 },
 
 {
-    "location": "stdlib/Dates/#stdlib-dates-1",
-    "page": "Dates and Time",
-    "title": "Dates and Time",
+    "location": "stdlib/Dates/#Dates-1",
+    "page": "Dates",
+    "title": "Dates",
     "category": "section",
-    "text": "DocTestSetup = :(using Dates)Functionality to handle time and dates is defined in the standard library module Dates. You\'ll need to import the module using import Dates and prefix each function call with an explicit Dates., e.g. Dates.dayofweek(dt). Alternatively, you can write using Dates to bring all exported functions into Main to be used without the Dates. prefix."
+    "text": "DocTestSetup = :(using Dates)The Dates module provides two types for working with dates: Date and DateTime, representing day and millisecond precision, respectively; both are subtypes of the abstract TimeType. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don\'t have to be dealt with. For example, since the Date type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.Both Date and DateTime are basically immutable Int64 wrappers. The single instant field of either type is actually a UTInstant{P} type, which represents a continuously increasing machine timeline based on the UT second [1]. The DateTime type is not aware of time zones (naive, in Python parlance), analogous to a LocalDateTime in Java 8. Additional time zone functionality can be added through the TimeZones.jl package, which compiles the IANA time zone database. Both Date and DateTime are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so 0000-12-31 is the day before 0001-01-01, and year -0001 (yes, negative one for the year) is 2 BC/BCE, year -0002 is 3 BC/BCE, etc.[1]: The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a \"UT second\", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that Date and DateTime are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called UT or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates."
+},
+
+{
+    "location": "stdlib/Dates/#Constructors-1",
+    "page": "Dates",
+    "title": "Constructors",
+    "category": "section",
+    "text": "Date and DateTime types can be constructed by integer or Period types, by parsing, or through adjusters (more on those later):julia> DateTime(2013)\n2013-01-01T00:00:00\n\njulia> DateTime(2013,7)\n2013-07-01T00:00:00\n\njulia> DateTime(2013,7,1)\n2013-07-01T00:00:00\n\njulia> DateTime(2013,7,1,12)\n2013-07-01T12:00:00\n\njulia> DateTime(2013,7,1,12,30)\n2013-07-01T12:30:00\n\njulia> DateTime(2013,7,1,12,30,59)\n2013-07-01T12:30:59\n\njulia> DateTime(2013,7,1,12,30,59,1)\n2013-07-01T12:30:59.001\n\njulia> Date(2013)\n2013-01-01\n\njulia> Date(2013,7)\n2013-07-01\n\njulia> Date(2013,7,1)\n2013-07-01\n\njulia> Date(Dates.Year(2013),Dates.Month(7),Dates.Day(1))\n2013-07-01\n\njulia> Date(Dates.Month(7),Dates.Year(2013))\n2013-07-01Date or DateTime parsing is accomplished by the use of format strings. Format strings work by the notion of defining delimited or fixed-width \"slots\" that contain a period to parse and passing the text to parse and format string to a Date or DateTime constructor, of the form Date(\"2015-01-01\",\"y-m-d\") or DateTime(\"20150101\",\"yyyymmdd\").Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so \"y-m-d\" lets the parser know that between the first and second slots in a date string like \"2014-07-16\", it should find the - character. The y, m, and d characters let the parser know which periods to parse in each slot.Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So \"yyyymmdd\" would correspond to a date string like \"20140716\". The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition \"yyyymm\" from one period character to the next.Support for text-form month parsing is also supported through the u and U characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so u corresponds to \"Jan\", \"Feb\", \"Mar\", etc. And U corresponds to \"January\", \"February\", \"March\", etc. Similar to other name=>value mapping functions dayname and monthname, custom locales can be loaded by passing in the locale=>Dict{String,Int} mapping to the MONTHTOVALUEABBR and MONTHTOVALUE dicts for abbreviated and full-name month names, respectively.One note on parsing performance: using the Date(date_string,format_string) function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a Dates.DateFormat, and pass it instead of a raw format string.julia> df = DateFormat(\"y-m-d\");\n\njulia> dt = Date(\"2015-01-01\",df)\n2015-01-01\n\njulia> dt2 = Date(\"2015-01-02\",df)\n2015-01-02You can also use the dateformat\"\" string macro. This macro creates the DateFormat object once when the macro is expanded and uses the same DateFormat object even if a code snippet is run multiple times.julia> for i = 1:10^5\n           Date(\"2015-01-01\", dateformat\"y-m-d\")\n       endA full suite of parsing and formatting tests and examples is available in stdlib/Dates/test/io.jl."
+},
+
+{
+    "location": "stdlib/Dates/#Durations/Comparisons-1",
+    "page": "Dates",
+    "title": "Durations/Comparisons",
+    "category": "section",
+    "text": "Finding the length of time between two Date or DateTime is straightforward given their underlying representation as UTInstant{Day} and UTInstant{Millisecond}, respectively. The difference between Date is returned in the number of Day, and DateTime in the number of Millisecond. Similarly, comparing TimeType is a simple matter of comparing the underlying machine instants (which in turn compares the internal Int64 values).julia> dt = Date(2012,2,29)\n2012-02-29\n\njulia> dt2 = Date(2000,2,1)\n2000-02-01\n\njulia> dump(dt)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 734562\n\njulia> dump(dt2)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 730151\n\njulia> dt > dt2\ntrue\n\njulia> dt != dt2\ntrue\n\njulia> dt + dt2\nERROR: MethodError: no method matching +(::Date, ::Date)\n[...]\n\njulia> dt * dt2\nERROR: MethodError: no method matching *(::Date, ::Date)\n[...]\n\njulia> dt / dt2\nERROR: MethodError: no method matching /(::Date, ::Date)\n[...]\n\njulia> dt - dt2\n4411 days\n\njulia> dt2 - dt\n-4411 days\n\njulia> dt = DateTime(2012,2,29)\n2012-02-29T00:00:00\n\njulia> dt2 = DateTime(2000,2,1)\n2000-02-01T00:00:00\n\njulia> dt - dt2\n381110400000 milliseconds"
+},
+
+{
+    "location": "stdlib/Dates/#Accessor-Functions-1",
+    "page": "Dates",
+    "title": "Accessor Functions",
+    "category": "section",
+    "text": "Because the Date and DateTime types are stored as single Int64 values, date parts or fields can be retrieved through accessor functions. The lowercase accessors return the field as an integer:julia> t = Date(2014, 1, 31)\n2014-01-31\n\njulia> Dates.year(t)\n2014\n\njulia> Dates.month(t)\n1\n\njulia> Dates.week(t)\n5\n\njulia> Dates.day(t)\n31While propercase return the same value in the corresponding Period type:julia> Dates.Year(t)\n2014 years\n\njulia> Dates.Day(t)\n31 daysCompound methods are provided, as they provide a measure of efficiency if multiple fields are needed at the same time:julia> Dates.yearmonth(t)\n(2014, 1)\n\njulia> Dates.monthday(t)\n(1, 31)\n\njulia> Dates.yearmonthday(t)\n(2014, 1, 31)One may also access the underlying UTInstant or integer value:julia> dump(t)\nDate\n  instant: Dates.UTInstant{Dates.Day}\n    periods: Dates.Day\n      value: Int64 735264\n\njulia> t.instant\nDates.UTInstant{Dates.Day}(735264 days)\n\njulia> Dates.value(t)\n735264"
+},
+
+{
+    "location": "stdlib/Dates/#Query-Functions-1",
+    "page": "Dates",
+    "title": "Query Functions",
+    "category": "section",
+    "text": "Query functions provide calendrical information about a TimeType. They include information about the day of the week:julia> t = Date(2014, 1, 31)\n2014-01-31\n\njulia> Dates.dayofweek(t)\n5\n\njulia> Dates.dayname(t)\n\"Friday\"\n\njulia> Dates.dayofweekofmonth(t) # 5th Friday of January\n5Month of the year:julia> Dates.monthname(t)\n\"January\"\n\njulia> Dates.daysinmonth(t)\n31As well as information about the TimeType\'s year and quarter:julia> Dates.isleapyear(t)\nfalse\n\njulia> Dates.dayofyear(t)\n31\n\njulia> Dates.quarterofyear(t)\n1\n\njulia> Dates.dayofquarter(t)\n31The dayname and monthname methods can also take an optional locale keyword that can be used to return the name of the day or month of the year for other languages/locales. There are also versions of these functions returning the abbreviated names, namely dayabbr and monthabbr. First the mapping is loaded into the LOCALES variable:julia> french_months = [\"janvier\", \"février\", \"mars\", \"avril\", \"mai\", \"juin\",\n                        \"juillet\", \"août\", \"septembre\", \"octobre\", \"novembre\", \"décembre\"];\n\njulia> french_monts_abbrev = [\"janv\",\"févr\",\"mars\",\"avril\",\"mai\",\"juin\",\n                              \"juil\",\"août\",\"sept\",\"oct\",\"nov\",\"déc\"];\n\njulia> french_days = [\"lundi\",\"mardi\",\"mercredi\",\"jeudi\",\"vendredi\",\"samedi\",\"dimanche\"];\n\njulia> Dates.LOCALES[\"french\"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [\"\"]);The above mentioned functions can then be used to perform the queries:julia> Dates.dayname(t;locale=\"french\")\n\"vendredi\"\n\njulia> Dates.monthname(t;locale=\"french\")\n\"janvier\"\n\njulia> Dates.monthabbr(t;locale=\"french\")\n\"janv\"Since the abbreviated versions of the days are not loaded, trying to use the function dayabbr will error.julia> Dates.dayabbr(t;locale=\"french\")\nERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]\nStacktrace:\n[...]"
+},
+
+{
+    "location": "stdlib/Dates/#TimeType-Period-Arithmetic-1",
+    "page": "Dates",
+    "title": "TimeType-Period Arithmetic",
+    "category": "section",
+    "text": "It\'s good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some tricky issues to deal with (though much less so for day-precision types).The Dates module approach tries to follow the simple principle of trying to change as little as possible when doing Period arithmetic. This approach is also often known as calendrical arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let\'s take a classic example: add 1 month to January 31st, 2014. What\'s the answer? Javascript will say March 3 (assumes 31 days). PHP says March 2 (assumes 30 days). The fact is, there is no right answer. In the Dates module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31. When you ask to add 1 month to this date, the month slot is incremented, so now we have 2014-02-31. Then the day number is checked if it is greater than the last valid day of the new month; if it is (as in the case above), the day number is adjusted down to the last valid day (28). What are the ramifications with this approach? Go ahead and add another month to our date, 2014-02-28 + Month(1) == 2014-03-28. What? Were you expecting the last day of March? Nope, sorry, remember the 7-7-7 slots. As few slots as possible are going to change, so we first increment the month slot by 1, 2014-03-28, and boom, we\'re done because that\'s a valid date. On the other hand, if we were to add 2 months to our original date, 2014-01-31, then we end up with 2014-03-31, as expected. The other ramification of this approach is a loss in associativity when a specific ordering is forced (i.e. adding things in different orders results in different outcomes). For example:julia> (Date(2014,1,29)+Dates.Day(1)) + Dates.Month(1)\n2014-02-28\n\njulia> (Date(2014,1,29)+Dates.Month(1)) + Dates.Day(1)\n2014-03-01What\'s going on there? In the first line, we\'re adding 1 day to January 29th, which results in 2014-01-30; then we add 1 month, so we get 2014-02-30, which then adjusts down to 2014-02-28. In the second example, we add 1 month first, where we get 2014-02-29, which adjusts down to 2014-02-28, and then add 1 day, which results in 2014-03-01. One design principle that helps in this case is that, in the presence of multiple Periods, the operations will be ordered by the Periods\' types, not their value or positional order; this means Year will always be added first, then Month, then Week, etc. Hence the following does result in associativity and Just Works:julia> Date(2014,1,29) + Dates.Day(1) + Dates.Month(1)\n2014-03-01\n\njulia> Date(2014,1,29) + Dates.Month(1) + Dates.Day(1)\n2014-03-01Tricky? Perhaps. What is an innocent Dates user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that\'s pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the \"joys\" of dealing with daylight savings, leap seconds, etc.).As a bonus, all period arithmetic objects work directly with ranges:julia> dr = Date(2014,1,29):Date(2014,2,3)\n2014-01-29:1 day:2014-02-03\n\njulia> collect(dr)\n6-element Array{Date,1}:\n 2014-01-29\n 2014-01-30\n 2014-01-31\n 2014-02-01\n 2014-02-02\n 2014-02-03\n\njulia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)\n2014-01-29:1 month:2014-07-29\n\njulia> collect(dr)\n7-element Array{Date,1}:\n 2014-01-29\n 2014-02-28\n 2014-03-29\n 2014-04-29\n 2014-05-29\n 2014-06-29\n 2014-07-29"
+},
+
+{
+    "location": "stdlib/Dates/#Adjuster-Functions-1",
+    "page": "Dates",
+    "title": "Adjuster Functions",
+    "category": "section",
+    "text": "As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a calendrical or temporal nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as \"Memorial Day = Last Monday of May\", or \"Thanksgiving = 4th Thursday of November\". These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.The Dates module provides the adjuster API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single TimeType as input and return or adjust to the first or last of the desired period relative to the input.julia> Dates.firstdayofweek(Date(2014,7,16)) # Adjusts the input to the Monday of the input\'s week\n2014-07-14\n\njulia> Dates.lastdayofmonth(Date(2014,7,16)) # Adjusts to the last day of the input\'s month\n2014-07-31\n\njulia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the input\'s quarter\n2014-09-30The next two higher-order methods, tonext, and toprev, generalize working with temporal expressions by taking a DateFunction as first argument, along with a starting TimeType. A DateFunction is just a function, usually anonymous, that takes a single TimeType as input and returns a Bool, true indicating a satisfied adjustment criterion. For example:julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday\n\njulia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday\n2014-07-15\n\njulia> Dates.tonext(Date(2014,7,13), Dates.Tuesday) # Convenience method provided for day of the week adjustments\n2014-07-15This is useful with the do-block syntax for more complex temporal expressions:julia> Dates.tonext(Date(2014,7,13)) do x\n           # Return true on the 4th Thursday of November (Thanksgiving)\n           Dates.dayofweek(x) == Dates.Thursday &&\n           Dates.dayofweekofmonth(x) == 4 &&\n           Dates.month(x) == Dates.November\n       end\n2014-11-27The Base.filter method can be used to obtain all valid dates/moments in a specified range:# Pittsburgh street cleaning; Every 2nd Tuesday from April to November\n# Date range from January 1st, 2014 to January 1st, 2015\njulia> dr = Dates.Date(2014):Dates.Date(2015);\n\njulia> filter(dr) do x\n           Dates.dayofweek(x) == Dates.Tue &&\n           Dates.April <= Dates.month(x) <= Dates.Nov &&\n           Dates.dayofweekofmonth(x) == 2\n       end\n8-element Array{Date,1}:\n 2014-04-08\n 2014-05-13\n 2014-06-10\n 2014-07-08\n 2014-08-12\n 2014-09-09\n 2014-10-14\n 2014-11-11Additional examples and tests are available in stdlib/Dates/test/adjusters.jl."
+},
+
+{
+    "location": "stdlib/Dates/#Period-Types-1",
+    "page": "Dates",
+    "title": "Period Types",
+    "category": "section",
+    "text": "Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. Period types are simple Int64 wrappers and are constructed by wrapping any Int64 convertible type, i.e. Year(1) or Month(3.0). Arithmetic between Period of the same type behave like integers, and limited Period-Real arithmetic is available.julia> y1 = Dates.Year(1)\n1 year\n\njulia> y2 = Dates.Year(2)\n2 years\n\njulia> y3 = Dates.Year(10)\n10 years\n\njulia> y1 + y2\n3 years\n\njulia> div(y3,y2)\n5\n\njulia> y3 - y2\n8 years\n\njulia> y3 % y2\n0 years\n\njulia> div(y3,3) # mirrors integer division\n3 years"
+},
+
+{
+    "location": "stdlib/Dates/#Rounding-1",
+    "page": "Dates",
+    "title": "Rounding",
+    "category": "section",
+    "text": "Date and DateTime values can be rounded to a specified resolution (e.g., 1 month or 15 minutes) with floor, ceil, or round:julia> floor(Date(1985, 8, 16), Dates.Month)\n1985-08-01\n\njulia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))\n2013-02-13T00:45:00\n\njulia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)\n2016-08-07T00:00:00Unlike the numeric round method, which breaks ties toward the even number by default, the TimeTyperound method uses the RoundNearestTiesUp rounding mode. (It\'s difficult to guess what breaking ties to nearest \"even\" TimeType would entail.) Further details on the available RoundingMode s can be found in the API reference.Rounding should generally behave as expected, but there are a few cases in which the expected behaviour is not obvious."
+},
+
+{
+    "location": "stdlib/Dates/#Rounding-Epoch-1",
+    "page": "Dates",
+    "title": "Rounding Epoch",
+    "category": "section",
+    "text": "In many cases, the resolution specified for rounding (e.g., Dates.Second(30)) divides evenly into the next largest period (in this case, Dates.Minute(1)). But rounding behaviour in cases in which this is not true may lead to confusion. What is the expected result of rounding a DateTime to the nearest 10 hours?julia> round(DateTime(2016, 7, 17, 11, 55), Dates.Hour(10))\n2016-07-17T12:00:00That may seem confusing, given that the hour (12) is not divisible by 10. The reason that 2016-07-17T12:00:00 was chosen is that it is 17,676,660 hours after 0000-01-01T00:00:00, and 17,676,660 is divisible by 10.As Julia Date and DateTime values are represented according to the ISO 8601 standard, 0000-01-01T00:00:00 was chosen as base (or \"rounding epoch\") from which to begin the count of days (and milliseconds) used in rounding calculations. (Note that this differs slightly from Julia\'s internal representation of Date s using Rata Die notation; but since the ISO 8601 standard is most visible to the end user, 0000-01-01T00:00:00 was chosen as the rounding epoch instead of the 0000-12-31T00:00:00 used internally to minimize confusion.)The only exception to the use of 0000-01-01T00:00:00 as the rounding epoch is when rounding to weeks. Rounding to the nearest week will always return a Monday (the first day of the week as specified by ISO 8601). For this reason, we use 0000-01-03T00:00:00 (the first day of the first week of year 0000, as defined by ISO 8601) as the base when rounding to a number of weeks.Here is a related case in which the expected behaviour is not necessarily obvious: What happens when we round to the nearest P(2), where P is a Period type? In some cases (specifically, when P <: Dates.TimePeriod) the answer is clear:julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Hour(2))\n2016-07-17T08:00:00\n\njulia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Minute(2))\n2016-07-17T08:56:00This seems obvious, because two of each of these periods still divides evenly into the next larger order period. But in the case of two months (which still divides evenly into one year), the answer may be surprising:julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Month(2))\n2016-07-01T00:00:00Why round to the first day in July, even though it is month 7 (an odd number)? The key is that months are 1-indexed (the first month is assigned 1), unlike hours, minutes, seconds, and milliseconds (the first of which are assigned 0).This means that rounding a DateTime to an even multiple of seconds, minutes, hours, or years (because the ISO 8601 specification includes a year zero) will result in a DateTime with an even value in that field, while rounding a DateTime to an even multiple of months will result in the months field having an odd value. Because both months and years may contain an irregular number of days, whether rounding to an even number of days will result in an even value in the days field is uncertain.See the API reference for additional information on methods exported from the Dates module."
+},
+
+{
+    "location": "stdlib/Dates/#stdlib-dates-api-1",
+    "page": "Dates",
+    "title": "API reference",
+    "category": "section",
+    "text": ""
 },
 
 {
     "location": "stdlib/Dates/#Dates.Period",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Period",
     "category": "Type",
     "text": "Period\nYear\nMonth\nWeek\nDay\nHour\nMinute\nSecond\nMillisecond\nMicrosecond\nNanosecond\n\nPeriod types represent discrete, human representations of time.\n\n\n\n\n\n"
@@ -13762,7 +13754,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.CompoundPeriod",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.CompoundPeriod",
     "category": "Type",
     "text": "CompoundPeriod\n\nA CompoundPeriod is useful for expressing time periods that are not a fixed multiple of smaller periods. For example, \"a year and a  day\" is not a fixed number of days, but can be expressed using a CompoundPeriod. In fact, a CompoundPeriod is automatically generated by addition of different period types, e.g. Year(1) + Day(1) produces a CompoundPeriod result.\n\n\n\n\n\n"
@@ -13770,7 +13762,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Instant",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Instant",
     "category": "Type",
     "text": "Instant\n\nInstant types represent integer-based, machine representations of time as continuous timelines starting from an epoch.\n\n\n\n\n\n"
@@ -13778,7 +13770,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.UTInstant",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.UTInstant",
     "category": "Type",
     "text": "UTInstant{T}\n\nThe UTInstant represents a machine timeline based on UT time (1 day = one revolution of the earth). The T is a Period parameter that indicates the resolution or precision of the instant.\n\n\n\n\n\n"
@@ -13786,7 +13778,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.TimeType",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.TimeType",
     "category": "Type",
     "text": "TimeType\n\nTimeType types wrap Instant machine instances to provide human representations of the machine instant. Time, DateTime and Date are subtypes of TimeType.\n\n\n\n\n\n"
@@ -13794,7 +13786,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Type",
     "text": "DateTime\n\nDateTime wraps a UTInstant{Millisecond} and interprets it according to the proleptic Gregorian calendar.\n\n\n\n\n\n"
@@ -13802,7 +13794,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Type",
     "text": "Date\n\nDate wraps a UTInstant{Day} and interprets it according to the proleptic Gregorian calendar.\n\n\n\n\n\n"
@@ -13810,7 +13802,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Time",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Time",
     "category": "Type",
     "text": "Time\n\nTime wraps a Nanosecond and represents a specific moment in a 24-hour day.\n\n\n\n\n\n"
@@ -13818,7 +13810,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates-and-Time-Types-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates and Time Types",
     "category": "section",
     "text": "Dates.Period\nDates.CompoundPeriod\nDates.Instant\nDates.UTInstant\nDates.TimeType\nDates.DateTime\nDates.Date\nDates.Time"
@@ -13826,7 +13818,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-NTuple{7,Int64}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(y, [m, d, h, mi, s, ms]) -> DateTime\n\nConstruct a DateTime type by parts. Arguments must be convertible to Int64.\n\n\n\n\n\n"
@@ -13834,7 +13826,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-Tuple{Period}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(periods::Period...) -> DateTime\n\nConstruct a DateTime type by Period type parts. Arguments may be in any order. DateTime parts not provided will default to the value of Dates.default(period).\n\n\n\n\n\n"
@@ -13842,7 +13834,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-Tuple{Function,Vararg{Any,N} where N}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), limit=10000) -> DateTime\n\nCreate a DateTime through the adjuster API. The starting point will be constructed from the provided y, m, d... arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied).\n\nExamples\n\njulia> DateTime(dt -> Dates.second(dt) == 40, 2010, 10, 20, 10; step = Dates.Second(1))\n2010-10-20T10:00:40\n\njulia> DateTime(dt -> Dates.hour(dt) == 20, 2010, 10, 20, 10; step = Dates.Hour(1), limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n\n\n"
@@ -13850,7 +13842,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(dt::Date) -> DateTime\n\nConvert a Date to a DateTime. The hour, minute, second, and millisecond parts of the new DateTime are assumed to be zero.\n\n\n\n\n\n"
@@ -13858,7 +13850,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-Tuple{AbstractString,AbstractString}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(dt::AbstractString, format::AbstractString; locale=\"english\") -> DateTime\n\nConstruct a DateTime by parsing the dt date time string following the pattern given in the format string.\n\nThis method creates a DateFormat object each time it is called. If you are parsing many date time strings of the same format, consider creating a DateFormat object once and using that as the second argument instead.\n\n\n\n\n\n"
@@ -13866,7 +13858,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.format",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.format",
     "category": "Function",
     "text": "format(io::IO, tok::AbstractDateToken, dt::TimeType, locale)\n\nFormat the tok token from dt and write it to io. The formatting can be based on locale.\n\nAll subtypes of AbstractDateToken must define this method in order to be able to print a Date / DateTime object according to a DateFormat containing that token.\n\n\n\n\n\n"
@@ -13874,7 +13866,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateFormat",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateFormat",
     "category": "Type",
     "text": "DateFormat(format::AbstractString, locale=\"english\") -> DateFormat\n\nConstruct a date formatting object that can be used for parsing date strings or formatting a date object as a string. The following character codes can be used to construct the format string:\n\nCode Matches Comment\ny 1996, 96 Returns year of 1996, 0096\nY 1996, 96 Returns year of 1996, 0096. Equivalent to y\nm 1, 01 Matches 1 or 2-digit months\nu Jan Matches abbreviated months according to the locale keyword\nU January Matches full month names according to the locale keyword\nd 1, 01 Matches 1 or 2-digit days\nH 00 Matches hours\nM 00 Matches minutes\nS 00 Matches seconds\ns .500 Matches milliseconds\ne Mon, Tues Matches abbreviated days of the week\nE Monday Matches full name days of the week\nyyyymmdd 19960101 Matches fixed-width year, month, and day\n\nCharacters not listed above are normally treated as delimiters between date and time slots. For example a dt string of \"1996-01-15T00:00:00.0\" would have a format string like \"y-m-dTH:M:S.s\". If you need to use a code character as a delimiter you can escape it using backslash. The date \"1995y01m\" would have the format \"y\\ym\\m\".\n\nCreating a DateFormat object is expensive. Whenever possible, create it once and use it many times or try the dateformat\"\" string macro. Using this macro creates the DateFormat object once at macro expansion time and reuses it later. see @dateformat_str.\n\nSee DateTime and format for how to use a DateFormat object to parse and write Date strings respectively.\n\n\n\n\n\n"
@@ -13882,7 +13874,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.@dateformat_str",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.@dateformat_str",
     "category": "Macro",
     "text": "dateformat\"Y-m-d H:M:S\"\n\nCreate a DateFormat object. Similar to DateFormat(\"Y-m-d H:M:S\") but creates the DateFormat object once during macro expansion.\n\nSee DateFormat for details about format specifiers.\n\n\n\n\n\n"
@@ -13890,7 +13882,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.DateTime-Tuple{AbstractString,DateFormat}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.DateTime",
     "category": "Method",
     "text": "DateTime(dt::AbstractString, df::DateFormat) -> DateTime\n\nConstruct a DateTime by parsing the dt date time string following the pattern given in the DateFormat object. Similar to DateTime(::AbstractString, ::AbstractString) but more efficient when repeatedly parsing similarly formatted date time strings with a pre-created DateFormat object.\n\n\n\n\n\n"
@@ -13898,7 +13890,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{Int64,Int64,Int64}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(y, [m, d]) -> Date\n\nConstruct a Date type by parts. Arguments must be convertible to Int64.\n\n\n\n\n\n"
@@ -13906,7 +13898,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{Period}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(period::Period...) -> Date\n\nConstruct a Date type by Period type parts. Arguments may be in any order. Date parts not provided will default to the value of Dates.default(period).\n\n\n\n\n\n"
@@ -13914,7 +13906,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{Function,Any,Any,Any}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(f::Function, y[, m, d]; step=Day(1), limit=10000) -> Date\n\nCreate a Date through the adjuster API. The starting point will be constructed from the provided y, m, d arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that f::Function is never satisfied).\n\nExamples\n\njulia> Date(date -> Dates.week(date) == 20, 2010, 01, 01)\n2010-05-17\n\njulia> Date(date -> Dates.year(date) == 2010, 2000, 01, 01)\n2010-01-01\n\njulia> Date(date -> Dates.month(date) == 10, 2000, 01, 01; limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n\n\n"
@@ -13922,7 +13914,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(dt::DateTime) -> Date\n\nConvert a DateTime to a Date. The hour, minute, second, and millisecond parts of the DateTime are truncated, so only the year, month and day parts are used in construction.\n\n\n\n\n\n"
@@ -13930,7 +13922,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{AbstractString,AbstractString}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(d::AbstractString, format::AbstractString; locale=\"english\") -> Date\n\nConstruct a Date by parsing the d date string following the pattern given in the format string.\n\nThis method creates a DateFormat object each time it is called. If you are parsing many date strings of the same format, consider creating a DateFormat object once and using that as the second argument instead.\n\n\n\n\n\n"
@@ -13938,7 +13930,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Date-Tuple{AbstractString,DateFormat}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Date",
     "category": "Method",
     "text": "Date(d::AbstractString, df::DateFormat) -> Date\n\nParse a date from a date string d using a DateFormat object df.\n\n\n\n\n\n"
@@ -13946,7 +13938,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Time-NTuple{5,Int64}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Time",
     "category": "Method",
     "text": "Time(h, [mi, s, ms, us, ns]) -> Time\n\nConstruct a Time type by parts. Arguments must be convertible to Int64.\n\n\n\n\n\n"
@@ -13954,7 +13946,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Time-Tuple{TimePeriod}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Time",
     "category": "Method",
     "text": "Time(period::TimePeriod...) -> Time\n\nConstruct a Time type by Period type parts. Arguments may be in any order. Time parts not provided will default to the value of Dates.default(period).\n\n\n\n\n\n"
@@ -13962,7 +13954,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Time-Tuple{Function,Vararg{Any,N} where N}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Time",
     "category": "Method",
     "text": "Time(f::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)\nTime(f::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)\n\nCreate a Time through the adjuster API. The starting point will be constructed from the provided h, mi, s, ms, us arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied). Note that the default step will adjust to allow for greater precision for the given arguments; i.e. if hour, minute, and second arguments are provided, the default step will be Millisecond(1) instead of Second(1).\n\nExamples\n\njulia> Dates.Time(t -> Dates.minute(t) == 30, 20)\n20:30:00\n\njulia> Dates.Time(t -> Dates.minute(t) == 0, 20)\n20:00:00\n\njulia> Dates.Time(t -> Dates.hour(t) == 10, 3; limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n\n\n"
@@ -13970,7 +13962,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Time-Tuple{DateTime}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Time",
     "category": "Method",
     "text": "Time(dt::DateTime) -> Time\n\nConvert a DateTime to a Time. The hour, minute, second, and millisecond parts of the DateTime are used to create the new Time. Microsecond and nanoseconds are zero by default.\n\n\n\n\n\n"
@@ -13978,7 +13970,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.now-Tuple{}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.now",
     "category": "Method",
     "text": "now() -> DateTime\n\nReturn a DateTime corresponding to the user\'s system time including the system timezone locale.\n\n\n\n\n\n"
@@ -13986,7 +13978,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.now-Tuple{Type{UTC}}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.now",
     "category": "Method",
     "text": "now(::Type{UTC}) -> DateTime\n\nReturn a DateTime corresponding to the user\'s system time as UTC/GMT.\n\n\n\n\n\n"
@@ -13994,7 +13986,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.eps",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.eps",
     "category": "Function",
     "text": "eps(::DateTime) -> Millisecond\neps(::Date) -> Day\neps(::Time) -> Nanosecond\n\nReturns Millisecond(1) for DateTime values, Day(1) for Date values, and Nanosecond(1) for Time values.\n\n\n\n\n\n"
@@ -14002,7 +13994,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates-Functions-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates Functions",
     "category": "section",
     "text": "Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)\nDates.DateTime(::Dates.Period)\nDates.DateTime(::Function, ::Any...)\nDates.DateTime(::Dates.TimeType)\nDates.DateTime(::AbstractString, ::AbstractString)\nDates.format\nDates.DateFormat\nDates.@dateformat_str\nDates.DateTime(::AbstractString, ::Dates.DateFormat)\nDates.Date(::Int64, ::Int64, ::Int64)\nDates.Date(::Dates.Period)\nDates.Date(::Function, ::Any, ::Any, ::Any)\nDates.Date(::Dates.TimeType)\nDates.Date(::AbstractString, ::AbstractString)\nDates.Date(::AbstractString, ::Dates.DateFormat)\nDates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)\nDates.Time(::Dates.TimePeriod)\nDates.Time(::Function, ::Any...)\nDates.Time(::Dates.DateTime)\nDates.now()\nDates.now(::Type{Dates.UTC})\nBase.eps"
@@ -14010,7 +14002,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.year",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.year",
     "category": "Function",
     "text": "year(dt::TimeType) -> Int64\n\nThe year of a Date or DateTime as an Int64.\n\n\n\n\n\n"
@@ -14018,7 +14010,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.month",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.month",
     "category": "Function",
     "text": "month(dt::TimeType) -> Int64\n\nThe month of a Date or DateTime as an Int64.\n\n\n\n\n\n"
@@ -14026,7 +14018,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.week",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.week",
     "category": "Function",
     "text": "week(dt::TimeType) -> Int64\n\nReturn the ISO week date of a Date or DateTime as an Int64. Note that the first week of a year is the week that contains the first Thursday of the year, which can result in dates prior to January 4th being in the last week of the previous year. For example, week(Date(2005, 1, 1)) is the 53rd week of 2004.\n\nExamples\n\njulia> Dates.week(Date(1989, 6, 22))\n25\n\njulia> Dates.week(Date(2005, 1, 1))\n53\n\njulia> Dates.week(Date(2004, 12, 31))\n53\n\n\n\n\n\n"
@@ -14034,7 +14026,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.day",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.day",
     "category": "Function",
     "text": "day(dt::TimeType) -> Int64\n\nThe day of month of a Date or DateTime as an Int64.\n\n\n\n\n\n"
@@ -14042,7 +14034,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.hour",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.hour",
     "category": "Function",
     "text": "hour(dt::DateTime) -> Int64\n\nThe hour of day of a DateTime as an Int64.\n\n\n\n\n\nhour(t::Time) -> Int64\n\nThe hour of a Time as an Int64.\n\n\n\n\n\n"
@@ -14050,7 +14042,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.minute",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.minute",
     "category": "Function",
     "text": "minute(dt::DateTime) -> Int64\n\nThe minute of a DateTime as an Int64.\n\n\n\n\n\nminute(t::Time) -> Int64\n\nThe minute of a Time as an Int64.\n\n\n\n\n\n"
@@ -14058,7 +14050,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.second",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.second",
     "category": "Function",
     "text": "second(dt::DateTime) -> Int64\n\nThe second of a DateTime as an Int64.\n\n\n\n\n\nsecond(t::Time) -> Int64\n\nThe second of a Time as an Int64.\n\n\n\n\n\n"
@@ -14066,7 +14058,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.millisecond",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.millisecond",
     "category": "Function",
     "text": "millisecond(dt::DateTime) -> Int64\n\nThe millisecond of a DateTime as an Int64.\n\n\n\n\n\nmillisecond(t::Time) -> Int64\n\nThe millisecond of a Time as an Int64.\n\n\n\n\n\n"
@@ -14074,7 +14066,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.microsecond",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.microsecond",
     "category": "Function",
     "text": "microsecond(t::Time) -> Int64\n\nThe microsecond of a Time as an Int64.\n\n\n\n\n\n"
@@ -14082,7 +14074,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.nanosecond",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.nanosecond",
     "category": "Function",
     "text": "nanosecond(t::Time) -> Int64\n\nThe nanosecond of a Time as an Int64.\n\n\n\n\n\n"
@@ -14090,7 +14082,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Year-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Year",
     "category": "Method",
     "text": "Year(v)\n\nConstruct a Year object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n\n\n"
@@ -14098,7 +14090,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Month-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Month",
     "category": "Method",
     "text": "Month(v)\n\nConstruct a Month object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n\n\n"
@@ -14106,7 +14098,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Week-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Week",
     "category": "Method",
     "text": "Week(v)\n\nConstruct a Week object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n\n\n"
@@ -14114,7 +14106,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Day-Tuple{TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Day",
     "category": "Method",
     "text": "Day(v)\n\nConstruct a Day object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n\n\n"
@@ -14122,7 +14114,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Hour-Tuple{DateTime}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Hour",
     "category": "Method",
     "text": "Hour(dt::DateTime) -> Hour\n\nThe hour part of a DateTime as a Hour.\n\n\n\n\n\n"
@@ -14130,7 +14122,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Minute-Tuple{DateTime}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Minute",
     "category": "Method",
     "text": "Minute(dt::DateTime) -> Minute\n\nThe minute part of a DateTime as a Minute.\n\n\n\n\n\n"
@@ -14138,7 +14130,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Second-Tuple{DateTime}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Second",
     "category": "Method",
     "text": "Second(dt::DateTime) -> Second\n\nThe second part of a DateTime as a Second.\n\n\n\n\n\n"
@@ -14146,7 +14138,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Millisecond-Tuple{DateTime}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Millisecond",
     "category": "Method",
     "text": "Millisecond(dt::DateTime) -> Millisecond\n\nThe millisecond part of a DateTime as a Millisecond.\n\n\n\n\n\n"
@@ -14154,7 +14146,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Microsecond-Tuple{Time}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Microsecond",
     "category": "Method",
     "text": "Microsecond(dt::Time) -> Microsecond\n\nThe microsecond part of a Time as a Microsecond.\n\n\n\n\n\n"
@@ -14162,7 +14154,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Nanosecond-Tuple{Time}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Nanosecond",
     "category": "Method",
     "text": "Nanosecond(dt::Time) -> Nanosecond\n\nThe nanosecond part of a Time as a Nanosecond.\n\n\n\n\n\n"
@@ -14170,7 +14162,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.yearmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.yearmonth",
     "category": "Function",
     "text": "yearmonth(dt::TimeType) -> (Int64, Int64)\n\nSimultaneously return the year and month parts of a Date or DateTime.\n\n\n\n\n\n"
@@ -14178,7 +14170,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.monthday",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.monthday",
     "category": "Function",
     "text": "monthday(dt::TimeType) -> (Int64, Int64)\n\nSimultaneously return the month and day parts of a Date or DateTime.\n\n\n\n\n\n"
@@ -14186,15 +14178,15 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.yearmonthday",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.yearmonthday",
     "category": "Function",
     "text": "yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)\n\nSimultaneously return the year, month and day parts of a Date or DateTime.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/Dates/#Accessor-Functions-1",
-    "page": "Dates and Time",
+    "location": "stdlib/Dates/#Accessor-Functions-2",
+    "page": "Dates",
     "title": "Accessor Functions",
     "category": "section",
     "text": "Dates.year\nDates.month\nDates.week\nDates.day\nDates.hour\nDates.minute\nDates.second\nDates.millisecond\nDates.microsecond\nDates.nanosecond\nDates.Year(::Dates.TimeType)\nDates.Month(::Dates.TimeType)\nDates.Week(::Dates.TimeType)\nDates.Day(::Dates.TimeType)\nDates.Hour(::DateTime)\nDates.Minute(::DateTime)\nDates.Second(::DateTime)\nDates.Millisecond(::DateTime)\nDates.Microsecond(::Dates.Time)\nDates.Nanosecond(::Dates.Time)\nDates.yearmonth\nDates.monthday\nDates.yearmonthday"
@@ -14202,7 +14194,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayname",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayname",
     "category": "Function",
     "text": "dayname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full day name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.dayname(Date(\"2000-01-01\"))\n\"Saturday\"\n\n\n\n\n\n"
@@ -14210,7 +14202,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayabbr",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayabbr",
     "category": "Function",
     "text": "dayabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.dayabbr(Date(\"2000-01-01\"))\n\"Sat\"\n\n\n\n\n\n"
@@ -14218,7 +14210,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayofweek",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayofweek",
     "category": "Function",
     "text": "dayofweek(dt::TimeType) -> Int64\n\nReturn the day of the week as an Int64 with 1 = Monday, 2 = Tuesday, etc..\n\nExamples\n\njulia> Dates.dayofweek(Date(\"2000-01-01\"))\n6\n\n\n\n\n\n"
@@ -14226,7 +14218,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayofmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayofmonth",
     "category": "Function",
     "text": "dayofmonth(dt::TimeType) -> Int64\n\nThe day of month of a Date or DateTime as an Int64.\n\n\n\n\n\n"
@@ -14234,7 +14226,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayofweekofmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayofweekofmonth",
     "category": "Function",
     "text": "dayofweekofmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, return which number it is in dt\'s month. So if the day of the week of dt is Monday, then 1 = First Monday of the month, 2 = Second Monday of the month, etc. In the range 1:5.\n\nExamples\n\n```jldoctest julia> Dates.dayofweekofmonth(Date(\"2000-02-01\")) 1\n\njulia> Dates.dayofweekofmonth(Date(\"2000-02-08\")) 2\n\njulia> Dates.dayofweekofmonth(Date(\"2000-02-15\")) 3 ````\n\n\n\n\n\n"
@@ -14242,7 +14234,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.daysofweekinmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.daysofweekinmonth",
     "category": "Function",
     "text": "daysofweekinmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, return the total number of that day of the week in dt\'s month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including dayofweekofmonth(dt) == daysofweekinmonth(dt) in the adjuster function.\n\nExamples\n\njulia> Dates.daysofweekinmonth(Date(\"2005-01-01\"))\n5\n\njulia> Dates.daysofweekinmonth(Date(\"2005-01-04\"))\n4\n\n\n\n\n\n"
@@ -14250,7 +14242,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.monthname",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.monthname",
     "category": "Function",
     "text": "monthname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full name of the month of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.monthname(Date(\"2005-01-04\"))\n\"January\"\n\n\n\n\n\n"
@@ -14258,7 +14250,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.monthabbr",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.monthabbr",
     "category": "Function",
     "text": "monthabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated month name of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.monthabbr(Date(\"2005-01-04\"))\n\"Jan\"\n\n\n\n\n\n"
@@ -14266,7 +14258,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.daysinmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.daysinmonth",
     "category": "Function",
     "text": "daysinmonth(dt::TimeType) -> Int\n\nReturn the number of days in the month of dt. Value will be 28, 29, 30, or 31.\n\nExamples\n\njulia> Dates.daysinmonth(Date(\"2000-01\"))\n31\n\njulia> Dates.daysinmonth(Date(\"2001-02\"))\n28\n\njulia> Dates.daysinmonth(Date(\"2000-02\"))\n29\n\n\n\n\n\n"
@@ -14274,7 +14266,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.isleapyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.isleapyear",
     "category": "Function",
     "text": "isleapyear(dt::TimeType) -> Bool\n\nReturn true if the year of dt is a leap year.\n\nExamples\n\njulia> Dates.isleapyear(Date(\"2004\"))\ntrue\n\njulia> Dates.isleapyear(Date(\"2005\"))\nfalse\n\n\n\n\n\n"
@@ -14282,7 +14274,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayofyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayofyear",
     "category": "Function",
     "text": "dayofyear(dt::TimeType) -> Int\n\nReturn the day of the year for dt with January 1st being day 1.\n\n\n\n\n\n"
@@ -14290,7 +14282,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.daysinyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.daysinyear",
     "category": "Function",
     "text": "daysinyear(dt::TimeType) -> Int\n\nReturn 366 if the year of dt is a leap year, otherwise return 365.\n\nExamples\n\njulia> Dates.daysinyear(1999)\n365\n\njulia> Dates.daysinyear(2000)\n366\n\n\n\n\n\n"
@@ -14298,7 +14290,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.quarterofyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.quarterofyear",
     "category": "Function",
     "text": "quarterofyear(dt::TimeType) -> Int\n\nReturn the quarter that dt resides in. Range of value is 1:4.\n\n\n\n\n\n"
@@ -14306,15 +14298,15 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.dayofquarter",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.dayofquarter",
     "category": "Function",
     "text": "dayofquarter(dt::TimeType) -> Int\n\nReturn the day of the current quarter of dt. Range of value is 1:92.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/Dates/#Query-Functions-1",
-    "page": "Dates and Time",
+    "location": "stdlib/Dates/#Query-Functions-2",
+    "page": "Dates",
     "title": "Query Functions",
     "category": "section",
     "text": "Dates.dayname\nDates.dayabbr\nDates.dayofweek\nDates.dayofmonth\nDates.dayofweekofmonth\nDates.daysofweekinmonth\nDates.monthname\nDates.monthabbr\nDates.daysinmonth\nDates.isleapyear\nDates.dayofyear\nDates.daysinyear\nDates.quarterofyear\nDates.dayofquarter"
@@ -14322,7 +14314,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.trunc-Tuple{TimeType,Type{Period}}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.trunc",
     "category": "Method",
     "text": "trunc(dt::TimeType, ::Type{Period}) -> TimeType\n\nTruncates the value of dt according to the provided Period type.\n\nExamples\n\njulia> trunc(Dates.DateTime(\"1996-01-01T12:30:00\"), Dates.Day)\n1996-01-01T00:00:00\n\n\n\n\n\n"
@@ -14330,7 +14322,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.firstdayofweek",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.firstdayofweek",
     "category": "Function",
     "text": "firstdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Monday of its week.\n\nExamples\n\njulia> Dates.firstdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-01T00:00:00\n\n\n\n\n\n"
@@ -14338,7 +14330,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.lastdayofweek",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.lastdayofweek",
     "category": "Function",
     "text": "lastdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Sunday of its week.\n\nExamples\n\njulia> Dates.lastdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-07T00:00:00\n\n\n\n\n\n"
@@ -14346,7 +14338,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.firstdayofmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.firstdayofmonth",
     "category": "Function",
     "text": "firstdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its month.\n\nExamples\n\njulia> Dates.firstdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-01T00:00:00\n\n\n\n\n\n"
@@ -14354,7 +14346,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.lastdayofmonth",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.lastdayofmonth",
     "category": "Function",
     "text": "lastdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its month.\n\nExamples\n\njulia> Dates.lastdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-31T00:00:00\n\n\n\n\n\n"
@@ -14362,7 +14354,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.firstdayofyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.firstdayofyear",
     "category": "Function",
     "text": "firstdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its year.\n\nExamples\n\njulia> Dates.firstdayofyear(DateTime(\"1996-05-20\"))\n1996-01-01T00:00:00\n\n\n\n\n\n"
@@ -14370,7 +14362,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.lastdayofyear",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.lastdayofyear",
     "category": "Function",
     "text": "lastdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its year.\n\nExamples\n\njulia> Dates.lastdayofyear(DateTime(\"1996-05-20\"))\n1996-12-31T00:00:00\n\n\n\n\n\n"
@@ -14378,7 +14370,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.firstdayofquarter",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.firstdayofquarter",
     "category": "Function",
     "text": "firstdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its quarter.\n\nExamples\n\njulia> Dates.firstdayofquarter(DateTime(\"1996-05-20\"))\n1996-04-01T00:00:00\n\njulia> Dates.firstdayofquarter(DateTime(\"1996-08-20\"))\n1996-07-01T00:00:00\n\n\n\n\n\n"
@@ -14386,7 +14378,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.lastdayofquarter",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.lastdayofquarter",
     "category": "Function",
     "text": "lastdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its quarter.\n\nExamples\n\njulia> Dates.lastdayofquarter(DateTime(\"1996-05-20\"))\n1996-06-30T00:00:00\n\njulia> Dates.lastdayofquarter(DateTime(\"1996-08-20\"))\n1996-09-30T00:00:00\n\n\n\n\n\n"
@@ -14394,7 +14386,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.tonext-Tuple{TimeType,Int64}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.tonext",
     "category": "Method",
     "text": "tonext(dt::TimeType, dow::Int; same::Bool=false) -> TimeType\n\nAdjusts dt to the next day of week corresponding to dow with 1 = Monday, 2 = Tuesday, etc. Setting same=true allows the current dt to be considered as the next dow, allowing for no adjustment to occur.\n\n\n\n\n\n"
@@ -14402,7 +14394,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.toprev-Tuple{TimeType,Int64}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.toprev",
     "category": "Method",
     "text": "toprev(dt::TimeType, dow::Int; same::Bool=false) -> TimeType\n\nAdjusts dt to the previous day of week corresponding to dow with 1 = Monday, 2 = Tuesday, etc. Setting same=true allows the current dt to be considered as the previous dow, allowing for no adjustment to occur.\n\n\n\n\n\n"
@@ -14410,7 +14402,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.tofirst",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.tofirst",
     "category": "Function",
     "text": "tofirst(dt::TimeType, dow::Int; of=Month) -> TimeType\n\nAdjusts dt to the first dow of its month. Alternatively, of=Year will adjust to the first dow of the year.\n\n\n\n\n\n"
@@ -14418,7 +14410,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.tolast",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.tolast",
     "category": "Function",
     "text": "tolast(dt::TimeType, dow::Int; of=Month) -> TimeType\n\nAdjusts dt to the last dow of its month. Alternatively, of=Year will adjust to the last dow of the year.\n\n\n\n\n\n"
@@ -14426,7 +14418,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.tonext-Tuple{Function,TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.tonext",
     "category": "Method",
     "text": "tonext(func::Function, dt::TimeType; step=Day(1), limit=10000, same=false) -> TimeType\n\nAdjusts dt by iterating at most limit iterations by step increments until func returns true. func must take a single TimeType argument and return a Bool. same allows dt to be considered in satisfying func.\n\n\n\n\n\n"
@@ -14434,15 +14426,15 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.toprev-Tuple{Function,TimeType}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.toprev",
     "category": "Method",
     "text": "toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false) -> TimeType\n\nAdjusts dt by iterating at most limit iterations by step increments until func returns true. func must take a single TimeType argument and return a Bool. same allows dt to be considered in satisfying func.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/Dates/#Adjuster-Functions-1",
-    "page": "Dates and Time",
+    "location": "stdlib/Dates/#Adjuster-Functions-2",
+    "page": "Dates",
     "title": "Adjuster Functions",
     "category": "section",
     "text": "Base.trunc(::Dates.TimeType, ::Type{Dates.Period})\nDates.firstdayofweek\nDates.lastdayofweek\nDates.firstdayofmonth\nDates.lastdayofmonth\nDates.firstdayofyear\nDates.lastdayofyear\nDates.firstdayofquarter\nDates.lastdayofquarter\nDates.tonext(::Dates.TimeType, ::Int)\nDates.toprev(::Dates.TimeType, ::Int)\nDates.tofirst\nDates.tolast\nDates.tonext(::Function, ::Dates.TimeType)\nDates.toprev(::Function, ::Dates.TimeType)"
@@ -14450,7 +14442,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.Period-Tuple{Any}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.Period",
     "category": "Method",
     "text": "Year(v)\nMonth(v)\nWeek(v)\nDay(v)\nHour(v)\nMinute(v)\nSecond(v)\nMillisecond(v)\nMicrosecond(v)\nNanosecond(v)\n\nConstruct a Period type with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n\n\n"
@@ -14458,7 +14450,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.CompoundPeriod-Tuple{Array{#s65,1} where #s65<:Period}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.CompoundPeriod",
     "category": "Method",
     "text": "CompoundPeriod(periods) -> CompoundPeriod\n\nConstruct a CompoundPeriod from a Vector of Periods. All Periods of the same type will be added together.\n\nExamples\n\njulia> Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13))\n25 hours\n\njulia> Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1))\n-1 hour, 1 minute\n\njulia> Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2))\n1 month, -2 weeks\n\njulia> Dates.CompoundPeriod(Dates.Minute(50000))\n50000 minutes\n\n\n\n\n\n"
@@ -14466,7 +14458,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.default",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.default",
     "category": "Function",
     "text": "default(p::Period) -> Period\n\nReturns a sensible \"default\" value for the input Period by returning T(1) for Year, Month, and Day, and T(0) for Hour, Minute, Second, and Millisecond.\n\n\n\n\n\n"
@@ -14474,7 +14466,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Periods-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Periods",
     "category": "section",
     "text": "Dates.Period(::Any)\nDates.CompoundPeriod(::Vector{<:Dates.Period})\nDates.default"
@@ -14482,7 +14474,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.floor-Tuple{TimeType,Period}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.floor",
     "category": "Method",
     "text": "floor(dt::TimeType, p::Period) -> TimeType\n\nReturn the nearest Date or DateTime less than or equal to dt at resolution p.\n\nFor convenience, p may be a type instead of a value: floor(dt, Dates.Hour) is a shortcut for floor(dt, Dates.Hour(1)).\n\njulia> floor(Date(1985, 8, 16), Dates.Month)\n1985-08-01\n\njulia> floor(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))\n2013-02-13T00:30:00\n\njulia> floor(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)\n2016-08-06T00:00:00\n\n\n\n\n\n"
@@ -14490,7 +14482,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.ceil-Tuple{TimeType,Period}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.ceil",
     "category": "Method",
     "text": "ceil(dt::TimeType, p::Period) -> TimeType\n\nReturn the nearest Date or DateTime greater than or equal to dt at resolution p.\n\nFor convenience, p may be a type instead of a value: ceil(dt, Dates.Hour) is a shortcut for ceil(dt, Dates.Hour(1)).\n\njulia> ceil(Date(1985, 8, 16), Dates.Month)\n1985-09-01\n\njulia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))\n2013-02-13T00:45:00\n\njulia> ceil(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)\n2016-08-07T00:00:00\n\n\n\n\n\n"
@@ -14498,7 +14490,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.round-Tuple{TimeType,Period,RoundingMode{:NearestTiesUp}}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.round",
     "category": "Method",
     "text": "round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType\n\nReturn the Date or DateTime nearest to dt at resolution p. By default (RoundNearestTiesUp), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.\n\nFor convenience, p may be a type instead of a value: round(dt, Dates.Hour) is a shortcut for round(dt, Dates.Hour(1)).\n\njulia> round(Date(1985, 8, 16), Dates.Month)\n1985-08-01\n\njulia> round(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))\n2013-02-13T00:30:00\n\njulia> round(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)\n2016-08-07T00:00:00\n\nValid rounding modes for round(::TimeType, ::Period, ::RoundingMode) are RoundNearestTiesUp (default), RoundDown (floor), and RoundUp (ceil).\n\n\n\n\n\n"
@@ -14506,7 +14498,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.floor-Union{Tuple{T}, Tuple{Union{Day, Week, TimePeriod},T}} where T<:Union{Day, Week, TimePeriod}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.floor",
     "category": "Method",
     "text": "floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T\n\nRound x down to the nearest multiple of precision. If x and precision are different subtypes of Period, the return value will have the same type as precision.\n\nFor convenience, precision may be a type instead of a value: floor(x, Dates.Hour) is a shortcut for floor(x, Dates.Hour(1)).\n\njulia> floor(Dates.Day(16), Dates.Week)\n2 weeks\n\njulia> floor(Dates.Minute(44), Dates.Minute(15))\n30 minutes\n\njulia> floor(Dates.Hour(36), Dates.Day)\n1 day\n\nRounding to a precision of Months or Years is not supported, as these Periods are of inconsistent length.\n\n\n\n\n\n"
@@ -14514,7 +14506,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.ceil-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod}}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.ceil",
     "category": "Method",
     "text": "ceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T\n\nRound x up to the nearest multiple of precision. If x and precision are different subtypes of Period, the return value will have the same type as precision.\n\nFor convenience, precision may be a type instead of a value: ceil(x, Dates.Hour) is a shortcut for ceil(x, Dates.Hour(1)).\n\njulia> ceil(Dates.Day(16), Dates.Week)\n3 weeks\n\njulia> ceil(Dates.Minute(44), Dates.Minute(15))\n45 minutes\n\njulia> ceil(Dates.Hour(36), Dates.Day)\n3 days\n\nRounding to a precision of Months or Years is not supported, as these Periods are of inconsistent length.\n\n\n\n\n\n"
@@ -14522,7 +14514,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Base.round-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod},RoundingMode{:NearestTiesUp}}",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Base.round",
     "category": "Method",
     "text": "round(x::Period, precision::T, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T\n\nRound x to the nearest multiple of precision. If x and precision are different subtypes of Period, the return value will have the same type as precision. By default (RoundNearestTiesUp), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded up.\n\nFor convenience, precision may be a type instead of a value: round(x, Dates.Hour) is a shortcut for round(x, Dates.Hour(1)).\n\njulia> round(Dates.Day(16), Dates.Week)\n2 weeks\n\njulia> round(Dates.Minute(44), Dates.Minute(15))\n45 minutes\n\njulia> round(Dates.Hour(36), Dates.Day)\n3 days\n\nValid rounding modes for round(::Period, ::T, ::RoundingMode) are RoundNearestTiesUp (default), RoundDown (floor), and RoundUp (ceil).\n\nRounding to a precision of Months or Years is not supported, as these Periods are of inconsistent length.\n\n\n\n\n\n"
@@ -14530,7 +14522,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.floorceil",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.floorceil",
     "category": "Function",
     "text": "floorceil(dt::TimeType, p::Period) -> (TimeType, TimeType)\n\nSimultaneously return the floor and ceil of a Date or DateTime at resolution p. More efficient than calling both floor and ceil individually.\n\n\n\n\n\nfloorceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> (T, T)\n\nSimultaneously return the floor and ceil of Period at resolution p.  More efficient than calling both floor and ceil individually.\n\n\n\n\n\n"
@@ -14538,7 +14530,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.epochdays2date",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.epochdays2date",
     "category": "Function",
     "text": "epochdays2date(days) -> Date\n\nTake the number of days since the rounding epoch (0000-01-01T00:00:00) and return the corresponding Date.\n\n\n\n\n\n"
@@ -14546,7 +14538,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.epochms2datetime",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.epochms2datetime",
     "category": "Function",
     "text": "epochms2datetime(milliseconds) -> DateTime\n\nTake the number of milliseconds since the rounding epoch (0000-01-01T00:00:00) and return the corresponding DateTime.\n\n\n\n\n\n"
@@ -14554,7 +14546,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.date2epochdays",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.date2epochdays",
     "category": "Function",
     "text": "date2epochdays(dt::Date) -> Int64\n\nTake the given Date and return the number of days since the rounding epoch (0000-01-01T00:00:00) as an Int64.\n\n\n\n\n\n"
@@ -14562,7 +14554,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.datetime2epochms",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.datetime2epochms",
     "category": "Function",
     "text": "datetime2epochms(dt::DateTime) -> Int64\n\nTake the given DateTime and return the number of milliseconds since the rounding epoch (0000-01-01T00:00:00) as an Int64.\n\n\n\n\n\n"
@@ -14570,7 +14562,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Rounding-Functions-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Rounding Functions",
     "category": "section",
     "text": "Date and DateTime values can be rounded to a specified resolution (e.g., 1 month or 15 minutes) with floor, ceil, or round.Base.floor(::Dates.TimeType, ::Dates.Period)\nBase.ceil(::Dates.TimeType, ::Dates.Period)\nBase.round(::Dates.TimeType, ::Dates.Period, ::RoundingMode{:NearestTiesUp})Most Period values can also be rounded to a specified resolution:Base.floor(::Dates.ConvertiblePeriod, ::T) where T <: Dates.ConvertiblePeriod\nBase.ceil(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod)\nBase.round(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod, ::RoundingMode{:NearestTiesUp})The following functions are not exported:Dates.floorceil\nDates.epochdays2date\nDates.epochms2datetime\nDates.date2epochdays\nDates.datetime2epochms"
@@ -14578,7 +14570,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.today",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.today",
     "category": "Function",
     "text": "today() -> Date\n\nReturn the date portion of now().\n\n\n\n\n\n"
@@ -14586,7 +14578,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.unix2datetime",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.unix2datetime",
     "category": "Function",
     "text": "unix2datetime(x) -> DateTime\n\nTake the number of seconds since unix epoch 1970-01-01T00:00:00 and convert to the corresponding DateTime.\n\n\n\n\n\n"
@@ -14594,7 +14586,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.datetime2unix",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.datetime2unix",
     "category": "Function",
     "text": "datetime2unix(dt::DateTime) -> Float64\n\nTake the given DateTime and return the number of seconds since the unix epoch 1970-01-01T00:00:00 as a Float64.\n\n\n\n\n\n"
@@ -14602,7 +14594,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.julian2datetime",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.julian2datetime",
     "category": "Function",
     "text": "julian2datetime(julian_days) -> DateTime\n\nTake the number of Julian calendar days since epoch -4713-11-24T12:00:00 and return the corresponding DateTime.\n\n\n\n\n\n"
@@ -14610,7 +14602,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.datetime2julian",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.datetime2julian",
     "category": "Function",
     "text": "datetime2julian(dt::DateTime) -> Float64\n\nTake the given DateTime and return the number of Julian calendar days since the julian epoch -4713-11-24T12:00:00 as a Float64.\n\n\n\n\n\n"
@@ -14618,7 +14610,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.rata2datetime",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.rata2datetime",
     "category": "Function",
     "text": "rata2datetime(days) -> DateTime\n\nTake the number of Rata Die days since epoch 0000-12-31T00:00:00 and return the corresponding DateTime.\n\n\n\n\n\n"
@@ -14626,7 +14618,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Dates.datetime2rata",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Dates.datetime2rata",
     "category": "Function",
     "text": "datetime2rata(dt::TimeType) -> Int64\n\nReturn the number of Rata Die days since epoch from the given Date or DateTime.\n\n\n\n\n\n"
@@ -14634,7 +14626,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Conversion-Functions-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Conversion Functions",
     "category": "section",
     "text": "Dates.today\nDates.unix2datetime\nDates.datetime2unix\nDates.julian2datetime\nDates.datetime2julian\nDates.rata2datetime\nDates.datetime2rata"
@@ -14642,7 +14634,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Dates/#Constants-1",
-    "page": "Dates and Time",
+    "page": "Dates",
     "title": "Constants",
     "category": "section",
     "text": "Days of the Week:Variable Abbr. Value (Int)\nMonday Mon 1\nTuesday Tue 2\nWednesday Wed 3\nThursday Thu 4\nFriday Fri 5\nSaturday Sat 6\nSunday Sun 7Months of the Year:Variable Abbr. Value (Int)\nJanuary Jan 1\nFebruary Feb 2\nMarch Mar 3\nApril Apr 4\nMay May 5\nJune Jun 6\nJuly Jul 7\nAugust Aug 8\nSeptember Sep 9\nOctober Oct 10\nNovember Nov 11\nDecember Dec 12DocTestSetup = nothing"
@@ -14733,7 +14725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.addprocs",
     "category": "Function",
-    "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process\'s environment. Relevant only when using TCP/IP as transport.\n\n\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host\'s current directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added processes. Default is false.\nexename: name of the julia executable. Defaults to \"$(Sys.BINDIR)/julia\" or \"$(Sys.BINDIR)/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message between unconnected workers results in an error.\ntopology=:all_to_all: All processes are connected to each other. The default.\ntopology=:master_worker: Only the driver process, i.e. pid 1 connects to the workers. The workers do not connect to each other.\ntopology=:custom: The launch method of the cluster manager specifies the connection topology via fields ident and connect_idents in WorkerConfig. A worker with a cluster manager identity ident will connect to all workers specified in connect_idents.\nlazy: Applicable only with topology=:all_to_all. If true, worker-worker connections are setup lazily, i.e. they are setup at the first instance of a remote call between workers. Default is true.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, lazy and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n\n\n"
+    "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process\'s environment. Relevant only when using TCP/IP as transport.\n\n\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host\'s current directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added processes. Default is false.\nexename: name of the julia executable. Defaults to \"$(Sys.BINDIR)/julia\" or \"$(Sys.BINDIR)/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message between unconnected workers results in an error.\ntopology=:all_to_all: All processes are connected to each other. The default.\ntopology=:master_worker: Only the driver process, i.e. pid 1 connects to the workers. The workers do not connect to each other.\ntopology=:custom: The launch method of the cluster manager specifies the connection topology via fields ident and connect_idents in WorkerConfig. A worker with a cluster manager identity ident will connect to all workers specified in connect_idents.\nlazy: Applicable only with topology=:all_to_all. If true, worker-worker connections are setup lazily, i.e. they are setup at the first instance of a remote call between workers. Default is true.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .julia/config/startup.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, lazy and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n\n\n"
 },
 
 {
@@ -18141,7 +18133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "The Julia REPL",
     "title": "Customizing keybindings",
     "category": "section",
-    "text": "Julia\'s REPL keybindings may be fully customized to a user\'s preferences by passing a dictionary to REPL.setup_interface. The keys of this dictionary may be characters or strings. The key \'*\' refers to the default action. Control plus character x bindings are indicated with \"^x\". Meta plus x can be written \"\\\\Mx\". The values of the custom keymap must be nothing (indicating that the input should be ignored) or functions that accept the signature (PromptState, AbstractREPL, Char). The REPL.setup_interface function must be called before the REPL is initialized, by registering the operation with atreplinit . For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in .juliarc.jl:import REPL\nimport REPL.LineEdit\n\nconst mykeys = Dict{Any,Any}(\n    # Up Arrow\n    \"\\e[A\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),\n    # Down Arrow\n    \"\\e[B\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))\n)\n\nfunction customize_keys(repl)\n    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)\nend\n\natreplinit(customize_keys)Users should refer to LineEdit.jl to discover the available actions on key input."
+    "text": "Julia\'s REPL keybindings may be fully customized to a user\'s preferences by passing a dictionary to REPL.setup_interface. The keys of this dictionary may be characters or strings. The key \'*\' refers to the default action. Control plus character x bindings are indicated with \"^x\". Meta plus x can be written \"\\\\Mx\". The values of the custom keymap must be nothing (indicating that the input should be ignored) or functions that accept the signature (PromptState, AbstractREPL, Char). The REPL.setup_interface function must be called before the REPL is initialized, by registering the operation with atreplinit . For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ~/.julia/config/startup.jl:import REPL\nimport REPL.LineEdit\n\nconst mykeys = Dict{Any,Any}(\n    # Up Arrow\n    \"\\e[A\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),\n    # Down Arrow\n    \"\\e[B\" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))\n)\n\nfunction customize_keys(repl)\n    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)\nend\n\natreplinit(customize_keys)Users should refer to LineEdit.jl to discover the available actions on key input."
 },
 
 {
@@ -18157,7 +18149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "The Julia REPL",
     "title": "Customizing Colors",
     "category": "section",
-    "text": "The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia prompt you can add something like the following to your .juliarc.jl file, which is to be placed inside your home directory:function customize_colors(repl)\n    repl.prompt_color = Base.text_colors[:cyan]\nend\n\natreplinit(customize_colors)The available color keys can be seen by typing Base.text_colors in the help mode of the REPL. In addition, the integers 0 to 255 can be used as color keys for terminals with 256 color support.You can also change the colors for the help and shell prompts and input and answer text by setting the appropriate field of repl in the customize_colors function above (respectively, help_color, shell_color, input_color, and answer_color). For the latter two, be sure that the envcolors field is also set to false.It is also possible to apply boldface formatting by using Base.text_colors[:bold] as a color. For instance, to print answers in boldface font, one can use the following as a .juliarc.jl:function customize_colors(repl)\n    repl.envcolors = false\n    repl.answer_color = Base.text_colors[:bold]\nend\n\natreplinit(customize_colors)You can also customize the color used to render warning and informational messages by setting the appropriate environment variables. For instance, to render error, warning, and informational messages respectively in magenta, yellow, and cyan you can add the following to your .juliarc.jl file:ENV[\"JULIA_ERROR_COLOR\"] = :magenta\nENV[\"JULIA_WARN_COLOR\"] = :yellow\nENV[\"JULIA_INFO_COLOR\"] = :cyan"
+    "text": "The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia prompt you can add something like the following to your ~/.julia/config/startup.jl file, which is to be placed inside your home directory:function customize_colors(repl)\n    repl.prompt_color = Base.text_colors[:cyan]\nend\n\natreplinit(customize_colors)The available color keys can be seen by typing Base.text_colors in the help mode of the REPL. In addition, the integers 0 to 255 can be used as color keys for terminals with 256 color support.You can also change the colors for the help and shell prompts and input and answer text by setting the appropriate field of repl in the customize_colors function above (respectively, help_color, shell_color, input_color, and answer_color). For the latter two, be sure that the envcolors field is also set to false.It is also possible to apply boldface formatting by using Base.text_colors[:bold] as a color. For instance, to print answers in boldface font, one can use the following as a ~/.julia/config/startup.jl:function customize_colors(repl)\n    repl.envcolors = false\n    repl.answer_color = Base.text_colors[:bold]\nend\n\natreplinit(customize_colors)You can also customize the color used to render warning and informational messages by setting the appropriate environment variables. For instance, to render error, warning, and informational messages respectively in magenta, yellow, and cyan you can add the following to your ~/.julia/config/startup.jl file:ENV[\"JULIA_ERROR_COLOR\"] = :magenta\nENV[\"JULIA_WARN_COLOR\"] = :yellow\nENV[\"JULIA_INFO_COLOR\"] = :cyan"
 },
 
 {
@@ -18221,7 +18213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "The Julia REPL",
     "title": "Base.atreplinit",
     "category": "Function",
-    "text": "atreplinit(f)\n\nRegister a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of f is the REPL object. This function should be called from within the .juliarc.jl initialization file.\n\n\n\n\n\n"
+    "text": "atreplinit(f)\n\nRegister a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of f is the REPL object. This function should be called from within the .julia/config/startup.jl initialization file.\n\n\n\n\n\n"
 },
 
 {
