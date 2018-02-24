@@ -200,6 +200,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/traits.jl \
+		base/refvalue.jl \
 		base/tuple.jl)
 COMPILER_SRCS = $(sort $(shell find $(JULIAHOME)/base/compiler -name \*.jl))
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
