@@ -2,7 +2,7 @@
 
 prefix = joinpath(homedir(), ".julia", "registries", "Uncurated")
 
-write_toml(prefix, "registry") do io
+write_toml(prefix, "Registry") do io
     repo = "https://github.com/JuliaRegistries/Uncurated.git"
     uuid = string(uuid5(uuid_registry, repo))
     println(io, "name = ", repr("Uncurated"))
@@ -64,15 +64,15 @@ for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
     uuid = string(p.uuid)
     startswith(url, "git://github.com") && (url = "https"*url[4:end])
 
-    # package.toml
-    write_toml(prefix, bucket, pkg, "package") do io
+    # Package.toml
+    write_toml(prefix, bucket, pkg, "Package") do io
         println(io, "name = ", repr(pkg))
         println(io, "uuid = ", repr(uuid))
         println(io, "repo = ", repr(url))
     end
 
-    # versions.toml
-    write_toml(prefix, bucket, pkg, "versions") do io
+    # Versions.toml
+    write_toml(prefix, bucket, pkg, "Versions") do io
         for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
             i > 1 && println(io)
             println(io, "[", toml_key(string(ver)), "]")
@@ -108,13 +108,13 @@ for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
         end
     end
 
-    # dependencies.toml
-    write_versions_data("dependencies") do dep, d
+    # Deps.toml
+    write_versions_data("Deps") do dep, d
         dep == "julia" ? nothing : repr(string(pkgs[dep].uuid))
     end
 
-    # compatibility.toml
-    write_versions_data("compatibility", lt=packagelt) do dep, d
+    # Compat.toml
+    write_versions_data("Compat", lt=packagelt) do dep, d
         dep in STDLIBS ? nothing : versions_repr(compress_versions(
             d.versions, collect(keys(pkgs[dep].versions))
         ))
