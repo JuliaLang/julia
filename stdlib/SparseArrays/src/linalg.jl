@@ -29,7 +29,7 @@ end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
-function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Number, β::Number)
     A.n == size(B, 1) || throw(DimensionMismatch())
     A.m == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
@@ -49,11 +49,11 @@ function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C:
     C
 end
 *(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(one(T), A, x, zero(T), similar(x, T, A.m)))
+    (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
 *(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2)))))
+    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
-function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
     A = adjA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -75,11 +75,11 @@ function mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecO
     C
 end
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), adjoint(A), x, zero(T), similar(x, T, A.n)))
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(one(T), adjoint(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
 
-function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
     A = transA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -101,18 +101,18 @@ function mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::Strided
     C
 end
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), transpose(A), x, zero(T), similar(x, T, A.n)))
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
 *(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(one(T), transpose(A), B, zero(T), similar(B, T, (A.n, size(B, 2)))))
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
 mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
-    mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
+    mul!(C, A, B, one(eltype(B)), zero(eltype(C)))
 mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = adjA.parent; mul!(one(eltype(B)), adjoint(A), B, zero(eltype(C)), C))
+    (A = adjA.parent; mul!(C, adjoint(A), B, one(eltype(B)), zero(eltype(C))))
 mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
-    (A = transA.parent; mul!(one(eltype(B)), transpose(A), B, zero(eltype(C)), C))
+    (A = transA.parent; mul!(C, transpose(A), B, one(eltype(B)), zero(eltype(C))))
 
 function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
