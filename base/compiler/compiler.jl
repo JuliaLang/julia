@@ -45,7 +45,7 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
-include("refpointer.jl")
+include("refvalue.jl")
 
 # checked arithmetic
 const checked_add = +
