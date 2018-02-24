@@ -320,99 +320,80 @@ accumulate_pairwise(op, itr) = accumulate_pairwise(op, uninitialized, itr)
 accumulate_pairwise(op, v0, itr) =  accumulate_pairwise(op, v0, itr, IteratorSize(itr))
 function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
     i = start(itr)
-    if done(itr, i)
+    if done(itr,i)
         return collect(Accumulate(op, v0, itr))
     end
-    v1, i = next(itr, i)
-    accv = reduce_first(op, v0, v1)
+    v1,i = next(itr,i)
+    y = reduce_first(op,v0,v1)
 
-    dest = _similar_for(1:1, typeof(accv), itr, IteratorSize(itr))
-    ld = linearindices(dest)
-    j = first(ld)
-    dest[j] = accv
-    m = last(ld) - j
-    if done(itr, i)
-        return dest
+    Y = _similar_for(1:1, typeof(y), itr, IteratorSize(itr))
+    L = linearindices(Y)
+    n = length(L)
+    j = first(L)
+
+    while true
+        Y[j] = y
+        if done(itr,i)
+            return Y
+        end
+        y,j,i,wider = _accum!(op,Y,itr,y,j+1,i,last(L)-j,true)
+        if !wider
+            return Y
+        end
+        R = promote_typejoin(eltype(Y), typeof(y))
+        newY = similar(Y, R)
+        copyto!(newY,1,Y,1,j)
+        Y = newY
     end
-    out, _ = _accumulate_pairwise!(op, dest, itr, accv, i, j, m, true)
-    return out
 end
 
 accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, uninitialized, itr)
-function accumulate_pairwise!(op, dest, v0, itr)
-    linearindices(dest) == linearindices(itr) || throw(DimensionMismatch("length of source and destination must match"))
+function accumulate_pairwise!(op, Y, v0, itr)
+    L = linearindices(Y)
+    L == linearindices(itr) || throw(DimensionMismatch("indices of source and destination must match"))
+
+    n = length(L)
 
     i = start(itr)
-    if done(itr, i)
-        return dest
-    end
-    v1, i = next(itr, i)
-    accv = reduce_first(op, v0, v1)
+    v1,i = next(itr,i)
 
-    ld = linearindices(dest)
-    j = first(ld)
-    dest[j] = accv
-    m = last(ld) - j
-    if done(itr, i)
-        return dest
-    end
-    out, _ = _accumulate_pairwise!(op, dest, itr, accv, i, j, m, false)
-    return out
+    j = first(L)
+    Y[j] = y = reduce_first(op,v0,v1)
+    _accum!(op,Y,itr,y,j+1,i,n-1,false)
+    return Y
 end
 
-# TODO figure out promotion machinery
-# collect_pairwise
-function _accumulate_pairwise!(op, dest::AbstractArray{T}, itr, accv, i, j, m, widen) where {T}
-    if m < 128
-        # m >= 1
-        w, i = next(itr, i)
-        y = op(accv, w)
-        S = typeof(y)
-        if !widen || S === T || S<:T
-            @inbounds dest[j+=1] = y
-            return _accumulate_pairwise_small!(op, dest, itr, accv, w, i, j, m-1, widen)
-        else
-            R = promote_typejoin(T, S)
-            new = similar(dest, R)
-            copyto!(new,1,dest,1,j)
-            @inbounds new[j+=1] = y
-            return _accumulate_pairwise_small!(op, new, itr, accv, w, i, j, m-1, widen)
+function _accumulate_pairwise!(op,Y,X,y0,j,i,m,widen)
+    if m < 128 # m >= 1
+        @inbounds begin
+            x,i = next(X,i)
+            y = op(y0, x)
+            if widen && !isa(y, eltype(Y))
+                return y, j, i, true
+            end
+            Y[j] = y
+
+            # to keep type stability, could also unroll loop?
+            w = reduce_first(op, x)
+            for k = 1:m-1
+                j += 1
+                x,i = next(X,i)
+                w = op(w,  x)
+                y = op(y0, w)
+                if widen && !isa(y, eltype(Y))
+                    return y, j, i, true
+                end
+                Y[j] = y
+            end
+            return w, j+1, i, false
         end
     else
         m1 = m >> 1
-        m2 = m - m1
-        dest, taccv1, i, j = _accumulate_pairwise!(op, dest, itr, accv, i, j, m1, widen)
-        dest, taccv2, i, j = _accumulate_pairwise!(op, dest, itr, op(accv, taccv1), i, j, m2, widen)
-        taccv = op(taccv1, taccv2)
-    end
-    return dest, taccv, i, j
-end
-
-function _accumulate_pairwise_small!(op, dest::AbstractArray{T}, itr, accv, w, i, j, m, widen) where T
-    if m == 0
-        return dest, reduce_first(op, w), i, j
-    end
-    v, i = next(itr, i)
-    x = op(w, v)
-    while true
-        y = op(accv, x)
-        S = typeof(y)
-        if !widen || S === T || S<:T
-            @inbounds dest[j+=1] = y
-            m -= 1
-        else
-            R = promote_typejoin(T, S)
-            new = similar(dest, R)
-            copyto!(new,1,dest,1,j)
-            @inbounds new[j+=1] = y
-            return _accumulate_pairwise_small!(op, new, itr, accv, x, i, j, m-1, widen)
-        end
-        if m == 0
-            return dest, x, i, j
-        end
-
-        v, i = next(itr, i)
-        x = op(x, v)
+        v1, j, i, wider = _accum!(op,Y,X,y0,j,i,m1,widen)
+        wider && return v1, j, i, wider
+        v2, j, i, wider = _accum!(op,Y,X,op(y0,v1),j,i,m-m1,widen)
+        wider && return v1, j, i, wider
+        return op(v1, v2), j, i, false
     end
 end
 

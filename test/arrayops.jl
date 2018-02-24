@@ -2309,3 +2309,17 @@ end
     @test accumulate(*, ['a' 'b'; 'c' 'd'], 1) == ["a" "b"; "ac" "bd"]
     @test accumulate(*, ['a' 'b'; 'c' 'd'], 2) == ["a" "ab"; "c" "cd"]
 end
+
+@testset "accumulate promotion" begin
+    U = cumsum(Any[1,1//1,1f0,1.0,big(1.0)])
+    @test U[1] == 1
+    @test U[1] isa Int
+    @test U[2] == 2
+    @test U[2] isa Rational{Int}
+    @test U[3] == 3
+    @test U[3] isa Float32
+    @test U[4] == 4
+    @test U[4] isa Float64
+    @test U[5] == 5
+    @test U[5] isa BigFloat
+end
