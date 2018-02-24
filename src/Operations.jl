@@ -585,6 +585,27 @@ function prune_manifest(env::EnvCache)
     end
 end
 
+function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=true)
+    localctx = deepcopy(ctx)
+    empty!(localctx.env.project["deps"])
+    info = manifest_info(localctx.env, pkg.uuid)
+    allow_self_load && (localctx.env.project["deps"][pkg.name] = string(pkg.uuid))
+    # Allow to load dependent packages at top level
+    deps = PackageSpec[]
+    for (dpkg, duuid) in get(info, "deps", [])
+        localctx.env.project["deps"][dpkg] = string(duuid)
+    end
+    prune_manifest(localctx.env)
+    mktempdir() do tmpdir
+        localctx.env.project_file = joinpath(tmpdir, "Project.toml")
+        localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
+        write_env(localctx, no_output = true)
+        withenv("JULIA_LOAD_PATH" => joinpath(tmpdir)) do
+            f()
+        end
+    end
+end
+
 #########
 # Build #
 #########
@@ -643,16 +664,12 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
         end
         @info " → $log_file"
         code = """
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
-            m = Base.require(Base.PkgId(Base.UUID($(repr(string(uuid)))), $(repr(name))))
-            eval(m, :(module __build__ end))
             cd($(repr(dirname(build_file))))
-            Base.include_relative(m.__build__, $(repr(build_file)))
+            include($(repr(build_file)))
             """
         cmd = ```
             $(Base.julia_cmd()) -O0 --color=no --history-file=no
@@ -660,10 +677,12 @@ function build_versions(ctx::Context, uuids::Vector{UUID})
             --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
-        open(log_file, "w") do log
-            success(pipeline(cmd, stdout=log, stderr=log))
-        end ? Base.rm(log_file, force=true) :
-        @error("Error building `$name`; see log file for further info")
+        with_local_project(ctx, PackageSpec(name, uuid); allow_self_load=false) do
+            open(log_file, "w") do log
+                success(pipeline(cmd, stdout=log, stderr=log))
+            end ? Base.rm(log_file, force=true) :
+                  @error("Error building `$name`; see log file for further info")
+        end
     end
     return
 end
@@ -896,16 +915,12 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             continue
         end
         code = """
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(Base.load_path())))
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
-            m = Base.require(Base.PkgId(Base.UUID($(repr(string(pkg.uuid)))), $(repr(pkg.name))))
-            eval(m, :(module __test__ end))
             cd($(repr(dirname(testfile))))
-            Base.include_relative(m.__test__, $(repr(testfile)))
+            include($(repr(testfile)))
             """
         cmd = ```
             $(Base.julia_cmd())
@@ -917,8 +932,10 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             --eval $code
         ```
         try
-            run(cmd)
-            @info("$(pkg.name) tests passed")
+            with_local_project(ctx, pkg) do
+                run(cmd)
+                @info("$(pkg.name) tests passed")
+            end
         catch err
             push!(pkgs_errored, pkg.name)
         end

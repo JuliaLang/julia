@@ -432,7 +432,7 @@ const default_envs = [
     "default",
 ]
 
-struct EnvCache
+mutable struct EnvCache
     # environment info:
     env::Union{Nothing,String,AbstractEnv}
     git::Union{Nothing,LibGit2.GitRepo}
@@ -928,7 +928,7 @@ function Context!(ctx::Context; kwargs...)
     end
 end
 
-function write_env(ctx::Context)
+function write_env(ctx::Context; no_output=false)
     env = ctx.env
     # load old environment for comparison
     old_env = EnvCache(env.env)
@@ -936,8 +936,8 @@ function write_env(ctx::Context)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        @info "Updating $(pathrepr(env, env.project_file))"
-        Pkg3.Display.print_project_diff(old_env, env)
+        no_output || @info "Updating $(pathrepr(env, env.project_file))"
+        no_output || Pkg3.Display.print_project_diff(old_env, env)
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -947,8 +947,8 @@ function write_env(ctx::Context)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        @info "Updating $(pathrepr(env, env.manifest_file))"
-        Pkg3.Display.print_manifest_diff(old_env, env)
+        no_output || @info "Updating $(pathrepr(env, env.manifest_file))"
+        no_output || Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)
