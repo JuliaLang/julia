@@ -109,15 +109,29 @@ temp_pkg_dir() do project_path
             Pkg3.checkout(TEST_PKG.name; path = devdir)
             @test isinstalled(TEST_PKG)
             @test Pkg3.installed()[TEST_PKG.name] > old_v
-            @test isfile(joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl"))
+            test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
+            @test isfile(test_pkg_main_file)
+            # Pkg3 #152
+            write(test_pkg_main_file,
+                """
+                module Example
+                    export hello, domath
+                    const example2path = joinpath(@__DIR__, "..", "deps", "deps.jl")
+                    if !isfile(example2path)
+                        error("Example is not installed correctly")
+                    end
+                    hello(who::String) = "Hello, \$who"
+                    domath(x::Number) = x + 5
+                end
+                """)
             mkpath(joinpath(devdir, TEST_PKG.name, "deps"))
             write(joinpath(devdir, TEST_PKG.name, "deps", "build.jl"),
                 """
-                touch("I_got_built")
+                touch("deps.jl")
                 """
             )
             Pkg3.build(TEST_PKG.name)
-            @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "I_got_built"))
+            @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
             Pkg3.test(TEST_PKG.name)
             Pkg3.free(TEST_PKG.name)
             @test Pkg3.installed()[TEST_PKG.name] == old_v

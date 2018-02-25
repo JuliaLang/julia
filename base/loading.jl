@@ -515,8 +515,8 @@ end
 
 function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::String)::Union{Bool,UUID}
     open(manifest_file) do io
+        uuid = deps = nothing
         state = :other
-        uuid = deps = path = nothing
         for line in eachline(io)
             if contains(line, re_array_of_tables)
                 uuid == where && break
@@ -525,8 +525,6 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             elseif state == :stanza
                 if (m = match(re_uuid_to_string, line)) != nothing
                     uuid = UUID(m.captures[1])
-                elseif (m = match(re_path_to_string, line)) != nothing
-                    path = String(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) != nothing
                     deps = String(m.captures[1])
                 elseif contains(line, re_subsection_deps)
@@ -541,15 +539,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             end
         end
         uuid == where || return false
-        if deps == nothing
-            (state == :deps || path == nothing) && return true
-            path = abspath(dirname(manifest_file), path)
-            project_file = env_project_file(path)
-            project_file isa String &&
-                return explicit_project_deps_get(project_file, name)
-            pkg = identify_package(name)
-            return pkg == nothing || pkg.uuid
-        end
+        deps == nothing && return true
         # TODO: handle inline table syntax
         if deps[1] != '[' || deps[end] != ']'
             @warn "Unexpected TOML deps format:\n$deps"
