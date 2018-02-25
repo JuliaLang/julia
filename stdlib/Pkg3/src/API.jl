@@ -301,7 +301,7 @@ end
 
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
-        pkg.uuid in ctx.stdlib_uuids && continue
+        pkg.uuid in keys(ctx.stdlibs) && continue
         info = manifest_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
@@ -334,12 +334,14 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
-    Pkg3.Operations.build_versions(ctx, uuids)
+    Pkg3.Operations.build_versions(ctx, uuids; do_resolve=true)
 end
 
-function init(path::String)
+init() = init(Context())
+init(path::String) = init(Context(), path)
+function init(ctx::Context, path::String=pwd())
     print_first_command_header()
-    ctx = Context(env = EnvCache(joinpath(path, "Project.toml")))
+    Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Pkg3.Operations.init(ctx)
 end
 
