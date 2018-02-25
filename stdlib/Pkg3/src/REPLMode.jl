@@ -233,7 +233,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT     ? Base.invokelatest(    do_init!, tokens) :
+    cmd.kind == CMD_INIT     ? Base.invokelatest(    do_init!, ctx, tokens) :
     cmd.kind == CMD_HELP     ? Base.invokelatest(    do_help!, ctx, tokens, repl) :
     cmd.kind == CMD_RM       ? Base.invokelatest(      do_rm!, ctx, tokens) :
     cmd.kind == CMD_ADD      ? Base.invokelatest(     do_add!, ctx, tokens) :
