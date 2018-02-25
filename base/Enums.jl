@@ -58,6 +58,14 @@ end
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
+
+To list all the instance values in an enum use `instances(EnumName)`, e.g.
+
+```julia
+for i in instances(Fruit)
+    println(i)
+end
+```
 """
 macro enum(T, syms...)
     if isempty(syms)
