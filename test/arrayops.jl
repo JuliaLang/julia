@@ -145,6 +145,28 @@ end
         @test isa(reshape(s, Val(N)), Base.ReshapedArray{Int,N})
     end
 end
+@testset "sizehint!" begin
+    A = zeros(40)
+    resize!(A, 1)
+    sizehint!(A, 1)
+    @test length(A) == 1
+
+    A = zeros(40)
+    resize!(A, 20)
+    sizehint!(A, 1)
+    @test length(A) == 20
+
+    A = [1:10;]
+    sizehint!(A, 20)
+    @test length(A) == length([1:10;])
+    @test A == [1:10;]
+
+    A = [1:10;]
+    resize!(A, 5)
+    sizehint!(A, 5)
+    @test length(A) == 5
+    @test A == [1:5;]
+end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
     let A = range(1, stop=60, length=60)
