@@ -324,9 +324,9 @@ function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClus
     cluster_manager = manager
 
     # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
-    assert(nprocs() <= 1)
-    assert(isempty(PGRP.refs))
-    assert(isempty(client_refs))
+    @assert nprocs() <= 1
+    @assert isempty(PGRP.refs)
+    @assert isempty(client_refs)
 
     # System is started in head node mode, cleanup related entries
     empty!(PGRP.workers)
@@ -493,7 +493,7 @@ end
 
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
-    assert(LPROC.id == 1)
+    @assert LPROC.id == 1
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -650,8 +650,8 @@ Set the passed cookie as the cluster cookie, then returns it.
 """
 function cluster_cookie(cookie)
     # The cookie must be an ASCII string with length <=  HDR_COOKIE_LEN
-    assert(isascii(cookie))
-    assert(length(cookie) <= HDR_COOKIE_LEN)
+    @assert isascii(cookie)
+    @assert length(cookie) <= HDR_COOKIE_LEN
 
     cookie = rpad(cookie, HDR_COOKIE_LEN)
 
@@ -685,7 +685,7 @@ function topology(t)
         Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
         t = :master_worker
     end
-    assert(t in [:all_to_all, :master_worker, :custom])
+    @assert t in [:all_to_all, :master_worker, :custom]
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else
@@ -1004,7 +1004,7 @@ end
 
 
 function interrupt(pid::Integer)
-    assert(myid() == 1)
+    @assert myid() == 1
     w = map_pid_wrkr[pid]
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
@@ -1026,7 +1026,7 @@ Interrupt the current executing task on the specified workers. This is equivalen
 pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
 """
 function interrupt(pids::AbstractVector=workers())
-    assert(myid() == 1)
+    @assert myid() == 1
     @sync begin
         for pid in pids
             @async interrupt(pid)
@@ -1120,7 +1120,7 @@ function init_parallel()
     global LPROC
     LPROC.id = 1
     cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
+    @assert isempty(PGRP.workers)
     register_worker(LPROC)
 end
 

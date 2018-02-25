@@ -1760,7 +1760,7 @@ function diag(F::Factor{Tv}) where Tv
         xv = f.x
         for j in 1:f.n
             jj = unsafe_load(c0, j) + 1
-            assert(unsafe_load(r0, jj) == j - 1)
+            @assert unsafe_load(r0, jj) == j - 1
             res[j] = unsafe_load(xv, jj)
         end
     end

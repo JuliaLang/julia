@@ -101,7 +101,7 @@ using Distributed
     cs = [Channel(N) for i in 1:5]
     tf2 = () -> begin
         if N > 0
-            foreach(c->assert(take!(c)==2), cs)
+            foreach(c->(@assert take!(c)==2), cs)
         end
         yield()
         error("foo")
@@ -145,7 +145,7 @@ using Distributed
 
     # channeled_tasks
     for T in [Any, Int]
-        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(assert(take!(c1)==1); put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2)); ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
         @test take!(chnls[2]) == 2
         @test_throws InvalidStateException wait(chnls[1])
@@ -156,7 +156,7 @@ using Distributed
 
         f=Future()
         tf4 = (c1,c2) -> begin
-            assert(take!(c1)==1)
+            @assert take!(c1)==1
             wait(f)
         end
 
@@ -181,7 +181,7 @@ using Distributed
 
     # channel
     tf6 = c -> begin
-        assert(take!(c)==2)
+        @assert take!(c)==2
         error("foo")
     end
 
