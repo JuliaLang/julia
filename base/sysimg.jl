@@ -127,6 +127,7 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("refvalue.jl")
 include("refpointer.jl")
 include("checked.jl")
 using .Checked
@@ -222,6 +223,7 @@ end
 include("some.jl")
 
 include("dict.jl")
+include("abstractset.jl")
 include("set.jl")
 
 include("char.jl")

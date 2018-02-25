@@ -8,7 +8,7 @@
 #define keyhash(k)     jl_object_id(k)
 #define h2index(hv,sz) (size_t)(((hv) & ((sz)-1))*2)
 
-static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
+static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted);
 
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
@@ -23,7 +23,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     JL_GC_PUSH1(&newa);
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
-            (*jl_table_lookup_bp(&newa, ol[i])) = ol[i+1];
+            (*jl_table_lookup_bp(&newa, ol[i], NULL)) = ol[i+1];
             jl_gc_wb(newa, ol[i+1]);
             // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
@@ -37,7 +37,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     return newa;
 }
 
-static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
+static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted)
 {
     // pa points to a **rooted** gc frame slot
     uint_t hv;
@@ -47,6 +47,9 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
+
+    if (inserted)
+        *inserted = 0;
 
     hv = keyhash((jl_value_t*)key);
  retry_bp:
@@ -58,6 +61,8 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     do {
         if (tab[index+1] == NULL) {
             tab[index] = key;
+            if (inserted)
+                *inserted = 1;
             jl_gc_wb(a, key);
             return &tab[index+1];
         }
@@ -124,11 +129,11 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
 }
 
 JL_DLLEXPORT
-jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
+jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted)
 {
     JL_GC_PUSH1(&h);
     // &h may be assigned to in jl_idtable_rehash so it need to be rooted
-    void **bp = jl_table_lookup_bp(&h, key);
+    void **bp = jl_table_lookup_bp(&h, key, inserted);
     *bp = val;
     jl_gc_wb(h, val);
     JL_GC_POP();
@@ -145,11 +150,16 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 }
 
 JL_DLLEXPORT
-jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
+jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt, int *found)
 {
     void **bp = jl_table_peek_bp(h, key);
-    if (bp == NULL || *bp == NULL)
+    if (bp == NULL || *bp == NULL) {
+        if (found)
+            *found = 0;
         return deflt;
+    }
+    if (found)
+        *found = 1;
     jl_value_t *val = (jl_value_t*)*bp;
     *(bp-1) = jl_nothing; // clear the key
     *bp = NULL;

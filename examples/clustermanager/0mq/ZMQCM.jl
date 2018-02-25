@@ -140,7 +140,7 @@ function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
         zid = parse(Int,String(ZMQ.recv(manager.sub)))
-        assert(zid == manager.zid_self)
+        @assert zid == manager.zid_self
 
         from_zid = parse(Int,String(ZMQ.recv(manager.sub)))
         mtype = String(ZMQ.recv(manager.sub))
@@ -279,4 +279,3 @@ function print_worker_stdout(io, pid)
         println("      From worker $(pid):\t$line")
     end
 end
-

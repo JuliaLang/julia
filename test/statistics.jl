@@ -155,6 +155,17 @@ end
     @test std([1,2,3]; mean=0) ≈ sqrt(7.0)
     @test std([1,2,3]; mean=0, corrected=false) ≈ sqrt(14.0/3)
 
+    @test stdm([1.0,2,3], 2) ≈ 1.
+    @test std([1.0,2,3]) ≈ 1.
+    @test std([1.0,2,3]; corrected=false) ≈ sqrt(2.0/3)
+    @test std([1.0,2,3]; mean=0) ≈ sqrt(7.0)
+    @test std([1.0,2,3]; mean=0, corrected=false) ≈ sqrt(14.0/3)
+
+    @test std([1.0,2,3]; dims=1)[] ≈ 1.
+    @test std([1.0,2,3]; dims=1, corrected=false)[] ≈ sqrt(2.0/3)
+    @test std([1.0,2,3]; dims=1, mean=[0])[] ≈ sqrt(7.0)
+    @test std([1.0,2,3]; dims=1, mean=[0], corrected=false)[] ≈ sqrt(14.0/3)
+
     @test stdm((1,2,3), 2) ≈ 1.
     @test std((1,2,3)) ≈ 1.
     @test std((1,2,3); corrected=false) ≈ sqrt(2.0/3)
@@ -409,9 +420,8 @@ end
 
 @testset "Issue #17153 and PR #17154" begin
     a = rand(10,10)
-    b = deepcopy(a)
+    b = copy(a)
     x = median(a, dims=1)
-
     @test b == a
     x = median(a, dims=2)
     @test b == a

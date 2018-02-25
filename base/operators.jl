@@ -654,6 +654,8 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
+See also: [`fld1`](@ref), [`fldmod1`](@ref).
+
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
@@ -664,8 +666,6 @@ julia> mod1(4, 3)
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
-# efficient version for integers
-mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -673,7 +673,7 @@ mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref).
+See also: [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -689,9 +689,11 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
-# efficient version for integers
-fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+function fld1(x::T, y::T) where T<:Integer
+    d = div(x, y)
+    return d + (!signbit(x ⊻ y) & (d * y != x))
+end
 
 """
     fldmod1(x, y)
@@ -700,9 +702,7 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
-# efficient version for integers
-fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 conj(x) = x
 

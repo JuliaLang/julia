@@ -296,7 +296,7 @@ _std(A::AbstractArray{<:AbstractFloat}, corrected::Bool, mean, dims) =
     sqrt!(var(A; corrected=corrected, mean=mean, dims=dims))
 
 _std(A::AbstractArray{<:AbstractFloat}, corrected::Bool, mean, ::Colon) =
-    sqrt!(var(A; corrected=corrected, mean=mean))
+    sqrt.(var(A; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))

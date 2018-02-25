@@ -556,7 +556,7 @@ end
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
     a = [1, 2]
     b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet)
+    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
         A = C(a)
         B = C(b)
         @test A ⊆ B

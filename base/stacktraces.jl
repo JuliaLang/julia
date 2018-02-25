@@ -133,7 +133,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        assert(ip.code isa Core.CodeInfo)
+        @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
