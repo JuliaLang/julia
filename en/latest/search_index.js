@@ -7037,7 +7037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -7181,7 +7181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.fld1",
     "category": "Function",
-    "text": "fld1(x, y)\n\nFlooring division, returning a value consistent with mod1(x,y)\n\nSee also: mod1.\n\nExamples\n\njulia> x = 15; y = 4;\n\njulia> fld1(x, y)\n4\n\njulia> x == fld(x, y) * y + mod(x, y)\ntrue\n\njulia> x == (fld1(x, y) - 1) * y + mod1(x, y)\ntrue\n\n\n\n\n\n"
+    "text": "fld1(x, y)\n\nFlooring division, returning a value consistent with mod1(x,y)\n\nSee also: mod1, fldmod1.\n\nExamples\n\njulia> x = 15; y = 4;\n\njulia> fld1(x, y)\n4\n\njulia> x == fld(x, y) * y + mod(x, y)\ntrue\n\njulia> x == (fld1(x, y) - 1) * y + mod1(x, y)\ntrue\n\n\n\n\n\n"
 },
 
 {
@@ -7189,7 +7189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.mod1",
     "category": "Function",
-    "text": "mod1(x, y)\n\nModulus after flooring division, returning a value r such that mod(r, y) == mod(x, y) in the range (0 y for positive y and in the range y0) for negative y.\n\nExamples\n\njulia> mod1(4, 2)\n2\n\njulia> mod1(4, 3)\n1\n\n\n\n\n\n"
+    "text": "mod1(x, y)\n\nModulus after flooring division, returning a value r such that mod(r, y) == mod(x, y) in the range (0 y for positive y and in the range y0) for negative y.\n\nSee also: fld1, fldmod1.\n\nExamples\n\njulia> mod1(4, 2)\n2\n\njulia> mod1(4, 3)\n1\n\n\n\n\n\n"
 },
 
 {
