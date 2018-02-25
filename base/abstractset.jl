@@ -215,6 +215,16 @@ false
 ```
 """
 function issubset(l, r)
+
+    rlen = length(r)
+    #This threshold was empirically determined by repeatedly
+    #sampling using these two methods.
+    lenthresh = 70
+
+    if rlen > lenthresh && !isa(r, Set)
+       return issubset(l, Set(r))
+    end
+
     for elt in l
         if !in(elt, r)
             return false
