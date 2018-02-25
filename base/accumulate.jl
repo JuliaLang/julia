@@ -45,10 +45,10 @@ end
 
 
 """
-    accumulate(op[, v0], itr)
+    accumulate(op[, v0], itr; dims::Integer)
 
-Cumulative apply binary operation `op` on an iterable `itr`. If an initial `v0` value is
-provided, then the first value of the iterator will be
+Cumulative apply binary operation `op` on an iterable `itr`, along the dimension
+`dims`. If an initial `v0` value is provided, then the first value of the iterator will be
 
     op(v0, first(iter))
 
@@ -56,8 +56,11 @@ Otherwise it will use
 
     Base.reduce_first(op, first(iter))
 
-See also: [`accumulate!`](@ref) to use a preallocated output array, and [`cumsum`](@ref),
-[`cumprod`](@ref) for specialized versions.
+The keyword argument `dims` is optional for 1-dimensional iterators.
+
+See also:
+ - [`accumulate!`](@ref) to use a preallocated output array,
+ - [`cumsum`](@ref) and [`cumprod`](@ref) for specialized versions.
 
 # Examples
 ```jldoctest
@@ -84,19 +87,37 @@ julia> accumulate(min, 0, [1,2,-1])
   0
   0
  -1
+
+julia> accumulate(+, fill(1, 3, 3); dims=1)
+3×3 Array{Int64,2}:
+ 1  1  1
+ 2  2  2
+ 3  3  3
+
+julia> accumulate(+, fill(1, 3, 3); dims=2)
+3×3 Array{Int64,2}:
+ 1  2  3
+ 1  2  3
+ 1  2  3
 ```
 """
-accumulate(op, itr) = accumulate(op, uninitialized, itr)
-accumulate(op, v0, itr) = accumulate(op, v0, itr, IteratorSize(itr))
-accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}) =
+accumulate(op, itr; dims::Union{Nothing,Integer}=nothing) = accumulate(op, uninitialized, itr; dims=dims)
+accumulate(op, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate(op, v0, itr, IteratorSize(itr), dims)
+
+function _accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
     collect(Accumulate(op, v0, itr))
+end
 
 
 """
-    accumulate!(op, dest,[, v0] itr)
+    accumulate!(op, dest[, v0], itr; dims::Integer)
 
-Cumulative operation `op` on an iterator `itr`, storing the result in `dest`.
-See also [`accumulate`](@ref).
+Cumulative operation `op` on an iterator `itr`, storing the result in `dest`, along the
+dimension `dims` (optional for 1-dimensional iterators).
+
+See also:
+ - [`accumulate`](@ref) for the non-inplace version
+ - [`cumsum!`](@ref) and [`cumprod!`](@ref)
 
 # Examples
 ``jldoctest
@@ -113,10 +134,30 @@ julia> y
  3
  3
  6
+
+julia> A = [1 2; 3 4];
+
+julia> B = [0 0; 0 0];
+
+julia> accumulate!(B, -, A; dims=1);
+
+julia> B
+2×2 Array{Int64,2}:
+  1   2
+ -2  -2
+
+julia> accumulate!(-, B, A; dims=2);
+
+julia> B
+2×2 Array{Int64,2}:
+ 1  -1
+ 3  -1
 ```
 """
-accumulate!(op, dest, x) = accumulate!(op, dest, uninitialized, x)
-function accumulate!(op, dest, v0, x)
+accumulate!(op, dest, itr; dims::Union{Nothing,Integer}=nothing) = accumulate!(op, dest, uninitialized, itr; dims=dims)
+accumulate!(op, dest, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate!(op, dest, uninitialized, itr, IteratorSize(itr), dims)
+
+function _accumulate!(op, dest, v0, x, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
     src = Accumulate(op, v0, x)
 
     # this is essentially `copyto!`, but unrolled to deal with potential type instability in first state
@@ -148,31 +189,7 @@ function accumulate!(op, dest, v0, x)
 end
 
 
-"""
-    accumulate(op[, v0], A, dim::Integer)
-
-Cumulative operation `op` along the dimension `dim`. See also
-[`accumulate!`](@ref) to use a preallocated output array. For common operations
-there are specialized variants of `accumulate`, see:
-[`cumsum`](@ref), [`cumprod`](@ref)
-
-# Examples
-```jldoctest
-julia> accumulate(+, fill(1, 3, 3), 1)
-3×3 Array{Int64,2}:
- 1  1  1
- 2  2  2
- 3  3  3
-
-julia> accumulate(+, fill(1, 3, 3), 2)
-3×3 Array{Int64,2}:
- 1  2  3
- 1  2  3
- 1  2  3
-```
-"""
-accumulate(op, X, dim::Int) = accumulate(op, uninitialized, X, dim)
-
+# by dimension accumulate/accumulate!
 # split into (head, slice, tail) dimension iterators
 @inline function split_dimensions(X,dim::Integer)
     inds = axes(X)
@@ -183,7 +200,7 @@ accumulate(op, X, dim::Int) = accumulate(op, uninitialized, X, dim)
     end
 end
 
-function accumulate(op, v0, X, dim::Integer)
+function _accumulate(op, v0, X, ::IteratorSize, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     if length(X) == 0
         # fallback on collect machinery
@@ -215,37 +232,7 @@ function accumulate(op, v0, X, dim::Integer)
     return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
 end
 
-
-"""
-    accumulate!(op, dest, A, dim::Integer)
-
-Cumulative operation `op` on `A` along the dimension `dim`, storing the result in `B`.
-See also [`accumulate`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> B = [0 0; 0 0];
-
-julia> accumulate!(B, -, A, 1);
-
-julia> B
-2×2 Array{Int64,2}:
-  1   2
- -2  -2
-
-julia> accumulate!(-, B, A, 2);
-
-julia> B
-2×2 Array{Int64,2}:
- 1  -1
- 3  -1
-```
-"""
-accumulate!(op, dest, X, dim::Integer) = accumulate!(op, dest, uninitialized, X, dim::Integer)
-
-function accumulate!(op, dest, v0, X, dim::Integer)
+function _accumulate!(op, dest, v0, X, ::IteratorSize, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     axes(dest) == axes(X) || throw(DimensionMismatch("shape of source and destination must match"))
     indH, indD, indT = split_dimensions(X,dim)
@@ -306,6 +293,8 @@ function _accumulate!(op, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH
     end
 end
 
+
+
 """
     accumulate_pairwise(op[, v0], itr)
 
@@ -336,7 +325,7 @@ function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
         if done(itr,i)
             return Y
         end
-        y,j,i,wider = _accum!(op,Y,itr,y,j+1,i,last(L)-j,true)
+        y,j,i,wider = _accumulate_pairwise!(op,Y,itr,y,j+1,i,last(L)-j,true)
         if !wider
             return Y
         end
@@ -359,7 +348,7 @@ function accumulate_pairwise!(op, Y, v0, itr)
 
     j = first(L)
     Y[j] = y = reduce_first(op,v0,v1)
-    _accum!(op,Y,itr,y,j+1,i,n-1,false)
+    _accumulate_pairwise!(op,Y,itr,y,j+1,i,n-1,false)
     return Y
 end
 
@@ -389,13 +378,74 @@ function _accumulate_pairwise!(op,Y,X,y0,j,i,m,widen)
         end
     else
         m1 = m >> 1
-        v1, j, i, wider = _accum!(op,Y,X,y0,j,i,m1,widen)
+        v1, j, i, wider = _accumulate_pairwise!(op,Y,X,y0,j,i,m1,widen)
         wider && return v1, j, i, wider
-        v2, j, i, wider = _accum!(op,Y,X,op(y0,v1),j,i,m-m1,widen)
+        v2, j, i, wider = _accumulate_pairwise!(op,Y,X,op(y0,v1),j,i,m-m1,widen)
         wider && return v1, j, i, wider
         return op(v1, v2), j, i, false
     end
 end
+
+
+
+"""
+    cumsum(A; dims::Integer)
+
+Cumulative sum `A` along the dimension `dims` (`dims` is option for 1-dimensional
+objects). This has the same promotion behaviour as [`sum`](@ref), namely that lower-width
+integer types are promoted to `Int`/`UInt`.
+
+See also:
+ - [`cumsum!`](@ref) to use a preallocated output array, both for performance and
+to control the precision of the output (e.g. to avoid overflow).
+ - [`accumulate`](@ref) for accumulation using other operators.
+
+# Examples
+```jldoctest
+julia> cumsum([1, 1, 1])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> cumsum([fill(1, 2) for i in 1:3])
+3-element Array{Array{Int64,1},1}:
+ [1, 1]
+ [2, 2]
+ [3, 3]
+
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumsum(a; dims=1)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 5  7  9
+
+julia> cumsum(a; dims=2)
+2×3 Array{Int64,2}:
+ 1  3   6
+ 4  9  15
+```
+"""
+function cumsum(A; dims::Union{Nothing,Integer}=nothing)
+    if A isa AbstractArray && ndims(A) > 1 && dims === nothing
+        depwarn("`cumsum(A::AbstractArray)` is deprecated, use `cumsum(A; dims=1)` instead.", :cumsum)
+        dims = 1
+    end
+    accumulate(add_sum, A; dims=dims)
+end
+
+function cumsum(v::AbstractVector{T}) where T
+    # we dispatch on the possibility of numerical accuracy issues
+    _cumsum(v, ArithmeticStyle(T))
+end
+_cumsum(v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise(add_sum, v)
+_cumsum(v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise(add_sum, v)
+_cumsum(v::AbstractVector, ::ArithmeticStyle)   = accumulate(add_sum, v)
+
 
 """
     Base.ConvertOp{T}(op)(x,y)
@@ -414,6 +464,20 @@ reduce_first(c::ConvertOp{T},x) where {T} = reduce_first(c.op, convert(T,x))
 
 
 
+"""
+    cumsum!(B, A; dims::Integer)
+
+Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. `dims` is
+optional for 1-dimensional objects.
+
+Elements of `A` are first converted to the element type of `B` before addition, so as to
+improve accuracy and reduce occurences of arithemtic overflow.
+
+See also [`cumsum`](@ref).
+"""
+cumsum!(dest::AbstractArray{T}, A; dims::Union{Nothing,Integer}=nothing) where {T} =
+    accumulate!(ConvertOp{T}(+), dest, A; dims=dims)
+
 function cumsum!(out::AbstractVector, v::AbstractVector{T}) where T
     # we dispatch on the possibility of numerical accuracy issues
     cumsum!(out, v, ArithmeticStyle(T))
@@ -425,109 +489,14 @@ cumsum!(out::AbstractVector{T}, v::AbstractVector, ::ArithmeticUnknown) where {T
 cumsum!(out::AbstractVector{T}, v::AbstractVector, ::ArithmeticStyle) where {T} =
     accumulate!(ConvertOp{T}(+), out, v)
 
-"""
-    cumsum(A, dim::Integer)
-
-Cumulative sum along the dimension `dim`. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> cumsum(a,1)
-2×3 Array{Int64,2}:
- 1  2  3
- 5  7  9
-
-julia> cumsum(a,2)
-2×3 Array{Int64,2}:
- 1  3   6
- 4  9  15
-```
-"""
-cumsum(A, dim::Integer) = accumulate(add_sum, A, dim)
 
 """
-    cumsum(x::AbstractVector)
+    cumprod(A; dims::Integer)
 
-Cumulative sum a vector. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
+Cumulative product along the dimension `dims` (`dims` is optional for 1-dimensional objects).
 
-# Examples
-```jldoctest
-julia> cumsum([1, 1, 1])
-3-element Array{Int64,1}:
- 1
- 2
- 3
-
-julia> cumsum([fill(1, 2) for i in 1:3])
-3-element Array{Array{Int64,1},1}:
- [1, 1]
- [2, 2]
- [3, 3]
-```
-"""
-function cumsum(v::AbstractVector{T}) where T
-    # we dispatch on the possibility of numerical accuracy issues
-    cumsum(v, ArithmeticStyle(T))
-end
-cumsum(v::AbstractVector, ::ArithmeticRounds)  = accumulate_pairwise(add_sum, v)
-cumsum(v::AbstractVector, ::ArithmeticUnknown) = accumulate_pairwise(add_sum, v)
-cumsum(v::AbstractVector, ::ArithmeticStyle)   = accumulate(add_sum, v)
-
-"""
-    cumsum!(B, A, dim::Integer)
-
-Cumulative sum of `A` along the dimension `dim`, storing the result in `B`. See also [`cumsum`](@ref).
-"""
-cumsum!(dest::AbstractArray{T}, A, dim::Integer) where {T} = accumulate!(ConvertOp{T}(+), dest, A, dim)
-
-"""
-    cumsum!(y::AbstractVector, x::AbstractVector)
-
-Cumulative sum of a vector `x`, storing the result in `y`. See also [`cumsum`](@ref).
-"""
-cumsum!(dest::AbstractArray{T}, itr) where {T} = accumulate!(ConvertOp{T}(+), dest, src)
-
-"""
-    cumprod(A, dim::Integer)
-
-Cumulative product along the dimension `dim`. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> cumprod(a,1)
-2×3 Array{Int64,2}:
- 1   2   3
- 4  10  18
-
-julia> cumprod(a,2)
-2×3 Array{Int64,2}:
- 1   2    6
- 4  20  120
-```
-"""
-cumprod(A, dim::Integer) = accumulate(mul_prod, A, dim)
-
-"""
-    cumprod(x::AbstractVector)
-
-Cumulative product of a vector. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
+See also:
+ - [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
 # Examples
@@ -543,23 +512,41 @@ julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
  Rational{Int64}[1//3 1//3; 1//3 1//3]
  Rational{Int64}[2//9 2//9; 2//9 2//9]
  Rational{Int64}[4//27 4//27; 4//27 4//27]
+
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumprod(a; dims=1)
+2×3 Array{Int64,2}:
+ 1   2   3
+ 4  10  18
+
+julia> cumprod(a; dims=2)
+2×3 Array{Int64,2}:
+ 1   2    6
+ 4  20  120
 ```
 """
-cumprod(x) = accumulate(mul_prod, x)
-cumprod(x::AbstractVector) = accumulate(mul_prod, x)
+function cumprod(A; dims::Union{Nothing,Integer}=nothing)
+    if A isa AbstractArray && ndims(A) > 1 && dims === nothing
+        depwarn("`cumprod(A::AbstractArray)` is deprecated, use `cumprod(A; dims=1)` instead.", :cumprod)
+        dims = 1
+    end
+    accumulate(mul_prod, A; dims=dims)
+end
 
 """
-    cumprod!(B, A, dim::Integer)
+    cumprod!(B, A; dims::Integer)
 
-Cumulative product of `A` along the dimension `dim`, storing the result in `B`.
+Cumulative product of `A` along the dimension `dims`, storing the result in `B`. `dims` is
+optional for 1-dimensional objects.
+
+Elements of `A` are first converted to the element type of `B` before multiplication, so
+as to improve accuracy and reduce occurences of arithemtic overflow.
+
 See also [`cumprod`](@ref).
 """
-cumprod!(dest::AbstractArray{T}, A, dim::Integer) where {T} = accumulate!(ConvertOp{T}(*), dest, A, dim)
-
-"""
-    cumprod!(y::AbstractVector, x::AbstractVector)
-
-Cumulative product of a vector `x`, storing the result in `y`.
-See also [`cumprod`](@ref).
-"""
-cumprod!(dest::AbstractArray{T}, itr) where {T} = accumulate!(ConvertOp{T}(*), dest, itr)
+cumprod!(dest::AbstractArray{T}, A; dims::Union{Nothing,Integer}=nothing) where {T} =
+    accumulate!(ConvertOp{T}(*), dest, A; dims=dims)
