@@ -634,7 +634,7 @@ function readlink(path::AbstractString)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
-            assert(false)
+            @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)

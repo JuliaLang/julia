@@ -1468,6 +1468,13 @@ end
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
+# PR 26194
+export assert
+function assert(x)
+    depwarn("`assert` is deprecated, use `@assert` instead.", :assert)
+    @assert x ""
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

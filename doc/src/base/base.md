@@ -274,7 +274,6 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.assert
 Base.@assert
 Base.ArgumentError
 Base.AssertionError

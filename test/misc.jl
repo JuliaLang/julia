@@ -2,21 +2,6 @@
 
 # Tests that do not really go anywhere else
 
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    try
-        assert(false)
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
-    end
-end
-
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)

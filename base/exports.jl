@@ -716,7 +716,6 @@ export
     time_ns,
 
 # errors
-    assert,
     backtrace,
     catch_backtrace,
     error,
