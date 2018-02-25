@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, isdispatchelem
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
@@ -210,8 +210,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isconcretetype(ast12474[1][2])
-    @test all(isconcretetype, ast12474[1][1].slottypes)
+    @test isdispatchelem(ast12474[1][2])
+    @test all(isdispatchelem, ast12474[1][1].slottypes)
 end
 
 
@@ -437,10 +437,10 @@ function is_typed_expr(e::Expr)
     return false
 end
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isconcretetype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
-        @test isconcretetype(expr.typ)
+        @test isdispatchelem(expr.typ)
     end
     for a in expr.args
         test_inferred_static(a)
@@ -448,10 +448,10 @@ function test_inferred_static(expr::Expr)
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
-    @test isconcretetype(rt)
+    @test isdispatchelem(rt)
     @test code.inferred
-    @test all(isconcretetype, code.slottypes)
-    @test all(isconcretetype, code.ssavaluetypes)
+    @test all(isdispatchelem, code.slottypes)
+    @test all(isdispatchelem, code.ssavaluetypes)
     for e in code.code
         test_inferred_static(e)
     end

@@ -632,25 +632,28 @@ function type_annotate!(sv::InferenceState)
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
+function _widen_all_consts!(e::Expr, used::Vector{Bool}, untypedload::Vector{Bool}, slottypes::Vector{Any})
     e.typ = widenconst(e.typ)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload, slottypes)
+            _widen_all_consts!(x, used, untypedload, slottypes)
         elseif isa(x, TypedSlot)
             vt = widenconst(x.typ)
-            if !(vt === x.typ)
-                if slottypes[x.id] ⊑ vt
-                    x = SlotNumber(x.id)
-                    untypedload[x.id] = true
-                else
-                    x = TypedSlot(x.id, vt)
-                end
-                e.args[i] = x
+            st = slottypes[x.id]
+            if vt === st || st ⊑ vt
+                x = SlotNumber(x.id)
+                untypedload[x.id] = true
+            else
+                x = TypedSlot(x.id, vt)
             end
-        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
-            untypedload[x.id] = true
+            e.args[i] = x
+            used[x.id] = true
+        elseif isa(x, SlotNumber)
+            if i != 1 || e.head !== :(=)
+                untypedload[x.id] = true
+            end
+            used[x.id] = true
         end
     end
     nothing
@@ -666,11 +669,12 @@ function widen_all_consts!(src::CodeInfo)
 
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
+    used = fill(false, nslots)
     e = Expr(:body)
     e.args = src.code
-    _widen_all_consts!(e, untypedload, src.slottypes)
+    _widen_all_consts!(e, used, untypedload, src.slottypes)
     for i = 1:nslots
-        src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
+        src.slottypes[i] = used[i] ? widen_slot_type(src.slottypes[i], untypedload[i]) : Union{}
     end
     return src
 end
@@ -841,7 +845,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         nargs = length(ea)
-                        (3 < nargs < 4) || return false
+                        (3 <= nargs <= 4) || return false
                         et = exprtype(e, src, mod)
                         # TODO: check ninitialized
                         if !isa(et, Const) && !isconstType(et)
@@ -874,8 +878,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            isconcretetype(typ) || return false
-            !iskindtype(typ) || return false
+            isconcretedispatch(typ) || return false
             typ = typ::DataType
             if !allow_volatile && typ.mutable
                 return false
@@ -1012,6 +1015,9 @@ function invoke_NF(argexprs, @nospecialize(etype), atypes::Vector{Any}, sv::Opti
                             isa_var = newvar!(sv, Bool)
                             isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
                             isa_ty.typ = Bool
+                            if isa(aei, Slot)
+                                isa_ty.typ = Conditional(aei, ty, typesubtract(ti, ty))
+                            end
                             pushfirst!(match, Expr(:gotoifnot, isa_var, after.label))
                             pushfirst!(match, Expr(:(=), isa_var, isa_ty))
                             append!(stmts, match)
@@ -1124,7 +1130,9 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         invoke_tt = widenconst(atypes[3])
         if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
                 has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+            # TODO: this can be rather aggressive at preventing inlining of closures
+            # XXX: this is wrong for `ft <: Type`, since we are failing to check that
+            #      the result doesn't have subtypes, or to do an intersection lookup
             return NOT_FOUND
         end
         if !(isa(invoke_tt.parameters[1], Type) &&
@@ -1172,14 +1180,16 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     if length(atypes) == 3 && istopfunction(topmod, f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
+        # be careful to preserve Conditional here, since split_disjoint_assign expects it
         if isa(e.typ, Const)
             return inline_as_constant(e.typ.val, argexprs, sv, nothing)
         end
         is_var = newvar!(sv, Bool)
         stmts = Any[ Expr(:(=), is_var, Expr(:call, GlobalRef(Core, :(===)), argexprs[2], argexprs[3])) ]
-        stmts[1].args[2].typ = Bool
+        etyp = e.typ
+        stmts[1].args[2].typ = (isa(etyp, Conditional) ? Conditional(etyp.var, etyp.elsetype, etyp.vtype) : Bool)
         not_is = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), is_var)
-        not_is.typ = Bool
+        not_is.typ = etyp
         return (not_is, stmts)
     elseif length(atypes) == 3 && istopfunction(topmod, f, :(>:))
         # special-case inliner for issupertype
@@ -1787,15 +1797,15 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
         ft = Bool
     else
         f = nothing
-        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+        ft = widenconst(ft)
+        if has_free_typevars(ft)
             return e
         end
     end
 
     ins = 1
 
-    # TODO: determine whether this is really necessary
+    # TODO: this optimization was broken when turning on linear IR
 #=
     if sv.params.inlining
         if isdefined(Main, :Base) &&
@@ -1945,8 +1955,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                 ft = Bool
             else
                 f = nothing
-                if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-                    # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+                if has_free_typevars(ft)
                     return e
                 end
             end
@@ -2363,7 +2372,11 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+function check_valid(def::ValueDef, changes::IdDict)
+    haskey(changes, def.stmts=>def.stmtidx) && return false
+    isdefined(def, :assign) && haskey(changes, def.assign) && return false
+    return true
+end
 
 
 function remove_invalid!(info::ValueInfo, changes::IdDict)
@@ -2678,7 +2691,7 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     return true
 end
 
-function replace_use_expr_with!(ctx::AllocOptContext, use::ValueUse, expr,
+function replace_use_expr_with!(ctx::AllocOptContext, use::ValueUse, @nospecialize(expr),
                                 delete_old=true, update_var_use=false)
     # Not supported on ccall & expression
     oldexpr = use.expr
@@ -2760,137 +2773,674 @@ function propagate_const_def!(ctx::AllocOptContext, info, key)
     return true
 end
 
-function split_disjoint_assign!(ctx::AllocOptContext, info, key)
-    key.second && return false
-    isdispatchelem(widenconst(ctx.sv.src.slottypes[key.first])) && return false # no splitting can be necessary
+function filter_defs!(ctx::AllocOptContext, info, key)
+    key.second && return false # only Slot could have multiple defs
+    # compute a better slottype from the uses
+    # (previously, inference computed this from the defs)
+    slottype = widenconst(ctx.sv.src.slottypes[key.first])
     alltypes = IdDict()
-    ndefs = length(info.defs)
-    deftypes = Vector{Any}(uninitialized, ndefs)
-    for i in 1:ndefs
-        def = info.defs[i]
-        defex = (def.assign::Expr).args[2]
-        rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
-        isdispatchelem(rhstyp) || return false
-        alltypes[rhstyp] = nothing
-        deftypes[i] = rhstyp
-    end
-    need_tag = false
+    nonleaf_slottype = Union{}
     for use in info.uses
-        usex = use.expr
-        slot = usex.args[use.exidx]
+        slot = use.expr.args[use.exidx]
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
-            if isdispatchelem(usetyp)
+            usetyp === Union{} && continue
+            if isconcretedispatch(usetyp)
                 alltypes[usetyp] = nothing
-                continue
-            end
-        end
-        if usex.head === :(=) || usex.head === :&
-            return false
-        else
-            ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
-            if isa(ty, Const)
-            elseif isa(ty, Conditional) && isa(ty.var, Slot) && slot_id(ty.var) == key.first
-                if isa(ty.vtype, Const) && !isdefined(typeof(ty.vtype.val), :instance)
-                    return false
-                end
-                need_tag = true
             else
-                return false
+                nonleaf_slottype = tmerge(nonleaf_slottype, usetyp)
+                nonleaf_slottype === Any && return false
             end
-            effect_free(usex, ctx.sv.src, ctx.sv.mod, false) || return false
+        else
+            return false
         end
+    end
+    if slottype <: nonleaf_slottype
+        return false
+    end
+    recomputed = false
+    new_slottype = Union{}
+    for def in info.defs
+        assign = def.assign
+        isa(assign, NewvarNode) && continue
+        assign = assign::Expr
+        defex = assign.args[2]
+        rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+        rhstyp === Any && continue
+        if rhstyp === Union{}
+            unused = true
+        else
+            if isconcretedispatch(rhstyp)
+                unused = !haskey(alltypes, rhstyp)
+            else
+                unused = true
+                for (t, v) in alltypes
+                    if (t <: rhstyp)
+                        unused = false
+                        break
+                    end
+                end
+            end
+            if unused
+                unused = (typeintersect(rhstyp, nonleaf_slottype) === Union{})
+            end
+        end
+        if unused
+            # this def has no places it can be seen from a use, so it can be dropped
+            recomputed = true
+            def.stmts[def.stmtidx] = defex
+            scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
+            ctx.changes[assign] = nothing
+        elseif !(new_slottype === Any || new_slottype === rhstyp)
+            new_slottype = tmerge(new_slottype, rhstyp)
+        end
+    end
+    if recomputed
+        # removed some defs, see if that narrows the slottype also
+        if !(slottype <: new_slottype)
+            ctx.sv.src.slottypes[key.first] = new_slottype
+            # drop TypedSlot from the uses which no longer need it
+            for use in info.uses
+                usex = use.expr
+                haskey(ctx.changes, usex) && continue
+                slot = use.expr.args[use.exidx]::TypedSlot
+                if new_slottype ⊑ slot.typ
+                    use.expr.args[use.exidx] = SlotNumber(slot.id)
+                end
+            end
+        end
+        add_allocopt_todo(ctx, key)
+    end
+    return recomputed
+end
+
+function split_disjoint_assign!(ctx::AllocOptContext, info, key)
+    key.second && return false # only split Slot (not SSAValue)
+    slottype = widenconst(ctx.sv.src.slottypes[key.first])
+    isconcretetype(slottype) && return false # no splitting can be necessary
+    (slottype <: Type) && return false # no splitting can be done
+    flags = ctx.sv.src.slotflags[key.first]
+    (flags & SLOT_USEDUNDEF == 0) || return false # skip possibly-undef values
+    alltypes = IdDict()
+    # see if any uses are splittable
+    let splittable = false
+        for use in info.uses
+            slot = use.expr.args[use.exidx]
+            use_etyp = use.expr.typ
+            if isa(use_etyp, Conditional) && isa(use_etyp.var, Slot) && slot_id(use_etyp.var) === key.first
+                vtype = widenconst(use_etyp.vtype)
+                elsetype = widenconst(use_etyp.elsetype)
+                if isconcretedispatch(vtype)
+                    alltypes[vtype] = false
+                end
+                if isconcretedispatch(elsetype)
+                    alltypes[elsetype] = false
+                end
+                if !isconcretedispatch(vtype) || !isconcretedispatch(elsetype)
+                    alltypes[Any] = false
+                end
+            else
+                usetyp = Any
+                if isa(slot, TypedSlot)
+                    usetyp = widenconst(slot.typ)
+                    usetyp === Union{} && continue
+                    splittable = true
+                    isconcretedispatch(usetyp) || (usetyp = Any)
+                end
+                alltypes[usetyp] = false
+            end
+        end
+        (splittable && length(alltypes) > 1) || return false
     end
     name = ctx.sv.src.slotnames[key.first]
-    flags = ctx.sv.src.slotflags[key.first]
-    if need_tag
-        tag_var = add_slot!(ctx.sv.src, Int, false, name)
-        ctx.sv.src.slotflags[tag_var.id] = flags
-    end
-    for i in 1:ndefs
-        def = info.defs[i]
-        assign = def.assign::Expr
-        defex = assign.args[2]
-        rhstyp = deftypes[i]
-        new_slot = alltypes[rhstyp]
-        if !isa(new_slot, SlotNumber)
-            new_slot = add_slot!(ctx.sv.src, rhstyp, false, name)
+    local tag_var # lazy-init below, if needed
+    nonleaf_slottype = Union{}
+    let ndefs, deftypes
+        ndefs = length(info.defs)
+        deftypes = Vector{Any}(uninitialized, ndefs)
+        # see if any defs are profitable to split
+        # if there are any non-leaf elements, join them all into one bucket
+        let splittable = false
+            for i in 1:ndefs
+                def = info.defs[i]
+                assign = def.assign::Expr
+                defex = assign.args[2]
+                rhstyp = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+                deftypes[i] = rhstyp
+                rhstyp === Union{} && continue
+                isconcretedispatch(rhstyp) || (rhstyp = Any)
+                alltypes[rhstyp] = true
+                if isconcretedispatch(rhstyp) #|| isa(defex, Slot)
+                    splittable = true
+                end
+            end
+            if !splittable || length(alltypes) <= 1
+                return false # odd: found nothing to split
+            end
+        end
+        # see if it's not obvious that all of the uses
+        # won't need to look at the type tag, allocate it now
+        need_tag = false
+        for use in info.uses
+            slot = use.expr.args[use.exidx]
+            if isa(slot, TypedSlot)
+                usetyp = widenconst(slot.typ)
+                if !isconcretedispatch(usetyp)
+                    need_tag = true
+                    break
+                end
+            else
+                need_tag = true
+                break
+            end
+        end
+        if need_tag
+            tag_var = add_slot!(ctx.sv.src, Int, false, name)
+            ctx.sv.src.slotflags[tag_var.id] = flags
+            if get(alltypes, Any, false)
+                for i in 1:ndefs
+                    rhstyp = deftypes[i]
+                    rhstyp === Union{} && continue
+                    if !isconcretedispatch(rhstyp)
+                        nonleaf_slottype = tmerge(nonleaf_slottype, rhstyp)
+                    end
+                end
+            end
+        end
+        # make separate variables for each splittable assignment or use type
+        for (t, v) in alltypes
+            v === false && (nonleaf_slottype === Union{}) && continue
+            st = (t === Any ? nonleaf_slottype : t)
+            st === Union{} && continue
+            # create a slot for each concrete type
+            new_slot = add_slot!(ctx.sv.src, st, false, name)
             ctx.sv.src.slotflags[new_slot.id] = flags | SLOT_STATICUNDEF
-            alltypes[rhstyp] = new_slot
+            alltypes[t] = new_slot
             add_allocopt_todo(ctx, new_slot)
         end
-        assign.args[1] = new_slot
-        if need_tag
-            stmts = Any[:($tag_var = $(new_slot.id)), assign]
-            add_def(ctx.infomap, tag_var, ValueDef(stmts[1], stmts, 1))
-            scan_expr_use!(ctx.infomap, stmts, 2, assign, ctx.sv.src)
-            ctx.changes[def.stmts=>def.stmtidx] = nothing
-            def.stmts[def.stmtidx] = stmts
-        else
-            add_def(ctx.infomap, new_slot, def)
-        end
-    end
+        # create assignments to the appropriate split variables at each def site
+        for i in 1:ndefs
+            def = info.defs[i]
+            assign = def.assign::Expr
+            defex = assign.args[2]
+            rhstyp = deftypes[i]
+            if rhstyp === Union{}
+                # simply drop an (unreachable) def and continue
+                def.stmts[def.stmtidx] = defex
+                scan_expr_use!(ctx.infomap, def.stmts, def.stmtidx, defex, ctx.sv.src)
+                continue
+            end
+            if isconcretedispatch(rhstyp) # splittable def
+                new_slot = alltypes[rhstyp]
+                # update use and infomap
+                assign.args[1] = new_slot::SlotNumber
+                if need_tag
+                    stmts = Any[ assign, :($tag_var = $(new_slot.id)) ]
+                    # assign must be first, since arguments might use the type before the assignment
+                    scan_expr_use!(ctx.infomap, stmts, 1, assign, ctx.sv.src)
+                    add_def(ctx.infomap, tag_var, ValueDef(stmts[2], stmts, 2))
+                    ctx.changes[def.stmts=>def.stmtidx] = nothing
+                    def.stmts[def.stmtidx] = stmts
+                else
+                    add_def(ctx.infomap, new_slot, def)
+                end
+            else # splittable by uses
+                exprs = []
+                phi = genlabel(ctx.sv)
+                rhsval = defex
+                for (t, v) in alltypes
+                    v === false && continue
+                    t === Any && continue
+                    v = v::SlotNumber
+                    t <: rhstyp || continue
+                    if !(rhsval isa SlotNumber || rhsval isa TypedSlot || rhsval isa SSAValue)
+                        rhsval = newvar!(ctx.sv, rhstyp)
+                        new_ex = :($rhsval = $defex)
+                        push!(exprs, new_ex)
+                        scan_expr_use!(ctx.infomap, exprs, 1, new_ex, ctx.sv.src)
+                        add_def(ctx.infomap, rhsval, ValueDef(new_ex, exprs, 1))
+                    end
+                    next = genlabel(ctx.sv)
+                    new_test = newvar!(ctx.sv, Bool)
+                    new_val = Expr(:call, GlobalRef(Core, :(isa)), rhsval, t)
+                    new_val.typ = Bool
+                    if rhsval isa Slot
+                        new_val.typ = Conditional(rhsval, t, rhstyp)
+                    end
+                    new_ex = :($new_test = $new_val)
+                    push!(exprs, new_ex)
+                    add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+                    add_use(ctx.infomap, rhsval, ValueUse(exprs, length(exprs), new_val, 2))
+                    new_ex = Expr(:gotoifnot, new_test, next.label)
+                    push!(exprs, new_ex)
+                    add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
+                    if rhsval isa Slot
+                        rhsval_typed = TypedSlot(slot_id(rhsval), t)
+                    else
+                        rhsval_typed = rhsval
+                    end
+                    new_ex = :($v = $rhsval_typed)
+                    push!(exprs, new_ex)
+                    add_def(ctx.infomap, v, ValueDef(new_ex, exprs, length(exprs)))
+                    add_use(ctx.infomap, rhsval_typed, ValueUse(exprs, length(exprs), new_ex, 2))
+                    if need_tag
+                        new_ex = :($tag_var = $(v.id))
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, tag_var, ValueDef(new_ex, exprs, length(exprs)))
+                    end
+                    push!(exprs, GotoNode(phi.label))
+                    push!(exprs, next)
+                end
+                any_slot = alltypes[Any]
+                if any_slot isa SlotNumber
+                    if rhsval isa Slot && nonleaf_slottype <: rhstyp
+                        rhsval_typed = TypedSlot(slot_id(rhsval), nonleaf_slottype)
+                    else
+                        rhsval_typed = rhsval
+                    end
+                    new_ex = :($any_slot = $rhsval_typed)
+                    push!(exprs, new_ex)
+                    add_def(ctx.infomap, any_slot, ValueDef(new_ex, exprs, length(exprs)))
+                    if rhsval_typed isa SlotNumber || rhsval_typed isa TypedSlot || rhsval_typed isa SSAValue
+                        add_use(ctx.infomap, rhsval_typed, ValueUse(exprs, length(exprs), new_ex, 2))
+                    end
+                    if need_tag
+                        new_ex = :($tag_var = $(any_slot.id))
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, tag_var, ValueDef(new_ex, exprs, length(exprs)))
+                    end
+                else # if any_slot === true?? false??
+                    # TODO: emit unreachable, if applicable
+                    # err_ex = Expr(:call, GlobalRef(_topmod(ctx.sv), :error), "fatal error in type inference (type bound)")
+                    # err_ex.typ = Union{}
+                    # push!(exprs, err_ex)
+                    push!(exprs, rhsval)
+                    add_use(ctx.infomap, rhsval, ValueUse(exprs, length(exprs)))
+                    if need_tag
+                        new_ex = :($tag_var = 0)
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, tag_var, ValueDef(new_ex, exprs, length(exprs)))
+                    end
+                end
+                push!(exprs, phi)
+                # replace old def expression with new exprs list and update metadata
+                def.stmts[def.stmtidx] = exprs
+                ctx.changes[def.stmts=>def.stmtidx] = nothing
+            end # if isconcretedispatch
+        end # foreach defs
+    end # let defs
+    # update uses to load from the correct type slot
     for use in info.uses
+        haskey(ctx.changes, use.stmts => use.stmtidx) && continue
         usex = use.expr
+        haskey(ctx.changes, usex) && continue
+        # inlining a constant is simple to do directly, if applicable
+        ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
+        if isa(ty, Const) && is_inlineable_constant(ty.val) && effect_free(usex, ctx.sv.src, ctx.sv.mod, false)
+            replace_use_expr_with!(ctx, use, quoted(ty.val))
+            continue
+        end
+        # look at use site, to see if we have a narrow type for it
         slot = usex.args[use.exidx]
+        usetyp = Any
         if isa(slot, TypedSlot)
             usetyp = widenconst(slot.typ)
-            if isdispatchelem(usetyp)
-                usetyp = widenconst(slot.typ)
-                new_slot = alltypes[usetyp]
-                if !isa(new_slot, SlotNumber)
-                    new_slot = add_slot!(ctx.sv.src, usetyp, false, name)
-                    ctx.sv.src.slotflags[new_slot.id] = flags | SLOT_STATICUNDEF
-                    alltypes[usetyp] = new_slot
+            issplit = true
+            if !isconcretedispatch(usetyp)
+                # see if the usetyp must be in the Any bucket
+                # or could be one of the split assignments
+                for (t, v) in alltypes
+                    v === false && continue # no def of this, just uses
+                    v = v::SlotNumber
+                    t === Any && continue # this is the bucket we are looking for
+                    t <: usetyp || continue # could be it be selected?
+                    issplit = false
+                    break
                 end
-                new_slot = new_slot::SlotNumber
-                use.expr.args[use.exidx] = new_slot
+            end
+            if issplit
+                # if we know the load type precisely selects one bucket,
+                # select just that def
+                new_slot = alltypes[isconcretedispatch(usetyp) ? usetyp : Any]
+                if new_slot === false
+                    # add an always-undef slot
+                    new_slot = add_slot!(ctx.sv.src, usetyp, false, name)
+                    ctx.sv.src.slotflags[new_slot.id] = SLOT_USEDUNDEF | SLOT_STATICUNDEF
+                    # TODO: do we need to emit NewvarNode(new_slot) before the uses?
+                else
+                    new_slot = new_slot::SlotNumber
+                    if !isconcretedispatch(usetyp) && usetyp !== Any && usetyp != nonleaf_slottype
+                        new_slot = TypedSlot(new_slot.id, usetyp)
+                    end
+                end
+                usex.args[use.exidx] = new_slot
                 add_use(ctx.infomap, new_slot, use)
+                usex.head === :(=) && maybe_add_allocopt_todo(ctx, usex.args[1])
                 continue
             end
         end
-        ty = exprtype(usex, ctx.sv.src, ctx.sv.mod)
-        if isa(ty, Const) && is_inlineable_constant(ty.val)
-            replace_use_expr_with!(ctx, use, quoted(ty.val))
-        elseif isa(ty, Conditional)
-            exprs = []
-            vars = []
-            for (t, v) in alltypes
-                isa(v, SlotNumber) || continue
-                if t ⊑ widenconst(ty.vtype)
-                    new_var = newvar!(ctx.sv, Bool)
-                    new_val = :($(GlobalRef(Core, :(===)))($tag_var, $(v.id)))
-                    new_val.typ = Bool
-                    new_ex = :($new_var = $new_val)
-                    push!(exprs, new_ex)
-                    push!(vars, new_var)
-                    add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
-                    add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+        ## see if we have a special optimization for this union-split computation ##
+        # if the type of the expression gave a Conditional constraint on ty,
+        # then we can use that decide the boolean just from the tag
+        if isa(ty, Conditional) && isa(ty.var, Slot) && slot_id(ty.var) === key.first
+            # TODO: this was the best I could do on short notice.
+            # TODO: using Conditional like this is bad,
+            #  since it is very unreliable, inaccurate, and usually not very powerful or useful
+            let var
+                vtype = widenconst(ty.vtype)
+                elsetype = widenconst(ty.elsetype)
+                if typeintersect(vtype, elsetype) === Union{}
+                    if haskey(alltypes, vtype)
+                        v = alltypes[vtype]
+                        negate = false
+                    elseif haskey(alltypes, elsetype)
+                        v = alltypes[elsetype]
+                        negate = true
+                    end
+                    exprs = []
+                    if @isdefined v
+                        if v === false
+                            var = quoted(negate)
+                        else
+                            v = v::SlotNumber
+                            new_var = newvar!(ctx.sv, Bool)
+                            new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                            new_val.typ = Bool
+                            new_ex = :($new_var = $new_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                            if negate
+                                neg_new_var = newvar!(ctx.sv, Bool)
+                                new_val = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), new_var)
+                                new_val.typ = Bool
+                                new_ex = :($neg_new_var = $new_val)
+                                push!(exprs, new_ex)
+                                add_def(ctx.infomap, neg_new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, new_var, ValueUse(exprs, length(exprs), new_val, 2))
+                                new_var = neg_new_var
+                            end
+                            var = new_var
+                        end
+                    elseif get(alltypes, Any, false) !== false
+                        vars = []
+                        for (t, v) in alltypes
+                            v === false && continue
+                            v = v::SlotNumber
+                            if t <: vtype && t <: usetyp
+                                new_var = newvar!(ctx.sv, Bool)
+                                new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                                new_val.typ = Bool
+                                new_ex = :($new_var = $new_val)
+                                push!(exprs, new_ex)
+                                push!(vars, new_var)
+                                add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                            end
+                        end
+                        if isempty(vars)
+                            var = quoted(false)
+                        else
+                            var = vars[1]
+                            for var_i in 2:length(vars)
+                                new_val = Expr(:call, GlobalRef(Core.Intrinsics, :or_int), var, vars[var_i])
+                                new_val.typ = Bool
+                                new_var = newvar!(ctx.sv, Bool)
+                                new_ex = :($new_var = $new_val)
+                                push!(exprs, new_ex)
+                                add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
+                                add_use(ctx.infomap, var, ValueUse(exprs, length(exprs), new_val, 2))
+                                add_use(ctx.infomap, vars[var_i], ValueUse(exprs, length(exprs), new_val, 3))
+                                var = new_var
+                            end
+                        end
+                    else
+                        # TODO: handle this case explicitly?
+                    end
+                    if @isdefined var
+                        replace_use_expr_with!(ctx, use, var, false, isempty(exprs))
+                        if !isempty(exprs)
+                            old_expr = use.stmts[use.stmtidx]
+                            push!(exprs, old_expr)
+                            use.stmts[use.stmtidx] = exprs
+                            scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+                            ctx.changes[use.stmts=>use.stmtidx] = nothing
+                        end
+                        continue
+                    end
                 end
-            end
-            if isempty(vars)
-                replace_use_expr_with!(ctx, use, quoted(false))
-            else
-                var = vars[1]
-                for var_i in 2:length(vars)
-                    new_var = newvar!(ctx.sv, Bool)
-                    new_val = :($(GlobalRef(Core.Intrinsics, :and_int))($var, $(vars[var_i])))
-                    new_val.typ = Bool
-                    new_ex = :($new_var = $new_val)
-                    push!(exprs, new_ex)
-                    add_def(ctx.infomap, new_var, ValueDef(new_ex, exprs, length(exprs)))
-                    add_use(ctx.infomap, var, ValueUse(exprs, length(exprs), new_val, 2))
-                    add_use(ctx.infomap, vars[var_i], ValueUse(exprs, length(exprs), new_val, 3))
-                    var = new_var
+            end # let
+        end # if Conditional
+        # optimize typeof(x) to only look at the tag
+        if usex.head === :(call) && length(usex.args) == 2 &&
+                use.exidx == 2 && widenconst(exprtype(usex.args[1], ctx.sv.src, ctx.sv.mod)) === typeof(Core.typeof)
+            let slot_var
+                exprs = []
+                for (t, v) in alltypes
+                    v === false && continue
+                    v = v::SlotNumber
+                    t === Any && continue
+                    t <: usetyp || continue
+                    if !@isdefined slot_var
+                        slot_var = t
+                    else
+                        # create conditional test
+                        new_test = newvar!(ctx.sv, Bool)
+                        new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                        new_val.typ = Bool
+                        new_ex = :($new_test = $new_val)
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+                        add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                        # create ifelse and select t or old
+                        slot_val = Expr(:call, GlobalRef(Core.Intrinsics, :select_value), new_test, t, slot_var)
+                        slot_val.typ = DataType
+                        new_slot_var = newvar!(ctx.sv, slottype)
+                        new_ex = :($new_slot_var = $slot_val)
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                        add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), slot_val, 2))
+                        if slot_var isa SSAValue
+                            add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs), slot_val, 4))
+                        end
+                        slot_var = new_slot_var
+                    end
                 end
-                replace_use_expr_with!(ctx, use, var, false)
-                old_expr = use.stmts[use.stmtidx]
-                push!(exprs, old_expr)
-                use.stmts[use.stmtidx] = exprs
-                scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
-                ctx.changes[use.stmts=>use.stmtidx] = nothing
-            end
+                let v = get(alltypes, Any, false)
+                    if v !== false
+                        v = v::SlotNumber
+                        if @isdefined slot_var
+                            new_slot_var = add_slot!(ctx.sv.src, DataType, false, name)
+                            new_ex = :($new_slot_var = $slot_var)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                            if slot_var isa SSAValue
+                                add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs)))
+                            end
+                            new_test = newvar!(ctx.sv, Bool)
+                            new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                            new_val.typ = Bool
+                            new_ex = :($new_test = $new_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                            phi = genlabel(ctx.sv)
+                            new_ex = Expr(:gotoifnot, new_test, phi.label)
+                            push!(exprs, new_ex)
+                            add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
+                            slot_val = Expr(:call, GlobalRef(Core, :typeof), v)
+                            slot_val.typ = DataType
+                            new_ex = :($new_slot_var = $slot_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, v, ValueUse(exprs, length(exprs), slot_val, 2))
+                            push!(exprs, phi)
+                            slot_var = new_slot_var
+                        else
+                            usex.args[2] = v # typeof(v_Any)
+                            add_use(ctx.infomap, v, ValueUse(use.stmts, use.stmtidx, usex, 2))
+                            continue
+                        end
+                    end
+                end
+                if !@isdefined slot_var
+                    # add an always-undef slot
+                    # TODO: do we need to emit this NewvarNode(new_slot) before the use?
+                    slot_var = add_slot!(ctx.sv.src, DataType, false, name)
+                    push!(exprs, NewvarNode(slot_var))
+                    ctx.sv.src.slotflags[slot_var.id] = SLOT_USEDUNDEF | SLOT_STATICUNDEF
+                end
+                # replace old expression with new and update metadata
+                replace_use_expr_with!(ctx, use, slot_var, false, isempty(exprs))
+                if !isempty(exprs)
+                    old_expr = use.stmts[use.stmtidx]
+                    push!(exprs, old_expr)
+                    use.stmts[use.stmtidx] = exprs
+                    scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+                    ctx.changes[use.stmts=>use.stmtidx] = nothing
+                end
+                continue
+            end # let
+        end # if call(typeof)
+        # optimize isa(x, T) to only look at the tag
+        if usex.head === :(call) && length(usex.args) == 3 &&
+                use.exidx == 2 && widenconst(exprtype(usex.args[1], ctx.sv.src, ctx.sv.mod)) === typeof(Core.isa)
+            let slot_var
+                T_expr = usex.args[3]
+                T, isexact = instanceof_tfunc(exprtype(T_expr, ctx.sv.src, ctx.sv.mod))
+                if isexact
+                    exprs = []
+                    for (t, v) in alltypes
+                        v === false && continue
+                        v = v::SlotNumber
+                        t === Any && continue
+                        t <: usetyp || continue
+                        t <: T || continue
+                        new_test = newvar!(ctx.sv, Bool)
+                        new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                        new_val.typ = Bool
+                        new_ex = :($new_test = $new_val)
+                        push!(exprs, new_ex)
+                        add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+                        add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                        if !@isdefined slot_var
+                            slot_var = new_test
+                        else
+                            slot_val = Expr(:call, GlobalRef(Core.Intrinsics, :or_int), new_test, slot_var)
+                            slot_val.typ = Bool
+                            new_slot_var = newvar!(ctx.sv, Bool)
+                            new_ex = :($new_slot_var = $slot_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), slot_val, 2))
+                            add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs), slot_val, 3))
+                            slot_var = new_slot_var
+                        end
+                    end
+                    if !@isdefined slot_var
+                        slot_var = false
+                    end
+                    let v = get(alltypes, Any, false)
+                        if v !== false && (!isconcretedispatch(T) || !haskey(alltypes, T))
+                            v = v::SlotNumber
+                            new_slot_var = add_slot!(ctx.sv.src, Bool, false, name)
+                            new_ex = :($new_slot_var = $slot_var)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                            if !isa(slot_var, Bool)
+                                add_use(ctx.infomap, slot_var, ValueUse(exprs, length(exprs)))
+                            end
+                            new_test = newvar!(ctx.sv, Bool)
+                            new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+                            new_val.typ = Bool
+                            new_ex = :($new_test = $new_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+                            phi = genlabel(ctx.sv)
+                            new_ex = Expr(:gotoifnot, new_test, phi.label)
+                            push!(exprs, new_ex)
+                            add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
+                            slot_val = Expr(:call, GlobalRef(Core, :isa), v, T_expr)
+                            slot_val.typ = Bool
+                            new_ex = :($new_slot_var = $slot_val)
+                            push!(exprs, new_ex)
+                            add_def(ctx.infomap, new_slot_var, ValueDef(new_ex, exprs, length(exprs)))
+                            add_use(ctx.infomap, v, ValueUse(exprs, length(exprs), slot_val, 2))
+                            if T_expr isa Slot || T_expr isa SSAValue
+                                add_use(ctx.infomap, T_expr, ValueUse(exprs, length(exprs), slot_val, 3))
+                            end
+                            push!(exprs, phi)
+                            slot_var = new_slot_var
+                        end
+                    end
+                    # replace old expression with new and update metadata
+                    replace_use_expr_with!(ctx, use, slot_var, false, isempty(exprs))
+                    if !isempty(exprs)
+                        old_expr = use.stmts[use.stmtidx]
+                        push!(exprs, old_expr)
+                        use.stmts[use.stmtidx] = exprs
+                        scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+                        ctx.changes[use.stmts=>use.stmtidx] = nothing
+                    end
+                    continue
+                else
+                    # TODO: we could fall back to testing `v_tag == tag_any ? isa(v_Any, T) : (typeof(v_split) == T)`
+                    #   (since we know that any subtype of Type must by in v_Any)
+                end # if isexact
+            end # let
+        end # if call(isa)
+        # general case:
+        # re-write `x = y::Union{0, 1, 2}` as an expanded conditional with split-type-assignment:
+        # `if tag === 0; x = y_0; elseif tag === 1; x = y_1; else; x = y_2; end`
+        # introducing a new variable `x` if needed
+        if usex.head === :(=) && usex.args[1] isa SlotNumber
+            dest_slot = usex.args[1]::SlotNumber
+        else
+            dest_slot = add_slot!(ctx.sv.src, slottype, false, name)
+            ctx.sv.src.slotflags[dest_slot.id] = flags
         end
+        exprs = []
+        phi = genlabel(ctx.sv)
+        for (t, v) in alltypes
+            v === false && continue
+            v = v::SlotNumber
+            t === Any || t <: usetyp || continue
+            next = genlabel(ctx.sv)
+            new_test = newvar!(ctx.sv, Bool)
+            new_val = Expr(:call, GlobalRef(Core, :(===)), tag_var, v.id)
+            new_val.typ = Bool
+            new_ex = :($new_test = $new_val)
+            push!(exprs, new_ex)
+            add_def(ctx.infomap, new_test, ValueDef(new_ex, exprs, length(exprs)))
+            add_use(ctx.infomap, tag_var, ValueUse(exprs, length(exprs), new_val, 2))
+            new_ex = Expr(:gotoifnot, new_test, next.label)
+            push!(exprs, new_ex)
+            add_use(ctx.infomap, new_test, ValueUse(exprs, length(exprs), new_ex, 1))
+            new_ex = :($dest_slot = $v)
+            push!(exprs, new_ex)
+            add_def(ctx.infomap, dest_slot, ValueDef(new_ex, exprs, length(exprs)))
+            add_use(ctx.infomap, v, ValueUse(exprs, length(exprs), new_ex, 2))
+            push!(exprs, GotoNode(phi.label))
+            push!(exprs, next)
+        end
+        err_ex = Expr(:call, GlobalRef(_topmod(ctx.sv), :error), "fatal error in type inference (type bound)")
+        err_ex.typ = Union{}
+        push!(exprs, err_ex)
+        push!(exprs, phi)
+        # replace old expression with new and update metadata
+        old_expr = use.stmts[use.stmtidx]
+        use.stmts[use.stmtidx] = exprs
+        if usex.head === :(=) && usex.args[1] === dest_slot
+            ctx.changes[old_expr] = nothing
+        else
+            usex.args[use.exidx] = dest_slot
+            add_use(ctx.infomap, dest_slot, use)
+            push!(exprs, old_expr)
+            scan_expr_use!(ctx.infomap, exprs, length(exprs), old_expr, ctx.sv.src)
+        end
+        add_allocopt_todo(ctx, dest_slot)
+        ctx.changes[use.stmts=>use.stmtidx] = nothing
     end
     delete_valueinfo!(ctx, key)
     return true
@@ -2987,6 +3537,32 @@ function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     end
     return si
 end
+function structinfo_assign(ctx::AllocOptContext, rhs::Union{SSAValue,Slot}, vt::DataType)
+    nf = fieldcount(vt)
+    names = (vt <: Tuple ? Symbol[] : fieldnames(vt))
+    si = StructInfo(Vector{Any}(uninitialized, nf), names, vt, vt.mutable, false)
+    ninit = vt.ninitialized
+    for i in 1:nf
+        ft = fieldtype(vt, i)
+        if i <= ninit || isbits(ft)
+            fldval = Expr(:call, GlobalRef(Core, :getfield), rhs, i, true)
+        else
+            @assert false "unimplemented"
+            #fldval = Any[
+            #    Expr(:new, .lhs)
+            #    .defined = Expr(:call, GlobalRef(Core, :isdefined), rhs, i)
+            #    Expr(:gotoifnot, .defined, 5)
+            #    .lhs = Expr(:call, GlobalRef(Core, :getfield), rhs, i)
+            #    5:
+            #    ]
+            #ctx.undef_fld[i] = nothing
+            #ctx.undef_fld[si.names[i]] = nothing
+        end
+        fldval.typ = ft
+        si.defs[i] = fldval
+    end
+    return si
+end
 
 function split_struct_alloc!(ctx::AllocOptContext, info, key)
     # Collect information about each struct/tuple allocation
@@ -3007,13 +3583,19 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
             elseif defex.head === :new
                 typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
                 # typ <: Tuple shouldn't happen but just in case someone generated invalid AST
-                if !isa(typ, DataType) || !isdispatchelem(typ) || typ <: Tuple
+                if !isa(typ, DataType) || !isconcretedispatch(typ) || typ <: Tuple
                     return false
                 end
                 si = structinfo_new(ctx, defex, typ)
             else
                 return false
             end
+        elseif isa(defex, Slot) || isa(defex, SSAValue)
+            typ = widenconst(exprtype(defex, ctx.sv.src, ctx.sv.mod))
+            if !isa(typ, DataType) || typ.mutable || typ.abstract || isvatuple(typ) || typ.ninitialized != fieldcount(typ)
+                return false
+            end
+            si = structinfo_assign(ctx, defex, typ)
         else
             v = exprtype(defex, ctx.sv.src, ctx.sv.mod)
             isa(v, Const) || return false
@@ -3109,6 +3691,8 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
     #     for preserved objects.
     #     Currently also require single assignment.
     #     Lifting this requirement is certainly possible but harder to implement....
+    #
+    # * future work: add support for `isa` and `typeof`
 
     has_preserve = false
     has_setfield_undef = false
@@ -3208,6 +3792,9 @@ function split_struct_alloc!(ctx::AllocOptContext, info, key)
         split_struct_alloc_multi!(ctx, info, key)
     end
     delete_valueinfo!(ctx, key)
+    for def in info.defs
+        maybe_add_allocopt_todo(ctx, (def.assign::Expr).args[2])
+    end
     return true
 end
 
@@ -3969,7 +4556,9 @@ function optimize_value!(ctx::AllocOptContext, key)
     elseif var_has_undef(ctx.sv.src, key.first, key.second)
         return
     end
-    # Split assignments of leaftypes that do no have overlaping uses with each other
+    # Remove defs with no uses (by type), and narrow slottype
+    filter_defs!(ctx, info, key) && return
+    # Split assignments of leaftypes that do not have overlapping uses with each other
     split_disjoint_assign!(ctx, info, key) && return
     # If we've found SSAValue or Slot as def, no need to try other optimizations
     merge_value_ssa!(ctx, info, key) && return
