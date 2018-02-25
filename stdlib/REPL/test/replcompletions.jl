@@ -234,6 +234,14 @@ let s = "α\\alpha"
     @test length(c) == 1
 end
 
+# test umlaut completion (not in original W3C symbol list)
+let s = "\\\"a"
+    c, r = test_bslashcomplete(s)
+    @test c[1] == "ä"
+    @test r == 1:length(s)
+    @test length(c) == 1
+end
+
 # test emoji symbol completions
 let s = "\\:koala:"
     c, r = test_bslashcomplete(s)
