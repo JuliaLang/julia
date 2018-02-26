@@ -10,4 +10,3 @@ release: # default target
 JULIA:=$(call spawn,$(JULIA_EXECUTABLE))
 BIN:=$(BUILDDIR)/embedding
 CC:=$(CC)
-include $(SRCDIR)/embedding/Makefile
