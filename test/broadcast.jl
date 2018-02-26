@@ -407,7 +407,7 @@ let
 end
 
 # Ref as 0-dimensional array for broadcast
-@test (-).(C_NULL, C_NULL)::UInt == 0
+@test (-).(Ref(C_NULL), Ref(C_NULL))::UInt == fill(0)
 @test (+).(1, Ref(2)) == fill(3)
 @test (+).(Ref(1), Ref(2)) == fill(3)
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]

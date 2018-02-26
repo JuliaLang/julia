@@ -55,7 +55,7 @@ BroadcastStyle(::Type) = Unknown()
 treated as a container for the purposes of broadcasting.
 """
 struct Scalar <: BroadcastStyle end
-BroadcastStyle(::Type{<:Union{Number,Symbol,String,Type,Function,Uninitialized,Nothing,RoundingMode,Ptr}}) = Scalar()
+BroadcastStyle(::Type{<:Union{Number,Symbol,String,Type,Function,Uninitialized,RoundingMode,Nothing,Missing}}) = Scalar()
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
