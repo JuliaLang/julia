@@ -1075,31 +1075,53 @@ parent(a::AbstractArray) = a
 
 ## rudimentary aliasing detection ##
 """
-    unalias(dest, A)
+    Base.unalias(dest, A)
 
-Return either `A` or a copy of `A`, in a rough effort to prevent modifications to `dest` from
-affecting the returned object. No guarantees are provided, and each custom array must
-opt-into aliasing detection by overloading this method by specializing on the second argument.
+Return either `A` or a copy of `A` in a rough effort to prevent modifications to `dest` from
+affecting the returned object. No guarantees are provided.
 
-This function must return an object of exactly the same type as `A` for performance and type stability.
+Custom arrays that wrap or use fields containing arrays that might alias against other
+external objects should provide a [`Base.dataids`](@ref) implementation.
 
-See also [`mightalias`](@ref) and [`dataids`](@ref).
+This function must return an object of exactly the same type as `A` for performance and type
+stability. Mutable custom arrays for which [`copy(A)`](@ref) is not `typeof(A)` should
+provide a [`Base.unaliascopy`](@ref) implementation.
+
+See also [`Base.mightalias`](@ref).
 """
-unalias(dest, A::AbstractArray) = mightalias(dest, A) ? copypreservingtype(A) : A
+unalias(dest, A::AbstractArray) = mightalias(dest, A) ? unaliascopy(A) : A
 unalias(dest, A::AbstractRange) = A
 unalias(dest, A) = A
 
-copypreservingtype(A::Array) = copy(A)
-copypreservingtype(A::AbstractArray)::typeof(A) = (@_noinline_meta; copy(A))
-copypreservingtype(A) = A
+"""
+    Base.unaliascopy(A)
+
+Make a preventative copy of `A` in an operation where `A` [`Base.mightalias`](@ref) against
+another array in order to preserve consistent semantics as that other array is mutated.
+
+This must return an object of the same type as `A` to preserve optimal performance in the
+much more common case where aliasing does not occur. By default,
+`unaliascopy(A::AbstractArray)` will attempt to use [`copy(A)`](@ref), but in cases where
+`copy(A)` is not a `typeof(A)`, then the array should provide a custom implementation of
+`Base.unaliascopy(A)`.
+"""
+unaliascopy(A::Array) = copy(A)
+unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
+_unaliascopy(A::T, C::T) where {T} = C
+_unaliascopy(A, C) = throw(ArgumentError("""
+    an array of type `$(typeof(A).name)` shares memory with another argument and must
+    make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
+        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+unaliascopy(A) = A
 
 """
-    mightalias(A::AbstractArray, B::AbstractArray)
+    Base.mightalias(A::AbstractArray, B::AbstractArray)
 
-Perform a conservative and rudimentary test to check if arrays `A` and `B` might share the same memory.
+Perform a conservative test to check if arrays `A` and `B` might share the same memory.
 
 By default, this simply checks if either of the arrays reference the same memory
-regions, as identified by their [`dataids`](@ref).
+regions, as identified by their [`Base.dataids`](@ref).
 """
 mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
@@ -1115,14 +1137,14 @@ _isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
 _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 """
-    dataids(A::AbstractArray)
+    Base.dataids(A::AbstractArray)
 
 Return a tuple of `UInt`s that represent the mutable data segments of an array.
 
 Custom arrays that would like to opt-in to aliasing detection of their component
 parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
-`dataids(C::CustomArray) = dataids(C.parent)`.
+`Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
 dataids(A::Array) = (UInt(pointer(A)),)

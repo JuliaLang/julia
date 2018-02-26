@@ -261,9 +261,9 @@ function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
 end
 
 ## Alias detection and prevention
-using Base: dataids, copypreservingtype
+using Base: dataids, unaliascopy
 Base.dataids(S::SparseMatrixCSC) = (dataids(S.colptr)..., dataids(S.rowval)..., dataids(S.nzval)...)
-Base.copypreservingtype(S::SparseMatrixCSC) = typeof(S)(S.m, S.n, copypreservingtype(S.colptr), copypreservingtype(S.rowval), copypreservingtype(S.nzval))
+Base.unaliascopy(S::SparseMatrixCSC) = typeof(S)(S.m, S.n, unaliascopy(S.colptr), unaliascopy(S.rowval), unaliascopy(S.nzval))
 
 ## Constructors
 

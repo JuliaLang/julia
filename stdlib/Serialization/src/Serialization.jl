@@ -11,7 +11,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: copypreservingtype, unwrap_unionall
+using Base: unaliascopy, unwrap_unionall
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -276,7 +276,7 @@ end
 function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
     # SubArray's copy only selects the relevant data (and reduces the size) but does not
     # preserve the type of the argument. This internal function does both:
-    b = copypreservingtype(a)
+    b = unaliascopy(a)
     serialize_any(s, b)
 end
 

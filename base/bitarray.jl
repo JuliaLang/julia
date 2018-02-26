@@ -79,8 +79,6 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
-copypreservingtype(B::BitArray) = copy(B)
-
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)

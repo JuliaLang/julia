@@ -73,11 +73,11 @@ parentindices(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
 _splatmap(f, ::Tuple{}) = ()
 _splatmap(f, t::Tuple) = (f(t[1])..., _splatmap(f, tail(t))...)
-copypreservingtype(A::SubArray) = typeof(A)(copypreservingtype(A.parent), map(copypreservingtype, A.indices), A.offset1, A.stride1)
+unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.indices), A.offset1, A.stride1)
 
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
-function copypreservingtype(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
+function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
     dest = Array{T}(uninitialized, index_lengths(V.indices...))
     copyto!(dest, V)
     SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
