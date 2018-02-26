@@ -6009,19 +6009,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base/#Base.assert",
-    "page": "Essentials",
-    "title": "Base.assert",
-    "category": "Function",
-    "text": "assert(cond)\n\nThrow an AssertionError if cond is false. Also available as the macro @assert.\n\nwarning: Warning\nAn assert might be disabled at various optimization levels. Assert should therefore only be used as a debugging tool and not used for authentication verification (e.g. verifying passwords), nor should side effects needed for the function to work correctly be used inside of asserts.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/base/#Base.@assert",
     "page": "Essentials",
     "title": "Base.@assert",
     "category": "Macro",
-    "text": "@assert cond [text]\n\nThrow an AssertionError if cond is false. Preferred syntax for writing assertions. Message text is optionally displayed upon assertion failure.\n\nwarning: Warning\nAn assert might be disabled at various optimization levels. Assert should therefore only be used as a debugging tool and not used for authentication verification (e.g. verifying passwords), nor should side effects needed for the function to work correctly be used inside of asserts.\n\nExamples\n\njulia> @assert iseven(3) \"3 is an odd number!\"\nERROR: AssertionError: 3 is an odd number!\n\njulia> @assert isodd(3) \"What even are numbers?\"\n\n\n\n\n\n"
+    "text": "@assert cond [text]\n\nThrow an AssertionError if cond is false. Preferred syntax for writing assertions. Message text is optionally displayed upon assertion failure.\n\nwarning: Warning\nAn assert might be disabled at various optimization levels. Assert should therefore only be used as a debugging tool and not used for authentication verification (e.g., verifying passwords), nor should side effects needed for the function to work correctly be used inside of asserts.\n\nExamples\n\njulia> @assert iseven(3) \"3 is an odd number!\"\nERROR: AssertionError: 3 is an odd number!\n\njulia> @assert isodd(3) \"What even are numbers?\"\n\n\n\n\n\n"
 },
 
 {
@@ -6245,7 +6237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Errors",
     "category": "section",
-    "text": "Base.error\nCore.throw\nBase.rethrow\nBase.backtrace\nBase.catch_backtrace\nBase.assert\nBase.@assert\nBase.ArgumentError\nBase.AssertionError\nCore.BoundsError\nBase.DimensionMismatch\nCore.DivideError\nCore.DomainError\nBase.EOFError\nCore.ErrorException\nCore.InexactError\nCore.InterruptException\nBase.KeyError\nBase.LoadError\nBase.MethodError\nBase.MissingException\nCore.OutOfMemoryError\nCore.ReadOnlyMemoryError\nCore.OverflowError\nBase.ParseError\nCore.StackOverflowError\nBase.SystemError\nCore.TypeError\nCore.UndefKeywordError\nCore.UndefRefError\nCore.UndefVarError\nBase.InitError\nBase.retry\nBase.ExponentialBackOff"
+    "text": "Base.error\nCore.throw\nBase.rethrow\nBase.backtrace\nBase.catch_backtrace\nBase.@assert\nBase.ArgumentError\nBase.AssertionError\nCore.BoundsError\nBase.DimensionMismatch\nCore.DivideError\nCore.DomainError\nBase.EOFError\nCore.ErrorException\nCore.InexactError\nCore.InterruptException\nBase.KeyError\nBase.LoadError\nBase.MethodError\nBase.MissingException\nCore.OutOfMemoryError\nCore.ReadOnlyMemoryError\nCore.OverflowError\nBase.ParseError\nCore.StackOverflowError\nBase.SystemError\nCore.TypeError\nCore.UndefKeywordError\nCore.UndefRefError\nCore.UndefVarError\nBase.InitError\nBase.retry\nBase.ExponentialBackOff"
 },
 
 {
