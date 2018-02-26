@@ -10,7 +10,74 @@ function ssaargmap(f, @nospecialize(stmt))
     urs[]
 end
 
-function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, topline::LineNumberNode)
+function line_to_vector(line::Int, linetable::Vector{LineInfoNode})
+    lines = Int[]
+    while line != 0
+        push!(lines, line)
+        line = linetable[line].inlined_at
+    end
+    return lines
+end
+
+function push_new_lineinfo!(new_code::Vector{Any}, topline::Int, line::Int, linetable::Vector{LineInfoNode})
+    # separate the info into three sets: pops, line-change, pushes
+    do_coverage = coverage_enabled()
+    topmod = linetable[line].mod
+    toplines = line_to_vector(topline, linetable)
+    lines = line_to_vector(line, linetable)
+    while !isempty(lines) && !isempty(toplines) && lines[end] == toplines[end]
+        # remove common frames, recording changes to topmod
+        topmod = linetable[pop!(lines)].mod
+        pop!(toplines)
+    end
+    # check whether the outermost frame changed, or just the line number
+    newframe = true
+    topfile = NullLineInfo.file
+    if !isempty(lines) && !isempty(toplines)
+        let topline = linetable[toplines[end]]
+            line = linetable[lines[end]]
+            if topline.inlined_at == 0 || (topline.mod === line.mod && topline.method === line.method)
+                # we could track frame_id precisely, but llvm / dwarf has no support for that,
+                # and it wouldn't really be that meaningful after statements moved around,
+                # so we just do fuzzy matching here in the legacy-format writer
+                newframe = false
+                topfile = topline.file
+            end
+        end
+    end
+    # first pop the old frame(s)
+    npops = length(toplines) + newframe - 1
+    if npops > 0
+        push!(new_code, (npops == 1) ? Expr(:meta, :pop_loc) : Expr(:meta, :pop_loc, npops))
+    end
+    # then change the line number
+    if !newframe
+        let line = linetable[pop!(lines)]
+            if line.file === topfile
+                loc = LineNumberNode(line.line)
+            else
+                loc = LineNumberNode(line.line, line.file)
+            end
+            push!(new_code, loc)
+            topmod = line.mod
+        end
+    end
+    # then push the new frames
+    while !isempty(lines)
+        let line = linetable[pop!(lines)]
+            if !do_coverage || line.mod == topmod
+                loc = Expr(:meta, :push_loc, line.file, line.method, line.line)
+            else
+                loc = Expr(:meta, :push_loc, line.file, line.method, line.line, line.mod)
+            end
+            push!(new_code, loc)
+            topmod = line.mod
+        end
+    end
+    nothing
+end
+
+function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector{LineInfoNode})
     if !isempty(code.new_nodes)
         code = compact!(code)
     end
@@ -68,6 +135,7 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, topline::LineNumb
     label_mapping = IdDict{Int, Int}()
     terminator_mapping = IdDict{Int, Int}()
     fixup = Int[]
+    topline = 1
     for (idx, stmt) in pairs(code.stmts)
         line = code.lines[idx]
         # push labels first
@@ -78,8 +146,8 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, topline::LineNumb
             push!(new_code, LabelNode(length(new_code) + 1))
         end
         # then metadata
-        if !(line.file === nothing && line.line === 0) && !(line === topline)
-            push!(new_code, line)
+        if line != 0 && line != topline
+            push_new_lineinfo!(new_code, topline, line, linetable)
             topline = line
         end
         # record if this'll need a fixup after stmt number

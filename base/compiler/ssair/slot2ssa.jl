@@ -183,7 +183,7 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(code::Vector{Any}, lines::Vector{LineNumberNode})
+function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     for i = length(code):-1:1
@@ -198,7 +198,7 @@ function strip_trailing_junk!(code::Vector{Any}, lines::Vector{LineNumberNode})
     term = code[end]
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode{Any}())
-        push!(lines, LineNumberNode(0))
+        push!(lines, 0)
     end
     return code
 end

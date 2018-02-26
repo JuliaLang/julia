@@ -1,3 +1,12 @@
+struct LineInfoNode
+    mod::Module
+    method::Symbol
+    file::Symbol
+    line::Int
+    inlined_at::Int
+end
+const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
+
 include("compiler/ssair/ir.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/slot2ssa.jl")
@@ -10,19 +19,41 @@ macro show(s)
     # return :(println($(QuoteNode(s)), " = ", $(esc(s))))
 end
 
-function normalize(@nospecialize(stmt), meta::Vector{Any}, inline::Vector{Any}, loc::RefValue{LineNumberNode})
+function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInfoNode}, loc::RefValue{Int})
     if isa(stmt, Expr)
         if stmt.head == :meta
             args = stmt.args
             if length(args) > 0
                 a1 = args[1]
                 if a1 === :push_loc
-                    push!(inline, stmt)
+                    let
+                        current = loc[]
+                        filename = args[2]::Symbol
+                        methodname = NullLineInfo.method
+                        mod = table[current].mod
+                        line = 0
+                        for i = 3:length(args)
+                            ai = args[i]
+                            if ai isa Symbol
+                                methodname = ai
+                            elseif ai isa Int32
+                                line = Int(ai)
+                            elseif ai isa Int64
+                                line = Int(ai)
+                            elseif ai isa Module
+                                mod = ai
+                            end
+                        end
+                        push!(table, LineInfoNode(mod, methodname, filename, line, current))
+                        loc[] = length(table)
+                    end
                 elseif a1 === :pop_loc
                     n = (length(args) > 1) ? args[2]::Int : 1
                     for i in 1:n
-                        isempty(inline) && break
-                        pop!(inline)
+                        current = loc[]
+                        current = table[current].inlined_at
+                        current == 0 && break
+                        loc[] = current
                     end
                 else
                     push!(meta, stmt)
@@ -39,22 +70,35 @@ function normalize(@nospecialize(stmt), meta::Vector{Any}, inline::Vector{Any}, 
     elseif isa(stmt, LabelNode)
         return nothing
     elseif isa(stmt, LineNumberNode)
-        loc[] = stmt
+        let # need to expand this node so that it is source-location independent
+            current = loc[]
+            info = table[current]
+            methodname = info.method
+            mod = info.mod
+            file = stmt.file
+            file isa Symbol || (file = info.file)
+            line = stmt.line
+            push!(table, LineInfoNode(mod, methodname, file, line, info.inlined_at))
+            loc[] = length(table)
+        end
         return nothing
     end
     return stmt
 end
 
-function run_passes(ci::CodeInfo, mod::Module, nargs::Int, toploc::LineNumberNode)
+function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode})
+    mod = linetable[1].mod
     ci.code = copy(ci.code)
     meta = Any[]
-    lines = fill(LineNumberNode(0), length(ci.code))
-    let inline = Any[], loc = RefValue(toploc)
+    lines = fill(0, length(ci.code))
+    let loc = RefValue(1)
         for i = 1:length(ci.code)
             stmt = ci.code[i]
-            stmt = normalize(stmt, meta, inline, loc)
+            stmt = normalize(stmt, meta, linetable, loc)
             ci.code[i] = stmt
-            stmt === nothing || (lines[i] = loc[])
+            if !(stmt === nothing)
+                lines[i] = loc[]
+            end
         end
     end
     ci.code = strip_trailing_junk!(ci.code, lines)

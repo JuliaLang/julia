@@ -120,22 +120,22 @@ function first_insert_for_bb(code, cfg, block)
 end
 
 
-const NewNode = Tuple{Int, Any, Any, LineNumberNode}
+const NewNode = Tuple{Int, Any, Any, #=LineNumber=#Int}
 
 struct IRCode
     stmts::Vector{Any}
     types::Vector{Any}
-    lines::Vector{LineNumberNode}
+    lines::Vector{Int}
     argtypes::Vector{Any}
     cfg::CFG
     new_nodes::Vector{NewNode}
     mod::Module
     meta::Vector{Any}
 
-    function IRCode(stmts::Vector{Any}, lines::Vector{LineNumberNode}, cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
+    function IRCode(stmts::Vector{Any}, lines::Vector{Int}, cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
         return new(stmts, Any[], lines, argtypes, cfg, NewNode[], mod, meta)
     end
-    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{LineNumberNode}, cfg::CFG, new_nodes::Vector{NewNode})
+    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, cfg::CFG, new_nodes::Vector{NewNode})
         return new(stmts, types, lines, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)
     end
 end
@@ -317,7 +317,7 @@ mutable struct IncrementalCompact
     ir::IRCode
     result::Vector{Any}
     result_types::Vector{Any}
-    result_lines::Vector{LineNumberNode}
+    result_lines::Vector{Int}
     ssa_rename::Vector{Any}
     used_ssas::Vector{Int}
     late_fixup::Vector{Int}
@@ -331,7 +331,7 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(code.new_nodes)
         result = Array{Any}(uninitialized, new_len)
         result_types = Array{Any}(uninitialized, new_len)
-        result_lines = Array{LineNumberNode}(uninitialized, new_len)
+        result_lines = Array{Int}(uninitialized, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         used_ssas = fill(0, new_len)
         late_fixup = Vector{Int}()

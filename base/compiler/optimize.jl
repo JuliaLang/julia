@@ -23,10 +23,11 @@ mutable struct OptimizationState
             s_edges = []
             frame.stmt_edges[1] = s_edges
         end
-        next_label = max(label_counter(frame.src.code), length(frame.src.code)) + 10
+        src = frame.src
+        next_label = max(label_counter(src.code), length(src.code)) + 10
         return new(frame.linfo, frame.vararg_type_container,
                    s_edges::Vector{Any},
-                   frame.src, frame.mod, frame.nargs,
+                   src, frame.mod, frame.nargs,
                    next_label, frame.min_valid, frame.max_valid,
                    frame.params)
     end
@@ -53,7 +54,7 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        next_label = max(label_counter(frame.src.code), length(frame.src.code)) + 10
+        next_label = max(label_counter(src.code), length(src.code)) + 10
         vararg_type_container = nothing # if you want something more accurate, set it yourself :P
         return new(linfo, vararg_type_container,
                    s_edges::Vector{Any},
@@ -262,7 +263,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue{Bool}(false)
+const enable_new_optimizer = RefValue(false)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -294,12 +295,13 @@ function optimize(me::InferenceState)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineNumberNode(Int(def.line), def.file)
+                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
             else
-                topline = LineNumberNode(0)
+                topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
             end
-            ir = run_passes(opt.src, opt.mod, nargs, topline)
-            replace_code!(opt.src, ir, nargs, topline)
+            linetable = [topline]
+            ir = run_passes(opt.src, nargs, linetable)
+            replace_code!(opt.src, ir, nargs, linetable)
             push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
             any_phi = true
         elseif !any_phi
@@ -1474,6 +1476,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     local end_label # if it ends in a goto, we might need to add a come-from label
+    npops = 0 # we don't require them to balance, so find out how many need to be added
     for i = 1:body_len
         a = body.args[i]
         if isa(a, GotoNode)
@@ -1496,6 +1499,27 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 end
                 edges = Any[newlabels[edge::Int + 1] - 1 for edge in edges]
                 a.args[2] = PhiNode(edges, a.args[2].values)
+            elseif a.head === :meta && length(a.args) > 0
+                a1 = a.args[1]
+                if a1 === :push_loc
+                    npops += 1
+                elseif a1 === :pop_loc
+                    if length(a.args) > 1
+                        npops_loc = a.args[2]::Int
+                        if npops_loc > npops # corrupt IR - try to normalize it to limit the impact
+                            a.args[2] = npops
+                            npops = 0
+                        else
+                            npops -= npops_loc
+                        end
+                    else
+                        if npops == 0 # corrupt IR - try to normalize it to limit the impact
+                            body.args[i] = nothing
+                        else
+                            npops -= 1
+                        end
+                    end
+                end
             end
         end
     end
@@ -1575,27 +1599,23 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             isa(linenode.file, Symbol) && (file = linenode.file)
         end
     end
-    if do_coverage
+    npops += 1
+    if do_coverage || !isempty(stmts)
+        pop_loc = (npops == 1) ? Expr(:meta, :pop_loc) : Expr(:meta, :pop_loc, npops)
         # Check if we are switching module, which is necessary to catch user
         # code inlined into `Base` with `--code-coverage=user`.
-        # Assume we are inlining directly into `enclosing` instead of another
-        # function inlined in it
         mod = method.module
-        if mod === sv.mod
+        if !do_coverage || mod === sv.mod
             pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line))
         else
             pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line, mod))
         end
-        push!(stmts, Expr(:meta, :pop_loc))
-    elseif !isempty(stmts)
-        pushfirst!(stmts, Expr(:meta, :push_loc, file,
-                             method.name, line))
-        if isa(stmts[end], LineNumberNode)
-            stmts[end] = Expr(:meta, :pop_loc)
+        if !do_coverage && !isempty(stmts) && isa(stmts[end], LineNumberNode)
+            stmts[end] = pop_loc
         else
-            push!(stmts, Expr(:meta, :pop_loc))
+            push!(stmts, pop_loc)
         end
     end
 
