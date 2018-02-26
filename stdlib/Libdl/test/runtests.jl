@@ -15,7 +15,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return contains(basename(dl), Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"))
+        return ismatch(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL

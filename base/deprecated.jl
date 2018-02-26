@@ -1240,7 +1240,7 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char) findlast(equalto(c), s)
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 
-@deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
+@deprecate contains(s::AbstractString, r::Regex) ismatch(r, s)
 
 @deprecate findin(a, b) findall(occursin(b), a)
 

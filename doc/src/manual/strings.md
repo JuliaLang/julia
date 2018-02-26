@@ -606,17 +606,17 @@ julia> typeof(ans)
 Regex
 ```
 
-To check if a regex matches a string, use [`contains`](@ref):
+To check if a regex matches a string, use [`ismatch`](@ref):
 
 ```jldoctest
-julia> contains("not a comment", r"^\s*(?:#|$)")
+julia> ismatch(r"^\s*(?:#|$)", "not a comment")
 false
 
-julia> contains("# a comment", r"^\s*(?:#|$)")
+julia> ismatch(r"^\s*(?:#|$)", "# a comment")
 true
 ```
 
-As one can see here, [`contains`](@ref) simply returns true or false, indicating whether the
+As one can see here, [`ismatch`](@ref) simply returns true or false, indicating whether the
 given regex matches the string or not. Commonly, however, one wants to know not just whether a
 string matched, but also *how* it matched. To capture this information about a match, use the
 [`match`](@ref) function instead:

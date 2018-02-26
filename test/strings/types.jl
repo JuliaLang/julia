@@ -154,8 +154,8 @@ end
 @test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
-@test !contains(SubString("",1,0), Regex("aa"))
-@test contains(SubString("",1,0), Regex(""))
+@test !ismatch(Regex("aa"), SubString("",1,0))
+@test ismatch(Regex(""), SubString("",1,0))
 
 # isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(

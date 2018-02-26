@@ -126,7 +126,7 @@ function complete_keyword(s::Union{String,SubString{String}})
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.Sys.isunix() && contains(path, r"^~(?:/|$)")
+    if Base.Sys.isunix() && ismatch(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -419,7 +419,7 @@ function afterusing(string::String, startpos::Int)
     r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
     isempty(r) && return false
     fr = reverseind(str, last(r))
-    return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
+    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
 function bslash_completions(string, pos)
