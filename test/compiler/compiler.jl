@@ -1418,3 +1418,8 @@ function h25579(g)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
         Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+
+f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
+g26172(::Val{0}) = ()
+g26172(v) = (nothing, g26172(f26172(v))...)
+@test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
