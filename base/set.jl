@@ -526,3 +526,11 @@ function _replace!(new::Callable, A::AbstractArray, count::Int)
         c == count && break
     end
 end
+
+# Construct uninitialized dictionary using the keys from/via a `Set`
+Dict{K, V}(::Uninitialized, inds) where {K, V} = Dict{K, V}(uninitialized, Set{K}(inds))
+function Dict{K,V}(::Uninitialized, inds::Set{K}) where {K, V}
+    d = inds.dict
+    n = length(d.keys)
+    Dict{K,V}(copy(d.slots), copy(d.keys), Vector{V}(uninitialized, n), d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+end

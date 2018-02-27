@@ -165,6 +165,28 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
     return dest
 end
 
+"""
+    Dict{K,V}(uninitialized, keys)
+
+Construct a `Dict` with unitialized values of type `V` with the provided unique set of
+`keys`.
+
+# Examples
+
+```
+julia> Dict{Int, Float64}(uninitialized, [1, 2, 3])
+Dict{Int64,Float64} with 3 entries:
+  2 => 6.90966e-310
+  3 => 6.90966e-310
+  1 => 6.90966e-310
+```
+"""
+function Dict{K,V}(::Uninitialized, inds::KeySet{<:Dict{K}}) where {K, V}
+    d = inds.dict
+    n = length(d.keys)
+    Dict{K,V}(copy(d.slots), copy(d.keys), Vector{V}(uninitialized, n), d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+end
+
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int

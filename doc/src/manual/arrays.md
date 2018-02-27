@@ -655,8 +655,9 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array, tuple or [`Ref`](@ref)
-(except for [`Ptr`](@ref)) as a "scalar".
+it also handles tuples, named tuples and dictionaries, and treats any argument that is not
+an array, tuple, named tuple, dictionary or [`Ref`](@ref) (except for [`Ptr`](@ref)) as a
+"scalar".
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
@@ -674,6 +675,14 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "1. First"
  "2. Second"
  "3. Third"
+
+julia> (a = 1, b = 2) .* 2
+(a = 2, b = 4)
+
+julia> Dict(1 => 1, 2 => 2) .+ [10, 20]
+Dict{Int64,Int64} with 2 entries:
+  2 => 22
+  1 => 11
 ```
 
 ### Implementation
