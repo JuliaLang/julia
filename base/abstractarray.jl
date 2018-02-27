@@ -29,7 +29,7 @@ Return a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
 lengths of dimensions you asked for.
 
-Note that `size` may not be defined for arrays with non-standard indices, in which case[`axes`](@ref)
+Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
 # Examples
