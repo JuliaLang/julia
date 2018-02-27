@@ -180,7 +180,7 @@ julia> str[end]
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
 element is returned by [`firstindex(str)`](@ref), and the index of the last element
-with [`lastindex(str)`](@ref). The keyword`end` can be used inside an indexing
+with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
 operation as shorthand for the last index along the given dimension.
 Most indexing in Julia is 1-based: the first element of many integer-indexed objects is found at
 index 1. (As we will see below, this does not necessarily mean that the last element is found
