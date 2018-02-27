@@ -189,11 +189,11 @@ end
     for T in (Nothing, Missing)
         x = [(1, T()), (1, 2)]
         y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
-        @test y isa Vector{Tuple{Int,Union{T,Int}}}
+        @test y isa Vector{Tuple{Int, Any}}
         @test isequal(x, y)
     end
     y = map(v -> (v[1], v[1] + v[2]), [(1, missing), (1, 2)])
-    @test y isa Vector{Tuple{Int,Union{Missing,Int}}}
+    @test y isa Vector{Tuple{Int, Any}}
     @test isequal(y, [(1, missing), (1, 3)])
 end
 
