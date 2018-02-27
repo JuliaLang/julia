@@ -202,7 +202,7 @@ end
 
 function _accumulate(op, v0, X, ::IteratorSize, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    if length(X) == 0
+    if isempty(X)
         # fallback on collect machinery
         return collect(Accumulate(op, v0, X))
     end
@@ -250,7 +250,11 @@ function _accumulate!(op, dest, v0, X, ::IteratorSize, dim::Integer)
     @assert !done(indT, sT)
     iT,sT = next(indT, sT)
 
-    return _accumulate!(op, dest, first(linearindices(dest))-1, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
+    accv = reduce_first(op, v0, X[iH, iD, iT])
+    i = first(linearindices(dest))
+    dest[i] = accv
+
+    return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
 end
 
 function _accumulate!(op, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {T}
