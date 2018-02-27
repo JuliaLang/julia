@@ -277,7 +277,7 @@ split(str::T, splitter::Char;
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = firstindex(str)
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), prevind(str,i))
+    r = coalesce(findfirst(splitter,str), i - 1)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
