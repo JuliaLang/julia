@@ -44,7 +44,7 @@ function _readKey(stream::IO=stdin)
     c = readNextChar(stream)
 
     # Escape characters
-	if c == '\x1b'
+    if c == '\x1b'
         stream.buffer.size < 2 && return '\x1b'
         esc_a = readNextChar(stream)
         esc_a == 'v' && return PAGE_UP  # M-v
