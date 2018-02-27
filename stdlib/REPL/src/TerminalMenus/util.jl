@@ -78,21 +78,13 @@ function _readKey(stream::IO=stdin)
                 esc_b == 'F' && return END_KEY
                 return '\x1b'
             end
-        elseif esc_a == 'H'
-            return HOME_KEY
-        elseif esc_a == 'F'
-            return END_KEY
         end
-
+        esc_a == 'H' && return HOME_KEY
+        esc_a == 'F' && return END_KEY
         return '\x1b'
-
-    elseif c == '\x16'  # C-v
-        return PAGE_DOWN
-    elseif c == '\x10'  # C-p
-        return ARROW_UP
-    elseif c == '\x0e'  # C-n
-        return ARROW_DOWN
-    else
-        return c
     end
+    c == '\x16' && return PAGE_DOWN  # C-v
+    c == '\x10' && return ARROW_UP   # C-p
+    c == '\x0e' && return ARROW_DOWN # C-n
+    return c
 end
