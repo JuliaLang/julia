@@ -125,6 +125,18 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
+A return type can also be specified in the function declaration using the `::` operator. This converts
+the return value to the specified type.
+
+```jldoctest
+function g(x,y)::Int8
+    return x * y
+end
+```
+
+This function will always return an `Int8` regardless of the types of `x` and `y`.
+See [Type Declarations](@ref) for more on return types.
+
 ## Operators Are Functions
 
 In Julia, most operators are just functions with support for special syntax. (The exceptions are

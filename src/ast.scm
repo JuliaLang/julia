@@ -6,8 +6,7 @@
   (if (has-parameters? l)
       (string (string.join (map deparse (cdr l)) sep)
               (if (length= (cdr l) 1) "," "")
-              "; "
-              (string.join (map deparse (cdar l)) ", "))
+              (deparse (car l)))
       (string.join (map deparse l) sep)))
 
 (define (deparse-prefix-call head args opn cls)
@@ -95,6 +94,7 @@
                                 (if (length= e 3)
                                     (deparse (caddr e))
                                     (deparse (cons 'braces (cddr e))))))
+           ((parameters) (string "; " (deparse-arglist (cdr e))))
            ;; bracket forms
            ((tuple)
             (string #\( (deparse-arglist (cdr e))
@@ -406,6 +406,7 @@
                            (eq? (cadr (caddr x)) 'Vararg)))))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
 (define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
+(define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))

@@ -199,6 +199,9 @@ Language changes
   * `=>` now has its own precedence level, giving it strictly higher precedence than
     `=` and `,` ([#25391]).
 
+  * The conditions under which unary operators followed by `(` are parsed as prefix function
+    calls have changed ([#26154]).
+
   * `begin` is disallowed inside indexing expressions, in order to enable the syntax
     `a[begin]` (for selecting the first element) in the future ([#23354]).
 
