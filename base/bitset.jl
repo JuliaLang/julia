@@ -28,6 +28,9 @@ very large integers), use [`Set`](@ref) instead.
 """
 BitSet(itr) = union!(BitSet(), itr)
 
+# Special implementation for BitSet, which lacks a fast `length` method.
+union!(s::BitSet, itr) = foldl(push!, s, itr)
+
 @inline intoffset(s::BitSet) = s.offset << 6
 
 eltype(::Type{BitSet}) = Int
