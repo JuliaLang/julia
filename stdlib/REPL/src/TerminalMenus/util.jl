@@ -43,8 +43,8 @@ readKey(stream::IO=stdin) = UInt32(_readKey(stream))
 function _readKey(stream::IO=stdin)
     c = readNextChar(stream)
 
-	# Escape characters
-	if c == '\x1b'
+    # Escape characters
+    if c == '\x1b'
         stream.buffer.size < 2 && return '\x1b'
         esc_a = readNextChar(stream)
 
@@ -59,56 +59,54 @@ function _readKey(stream::IO=stdin)
         stream.buffer.size < 3 && return '\x1b'
         esc_b = readNextChar(stream)
 
-		if esc_a == '[' || esc_a == 'O'
-			if esc_b >= '0' && esc_b <= '9'
-				stream.buffer.size < 4 && return '\x1b'
+        if esc_a == '[' || esc_a == 'O'
+            if esc_b >= '0' && esc_b <= '9'
+                stream.buffer.size < 4 && return '\x1b'
                 esc_c = readNextChar(stream)
-
-				if esc_c == '~'
-					if esc_b == '1'
+                if esc_c == '~'
+                    if esc_b == '1'
                         return HOME_KEY
-					elseif esc_b == '4'
+                    elseif esc_b == '4'
                         return END_KEY
-					elseif esc_b == '3'
+                    elseif esc_b == '3'
                         return DEL_KEY
-					elseif esc_b == '5'
+                    elseif esc_b == '5'
                         return PAGE_UP
-					elseif esc_b == '6'
+                    elseif esc_b == '6'
                         return PAGE_DOWN
-					elseif esc_b == '7'
+                    elseif esc_b == '7'
                         return HOME_KEY
-					elseif esc_b == '8'
+                    elseif esc_b == '8'
                         return END_KEY
                     else
                         return '\x1b'
                     end
                 end
-
-			else
-				# Arrow keys
-				if esc_b == 'A'
+            else
+                # Arrow keys
+                if esc_b == 'A'
                     return ARROW_UP
-				elseif esc_b == 'B'
+                elseif esc_b == 'B'
                     return ARROW_DOWN
-				elseif esc_b == 'C'
+                elseif esc_b == 'C'
                     return ARROW_RIGHT
-				elseif esc_b == 'D'
+                elseif esc_b == 'D'
                     return ARROW_LEFT
-				elseif esc_b == 'H'
+                elseif esc_b == 'H'
                     return HOME_KEY
-				elseif esc_b == 'F'
+                elseif esc_b == 'F'
                     return END_KEY
                 else
                     return '\x1b'
                 end
-			end
-		elseif esc_a == 'H'
+            end
+        elseif esc_a == 'H'
             return HOME_KEY
         elseif esc_a == 'F'
             return END_KEY
-		end
+        end
 
-		return '\x1b'
+        return '\x1b'
 
     elseif c == '\x16'  # C-v
         return PAGE_DOWN
@@ -117,6 +115,6 @@ function _readKey(stream::IO=stdin)
     elseif c == '\x0e'  # C-n
         return ARROW_DOWN
     else
-		return c
-	end
+        return c
+    end
 end
