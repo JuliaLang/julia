@@ -1529,7 +1529,7 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::AbstractArray) = (UInt(pointer_from_objref(A)),)
 dataids(A::Array) = (UInt(pointer(A)),)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
