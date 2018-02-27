@@ -182,6 +182,11 @@ As in the example above, we recommend following some simple conventions when wri
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It it advised to add line breaks after 92 characters.
+6. Provide information allowing custom types to implement the function in an
+   `# Implementation` section. These implementation details intended for developers
+   rather than users, explaining e.g. which functions should be overridden and which functions
+   automatically use appropriate fallbacks, are better kept separate from the main description of
+   the function's behavior.
 
 ## Accessing Documentation
 
