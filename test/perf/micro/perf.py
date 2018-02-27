@@ -64,7 +64,7 @@ def randmatmul(n):
 ## mandelbrot ##
 
 def abs2(z):
-    return real(z)*real(z) +  imag(z)*imag(z)
+    return z.real*z.real +  z.imag*z.imag
 
 def mandel(z):
     maxiter = 80
