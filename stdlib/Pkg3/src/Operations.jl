@@ -98,7 +98,8 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
         reqfile = joinpath(pkg.path, "REQUIRE")
         fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
         !isfile(reqfile) && continue
-        for r in filter!(r->r isa Pkg2.Reqs.Requirement, Pkg2.Reqs.read(reqfile))
+        for r in Pkg2.Reqs.read(reqfile)
+            r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
             if pkg_name == "julia"
                 if !(VERSION in vspec)
@@ -221,7 +222,6 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         uuid_to_name[uuid] = name
         info = manifest_info(ctx.env, uuid)
         info == nothing && continue
-        haskey(info, "version") || continue
         ver = VersionNumber(info["version"])
         uuid_idx = findfirst(equalto(uuid), uuids)
         if uuid_idx != nothing
@@ -537,19 +537,20 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         end
         reqfile = joinpath(path, "REQUIRE")
         if isfile(reqfile)
-            for r in filter!(r->r isa Pkg2.Reqs.Requirement, Pkg2.Reqs.read(reqfile))
+            for r in Pkg2.Reqs.read(reqfile)
+                r isa Pkg2.Reqs.Requirement || continue
                 push!(dep_pkgs, PackageSpec(r.package))
             end
             registry_resolve!(env, dep_pkgs)
-        end
-        ensure_resolved(env, dep_pkgs)
-        deps = Dict{String,String}()
-        for dep_pkg in dep_pkgs
-            dep_pkg.name == "julia" && continue
-            deps[dep_pkg.name] = string(dep_pkg.uuid)
-        end
-        if !isempty(deps)
-            info["deps"] = deps
+            ensure_resolved(env, dep_pkgs)
+            deps = Dict{String,String}()
+            for dep_pkg in dep_pkgs
+                dep_pkg.name == "julia" && continue
+                deps[dep_pkg.name] = string(dep_pkg.uuid)
+            end
+            if !isempty(deps)
+                info["deps"] = deps
+            end
         end
     else
         for path in registered_paths(env, uuid)
@@ -585,36 +586,62 @@ function prune_manifest(env::EnvCache)
     end
 end
 
-function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=true, do_resolve=false)
-    localctx = deepcopy(ctx)
+# When testing or building a dependency, we want that dependency to be able to load its own dependencies
+# at top level. Therefore we would like to execute the build or testing of a dependency using its own Project file as
+# the current environment. Being backwards compatible with REQUIRE file complicates the story a bit since these packages
+# do not have any Project files.
+function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::PackageSpec; allow_self_load=true, might_need_to_resolve=false)
+    # localctx is the context for the temporary environment we run the testing / building in
+    localctx = deepcopy(mainctx)
     empty!(localctx.env.project["deps"])
     info = manifest_info(localctx.env, pkg.uuid)
-    # If package or its dependencies are checked out, will need to resolve
-    # unless we already have resolved for the current environment
+    # If pkg or its dependencies are checked out, we will need to resolve
+    # unless we already have resolved for the current environment, which the calleer indicates
+    # with `might_need_to_resolve`
+    need_to_resolve = false
     if allow_self_load
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
     end
-    need_to_resolve = haskey(info, "path")
-    # Allow to load dependent packages at top level by putting them in the project
+    need_to_resolve |= haskey(info, "path")
     deps = PackageSpec[]
     for (dpkg, duuid) in get(info, "deps", [])
         dinfo = manifest_info(localctx.env, UUID(duuid))
         dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
         localctx.env.project["deps"][dpkg] = string(duuid)
     end
-    local new
-    will_resolve = do_resolve && need_to_resolve
-    if will_resolve
-        pkgs = PackageSpec[]
-        resolve_versions!(localctx, pkgs)
-        new = apply_versions(localctx, pkgs)
-    else
-        prune_manifest(localctx.env)
-    end
+
+
     mktempdir() do tmpdir
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
         localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
-        write_env(localctx, no_output = true)
+        # If pkg has a test only dependency, definitely need to resolve!
+        pkgs = PackageSpec[]
+        if pkg.special_action == PKGSPEC_TESTED
+            info = manifest_info(localctx.env, pkg.uuid)
+            path = haskey(info, "path") ? info["path"] : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
+            test_reqfile = joinpath(path, "test", "REQUIRE")
+            if isfile(test_reqfile)
+                for r in Pkg2.Reqs.read(test_reqfile)
+                    r isa Pkg2.Reqs.Requirement || continue
+                    pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
+                    push!(pkgs, PackageSpec(pkg_name, vspec))
+                end
+                registry_resolve!(localctx.env, pkgs)
+                ensure_resolved(localctx.env, pkgs)
+                add(localctx, pkgs)
+                need_to_resolve = false # add resolves
+            end
+        end
+
+        local new
+        will_resolve = might_need_to_resolve && need_to_resolve
+        if will_resolve
+            resolve_versions!(localctx, pkgs)
+            new = apply_versions(localctx, pkgs)
+        else
+            prune_manifest(localctx.env)
+        end
+        write_env(localctx, display_diff = false)
         will_resolve && build_versions(localctx, new)
         withenv("JULIA_LOAD_PATH" => joinpath(tmpdir)) do
             f()
@@ -646,7 +673,7 @@ function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,In
     return order
 end
 
-function build_versions(ctx::Context, uuids::Vector{UUID}; do_resolve=false)
+function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve=false)
     # collect builds for UUIDs with `deps/build.jl` files
     ctx.preview && (@info "Skipping building in preview mode"; return)
     builds = Tuple{UUID,String,Union{String,SHA1},String}[]
@@ -693,7 +720,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; do_resolve=false)
             --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
-        with_local_project(ctx, PackageSpec(name, uuid); allow_self_load=false, do_resolve=do_resolve) do
+        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); allow_self_load=false, might_need_to_resolve=might_need_to_resolve) do
             open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
             end ? Base.rm(log_file, force=true) :
@@ -902,6 +929,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     testfiles        = String[]
     version_paths    = String[]
     for pkg in pkgs
+        pkg.special_action = PKGSPEC_TESTED
         info = manifest_info(ctx.env, pkg.uuid)
         if haskey(info, "git-tree-sha1")
             version_path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
@@ -947,15 +975,14 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
             --eval $code
         ```
-        try
-            with_local_project(ctx, pkg; do_resolve=true) do
+        with_dependencies_loadable_at_toplevel(ctx, pkg; might_need_to_resolve=true) do
+            try
                 run(cmd)
                 @info("$(pkg.name) tests passed")
+            catch err
+                push!(pkgs_errored, pkg.name)
             end
-        catch err
-            push!(pkgs_errored, pkg.name)
         end
-
     end
 
     if !isempty(pkgs_errored)

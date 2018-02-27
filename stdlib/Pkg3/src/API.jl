@@ -334,7 +334,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
-    Pkg3.Operations.build_versions(ctx, uuids; do_resolve=true)
+    Pkg3.Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
 end
 
 init() = init(Context())

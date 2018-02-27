@@ -23,7 +23,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT, PKGSPEC_TESTED
 
 
 ## ordering of UUIDs ##
@@ -359,7 +359,7 @@ cmderror(msg::String...) = throw(CommandError(join(msg)))
 # No stacktrace shown
 Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
-    printstyled(color = Base.error_color(), io, string(ex.msg))
+    printstyled(io, string(ex.msg); color = Base.error_color())
 end
 
 ###############
@@ -376,7 +376,7 @@ function UpgradeLevel(s::Symbol)
 end
 
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
-@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT)
+@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT, PKGSPEC_TESTED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
@@ -928,7 +928,7 @@ function Context!(ctx::Context; kwargs...)
     end
 end
 
-function write_env(ctx::Context; no_output=false)
+function write_env(ctx::Context; display_diff=true)
     env = ctx.env
     # load old environment for comparison
     old_env = EnvCache(env.env)
@@ -936,8 +936,8 @@ function write_env(ctx::Context; no_output=false)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        no_output || @info "Updating $(pathrepr(env, env.project_file))"
-        no_output || Pkg3.Display.print_project_diff(old_env, env)
+        display_diff && @info "Updating $(pathrepr(env, env.project_file))"
+        display_diff && Pkg3.Display.print_project_diff(old_env, env)
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -947,8 +947,8 @@ function write_env(ctx::Context; no_output=false)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        no_output || @info "Updating $(pathrepr(env, env.manifest_file))"
-        no_output || Pkg3.Display.print_manifest_diff(old_env, env)
+        display_diff && @info "Updating $(pathrepr(env, env.manifest_file))"
+        display_diff && Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)
