@@ -1904,7 +1904,12 @@
 
    '.=
    (lambda (e)
-     (expand-fuse-broadcast (cadr e) (caddr e)))
+     `(ifvalue
+       ,(let ((temp (make-ssavalue)))
+          `(block ,(expand-forms `(= ,temp ,(caddr e)))
+                  ,(expand-fuse-broadcast (cadr e) temp)
+                  ,temp))
+       ,(expand-fuse-broadcast (cadr e) (caddr e))))
 
    '|<:|
    (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
@@ -3651,6 +3656,10 @@ f(x) = yt(x)
              (if value
                  (compile (cadr e) break-labels value tail)
                  #f))
+            ((ifvalue)
+             (if value
+                 (syntax-deprecation "using the value of `.=`" "" current-loc))
+             (compile (caddr e) break-labels value tail))
             ((if elseif)
              (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
                    (end-jump `(goto _))
