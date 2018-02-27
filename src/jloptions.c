@@ -78,7 +78,7 @@ static const char opts[]  =
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
-    " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
+    " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes|no}\n"
     "                           Use native code from system image if available\n"

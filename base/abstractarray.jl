@@ -138,8 +138,7 @@ julia> ndims(A)
 ```
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{AbstractArray{T,N}}) where {T,N} = N
-ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
+ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
 
 """
     length(collection) -> Integer
@@ -753,7 +752,7 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -883,8 +882,8 @@ of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
-function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
-    LinSpace(T(r.start), T(r.stop), length(r))
+function map(::Type{T}, r::LinRange) where T<:AbstractFloat
+    LinRange(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##
@@ -1049,6 +1048,110 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
 end
+
+"""
+    parent(A)
+
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+it is not a view.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> V = view(A, 1:2, :)
+2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
+ 1  2
+ 3  4
+
+julia> parent(V)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+parent(a::AbstractArray) = a
+
+## rudimentary aliasing detection ##
+"""
+    Base.unalias(dest, A)
+
+Return either `A` or a copy of `A` in a rough effort to prevent modifications to `dest` from
+affecting the returned object. No guarantees are provided.
+
+Custom arrays that wrap or use fields containing arrays that might alias against other
+external objects should provide a [`Base.dataids`](@ref) implementation.
+
+This function must return an object of exactly the same type as `A` for performance and type
+stability. Mutable custom arrays for which [`copy(A)`](@ref) is not `typeof(A)` should
+provide a [`Base.unaliascopy`](@ref) implementation.
+
+See also [`Base.mightalias`](@ref).
+"""
+unalias(dest, A::AbstractArray) = mightalias(dest, A) ? unaliascopy(A) : A
+unalias(dest, A::AbstractRange) = A
+unalias(dest, A) = A
+
+"""
+    Base.unaliascopy(A)
+
+Make a preventative copy of `A` in an operation where `A` [`Base.mightalias`](@ref) against
+another array in order to preserve consistent semantics as that other array is mutated.
+
+This must return an object of the same type as `A` to preserve optimal performance in the
+much more common case where aliasing does not occur. By default,
+`unaliascopy(A::AbstractArray)` will attempt to use [`copy(A)`](@ref), but in cases where
+`copy(A)` is not a `typeof(A)`, then the array should provide a custom implementation of
+`Base.unaliascopy(A)`.
+"""
+unaliascopy(A::Array) = copy(A)
+unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
+_unaliascopy(A::T, C::T) where {T} = C
+_unaliascopy(A, C) = throw(ArgumentError("""
+    an array of type `$(typeof(A).name)` shares memory with another argument and must
+    make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
+        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+unaliascopy(A) = A
+
+"""
+    Base.mightalias(A::AbstractArray, B::AbstractArray)
+
+Perform a conservative test to check if arrays `A` and `B` might share the same memory.
+
+By default, this simply checks if either of the arrays reference the same memory
+regions, as identified by their [`Base.dataids`](@ref).
+"""
+mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
+mightalias(x, y) = false
+
+_isdisjoint(as::Tuple{}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple, bs::Tuple{}) = true
+_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
+
+"""
+    Base.dataids(A::AbstractArray)
+
+Return a tuple of `UInt`s that represent the mutable data segments of an array.
+
+Custom arrays that would like to opt-in to aliasing detection of their component
+parts can specialize this method to return the concatenation of the `dataids` of
+their component parts.  A typical definition for an array that wraps a parent is
+`Base.dataids(C::CustomArray) = dataids(C.parent)`.
+"""
+dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::Array) = (UInt(pointer(A)),)
+dataids(::AbstractRange) = ()
+dataids(x) = ()
 
 ## get (getindex with a default value) ##
 

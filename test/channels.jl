@@ -101,7 +101,7 @@ using Distributed
     cs = [Channel(N) for i in 1:5]
     tf2 = () -> begin
         if N > 0
-            foreach(c->assert(take!(c)==2), cs)
+            foreach(c->(@assert take!(c)==2), cs)
         end
         yield()
         error("foo")
@@ -145,7 +145,7 @@ using Distributed
 
     # channeled_tasks
     for T in [Any, Int]
-        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(assert(take!(c1)==1); put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2)); ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
         @test take!(chnls[2]) == 2
         @test_throws InvalidStateException wait(chnls[1])
@@ -156,7 +156,7 @@ using Distributed
 
         f=Future()
         tf4 = (c1,c2) -> begin
-            assert(take!(c1)==1)
+            @assert take!(c1)==1
             wait(f)
         end
 
@@ -181,7 +181,7 @@ using Distributed
 
     # channel
     tf6 = c -> begin
-        assert(take!(c)==2)
+        @assert take!(c)==2
         error("foo")
     end
 
@@ -238,7 +238,7 @@ end
         GC.enable(true)
         GC.gc()
     end
-    oldstderr = STDERR
+    oldstderr = stderr
     local newstderr, errstream
     try
         newstderr = redirect_stderr()
@@ -248,9 +248,9 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    wait(t)
+    Base._wait(t)
     @test run[] == 3
-    @test wait(errstream) == """
+    @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -266,7 +266,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
 end
 
 @testset "schedule_and_wait" begin
@@ -286,7 +286,7 @@ end
     testerr = ErrorException("expected")
     @async Base.throwto(t, testerr)
     @test try
-        wait(t)
+        Base._wait(t)
         false
     catch ex
         ex
@@ -364,4 +364,30 @@ end
     @test !isopen(c)
     c.excp == nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
+end
+
+# issue #12473
+# make sure 1-shot timers work
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0)
+    sleep(0.2)
+    @test a == [1]
+end
+
+# make sure repeating timers work
+@noinline function make_unrooted_timer(a)
+    t = Timer(0.0, interval = 0.1)
+    finalizer(t -> a[] += 1, t)
+    wait(t)
+    e = @elapsed for i = 1:5
+        wait(t)
+    end
+    @test 1.5 > e >= 0.4
+    @test a[] == 0
+    nothing
+end
+let a = Ref(0)
+    make_unrooted_timer(a)
+    GC.gc()
+    @test a[] == 1
 end

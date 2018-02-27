@@ -338,7 +338,7 @@ julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
 
 Floating-point numbers have [two zeros](https://en.wikipedia.org/wiki/Signed_zero), positive zero
 and negative zero. They are equal to each other but have different binary representations, as
-can be seen using the `bits` function: :
+can be seen using the `bits` function:
 
 ```jldoctest
 julia> 0.0 == -0.0

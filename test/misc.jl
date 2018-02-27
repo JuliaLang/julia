@@ -2,21 +2,6 @@
 
 # Tests that do not really go anywhere else
 
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    try
-        assert(false)
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
-    end
-end
-
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -91,9 +76,9 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting STDERR.
+# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
-    redir_err = "redirect_stderr(STDOUT)"
+    redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
@@ -117,7 +102,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    wait(t)
+    Base._wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -127,9 +112,9 @@ end
 @noinline function f6597(c)
     t = @schedule nothing
     finalizer(t -> c[] += 1, t)
-    wait(t)
+    Base._wait(t)
     @test c[] == 0
-    wait(t)
+    Base._wait(t)
     nothing
 end
 let c = Ref(0),
@@ -384,7 +369,7 @@ if Sys.iswindows()
     end
 end
 
-let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
     @test !contains(optstring, "Ptr")
     @test endswith(optstring, "\n)")
@@ -452,14 +437,14 @@ let buf_color = IOBuffer()
     @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
-if STDOUT isa Base.TTY
-    @test haskey(STDOUT, :color) == true
-    @test haskey(STDOUT, :bar) == false
-    @test (:color=>Base.have_color) in STDOUT
-    @test (:color=>!Base.have_color) ∉ STDOUT
-    @test STDOUT[:color] == get(STDOUT, :color, nothing) == Base.have_color
-    @test get(STDOUT, :bar, nothing) === nothing
-    @test_throws KeyError STDOUT[:bar]
+if stdout isa Base.TTY
+    @test haskey(stdout, :color) == true
+    @test haskey(stdout, :bar) == false
+    @test (:color=>Base.have_color) in stdout
+    @test (:color=>!Base.have_color) ∉ stdout
+    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:bar]
 end
 
 let
@@ -597,7 +582,7 @@ include("testenv.jl")
 let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
     local cmd = `$test_exename $flags deprecation_exec.jl`
 
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
     end
 end

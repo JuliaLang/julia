@@ -139,7 +139,7 @@ h265() = true
 loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
 @test_throws MethodError put_n_take!(h265, ())
-@test_throws MethodError wait(t265)
+@test_throws MethodError fetch(t265)
 @test istaskdone(t265)
 let ex = t265.exception
     @test ex.f == h265

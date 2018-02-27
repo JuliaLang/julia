@@ -91,12 +91,9 @@ struct SHA1
     end
 end
 SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
+string(hash::SHA1) = bytes2hex(hash.bytes)
 
-convert(::Type{String}, hash::SHA1) = bytes2hex(convert(Vector{UInt8}, hash))
-convert(::Type{Vector{UInt8}}, hash::SHA1) = hash.bytes
-
-string(hash::SHA1) = String(hash)
-show(io::IO, hash::SHA1) = print(io, "SHA1(", convert(String, hash), ")")
+show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -123,36 +120,28 @@ dummy_uuid(project_file::String) = isfile_casesensitive(project_file) ?
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
-const SlugInt = UInt32 # max p = 4
-const chars = String(['A':'Z'; 'a':'z'; '0':'9'])
-const nchars = SlugInt(length(chars))
-const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
+const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
-function slug(x::SlugInt, p::Int)
-    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
-        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
-    return sprint() do io
+function slug(x::UInt32, p::Int)
+    sprint(sizehint=p) do io
+        n = length(slug_chars)
         for i = 1:p
-            x, d = divrem(x, nchars)
-            write(io, chars[1+d])
+            x, d = divrem(x, n)
+            write(io, slug_chars[1+d])
         end
     end
 end
-slug(x::Integer, p::Int) = slug(SlugInt(x), p)
 
-function slug(bytes::Vector{UInt8}, p::Int)
-    n = nchars^p
-    x = zero(SlugInt)
-    for (i, b) in enumerate(bytes)
-        x = (x + b*powermod(2, 8(i-1), n)) % n
-    end
-    slug(x, p)
+function package_slug(uuid::UUID, p::Int=4)
+    crc = _crc32c(uuid)
+    return slug(crc, p)
 end
 
-slug(uuid::UUID, p::Int=4) = slug(uuid.value % nchars^p, p)
-slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
-
-version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
+function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
+    crc = _crc32c(uuid)
+    crc = _crc32c(sha1.bytes, crc)
+    return slug(crc, p)
+end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 
@@ -202,6 +191,7 @@ function find_env(env::CurrentEnv, dir::AbstractString = pwd())
         old, dir = dir, dirname(dir)
         dir == old && break
     end
+    env.create ? joinpath(pwd(), project_names[end]) : nothing
 end
 
 find_env(env::Function) = find_env(env())
@@ -585,7 +575,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
             return entry_path(path, name)
         end
         hash == nothing && return nothing
-        slug = version_slug(uuid, hash)
+        slug = joinpath(name, version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", slug)
             ispath(path) && return path
@@ -638,12 +628,17 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? base_path : nothing
 end
 
+cache_file_entry(pkg::PkgId) = joinpath(
+    "compiled",
+    "v$(VERSION.major).$(VERSION.minor)",
+    pkg.uuid === nothing ? "$(pkg.name).ji" : joinpath(pkg.name, "$(package_slug(pkg.uuid)).ji")
+)
+
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
-    suffix = "$(pkg.name).ji"
-    pkg.uuid !== nothing && (suffix = joinpath(slug(pkg.uuid), suffix))
-    for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, suffix)
+    entry = cache_file_entry(pkg)
+    for depot in DEPOT_PATH
+        path = joinpath(depot, entry)
         isfile_casesensitive(path) && push!(paths, path)
     end
     return paths
@@ -870,6 +865,10 @@ function require(into::Module, mod::Symbol)
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
+    return require(uuidkey)
+end
+
+function require(uuidkey::PkgId)
     if !root_module_exists(uuidkey)
         _require(uuidkey)
         # After successfully loading, notify downstream consumers
@@ -1106,8 +1105,8 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
-        while !eof(STDIN)
-            code = readuntil(STDIN, '\\0')
+        while !eof(stdin)
+            code = readuntil(stdin, '\\0')
             eval(Main, Meta.parse(code))
         end
         """
@@ -1115,19 +1114,17 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                               --output-ji $output --output-incremental=yes
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color ? "yes" : "no")
-                              --eval $code_object`), stderr=STDERR),
-              "w", STDOUT)
+                              --eval $code_object`), stderr=stderr),
+              "w", stdout)
     in = io.in
     try
         write(in, """
         begin
         import Pkg
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $(repr(LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
         Base._track_dependencies[] = true
@@ -1166,11 +1163,9 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for
-a module and all of its dependencies.
+Creates a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
-`LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
-[Module initialization and precompilation](@ref)
+`DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
 function compilecache(pkg::PkgId)
@@ -1179,12 +1174,9 @@ function compilecache(pkg::PkgId)
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$name not found in path"))
     # decide where to put the resulting cache file
-    cachepath = abspath(LOAD_CACHE_PATH[1])
-    pkg.uuid !== nothing && (cachepath = joinpath(cachepath, slug(pkg.uuid)))
-    if !isdir(cachepath)
-        mkpath(cachepath)
-    end
-    cachefile::String = joinpath(cachepath, "$(pkg.name).ji")
+    cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
+    cachepath = dirname(cachefile)
+    isdir(cachepath) || mkpath(cachepath)
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules

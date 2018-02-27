@@ -585,11 +585,9 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     code = """
         import Pkg
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
@@ -618,7 +616,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --eval $code
         ```
 
-    success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
+    success(pipeline(cmd, stdout=stdout, stderr=stderr))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
@@ -685,7 +683,7 @@ function updatehook(pkgs::Vector)
     errs = Dict()
     updatehook!(pkgs,errs)
     isempty(errs) && return
-    println(STDERR)
+    println(stderr)
     @warn """
         ------------------------------------------------------------
         # Update hook summary

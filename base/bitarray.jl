@@ -1600,8 +1600,8 @@ findall(::typeof(!iszero), B::BitArray) = findall(B)
 
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+, A, region)
-sum(B::BitArray) = count(B)
+_sum(A::BitArray, dims)    = reduce(+, A, dims=dims)
+_sum(B::BitArray, ::Colon) = count(B)
 
 function all(B::BitArray)
     isempty(B) && return true

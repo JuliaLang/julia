@@ -2,7 +2,7 @@
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 using Pkg
 Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
+cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
 Pkg.update()
 Pkg.resolve()
 
@@ -73,7 +73,6 @@ const PAGES = [
         "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
-        "manual/dates.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",

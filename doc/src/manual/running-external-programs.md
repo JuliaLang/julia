@@ -14,7 +14,7 @@ differs in several aspects from the behavior in various shells, Perl, or Ruby:
     You can use this object to connect the command to others via pipes, [`run`](@ref) it, and [`read`](@ref) or [`write`](@ref)
     to it.
   * When the command is run, Julia does not capture its output unless you specifically arrange for
-    it to. Instead, the output of the command by default goes to [`STDOUT`](@ref) as it would using
+    it to. Instead, the output of the command by default goes to [`stdout`](@ref) as it would using
     `libc`'s `system` call.
   * The command is never run with a shell. Instead, Julia parses the command syntax directly, appropriately
     interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
@@ -33,7 +33,7 @@ julia> run(mycommand)
 hello
 ```
 
-The `hello` is the output of the `echo` command, sent to [`STDOUT`](@ref). The run method itself
+The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). The run method itself
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
@@ -50,7 +50,7 @@ true
 More generally, you can use [`open`](@ref) to read from or write to an external command.
 
 ```jldoctest
-julia> open(`less`, "w", STDOUT) do io
+julia> open(`less`, "w", stdout) do io
            for i = 1:3
                println(io, i)
            end
@@ -280,7 +280,7 @@ hello
 ```
 
 The order of the output here is non-deterministic because the two `echo` processes are started
-nearly simultaneously, and race to make the first write to the [`STDOUT`](@ref) descriptor they
+nearly simultaneously, and race to make the first write to the [`stdout`](@ref) descriptor they
 share with each other and the `julia` parent process. Julia lets you pipe the output from both
 of these processes to another program:
 
@@ -347,7 +347,7 @@ generates lines with the numbers 0 through 9 on them, while two parallel process
 output, one prefixing lines with the letter "A", the other with the letter "B". Which consumer
 gets the first line is non-deterministic, but once that race has been won, the lines are consumed
 alternately by one process and then the other. (Setting `$|=1` in Perl causes each print statement
-to flush the [`STDOUT`](@ref) handle, which is necessary for this example to work. Otherwise all
+to flush the [`stdout`](@ref) handle, which is necessary for this example to work. Otherwise all
 the output is buffered and printed to the pipe at once, to be read by just one consumer process.)
 
 Here is an even more complex multi-stage producer-consumer example:

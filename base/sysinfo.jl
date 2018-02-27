@@ -3,7 +3,7 @@
 module Sys
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
-""" -> Sys
+""" Sys
 
 export BINDIR,
        CPU_CORES,
@@ -120,7 +120,7 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
     print(io, prefix)
     unit = tck > 0 ? " s  " : "    "
     tc = max(tck, 1)
-    d(i, unit=unit) = lpad(string(round(Int,i)), 9) * unit
+    d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
           d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
@@ -157,7 +157,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
-function cpu_summary(io::IO=STDOUT, cpu::AbstractVector{CPUinfo} = cpu_info())
+function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)

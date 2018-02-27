@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    ConsoleLogger(stream=STDERR, min_level=Info; meta_formatter=default_metafmt,
+    ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,
                   show_limited=true, right_justify=0)
 
 Logger with formatting optimized for readability in a text console, for example
@@ -30,7 +30,7 @@ struct ConsoleLogger <: AbstractLogger
     right_justify::Int
     message_limits::Dict{Any,Int}
 end
-function ConsoleLogger(stream::IO=STDERR, min_level=Info;
+function ConsoleLogger(stream::IO=stderr, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(stream, min_level, meta_formatter,

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Interface to [libgit2](https://libgit2.github.com/).
 """

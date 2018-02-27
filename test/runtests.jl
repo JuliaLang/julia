@@ -109,11 +109,11 @@ cd(dirname(@__FILE__)) do
     local stdin_monitor
     all_tasks = Task[]
     try
-        if isa(STDIN, Base.TTY)
+        if isa(stdin, Base.TTY)
             t = current_task()
-            # Monitor STDIN and kill this task on ^C
+            # Monitor stdin and kill this task on ^C
             stdin_monitor = @async begin
-                term = REPL.Terminals.TTYTerminal("xterm", STDIN, STDOUT, STDERR)
+                term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     REPL.Terminals.raw!(term, true)
                     while true
@@ -194,7 +194,7 @@ cd(dirname(@__FILE__)) do
         foreach(task->try; schedule(task, InterruptException(); error=true); end, all_tasks)
         foreach(wait, all_tasks)
     finally
-        if isa(STDIN, Base.TTY)
+        if isa(stdin, Base.TTY)
             schedule(stdin_monitor, InterruptException(); error=true)
         end
     end
@@ -243,7 +243,7 @@ cd(dirname(@__FILE__)) do
             Test.pop_testset()
         elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
-            Base.showerror(STDOUT,res[2][1].captured)
+            Base.showerror(stdout,res[2][1].captured)
             fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1].captured.ex.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))

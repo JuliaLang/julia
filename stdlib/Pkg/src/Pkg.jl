@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
     Pkg
 
@@ -14,7 +16,7 @@ Please see the manual section on packages for more information.
 module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
-export dir, init, rm, add, available, installed, status, clone, checkout,
+export dir, init, add, available, installed, status, clone, checkout,
        update, resolve, test, build, free, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
@@ -86,8 +88,7 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    pushfirst!(Base.LOAD_PATH, dir)
-    pushfirst!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
+    push!(Base.LOAD_PATH, dir)
 end
 
 """
@@ -150,14 +151,14 @@ installed(pkg::AbstractString) = cd(Entry.installed,splitjl(pkg))
 
 Prints out a summary of what packages are installed and what version and state they're in.
 """
-status(io::IO=STDOUT) = cd(Entry.status,io)
+status(io::IO=stdout) = cd(Entry.status,io)
 
 """
     status(pkg)
 
 Prints out a summary of what version and state `pkg`, specifically, is in.
 """
-status(pkg::AbstractString, io::IO=STDOUT) = cd(Entry.status,io,splitjl(pkg))
+status(pkg::AbstractString, io::IO=stdout) = cd(Entry.status,io,splitjl(pkg))
 
 """
     clone(pkg)

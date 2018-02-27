@@ -766,7 +766,7 @@
   (if (and (pair? body) (eq? (car body) 'block))
       (cond ((atom? (cdr body))
              `(block ,stmt (null)))
-            ((and (pair? (cadr body)) (eq? (caadr body) 'line))
+            ((linenum? (cadr body))
              `(block ,(cadr body) ,stmt ,@(cddr body)))
             (else
              `(block ,stmt ,@(cdr body))))
@@ -805,8 +805,7 @@
                       ,(ctor-body body curlyargs))))))
 
 (define (function-body-lineno body)
-  (let ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
-                      body)))
+  (let ((lnos (filter linenum? body)))
     (if (null? lnos) '() (car lnos))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
@@ -863,7 +862,7 @@
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
                            fields0)
    (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
-          (locs        (if (and (pair? fields0) (pair? (car fields0)) (eq? (caar fields0) 'line))
+          (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
           (field-names (map decl-var fields))
@@ -1103,18 +1102,7 @@
                               (set! a (cadr w))))
                     #f))
          (argl (if (pair? a)
-                   (if (eq? (car a) 'tuple)
-                       (map =-to-kw (cdr a))
-                       (if (eq? (car a) 'block)
-                           (cond ((length= a 1) '())
-                                 ((length= a 2) (list (cadr a)))
-                                 ((length= a 3)
-                                  (if (assignment? (caddr a))
-                                      `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
-                                      `((parameters ,(caddr a)) ,(cadr a))))
-                                 (else
-                                  (error "more than one semicolon in argument list")))
-                           (list (=-to-kw a))))
+                   (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) a))
                    (list a)))
          ;; TODO: always use a specific special name like #anon# or _, then ignore
          ;; this as a local variable name.
@@ -1249,7 +1237,7 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symbol? x) (decl? x) (and (pair? x) (eq? (car x) 'line)))
+            (cond ((or (symbol? x) (decl? x) (linenum? x))
                    (loop (cdr f)))
                   ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
@@ -1519,11 +1507,7 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x)
-                                   (or (eq? x 'end)
-                                       (eq? x ':)
-                                       (and (pair? x)
-                                            (eq? (car x) ':))))
+                       (contains (lambda (x) (eq? x 'end))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -1616,10 +1600,6 @@
                  ,(lower-tuple-assignment (list lhs state)
                                           `(call (top next) ,coll ,state))
                  ,body))))))
-
-;; convert an operator parsed as (op a b) to (call op a b)
-(define (syntactic-op-to-call e)
-  `(call ,(car e) ,@(map expand-forms (cdr e))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
@@ -1912,8 +1892,7 @@
    (lambda (e)
      (cond ((null? (cdr e)) '(null))
            ((and (null? (cddr e))
-                 (not (and (pair? (cadr e))
-                           (eq? (car (cadr e)) 'line))))
+                 (not (linenum? (cadr e))))
             (expand-forms (cadr e)))
            (else
             (cons 'block
@@ -1927,8 +1906,10 @@
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
 
-   '|<:| syntactic-op-to-call
-   '|>:| syntactic-op-to-call
+   '|<:|
+   (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
+   '|>:|
+   (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
@@ -2054,10 +2035,7 @@
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
-                               (contains (lambda (x)
-                                           (or (eq? x 'end)
-                                               (and (pair? x)
-                                                    (eq? (car x) ':))))
+                               (contains (lambda (x) (eq? x 'end))
                                          idxs)))
                    (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
@@ -2296,16 +2274,6 @@
    '>>>=   lower-update-op
    '.>>>=   lower-update-op
 
-   ':
-   (lambda (e)
-     (if (or (length= e 2)
-             (and (length= e 3)
-                  (eq? (caddr e) ':))
-             (and (length= e 4)
-                  (eq? (cadddr e) ':)))
-         (error "invalid \":\" outside indexing"))
-     (expand-forms `(call colon ,@(cdr e))))
-
    '|...|
    (lambda (e) (error "\"...\" expression outside call"))
 
@@ -2412,7 +2380,9 @@
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                                              (pair? (caddr x))
+                                              (eq? (car (caddr x)) 'call)
+                                              (eq? (cadr (caddr x)) ':)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
@@ -3636,7 +3606,7 @@ f(x) = yt(x)
             ((block body)
              (let* ((last-fname filename)
                     (fnm        (first-non-meta e))
-                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                    (fname      (if (and (length> e 1) (linenum? fnm)
                                          (length> fnm 2))
                                     (caddr fnm)
                                     filename))

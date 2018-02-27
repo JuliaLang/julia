@@ -128,10 +128,8 @@ copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
-Dict(ps::Pair{K,V}...)           where {K,V} = Dict{K,V}(ps)
-Dict(ps::Pair{K}...)             where {K}   = Dict{K,Any}(ps)
-Dict(ps::(Pair{K,V} where K)...) where {V}   = Dict{Any,V}(ps)
-Dict(ps::Pair...)                            = Dict{Any,Any}(ps)
+Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
+Dict(ps::Pair...)                  = Dict(ps)
 
 function Dict(kv)
     try
@@ -143,21 +141,6 @@ function Dict(kv)
             rethrow(e)
         end
     end
-end
-
-TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
-
-dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
-dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
-dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
-dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
-dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
-function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
-    T = @default_eltype(kv)
-    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
-        return dict_with_eltype(DT_apply, kv, T)
-    end
-    return grow_to!(dict_with_eltype(DT_apply, T), kv)
 end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
@@ -246,11 +229,6 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
 
     return h
 end
-
-max_values(::Type) = typemax(Int)
-max_values(T::Type{<:Union{Nothing,BitIntegerSmall}}) = 1 << (8*sizeof(T))
-max_values(T::Union) = max(max_values(T.a), max_values(T.b))
-max_values(::Type{Bool}) = 2
 
 function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)

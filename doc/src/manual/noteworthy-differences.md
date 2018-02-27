@@ -38,7 +38,7 @@ may trip up Julia users accustomed to MATLAB:
     use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange` object will
     act like a normal array in most cases but is more efficient because it lazily computes its values.
     This pattern of creating specialized objects instead of full arrays is used frequently, and is
-    also seen in functions such as [`linspace`](@ref), or with iterators such as `enumerate`, and
+    also seen in functions such as [`range`](@ref), or with iterators such as `enumerate`, and
     `zip`. The special objects can mostly be used as if they were normal arrays.
   * Functions in Julia return values from their last expression or the `return` keyword instead of
     listing the names of variables to return in the function definition (see [The return Keyword](@ref)

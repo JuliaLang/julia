@@ -112,7 +112,7 @@ function setup_connection(zid, initiated_by)
         end
         (read_stream, write_stream)
     catch e
-        Base.show_backtrace(STDOUT,catch_backtrace())
+        Base.show_backtrace(stdout,catch_backtrace())
         println(e)
         rethrow(e)
     end
@@ -140,7 +140,7 @@ function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
         zid = parse(Int,String(ZMQ.recv(manager.sub)))
-        assert(zid == manager.zid_self)
+        @assert zid == manager.zid_self
 
         from_zid = parse(Int,String(ZMQ.recv(manager.sub)))
         mtype = String(ZMQ.recv(manager.sub))
@@ -168,7 +168,7 @@ function recv_data()
 
         (from_zid, data)
     catch e
-        Base.show_backtrace(STDOUT,catch_backtrace())
+        Base.show_backtrace(stdout,catch_backtrace())
         println(e)
         rethrow(e)
     end
@@ -189,7 +189,7 @@ function start_master(np)
                 unsafe_write(r_s, pointer(data), length(data))
             end
         catch e
-            Base.show_backtrace(STDOUT,catch_backtrace())
+            Base.show_backtrace(stdout,catch_backtrace())
             println(e)
             rethrow(e)
         end
@@ -279,4 +279,3 @@ function print_worker_stdout(io, pid)
         println("      From worker $(pid):\t$line")
     end
 end
-

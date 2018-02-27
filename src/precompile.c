@@ -311,7 +311,12 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->jlcall_api != JL_API_CONST)
+            l->func.linfo->jlcall_api != JL_API_CONST &&
+            (l->func.linfo->fptr ||
+             (l->func.linfo->inferred &&
+              l->func.linfo->inferred != jl_nothing &&
+              jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
+              !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred))))
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }

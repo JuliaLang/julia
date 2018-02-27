@@ -1,5 +1,9 @@
 # Random Numbers
 
+```@meta
+DocTestSetup = :(using Random)
+```
+
 Random number generation in Julia uses the [Mersenne Twister library](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT)
 via `MersenneTwister` objects. Julia has a global RNG, which is used by default. Other RNG types
 can be plugged in by inheriting the `AbstractRNG` type; they can then be used to have multiple
@@ -40,4 +44,8 @@ Random.randcycle
 Random.randcycle!
 Random.shuffle
 Random.shuffle!
+```
+
+```@meta
+DocTestSetup = nothing
 ```

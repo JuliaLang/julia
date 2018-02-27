@@ -452,7 +452,7 @@ end
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
-        @eval @doc ("""
+        @eval @doc """
             rem(x::Integer, T::Type{<:Integer}) -> T
             mod(x::Integer, T::Type{<:Integer}) -> T
             %(x::Integer, T::Type{<:Integer}) -> T
@@ -466,7 +466,7 @@ if nameof(@__MODULE__) === :Base
         julia> 129 % Int8
         -127
         ```
-        """ -> $fname(x::Integer, T::Type{<:Integer}))
+        """ $fname(x::Integer, T::Type{<:Integer})
     end
 end
 
@@ -478,7 +478,7 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits, [base]])
+    trunc([T,] x, [digits; base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -491,7 +491,7 @@ not representable.
 function trunc end
 
 """
-    floor([T,] x, [digits, [base]])
+    floor([T,] x, [digits; base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -504,7 +504,7 @@ not representable.
 function floor end
 
 """
-    ceil([T,] x, [digits, [base]])
+    ceil([T,] x, [digits; base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.

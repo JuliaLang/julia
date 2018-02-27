@@ -24,7 +24,7 @@ Details can be found in
 
 # Subtypes
 
-All subtypes must contain the feilds `pagesize::Int` and
+All subtypes must contain the fields `pagesize::Int` and
 `pageoffset::Int`. They must also implement the following functions.
 
 ## Necessary Functions
@@ -59,7 +59,7 @@ abstract type AbstractMenu end
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
 
 # This function must be implemented for all menu types. It defines what
-#   happends when a user cancels ('q' or ctrl-c) a menu. `request()` will
+#   happens when a user cancels ('q' or ctrl-c) a menu. `request()` will
 #   always exit after calling this function.
 cancel(m::AbstractMenu) = error("unimplemented")
 
@@ -77,7 +77,7 @@ end
 
 
 # OPTIONAL FUNCTIONS
-# These functions do not need to be implemented for all Menu types
+# These functions do not need to be implemented for all menu types
 ##################################################################
 
 # If `header()` is defined for a specific menu type, display the header
@@ -85,7 +85,7 @@ end
 header(m::AbstractMenu) = ""
 
 # If `keypress()` is defined for a specific menu type, send any
-#   non-standard keypres event to this function. If the function returns
+#   non-standard keypress event to this function. If the function returns
 #   true, `request()` will exit.
 keypress(m::AbstractMenu, i::UInt32) = false
 

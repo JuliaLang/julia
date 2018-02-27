@@ -34,7 +34,7 @@ struct Givens{T} <: AbstractRotation{T}
     c::T
     s::T
 end
-mutable struct Rotation{T} <: AbstractRotation{T}
+struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 

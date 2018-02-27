@@ -536,12 +536,27 @@ end
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
+
+    # test eltype promotion
+    x = @inferred replace([1, 2], 2=>2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+
+    x = @inferred replace([1, 2], 2=>missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace(x -> x > 1, [1, 2], missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+
+    # test that isequal is used
+    @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]
+    @test replace([1, missing], missing=>0) == [1, 0]
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
     a = [1, 2]
     b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet)
+    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
         A = C(a)
         B = C(b)
         @test A ⊆ B

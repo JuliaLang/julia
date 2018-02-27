@@ -142,6 +142,15 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+# range syntax
+@test_repr "1:2"
+@test_repr "3:4:5"
+let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
+    ex1 = Expr(:call, :(:), 1)
+    @test eval(Meta.parse(repr(ex4))) == ex4
+    @test eval(Meta.parse(repr(ex1))) == ex1
+end
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
@@ -471,15 +480,15 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
-let oldout = STDOUT, olderr = STDERR
+let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
-        @test wrout === STDOUT
+        @test wrout === stdout
         out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
-        @test wrerr === STDERR
+        @test wrerr === stderr
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
@@ -487,7 +496,7 @@ let oldout = STDOUT, olderr = STDERR
             close(wrerr)
         end
 
-        for io in (Core.STDOUT, Core.STDERR)
+        for io in (Core.stdout, Core.stderr)
             Core.println(io, "TESTA")
             println(io, "TESTB")
             print(io, 'Α', 1)
@@ -503,8 +512,8 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
-        @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
+        @test fetch(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
         redirect_stderr(olderr)
@@ -522,13 +531,13 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            println(STDERR, "WARNING: hello")
+            println(stderr, "WARNING: hello")
             [2]
         end
     end
     @test ret == [2]
 
-    # STDIN is unavailable on the workers. Run test on master.
+    # stdin is unavailable on the workers. Run test on master.
     @test contains(read(filename, String), "WARNING: hello")
     ret = eval(Main, quote
         remotecall_fetch(1, $filename) do fname
@@ -753,11 +762,16 @@ let io = IOBuffer()
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
 end
 
-# PR 17117
-# test print_array
-let s = IOBuffer(Vector{UInt8}(), read=true, write=true)
+@testset "PR 17117: print_array" begin
+    s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    close(s)
+    s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
+    z = zeros(0,0,0,0,0,0,0,0)
+    Base.print_array(s2, z)
+    @test String(resize!(s2.data, s2.size)) == ""
+    close(s2)
 end
 
 let repr = sprint(dump, :(x = 1))
@@ -850,7 +864,7 @@ test_repr("a.:(begin
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
-@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
+@test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
@@ -890,7 +904,7 @@ end
 
 function static_shown(x)
     p = Pipe()
-    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), p.in, x)
     @async close(p.in)
     return read(p.out, String)
@@ -1036,10 +1050,10 @@ end
     anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -1155,4 +1169,15 @@ end
         @test contains(str, "arraylen")
         @test contains(str, "(intrinsic function")
     end
+end
+
+@testset "repr(mime, x)" begin
+    @test repr("text/plain", UInt8[1 2;3 4]) == "2×2 Array{UInt8,2}:\n 0x01  0x02\n 0x03  0x04"
+    @test repr("text/html", "raw html data") == "raw html data"
+    @test repr("text/plain", "string") == "\"string\""
+    @test repr("image/png", UInt8[2,3,4,7]) == UInt8[2,3,4,7]
+    @test repr("text/plain", 3.141592653589793) == "3.141592653589793"
+    @test repr("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
+    @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
+    @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end

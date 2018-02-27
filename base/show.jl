@@ -4,10 +4,10 @@
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
-function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for linspace, e.g.
-    # linspace(1,3,7)
-    # 7-element LinSpace{Float64}:
+function show(io::IO, ::MIME"text/plain", r::LinRange)
+    # show for LinRange, e.g.
+    # range(1, stop=3, length=7)
+    # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
     print(io, summary(r))
     if !isempty(r)
@@ -168,7 +168,7 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     dict::ImmutableDict{Symbol, Any}
 
     function IOContext{IO_t}(io::IO_t, dict::ImmutableDict{Symbol, Any}) where IO_t<:IO
-        assert(!(IO_t <: IOContext))
+        @assert !(IO_t <: IOContext) "Cannot create `IOContext` from another `IOContext`."
         return new(io, dict)
     end
 end
@@ -245,9 +245,9 @@ julia> String(take!(io))
 ```
 
 ```jldoctest
-julia> print(IOContext(STDOUT, :compact => false), 1.12341234)
+julia> print(IOContext(stdout, :compact => false), 1.12341234)
 1.12341234
-julia> print(IOContext(STDOUT, :compact => true), 1.12341234)
+julia> print(IOContext(stdout, :compact => true), 1.12341234)
 1.12341
 ```
 
@@ -261,9 +261,9 @@ julia> function f(io::IO)
        end
 f (generic function with 1 method)
 
-julia> f(STDOUT)
+julia> f(stdout)
 loooooong
-julia> f(IOContext(STDOUT, :short => true))
+julia> f(IOContext(stdout, :short => true))
 short
 ```
 """
@@ -309,7 +309,7 @@ Write an informative text representation of a value to the current output stream
 should overload `show(io, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
 """
-show(x) = show(STDOUT::IO, x)
+show(x) = show(stdout::IO, x)
 
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
@@ -529,7 +529,7 @@ function show_supertypes(io::IO, typ::DataType)
     end
 end
 
-show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
+show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 """
     @show
@@ -766,15 +766,10 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
-    i = start(s)
-    done(s, i) && return false
-    (c, i) = next(s, i)
+    isempty(s) && return false
+    c, rest = Iterators.peel(s)
     is_id_start_char(c) || return false
-    while !done(s, i)
-        (c, i) = next(s, i)
-        is_id_char(c) || return false
-    end
-    return true
+    return all(is_id_char, rest)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
@@ -971,8 +966,8 @@ end
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) &&
-            (func.head == :. || func.head == :curly))
+    if (isa(func, Symbol) && func !== :(:)) ||
+            (isa(func, Expr) && (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -1153,7 +1148,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x <: y" or "x = y")
-    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
+    elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
         if func_prec <= prec
@@ -1222,9 +1217,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
-                sep = " $func "
+                sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -1761,7 +1756,7 @@ DeeplyNested
     1: DeeplyNested
 ```
 """
-dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
+dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
 """
@@ -1951,7 +1946,7 @@ end
     showcompact(io::IO, x)
 
 Show a compact representation of a value to `io`. If `io` is not specified, the
-default is to print to [`STDOUT`](@ref).
+default is to print to [`stdout`](@ref).
 
 This is used for printing array elements without repeating type information (which would
 be redundant with that printed once for the whole array), and without line breaks inside
@@ -1971,7 +1966,7 @@ julia> showcompact(A)
 [1.0 2.0; 3.0 4.0]
 ```
 """
-showcompact(x) = showcompact(STDOUT, x)
+showcompact(x) = showcompact(stdout, x)
 function showcompact(io::IO, x)
     if get(io, :compact, false)
         show(io, x)
@@ -1995,8 +1990,8 @@ function print_bit_chunk(io::IO, c::UInt64, l::Integer = 64)
     end
 end
 
-print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
-print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
+print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(stdout, c, l)
+print_bit_chunk(c::UInt64) = print_bit_chunk(stdout, c)
 
 function bitshow(io::IO, B::BitArray)
     isempty(B) && return
@@ -2008,6 +2003,6 @@ function bitshow(io::IO, B::BitArray)
     l = _mod64(length(B)-1) + 1
     print_bit_chunk(io, Bc[end], l)
 end
-bitshow(B::BitArray) = bitshow(STDOUT, B)
+bitshow(B::BitArray) = bitshow(stdout, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)

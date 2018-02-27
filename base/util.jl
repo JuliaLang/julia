@@ -1,17 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# timing
-
-# time() in libc.jl
-
-# high-resolution relative time, in nanoseconds
-
-"""
-    time_ns()
-
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-"""
-time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
@@ -105,7 +93,7 @@ function format_bytes(bytes)
     end
 end
 
-function time_print(elapsedtime, bytes, gctime, allocs)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
     Printf.@printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -122,13 +110,12 @@ function time_print(elapsedtime, bytes, gctime, allocs)
     elseif gctime > 0
         Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
-    println()
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("elapsed time (ns): $elapsedtime\n")
+    print("\nelapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -171,6 +158,7 @@ macro time(ex)
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff))
+        println()
         val
     end
 end
@@ -288,16 +276,7 @@ julia> gctime
 0.0055765
 
 julia> fieldnames(typeof(memallocs))
-9-element Array{Symbol,1}:
- :allocd
- :malloc
- :realloc
- :poolalloc
- :bigalloc
- :freecall
- :total_time
- :pause
- :full_sweep
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
 julia> memallocs.total_time
 5576500
@@ -355,7 +334,7 @@ If the keyword `bold` is given as `true`, the result will be printed in bold.
 printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(STDOUT, msg...; bold=bold, color=color)
+    printstyled(stdout, msg...; bold=bold, color=color)
 
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -406,7 +385,7 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
-    flush(STDOUT)
+    flush(stdout)
     p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
@@ -570,7 +549,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef

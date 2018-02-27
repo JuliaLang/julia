@@ -947,7 +947,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
 
 
-mutable struct PartitionIterator{T}
+struct PartitionIterator{T}
     c::T
     n::Int
 end
@@ -1050,6 +1050,18 @@ mutable struct Stateful{T, VS}
             new{T, VS}(itr, next(itr, state)::VS, 0)
         end
     end
+end
+
+function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
+    s.itr = itr
+    state = start(itr)
+    if done(itr, state)
+        s.nextvalstate = nothing
+    else
+        s.nextvalstate = next(itr, state)::VS
+    end
+    s.taken = 0
+    s
 end
 
 # Try to find an appropriate type for the (value, state tuple),

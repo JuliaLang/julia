@@ -230,7 +230,7 @@ Base.skipmissing
 ```@docs
 Base.run
 Base.spawn
-Base.DevNull
+Base.devnull
 Base.success
 Base.process_running
 Base.process_exited
@@ -274,7 +274,6 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.assert
 Base.@assert
 Base.ArgumentError
 Base.AssertionError

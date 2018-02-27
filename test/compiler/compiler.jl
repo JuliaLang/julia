@@ -169,12 +169,12 @@ mutable struct A14009{T}; end
 A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 
 # issue #9232
@@ -188,7 +188,7 @@ result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtyp
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 code_typed(invoke_g10878, ())
-code_llvm(DevNull, invoke_g10878, ())
+code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
@@ -585,8 +585,9 @@ tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 
     function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
         num_iters, num_chains = size(Y)
-        start_iters = unique([1; [round(Int64, s) for s in logspace(log(10,100),
-                                                                    log(10,num_iters/2),nbins-1)]])
+        start_iters = unique([1; map(s->round(Int64, exp10(s)), range(log(10,100),
+                                                                      stop=log(10,num_iters/2),
+                                                                      length=nbins-1))])
         result = zeros(Float64, 10, length(start_iters) * num_chains)
         j=1
         for c in 1:num_chains
@@ -1417,3 +1418,8 @@ function h25579(g)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
         Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+
+f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
+g26172(::Val{0}) = ()
+g26172(v) = (nothing, g26172(f26172(v))...)
+@test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)

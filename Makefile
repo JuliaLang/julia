@@ -16,7 +16,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/site $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf examples examples/embedding)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/embedding test/perf examples)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -62,14 +62,12 @@ clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
 
 $(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) \
-                           $(shell find $(JULIAHOME)/examples/clustermanager) \
-                           $(shell find $(JULIAHOME)/examples/embedding)
+                           $(shell find $(JULIAHOME)/examples/clustermanager)
 	@echo Copying in usr/share/doc/julia/examples
 	@-rm -fr $(build_docdir)/examples
 	@mkdir -p $(build_docdir)/examples
 	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
 	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
-	@cp -R $(JULIAHOME)/examples/embedding $(build_docdir)/examples
 	@echo 1 > $@
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
@@ -82,7 +80,7 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_defaultpkgdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -159,8 +157,8 @@ $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
 	@mkdir -p $(build_man1dir)
 	@cp $< $@
 
-$(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia
-	@echo Creating usr/etc/julia/juliarc.jl
+$(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysconfdir)/julia
+	@echo Creating usr/etc/julia/startup.jl
 	@cp $< $@
 
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
@@ -177,24 +175,32 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/boot.jl \
 		base/docs/core.jl \
 		base/abstractarray.jl \
-		base/array.jl \
-		base/bool.jl \
 		base/abstractdict.jl \
+		base/array.jl \
+		base/bitarray.jl \
+		base/bitset.jl \
+		base/bool.jl \
+		base/ctypes.jl \
 		base/error.jl \
 		base/essentials.jl \
-		base/generator.jl \
 		base/expr.jl \
+		base/generator.jl \
 		base/hashing.jl \
 		base/int.jl \
-		base/bitset.jl \
+		base/indices.jl \
+		base/iterators.jl \
+		base/namedtuple.jl \
 		base/number.jl \
 		base/operators.jl \
 		base/options.jl \
+		base/pair.jl \
 		base/pointer.jl \
 		base/promotion.jl \
 		base/range.jl \
 		base/reduce.jl \
 		base/reflection.jl \
+		base/traits.jl \
+		base/refvalue.jl \
 		base/tuple.jl)
 COMPILER_SRCS = $(sort $(shell find $(JULIAHOME)/base/compiler -name \*.jl))
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
@@ -338,7 +344,7 @@ endif
 endif
 
 	# Copy public headers
-	cp -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
+	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
@@ -421,11 +427,11 @@ ifeq ($(OS), Linux)
 	# Copy over any bundled ca certs we picked up from the system during buildi
 	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
-	# Copy in juliarc.jl files per-platform for binary distributions as well
+	# Copy in startup.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
-	-cat $(JULIAHOME)/contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
+	-cat $(JULIAHOME)/contrib/mac/startup.jl >> $(DESTDIR)$(prefix)/etc/julia/startup.jl
 endif
 
 ifeq ($(OS), WINNT)

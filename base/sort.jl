@@ -2,16 +2,16 @@
 
 module Sort
 
-using Base.Order, Base.Checked
-using Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+using .Base.Order, .Base.Checked
+using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
 
-import
-    Base.sort,
-    Base.sort!,
-    Base.issorted,
-    Base.sortperm,
-    Base.Slice,
-    Base.to_indices
+import .Base:
+    sort,
+    sort!,
+    issorted,
+    sortperm,
+    Slice,
+    to_indices
 
 export # also exported by Base
     # order-only:
@@ -858,13 +858,15 @@ julia> sort(A, 2)
  1  2
 ```
 """
-function sort(A::AbstractArray, dim::Integer;
+function sort(A::AbstractArray;
+              dims::Integer,
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
               initialized::Union{Bool,Nothing}=nothing)
+    dim = dims
     if initialized !== nothing
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end

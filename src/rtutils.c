@@ -471,14 +471,14 @@ JL_DLLEXPORT void jl_flush_cstdio(void)
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
+    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
     return stdout_obj;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
+    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
     return stderr_obj;
 }
 
@@ -873,11 +873,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_is_datatype(vt)) {
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
-        if (!istuple && !isnamedtuple)
+        size_t tlen = jl_datatype_nfields(vt);
+        if (isnamedtuple) {
+            if (tlen == 0)
+                n += jl_printf(out, "NamedTuple");
+        }
+        else if (!istuple) {
             n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+        }
         n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
-        size_t tlen = jl_datatype_nfields(vt);
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
             n += jl_printf(out, "0x");

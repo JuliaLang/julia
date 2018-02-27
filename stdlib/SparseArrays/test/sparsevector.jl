@@ -822,7 +822,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = A*x
@@ -835,7 +835,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = *(transpose(A), x)
@@ -850,7 +850,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x)
@@ -864,7 +864,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')

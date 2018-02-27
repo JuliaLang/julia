@@ -239,7 +239,10 @@ end
     @test first(eachindex("")) === 1
     @test last(eachindex("foobar")) === lastindex("foobar")
     @test done(eachindex("foobar"),7)
-    @test eltype(Base.EachStringIndex) == Int
+    @test Int == eltype(Base.EachStringIndex) ==
+                 eltype(Base.EachStringIndex{String}) ==
+                 eltype(Base.EachStringIndex{GenericString}) ==
+                 eltype(eachindex("foobar")) == eltype(eachindex(gstr))
     @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 

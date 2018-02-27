@@ -213,7 +213,7 @@ end
 # PR #17300: loop fusion
 @test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
-    @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
+    @test atan2.(log.(A), sum(A, dims=1)) == broadcast(atan2, broadcast(log, A), sum(A, dims=1))
 end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)

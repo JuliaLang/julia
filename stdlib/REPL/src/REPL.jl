@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module REPL
 
 using Base.Meta
+import InteractiveUtils
 
 export
     AbstractREPL,
@@ -668,16 +671,8 @@ function return_callback(s)
     end
 end
 
-function find_hist_file()
-    filename = ".julia_history"
-    if isfile(filename)
-        return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
-        return ENV["JULIA_HISTORY"]
-    else
-        return joinpath(homedir(), filename)
-    end
-end
+find_hist_file() = get(ENV, "JULIA_HISTORY",
+    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -834,6 +829,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
@@ -981,7 +977,7 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
-            Base.edit(linfos[n][1], linfos[n][2])
+            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1139,8 +1135,5 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
-
-include("precompile.jl")
-_precompile_()
 
 end # module

@@ -428,10 +428,10 @@ atdoc!(λ) = global atdoc = λ
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
-mutable struct CoreSTDOUT <: IO end
-mutable struct CoreSTDERR <: IO end
-const STDOUT = CoreSTDOUT()
-const STDERR = CoreSTDERR()
+struct CoreSTDOUT <: IO end
+struct CoreSTDERR <: IO end
+const stdout = CoreSTDOUT()
+const stderr = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
 io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
@@ -455,9 +455,9 @@ print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a
 println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
 println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
 
-show(@nospecialize a) = show(STDOUT, a)
-print(@nospecialize a...) = print(STDOUT, a...)
-println(@nospecialize a...) = println(STDOUT, a...)
+show(@nospecialize a) = show(stdout, a)
+print(@nospecialize a...) = print(stdout, a...)
+println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
@@ -522,7 +522,8 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
             arrayset(false, flds, getfield(args, i), i)
             i = add_int(i, 1)
         end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
+        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
+              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
     end
 end
 

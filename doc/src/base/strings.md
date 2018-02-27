@@ -8,7 +8,7 @@ Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
 Base.repeat(::Char, ::Integer)
-Base.repr
+Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
 Base.transcode
@@ -26,7 +26,6 @@ Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
 Base.eachmatch
-Base.matchall
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
