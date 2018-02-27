@@ -134,7 +134,7 @@ function g(x,y)::Int8
 end
 ```
 
-This function will always return an `Int8` regardless of the types of `x` and `y`. 
+This function will always return an `Int8` regardless of the types of `x` and `y`.
 See [Type Declarations](@ref) for more on return types.
 
 ## Operators Are Functions
