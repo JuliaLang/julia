@@ -526,11 +526,11 @@ function f21900()
         x = 0
     end
     global f21900_cnt += 1
-    x
+    x # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError f21900()
+@test_throws UndefVarError(:x) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
@@ -3857,14 +3857,14 @@ foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 
 # issue #6846
 f6846() = (please6846; 2)
-@test_throws UndefVarError f6846()
+@test_throws UndefVarError(:please6846) f6846()
 
 module M6846
     macro f()
-        return :(please6846; 2)
+        return esc(:(please6846; 2))
     end
 end
-@test_throws UndefVarError @M6846.f()
+@test_throws UndefVarError(:please6846) @M6846.f()
 
 # issue #14758
 @test isa(@eval(f14758(; $([]...)) = ()), Function)
@@ -4580,10 +4580,10 @@ end
 B14878(ng) = B14878()
 function trigger14878()
     w = A14878()
-    w.ext[:14878] = B14878(junk)  # junk not defined!
+    w.ext[:14878] = B14878(junk)  # global junk not defined!
     return w
 end
-@test_throws UndefVarError trigger14878()
+@test_throws UndefVarError(:junk) trigger14878()
 
 # issue #1090
 function f1090(x)::Int

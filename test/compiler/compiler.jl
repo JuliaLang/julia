@@ -1063,25 +1063,25 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     end
 end
 
-function find_call(code, func, narg)
-    for ex in code
+function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
+    for ex in code.code
+        Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
-        ex = ex::Expr
         if ex.head === :call && length(ex.args) == narg
             farg = ex.args[1]
             if isa(farg, GlobalRef)
-                farg = farg::GlobalRef
                 if isdefined(farg.mod, farg.name) && isconst(farg.mod, farg.name)
-                    farg = getfield(farg.mod, farg.name)
+                    farg = typeof(getfield(farg.mod, farg.name))
                 end
+            elseif isa(farg, Core.SSAValue)
+                farg = code.ssavaluetypes[farg.id + 1]
+            else
+                farg = typeof(farg)
             end
-            if farg === func
+            if farg === typeof(func)
                 return true
             end
-        elseif Core.Compiler.is_meta_expr(ex)
-            continue
         end
-        find_call(ex.args, func, narg) && return true
     end
     return false
 end
@@ -1096,24 +1096,24 @@ test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
-    Core.sizeof(typeref[])
+    return Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]), Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
-    Core.sizeof($constvec)
+    return Core.sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_call(first(code_typed(sizeof_constvec, ())[1]).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_constvec, ())[1]), Core.sizeof, 2)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
 test_const_return((x)->isdefined(x, :re), Tuple{ComplexF64}, true)
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
-@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
+@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
 let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
         findfirst(x->x===isa, Core.Compiler.T_FFUNC_KEY)][3]

@@ -1082,8 +1082,13 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #else
         Optional<Reloc::Model>(),
 #endif
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+        // On PPC the small model is limited to 16bit offsets
+        CodeModel::Medium,
+#else
         // Use small model so that we can use signed 32bits offset in the function and GV tables
         CodeModel::Small,
+#endif
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 

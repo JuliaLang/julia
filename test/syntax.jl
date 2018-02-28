@@ -1341,3 +1341,13 @@ end
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
+
+@test Meta.parse("-(2)(x)") == Expr(:call, :-, Expr(:call, :*, 2, :x))
+@test Meta.parse("-(x)y")   == Expr(:call, :-, Expr(:call, :*, :x, :y))
+@test Meta.parse("-(x,)y")  == Expr(:call, :*, Expr(:call, :-, :x), :y)
+@test Meta.parse("-(f)(x)") == Expr(:call, :-, Expr(:call, :f, :x))
+@test Meta.parse("-(2)(x)^2") == Expr(:call, :-, Expr(:call, :*, 2, Expr(:call, :^, :x, 2)))
+@test Meta.parse("Y <- (x->true)(X)") ==
+    Expr(:call, :<, :Y,
+         Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
+                              :X)))

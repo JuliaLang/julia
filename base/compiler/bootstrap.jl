@@ -31,5 +31,3 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
         end
     end
 end
-
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)

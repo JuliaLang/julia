@@ -214,6 +214,16 @@ end
 
 copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
 
+# N.B: The generic definition in multidimensional.jl covers, this, this is just here
+# for bootstrapping purposes.
+function fill!(dest::Array{T}, x) where T
+    xT = convert(T, x)
+    for i in 1:length(dest)
+        @inbounds dest[i] = xT
+    end
+    dest
+end
+
 """
     copy(x)
 

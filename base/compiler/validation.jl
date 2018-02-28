@@ -25,7 +25,8 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :simdloop => 0:0,
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
-    :thunk => 1:1
+    :thunk => 1:1,
+    :throw_undef_if_not => 2:2
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -139,7 +140,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
             elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :const || head === :enter ||
                 head === :leave || head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop
+                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not
                 validate_val!(x)
             else
                 push!(errors, InvalidCodeError("invalid statement", x))

@@ -273,7 +273,8 @@ false
 """
     &(x, y)
 
-Bitwise and.
+Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
 
 # Examples
 ```jldoctest
@@ -282,6 +283,12 @@ julia> 4 & 10
 
 julia> 4 & 12
 4
+
+julia> true & missing
+missing
+
+julia> false & missing
+false
 ```
 """
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
@@ -289,7 +296,8 @@ julia> 4 & 12
 """
     |(x, y)
 
-Bitwise or.
+Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
 
 # Examples
 ```jldoctest
@@ -298,6 +306,12 @@ julia> 4 | 10
 
 julia> 4 | 1
 5
+
+julia> true | missing
+true
+
+julia> false | missing
+missing
 ```
 """
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)

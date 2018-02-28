@@ -1,4 +1,4 @@
-# Arrays with custom indices
+# [Arrays with custom indices](@id man-custom-indices)
 
 Julia 0.5 adds experimental support for arrays with arbitrary indices. Conventionally, Julia's
 arrays are indexed starting at 1, whereas some other languages start numbering at 0, and yet others
