@@ -136,9 +136,9 @@ julia> lstrip(a)
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
     e = lastindex(s)
     for (i, c) in pairs(s)
-        !(c in chars) && return SubString(s, i, e)
+        !(c in chars) && return @inbounds SubString(s, i, e)
     end
-    SubString(s, e+1, e)
+    @inbounds SubString(s, e+1, e)
 end
 
 """
@@ -161,9 +161,9 @@ julia> rstrip(a)
 """
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
     for (i, c) in Iterators.reverse(pairs(s))
-        c in chars || return SubString(s, 1, i)
+        c in chars || return @inbounds SubString(s, 1, i)
     end
-    SubString(s, 1, 0)
+    @inbounds SubString(s, 1, 0)
 end
 
 """

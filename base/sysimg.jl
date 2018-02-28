@@ -176,7 +176,7 @@ Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missi
 include("abstractdict.jl")
 
 include("iterators.jl")
-using .Iterators: zip, enumerate
+using .Iterators: zip, enumerate, Next
 using .Iterators: Flatten, product  # for generators
 
 include("namedtuple.jl")

@@ -62,10 +62,11 @@ function codeunit(s::SubString, i::Integer)
     @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function next(s::SubString, i::Integer)
+function next(sp::StringNext{<:SubString}, i::Int)
+    s = sp.data
     @boundscheck checkbounds(s, i)
-    @inbounds c, i = next(s.string, s.offset + i)
-    return c, i - s.offset
+    @inbounds (c, idx), i = next(StringNext(s.string), s.offset + i)
+    return (c, idx - s.offset), i - s.offset
 end
 
 function getindex(s::SubString, i::Integer)
