@@ -275,9 +275,9 @@ split(str::T, splitter::Char;
     _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    i = firstindex(str)
+    @assert (i = firstindex(str)) == 1
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), i - 1)
+    r = coalesce(findfirst(splitter,str), 0)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -342,17 +342,16 @@ rsplit(str::T, splitter::Char;
   _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    i0 = firstindex(str)-1
     n = lastindex(str)
-    r = coalesce(findlast(splitter, str), i0)
+    r = coalesce(findlast(splitter, str), 0)
     j, k = first(r), last(r)
-    while j > i0 && k > i0 && length(strs) != limit-1
+    while j > 0 && k > 0 && length(strs) != limit-1
         (keep_empty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
         n = prevind(str, j)
-        r = coalesce(findprev(splitter,str,n), i0)
+        r = coalesce(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
     end
-    (keep_empty || n > i0) && pushfirst!(strs, SubString(str,firstindex(str),n))
+    (keep_empty || n > 0) && pushfirst!(strs, SubString(str,1,n))
     return strs
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
