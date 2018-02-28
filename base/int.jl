@@ -717,7 +717,7 @@ if Core.sizeof(Int) == 4
         return Int128(div(BigInt(x), BigInt(y)))
     end
     function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))
+        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
     end
 
     function rem(x::Int128, y::Int128)
