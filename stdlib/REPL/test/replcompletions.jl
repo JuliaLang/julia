@@ -523,6 +523,26 @@ temp_pkg_dir_noinit() do
 end
 
 path = joinpath(tempdir(),randstring())
+pushfirst!(LOAD_PATH, path)
+try
+    mkpath(path)
+    write(joinpath(path, "Project.toml"),
+        """
+        name = "MyProj"
+
+        [deps]
+        MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+        """)
+        c, r, res = test_complete("using MyP")
+        @test "MyPack" in c
+        @test "MyProj" in c
+finally
+    @test popfirst!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
+
+path = joinpath(tempdir(),randstring())
 push!(LOAD_PATH, path)
 try
     # Should not throw an error even though the path do no exist
