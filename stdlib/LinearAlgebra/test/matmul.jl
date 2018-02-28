@@ -250,6 +250,11 @@ vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y)
     end
 end
 
+@testset "array vecdot" begin
+    a = rand(3,3,3)
+    @test vecdot(a,a) === vecdot(vec(a), a) === vecdot(a, vec(a)) === dot(vec(a), vec(a)) === BLAS.dot(a,a)
+end
+
 @testset "Issue 11978" begin
     A = Matrix{Matrix{Float64}}(uninitialized, 2, 2)
     A[1,1] = Matrix(1.0I, 3, 3)

@@ -256,18 +256,16 @@ struct HermitianLayout{ML<:MemoryLayout} <: MemoryLayout
 end
 HermitianLayout(layout::ML, uplo) where ML<:MemoryLayout = HermitianLayout{ML}(layout, uplo)
 
-MemoryLayout(A::Hermitian) = hermitianmemorylayout(eltype(A), MemoryLayout(parent(A)), A.uplo)
-MemoryLayout(A::Symmetric) = symmetricmemorylayout(MemoryLayout(parent(A)), A.uplo)
-hermitianmemorylayout(_1, _2, _3) = UnknownLayout()
-hermitianmemorylayout(::Type{<:Complex}, layout::AbstractColumnMajor, uplo) = HermitianLayout(layout,uplo)
-hermitianmemorylayout(::Type{<:Real}, layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
-hermitianmemorylayout(::Type{<:Complex}, layout::AbstractRowMajor, uplo) = HermitianLayout(layout,uplo)
-hermitianmemorylayout(::Type{<:Real}, layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
-symmetricmemorylayout(_1, _2) = UnknownLayout()
-symmetricmemorylayout(layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
-symmetricmemorylayout(layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
-symmetricmemorylayout(layout::ConjLayout{<:AbstractColumnMajor}, uplo) = SymmetricLayout(layout,uplo)
-symmetricmemorylayout(layout::ConjLayout{<:AbstractRowMajor}, uplo) = SymmetricLayout(layout,uplo)
+MemoryLayout(A::Hermitian) = hermitianlayout(eltype(A), MemoryLayout(parent(A)), A.uplo)
+MemoryLayout(A::Symmetric) = symmetriclayout(MemoryLayout(parent(A)), A.uplo)
+hermitianlayout(_1, _2, _3) = UnknownLayout()
+hermitianlayout(::Type{<:Complex}, layout::AbstractColumnMajor, uplo) = HermitianLayout(layout,uplo)
+hermitianlayout(::Type{<:Real}, layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
+hermitianlayout(::Type{<:Complex}, layout::AbstractRowMajor, uplo) = HermitianLayout(layout,uplo)
+hermitianlayout(::Type{<:Real}, layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
+symmetriclayout(_1, _2) = UnknownLayout()
+symmetriclayout(layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
+symmetriclayout(layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
 transposelayout(S::SymmetricLayout) = S
 adjointlayout(::Type{T}, S::HermitianLayout) where T = S
 

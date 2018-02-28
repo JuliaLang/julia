@@ -504,7 +504,7 @@ end
     @test Base.MemoryLayout(Hermitian(B)) == LinearAlgebra.HermitianLayout(Base.DenseColumnMajor(),'U')
     @test Base.MemoryLayout(Transpose(Symmetric(B))) == LinearAlgebra.SymmetricLayout(Base.DenseColumnMajor(),'U')
     @test Base.MemoryLayout(Transpose(Hermitian(B))) == Base.UnknownLayout()
-    @test Base.MemoryLayout(Adjoint(Symmetric(B))) == LinearAlgebra.SymmetricLayout(LinearAlgebra.ConjLayout(Base.DenseColumnMajor()),'U')
+    @test Base.MemoryLayout(Adjoint(Symmetric(B))) == Base.UnknownLayout()
     @test Base.MemoryLayout(Adjoint(Hermitian(B))) == LinearAlgebra.HermitianLayout(Base.DenseColumnMajor(),'U')
     @test Base.MemoryLayout(Symmetric(B')) == Base.UnknownLayout()
     @test Base.MemoryLayout(Hermitian(B')) == Base.UnknownLayout()

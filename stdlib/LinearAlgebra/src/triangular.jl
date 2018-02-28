@@ -418,12 +418,12 @@ equivalent to a `UpperTriangularLayout(B)` where `B` satisfies `MemoryLayout(B) 
 UnitUpperTriangularLayout
 
 
-MemoryLayout(A::UpperTriangular) = trilayout(UpperTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::UnitUpperTriangular) = trilayout(UnitUpperTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::LowerTriangular) = trilayout(LowerTriangularLayout, MemoryLayout(parent(A)))
-MemoryLayout(A::UnitLowerTriangular) = trilayout(UnitLowerTriangularLayout, MemoryLayout(parent(A)))
-trilayout(_, ::MemoryLayout) = UnknownLayout()
-trilayout(::Type{Tri}, ML::AbstractColumnMajor) where {Tri} = Tri(ML)
+MemoryLayout(A::UpperTriangular) = triangularlayout(UpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitUpperTriangular) = triangularlayout(UnitUpperTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::LowerTriangular) = triangularlayout(LowerTriangularLayout, MemoryLayout(parent(A)))
+MemoryLayout(A::UnitLowerTriangular) = triangularlayout(UnitLowerTriangularLayout, MemoryLayout(parent(A)))
+triangularlayout(_, ::MemoryLayout) = UnknownLayout()
+triangularlayout(::Type{Tri}, ML::AbstractColumnMajor) where {Tri} = Tri(ML)
 
 for (TriLayout, TriLayoutTrans) in ((UpperTriangularLayout,     LowerTriangularLayout),
                                     (UnitUpperTriangularLayout, UnitLowerTriangularLayout),

@@ -134,10 +134,12 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 struct ConjLayout{ML<:MemoryLayout} <: MemoryLayout
     layout::ML
 end
+
+conjlayout(_1, _2) = UnknownLayout()
 conjlayout(::Type{<:Complex}, M::ConjLayout) = M.layout
-conjlayout(::Type{<:Complex}, M::MemoryLayout) = ConjLayout(M)
+conjlayout(::Type{<:Complex}, M::AbstractStridedLayout) = ConjLayout(M)
 conjlayout(::Type{<:Real}, M::MemoryLayout) = M
-conjlayout(::Type{<:Complex}, M::UnknownLayout) = M
+
 
 Base.submemorylayout(M::ConjLayout, t::Tuple) = ConjLayout(Base.submemorylayout(M.layout, t))
 

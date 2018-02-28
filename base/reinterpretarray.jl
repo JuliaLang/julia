@@ -44,7 +44,7 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     tuple(size1, tail(psize)...)
 end
 
-MemoryLayout(A::ReinterpretArray) where V = reinterpretedmemorylayout(MemoryLayout(parent(A)))
+MemoryLayout(A::ReinterpretArray) = reinterpretedmemorylayout(MemoryLayout(parent(A)))
 reinterpretedmemorylayout(::MemoryLayout) = UnknownLayout()
 reinterpretedmemorylayout(::DenseColumnMajor) = DenseColumnMajor()
 
