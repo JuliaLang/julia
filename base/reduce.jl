@@ -40,7 +40,7 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
     if done(itr, i)
         return v0
     else
-        (x, i) = next(itr, i)
+        @inbounds (x, i) = next(itr, i)
         v = op(v0, f(x))
         while !done(itr, i)
             @inbounds (x, i) = next(itr, i)
@@ -71,7 +71,7 @@ function mapfoldl(f, op, itr)
     if done(itr, i)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = next(itr, i)
+    @inbounds (x, i) = next(itr, i)
     v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
@@ -555,10 +555,10 @@ julia> extrema([9,pi,4.5])
 function extrema(itr)
     s = start(itr)
     done(itr, s) && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = next(itr, s)
+    @inbounds (v, s) = next(itr, s)
     vmin = vmax = v
     while !done(itr, s)
-        (x, s) = next(itr, s)
+        @inbounds (x, s) = next(itr, s)
         vmax = max(x, vmax)
         vmin = min(x, vmin)
     end

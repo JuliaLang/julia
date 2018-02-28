@@ -37,7 +37,7 @@ _setindex(v, i::Integer) = ()
 
 start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
-next(t::Tuple, i::Int) = (t[i], i+1)
+next(t::Tuple, i::Int) = (@_propagate_inbounds_meta; (t[i], i+1))
 
 keys(t::Tuple) = 1:length(t)
 
