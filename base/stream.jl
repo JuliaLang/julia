@@ -898,8 +898,8 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
 end
 
 function flush(s::LibuvStream)
-    if s.sendbuf !== nothing
-        buf = s.sendbuf
+    buf = s.sendbuf
+    if buf !== nothing
         if bytesavailable(buf) > 0
             arr = take!(buf)        # Array of UInt8s
             uv_write(s, arr)
@@ -915,8 +915,8 @@ buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 ## low-level calls to libuv ##
 
 function write(s::LibuvStream, b::UInt8)
-    if s.sendbuf !== nothing
-        buf = s.sendbuf
+    buf = s.sendbuf
+    if buf !== nothing
         if bytesavailable(buf) + 1 < buf.maxsize
             return write(buf, b)
         end

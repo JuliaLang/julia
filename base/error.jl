@@ -203,7 +203,8 @@ function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
             catch e
                 done(delays, state) && rethrow(e)
                 if check !== nothing
-                    state, retry_or_not = check(state, e)
+                    result = check(state, e)
+                    state, retry_or_not = length(result) == 2 ? result : (state, result)
                     retry_or_not || rethrow(e)
                 end
             end

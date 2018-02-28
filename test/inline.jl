@@ -67,7 +67,7 @@ function bar12620()
         foo_inl(i==1)
     end
 end
-@test_throws UndefVarError bar12620()
+@test_throws UndefVarError(:y) bar12620()
 
 # issue #16165
 @inline f16165(x) = (x = UInt(x) + 1)

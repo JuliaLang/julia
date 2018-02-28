@@ -147,6 +147,7 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
+include("views.jl")
 include("reinterpretarray.jl")
 
 
