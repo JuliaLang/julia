@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using InteractiveUtils
+using Test, InteractiveUtils
 
 # test methodswith
 # `methodswith` relies on exported symbols
