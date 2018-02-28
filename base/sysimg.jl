@@ -324,7 +324,6 @@ include("weakkeydict.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
-global_logger(SimpleLogger(Core.stderr, CoreLogging.Info))
 
 # To limit dependency on rand functionality (implemented in the Random
 # module), Crand is used in file.jl, and could be used in error.jl
@@ -343,7 +342,7 @@ Crand(::Type{Float64}) = Crand(UInt32) / 2^32
 """
     Csrand([seed])
 
-Interface the the C `srand(seed)` function.
+Interface with the C `srand(seed)` function.
 """
 Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
@@ -456,7 +455,7 @@ include("loading.jl")
 include("util.jl")
 
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+let BINDIR = Sys.BINDIR
     init_depot_path(BINDIR)
     init_load_path(BINDIR)
 end
@@ -483,17 +482,28 @@ end_base_include = time_ns()
 
 if is_primary_base_module
 function __init__()
+    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
+        ENV["OPENBLAS_MAIN_FREE"] = "1"
+    end
+    # And try to prevent openblas from starting too many threads, unless/until specifically requested
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+        cpu_cores = Sys.CPU_CORES::Int
+        if cpu_cores > 8 # always at most 8
+            ENV["OPENBLAS_NUM_THREADS"] = "8"
+        elseif haskey(ENV, "JULIA_CPU_CORES") # or exactly as specified
+            ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
+        end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
+    end
     # for the few uses of Crand in Base:
     Csrand()
     # Base library init
     reinit_stdio()
-    Logging = root_module(PkgId(UUID(0x56ddb016_857b_54e1_b83d_db4d58db5568), "Logging"))
-    global_logger(Logging.ConsoleLogger(stderr))
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
-    early_init()
+    # initialize loading
     init_depot_path()
     init_load_path()
-    init_threadcall()
+    nothing
 end
 
 INCLUDE_STATE = 3 # include = include_relative
@@ -504,7 +514,6 @@ const tot_time_stdlib = RefValue(0.0)
 end # baremodule Base
 
 using .Base
-
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
@@ -915,8 +924,12 @@ end
 end
 end
 
+# Clear global state
+empty!(Core.ARGS)
+empty!(Base.ARGS)
 empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
+@eval Base.Sys BINDIR = ""
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))

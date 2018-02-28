@@ -298,11 +298,6 @@ function exec_options(opts)
     # load ~/.julia/config/startup.jl file
     startup && load_julia_startup()
 
-    if repl || is_interactive
-        # load interactive-only libraries
-        eval(Main, :(using InteractiveUtils))
-    end
-
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
@@ -387,6 +382,18 @@ const REPL_MODULE_REF = Ref{Module}()
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
     global active_repl
+    # load interactive-only libraries
+    if !isdefined(Main, :InteractiveUtils)
+        try
+            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+                eval(Main, :(const InteractiveUtils = $InteractiveUtils))
+                eval(Main, :(using .InteractiveUtils))
+            end
+        catch ex
+            @warn "Failed to insert InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+        end
+    end
+
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
