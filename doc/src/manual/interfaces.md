@@ -408,7 +408,7 @@ perhaps range-types `Ind` of your own design. For more information, see [Arrays 
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
-| `Base.MemoryLayout(A)`                 |                                        | Return a subtype of `Base.AbstractStridedLayout`,  such as `Base.DenseColumnMajor{T}()`,`Base.DenseRowMajor{T}()`, or `Base.StridedLayout{T}()`.
+| `Base.MemoryLayout(A)`                 |                                        | Return a subtype of `Base.AbstractStridedLayout`,  such as `Base.DenseColumnMajor()`,`Base.DenseRowMajor()`, or `Base.StridedLayout()`.
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 

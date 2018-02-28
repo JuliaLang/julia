@@ -885,26 +885,26 @@ end
 
 @testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
     let A = [1.0 2; 3 4]
-        @test Base.MemoryLayout(A)                   == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,:,:))         == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,:))           == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,:,1))         == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,:,1:1))       == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,1:1,1))       == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,1,1:1))       == Base.StridedLayout{Float64}()
-        @test Base.MemoryLayout(view(A,1,:))         == Base.StridedLayout{Float64}()
-        @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.ColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,1:1,:))       == Base.ColumnMajor{Float64}()
-        @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == Base.StridedLayout{Float64}()
-        @test Base.MemoryLayout(view(A,1:2:1,:))     == Base.StridedLayout{Float64}()
-        @test Base.MemoryLayout(view(A,[1,2],:))     == Base.UnknownLayout{Float64}()
+        @test Base.MemoryLayout(A)                   == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,:,:))         == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,:))           == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,:,1))         == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,:,1:1))       == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1:1,1))       == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,1:1))       == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1,:))         == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.ColumnMajor()
+        @test Base.MemoryLayout(view(A,1:1,:))       == Base.ColumnMajor()
+        @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:2:1,:))     == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,[1,2],:))     == Base.UnknownLayout()
 
-        @test Base.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == Base.DenseColumnMajor{Float64}()
-        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == Base.DenseColumnMajor{Float64}()
+        @test Base.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,1),(1,2),())) == Base.DenseColumnMajor()
 
-        @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == Base.DenseColumnMajor{ComplexF64}()
+        @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == Base.DenseColumnMajor()
 
-        Base.MemoryLayout(BitArray([true,true,false])) == Base.UnknownLayout{Bool}()
+        Base.MemoryLayout(BitArray([true,true,false])) == Base.UnknownLayout()
     end
 end

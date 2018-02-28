@@ -245,33 +245,31 @@ Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(conver
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
 
 # MemoryLayout of Symmetric/Hermitian
-struct SymmetricLayout{T,ML<:MemoryLayout} <: MemoryLayout{T}
+struct SymmetricLayout{ML<:MemoryLayout} <: MemoryLayout
     layout::ML
     uplo::Char
 end
-SymmetricLayout(layout::ML, uplo) where ML<:MemoryLayout{T} where T = SymmetricLayout{T,ML}(layout, uplo)
-struct HermitianLayout{T,ML<:MemoryLayout} <: MemoryLayout{T}
+SymmetricLayout(layout::ML, uplo) where ML<:MemoryLayout = SymmetricLayout{ML}(layout, uplo)
+struct HermitianLayout{ML<:MemoryLayout} <: MemoryLayout
     layout::ML
     uplo::Char
 end
-HermitianLayout(layout::ML, uplo) where ML<:MemoryLayout{T} where T = HermitianLayout{T,ML}(layout, uplo)
+HermitianLayout(layout::ML, uplo) where ML<:MemoryLayout = HermitianLayout{ML}(layout, uplo)
 
-MemoryLayout(A::Hermitian) = hermitianmemorylayout(MemoryLayout(parent(A)), A.uplo)
+MemoryLayout(A::Hermitian) = hermitianmemorylayout(eltype(A), MemoryLayout(parent(A)), A.uplo)
 MemoryLayout(A::Symmetric) = symmetricmemorylayout(MemoryLayout(parent(A)), A.uplo)
-hermitianmemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-hermitianmemorylayout(layout::AbstractColumnMajor{<:Complex}, uplo) = HermitianLayout(layout,uplo)
-hermitianmemorylayout(layout::AbstractColumnMajor{<:Real}, uplo) = SymmetricLayout(layout,uplo)
-hermitianmemorylayout(layout::AbstractRowMajor{<:Complex}, uplo) = HermitianLayout(layout,uplo)
-hermitianmemorylayout(layout::AbstractRowMajor{<:Real}, uplo) = SymmetricLayout(layout,uplo)
-symmetricmemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
+hermitianmemorylayout(_1, _2, _3) = UnknownLayout()
+hermitianmemorylayout(::Type{<:Complex}, layout::AbstractColumnMajor, uplo) = HermitianLayout(layout,uplo)
+hermitianmemorylayout(::Type{<:Real}, layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
+hermitianmemorylayout(::Type{<:Complex}, layout::AbstractRowMajor, uplo) = HermitianLayout(layout,uplo)
+hermitianmemorylayout(::Type{<:Real}, layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
+symmetricmemorylayout(_1, _2) = UnknownLayout()
 symmetricmemorylayout(layout::AbstractColumnMajor, uplo) = SymmetricLayout(layout,uplo)
 symmetricmemorylayout(layout::AbstractRowMajor, uplo) = SymmetricLayout(layout,uplo)
-
-adjoint(H::HermitianLayout) = H
-adjoint(H::SymmetricLayout{<:Real}) = H
-transpose(H::SymmetricLayout) = H
-
-
+symmetricmemorylayout(layout::ConjLayout{<:AbstractColumnMajor}, uplo) = SymmetricLayout(layout,uplo)
+symmetricmemorylayout(layout::ConjLayout{<:AbstractRowMajor}, uplo) = SymmetricLayout(layout,uplo)
+transposelayout(S::SymmetricLayout) = S
+adjointlayout(::Type{T}, S::HermitianLayout) where T = S
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
@@ -411,34 +409,34 @@ end
 
 ## Matrix-vector product
 _mul!(y::AbstractVector{T},    A::AbstractMatrix{T},                  x::AbstractVector{T},
-      ::AbstractStridedLayout, AL::SymmetricLayout{T,<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, AL::SymmetricLayout{<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
     BLAS.symv!(AL.uplo, one(T), parent(A), x, zero(T), y)
 _mul!(y::AbstractVector{T},    A::AbstractMatrix{T},                  x::AbstractVector{T},
-      ::AbstractStridedLayout, AL::SymmetricLayout{T,<:AbstractRowMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, AL::SymmetricLayout{<:AbstractRowMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
     BLAS.symv!(ifelse(AL.uplo == 'L', 'U', 'L'), one(T), transpose(parent(A)), x, zero(T), y)
 _mul!(y::AbstractVector{T},    A::AbstractMatrix{T},                  x::AbstractVector{T},
-      ::AbstractStridedLayout, AL::HermitianLayout{T,<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout, AL::HermitianLayout{<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemv!(AL.uplo, one(T), parent(A), x, zero(T), y)
 _mul!(y::AbstractVector{T},     A::AbstractMatrix{T}, x::AbstractVector{T},
-      ::AbstractStridedLayout,  AL::HermitianLayout{T,<:AbstractRowMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout,  AL::HermitianLayout{<:AbstractRowMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemv!(ifelse(AL.uplo == 'L', 'U', 'L'), one(T), transpose(parent(A)), x, zero(T), y)
 
 ## Matrix-matrix product
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::AbstractStridedLayout, AL::SymmetricLayout{T,<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, AL::SymmetricLayout{<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasFloat} =
     BLAS.symm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::SymmetricLayout{T,<:AbstractColumnMajor}) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::SymmetricLayout{<:AbstractColumnMajor}) where {T<:BlasFloat} =
     BLAS.symm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 _mul!(C::AbstractMatrix{T},     A::AbstractMatrix{T}, B::AbstractMatrix{T},
-      ::AbstractStridedLayout,  AL::HermitianLayout{T,<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
+      ::AbstractStridedLayout,  AL::HermitianLayout{<:AbstractColumnMajor},  ::AbstractStridedLayout) where {T<:BlasComplex} =
     BLAS.hemm!('L', AL.uplo, one(T), parent(A), B, zero(T), C)
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout{T,<:AbstractColumnMajor}) where {T<:BlasComplex} =
+      ::AbstractStridedLayout, ::AbstractStridedLayout, BL::HermitianLayout{<:AbstractColumnMajor}) where {T<:BlasComplex} =
     BLAS.hemm!('R', BL.uplo, one(T), parent(B), A, zero(T), C)
 
 _mul!(C::AbstractMatrix{T},    A::AbstractMatrix{T},    B::AbstractMatrix{T},
-      ::AbstractStridedLayout, ::Union{HermitianLayout{T}, SymmetricLayout{T}}, ::Union{HermitianLayout{T}, SymmetricLayout{T}}) where {T<:BlasFloat} =
+      ::AbstractStridedLayout, ::Union{HermitianLayout, SymmetricLayout}, ::Union{HermitianLayout, SymmetricLayout}) where {T<:BlasFloat} =
     mul!(C, A, Matrix{T}(B))
 
 

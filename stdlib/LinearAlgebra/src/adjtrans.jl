@@ -131,28 +131,27 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 
 
 # MemoryLayout of transposed and adjoint matrices
-struct ConjLayout{T<:Complex, ML<:MemoryLayout} <: MemoryLayout{T}
+struct ConjLayout{ML<:MemoryLayout} <: MemoryLayout
     layout::ML
 end
-ConjLayout(layout::ML) where ML<:MemoryLayout{T} where T<:Complex = ConjLayout{T,ML}(layout)
-conj(::UnknownLayout{T}) where T = UnknownLayout{T}()
-conj(c::ConjLayout) = c.layout
-conj(layout::MemoryLayout{T}) where T<:Complex = ConjLayout(layout)
+conjlayout(::Type{<:Complex}, M::ConjLayout) = M.layout
+conjlayout(::Type{<:Complex}, M::MemoryLayout) = ConjLayout(M)
+conjlayout(::Type{<:Real}, M::MemoryLayout) = M
+conjlayout(::Type{<:Complex}, M::UnknownLayout) = M
 
+Base.submemorylayout(M::ConjLayout, t::Tuple) = ConjLayout(Base.submemorylayout(M.layout, t))
 
-MemoryLayout(A::Adjoint) = adjoint(MemoryLayout(parent(A)))
-MemoryLayout(A::Transpose) = transpose(MemoryLayout(parent(A)))
-transpose(::MemoryLayout{T}) where T = UnknownLayout{T}()
-transpose(::StridedLayout{T}) where T = StridedLayout{T}()
-transpose(::ColumnMajor{T}) where T = RowMajor{T}()
-transpose(::RowMajor{T}) where T = ColumnMajor{T}()
-transpose(::DenseColumnMajor{T}) where T = DenseRowMajor{T}()
-transpose(::DenseRowMajor{T}) where T = DenseColumnMajor{T}()
-adjoint(::MemoryLayout{T}) where T = UnknownLayout{T}()
-adjoint(M::MemoryLayout{T}) where T<:Real = transpose(M)
-adjoint(M::ConjLayout{T}) where T<:Complex = transpose(conj(M))
-adjoint(M::MemoryLayout{T}) where T<:Complex = conj(transpose(M))
-Base.submemorylayout(M::ConjLayout{T}, t::Tuple) where T<:Complex = conj(Base.submemorylayout(conj(M), t))
+MemoryLayout(A::Transpose) = transposelayout(MemoryLayout(parent(A)))
+MemoryLayout(A::Adjoint) = adjointlayout(eltype(A), MemoryLayout(parent(A)))
+transposelayout(_) = UnknownLayout()
+transposelayout(::StridedLayout) = StridedLayout()
+transposelayout(::ColumnMajor) = RowMajor()
+transposelayout(::RowMajor) = ColumnMajor()
+transposelayout(::DenseColumnMajor) = DenseRowMajor()
+transposelayout(::DenseRowMajor) = DenseColumnMajor()
+transposelayout(M::ConjLayout) = ConjLayout(transposelayout(M.layout))
+adjointlayout(::Type{T}, M::MemoryLayout) where T = transposelayout(conjlayout(T, M))
+
 
 # Adjoints and transposes conform to the strided array interface if their parent does
 Base.unsafe_convert(::Type{Ptr{T}}, A::AdjOrTrans{T,S}) where {T,S} = Base.unsafe_convert(Ptr{T}, parent(A))

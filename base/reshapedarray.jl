@@ -244,7 +244,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 
 MemoryLayout(A::ReshapedArray) = reshapedmemorylayout(MemoryLayout(parent(A)))
-reshapedmemorylayout(::MemoryLayout{T}) where T = UnknownLayout{T}()
-reshapedmemorylayout(::DenseColumnMajor{T}) where T = DenseColumnMajor{T}()
+reshapedmemorylayout(::MemoryLayout) = UnknownLayout()
+reshapedmemorylayout(::DenseColumnMajor) = DenseColumnMajor()
 
 unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))

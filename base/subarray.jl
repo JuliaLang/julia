@@ -318,31 +318,31 @@ find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...)
 find_extended_inds() = ()
 
 MemoryLayout(A::SubArray) = submemorylayout(MemoryLayout(parent(A)), parentindices(A))
-submemorylayout(::MemoryLayout{T}, _) where T = UnknownLayout{T}()
-submemorylayout(::AbstractColumnMajor{T}, ::Tuple{I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I}) where {T,I<:Union{RangeIndex,AbstractCartesianIndex}} =
-    StridedLayout{T}()
-submemorylayout(::AbstractColumnMajor{T}, ::Tuple{I,Int}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::AbstractColumnMajor{T}, ::Tuple{I,Int}) where {T,I<:Slice} =
-    DenseColumnMajor{T}()
-submemorylayout(::AbstractRowMajor{T}, ::Tuple{Int,I}) where {T,I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
-    DenseColumnMajor{T}()
-submemorylayout(::AbstractRowMajor{T}, ::Tuple{Int,I}) where {T,I<:Slice} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseColumnMajor{T}, ::Tuple{I1,I2}) where {T,I1<:Slice,I2<:AbstractUnitRange{Int}} =
-    DenseColumnMajor{T}()
-submemorylayout(::DenseColumnMajor{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    ColumnMajor{T}()
-submemorylayout(::AbstractColumnMajor{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    ColumnMajor{T}()
-submemorylayout(::AbstractRowMajor{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:Slice} =
-    DenseRowMajor{T}()
-submemorylayout(::AbstractRowMajor{T}, ::Tuple{I1,I2}) where {T,I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
-    RowMajor{T}()
-submemorylayout(::AbstractStridedLayout{T}, ::Tuple{I1,I2}) where {T,I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
-    StridedLayout{T}()
+submemorylayout(::MemoryLayout, _)= UnknownLayout()
+submemorylayout(::AbstractColumnMajor, ::Tuple{I}) where {I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor()
+submemorylayout(::AbstractStridedLayout, ::Tuple{I}) where {I<:Union{RangeIndex,AbstractCartesianIndex}} =
+    StridedLayout()
+submemorylayout(::AbstractColumnMajor, ::Tuple{I,Int}) where {I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor()
+submemorylayout(::AbstractColumnMajor, ::Tuple{I,Int}) where {I<:Slice} =
+    DenseColumnMajor()
+submemorylayout(::AbstractRowMajor, ::Tuple{Int,I}) where {I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex}} =
+    DenseColumnMajor()
+submemorylayout(::AbstractRowMajor, ::Tuple{Int,I}) where {I<:Slice} =
+    DenseColumnMajor()
+submemorylayout(::DenseColumnMajor, ::Tuple{I1,I2}) where {I1<:Slice,I2<:AbstractUnitRange{Int}} =
+    DenseColumnMajor()
+submemorylayout(::DenseColumnMajor, ::Tuple{I1,I2}) where {I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
+    ColumnMajor()
+submemorylayout(::AbstractColumnMajor, ::Tuple{I1,I2}) where {I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
+    ColumnMajor()
+submemorylayout(::AbstractRowMajor, ::Tuple{I1,I2}) where {I1<:AbstractUnitRange{Int},I2<:Slice} =
+    DenseRowMajor()
+submemorylayout(::AbstractRowMajor, ::Tuple{I1,I2}) where {I1<:AbstractUnitRange{Int},I2<:AbstractUnitRange{Int}} =
+    RowMajor()
+submemorylayout(::AbstractStridedLayout, ::Tuple{I1,I2}) where {I1<:Union{RangeIndex,AbstractCartesianIndex},I2<:Union{RangeIndex,AbstractCartesianIndex}} =
+    StridedLayout()
 
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
