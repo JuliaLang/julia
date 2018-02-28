@@ -57,12 +57,12 @@ const cmds = Dict(
 ###########
 # Options #
 ###########
-@enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
+@enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_LOCKFILE, OPT_MAJOR, OPT_MINOR,
                   OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH,
                   OPT_BRANCH,)
 
 function Types.PackageMode(opt::OptionKind)
-    opt == OPT_MANIFEST && return PKGMODE_MANIFEST
+    opt == OPT_LOCKFILE && return PKGMODE_LOCKFILE
     opt == OPT_PROJECT  && return PKGMODE_PROJECT
     throw(ArgumentError("invalid option $opt"))
 end
@@ -81,7 +81,7 @@ struct Option
     argument::Union{String, Nothing}
     Option(kind::OptionKind, val::String) = new(kind, val, nothing)
     function Option(kind::OptionKind, val::String, argument::Union{String, Nothing})
-        if kind in (OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR,
+        if kind in (OPT_PROJECT, OPT_LOCKFILE, OPT_MAJOR,
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
@@ -100,8 +100,8 @@ const opts = Dict(
     "env"      => OPT_ENV,
     "project"  => OPT_PROJECT,
     "p"        => OPT_PROJECT,
-    "manifest" => OPT_MANIFEST,
-    "m"        => OPT_MANIFEST,
+    "lockfile" => OPT_LOCKFILE,
+    "l"        => OPT_LOCKFILE,
     "major"    => OPT_MAJOR,
     "minor"    => OPT_MINOR,
     "patch"    => OPT_PATCH,
@@ -273,9 +273,9 @@ What action you want the package manager to take:
 
 `add`: add packages to project
 
-`rm`: remove packages from project or manifest
+`rm`: remove packages from project or lockfile
 
-`up`: update packages in manifest
+`up`: update packages in lockfile
 
 `preview`: previews a subsequent command without affecting the current state
 
@@ -310,12 +310,12 @@ const helps = Dict(
 
         status
         status [-p|--project]
-        status [-m|--manifest]
+        status [-l|--lockfile]
 
     Show the status of the current environment. By default, the full contents of
     the project file is summarized, showing what version each package is on and
     how it has changed since the last git commit (if in a git repo), as well as
-    any changes to manifest packages not already listed. In `--project` mode, the
+    any changes to lockfile packages not already listed. In `--project` mode, the
     status of the project file is summarized. In `--project` mode, the status of
     the project file is summarized.
     """, CMD_ADD => md"""
@@ -335,21 +335,21 @@ const helps = Dict(
     refer to one package in a project this is unambiguous, but you can specify
     a `uuid` anyway, and the command is ignored, with a warning if package name
     and UUID do not mactch. When a package is removed from the project file, it
-    may still remain in the manifest if it is required by some other package in
+    may still remain in the lockfile if it is required by some other package in
     the project. Project mode operation is the default, so passing `-p` or
-    `--project` is optional unless it is preceded by the `-m` or `--manifest`
+    `--project` is optional unless it is preceded by the `-l` or `--lockfile`
     options at some earlier point.
 
-        rm [-m|--manifest] pkg[=uuid] ...
+        rm [-l|--lockfile] pkg[=uuid] ...
 
-    Remove package `pkg` from the manifest file. If the name `pkg` refers to
-    multiple packages in the manifest, `uuid` disambiguates it. Removing a package
-    from the manifest forces the removal of all packages that depend on it, as well
-    as any no-longer-necessary manifest packages due to project package removals.
+    Remove package `pkg` from the lockfile file. If the name `pkg` refers to
+    multiple packages in the lockfile, `uuid` disambiguates it. Removing a package
+    from the lockfile forces the removal of all packages that depend on it, as well
+    as any no-longer-necessary lockfile packages due to project package removals.
     """, CMD_UP => md"""
 
         up [-p|project]  [opts] pkg[=uuid] [@version] ...
-        up [-m|manifest] [opts] pkg[=uuid] [@version] ...
+        up [-l|lockfile] [opts] pkg[=uuid] [@version] ...
 
         opts: --major | --minor | --patch | --fixed
 
@@ -357,7 +357,7 @@ const helps = Dict(
     specifications. Versions may be specified by `@1`, `@1.2`, `@1.2.3`, allowing
     any version with a prefix that matches, or ranges thereof, such as `@1.2-3.4.5`.
     In `--project` mode, package specifications only match project packages, while
-    in `manifest` mode they match any manifest package. Bound level options force
+    in `lockfile` mode they match any lockfile package. Bound level options force
     the following packages to be upgraded only within the current major, minor,
     patch version; if the `--fixed` upgrade level is given, then the following
     packages will not be upgraded at all.
@@ -366,7 +366,7 @@ const helps = Dict(
         preview cmd
 
     Runs the command `cmd` in preview mode. This is defined such that no side effects
-    will take place i.e. no packages are downloaded and neither the project nor manifest
+    will take place i.e. no packages are downloaded and neither the project nor lockfile
     is modified.
     """, CMD_TEST => md"""
 
@@ -391,7 +391,7 @@ const helps = Dict(
         build pkg[=uuid] ...
 
     Run the build script in deps/build.jl for each package in `pkg`` and all of their dependencies in depth-first recursive order.
-    If no packages are given, runs the build scripts for all packages in the manifest.
+    If no packages are given, runs the build scripts for all packages in the lockfile.
     """, CMD_PIN => md"""
 
         pin pkg[=uuid] ...
@@ -459,7 +459,7 @@ function do_rm!(ctx::Context, tokens::Vector{Token})
         elseif token isa VersionRange
             cmderror("`rm` does not take version specs")
         elseif token isa Option
-            if token.kind in (OPT_PROJECT, OPT_MANIFEST)
+            if token.kind in (OPT_PROJECT, OPT_LOCKFILE)
                 mode = PackageMode(token.kind)
             else
                 cmderror("invalid option for `rm`: $token")
@@ -516,7 +516,7 @@ function do_up!(ctx::Context, tokens::Vector{Token})
                 cmderror("package name/uuid must precede version spec `@$token`")
             pkgs[end].version = VersionSpec(token)
         elseif token isa Option
-            if token.kind in (OPT_PROJECT, OPT_MANIFEST)
+            if token.kind in (OPT_PROJECT, OPT_LOCKFILE)
                 mode = PackageMode(token.kind)
             elseif token.kind in (OPT_MAJOR, OPT_MINOR, OPT_PATCH, OPT_FIXED)
                 level = UpgradeLevel(token.kind)
@@ -597,7 +597,7 @@ function do_status!(ctx::Context, tokens::Vector{Token})
     while !isempty(tokens)
         token = popfirst!(tokens)
         if token isa Option
-            if token.kind in (OPT_PROJECT, OPT_MANIFEST)
+            if token.kind in (OPT_PROJECT, OPT_LOCKFILE)
                 mode = PackageMode(token.kind)
             else
                 cmderror("invalid option for `status`: $(token)")
@@ -617,7 +617,7 @@ function do_test!(ctx::Context, tokens::Vector{Token})
         token = popfirst!(tokens)
         if token isa String
             pkg = parse_package(token)
-            pkg.mode = PKGMODE_MANIFEST
+            pkg.mode = PKGMODE_LOCKFILE
             push!(pkgs, pkg)
         elseif token isa Option
             if token.kind == OPT_COVERAGE

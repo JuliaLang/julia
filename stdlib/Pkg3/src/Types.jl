@@ -18,10 +18,10 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
-    manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    read_project, read_manifest, pathrepr, registries,
-    PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
+    project_resolve!, lockfile_resolve!, registry_resolve!, ensure_resolved,
+    lockfile_info, registered_uuids, registered_paths, registered_uuid, registered_name,
+    read_project, read_lockfile, pathrepr, registries,
+    PackageMode, PKGMODE_LOCKFILE, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT
 
@@ -375,7 +375,7 @@ function UpgradeLevel(s::Symbol)
     throw(ArgumentError("invalid upgrade bound: $s"))
 end
 
-@enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
+@enum(PackageMode, PKGMODE_PROJECT, PKGMODE_LOCKFILE, PKGMODE_COMBINED)
 @enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
@@ -424,7 +424,7 @@ function parse_toml(path::String...; fakeit::Bool=false)
 end
 
 const project_names = ["JuliaProject.toml", "Project.toml"]
-const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
+const lockfile_names = ["JuliaLockfile.toml", "Lockfile.toml"]
 const default_envs = [
     "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
     "v$(VERSION.major).$(VERSION.minor)",
@@ -439,11 +439,11 @@ mutable struct EnvCache
 
     # paths for files:
     project_file::String
-    manifest_file::String
+    lockfile_file::String
 
     # cache of metadata:
     project::Dict
-    manifest::Dict
+    lockfile::Dict
 
     # registered package info:
     uuids::Dict{String,Vector{UUID}}
@@ -470,40 +470,40 @@ mutable struct EnvCache
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
-        if haskey(project, "manifest")
-            manifest_file = abspath(project["manifest"])
+        if haskey(project, "lockfile")
+            lockfile_file = abspath(project["lockfile"])
         else
             dir = abspath(dirname(project_file))
-            for name in manifest_names
-                manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
+            for name in lockfile_names
+                lockfile_file = joinpath(dir, name)
+                isfile(lockfile_file) && break
             end
         end
-        write_env_usage(manifest_file)
-        manifest = read_manifest(manifest_file)
+        write_env_usage(lockfile_file)
+        lockfile = read_lockfile(lockfile_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
         return new(
             env,
             git,
             project_file,
-            manifest_file,
+            lockfile_file,
             project,
-            manifest,
+            lockfile,
             uuids,
             paths,
         )
     end
 end
 
-function write_env_usage(manifest_file::AbstractString)
+function write_env_usage(lockfile_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
-    usage_file = joinpath(logdir(), "manifest_usage.toml")
+    usage_file = joinpath(logdir(), "lockfile_usage.toml")
     touch(usage_file)
-    !isfile(manifest_file) && return
+    !isfile(lockfile_file) && return
     # Do not rewrite as do syntax (no longer precompilable)
     io = open(usage_file, "a")
-    println(io, "[[\"", escape_string(manifest_file), "\"]]")
+    println(io, "[[\"", escape_string(lockfile_file), "\"]]")
     print(io, "time = ", now()); println(io, 'Z')
     close(io)
 end
@@ -519,28 +519,28 @@ function read_project(file::String)
     isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
-function read_manifest(io::IO)
-    manifest = TOML.parse(io)
-    for (name, infos) in manifest, info in infos
+function read_lockfile(io::IO)
+    lockfile = TOML.parse(io)
+    for (name, infos) in lockfile, info in infos
         haskey(info, "deps") || continue
         info["deps"] isa AbstractVector || continue
         for dep in info["deps"]
-            length(manifest[dep]) == 1 ||
+            length(lockfile[dep]) == 1 ||
                 error("ambiguious dependency for $name: $dep")
         end
         new_dict = Dict()
         for d in info["deps"]
-            new_dict[d] = manifest[d][1]["uuid"]
+            new_dict[d] = lockfile[d][1]["uuid"]
         end
         info["deps"] = new_dict
     end
-    return manifest
+    return lockfile
 end
-function read_manifest(file::String)
-    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+function read_lockfile(file::String)
+    try isfile(file) ? open(read_lockfile, file) : read_lockfile(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
-        err.msg *= "In manifest file: $file"
+        err.msg *= "In lockfile file: $file"
         rethrow(err)
     end
 end
@@ -567,18 +567,18 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     return pkgs
 end
 
-# Disambiguate name/uuid package specifications using manifest info.
-function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
+# Disambiguate name/uuid package specifications using lockfile info.
+function lockfile_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = Dict{String,Vector{String}}()
     names = Dict{String,String}()
-    for (name, infos) in env.manifest, info in infos
+    for (name, infos) in env.lockfile, info in infos
         haskey(info, "uuid") || continue
         uuid = info["uuid"]
         push!(get!(uuids, name, String[]), uuid)
         names[uuid] = name # can be duplicate but doesn't matter
     end
     for pkg in pkgs
-        pkg.mode == PKGMODE_MANIFEST || continue
+        pkg.mode == PKGMODE_LOCKFILE || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
             length(uuids[pkg.name]) == 1 && (pkg.uuid = UUID(uuids[pkg.name][1]))
         end
@@ -619,7 +619,7 @@ function ensure_resolved(
     for pkg in pkgs
         has_uuid(pkg) && continue
         uuids = UUID[]
-        for (name, infos) in env.manifest, info in infos
+        for (name, infos) in env.lockfile, info in infos
             name == pkg.name && haskey(info, "uuid") || continue
             uuid = UUID(info["uuid"])
             uuid in uuids || push!(uuids, uuid)
@@ -633,13 +633,13 @@ function ensure_resolved(
         for (name, uuids) in sort!(collect(unresolved), by=lowercase∘first)
             print(io, " * $name (")
             if length(uuids) == 0
-                what = ["project", "manifest"]
+                what = ["project", "lockfile"]
                 registry && push!(what, "registry")
                 print(io, "not found in ")
                 join(io, what, ", ", " or ")
             else
                 join(io, uuids, ", ", " or ")
-                print(io, " in manifest but not in project")
+                print(io, " in lockfile but not in project")
             end
             println(io, ")")
         end
@@ -709,8 +709,8 @@ function find_registered!(
     for (name, uuid) in env.project["deps"]
         save(name); save(UUID(uuid))
     end
-    # lookup anything mentioned in the manifest file
-    for (name, infos) in env.manifest, info in infos
+    # lookup anything mentioned in the lockfile file
+    for (name, infos) in env.lockfile, info in infos
         save(name)
         haskey(info, "uuid") && save(UUID(info["uuid"]))
         haskey(info, "deps") || continue
@@ -783,7 +783,7 @@ end
 find_registered!(env::EnvCache, uuids::Vector{UUID}; force::Bool=false)::Nothing =
     find_registered!(env, String[], uuids, force=force)
 
-# Lookup all packages in project & manifest files
+# Lookup all packages in project & lockfile files
 find_registered!(env::EnvCache)::Nothing =
     find_registered!(env, String[], UUID[], force=true)
 
@@ -861,10 +861,10 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     return values
 end
 
-# Find package by UUID in the manifest file
-function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothing}
+# Find package by UUID in the lockfile file
+function lockfile_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothing}
     uuid in values(env.uuids) || find_registered!(env, [uuid])
-    for (name, infos) in env.manifest, info in infos
+    for (name, infos) in env.lockfile, info in infos
         haskey(info, "uuid") && uuid == UUID(info["uuid"]) || continue
         return merge!(Dict{String,Any}("name" => name), info)
     end
@@ -945,23 +945,23 @@ function write_env(ctx::Context; no_output=false)
             end
         end
     end
-    # update the manifest file
-    if !isempty(env.manifest) || ispath(env.manifest_file)
-        no_output || @info "Updating $(pathrepr(env, env.manifest_file))"
-        no_output || Pkg3.Display.print_manifest_diff(old_env, env)
-        manifest = deepcopy(env.manifest)
-        uniques = sort!(collect(keys(manifest)), by=lowercase)
-        filter!(name->length(manifest[name]) == 1, uniques)
-        uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
-        for (name, infos) in manifest, info in infos
+    # update the lockfile file
+    if !isempty(env.lockfile) || ispath(env.lockfile_file)
+        no_output || @info "Updating $(pathrepr(env, env.lockfile_file))"
+        no_output || Pkg3.Display.print_lockfile_diff(old_env, env)
+        lockfile = deepcopy(env.lockfile)
+        uniques = sort!(collect(keys(lockfile)), by=lowercase)
+        filter!(name->length(lockfile[name]) == 1, uniques)
+        uuids = Dict(name => UUID(lockfile[name][1]["uuid"]) for name in uniques)
+        for (name, infos) in lockfile, info in infos
             haskey(info, "deps") || continue
             deps = Dict{String,UUID}(n => UUID(u) for (n, u) in info["deps"])
             all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
             info["deps"] = sort!(collect(keys(deps)))
         end
         if !ctx.preview
-            open(env.manifest_file, "w") do io
-                TOML.print(io, manifest, sorted=true)
+            open(env.lockfile_file, "w") do io
+                TOML.print(io, lockfile, sorted=true)
             end
         end
     end

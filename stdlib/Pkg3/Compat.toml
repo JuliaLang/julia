@@ -4,7 +4,7 @@ desc = "PkgA accidentally changed its `foo` API and broke PkgB"
 
 # The name/uuid mapping of a package is recorded when a compatibility entry
 # is created. This is only used to decode the package names below and does
-# not need to match the name used in Config.toml or Manifest.toml, nor do
+# not need to match the name used in Config.toml or Lockfile.toml, nor do
 # they need to be updated later if those change for any reason. They may be
 # updated, however, for clarity.
 
