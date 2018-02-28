@@ -46,7 +46,7 @@ const DEPOT_PATH = String[]
 function init_depot_path(BINDIR = Sys.BINDIR)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
-        push!(empty!(DEPOT_PATH), map(expanduser, depots))
+        append!(empty!(DEPOT_PATH), map(expanduser, depots))
     else
         push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
     end
