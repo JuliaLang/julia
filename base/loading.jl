@@ -336,7 +336,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Bool,
     @assert where.uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
-        proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+        proj_name, proj_uuid = project_file_name_uuid_path(project_file, where.name)
         if proj_name == where.name && proj_uuid == where.uuid
             # `where` matches the project, use deps as manifest
             found_or_uuid = explicit_project_deps_get(project_file, name)
@@ -355,6 +355,8 @@ end
 function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
     project_file = env_project_file(env)
     if project_file isa String
+        proj_name, proj_uuid, path = project_file_name_uuid_path(project_file, pkg.name)
+        proj_name == pkg.name && proj_uuid == pkg.uuid && return path
         manifest_file = project_file_manifest_path(project_file)
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_uuid_path(manifest_file, pkg)
@@ -380,19 +382,23 @@ const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
 # find project file's top-level UUID entry (or nothing)
-function project_file_name_and_uuid(project_file::String,
-    name::Union{Nothing,String}=nothing)::Tuple{Union{Nothing,String},UUID}
+function project_file_name_uuid_path(project_file::String,
+    name::String)::Tuple{String,UUID,String}
     open(project_file) do io
         uuid = dummy_uuid(project_file)
+        path = joinpath("src", "$name.jl")
         for line in eachline(io)
             contains(line, re_section) && break
             if (m = match(re_name_to_string, line)) != nothing
                 name = String(m.captures[1])
             elseif (m = match(re_uuid_to_string, line)) != nothing
                 uuid = UUID(m.captures[1])
+            elseif (m = match(re_path_to_string, line)) != nothing
+                path = String(m.captures[1])
             end
         end
-        return name, uuid
+        path = joinpath(dirname(project_file), path)
+        return name, uuid, path
     end
 end
 
@@ -433,11 +439,11 @@ end
 # and project file if one exists (or nothing if not)
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
     for entry in ("", joinpath(name, "src"), joinpath("$name.jl", "src"))
-        path = joinpath(dir, entry, "$name.jl")
+        path = normpath(joinpath(dir, entry, "$name.jl"))
         isfile_casesensitive(path) || continue
         if !isempty(entry)
             for proj in project_names
-                project_file = joinpath(dir, dirname(entry), proj)
+                project_file = normpath(joinpath(dir, dirname(entry), proj))
                 isfile_casesensitive(project_file) || continue
                 return path, project_file
             end
@@ -449,8 +455,8 @@ end
 
 # given a path and a name, return the entry point
 function entry_path(path::String, name::String)::Union{Nothing,String}
-    isfile_casesensitive(path) && return path
-    path = joinpath(path, "src", "$name.jl")
+    isfile_casesensitive(path) && return normpath(path)
+    path = normpath(joinpath(path, "src", "$name.jl"))
     isfile_casesensitive(path) ? path : nothing
 end
 entry_path(::Nothing, name::String) = nothing
@@ -578,7 +584,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
         slug = joinpath(name, version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", slug)
-            ispath(path) && return path
+            ispath(path) && return entry_path(path, name)
         end
     end
 end
@@ -592,7 +598,7 @@ end
 function implicit_project_deps_get(dir::String, name::String)::Union{Bool,UUID}
     path, project_file = entry_point_and_project_file(dir, name)
     project_file == nothing && return path != nothing
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, name)
     proj_name == name && proj_uuid
 end
 
@@ -605,7 +611,7 @@ function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Un
     @assert where.uuid !== nothing
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return false
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, where.name)
     proj_name == where.name && proj_uuid == where.uuid || return false
     found_or_uuid = explicit_project_deps_get(project_file, name)
     found_or_uuid isa UUID ? found_or_uuid : true
@@ -616,7 +622,7 @@ function implicit_manifest_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,Str
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     pkg.uuid === nothing && project_file === nothing && return path
     pkg.uuid === nothing || project_file === nothing && return nothing
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, pkg.name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, pkg.name)
     proj_name == pkg.name && proj_uuid == pkg.uuid ? path : nothing
 end
 
