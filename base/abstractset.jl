@@ -221,7 +221,7 @@ function issubset(l, r)
     #sampling using these two methods.
     lenthresh = 70
 
-    if rlen > lenthresh && !isa(r, Set)
+    if rlen > lenthresh && !isa(r, AbstractSet)
        return issubset(l, Set(r))
     end
 
