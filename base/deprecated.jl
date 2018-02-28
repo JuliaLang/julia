@@ -1468,6 +1468,8 @@ end
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
+@deprecate diff(A::AbstractMatrix) diff(A, 1)
+
 # PR 26194
 export assert
 function assert(x)

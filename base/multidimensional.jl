@@ -1087,6 +1087,44 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     return B
 end
 
+diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+
+"""
+    diff(A::AbstractVector)
+    diff(A::AbstractMatrix, dim::Integer)
+
+Finite difference operator of matrix or vector `A`. If `A` is a matrix,
+specify the dimension over which to operate with the `dim` argument.
+
+# Examples
+```jldoctest
+julia> a = [2 4; 6 16]
+2×2 Array{Int64,2}:
+ 2   4
+ 6  16
+
+julia> diff(a,2)
+2×1 Array{Int64,2}:
+  2
+ 10
+
+julia> diff(vec(a))
+3-element Array{Int64,1}:
+  4
+ -2
+ 12
+```
+"""
+function diff(A::AbstractMatrix, dim::Integer)
+    if dim == 1
+        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
+    elseif dim == 2
+        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    else
+        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
+    end
+end
+
 ### from abstractarray.jl
 
 # In the common case where we have two views into the same parent, aliasing checks

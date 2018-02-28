@@ -2184,6 +2184,21 @@ end
     @test all(x -> x isa U, b)
 end
 
+@testset "diff" begin
+    # test diff, throw ArgumentError for invalid dimension argument
+    X = [3  9   5;
+         7  4   2;
+         2  1  10]
+    @test diff(X,1) == [4  -5 -3; -5  -3  8]
+    @test diff(X,2) == [6 -4; -3 -2; -1 9]
+    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
+    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
+    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
+    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
+    @test_throws ArgumentError diff(X,3)
+    @test_throws ArgumentError diff(X,-1)
+end
+
 @testset "accumulate, accumulate!" begin
     @test accumulate(+, [1,2,3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], dims=1) == [1 2; 1 2]

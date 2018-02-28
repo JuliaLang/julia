@@ -144,7 +144,7 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-LinearAlgebra.diff
+Base.diff
 Base.repeat
 Base.rot180
 Base.rotl90
