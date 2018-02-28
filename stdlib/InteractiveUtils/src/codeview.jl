@@ -116,7 +116,7 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
+All metadata and dbg.* calls are removed from the printed bitcode. Use [`code_llvm_raw`](@ref) for the full IR.
 """
 code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
