@@ -17,7 +17,7 @@ using Pkg3.Operations
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP)
 
 struct Command
     kind::CommandKind
@@ -51,7 +51,9 @@ const cmds = Dict(
     "build"     => CMD_BUILD,
     "pin"       => CMD_PIN,
     "free"      => CMD_FREE,
-    "checkout"  => CMD_CHECKOUT,
+    "checkout"  => CMD_CHECKOUT, # deprecated
+    "develop"   => CMD_DEVELOP,
+    "dev"       => CMD_DEVELOP,
 )
 
 ###########
@@ -245,6 +247,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_PIN      ? Base.invokelatest(     do_pin!, ctx, tokens) :
     cmd.kind == CMD_FREE     ? Base.invokelatest(    do_free!, ctx, tokens) :
     cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_checkout!, ctx, tokens) :
+    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_develop!,  ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -289,9 +292,9 @@ What action you want the package manager to take:
 
 `pin`: pins the version of packages
 
-`checkout`: clone the full package repo locally for development
+`develop`: clone the full package repo locally for development
 
-`free`: undos a `pin` or `checkout`
+`free`: undos a `pin` or `develop`
 """
 
 const helps = Dict(
@@ -305,7 +308,7 @@ const helps = Dict(
 
     Display usage information for commands listed.
 
-    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `checkout`.
+    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `develop`.
     """, CMD_STATUS => md"""
 
         status
@@ -401,10 +404,10 @@ const helps = Dict(
     """, CMD_FREE => md"""
         free pkg[=uuid] ...
 
-    Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help checkout`) then this command
+    Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
     makes the package no longer being checked out.
-    """, CMD_CHECKOUT => md"""
-        checkout pkg[=uuid] ...
+    """, CMD_DEVELOP => md"""
+        develop pkg[=uuid] ...
 
         opts: --path | --branch
 
@@ -415,7 +418,7 @@ const helps = Dict(
 
     *Example*
     ```jl
-    pkg> checkout --path=~/mydevpackages Example --branch=devel ACME --branch=feature/branch
+    pkg> develop --path=~/mydevpackages Example --branch=devel ACME --branch=feature/branch
     ```
     """
 )
@@ -567,6 +570,11 @@ function do_free!(ctx::Context, tokens::Vector{Token})
 end
 
 function do_checkout!(ctx::Context, tokens::Vector{Token})
+    Base.depwarn("`checkout`` is deprecated, use `develop`", :checkout)
+    do_develop!(ctx, tokens)
+end
+
+function do_develop!(ctx::Context, tokens::Vector{Token})
     pkgs_branches = Tuple{PackageSpec, Union{String, Nothing}}[] # (package, branch?)
     path = devdir()
     prev_token_was_package = false
@@ -582,14 +590,14 @@ function do_checkout!(ctx::Context, tokens::Vector{Token})
             elseif token.kind == OPT_BRANCH
                 pkgs_branches[end] = (pkgs_branches[end][1], token.argument)
             else
-                cmderror("invalid option for `checkout`: $token")
+                cmderror("invalid option for `develop`: $token")
             end
         else
             cmderror("unexpected token $token")
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.checkout(ctx, pkgs_branches; path = path)
+    Pkg3.API.develop(ctx, pkgs_branches; path = path)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})

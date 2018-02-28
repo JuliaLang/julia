@@ -101,12 +101,12 @@ temp_pkg_dir() do project_path
         Pkg3.rm(TEST_PKG.name)
     end
 
-    @testset "checking out / freeing" begin
+    @testset "develop / freeing" begin
         Pkg3.add(TEST_PKG.name)
         old_v = Pkg3.installed()[TEST_PKG.name]
         Pkg3.rm(TEST_PKG.name)
         mktempdir() do devdir
-            Pkg3.checkout(TEST_PKG.name; path = devdir)
+            Pkg3.develop(TEST_PKG.name; path = devdir)
             @test isinstalled(TEST_PKG)
             @test Pkg3.installed()[TEST_PKG.name] > old_v
             test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
@@ -138,7 +138,7 @@ temp_pkg_dir() do project_path
         end
         mktempdir() do tmp
             withenv("JULIA_PKG_DEVDIR" => tmp) do
-                @test_throws CommandError Pkg3.checkout(TEST_PKG.name, "nonexisting_branch",)
+                @test_throws CommandError Pkg3.develop(TEST_PKG.name, "nonexisting_branch",)
             end
         end
     end

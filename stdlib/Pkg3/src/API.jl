@@ -153,14 +153,17 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
 end
 
 
-checkout(pkg::Union{String, PackageSpec}; kwargs...)  = checkout([pkg]; kwargs...)
-checkout(pkg::String, branch::String; kwargs...)      = checkout([(PackageSpec(pkg), branch)]; kwargs...)
-checkout(pkg::PackageSpec, branch::String; kwargs...) = checkout([(pkg, branch)]; kwargs...)
-checkout(pkgs::Vector{String}; kwargs...)             = checkout([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs::Vector{PackageSpec}; kwargs...)        = checkout([(pkg, nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs_branches::Vector; kwargs...)            = checkout(Context(), pkgs_branches; kwargs...)
+#deprecated
+@deprecate checkout develop
 
-function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
+develop(pkg::Union{String, PackageSpec}; kwargs...)  = develop([pkg]; kwargs...)
+develop(pkg::String, branch::String; kwargs...)      = develop([(PackageSpec(pkg), branch)]; kwargs...)
+develop(pkg::PackageSpec, branch::String; kwargs...) = develop([(pkg, branch)]; kwargs...)
+develop(pkgs::Vector{String}; kwargs...)             = develop([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
+develop(pkgs::Vector{PackageSpec}; kwargs...)        = develop([(pkg, nothing) for pkg in pkgs]; kwargs...)
+develop(pkgs_branches::Vector; kwargs...)            = develop(Context(), pkgs_branches; kwargs...)
+
+function develop(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
@@ -168,7 +171,7 @@ function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs..
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.checkout(ctx, pkgs_branches; path = path)
+    Pkg3.Operations.develop(ctx, pkgs_branches; path = path)
 end
 
 

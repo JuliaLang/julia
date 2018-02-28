@@ -74,7 +74,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
         info = manifest_info(ctx.env, pkg.uuid)
         if pkg.special_action == PKGSPEC_FREED
             continue
-        elseif pkg.special_action == PKGSPEC_CHECKED_OUT
+        elseif pkg.special_action == PKGSPEC_DEVELOPED
             @assert pkg.path != nothing
         elseif info !== nothing && get(info, "path", false) != false
             pkg.path = info["path"]
@@ -895,13 +895,13 @@ function free(ctx::Context, pkgs::Vector{PackageSpec})
     need_to_resolve && build_versions(ctx, new)
 end
 
-function checkout(ctx::Context, pkgs_branches::Vector; path = devdir())
+function develop(ctx::Context, pkgs_branches::Vector; path = devdir())
     pkgs = PackageSpec[]
     for (pkg, branch) in pkgs_branches
         push!(pkgs, pkg)
         ctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-        pkg.special_action = PKGSPEC_CHECKED_OUT
-        @info "Checking out $(pkg.name) [$(string(pkg.uuid)[1:8])]"
+        pkg.special_action = PKGSPEC_DEVELOPED
+        @info "Making $(pkg.name) [$(string(pkg.uuid)[1:8])] available for development..."
 
         pkgpath = joinpath(path, pkg.name)
         pkg.path = pkgpath
@@ -928,7 +928,7 @@ function checkout(ctx::Context, pkgs_branches::Vector; path = devdir())
                 end
             end
             if !successfully_cloned
-                cmderror("Failed to checkout $(pkg.name) [$(string(pkg.uuid)[1:8])] to $(pkgpath)")
+                cmderror("Failed to clone $(pkg.name) [$(string(pkg.uuid)[1:8])] to $(pkgpath)")
             end
         end
     end

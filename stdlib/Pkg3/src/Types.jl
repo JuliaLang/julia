@@ -23,7 +23,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT, PKGSPEC_TESTED
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED
 
 
 ## ordering of UUIDs ##
@@ -376,7 +376,7 @@ function UpgradeLevel(s::Symbol)
 end
 
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
-@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT, PKGSPEC_TESTED)
+@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
