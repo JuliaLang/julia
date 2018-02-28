@@ -233,7 +233,7 @@ This section lists changes that do not have deprecation warnings.
     Previously an empty tuple was returned ([#21697]).
 
   * `⋮`, `⋱`, `⋰`, and `⋯` are now parsed as binary operators, not ordinary
-    identifiers.  `≔` and `⩴` now parse with assignment rather than comparison
+    identifiers.  `≔`, `≕`, and `⩴` now parse with assignment rather than comparison
     precedence ([#26262]).
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
