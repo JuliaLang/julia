@@ -11,7 +11,8 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
+    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
+    linearindices, (:), |, +, -, !==, !
 
 import .Base:
     start, done, next, first, last,
@@ -1064,19 +1065,23 @@ function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s
 end
 
-# Try to find an appropriate type for the (value, state tuple),
-# by doing a recursive unrolling of the iteration protocol up to
-# fixpoint.
-function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
-    nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
-    nextvalstate <: Tuple{Any, Any} || return Any
-    nextvalstate = Tuple{
-        typejoin(valT, fieldtype(nextvalstate, 1)),
-        typejoin(stateT, fieldtype(nextvalstate, 2))}
-    return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
-        fixpoint_iter_type(itrT,
-            fieldtype(nextvalstate, 1),
-            fieldtype(nextvalstate, 2)))
+if Base === Core.Compiler
+    fixpoint_iter_type(a, b, c) = Any
+else
+    # Try to find an appropriate type for the (value, state tuple),
+    # by doing a recursive unrolling of the iteration protocol up to
+    # fixpoint.
+    function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
+        nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
+        nextvalstate <: Tuple{Any, Any} || return Any
+        nextvalstate = Tuple{
+            typejoin(valT, fieldtype(nextvalstate, 1)),
+            typejoin(stateT, fieldtype(nextvalstate, 2))}
+        return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
+            fixpoint_iter_type(itrT,
+                fieldtype(nextvalstate, 1),
+                fieldtype(nextvalstate, 2)))
+    end
 end
 
 convert(::Type{Stateful}, itr) = Stateful(itr)

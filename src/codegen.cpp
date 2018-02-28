@@ -64,6 +64,7 @@
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/Verifier.h> // for llvmcall validation
 #if JL_LLVM_VERSION >= 40000
 #  include <llvm/Bitcode/BitcodeWriter.h>
@@ -387,7 +388,7 @@ struct jl_cgval_t {
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
     // runtime values) if `(TIndex | 0x80) != 0`, then `Vboxed == V` (by value).
-    // For conenience, we also set this value of isboxed values, in which case
+    // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
     Value *Vboxed;
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
@@ -527,6 +528,7 @@ public:
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
     std::vector<jl_cgval_t> SAvalues;
+    std::vector<std::tuple<jl_cgval_t, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
     std::map<int, jl_arrayvar_t> *arrayvars = NULL;
     jl_module_t *module = NULL;
@@ -1970,7 +1972,6 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
-        size_t i;
         if (e->head == method_sym) {
             simple_use_analysis(ctx, jl_exprarg(e, 0));
             if (jl_expr_nargs(e) > 1) {
@@ -1983,10 +1984,22 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
             simple_use_analysis(ctx, jl_exprarg(e, 1));
         }
         else {
-            size_t elen = jl_array_dim0(e->args);
+            size_t i, elen = jl_array_dim0(e->args);
             for (i = 0; i < elen; i++) {
                 simple_use_analysis(ctx, jl_exprarg(e, i));
             }
+        }
+    }
+    else if (jl_is_pinode(expr)) {
+        simple_use_analysis(ctx, jl_fieldref_noalloc(expr, 0));
+    }
+    else if (jl_is_phinode(expr)) {
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 1);
+        size_t i, elen = jl_array_len(values);
+        for (i = 0; i < elen; i++) {
+            jl_value_t *v = jl_array_ptr_ref(values, i);
+            if (v)
+                simple_use_analysis(ctx, v);
         }
     }
 }
@@ -2267,8 +2280,10 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
         assert(varg1 && varg2 && (arg1.isboxed || arg1.TIndex) && (arg2.isboxed || arg2.TIndex) &&
                 "Only boxed types are valid for pointer comparison.");
-        return ctx.builder.CreateICmpEQ(decay_derived(varg1),
-                                        decay_derived(varg2));
+        varg1 = decay_derived(varg1);
+        varg2 = decay_derived(varg2);
+        return ctx.builder.CreateICmpEQ(emit_bitcast(ctx, varg1, T_pint8),
+                                        emit_bitcast(ctx, varg2, T_pint8));
     }
 
     Value *varg1 = mark_callee_rooted(boxed(ctx, arg1));
@@ -3371,48 +3386,6 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
     return v;
 }
 
-
-static void union_alloca_type(jl_uniontype_t *ut,
-        bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align)
-{
-    nbytes = 0;
-    align = 0;
-    min_align = MAX_ALIGN;
-    // compute the size of the union alloca that could hold this type
-    unsigned counter = 0;
-    allunbox = for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
-                if (!jl_is_datatype_singleton(jt)) {
-                    size_t nb1 = jl_datatype_size(jt);
-                    size_t align1 = jl_datatype_align(jt);
-                    if (nb1 > nbytes)
-                        nbytes = nb1;
-                    if (align1 > align)
-                        align = align1;
-                    if (align1 < min_align)
-                        min_align = align1;
-                }
-            },
-            (jl_value_t*)ut,
-            counter);
-}
-
-static Value *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, bool &allunbox, size_t &min_align)
-{
-    size_t nbytes, align;
-    union_alloca_type(ut, allunbox, nbytes, align, min_align);
-    if (nbytes > 0) {
-        // at least some of the values can live on the stack
-        // try to pick an Integer type size such that SROA will emit reasonable code
-        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * min_align), (nbytes + min_align - 1) / min_align);
-        AllocaInst *lv = emit_static_alloca(ctx, AT);
-        if (align > 1)
-            lv->setAlignment(align);
-        return lv;
-    }
-    return NULL;
-}
-
 static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Value *isboxed, jl_cgval_t rval_info)
 {
     if (vi.usedUndef)
@@ -3478,9 +3451,94 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
     }
 }
 
+static void emit_phinode_assign(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
+{
+    ssize_t idx = ((jl_ssavalue_t*)l)->id;
+    assert(idx >= 0);
+    assert(!ctx.ssavalue_assigned.at(idx));
+    jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
+    assert(jl_is_array(ssavalue_types));
+    jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
+    jl_value_t *phiType = jl_array_ptr_ref(ssavalue_types, idx);
+    BasicBlock *BB = ctx.builder.GetInsertBlock();
+    auto InsertPt = BB->getFirstInsertionPt();
+    if (phiType == jl_bottom_type) {
+        return;
+    }
+    if (jl_is_uniontype(phiType)) {
+        bool allunbox;
+        size_t min_align;
+        Value *dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align);
+        Value *ptr = NULL;
+        if (dest) {
+            PHINode *Tindex_phi = PHINode::Create(T_int8, jl_array_len(edges), "tindex_phi");
+            BB->getInstList().insert(InsertPt, Tindex_phi);
+            PHINode *ptr_phi = PHINode::Create(T_prjlvalue, jl_array_len(edges), "ptr_phi");
+            BB->getInstList().insert(InsertPt, ptr_phi);
+            Value *isboxed = ctx.builder.CreateICmpNE(
+                    ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
+                    ConstantInt::get(T_int8, 0));
+            ptr = ctx.builder.CreateSelect(isboxed,
+                maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
+                maybe_bitcast(ctx, decay_derived(dest), T_pint8));
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack);
+            val.Vboxed = ptr_phi;
+            ctx.PhiNodes.push_back(std::make_tuple(val, ptr_phi, r));
+            ctx.SAvalues.at(idx) = val;
+            ctx.ssavalue_assigned.at(idx) = true;
+            return;
+        }
+        else if (allunbox) {
+            PHINode *Tindex_phi = PHINode::Create(T_int8, jl_array_len(edges), "tindex_phi");
+            BB->getInstList().insert(InsertPt, Tindex_phi);
+            jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, tbaa_stack);
+            ctx.PhiNodes.push_back(std::make_tuple(val, (PHINode*)NULL, r));
+            ctx.SAvalues.at(idx) = val;
+            ctx.ssavalue_assigned.at(idx) = true;
+            return;
+        }
+    }
+    bool isboxed;
+    Type *vtype = julia_type_to_llvm(phiType, &isboxed);
+    if (isboxed)
+        vtype = T_prjlvalue;
+    // The frontend should really not emit this, but we allow it
+    // for convenience.
+    if (type_is_ghost(vtype)) {
+        assert(jl_is_datatype(phiType) && ((jl_datatype_t*)phiType)->instance);
+        // Skip adding it to the PhiNodes list, since we didn't create one.
+        ctx.SAvalues.at(idx) = mark_julia_const(((jl_datatype_t*)phiType)->instance);
+        ctx.ssavalue_assigned.at(idx) = true;
+        return;
+    }
+    jl_cgval_t slot;
+    PHINode *value_phi = NULL;
+    if (vtype->isAggregateType()) {
+        value_phi = PHINode::Create(vtype->getPointerTo(AddressSpace::Derived),
+                jl_array_len(edges), "value_phi");
+        BB->getInstList().insert(InsertPt, value_phi);
+        Value *alloc = emit_static_alloca(ctx, vtype);
+        ctx.builder.CreateMemCpy(alloc, value_phi, jl_datatype_size(phiType),
+            jl_datatype_align(phiType), false);
+        slot = mark_julia_slot(alloc, phiType, NULL, tbaa_stack);
+    }
+    else {
+        value_phi = PHINode::Create(vtype, jl_array_len(edges), "value_phi");
+        BB->getInstList().insert(InsertPt, value_phi);
+        slot = mark_julia_type(ctx, value_phi, isboxed, phiType);
+    }
+    ctx.PhiNodes.push_back(std::make_tuple(slot, value_phi, r));
+    ctx.SAvalues.at(idx) = slot;
+    ctx.ssavalue_assigned.at(idx) = true;
+    return;
+}
+
 static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
 {
     if (jl_is_ssavalue(l)) {
+        if (jl_is_phinode(r)) {
+            return emit_phinode_assign(ctx, l, r);
+        }
         ssize_t idx = ((jl_ssavalue_t*)l)->id;
         assert(idx >= 0);
         assert(!ctx.ssavalue_assigned.at(idx));
@@ -3600,7 +3658,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
             tindex = compute_tindex_unboxed(ctx, rval_info, vi.value.typ);
             if (vi.boxroot)
                 tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
-            if (!vi.boxroot)
+            else
                 rval_info.TIndex = tindex;
         }
         ctx.builder.CreateStore(tindex, vi.pTIndex, vi.isVolatile);
@@ -3747,6 +3805,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     if (jl_is_gotonode(expr)) {
         jl_error("GotoNode in value position");
     }
+    if (jl_is_pinode(expr)) {
+        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1));
+    }
     if (!jl_is_expr(expr)) {
         int needroot = true;
         if (jl_is_quotenode(expr)) {
@@ -3783,6 +3844,11 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     // to add new node types.
     if (head == isdefined_sym) {
         return emit_isdefined(ctx, args[0]);
+    }
+    else if (head == throw_undef_if_not_sym) {
+        Value *cond = emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type);
+        undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
+        return ghostValue(jl_void_type);
     }
     else if (head == invoke_sym) {
         return emit_invoke(ctx, ex);
@@ -5622,25 +5688,16 @@ static std::unique_ptr<Module> emit_function(
             }
             return bb;
         }
-        // If this is a label node in an empty bb
-        if (lname == cursor + 1 && cur_bb->begin() == cur_bb->end()) {
-            assert(unconditional);
-            // Use this bb as the one for the new label.
-            bb = cur_bb;
+        // use the label name as the BB name.
+        bb = BasicBlock::Create(jl_LLVMContext,
+                                "L" + std::to_string(lname), f);
+        if (unconditional) {
+           if (!cur_bb->getTerminator())
+               ctx.builder.CreateBr(bb);
+           ctx.builder.SetInsertPoint(bb);
         }
         else {
-            // Otherwise, create a new BB
-            // use the label name as the BB name.
-            bb = BasicBlock::Create(jl_LLVMContext,
-                                    "L" + std::to_string(lname), f);
-            if (unconditional) {
-                if (!cur_bb->getTerminator())
-                    ctx.builder.CreateBr(bb);
-                ctx.builder.SetInsertPoint(bb);
-            }
-            else {
-                add_to_list(lname, bb);
-            }
+           add_to_list(lname, bb);
         }
         if (unconditional)
             find_next_stmt(lname);
@@ -5657,6 +5714,9 @@ static std::unique_ptr<Module> emit_function(
         return (malloc_log_mode == JL_LOG_ALL ||
                 (malloc_log_mode == JL_LOG_USER && in_user_code));
     };
+
+    std::map<size_t, BasicBlock*> come_from_bb;
+    come_from_bb[0] = ctx.builder.GetInsertBlock();
 
     // Handle the implicit first line number node.
     if (ctx.debug_enabled)
@@ -5778,6 +5838,7 @@ static std::unique_ptr<Module> emit_function(
         }
         if (jl_is_gotonode(stmt)) {
             int lname = jl_gotonode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             handle_label(lname, true);
             continue;
         }
@@ -5786,17 +5847,23 @@ static std::unique_ptr<Module> emit_function(
             jl_value_t *cond = args[0];
             int lname = jl_unbox_long(args[1]);
             Value *isfalse = emit_condition(ctx, cond, "if");
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             if (do_malloc_log(props.in_user_code) && props.line != -1)
                 mallocVisitLine(ctx, props.file, props.line);
-            BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", f);
+            bool next_is_label = jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1));
             BasicBlock *ifnot = handle_label(lname, false);
+            BasicBlock *ifso = next_is_label ? handle_label(cursor+2, false) : BasicBlock::Create(jl_LLVMContext, "if", f);
             // Any branches treated as constant in type inference should be
             // eliminated before running
             ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
-            ctx.builder.SetInsertPoint(ifso);
+            if (!next_is_label)
+                ctx.builder.SetInsertPoint(ifso);
+            find_next_stmt(next_is_label ? -1 : cursor+1);
+            continue;
         }
         else if (expr && expr->head == enter_sym) {
             jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
+
             assert(jl_is_long(args[0]));
             int lname = jl_unbox_long(args[0]);
             CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
@@ -5828,10 +5895,215 @@ static std::unique_ptr<Module> emit_function(
                 mallocVisitLine(ctx, props.file, props.line);
             }
         }
+        if (cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
         find_next_stmt(cursor + 1);
     }
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
+
+    // We don't visit empty labels, but they can still be implicit terminators,
+    // just add them to the list
+    for (auto &pair : labels)
+        come_from_bb[pair.first] = pair.second;
+
+    // Codegen Phi nodes
+    std::map<BasicBlock *, BasicBlock*> BB_rewrite_map;
+    for (auto &tup : ctx.PhiNodes) {
+        jl_cgval_t phi_result;
+        PHINode *VN;
+        jl_value_t *r;
+        std::tie(phi_result, VN, r) = tup;
+        jl_value_t *phiType = phi_result.typ;
+        jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(r, 1);
+        Value *PhiAlloca = NULL;
+        if (phi_result.V && isa<SelectInst>(phi_result.V)) {
+            PhiAlloca = cast<SelectInst>(phi_result.V)->getOperand(2)->stripPointerCasts();
+        }
+        PHINode *TindexN = cast_or_null<PHINode>(phi_result.TIndex);
+        BasicBlock *PhiBB = VN ? VN->getParent() : TindexN->getParent();
+        for (size_t i = 0; i < jl_array_len(edges); ++i) {
+            size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, i));
+            jl_value_t *value = jl_array_ptr_ref(values, i);
+            Value *V = NULL;
+            BasicBlock *IncomingBB = come_from_bb[edge];
+            BasicBlock *FromBB = IncomingBB;
+            if (BB_rewrite_map.count(FromBB)) {
+                FromBB = BB_rewrite_map[IncomingBB];
+            }
+#ifndef JL_NDEBUG
+            bool found_pred = false;
+            for (BasicBlock *pred : predecessors(PhiBB)) {
+                found_pred = pred == FromBB;
+                if (found_pred)
+                    break;
+            }
+            assert(found_pred);
+#endif
+            ctx.builder.SetInsertPoint(FromBB->getTerminator());
+            jl_cgval_t val;
+            if (!value || jl_is_ssavalue(value)) {
+                ssize_t idx = value ? ((jl_ssavalue_t*)value)->id : 0;
+                if (!value || !ctx.ssavalue_assigned.at(idx)) {
+                    Value *RTindex = TindexN ? UndefValue::get(T_int8) : NULL;
+                     if (VN) { // otherwise, it's all-unboxed
+                        Value *undef;
+                        if (isa<PointerType>(VN->getType())) {
+                            bool isboxed;
+                            Type *lphity = julia_type_to_llvm(phiType, &isboxed);
+                            if (!isboxed) {
+                                // the emit_phinode_assign emitted a memcpy in this case,
+                                // so this needs to ensure the pointer is valid, while the contents are undef
+                                undef = decay_derived(emit_static_alloca(ctx, lphity));
+                            }
+                            else {
+                                // but make sure gc pointers (including ptr_phi of union-split) are NULL
+                                undef = ConstantPointerNull::get(cast<PointerType>(VN->getType()));
+                                if (TindexN) // let the runtime / optimizer know this is unknown / boxed / null, so that it won't try to union_move / copy it later
+                                    RTindex = ConstantInt::get(T_int8, 0x80);
+                            }
+                        }
+                        else {
+                            undef = UndefValue::get(VN->getType());
+                        }
+                        VN->addIncoming(undef, FromBB);
+                    }
+                    if (TindexN)
+                        TindexN->addIncoming(RTindex, FromBB);
+                    continue;
+                }
+                val = ctx.SAvalues.at(idx);
+            }
+            else {
+                val = emit_expr(ctx, value);
+            }
+            if (val.constant)
+                val = mark_julia_const(val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
+            TerminatorInst *terminator = FromBB->getTerminator();
+            if (!isa<BranchInst>(terminator) || cast<BranchInst>(terminator)->isConditional()) {
+                bool found = false;
+                for (size_t i = 0; i < terminator->getNumSuccessors(); ++i) {
+                    if (terminator->getSuccessor(i) == PhiBB) {
+                        // Can't use `llvm::SplitCriticalEdge` here because
+                        // we may have invalid phi nodes in the destination.
+                        BasicBlock *NewBB = BasicBlock::Create(terminator->getContext(),
+                           FromBB->getName() + "." + PhiBB->getName() + "_crit_edge");
+                        terminator->setSuccessor(i, NewBB);
+                        Function::iterator FBBI = FromBB->getIterator();
+                        ctx.f->getBasicBlockList().insert(++FBBI, NewBB);
+                        ctx.builder.SetInsertPoint(NewBB);
+                        found = true;
+                        break;
+                    }
+                }
+                assert(found);
+            }
+            else {
+                terminator->eraseFromParent();
+                ctx.builder.SetInsertPoint(FromBB);
+            }
+            if (!jl_is_uniontype(phiType)) {
+                if (val.typ == (jl_value_t*)jl_bottom_type) {
+                    V = UndefValue::get(VN->getType());
+                }
+                else if (VN->getType() == T_prjlvalue) {
+                    V = boxed(ctx, val);
+                }
+                else if (VN->getType()->isPointerTy()) {
+                    V = maybe_bitcast(ctx,
+                            decay_derived(data_pointer(ctx, val)),
+                            VN->getType());
+                }
+                else {
+                    V = emit_unbox(ctx, VN->getType(), val, val.typ);
+                }
+                VN->addIncoming(V, ctx.builder.GetInsertBlock());
+                assert(!TindexN);
+            }
+            else if (!TindexN) {
+                VN->addIncoming(boxed(ctx, val), ctx.builder.GetInsertBlock());
+            }
+            else {
+                Value *RTindex = NULL;
+                if (val.typ == (jl_value_t*)jl_bottom_type) {
+                    V = UndefValue::get(VN->getType());
+                    RTindex = UndefValue::get(T_int8);
+                }
+                else if (jl_is_concrete_type(val.typ) || val.constant) {
+                    size_t tindex = get_box_tindex((jl_datatype_t*)val.typ, phiType);
+                    if (tindex == 0) {
+                        V = boxed(ctx, val);
+                        RTindex = ConstantInt::get(T_int8, 0x80);
+                    }
+                    else {
+                        V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                        Type *lty = julia_type_to_llvm(val.typ);
+                        if (PhiAlloca && !type_is_ghost(lty)) // basically, if !ghost union
+                            emit_unbox(ctx, lty, val, val.typ, PhiAlloca);
+                        RTindex = ConstantInt::get(T_int8, tindex);
+                    }
+                }
+                else {
+                    jl_cgval_t new_union = convert_julia_type(ctx, val, phiType);
+                    RTindex = new_union.TIndex;
+                    if (!RTindex) {
+                        assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
+                        RTindex = compute_tindex_unboxed(ctx, new_union, phiType);
+                        RTindex = ctx.builder.CreateOr(RTindex, ConstantInt::get(T_int8, 0x80));
+                        new_union.TIndex = RTindex;
+                    }
+                    V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    if (PhiAlloca) { // basically, if !ghost union
+                        Value *skip = NULL;
+                        if (new_union.Vboxed != nullptr)
+                            skip = ctx.builder.CreateICmpNE( // if 0x80 is set, we won't select this slot anyways
+                                    ctx.builder.CreateAnd(RTindex, ConstantInt::get(T_int8, 0x80)),
+                                    ConstantInt::get(T_int8, 0));
+                        emit_unionmove(ctx, PhiAlloca, new_union, skip, false, NULL);
+                    }
+                }
+                if (VN)
+                    VN->addIncoming(V, ctx.builder.GetInsertBlock());
+                if (TindexN)
+                    TindexN->addIncoming(RTindex, ctx.builder.GetInsertBlock());
+            }
+            ctx.builder.CreateBr(PhiBB);
+            // Check any phi nodes in the Phi block to see if by splitting the edges,
+            // we made things inconsistent
+            if (FromBB != ctx.builder.GetInsertBlock()) {
+                BB_rewrite_map[IncomingBB] = ctx.builder.GetInsertBlock();
+                for (BasicBlock::iterator I = PhiBB->begin(); isa<PHINode>(I); ++I) {
+                    PHINode *PN = cast<PHINode>(I);
+                    ssize_t BBIdx = PN->getBasicBlockIndex(FromBB);
+                    if (BBIdx == -1)
+                        continue;
+                    PN->setIncomingBlock(BBIdx, ctx.builder.GetInsertBlock());
+                }
+            }
+        }
+        // Julia PHINodes may be incomplete with respect to predecessors, LLVM's may not
+        for (auto *pred : predecessors(PhiBB)) {
+            PHINode *PhiN = VN ? VN : TindexN;
+            bool found = false;
+            for (size_t i = 0; i < PhiN->getNumIncomingValues(); ++i) {
+                found = pred == PhiN->getIncomingBlock(i);
+                if (found)
+                    break;
+            }
+            if (!found) {
+                if (VN) {
+                    Value *undef = VN->getType() == T_prjlvalue ?
+                        (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)) :
+                        (llvm::Value*)UndefValue::get(VN->getType());
+                    VN->addIncoming(undef, pred);
+                }
+                if (TindexN) {
+                    TindexN->addIncoming(UndefValue::get(TindexN->getType()), pred);
+                }
+            }
+        }
+    }
 
     // step 13. Perform any delayed instantiations
     if (ctx.debug_enabled) {

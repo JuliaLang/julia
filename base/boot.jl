@@ -98,6 +98,16 @@
 #    label::Int
 #end
 
+#struct PiNode
+#    val
+#    typ
+#end
+
+#struct PhiNode
+#    edges::Vector{Any}
+#    values::Vector{Any}
+#end
+
 #struct QuoteNode
 #    value
 #end
@@ -141,7 +151,7 @@ export
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     UndefKeywordError,
     # AST representation
-    Expr, QuoteNode, LineNumberNode, GlobalRef,
+    Expr, QuoteNode, LineNumberNode, GlobalRef, PiNode, PhiNode,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -344,6 +354,8 @@ eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumber
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
