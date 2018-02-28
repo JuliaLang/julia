@@ -208,7 +208,7 @@ Language changes
   * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
     parser. ([#25564])
 
-  * `…` and `⁝` are now parsed as binary operators ([#26262]).
+  * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
 
 Breaking changes
 ----------------
