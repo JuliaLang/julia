@@ -13,6 +13,8 @@ using ..Types, ..TOML
 
 preview_info() = @info("In preview mode")
 
+include("generate.jl")
+
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
@@ -29,7 +31,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
-    ensure_resolved(ctx.env, pkgs, true)
+    ensure_resolved(ctx.env, pkgs, registry=true)
     Operations.add_or_develop(ctx, pkgs)
 end
 
@@ -156,7 +158,7 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs; registry=true)
     Operations.free(ctx, pkgs)
 end
 

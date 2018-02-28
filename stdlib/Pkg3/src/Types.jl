@@ -744,7 +744,7 @@ end
 function set_repo_for_pkg!(env, pkg)
     if !has_uuid(pkg)
         registry_resolve!(env, [pkg])
-        ensure_resolved(env, [pkg])
+        ensure_resolved(env, [pkg]; registry=true)
     end
     # TODO: look into [1]
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
@@ -850,7 +850,7 @@ end
 
 # Ensure that all packages are fully resolved
 function ensure_resolved(env::EnvCache,
-    pkgs::AbstractVector{PackageSpec},
+    pkgs::AbstractVector{PackageSpec};
     registry::Bool=false,)::Nothing
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs

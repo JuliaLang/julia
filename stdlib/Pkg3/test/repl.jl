@@ -21,6 +21,22 @@ function git_init_package(tmp, path)
 end
 
 
+mktempdir() do project_path
+    cd(project_path) do
+        push!(LOAD_PATH, Base.parse_load_path("@"))
+        try
+            pkg"generate HelloWorld"
+            cd("HelloWorld")
+            pkg"st"
+            @eval using HelloWorld
+            Base.invokelatest(HelloWorld.greet)
+            @test isfile("Project.toml")
+        finally
+            pop!(LOAD_PATH)
+        end
+    end
+end
+
 temp_pkg_dir() do project_path; cd(project_path) do
     tmp_pkg_path = mktempdir()
     pkg"init"

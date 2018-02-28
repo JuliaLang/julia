@@ -130,7 +130,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
 
     # Look up the UUIDS for all the fixed dependencies in the registry in one shot
     registry_resolve!(ctx.env, fix_deps)
-    ensure_resolved(ctx.env, fix_deps)
+    ensure_resolved(ctx.env, fix_deps; registry=true)
     fixed = Dict{UUID,Fixed}()
     # Collect the dependencies for the fixed packages
     for (uuid, fixed_pkgs) in fix_deps_map
@@ -576,7 +576,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 push!(dep_pkgs, PackageSpec(r.package))
             end
             registry_resolve!(env, dep_pkgs)
-            ensure_resolved(env, dep_pkgs)
+            ensure_resolved(env, dep_pkgs; registry=true)
             deps = Dict{String,String}()
             for dep_pkg in dep_pkgs
                 dep_pkg.name == "julia" && continue
@@ -663,7 +663,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                     push!(pkgs, PackageSpec(pkg_name, vspec))
                 end
                 registry_resolve!(localctx.env, pkgs)
-                ensure_resolved(localctx.env, pkgs)
+                ensure_resolved(localctx.env, pkgs; registry=true)
                 add(localctx, pkgs)
                 need_to_resolve = false # add resolves
             end

@@ -14,7 +14,7 @@ using ..Types, ..Display, ..Operations
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE)
 
 struct Command
     kind::CommandKind
@@ -51,6 +51,7 @@ const cmds = Dict(
     "checkout"  => CMD_CHECKOUT, # deprecated
     "develop"   => CMD_DEVELOP,
     "dev"       => CMD_DEVELOP,
+    "generate"  => CMD_GENERATE,
 )
 
 #################
@@ -264,6 +265,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_BUILD    ? Base.invokelatest(         do_build!, ctx, tokens) :
     cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
     cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
+    cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -289,6 +291,8 @@ What action you want the package manager to take:
 `help`: show this message
 
 `status`: summarize contents of and changes to environment
+
+`generate`: generate files for a new project
 
 `add`: add packages to project
 
@@ -337,7 +341,13 @@ const helps = Dict(
     any changes to manifest packages not already listed. In `--project` mode, the
     status of the project file is summarized. In `--project` mode, the status of
     the project file is summarized.
-    """, CMD_ADD => md"""
+    """, CMD_GENERATE => md"""
+
+        create name
+
+    Create a project called `name` in the current folder.
+    """,
+    CMD_ADD => md"""
 
         add pkg[=uuid] [@version] [#rev] ...
 
@@ -679,6 +689,20 @@ function do_init!(ctx::Context, tokens::Vector{Token})
         cmderror("`init` does currently not take any arguments")
     end
     API.init(ctx)
+end
+
+function do_generate!(ctx::Context, tokens::Vector{Token})
+    local pkg
+    while !isempty(tokens)
+        token = popfirst!(tokens)
+        if token isa String
+            pkg = token
+            break # TODO: error message?
+        else
+            cmderror("`generate` takes a name of the project to create")
+        end
+    end
+    API.generate(pkg)
 end
 
 

@@ -34,7 +34,7 @@ include("Operations.jl")
 include("API.jl")
 include("REPLMode.jl")
 
-import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop
+import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, create
 const update = up
 import .REPLMode: @pkg_str
 export @pkg_str
