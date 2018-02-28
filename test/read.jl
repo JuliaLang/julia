@@ -400,17 +400,17 @@ end
 test_read_nbyte()
 
 
-# DevNull
-@test !isreadable(DevNull)
-@test iswritable(DevNull)
-@test isopen(DevNull)
-@test write(DevNull, 0xff) === 1
-@test write(DevNull, Int32(1234)) === 4
-@test_throws EOFError read(DevNull, UInt8)
-@test close(DevNull) === nothing
-@test flush(DevNull) === nothing
-@test eof(DevNull)
-@test print(DevNull, "go to /dev/null") === nothing
+# devnull
+@test !isreadable(devnull)
+@test iswritable(devnull)
+@test isopen(devnull)
+@test write(devnull, 0xff) === 1
+@test write(devnull, Int32(1234)) === 4
+@test_throws EOFError read(devnull, UInt8)
+@test close(devnull) === nothing
+@test flush(devnull) === nothing
+@test eof(devnull)
+@test print(devnull, "go to /dev/null") === nothing
 
 
 let s = "qwerty"

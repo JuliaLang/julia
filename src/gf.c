@@ -239,6 +239,9 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
+    static int in_inference;
+    if (in_inference > 2)
+        return NULL;
 #ifdef ENABLE_INFERENCE
     jl_method_instance_t *li = *pli;
     if (li->inInference && !force)
@@ -260,8 +263,10 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     size_t last_age = ptls->world_age;
     ptls->world_age = jl_typeinf_world;
     li->inInference = 1;
+    in_inference++;
     jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
     ptls->world_age = last_age;
+    in_inference--;
     li->inInference = 0;
 
     jl_code_info_t *src = NULL;
@@ -443,7 +448,7 @@ static void foreach_mtable_in_module(
 {
     size_t i;
     void **table = m->bindings.table;
-    jl_eqtable_put(visited, m, jl_true);
+    jl_eqtable_put(visited, m, jl_true, NULL);
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];

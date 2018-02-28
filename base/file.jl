@@ -27,6 +27,8 @@ export
     unlink,
     walkdir
 
+import .Base.RefValue
+
 # get and set current directory
 
 """
@@ -36,7 +38,7 @@ Get the current working directory.
 """
 function pwd()
     b = Vector{UInt8}(uninitialized, 1024)
-    len = Ref{Csize_t}(length(b))
+    len = RefValue{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
 end
@@ -632,7 +634,7 @@ function readlink(path::AbstractString)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
-            assert(false)
+            @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)

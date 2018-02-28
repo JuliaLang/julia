@@ -326,11 +326,11 @@ Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, t
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> write(io, "JuliaLang is a GitHub organization.", "It has many members.")
-55
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.It has many members."
+"JuliaLang is a GitHub organization. It has many members."
 ```
 """
 function take!(io::GenericIOBuffer)

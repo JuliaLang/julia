@@ -36,6 +36,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
 end
 
 parent(a::ReinterpretArray) = a.parent
+dataids(a::ReinterpretArray) = dataids(a.parent)
 
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)

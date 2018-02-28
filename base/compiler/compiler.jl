@@ -4,7 +4,7 @@ getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compi
 
 using Core.Intrinsics, Core.IR
 
-import Core: print, println, show, write, unsafe_write, STDOUT, STDERR,
+import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance
 
 const getproperty = getfield
@@ -45,8 +45,19 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("refvalue.jl")
+
+# checked arithmetic
 const checked_add = +
 const checked_sub = -
+const SignedInt = Union{Int8,Int16,Int32,Int64,Int128}
+const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
+sub_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_ssub_int(x, y)
+sub_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_usub_int(x, y)
+sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
+add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
+add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
+add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
 # core array operations
 include("indices.jl")
@@ -63,11 +74,28 @@ include("reduce.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
+include("abstractset.jl")
 include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
 include("namedtuple.jl")
 
 # core docsystem
 include("docs/core.jl")
+
+# SubArray
+include("subarray.jl")
+macro views(x); esc(x); end
+
+# sorting
+function sort end
+function sort! end
+function issorted end
+function sortperm end
+include("ordering.jl")
+using .Order
+include("sort.jl")
+using .Sort
 
 ############
 # compiler #
@@ -93,6 +121,7 @@ include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
 include("compiler/bootstrap.jl")
+ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)
 
 end # baremodule Compiler
 ))

@@ -1008,12 +1008,14 @@ function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, A::SparseVecOrMat, Bs::
     if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(A)
         return copyto!(dest, A)
     end
-    _aresameshape(dest, A, Bs...) && return _noshapecheck_map!(f, dest, A, Bs...)
-    Base.Broadcast.check_broadcast_indices(axes(dest), A, Bs...)
-    fofzeros = f(_zeros_eltypes(A, Bs...)...)
+    A′ = Base.unalias(dest, A)
+    Bs′ = map(B->Base.unalias(dest, B), Bs)
+    _aresameshape(dest, A′, Bs′...) && return _noshapecheck_map!(f, dest, A′, Bs′...)
+    Base.Broadcast.check_broadcast_indices(axes(dest), A′, Bs′...)
+    fofzeros = f(_zeros_eltypes(A′, Bs′...)...)
     fpreszeros = _iszero(fofzeros)
-    fpreszeros ? _broadcast_zeropres!(f, dest, A, Bs...) :
-                        _broadcast_notzeropres!(f, fofzeros, dest, A, Bs...)
+    fpreszeros ? _broadcast_zeropres!(f, dest, A′, Bs′...) :
+                        _broadcast_notzeropres!(f, fofzeros, dest, A′, Bs′...)
     return dest
 end
 function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, mixedsrcargs::Vararg{Any,N}) where {Tf,N}

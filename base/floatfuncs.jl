@@ -43,7 +43,8 @@ maxintfloat() = maxintfloat(Float64)
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
-    round([T,] x, [digits, [base]], [r::RoundingMode])
+    round([T,] x, [r::RoundingMode])
+    round(x, [digits; base = 10])
 
 Rounds `x` to an integer value according to the provided
 [`RoundingMode`](@ref), returning a value of the same type as `x`. When not
@@ -71,14 +72,14 @@ rounded.
 [`InexactError`](@ref) if the value is not representable.
 
 `round(x, digits)` rounds to the specified number of digits after the decimal place (or
-before if negative). `round(x, digits, base)` rounds using a base other than 10.
+before if negative). `round(x, digits, base = base)` rounds using a base other than 10.
 
 # Examples
 ```jldoctest
 julia> round(pi, 2)
 3.14
 
-julia> round(pi, 3, 2)
+julia> round(pi, 3, base = 2)
 3.125
 ```
 
@@ -141,7 +142,7 @@ function _signif_og(x, digits, base)
 end
 
 """
-    signif(x, digits, [base])
+    signif(x, digits; base = 10)
 
 Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
 base `base` representation, default 10.
@@ -151,11 +152,11 @@ base `base` representation, default 10.
 julia> signif(123.456, 2)
 120.0
 
-julia> signif(357.913, 4, 2)
+julia> signif(357.913, 4, base = 2)
 352.0
 ```
 """
-function signif(x::Real, digits::Integer, base::Integer=10)
+function signif(x::Real, digits::Integer; base::Integer = 10)
     digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
 
     x = float(x)
@@ -171,7 +172,7 @@ end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x::Real, digits::Integer, base::Integer=10)
+        function ($f)(x::Real, digits::Integer; base::Integer = 10)
             x = float(x)
             og = convert(eltype(x),base)^digits
             r = ($f)(x * og) / og
@@ -194,7 +195,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? √eps : 0, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword

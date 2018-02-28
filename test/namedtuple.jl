@@ -226,9 +226,9 @@ abstr_nt_22194_3()
 for T in (Nothing, Missing)
     x = [(a=1, b=T()), (a=1, b=2)]
     y = map(v -> (a=v.a, b=v.b), [(a=1, b=T()), (a=1, b=2)])
-    @test y isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{T,Int}}}}
+    @test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
     @test isequal(x, y)
 end
 y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
-@test y isa Vector{NamedTuple{(:a,:b),Tuple{Int,Union{Missing,Int}}}}
+@test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
 @test isequal(y, [(a=1, b=missing), (a=1, b=3)])

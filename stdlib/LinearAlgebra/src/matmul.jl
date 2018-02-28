@@ -109,9 +109,7 @@ mul!(y::AbstractVector, A::AbstractMatrix, B::AbstractMatrix) = mul!(reshape(y,l
 
 # Matrix-matrix multiplication
 """
-```
-*(A::AbstractMatrix, B::AbstractMatrix)
-```
+    *(A::AbstractMatrix, B::AbstractMatrix)
 
 Matrix multiplication.
 

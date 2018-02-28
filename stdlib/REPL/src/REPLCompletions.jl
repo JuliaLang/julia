@@ -201,7 +201,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     end
 
     matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
-    startpos = pos - lastindex(prefix) + 1 - length(matchall(r" ", prefix))
+    startpos = pos - lastindex(prefix) + 1 - count(equalto(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
@@ -646,10 +646,9 @@ function shell_completions(string, pos)
 
         return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        r = first(last_parse):prevind(last_parse, last(last_parse))
-        partial = scs[r]
+        partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
-        range = range .+ (first(r) - 1)
+        range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

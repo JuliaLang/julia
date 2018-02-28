@@ -2844,10 +2844,7 @@ void jl_init_serializer(void)
                      jl_box_int32(21), jl_box_int32(22), jl_box_int32(23),
                      jl_box_int32(24), jl_box_int32(25), jl_box_int32(26),
                      jl_box_int32(27), jl_box_int32(28), jl_box_int32(29),
-                     jl_box_int32(30), jl_box_int32(31), jl_box_int32(32),
-#ifndef _P64
-                     jl_box_int32(33), jl_box_int32(34), jl_box_int32(35),
-#endif
+                     jl_box_int32(30), jl_box_int32(31),
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
                      jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
@@ -2858,12 +2855,10 @@ void jl_init_serializer(void)
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
-                     jl_box_int64(30), jl_box_int64(31), jl_box_int64(32),
-#ifdef _P64
-                     jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
-#endif
+                     jl_box_int64(30), jl_box_int64(31),
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
-                     jl_quotenode_type, jl_type_type, jl_bottom_type, jl_ref_type,
+                     jl_quotenode_type, jl_pinode_type, jl_phinode_type,
+                     jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
                      jl_densearray_type, jl_function_type, jl_unionall_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,

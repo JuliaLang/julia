@@ -28,7 +28,6 @@ kw"help", kw"?", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
-```
 """
 kw"using"
 
@@ -790,16 +789,16 @@ A variable referring to the last computed value, automatically set at the intera
 kw"ans"
 
 """
-    DevNull
+    devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
 /dev/null on Unix or NUL on Windows. Usage:
 
 ```julia
-run(pipeline(`cat test.txt`, DevNull))
+run(pipeline(`cat test.txt`, devnull))
 ```
 """
-DevNull
+devnull
 
 # doc strings for code in boot.jl and built-ins
 

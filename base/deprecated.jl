@@ -122,12 +122,12 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
-macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
-    dep_message == nothing && (dep_message = ", use $new instead.")
+macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
+    dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
-         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         constant ? Expr(:const, Expr(:(=), esc(old), esc(new))) : Expr(:(=), esc(old), esc(new)),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
@@ -250,7 +250,7 @@ export current_module
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
-               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
+               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^,
                :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
@@ -258,6 +258,7 @@ module Operators
             @eval Base.@deprecate_binding $op Base.$op
         end
     end
+    Base.@deprecate_binding colon (:)
 end
 export Operators
 
@@ -295,9 +296,9 @@ export conv, conv2, deconv, filt, filt!, xcorr
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, vardim, corrected=corrected)
+@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
 @deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, vardim, corrected=corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
 
 # PR #22325
 # TODO: when this replace is removed from deprecated.jl:
@@ -780,8 +781,8 @@ findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, 
 # issue #20899
 # TODO: delete JULIA_HOME deprecation in src/init.c
 
-@deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
-@deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
+# cumsum and cumprod have deprecations in multidimensional.jl
+# when the message is removed, the `dims` keyword argument should become required.
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
@@ -960,14 +961,14 @@ function info(io::IO, msg...; prefix="INFO: ")
     print(io, String(take!(buf)))
     return
 end
-info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+info(msg...; prefix="INFO: ") = info(stderr, msg..., prefix=prefix)
 
 # print a warning only once
 
 const have_warned = Set()
 
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
-warn_once(msg...) = warn(STDERR, msg..., once=true)
+warn_once(msg...) = warn(stderr, msg..., once=true)
 
 """
     warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
@@ -1017,19 +1018,19 @@ julia> warn("Beep Beep")
 WARNING: Beep Beep
 ```
 """
-warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+warn(msg...; kw...) = warn(stderr, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     warn(io, sprint(showerror, err), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
-    warn(STDERR, err, prefix=prefix; kw...)
+    warn(stderr, err, prefix=prefix; kw...)
 
 info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     info(io, sprint(showerror, err), prefix=prefix; kw...)
 
 info(err::Exception; prefix="ERROR: ", kw...) =
-    info(STDERR, err, prefix=prefix; kw...)
+    info(stderr, err, prefix=prefix; kw...)
 
 # issue #25082
 @deprecate_binding Void Nothing
@@ -1244,6 +1245,10 @@ end
 @deprecate findin(a, b) findall(occursin(b), a)
 
 @deprecate find findall
+@deprecate find(A::AbstractVector) findall(A)
+@deprecate find(A::AbstractArray) LinearIndices(A)[findall(A)]
+@deprecate find(f::Function, A::AbstractVector) findall(f, A)
+@deprecate find(f::Function, A::AbstractArray) LinearIndices(A)[findall(f, A)]
 
 @deprecate findn(x::AbstractVector) (findall(!iszero, x),)
 @deprecate findn(x::AbstractMatrix) (I = findall(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
@@ -1304,6 +1309,47 @@ export readandwrite
 @deprecate datatype_name(t::DataType) nameof(t) false
 @deprecate datatype_name(t::UnionAll) nameof(t) false
 
+# issue #25501
+@deprecate sum(a::AbstractArray, dims)        sum(a, dims=dims)
+@deprecate sum(f, a::AbstractArray, dims)     sum(f, a, dims=dims)
+@deprecate prod(a::AbstractArray, dims)       prod(a, dims=dims)
+@deprecate prod(f, a::AbstractArray, dims)    prod(f, a, dims=dims)
+@deprecate maximum(a::AbstractArray, dims)    maximum(a, dims=dims)
+@deprecate maximum(f, a::AbstractArray, dims) maximum(f, a, dims=dims)
+@deprecate minimum(a::AbstractArray, dims)    minimum(a, dims=dims)
+@deprecate minimum(f, a::AbstractArray, dims) minimum(f, a, dims=dims)
+@deprecate all(a::AbstractArray, dims)        all(a, dims=dims)
+@deprecate all(f, a::AbstractArray, dims)     all(f, a, dims=dims)
+@deprecate any(a::AbstractArray, dims)        any(a, dims=dims)
+@deprecate any(f, a::AbstractArray, dims)     any(f, a, dims=dims)
+@deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
+@deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
+
+@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
+@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
+@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
+@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
+@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
+@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
+@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
+@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
+@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
+
+@deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+
+@deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
+
+@deprecate accumulate(op, A, dim::Integer)               accumulate(op, A, dims=dim)
+@deprecate accumulate!(op, B, A, dim::Integer)           accumulate!(op, B, A, dims=dim)
+@deprecate cumsum(A::AbstractArray, dim::Integer)        cumsum(A, dims=dim)
+@deprecate cumsum!(B, A, dim::Integer)                   cumsum!(B, A, dims=dim)
+@deprecate cumsum!(out, A::AbstractVector, dim::Integer) cumsum!(out, A, dims=dim)
+@deprecate cumprod(A::AbstractArray, dim::Integer)       cumprod(A, dims=dim)
+@deprecate cumprod!(B, A, dim::Integer)                  cumprod!(B, A, dims=dim)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
@@ -1344,7 +1390,7 @@ end
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
-@deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate matchall(re, str, overlap) collect(m.match for m in eachmatch(re, str, overlap = overlap))
 @deprecate chop(s, head) chop(s, head = head)
 @deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 @deprecate tryparse(T::Type{<:Integer}, s, base) tryparse(T, s, base = base)
@@ -1366,6 +1412,7 @@ end
 @deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
 
 @deprecate reprmime(mime, x) repr(mime, x)
+@deprecate mimewritable(mime, x) showable(mime, x)
 
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
@@ -1393,14 +1440,39 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
+# Issue #25786
+@deprecate_binding DevNull devnull
+# TODO: When these are removed, also remove the uppercase variants in libuv.jl and stream.jl
+@deprecate_binding STDIN stdin true nothing false
+@deprecate_binding STDOUT stdout true nothing false
+@deprecate_binding STDERR stderr true nothing false
+
 # PR 25062
 @deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),
            link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write),
            false)
 
+# PR 26156
+@deprecate trunc(x, digits, base) trunc(x, digits, base = base)
+@deprecate floor(x, digits, base) floor(x, digits, base = base)
+@deprecate ceil(x, digits, base) ceil(x, digits, base = base)
+@deprecate round(x, digits, base) round(x, digits, base = base)
+@deprecate signif(x, digits, base) signif(x, digits, base = base)
+
 # Remember to delete the module when removing this
 @eval Base.Math module JuliaLibm
     Base.@deprecate log Base.log
+end
+
+# PR 26071
+@deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
+           collect(m.match for m in eachmatch(r, s, overlap = overlap)))
+
+# PR 26194
+export assert
+function assert(x)
+    depwarn("`assert` is deprecated, use `@assert` instead.", :assert)
+    @assert x ""
 end
 
 # END 0.7 deprecations

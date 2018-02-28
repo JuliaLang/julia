@@ -480,15 +480,15 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
-let oldout = STDOUT, olderr = STDERR
+let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
-        @test wrout === STDOUT
+        @test wrout === stdout
         out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
-        @test wrerr === STDERR
+        @test wrerr === stderr
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
@@ -496,7 +496,7 @@ let oldout = STDOUT, olderr = STDERR
             close(wrerr)
         end
 
-        for io in (Core.STDOUT, Core.STDERR)
+        for io in (Core.stdout, Core.stderr)
             Core.println(io, "TESTA")
             println(io, "TESTB")
             print(io, 'Α', 1)
@@ -531,13 +531,13 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            println(STDERR, "WARNING: hello")
+            println(stderr, "WARNING: hello")
             [2]
         end
     end
     @test ret == [2]
 
-    # STDIN is unavailable on the workers. Run test on master.
+    # stdin is unavailable on the workers. Run test on master.
     @test contains(read(filename, String), "WARNING: hello")
     ret = eval(Main, quote
         remotecall_fetch(1, $filename) do fname
@@ -762,11 +762,16 @@ let io = IOBuffer()
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
 end
 
-# PR 17117
-# test print_array
-let s = IOBuffer(Vector{UInt8}(), read=true, write=true)
+@testset "PR 17117: print_array" begin
+    s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    close(s)
+    s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
+    z = zeros(0,0,0,0,0,0,0,0)
+    Base.print_array(s2, z)
+    @test String(resize!(s2.data, s2.size)) == ""
+    close(s2)
 end
 
 let repr = sprint(dump, :(x = 1))

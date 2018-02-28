@@ -4,7 +4,7 @@ module Multimedia
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,
-    mimewritable, TextDisplay
+    showable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
@@ -14,8 +14,8 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # defined in sysimg.jl for bootstrapping:
 # struct MIME{mime} end
 # macro MIME_str(s)
-import Base: MIME, @MIME_str
-import Base: show, print, string, convert, repr
+import .Base: MIME, @MIME_str
+import .Base: show, print, string, convert, repr
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
@@ -25,23 +25,26 @@ print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 # in order to provide a way to export T as a given mime type.
 
 """
-    mimewritable(mime, x)
+    showable(mime, x)
 
-Returns a boolean value indicating whether or not the object `x` can be written as the given
-`mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](@ref) method for `typeof(x)`.)
+Returns a boolean value indicating whether or not the object `x` can be written
+as the given `mime` type.
+
+(By default, this is determined automatically by the existence of the
+corresponding [`show`](@ref) method for `typeof(x)`.  Some types provide custom `showable`
+methods; for example, if the available MIME formats depend on the *value* of `x`.)
 
 # Examples
 ```jldoctest
-julia> mimewritable(MIME("text/plain"), rand(5))
+julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> mimewritable(MIME("img/png"), rand(5))
+julia> showable("img/png", rand(5))
 false
 ```
 """
-mimewritable(::MIME{mime}, x) where {mime} =
-    hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(::MIME{mime}, x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(m::AbstractString, x) = showable(MIME(m), x)
 
 """
     show(io, mime, x)
@@ -73,10 +76,7 @@ The first argument to `show` can be an [`IOContext`](@ref) specifying output for
 See [`IOContext`](@ref) for details.
 """
 show(stream, mime, x)
-
-# it is convenient to accept strings instead of ::MIME
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
-mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 """
     repr(mime, x; context=nothing)
@@ -251,7 +251,7 @@ function popdisplay(d::AbstractDisplay)
 end
 function reinit_displays()
     empty!(displays)
-    pushdisplay(TextDisplay(STDOUT))
+    pushdisplay(TextDisplay(stdout))
 end
 
 xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
@@ -263,15 +263,15 @@ xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
     display(d::AbstractDisplay, mime, x)
 
 AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
+richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
 
-In general, you cannot assume that `display` output goes to `STDOUT` (unlike [`print(x)`](@ref) or
+In general, you cannot assume that `display` output goes to `stdout` (unlike [`print(x)`](@ref) or
 [`show(x)`](@ref)).  For example, `display(x)` may open up a separate window with an image.
 `display(x)` means "show `x` in the best way you can for the current output device(s)."
-If you want REPL-like text output that is guaranteed to go to `STDOUT`, use
-[`show(STDOUT, "text/plain", x)`](@ref) instead.
+If you want REPL-like text output that is guaranteed to go to `stdout`, use
+[`show(stdout, "text/plain", x)`](@ref) instead.
 
 There are also two variants with a `mime` argument (a MIME type string, such as
 `"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing

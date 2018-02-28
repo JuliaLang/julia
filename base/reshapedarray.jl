@@ -180,6 +180,9 @@ parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 
+unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
+dataids(A::ReshapedArray) = dataids(A.parent)
+
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
 @inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)
 @inline _ind2sub_rs(::Tuple{}, ind) = (ind + 1,)

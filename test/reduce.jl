@@ -222,9 +222,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
 @test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
 @test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
-@test size(extrema(A,1)) == size(maximum(A,1))
-@test size(extrema(A,(1,2))) == size(maximum(A,(1,2)))
-@test size(extrema(A,(1,2,3))) == size(maximum(A,(1,2,3)))
+@test size(extrema(A,1)) == size(maximum(A,dims=1))
+@test size(extrema(A,(1,2))) == size(maximum(A,dims=(1,2)))
+@test size(extrema(A,(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 
 # any & all
 

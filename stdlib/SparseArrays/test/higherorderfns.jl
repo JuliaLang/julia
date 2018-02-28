@@ -554,4 +554,72 @@ end
     @test spzeros(1,2) .* spzeros(0,1) == zeros(0,2)
 end
 
+@testset "aliasing and indexed assignment or broadcast!" begin
+    A = sparsevec([0, 0, 1, 1])
+    B = sparsevec([1, 1, 0, 0])
+    A .+= B
+    @test A == sparse([1,1,1,1])
+
+    A = sprandn(10, 10, 0.1)
+    fA = Array(A)
+    b = randn(10);
+    broadcast!(/, A, A, b)
+    @test A == fA ./ Array(b)
+
+    a = sparse([1,3,5])
+    b = sparse([3,1,2])
+    a[b] = a
+    @test a == [3,5,1]
+    a = sparse([3,2,1])
+    a[a] = [4,5,6]
+    @test a == [6,5,4]
+
+    A = sparse([1,2,3,4])
+    V = view(A, A)
+    @test V == A
+    V[1] = 2
+    @test V == A == [2,2,3,4]
+    V[1] = 2^30
+    @test V == A == [2^30, 2, 3, 4]
+
+    A = sparse([2,1,4,3])
+    V = view(A, :)
+    A[V] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = sparse([2,1,4,3])
+    R = reshape(view(A, :), 2, 2)
+    A[R] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = sparse([2,1,4,3])
+    R = reshape(A, 2, 2)
+    A[R] = (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    # And broadcasting
+    a = sparse([1,3,5])
+    b = sparse([3,1,2])
+    a[b] .= a
+    @test a == [3,5,1]
+    a = sparse([3,2,1])
+    a[a] .= [4,5,6]
+    @test a == [6,5,4]
+
+    A = sparse([2,1,4,3])
+    V = view(A, :)
+    A[V] .= (1:4) .+ 2^30
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = sparse([2,1,4,3])
+    R = reshape(view(A, :), 2, 2)
+    A[R] .= reshape((1:4) .+ 2^30, 2, 2)
+    @test A == [2,1,4,3] .+ 2^30
+
+    A = sparse([2,1,4,3])
+    R = reshape(A, 2, 2)
+    A[R] .= reshape((1:4) .+ 2^30, 2, 2)
+    @test A == [2,1,4,3] .+ 2^30
+end
+
 end # module

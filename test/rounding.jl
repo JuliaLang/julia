@@ -312,18 +312,18 @@ end
     end
 end
 @testset "rounding in other bases" begin
-    @test round(pi,2,2) ≈ 3.25
-    @test round(pi,3,2) ≈ 3.125
-    @test round(pi,3,5) ≈ 3.144
+    @test round(pi, 2, base = 2) ≈ 3.25
+    @test round(pi, 3, base = 2) ≈ 3.125
+    @test round(pi, 3, base = 5) ≈ 3.144
 end
 @testset "vectorized trunc/round/floor/ceil with digits/base argument" begin
     a = rand(2, 2, 2)
     for f in (round, trunc, floor, ceil)
         @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
         @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
-        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
-        @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
-        @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
-        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+        @test f.(a, 9, base = 2) == map(x->f(x, 9, base = 2), a)
+        @test f.(a[:, 1, 1], 9, base = 2) == map(x->f(x, 9, base = 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 9, base = 2) == map(x->f(x, 9, base = 2), a[:, :, 1])
+        @test f.(a, 9, base = 2) == map(x->f(x, 9, base = 2), a)
     end
 end

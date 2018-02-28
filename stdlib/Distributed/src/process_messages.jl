@@ -57,7 +57,7 @@ function run_work_thunk(thunk, print_error)
     catch err
         ce = CapturedException(err, catch_backtrace())
         result = RemoteException(ce)
-        print_error && showerror(STDERR, ce)
+        print_error && showerror(stderr, ce)
     end
     return result
 end
@@ -200,8 +200,8 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         end
 
         if wpid < 1
-            println(STDERR, e, CapturedException(e, catch_backtrace()))
-            println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
+            println(stderr, e, CapturedException(e, catch_backtrace()))
+            println(stderr, "Process($(myid())) - Unknown remote, closing connection.")
         elseif !(wpid in map_del_wrkr)
             werr = worker_from_id(wpid)
             oldstate = werr.state
@@ -226,7 +226,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
 
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING
-                println(STDERR, "Worker $wpid terminated.")
+                println(stderr, "Worker $wpid terminated.")
                 rethrow(e)
             end
         end
