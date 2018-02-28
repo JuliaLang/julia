@@ -6517,7 +6517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.IteratorSize",
     "category": "Type",
-    "text": "IteratorSize(itertype::Type) -> IteratorSize\n\nGiven the type of an iterator, return one of the following values:\n\nSizeUnknown() if the length (number of elements) cannot be determined in advance.\nHasLength() if there is a fixed, finite length.\nHasShape{N}() if there is a known length plus a notion of multidimensional shape (as for an array).  In this case N should give the number of dimensions, and the size function is valid  for the iterator.\nIsInfinite() if the iterator yields values forever.\n\nThe default value (for iterators that do not define this function) is HasLength(). This means that most iterators are assumed to implement length.\n\nThis trait is generally used to select between algorithms that pre-allocate space for their result, and algorithms that resize their result incrementally.\n\njulia> Base.IteratorSize(1:5)\nBase.HasShape{1}()\n\njulia> Base.IteratorSize((2,3))\nBase.HasLength()\n\n\n\n\n\n"
+    "text": "IteratorSize(itertype::Type) -> IteratorSize\n\nGiven the type of an iterator, return one of the following values:\n\nSizeUnknown() if the length (number of elements) cannot be determined in advance.\nHasLength() if there is a fixed, finite length.\nHasShape{N}() if there is a known length plus a notion of multidimensional shape (as for an array).  In this case N should give the number of dimensions, and the axes function is valid  for the iterator.\nIsInfinite() if the iterator yields values forever.\n\nThe default value (for iterators that do not define this function) is HasLength(). This means that most iterators are assumed to implement length.\n\nThis trait is generally used to select between algorithms that pre-allocate space for their result, and algorithms that resize their result incrementally.\n\njulia> Base.IteratorSize(1:5)\nBase.HasShape{1}()\n\njulia> Base.IteratorSize((2,3))\nBase.HasLength()\n\n\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -10245,7 +10245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.size",
     "category": "Function",
-    "text": "size(A::AbstractArray, [dim...])\n\nReturn a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\nExamples\n\njulia> A = fill(1, (2,3,4));\n\njulia> size(A, 2)\n3\n\njulia> size(A, 3, 2)\n(4, 3)\n\n\n\n\n\n"
+    "text": "size(A::AbstractArray, [dim...])\n\nReturn a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\nNote that size may not be defined for arrays with non-standard indices, in which case axes may be useful. See the manual chapter on arrays with custom indices.\n\nExamples\n\njulia> A = fill(1, (2,3,4));\n\njulia> size(A, 2)\n3\n\njulia> size(A, 3, 2)\n(4, 3)\n\n\n\n\n\n"
 },
 
 {
@@ -10261,7 +10261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.axes",
     "category": "Method",
-    "text": "axes(A, d)\n\nReturn the valid range of indices for array A along dimension d.\n\nExamples\n\njulia> A = fill(1, (5,6,7));\n\njulia> axes(A, 2)\nBase.OneTo(6)\n\n\n\n\n\n"
+    "text": "axes(A, d)\n\nReturn the valid range of indices for array A along dimension d.\n\nSee also size, and the manual chapter on arrays with custom indices.\n\nExamples\n\njulia> A = fill(1, (5,6,7));\n\njulia> axes(A, 2)\nBase.OneTo(6)\n\n\n\n\n\n"
 },
 
 {
@@ -20169,7 +20169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays/#Arrays-with-custom-indices-1",
+    "location": "devdocs/offset-arrays/#man-custom-indices-1",
     "page": "Arrays with custom indices",
     "title": "Arrays with custom indices",
     "category": "section",
