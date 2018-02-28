@@ -18,7 +18,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
+    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
@@ -496,6 +496,42 @@ mutable struct EnvCache
     end
 end
 
+
+###########
+# Context #
+###########
+const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_path(stdlib::String) = joinpath(STDLIB_DIR, stdlib)
+function gather_stdlib_uuids()
+    stdlibs = Dict{UUID, String}()
+    for stdlib in readdir(STDLIB_DIR)
+        projfile = joinpath(stdlib_path(stdlib), "Project.toml")
+        if isfile(projfile)
+            proj = TOML.parsefile(projfile)
+            if haskey(proj, "uuid")
+                stdlibs[UUID(proj["uuid"])] = stdlib
+            end
+        end
+    end
+    return stdlibs
+end
+
+# ENV variables to set some of these defaults?
+Base.@kwdef mutable struct Context
+    env::EnvCache = EnvCache()
+    preview::Bool = false
+    use_libgit2_for_all_downloads::Bool = false
+    num_concurrent_downloads::Int = 8
+    graph_verbose::Bool = false
+    stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
+end
+
+function Context!(ctx::Context; kwargs...)
+    for (k, v) in kwargs
+        setfield!(ctx, k, v)
+    end
+end
+
 function write_env_usage(manifest_file::AbstractString)
     !ispath(logdir()) && mkpath(logdir())
     usage_file = joinpath(logdir(), "manifest_usage.toml")
@@ -607,6 +643,20 @@ function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
         end
     end
     return pkgs
+end
+
+function stdlib_resolve!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    for pkg in pkgs
+        @assert has_name(pkg) || has_uuid(pkg)
+        if has_name(pkg) && !has_uuid(pkg)
+            for (uuid, name) in ctx.stdlibs
+                name == pkg.name && (pkg.uuid = uuid)
+            end
+        end
+        if has_uuid(pkg) && !has_name(pkg)
+            haskey(ctx.stdlibs, pkg.uuid) && (pkg.name = ctx.stdlibs[pkg.uuid])
+        end
+    end
 end
 
 # Ensure that all packages are fully resolved
@@ -893,41 +943,6 @@ function pathrepr(env::EnvCache, path::String, base::String=pwd())
     return repr(path)
 end
 
-
-###########
-# Context #
-###########
-function gather_stdlib_uuids()
-    stdlibs = Dict{UUID, String}()
-    stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-    for stdlib in readdir(stdlib_dir)
-        projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
-        if isfile(projfile)
-            proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
-            if haskey(proj, "uuid")
-                stdlibs[UUID(proj["uuid"])] = stdlib
-            end
-        end
-    end
-    return stdlibs
-end
-
-# ENV variables to set some of these defaults?
-Base.@kwdef mutable struct Context
-    env::EnvCache = EnvCache()
-    preview::Bool = false
-    use_libgit2_for_all_downloads::Bool = false
-    num_concurrent_downloads::Int = 8
-    graph_verbose::Bool = false
-    stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
-end
-
-function Context!(ctx::Context; kwargs...)
-    for (k, v) in kwargs
-        setfield!(ctx, k, v)
-    end
-end
-
 function write_env(ctx::Context; display_diff=true)
     env = ctx.env
     # load old environment for comparison
@@ -937,7 +952,7 @@ function write_env(ctx::Context; display_diff=true)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
         display_diff && @info "Updating $(pathrepr(env, env.project_file))"
-        display_diff && Pkg3.Display.print_project_diff(old_env, env)
+        display_diff && Pkg3.Display.print_project_diff(ctx, old_env, env)
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -948,7 +963,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         display_diff && @info "Updating $(pathrepr(env, env.manifest_file))"
-        display_diff && Pkg3.Display.print_manifest_diff(old_env, env)
+        display_diff && Pkg3.Display.print_manifest_diff(ctx, old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)

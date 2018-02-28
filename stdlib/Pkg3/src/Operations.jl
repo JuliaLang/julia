@@ -222,6 +222,7 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         uuid_to_name[uuid] = name
         info = manifest_info(ctx.env, uuid)
         info == nothing && continue
+        haskey(info, "version") || continue # stdlibs might not have a version
         ver = VersionNumber(info["version"])
         uuid_idx = findfirst(equalto(uuid), uuids)
         if uuid_idx != nothing
@@ -259,12 +260,15 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
 end
 
 # Find names, repos and hashes for each package UUID & version
-function version_data(ctx::Context, pkgs::Vector{PackageSpec})
+function version_data!(ctx::Context, pkgs::Vector{PackageSpec})
     names = Dict{UUID,String}()
     hashes = Dict{UUID,SHA1}()
     clones = Dict{UUID,Vector{String}}()
     for pkg in pkgs
-        pkg.uuid in keys(ctx.stdlibs) && continue
+        if pkg.uuid in keys(ctx.stdlibs)
+            names[pkg.uuid] = ctx.stdlibs[pkg.uuid]
+            continue
+        end
         pkg.path == nothing || continue
         uuid = pkg.uuid
         ver = pkg.version::VersionNumber
@@ -293,8 +297,11 @@ function version_data(ctx::Context, pkgs::Vector{PackageSpec})
         end
         @assert haskey(hashes, uuid)
     end
+    for pkg in pkgs
+        haskey(names, pkg.uuid) && (pkg.name = names[pkg.uuid])
+    end
     foreach(sort!, values(clones))
-    return names, hashes, clones
+    return hashes, clones
 end
 
 ########################
@@ -390,7 +397,7 @@ end
 # install & update manifest
 function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     BinaryProvider.probe_platform_engines!()
-    names, hashes, urls = version_data(ctx, pkgs)
+    hashes, urls = version_data!(ctx, pkgs)
     new_versions = UUID[]
 
     pkgs_to_install = Tuple{PackageSpec, String}[]
@@ -404,7 +411,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
         end
     end
 
-    widths = [textwidth(names[pkg.uuid]) for (pkg, _) in pkgs_to_install if haskey(names, pkg.uuid)]
+    widths = [textwidth(pkg.name) for (pkg, _) in pkgs_to_install]
     max_name = length(widths) == 0 ? 0 : maximum(widths)
 
     ########################################
@@ -446,7 +453,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
-            @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
+            @info "Installed $(rpad(pkg.name * " ", max_name + 2, "─")) $vstr"
         else
             push!(missed_packages, (pkg, path))
         end
@@ -458,10 +465,10 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     for (pkg, path) in missed_packages
         uuid = pkg.uuid
         if !ctx.preview
-            install_git(pkg.uuid, names[uuid], hashes[uuid], urls[uuid], pkg.version::VersionNumber, path)
+            install_git(pkg.uuid, pkg.name, hashes[uuid], urls[uuid], pkg.version::VersionNumber, path)
         end
         vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
-        @info "Installed $(rpad(names[pkg.uuid] * " ", max_name + 2, "─")) $vstr"
+        @info "Installed $(rpad(pkg.name * " ", max_name + 2, "─")) $vstr"
     end
 
     ##########################################
@@ -469,12 +476,10 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     ##########################################
     for pkg in pkgs
         uuid = pkg.uuid
-        uuid in keys(ctx.stdlibs) && continue
-        if pkg.path == nothing
-            pkg.name = names[uuid]
-            hash = hashes[uuid]
-        else
+        if pkg.path !== nothing || uuid in keys(ctx.stdlibs)
             hash = nothing
+        else
+            hash = hashes[uuid]
         end
         update_manifest(ctx, pkg, hash)
     end
@@ -506,7 +511,7 @@ end
 function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
     env = ctx.env
     uuid, name, version, path, special_action = pkg.uuid, pkg.name, pkg.version, pkg.path, pkg.special_action
-    hash == nothing && @assert path != nothing
+    hash == nothing && @assert (path != nothing || pkg.uuid in keys(ctx.stdlibs))
     infos = get!(env.manifest, name, Dict{String,Any}[])
     info = nothing
     for i in infos
@@ -518,6 +523,8 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         info = Dict{String,Any}("uuid" => string(uuid))
         push!(infos, info)
     end
+    # We do not print out the whole dependency chain for the standard libaries right now
+    uuid in keys(ctx.stdlibs) && return info
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
     path == nothing ? delete!(info, "path")          : (info["path"]          = path)
@@ -617,8 +624,12 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         # If pkg has a test only dependency, definitely need to resolve!
         pkgs = PackageSpec[]
         if pkg.special_action == PKGSPEC_TESTED
-            info = manifest_info(localctx.env, pkg.uuid)
-            path = haskey(info, "path") ? info["path"] : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
+            if pkg.uuid in keys(localctx.stdlibs)
+                path = Types.stdlib_path(pkg.name)
+            else
+                info = manifest_info(localctx.env, pkg.uuid)
+                path = haskey(info, "path") ? info["path"] : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
+            end
             test_reqfile = joinpath(path, "test", "REQUIRE")
             if isfile(test_reqfile)
                 for r in Pkg2.Reqs.read(test_reqfile)
@@ -827,6 +838,10 @@ end
 function up(ctx::Context, pkgs::Vector{PackageSpec})
     # resolve upgrade levels to version specs
     for pkg in pkgs
+        if pkg.uuid in keys(ctx.stdlibs)
+            pkg.version = VersionSpec()
+            continue
+        end
         pkg.version isa UpgradeLevel || continue
         level = pkg.version
         info = manifest_info(ctx.env, pkg.uuid)
@@ -935,6 +950,8 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             version_path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
         elseif haskey(info, "path")
             version_path = info["path"]
+        elseif pkg.uuid in keys(ctx.stdlibs)
+            version_path = Types.stdlib_path(pkg.name)
         else
             cmderror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
         end
@@ -953,7 +970,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
 
     pkgs_errored = []
     for (pkg, testfile, version_path) in zip(pkgs, testfiles, version_paths)
-        @info("Testing $(pkg.name) located at $version_path")
+        @info("Testing $(pkg.name) located at $(abspath(version_path))")
         if ctx.preview
             @info("In preview mode, skipping tests for $(pkg.name)")
             continue

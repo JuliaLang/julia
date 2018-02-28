@@ -24,6 +24,7 @@ function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
+    stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, true)
     Pkg3.Operations.add(ctx, pkgs)
 end
@@ -187,9 +188,9 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
+function installed(mode::PackageMode=PKGMODE_MANIFEST)
     diffs = Pkg3.Display.status(Context(), mode, #=use_as_api=# true)
-    version_status = Dict{String, VersionNumber}()
+    version_status = Dict{String, Union{VersionNumber,Nothing}}()
     diffs == nothing && return version_status
     for entry in diffs
         version_status[entry.name] = entry.new.ver

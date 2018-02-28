@@ -143,6 +143,15 @@ temp_pkg_dir() do project_path
         end
     end
 
+    @testset "stdlibs as direct dependency" begin
+        uuid_pkg = (name = "CRC32c", uuid = UUID("8bf52ea8-c179-5cab-976a-9e18b702a9bc"))
+        Pkg3.add("CRC32c")
+        @test haskey(Pkg3.installed(), uuid_pkg.name)
+        Pkg3.up()
+        Pkg3.test("CRC32c")
+        Pkg3.rm("CRC32c")
+    end
+
     @testset "package name in resolver errors" begin
         try
             Pkg3.add([PackageSpec(TEST_PKG.name, VersionSpec(v"55"))])
