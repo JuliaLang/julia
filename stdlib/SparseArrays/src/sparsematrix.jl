@@ -2285,7 +2285,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
             end
         end
     end
-    colptrB = cumsum(colptrB)
+    colptrB = accumulate(+,colptrB) # cumsum would promote incorrectly
     if n > (idxB-1)
         deleteat!(nzvalB, idxB:n)
         deleteat!(rowvalB, idxB:n)
