@@ -588,9 +588,14 @@ end
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
 
-
 # PR #25321
 # checks that issue in type inference is resolved
 A = rand(5,5,5,5)
 V = view(A, 1:1 ,:, 1:3, :)
 @test @inferred(strides(V)) == (1, 5, 25, 125)
+
+# Issue #26263 — ensure that unaliascopy properly trims the array
+A = rand(5,5,5,5)
+V = view(A, 2:5, :, 2:5, 1:2:5)
+@test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
+@test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])
