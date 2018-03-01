@@ -84,7 +84,7 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
 end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = i
+_trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
 _trimmedindex(i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 ## SubArray creation
