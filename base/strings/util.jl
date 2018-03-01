@@ -275,7 +275,7 @@ split(str::T, splitter::Char;
     _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    @assert (i = firstindex(str)) == 1
+    i = 1 # firstindex(str)
     n = lastindex(str)
     r = coalesce(findfirst(splitter,str), 0)
     if r != 0:-1
