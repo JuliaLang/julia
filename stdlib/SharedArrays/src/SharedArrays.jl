@@ -343,7 +343,6 @@ for each worker process.
 """
 localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-Base.MemoryLayout(S::SharedArray) = Base.MemoryLayout(sdata(S))
 strides(S::SharedArray) = strides(sdata(S))
 stride(S::SharedArray, i::Int) = stride(sdata(S), i)
 

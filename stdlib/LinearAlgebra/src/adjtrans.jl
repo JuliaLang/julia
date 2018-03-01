@@ -141,7 +141,7 @@ conjlayout(::Type{<:Complex}, M::AbstractStridedLayout) = ConjLayout(M)
 conjlayout(::Type{<:Real}, M::MemoryLayout) = M
 
 
-Base.submemorylayout(M::ConjLayout, t::Tuple) = ConjLayout(Base.submemorylayout(M.layout, t))
+Base.subarraylayout(M::ConjLayout, t::Tuple) = ConjLayout(Base.subarraylayout(M.layout, t))
 
 MemoryLayout(A::Transpose) = transposelayout(MemoryLayout(parent(A)))
 MemoryLayout(A::Adjoint) = adjointlayout(eltype(A), MemoryLayout(parent(A)))

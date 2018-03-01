@@ -378,8 +378,7 @@ overrides of `strides(A::MyMatrix)` and `unknown_convert(::Type{Ptr{T}}, A::MyMa
 """
 MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout()
 
-MemoryLayout(A::Vector{T}) where T = DenseColumnMajor()
-MemoryLayout(A::Matrix{T}) where T = DenseColumnMajor()
+MemoryLayout(A::DenseArray{T}) where T = DenseColumnMajor()
 
 
 
