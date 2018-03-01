@@ -1,13 +1,15 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractChar
+Core.Char
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
+Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
-Base.repeat(::Char, ::Integer)
+Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString

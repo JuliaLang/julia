@@ -240,8 +240,8 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(c::Union{Nothing, Char}) = c !== nothing && isxdigit(c)
-escape_nul(c::Union{Nothing, Char}) =
+need_full_hex(c::Union{Nothing, AbstractChar}) = c !== nothing && isxdigit(c)
+escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
@@ -486,7 +486,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     String(take!(buf))
 end
 
-function String(chars::AbstractVector{Char})
+function String(chars::AbstractVector{<:AbstractChar})
     sprint(sizehint=length(chars)) do io
         for c in chars
             write(io, c)

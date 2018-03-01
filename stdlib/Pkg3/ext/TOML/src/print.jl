@@ -1,5 +1,5 @@
 "Identify if character in subset of bare key symbols"
-isbare(c::Char) = 'A' <= c <= 'Z' || 'a' <= c <= 'z' || isdigit(c) || c == '-' || c == '_'
+isbare(c::AbstractChar) = 'A' <= c <= 'Z' || 'a' <= c <= 'z' || isdigit(c) || c == '-' || c == '_'
 
 function printkey(io::IO, keys::Vector{String})
     for (i, k) in enumerate(keys)

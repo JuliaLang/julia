@@ -259,7 +259,7 @@ reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), T) = one(T)
-reduce_empty(::typeof(*), ::Type{Char}) = ""
+reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
@@ -307,7 +307,7 @@ different types than its inputs.
 """
 reduce_first(op, x) = x
 reduce_first(::typeof(+), x::Bool) = Int(x)
-reduce_first(::typeof(*), x::Char) = string(x)
+reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
 reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)

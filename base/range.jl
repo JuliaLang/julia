@@ -917,7 +917,7 @@ in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r
 in(x::Real, r::AbstractRange{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
-in(x::Char, r::AbstractRange{Char}) =
+in(x::AbstractChar, r::AbstractRange{<:AbstractChar}) =
     !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(Int(x) - Int(first(r)), step(r)) == 0)
 

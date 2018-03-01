@@ -12,7 +12,7 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     rook::Bool
     info::BlasInt
 end
-BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool,
+BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::AbstractChar, symmetric::Bool,
              rook::Bool, info::BlasInt) where {T} =
         BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
 
@@ -88,7 +88,7 @@ size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi

@@ -182,10 +182,10 @@ struct Delim{T, length} <: AbstractDateToken
     d::T
 end
 
-Delim(d::Char) = Delim{Char, 1}(d)
+Delim(d::T) where {T<:AbstractChar} = Delim{T, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
+@inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
     for j=1:N
         i > len && return (nothing, i)
         c, i = next(str, i)
@@ -214,7 +214,7 @@ end
     write(io, d.d)
 end
 
-function _show_content(io::IO, d::Delim{Char, N}) where N
+function _show_content(io::IO, d::Delim{<:AbstractChar, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
             write(io, '\\', d.d)

@@ -143,7 +143,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, AbstractString, String, IO,
+    AbstractChar, Char, AbstractString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
@@ -177,7 +177,8 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 #primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+abstract type AbstractChar end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 #primitive type UInt8   <: Unsigned 8 end
@@ -460,7 +461,7 @@ function write(io::IO, x::String)
 end
 
 show(io::IO, @nospecialize x) = ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), io_pointer(io), x)
-print(io::IO, x::Char) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
+print(io::IO, x::AbstractChar) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
 print(io::IO, x::String) = (write(io, x); nothing)
 print(io::IO, @nospecialize x) = show(io, x)
 print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
@@ -701,9 +702,10 @@ UInt32(x::BuiltinInts)  = toUInt32(x)::UInt32
 UInt64(x::BuiltinInts)  = toUInt64(x)::UInt64
 UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
 
-Char(x::Number) = Char(UInt32(x))
-Char(x::Char) = x
-(::Type{T})(x::Char) where {T<:Number} = T(UInt32(x))
+(::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+(::Type{AbstractChar})(x::Number) = Char(x)
+(::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(UInt32(x))
+(::Type{T})(x::T) where {T<:AbstractChar} = x
 
 (::Type{T})(x::T) where {T<:Number} = x
 

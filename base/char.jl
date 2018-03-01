@@ -1,12 +1,49 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct InvalidCharError <: Exception
-    char::Char
+"""
+The `AbstractChar` type is the supertype of all character implementations
+in Julia.   A character represents a Unicode code point, and can be converted
+to/from `UInt32` in order to obtain the numerical value of the code point.
+These numerical values determine how characters are compared with `<` and `==`,
+for example.
+
+A given `AbstractChar` subtype may be capable of representing only a subset
+of Unicode, in which case conversion from an unsupported `UInt32` value
+may throw an error.  Conversely, the built-in [`Char`](@ref) type represents
+a *superset* of Unicode (in order to losslessly encode invalid byte streams),
+in which case conversion of a non-Unicode value *to* `UInt32` throws an error.
+The [`isvalid`](@ref) function can be used to check which codepoints are
+representable in a given `AbstractChar` type.
+
+Internally, an `AbstractChar` type may use a variety of encodings.  Conversion
+to `UInt32` will not reveal this encoding because it always returns the
+Unicode value of the character.  (Typically, the raw encoding can be obtained
+via [`reinterpret`](@ref).)
+"""
+AbstractChar
+
+"""
+    Char(c::Union{Number,AbstractChar})
+
+`Char` is a 32-bit [`AbstractChar`](@ref) type that is the default representation
+of characters in Julia.  `Char` is the type used for character literals like `'x'`
+and it is also the element type of [`String`](@ref).
+
+In order to losslessly represent arbitrary byte streams stored in a `String`,
+a `Char` value may store information that cannot be converted to a Unicode
+codepoint — converting such a `Char` to `UInt32` will throw an error.
+The [`isvalid(c::Char)`](@ref) function can be used to query whether `c`
+represents a valid Unicode character.
+"""
+Char
+
+struct InvalidCharError{T<:AbstractChar} <: Exception
+    char::T
 end
 struct CodePointError <: Exception
     code::Integer
 end
-@noinline invalid_char(c::Char) = throw(InvalidCharError(c))
+@noinline invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
 @noinline code_point_err(u::UInt32) = throw(CodePointError(u))
 
 function ismalformed(c::Char)
@@ -23,6 +60,11 @@ function isoverlong(c::Char)
     u = reinterpret(UInt32, c)
     is_overlong_enc(u)
 end
+
+# fallback: other AbstractChar types, by default, are assumed
+#           not to support malformed or overlong encodings.
+ismalformed(c::AbstractChar) = false
+isoverlong(c::AbstractChar) = false
 
 function UInt32(c::Char)
     # TODO: use optimized inline LLVM
@@ -69,50 +111,57 @@ function Char(b::Union{Int8,UInt8})
     0 ≤ b ≤ 0x7f ? reinterpret(Char, (b % UInt32) << 24) : Char(UInt32(b))
 end
 
-convert(::Type{Char}, x::Number) = Char(x)
-convert(::Type{T}, x::Char) where {T<:Number} = T(x)
+convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
+convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
+convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
 
-rem(x::Char, ::Type{T}) where {T<:Number} = rem(UInt32(x), T)
+rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(UInt32(x), T)
 
 typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
 typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
 
-size(c::Char) = ()
-size(c::Char,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
-ndims(c::Char) = 0
-ndims(::Type{Char}) = 0
-length(c::Char) = 1
-firstindex(c::Char) = 1
-lastindex(c::Char) = 1
-getindex(c::Char) = c
-getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
-getindex(c::Char, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
-first(c::Char) = c
-last(c::Char) = c
-eltype(::Type{Char}) = Char
+size(c::AbstractChar) = ()
+size(c::AbstractChar,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
+ndims(c::AbstractChar) = 0
+ndims(::Type{<:AbstractChar}) = 0
+length(c::AbstractChar) = 1
+firstindex(c::AbstractChar) = 1
+lastindex(c::AbstractChar) = 1
+getindex(c::AbstractChar) = c
+getindex(c::AbstractChar, i::Integer) = i == 1 ? c : throw(BoundsError())
+getindex(c::AbstractChar, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
+first(c::AbstractChar) = c
+last(c::AbstractChar) = c
+eltype(::Type{T}) where {T<:AbstractChar} = T
 
-start(c::Char) = false
-next(c::Char, state) = (c, true)
-done(c::Char, state) = state
-isempty(c::Char) = false
-in(x::Char, y::Char) = x == y
+start(c::AbstractChar) = false
+next(c::AbstractChar, state) = (c, true)
+done(c::AbstractChar, state) = state
+isempty(c::AbstractChar) = false
+in(x::AbstractChar, y::AbstractChar) = x == y
 
 ==(x::Char, y::Char) = reinterpret(UInt32, x) == reinterpret(UInt32, y)
 isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
 hash(x::Char, h::UInt) =
     hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-widen(::Type{Char}) = Char
 
--(x::Char, y::Char) = Int(x) - Int(y)
--(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
-+(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
-+(x::Integer, y::Char) = y + x
+# fallbacks:
+isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
+==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
+hash(x::AbstractChar, h::UInt) =
+    hash_uint64(((UInt32(x) + UInt64(0xd060fad0)) << 32) ⊻ UInt64(h))
+widen(::Type{T}) where {T<:AbstractChar} = T
 
-print(io::IO, c::Char) = (write(io, c); nothing)
+-(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
+-(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
++(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
++(x::Integer, y::AbstractChar) = y + x
+
+print(io::IO, c::AbstractChar) = (write(io, c); nothing)
 
 const hex_chars = UInt8['0':'9';'a':'z']
 
-function show(io::IO, c::Char)
+function show(io::IO, c::AbstractChar)
     if c <= '\\'
         b = c == '\0' ? 0x30 :
             c == '\a' ? 0x61 :
@@ -154,14 +203,14 @@ function show(io::IO, c::Char)
     return
 end
 
-function show(io::IO, ::MIME"text/plain", c::Char)
+function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)
             print(io, "[overlong] ")
             u = decode_overlong(c)
-            c = Char(u)
+            c = T(u)
         else
             u = UInt32(c)
         end

@@ -1654,7 +1654,7 @@ end
 
 ### BLAS-2 / sparse A * sparse x -> dense y
 
-function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::Char='N')
+function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractChar='N')
     local xlen::Int, ylen::Int
     m, n = size(A)
     if trans == 'N' || trans == 'n'

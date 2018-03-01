@@ -458,6 +458,9 @@ Library improvements
   * The function `thisind(s::AbstractString, i::Integer)` returns the largest valid index
     less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
 
+  * `Char` is now a subtype of `AbstractChar`, and most of the functions that
+    take character arguments now accept any `AbstractChar`.
+
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
   * Introduced the `empty` function, the functional pair to `empty!` which returns a new,

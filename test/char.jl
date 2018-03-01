@@ -250,3 +250,22 @@ end
     test_overlong('\u8430', 0x8430, "'萰'")
     test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")
 end
+
+# create a new AbstractChar type to test the fallbacks
+primitive type ASCIIChar <: AbstractChar 8 end
+ASCIIChar(c::UInt8) = reinterpret(ASCIIChar, c)
+ASCIIChar(c::UInt32) = ASCIIChar(UInt8(c))
+Base.UInt8(c::ASCIIChar) = reinterpret(UInt8, c)
+Base.UInt32(c::ASCIIChar) = UInt32(UInt8(c))
+
+@testset "abstractchar" begin
+    @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+
+    @test isascii(ASCIIChar('x'))
+    @test ASCIIChar('x') < 'y'
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x'))
+    @test ASCIIChar('x')^3 == "xxx"
+    @test repr(ASCIIChar('x')) == "'x'"
+    @test string(ASCIIChar('x')) == "x"
+    @test read(IOBuffer("x"), ASCIIChar) === ASCIIChar('x')
+end
