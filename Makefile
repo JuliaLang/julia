@@ -164,8 +164,9 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
 
-$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
-	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
+	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ \
+		$(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
@@ -214,15 +215,13 @@ $(build_private_libdir)/basecompiler.ji: $(CORE_SRCS) $(COMPILER_SRCS) | $(build
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/basecompiler.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sys$1-o.a: $$(build_private_libdir)/basecompiler.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+	if ! $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
-		mv $$@.tmp $$@; \
-	else \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; \
 	fi )
-.SECONDARY: $(build_private_libdir)/sys$1.o
+.SECONDARY: $(build_private_libdir)/sys$1-o.a
 endef
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
