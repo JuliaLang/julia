@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random
+using Sockets, Random
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -56,25 +56,25 @@ using Random
 
     @test IPv6(UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1), UInt16(1)) == IPv6(1,1,1,1,1,1,1,1)
 
-    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), -1)
-    @test_throws BoundsError Base.ipv6_field(IPv6(0xffff7f000001), 9)
+    @test_throws BoundsError Sockets.ipv6_field(IPv6(0xffff7f000001), -1)
+    @test_throws BoundsError Sockets.ipv6_field(IPv6(0xffff7f000001), 9)
 end
 
 @testset "InetAddr constructor" begin
-    inet = Base.InetAddr(IPv4(127,0,0,1), 1024)
+    inet = Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
 end
 @testset "InetAddr invalid port" begin
-    @test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), -1)
-    @test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
+    @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
+    @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
 end
 
 @testset "isless and comparisons" begin
     @test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
     @test ip"1.2.3.4" >= ip"1.2.3.4" >= ip"1.2.3.1"
     @test isless(ip"1.2.3.4", ip"1.2.3.5")
-    @test_throws MethodError sort[ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"]
+    @test_throws MethodError sort([ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"])
 end
 
 @testset "RFC 5952 Compliance" begin
@@ -92,13 +92,13 @@ defaultport = rand(2000:4000)
         tsk = @async begin
             local (p, s) = listenany(testport)
             @test p != 0
-            @test getsockname(s) == (Base.localhost, p)
+            @test getsockname(s) == (Sockets.localhost, p)
             put!(port, p)
             for i in 1:3
                 sock = accept(s)
-                @test getsockname(sock) == (Base.localhost, p)
+                @test getsockname(sock) == (Sockets.localhost, p)
                 let peer = getpeername(sock)::Tuple{IPAddr, UInt16}
-                    @test peer[1] == Base.localhost
+                    @test peer[1] == Sockets.localhost
                     @test 0 != peer[2] != p
                 end
                 # test write call
@@ -117,16 +117,16 @@ defaultport = rand(2000:4000)
         wait(port)
         let p = fetch(port)
             otherip = getipaddr()
-            if otherip != Base.localhost
+            if otherip != Sockets.localhost
                 @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
             for i in 1:3
                 client = connect(p)
                 let name = getsockname(client)::Tuple{IPAddr, UInt16}
-                    @test name[1] == Base.localhost
+                    @test name[1] == Sockets.localhost
                     @test 0 != name[2] != p
                 end
-                @test getpeername(client) == (Base.localhost, p)
+                @test getpeername(client) == (Sockets.localhost, p)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
@@ -135,10 +135,10 @@ defaultport = rand(2000:4000)
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        c = Base.Condition()
+        c = Condition()
         tsk = @async begin
             s = listen(socketname)
-            Base.notify(c)
+            notify(c)
             sock = accept(s)
             write(sock,"Hello World\n")
             close(s)
@@ -180,10 +180,10 @@ end
         @test try
             getaddrinfo(localhost, IPv6)::IPv6 != ip"::"
         catch ex
-            isa(ex, Base.DNSError) && ex.code == Base.UV_EAI_NONAME && ex.host == localhost
+            isa(ex, Sockets.DNSError) && ex.code == Base.UV_EAI_NONAME && ex.host == localhost
         end
     end
-    @test_throws Base.DNSError getaddrinfo(".invalid")
+    @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
     @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
 end
@@ -221,11 +221,11 @@ let localhost = getaddrinfo("localhost")
     close(server2)
 end
 
-@test_throws Base.DNSError connect(".invalid", 80)
+@test_throws Sockets.DNSError connect(".invalid", 80)
 
 @testset "UDPSocket" begin
     # test show() function for UDPSocket()
-    @test repr(UDPSocket()) == "UDPSocket(init)"
+    @test endswith(repr(UDPSocket()), "UDPSocket(init)")
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"127.0.0.1", randport)
@@ -393,10 +393,10 @@ end
 end
 
 @testset "connect!" begin
-    # test the method matching connect!(::TCPSocket, ::Base.InetAddr{T<:Base.IPAddr})
-    let addr = Base.InetAddr(ip"127.0.0.1", 4444)
+    # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
 
-        function test_connect(addr::Base.InetAddr)
+        function test_connect(addr::Sockets.InetAddr)
             srv = listen(addr)
 
             @async try c = accept(srv); close(c) catch end
@@ -423,7 +423,7 @@ end
 end
 
 @testset "TCPServer constructor" begin
-    s = Base.TCPServer(; delay=false)
+    s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
     end

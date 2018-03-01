@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Serialization
+using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -1460,7 +1460,7 @@ function reuseport_tests()
             ports_higher = []       # ports of pids higher than myid()
             for w in Distributed.PGRP.workers
                 w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
+                port = Sockets._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
                     # master connects to workers
                     push!(ports_higher, port)

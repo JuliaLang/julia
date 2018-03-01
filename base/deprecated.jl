@@ -457,8 +457,6 @@ end
 @deprecate (convert(::Type{Integer}, x::Enum{T}) where {T<:Integer})         Integer(x)
 @deprecate (convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer})  T(x)
 
-@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
-
 function (::Type{T})(arg) where {T}
     if applicable(convert, T, arg)
         sig = which(convert, (Type{T}, typeof(arg))).sig
@@ -679,15 +677,6 @@ function Broadcast.dotview(A::AbstractArray, args::Number...)
 end
 Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
 # Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
-
-@noinline function getaddrinfo(callback::Function, host::AbstractString)
-    depwarn("`getaddrinfo` with a callback function is deprecated, wrap code in `@async` instead for deferred execution.", :getaddrinfo)
-    @async begin
-        r = getaddrinfo(host)
-        callback(r)
-    end
-    nothing
-end
 
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
