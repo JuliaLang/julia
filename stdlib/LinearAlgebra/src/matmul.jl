@@ -108,9 +108,7 @@ mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVect
 # Matrix-matrix multiplication
 
 """
-```
-*(A::AbstractMatrix, B::AbstractMatrix)
-```
+    *(A::AbstractMatrix, B::AbstractMatrix)
 
 Matrix multiplication.
 
@@ -158,18 +156,18 @@ julia> Y
 mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
 
 """
-    mul1!(A, B)
+    rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
-mul1!(A, B)
+rmul!(A, B)
 
 """
-    mul2!(A, B)
+    lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
 """
-mul2!(A, B)
+lmul!(A, B)
 
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, B::AbstractMatrix)
     A = transA.parent
@@ -265,11 +263,11 @@ function copytri!(A::AbstractMatrix, uplo::Char, conjugate::Bool=false)
     n = checksquare(A)
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
-            A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
+            A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
         for i = 1:(n-1), j = (i+1):n
-            A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
+            A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))

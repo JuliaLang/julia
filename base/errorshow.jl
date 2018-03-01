@@ -134,6 +134,9 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
 
+showerror(io::IO, ex::UndefKeywordError) =
+    print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
+
 function showerror(io::IO, ex::UndefVarError)
     if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
         return showerror(io, ErrorException("""
@@ -148,6 +151,8 @@ end
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
+
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
@@ -285,7 +290,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
 end
 
 #Show an error by directly calling jl_printf.
-#Useful in Base submodule __init__ functions where STDERR isn't defined yet.
+#Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)

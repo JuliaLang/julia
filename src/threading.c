@@ -584,10 +584,14 @@ void jl_init_threading(void)
 void jl_start_threads(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    char *cp, mask[UV_CPU_SETSIZE];
+    int cpumasksize = uv_cpumask_size();
+    char *cp;
     int i, exclusive;
     uv_thread_t uvtid;
     ti_threadarg_t **targs;
+    if (cpumasksize < jl_n_threads) // also handles error case
+        cpumasksize = jl_n_threads;
+    char *mask = (char*)alloca(cpumasksize);
 
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
@@ -599,10 +603,11 @@ void jl_start_threads(void)
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
-        memset(mask, 0, UV_CPU_SETSIZE);
+        memset(mask, 0, cpumasksize);
         mask[0] = 1;
         uvtid = (uv_thread_t)uv_thread_self();
-        uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+        uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+        mask[0] = 0;
     }
 
     // create threads
@@ -616,9 +621,9 @@ void jl_start_threads(void)
         targs[i]->tid = i + 1;
         uv_thread_create(&uvtid, ti_threadfun, targs[i]);
         if (exclusive) {
-            memset(mask, 0, UV_CPU_SETSIZE);
-            mask[i+1] = 1;
-            uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+            mask[i + 1] = 1;
+            uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+            mask[i + 1] = 0;
         }
         uv_thread_detach(&uvtid);
     }

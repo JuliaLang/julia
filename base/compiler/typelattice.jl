@@ -27,7 +27,7 @@ end
 #    # May assume x is `Float` now
 # end
 # ```
-mutable struct Conditional
+struct Conditional
     var::Slot
     vtype
     elsetype
@@ -48,8 +48,13 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
+# Wraps a type and represents that the value may also be undef at this point.
+struct MaybeUndef
+    typ
+end
+
 # The type of a variable load is either a value or an UndefVarError
-mutable struct VarState
+struct VarState
     typ
     undef::Bool
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
@@ -57,7 +62,7 @@ end
 
 const VarTable = Array{Any,1}
 
-mutable struct StateUpdate
+struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype::VarState
     state::VarTable
@@ -120,6 +125,11 @@ end
 maybe_extract_const_bool(c) = nothing
 
 function ⊑(@nospecialize(a), @nospecialize(b))
+    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
+        return false
+    end
+    isa(a, MaybeUndef) && (a = a.typ)
+    isa(b, MaybeUndef) && (b = b.typ)
     (a === NOT_FOUND || b === Any) && return true
     (a === Any || b === NOT_FOUND) && return false
     a === Union{} && return true
@@ -160,6 +170,7 @@ function widenconst(c::Const)
         return typeof(c.val)
     end
 end
+widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(@nospecialize(t)) = t
 
@@ -168,6 +179,11 @@ issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea ⊑ typeb && return typeb
     typeb ⊑ typea && return typea
+    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
+        return MaybeUndef(tmerge(
+            isa(typea, MaybeUndef) ? typea.typ : typea,
+            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
+    end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if typea.var === typeb.var
             vtype = tmerge(typea.vtype, typeb.vtype)

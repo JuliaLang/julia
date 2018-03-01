@@ -1,17 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# timing
-
-# time() in libc.jl
-
-# high-resolution relative time, in nanoseconds
-
-"""
-    time_ns()
-
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-"""
-time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
@@ -105,7 +93,7 @@ function format_bytes(bytes)
     end
 end
 
-function time_print(elapsedtime, bytes, gctime, allocs)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
     Printf.@printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -122,13 +110,12 @@ function time_print(elapsedtime, bytes, gctime, allocs)
     elseif gctime > 0
         Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
-    println()
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("elapsed time (ns): $elapsedtime\n")
+    print("\nelapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -171,6 +158,7 @@ macro time(ex)
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff))
+        println()
         val
     end
 end
@@ -288,16 +276,7 @@ julia> gctime
 0.0055765
 
 julia> fieldnames(typeof(memallocs))
-9-element Array{Symbol,1}:
- :allocd
- :malloc
- :realloc
- :poolalloc
- :bigalloc
- :freecall
- :total_time
- :pause
- :full_sweep
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
 julia> memallocs.total_time
 5576500
@@ -344,22 +323,18 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
 end
 
 """
-    print_with_color(color::Union{Symbol, Int}, [io], xs...; bold::Bool = false)
+    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
 
-Print `xs` in a color specified as a symbol.
+Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-print_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(print, color, io, msg...; bold = bold)
-print_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    print_with_color(color, STDOUT, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(println, color, io, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    println_with_color(color, STDOUT, msg...; bold = bold)
+printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold)
+printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, color=color)
 
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -410,7 +385,7 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
-    flush(STDOUT)
+    flush(stdout)
     p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
@@ -574,7 +549,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef
@@ -679,18 +655,36 @@ kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
 kwdef_val(::Type{T}) where {T} = T()
 
+# testing
 
-function _check_bitarray_consistency(B::BitArray{N}) where N
-    n = length(B)
-    if N ≠ 1
-        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
-        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+"""
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false, [seed])
+
+Run the Julia unit tests listed in `tests`, which can be either a string or an array of
+strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+"""
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Nothing}=nothing)
+    if isa(tests,AbstractString)
+        tests = split(tests)
     end
-    Bc = B.chunks
-    nc = length(Bc)
-    nc == num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
-    n == 0 && return true
-    Bc[end] & _msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
-    return true
+    exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
+    ENV2 = copy(ENV)
+    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    try
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+    catch
+        buf = PipeBuffer()
+        versioninfo(buf)
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
+    end
 end
-

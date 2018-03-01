@@ -14,21 +14,21 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function mul1!(X::Array{T}, s::T) where T<:BlasFloat
+function rmul!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
     if length(X) < SCAL_CUTOFF
-        generic_mul1!(X, s)
+        generic_rmul!(X, s)
     else
         BLAS.scal!(length(X), s, X, 1)
     end
     X
 end
 
-mul2!(s::T, X::Array{T}) where {T<:BlasFloat} = mul1!(X, s)
+lmul!(s::T, X::Array{T}) where {T<:BlasFloat} = rmul!(X, s)
 
-mul1!(X::Array{T}, s::Number) where {T<:BlasFloat} = mul1!(X, convert(T, s))
-function mul1!(X::Array{T}, s::Real) where T<:BlasComplex
+rmul!(X::Array{T}, s::Number) where {T<:BlasFloat} = rmul!(X, convert(T, s))
+function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
     GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
@@ -72,7 +72,7 @@ end
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite by trying to perform a
+Test whether a matrix is positive definite (and Hermitian) by trying to perform a
 Cholesky factorization of `A`, overwriting `A` in the process.
 See also [`isposdef`](@ref).
 
@@ -94,7 +94,7 @@ isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite by trying to perform a
+Test whether a matrix is positive definite (and Hermitian) by trying to perform a
 Cholesky factorization of `A`.
 See also [`isposdef!`](@ref)
 
@@ -249,7 +249,7 @@ function diagind(m::Integer, n::Integer, k::Integer=0)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
             "at most $n in an $m-by-$n matrix")))
     end
-    k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
+    k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
 end
 
 """
@@ -1310,9 +1310,13 @@ end
 ## Basis for null space
 
 """
-    nullspace(M)
+    nullspace(M[, tol::Real])
 
-Basis for nullspace of `M`.
+Computes a basis for the nullspace of `M` by including the singular
+vectors of A whose singular have magnitude are greater than `tol*σ₁`,
+where `σ₁` is `A`'s largest singular values. By default, the value of
+`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
@@ -1327,16 +1331,22 @@ julia> nullspace(M)
  0.0
  0.0
  1.0
+
+julia> nullspace(M, 2)
+3×3 Array{Float64,2}:
+ 0.0  1.0  0.0
+ 1.0  0.0  0.0
+ 0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix{T}) where T
+function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
-    SVD = svdfact(A, full = true)
-    indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
+    SVD = svdfact(A, full=true)
+    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
+nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
 
 """
     cond(M, p::Real=2)
@@ -1402,7 +1412,7 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
 
     D = -(adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    mul1!(QA*(Y * adjoint(QB)), inv(scale))
+    rmul!(QA*(Y * adjoint(QB)), inv(scale))
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
@@ -1445,7 +1455,7 @@ function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
 
     D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    mul1!(Q*(Y * adjoint(Q)), inv(scale))
+    rmul!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)

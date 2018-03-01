@@ -1,24 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
-using Random, LinearAlgebra
+using Random, LinearAlgebra, Test
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
+tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
 tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{Bool,Vector{Bool}}}) = true
 tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
-bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
+bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
 
-function check_bitop_call(ret_type, func, args...)
-    r1 = func(args...)
-    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
+function check_bitop_call(ret_type, func, args...; kwargs...)
+    r1 = func(args...; kwargs...)
+    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
     ret_type ≢ nothing && @test isa(r1, ret_type)
     @test tc(r1, r2)
-    @test isequal(r1, ret_type ≡ nothing ? r2 : convert(ret_type, r2))
+    @test isequal(r1, ret_type ≡ nothing ? r2 : r2)
     @test bitcheck(r1)
 end
 macro check_bit_operation(ex, ret_type)
@@ -1033,7 +1034,7 @@ timesofar("binary comparison")
     for d = 1:4
         j = rand(1:size(b1, d))
         #for j = 1 : size(b1, d)
-            @check_bit_operation slicedim(b1, d, j) BitArray{3}
+            @check_bit_operation selectdim(b1, d, j) SubArray{Bool, 3, BitArray{4}}
         #end
         @check_bit_operation flipdim(b1, d) BitArray{4}
     end
@@ -1071,9 +1072,9 @@ timesofar("binary comparison")
         i2 = circshift!(b1, -j)
         @test b2 == i2
 
-        @check_bit_operation slicedim(b1, 1, m) Bool
+        @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
-    @check_bit_operation slicedim(b1, 1, :) BitVector
+    @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
 end
 
 timesofar("datamove")
@@ -1229,9 +1230,9 @@ end
     b1 = bitrand(s1, s2, s3, s4)
     m1 = 1
     m2 = 3
-    @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
+    @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
     @check_bit_operation minimum(b1) Bool
@@ -1491,3 +1492,11 @@ end
 end
 
 timesofar("I/O")
+
+@testset "not strided" begin
+    @test_throws ErrorException pointer(trues(1))
+    @test_throws ErrorException pointer(trues(1),1)
+    b = falses(3)
+    b[:] = view(trues(10), [1,3,7])
+    @test b == trues(3)
+end

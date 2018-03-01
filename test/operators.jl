@@ -47,8 +47,8 @@ p = 1=>:foo
 @test last(p)  == :foo
 @test first(reverse(p)) == :foo
 @test last(reverse(p))  == 1
-@test endof(p) == 2
-@test p[endof(p)] == p[end] == p[2] == :foo
+@test lastindex(p) == 2
+@test p[lastindex(p)] == p[end] == p[2] == :foo
 
 @test (|)(2) == 2
 @test xor(2) == 2
@@ -130,4 +130,54 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
     @test TypeWrapper(Int) <= TypeWrapper(Int)
     @test TypeWrapper(Int) <= TypeWrapper(Real)
     @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
+end
+
+# issue #20355
+@testset "mod1, fld1" begin
+    for T in [Int8, Int16, Int32, Int64],
+        x in T[typemin(T); typemin(T) + 1; -10:10; typemax(T)-1; typemax(T)],
+        y in T[typemin(T); typemin(T) + 1; -10:-1; 1:10; typemax(T)-1; typemax(T)]
+
+        m = mod1(x, y)
+        @test mod(x, y) == mod(m, y)
+        if y > 0
+            @test 0 < m <= y
+        else
+            @test y <= m < 0
+        end
+        if x == typemin(T) && y == -1
+            @test_throws DivideError fld1(x, y)
+        else
+            f = fld1(x, y)
+            @test (f - 1) * y + m == x
+        end
+    end
+
+    for T in [UInt8, UInt16, UInt32, UInt64],
+        x in T[0:10; typemax(T)-1; typemax(T)],
+        y in T[1:10; typemax(T)-1; typemax(T)]
+
+        m = mod1(x, y)
+        @test mod(x, y) == mod(m, y)
+        @test 0 < m <= y
+        f = fld1(x, y)
+        @test (f - 1) * y + m == x
+    end
+
+    for T in [Float32, Float64, Rational{Int64}],
+        x in T[k // 4 for k in -10:10],
+        y in T[k // 4 for k in [-10:-1; 1:10]]
+
+        m = mod1(x, y)
+        @test mod(x, y) == mod(m, y)
+        if y > 0
+            @test 0 < m <= y
+        else
+            @test y <= m < 0
+        end
+        f = fld1(x, y)
+        @test (f - 1) * y + m == x
+    end
+
+    @test fldmod1(4.0, 3) == fldmod1(4, 3)
 end

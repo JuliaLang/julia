@@ -14,7 +14,7 @@ function findnext(pred::EqualTo{Char}, s::String, i::Integer)
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
         s[i] == c && return i
-        i = next(s, i)[2]
+        i = nextind(s, i)
     end
 end
 
@@ -87,7 +87,7 @@ end
     findfirst(pattern::Regex, string::String)
 
 Find the first occurrence of `pattern` in `string`. Equivalent to
-[`findnext(pattern, string, start(s))`](@ref).
+[`findnext(pattern, string, firstindex(s))`](@ref).
 
 # Examples
 ```jldoctest
@@ -99,19 +99,17 @@ julia> findfirst("Julia", "JuliaLang")
 ```
 """
 findfirst(pattern::AbstractString, string::AbstractString) =
-    findnext(pattern, string, start(string))
+    findnext(pattern, string, firstindex(string))
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    while !done(s,i)
-        d, j = next(s,i)
+    for (j, d) in pairs(SubString(s, i))
         if testf(d)
-            return i
+            return i + j - 1
         end
-        i = j
     end
     return nothing
 end
@@ -122,31 +120,17 @@ function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,Char,Int8,UInt8},
                       i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
+        return 1 <= i <= nextind(s,lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t1, j2 = next(t,start(t))
+    t1, trest = Iterators.peel(t)
     while true
         i = findnext(equalto(t1),s,i)
         if i === nothing return 0 end
-        c, ii = next(s,i)
-        j = j2; k = ii
-        matched = true
-        while !done(t,j)
-            if done(s,k)
-                matched = false
-                break
-            end
-            c, k = next(s,k)
-            d, j = next(t,j)
-            if c != d
-                matched = false
-                break
-            end
-        end
-        if matched
-            return i
-        end
+        ii = nextind(s, i)
+        a = Iterators.Stateful(trest)
+        matched = all(splat(==), zip(SubString(s, ii), a))
+        (isempty(a) && matched) && return i
         i = ii
     end
 end
@@ -162,7 +146,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    endof(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
+    lastindex(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -234,7 +218,7 @@ function _search(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
     end
 end
 
@@ -271,7 +255,7 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
     findlast(pattern::Regex, string::String)
 
 Find the last occurrence of `pattern` in `string`. Equivalent to
-[`findlast(pattern, string, endof(s))`](@ref).
+[`findlast(pattern, string, lastindex(s))`](@ref).
 
 # Examples
 ```jldoctest
@@ -283,7 +267,7 @@ julia> findfirst("Julia", "JuliaLang")
 ```
 """
 findlast(pattern::AbstractString, string::AbstractString) =
-    findprev(pattern, string, endof(string))
+    findprev(pattern, string, lastindex(string))
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
@@ -305,41 +289,31 @@ function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,Char,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, endof(s)) ? i :
+        return 1 <= i <= nextind(s, lastindex(s)) ? i :
                throw(BoundsError(s, i))
     end
-    t = t isa AbstractString ? reverse(t) : t
-    rs = reverse(s)
-    l = endof(s)
-    t1, j2 = next(t, start(t))
+    t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
         i = findprev(equalto(t1), s, i)
         i === nothing && return 0
-        c, ii = next(rs, reverseind(rs, i))
-        j = j2; k = ii
-        matched = true
-        while !done(t, j)
-            if done(rs, k)
-                matched = false
-                break
-            end
-            c, k = next(rs, k)
-            d, j = next(t, j)
-            if c != d
-                matched = false
-                break
-            end
+        ii = prevind(s, i)
+        a = Iterators.Stateful(trest)
+        b = Iterators.Stateful(Iterators.reverse(
+            pairs(SubString(s, 1, ii))))
+        matched = all(splat(==), zip(a, (x[2] for x in b)))
+        if matched && isempty(a)
+            isempty(b) && return firstindex(s)
+            return nextind(s, popfirst!(b)[1])
         end
-        matched && return nextind(s, reverseind(s, k))
-        i = reverseind(s, ii)
+        i = ii
     end
 end
 
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    if endof(t) == 1
+    if lastindex(t) == 1
         return coalesce(findprev(equalto(t[1]), s, i), 0)
-    elseif endof(t) != 0
+    elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
     elseif i > sizeof(s)
@@ -419,7 +393,7 @@ function _rsearch(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
     end
 end
 
@@ -475,6 +449,6 @@ false
 function contains end
 
 contains(haystack::AbstractString, needle::Union{AbstractString,Char}) =
-    _searchindex(haystack, needle, start(haystack)) != 0
+    _searchindex(haystack, needle, firstindex(haystack)) != 0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")

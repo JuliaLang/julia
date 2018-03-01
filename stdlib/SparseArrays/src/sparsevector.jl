@@ -92,6 +92,10 @@ similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew, (m, n))
 
+## Alias detection and prevention
+using Base: dataids, unaliascopy
+Base.dataids(S::SparseVector) = (dataids(S.nzind)..., dataids(S.nzval)...)
+Base.unaliascopy(S::SparseVector) = typeof(S)(S.n, unaliascopy(S.nzind), unaliascopy(S.nzval))
 
 ### Construct empty sparse vector
 
@@ -1472,20 +1476,20 @@ end
 
 # scaling
 
-function mul1!(x::SparseVectorUnion, a::Real)
-    mul1!(nonzeros(x), a)
+function rmul!(x::SparseVectorUnion, a::Real)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul1!(x::SparseVectorUnion, a::Complex)
-    mul1!(nonzeros(x), a)
+function rmul!(x::SparseVectorUnion, a::Complex)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul2!(a::Real, x::SparseVectorUnion)
-    mul1!(nonzeros(x), a)
+function lmul!(a::Real, x::SparseVectorUnion)
+    rmul!(nonzeros(x), a)
     return x
 end
-function mul2!(a::Complex, x::SparseVectorUnion)
-    mul1!(nonzeros(x), a)
+function lmul!(a::Complex, x::SparseVectorUnion)
+    rmul!(nonzeros(x), a)
     return x
 end
 
@@ -1581,14 +1585,14 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
 end
 
 mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(one(Tx), A, x, zero(Ty), y)
+    mul!(y, A, x, one(Tx), zero(Ty))
 
-function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::AbstractVector)
+function mul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1619,15 +1623,15 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
+    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
-function mul!(α::Number, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, β::Number, y::AbstractVector)
+function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     A = transA.parent
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1678,14 +1682,14 @@ end
 # * and mul!
 
 mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(one(Tx), A, x, zero(Ty), y)
+    mul!(y, A, x, one(Tx), zero(Ty))
 
-function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::AbstractVector)
+function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 
@@ -1711,25 +1715,25 @@ end
 # * and *(Tranpose(A), B)
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(one(Tx), transpose(A), x, zero(Ty), y))
+    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
-mul!(α::Number, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
-    (A = transA.parent; _At_or_Ac_mul_B!(*, α, A, x, β, y))
+mul!(y::AbstractVector, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+    (A = transA.parent; _At_or_Ac_mul_B!(*, y, A, x, α, β))
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(one(Tx), adjoint(A), x, zero(Ty), y))
+    (A = adjA.parent; mul!(y, adjoint(A), x, one(Tx), zero(Ty)))
 
-mul!(α::Number, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, β::Number, y::AbstractVector) =
-    (A = adjA.parent; _At_or_Ac_mul_B!(dot, α, A, x, β, y))
+mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+    (A = adjA.parent; _At_or_Ac_mul_B!(dot, y, A, x, α, β))
 
 function _At_or_Ac_mul_B!(tfun::Function,
-                          α::Number, A::SparseMatrixCSC, x::AbstractSparseVector,
-                          β::Number, y::AbstractVector)
+                          y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector,
+                          α::Number, β::Number)
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
-        β == zero(β) ? fill!(y, zero(eltype(y))) : mul1!(y, β)
+        β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
     end
     α == zero(α) && return y
 

@@ -98,6 +98,16 @@
 #    label::Int
 #end
 
+#struct PiNode
+#    val
+#    typ
+#end
+
+#struct PhiNode
+#    edges::Vector{Any}
+#    values::Vector{Any}
+#end
+
 #struct QuoteNode
 #    value
 #end
@@ -122,10 +132,10 @@
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Nothing, Cvoid,
-    SimpleVector, AbstractArray, DenseArray, NamedTuple,
+    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    AbstractArray, DenseArray, NamedTuple,
     # special objects
-    Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
+    Function, Method,
     Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -139,9 +149,9 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
-    GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    Expr, QuoteNode, LineNumberNode, GlobalRef, PiNode, PhiNode,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -253,6 +263,9 @@ end
 struct ArgumentError <: Exception
     msg::AbstractString
 end
+struct UndefKeywordError <: Exception
+    var::Symbol
+end
 
 struct MethodError <: Exception
     f
@@ -341,6 +354,8 @@ eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumber
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -403,6 +418,15 @@ function Symbol(a::Array{UInt8,1})
 end
 Symbol(s::Symbol) = s
 
+# module providing the IR object model
+module IR
+export CodeInfo, MethodInstance, GotoNode, LabelNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+
+import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+end
+
 # docsystem basics
 macro doc(x...)
     atdoc(__source__, __module__, x...)
@@ -410,19 +434,16 @@ end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-macro doc_str(s)
-    Expr(:escape, s)
-end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
-mutable struct CoreSTDOUT <: IO end
-mutable struct CoreSTDERR <: IO end
-const STDOUT = CoreSTDOUT()
-const STDERR = CoreSTDERR()
+struct CoreSTDOUT <: IO end
+struct CoreSTDERR <: IO end
+const stdout = CoreSTDOUT()
+const stderr = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
 io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
@@ -446,9 +467,9 @@ print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a
 println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
 println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
 
-show(@nospecialize a) = show(STDOUT, a)
-print(@nospecialize a...) = print(STDOUT, a...)
-println(@nospecialize a...) = println(STDOUT, a...)
+show(@nospecialize a) = show(stdout, a)
+print(@nospecialize a...) = print(stdout, a...)
+println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
@@ -513,7 +534,8 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
             arrayset(false, flds, getfield(args, i), i)
             i = add_int(i, 1)
         end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT, fields, N)::NT
+        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
+              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
     end
 end
 

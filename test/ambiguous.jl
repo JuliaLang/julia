@@ -73,8 +73,6 @@ let io = IOBuffer()
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
     @test length(code_typed(ambig, (Int, Int))) == 1
-    code_llvm(io, ambig, (Int, Int))
-    code_native(io, ambig, (Int, Int))
 end
 
 # Test that ambiguous cases fail appropriately
@@ -84,10 +82,7 @@ let io = IOBuffer()
     @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_llvm(io, ambig, (UInt8, Int)))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
-                 code_native(io, ambig, (UInt8, Int)))
+    @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
 
 # Method overwriting doesn't destroy ambiguities
@@ -286,6 +281,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))
+        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing, S}} where S, Type{T} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, S}} where S, Type{T} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))

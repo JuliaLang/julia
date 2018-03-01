@@ -5,7 +5,9 @@
 """
     typejoin(T, S)
 
-Compute a type that contains both `T` and `S`.
+
+Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
+they both inherit.
 """
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
@@ -25,9 +27,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif isa(b,TypeVar)
         return typejoin(a, b.ub)
     elseif isa(a,Union)
-        return typejoin(typejoin(a.a,a.b), b)
+        a′ = typejoin(a.a, a.b)
+        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
     elseif isa(b,Union)
-        return typejoin(a, typejoin(b.a,b.b))
+        b′ = typejoin(b.a, b.b)
+        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -35,31 +39,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
         if lar == 0
-            return Tuple{Vararg{tailjoin(bp,1)}}
+            return Tuple{Vararg{tailjoin(bp, 1)}}
         end
         if lbr == 0
-            return Tuple{Vararg{tailjoin(ap,1)}}
+            return Tuple{Vararg{tailjoin(ap, 1)}}
         end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(uninitialized, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
+                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
                 c = Vector{Any}(uninitialized, laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                c[laf+1] = Vararg{tailjoin(bp, laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(uninitialized, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
+                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
                 c = Vector{Any}(uninitialized, lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                c[lbf+1] = Vararg{tailjoin(ap, lbf+1)}
                 n = lbf
             end
         else
@@ -68,7 +72,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            ci = typejoin(unwrapva(ai), unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -101,6 +105,27 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     end
     return Any
 end
+
+"""
+    promote_typejoin(T, S)
+
+Compute a type that contains both `T` and `S`, which could be
+either a parent of both types, or a `Union` if appropriate.
+Falls back to [`typejoin`](@ref).
+"""
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
+promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
+promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
+promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
+promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)
@@ -193,6 +218,10 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+# To fix ambiguities
+promote_rule(::Type{Any}, ::Type{<:Any}) = Any
+promote_rule(::Type{<:Any}, ::Type{Any}) = Any
+promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that

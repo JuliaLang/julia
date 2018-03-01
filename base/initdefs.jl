@@ -21,22 +21,12 @@ const ARGS = String[]
 """
     exit(code=0)
 
-Quit the program with an exit code. The default exit code is zero, indicating that the
-program completed successfully (see also [`quit`](@ref)). In an interactive session,
-`exit()` can be called with the keyboard shorcut `^D`.
-
+Stop the program with an exit code. The default exit code is zero, indicating that the
+program completed successfully. In an interactive session, `exit()` can be called with
+the keyboard shortcut `^D`.
 """
 exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
-
-"""
-    quit()
-
-Quit the program indicating successful completion. This function is equivalent to
-`exit(0)` (see [`exit`](@ref)). In an interactive session, `quit()` can be called
-with the keyboard shorcut `^D`.
-"""
-quit() = exit()
 
 const roottask = current_task()
 
@@ -111,7 +101,6 @@ function and `using` and `import` statements to consider when loading
 code.
 """
 const LOAD_PATH = Any[]
-const LOAD_CACHE_PATH = String[]
 
 function parse_load_path(str::String)
     envs = Any[split(str, Sys.iswindows() ? ';' : ':');]
@@ -129,7 +118,6 @@ function init_load_path(BINDIR = Sys.BINDIR)
     load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
     append!(empty!(LOAD_PATH), parse_load_path(load_path))
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    push!(LOAD_PATH, Pkg.dir)
     push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
 end
@@ -160,8 +148,8 @@ function _atexit()
         try
             f()
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            show(stderr, err)
+            println(stderr)
         end
     end
 end

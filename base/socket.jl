@@ -293,7 +293,6 @@ end
 function TCPSocket(; delay=true)
     tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
     af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
-
     err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cuint),
                 eventloop(), tcp.handle, af_spec)
     uv_error("failed to create tcp socket", err)
@@ -352,12 +351,7 @@ uninitialized client stream may be provided, in which case it will be used inste
 creating a new stream.
 """
 accept(server::TCPServer) = accept(server, TCPSocket())
-
-# Libuv will internally reset the readable and writable flags on
-# this pipe after it has successfully accepted the connection, to
-# remember that before that this is an invalid pipe
-accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
-    readable=false, writable=false, julia_only=true))
+accept(server::PipeServer) = accept(server, PipeEndpoint())
 
 # UDP
 """

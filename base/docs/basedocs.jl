@@ -28,7 +28,6 @@ kw"help", kw"?", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
-```
 """
 kw"using"
 
@@ -790,16 +789,16 @@ A variable referring to the last computed value, automatically set at the intera
 kw"ans"
 
 """
-    DevNull
+    devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
 /dev/null on Unix or NUL on Windows. Usage:
 
 ```julia
-run(pipeline(`cat test.txt`, DevNull))
+run(pipeline(`cat test.txt`, devnull))
 ```
 """
-DevNull
+devnull
 
 # doc strings for code in boot.jl and built-ins
 
@@ -988,7 +987,7 @@ callable with no arguments). The task exits when this function returns.
 
 # Examples
 ```jldoctest
-julia> a() = det(rand(1000, 1000));
+julia> a() = sum(i for i in 1:1000);
 
 julia> b = Task(a);
 ```
@@ -1018,6 +1017,13 @@ nfields
 A symbol in the current scope is not defined.
 """
 UndefVarError
+
+"""
+    UndefKeywordError(var::Symbol)
+
+The required keyword argument `var` was not assigned in a function call.
+"""
+UndefKeywordError
 
 """
     OverflowError(msg)

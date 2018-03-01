@@ -232,7 +232,7 @@ readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg;
 readuntil(io::AbstractPipe, arg::Char; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_indexable(io::AbstractPipe, target#=::Indexable{T}=#, out) = readuntil_indexable(pipe_reader(io), target, out)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
@@ -326,10 +326,10 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
 
 """
-    readline(io::IO=STDIN; keep::Bool=false)
+    readline(io::IO=stdin; keep::Bool=false)
     readline(filename::AbstractString; keep::Bool=false)
 
-Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
+Read a single line of text from the given I/O stream or file (defaults to `stdin`).
 When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
 input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` is
 false (as it is by default), these trailing newline characters are removed from the
@@ -362,7 +362,7 @@ function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
     end
 end
 
-function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
+function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
     if chomp !== nothing
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
@@ -379,7 +379,7 @@ function readline(s::IO=STDIN; chomp=nothing, keep::Bool=false)
 end
 
 """
-    readlines(io::IO=STDIN; keep::Bool=false)
+    readlines(io::IO=stdin; keep::Bool=false)
     readlines(filename::AbstractString; keep::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
@@ -411,7 +411,7 @@ function readlines(filename::AbstractString; kw...)
         readlines(f; kw...)
     end
 end
-readlines(s=STDIN; kw...) = collect(eachline(s; kw...))
+readlines(s=stdin; kw...) = collect(eachline(s; kw...))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -661,92 +661,111 @@ function readuntil(s::IO, delim::T; keep::Bool=false) where T
     return out
 end
 
-# requires that indices for target are small ordered integers bounded by start and endof
+# requires that indices for target are the integer unit range from firstindex to lastindex
 # returns whether the delimiter was matched
-function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
-    T = eltype(target)
-    first = start(target)
-    if done(target, first)
+# uses the Knuth–Morris–Pratt_algorithm, with the first and second cache entries unrolled
+# For longer targets, the cache improves the big-O efficiency of scanning of sequences
+# with repeated patterns
+# Each cache entry tells us which index we should start the search at.
+# We assume this is unlikely, so we only lazy-initialize as much of the cache as we need to use
+# When we allocate the cache, we initialize it to 0 (and offset by the first index afterwards).
+# Suppose target is:
+#    Index:  1245689
+#    Value: "aδcaδcx"
+# We would set the cache to
+#    0 0 0 1 2 3 4 0
+# So after if we mismatch after the second aδc sequence,
+# we can immediately jump back to index 5 (4 + 1).
+function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) where {T}
+    first = firstindex(target)
+    last = lastindex(target)
+    len = last - first + 1
+    if len < 1
         return true
     end
-    len = endof(target)
+    pos = 0 # array-offset
+    max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
-    second = next(target, first)[2]
-    max_pos = second
-    pos = first
+    output! = (isa(out, IO) ? write : push!)
     while !eof(io)
         c = read(io, T)
         # Backtrack until the next target character matches what was found
-        if out isa IO
-            write(out, c)
-        else
-            push!(out, c)
-        end
         while true
-            c1, pos1 = next(target, pos)
+            c1 = target[pos + first]
             if c == c1
-                pos = pos1
+                pos += 1
                 break
-            elseif pos == first
+            elseif pos == 0
                 break
-            elseif pos == second
-                pos = first
+            elseif pos == 1
+                if !keep
+                    output!(out, target[first])
+                end
+                pos = 0
             else
                 # grow cache to contain up to `pos`
                 if !@isdefined(cache)
                     cache = zeros(Int, len)
                 end
                 while max_pos < pos
-                    b = cache[max_pos] + first
-                    cb, b1 = next(target, b)
-                    ci, max_pos1 = next(target, max_pos)
-                    if ci == cb
-                        cache[max_pos1] = b1 - first
+                    ci = target[max_pos + first]
+                    b = max_pos
+                    max_pos += 1
+                    while b != 0
+                        b = cache[b]
+                        cb = target[b + first]
+                        if ci == cb
+                            cache[max_pos] = b + 1
+                            break
+                        end
                     end
-                    max_pos = max_pos1
                 end
-                pos = cache[pos] + first
+                # read new position from cache
+                pos1 = cache[pos]
+                if !keep
+                    # and add the removed prefix from the target to the output
+                    # if not always keeping the match
+                    for b in 1:(pos - pos1)
+                        output!(out, target[b - 1 + first])
+                    end
+                end
+                pos = pos1
             end
         end
-        done(target, pos) && return true
+        if keep || pos == 0
+            output!(out, c)
+        end
+        pos == len && return true
+    end
+    if !keep
+        # failed early without finishing the match,
+        # add the partial match to the output
+        # if not always keeping the match
+        for b in 1:pos
+            output!(out, target[b - 1 + first])
+        end
     end
     return false
 end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    i = start(target)
-    done(target, i) && return ""
-    c, i = next(target, start(target))
-    if done(target, i) && c <= '\x7f'
+    isempty(target) && return ""
+    c, rest = Iterators.peel(target)
+    if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
     # convert String to a utf8-byte-iterator
-    if target isa String || target isa SubString{String}
-        target = codeunits(target)
-    else
-        target = codeunits(String(target))
+    if !(target isa String) && !(target isa SubString{String})
+        target = String(target)
     end
-    out = StringVector(0)
-    found = readuntil_indexable(io, target, out)
-    if !keep && found
-        lo, lt = length(out), length(target)
-        if lt <= lo
-            resize!(out, lo - lt)
-        end
-    end
-    return String(out)
+    target = codeunits(target)::AbstractVector
+    return String(readuntil(io, target, keep=keep))
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    found = readuntil_indexable(io, target, out)
-    if !keep && found
-        lo, lt = length(out), length(target)
-        if lt <= lo
-            resize!(out, lo - lt)
-        end
-    end
+    readuntil_vector!(io, target, keep, out)
     return out
 end
 
@@ -815,17 +834,17 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-mutable struct EachLine
+struct EachLine
     stream::IO
     ondone::Function
     keep::Bool
 
-    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, keep::Bool=false) =
+    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
         new(stream, ondone, keep)
 end
 
 """
-    eachline(io::IO=STDIN; keep::Bool=false)
+    eachline(io::IO=stdin; keep::Bool=false)
     eachline(filename::AbstractString; keep::Bool=false)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
@@ -849,7 +868,7 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=STDIN; chomp=nothing, keep::Bool=false)
+function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
     if chomp !== nothing
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
@@ -979,7 +998,8 @@ end
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
-passing them as the second argument.
+passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
+end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
 
 # Examples
 ```jldoctest
@@ -991,7 +1011,7 @@ julia> countlines(io)
 julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 
 julia> countlines(io)
-0
+1
 
 julia> countlines(io, eol = '.')
 1
@@ -1001,12 +1021,15 @@ function countlines(io::IO; eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
-    nl = 0
+    nl = nb = 0
     while !eof(io)
         nb = readbytes!(io, a)
         @simd for i=1:nb
             @inbounds nl += a[i] == aeol
         end
+    end
+    if nb > 0 && a[nb] != aeol
+        nl += 1 # final line is not terminated with eol
     end
     nl
 end

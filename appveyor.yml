@@ -55,6 +55,6 @@ test_script:
   - usr\bin\julia -e "versioninfo()"
   - usr\bin\julia --sysimage-native-code=no -e "true"
   - cd julia-* && .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl all &&
-      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl libgit2-online download pkg
+      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download
   - cd ..
-  - usr\bin\julia usr\share\doc\julia\examples\embedding\embedding-test.jl examples\embedding\embedding.exe
+  - usr\bin\julia usr\share\julia\test\embedding\embedding-test.jl test\embedding\embedding.exe

@@ -27,7 +27,7 @@ function test_threaded_loop_and_atomic_add()
     # and were unique (via pigeon-hole principle).
     @test !(false in found)
     if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
+        println(stderr, "Warning: threaded loop executed in order")
     end
 end
 
@@ -455,6 +455,7 @@ test_nested_loops()
 @testset "libatomic" begin
     prog = """
     using Base.Threads
+    using InteractiveUtils: code_native
     function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
         Base.llvmcall(\"\"\"
             %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
@@ -462,7 +463,7 @@ test_nested_loops()
             ret void
         \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
     end
-    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
+    code_native(stdout, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
     """
 
     mktempdir() do dir
@@ -478,3 +479,19 @@ test_nested_loops()
         @test !contains(err, "__atomic_store")
     end
 end
+
+function test_thread_too_few_iters()
+    x = Atomic()
+    a = zeros(Int, nthreads()+2)
+    threaded_loop(a, 1:nthreads()-1, x)
+    found = zeros(Bool, nthreads()+2)
+    for i=1:nthreads()-1
+        found[a[i]] = true
+    end
+    @test x[] == nthreads()-1
+    # Next test checks that all loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test !(false in found[1:nthreads()-1])
+    @test !(true in found[nthreads():end])
+end
+test_thread_too_few_iters()

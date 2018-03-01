@@ -105,23 +105,8 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
-## assertion functions and macros ##
+## assertion macro ##
 
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro [`@assert`](@ref).
-
-!!! warning
-    An assert might be disabled at various optimization levels.
-    Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g. verifying passwords),
-    nor should side effects needed for the function to work correctly
-    be used inside of asserts.
-"""
-assert(x) = x ? nothing : throw(AssertionError())
 
 """
     @assert cond [text]
@@ -132,7 +117,7 @@ Message `text` is optionally displayed upon assertion failure.
 !!! warning
     An assert might be disabled at various optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g. verifying passwords),
+    and not used for authentication verification (e.g., verifying passwords),
     nor should side effects needed for the function to work correctly
     be used inside of asserts.
 
@@ -218,7 +203,8 @@ function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
             catch e
                 done(delays, state) && rethrow(e)
                 if check !== nothing
-                    state, retry_or_not = check(state, e)
+                    result = check(state, e)
+                    state, retry_or_not = length(result) == 2 ? result : (state, result)
                     retry_or_not || rethrow(e)
                 end
             end

@@ -12,7 +12,7 @@ using Random
     @test !done(p,2)
     @test done(p,3)
     @test !done(p,0)
-    @test endof(p) == length(p) == 2
+    @test lastindex(p) == length(p) == 2
     @test Base.indexed_next(p, 1, (1,2)) == (10,2)
     @test Base.indexed_next(p, 2, (1,2)) == (20,3)
     @test (1=>2) < (2=>3)
@@ -91,6 +91,8 @@ end
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
+    # test rethrow of error in ctor
+    @test_throws DomainError Dict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
@@ -158,6 +160,19 @@ end
     d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+end
+
+@testset "type of Dict constructed from varargs of Pairs" begin
+    @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
+    @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
+    @test Dict(1=>1.0, 2.0=>2) isa Dict{Real,Real}
+
+    for T in (Nothing, Missing)
+        @test Dict(1=>1, 2=>T()) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>T(), 2=>2) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>1, T()=>2) isa Dict{Union{Int,T},Int}
+        @test Dict(T()=>1, 2=>2) isa Dict{Union{Int,T},Int}
+    end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
@@ -323,6 +338,13 @@ end
         @test !isempty(summary(keys(d)))
         @test !isempty(summary(values(d)))
     end
+    # show on empty Dict
+    io = IOBuffer()
+    d = Dict{Int, String}()
+    show(io, d)
+    str = String(take!(io))
+    @test str == "Dict{$(Int),String}()"
+    close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
@@ -430,6 +452,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict{Any,Any}(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -470,6 +493,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -535,6 +559,11 @@ end
     end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
+
+    # not an iterator of tuples or pairs
+    @test_throws ArgumentError IdDict([1, 2, 3, 4])
+    # test rethrow of error in ctor
+    @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 
@@ -642,6 +671,10 @@ end
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
+    d = Dict(zip(-1:3,-1:3))
+    f = p -> sqrt(p.second) > 2
+    # test rethrowing error from f
+    @test_throws DomainError filter(f, d)
 end
 
 struct MyString <: AbstractString
@@ -655,13 +688,13 @@ import Base.==
 const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
-Base.endof(s::MyString) = endof(s.str)
+Base.lastindex(s::MyString) = lastindex(s.str)
 Base.next(s::MyString, v::Int) = next(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
-Base.endof(v::MyInt) = endof(v.val)
+Base.lastindex(v::MyInt) = lastindex(v.val)
 Base.next(v::MyInt, i::Int) = next(v.val, i)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
@@ -923,4 +956,3 @@ end
     @test String(take!(buf)) ==
         "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
-

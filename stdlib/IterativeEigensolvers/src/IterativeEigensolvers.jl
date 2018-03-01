@@ -9,7 +9,7 @@ module IterativeEigensolvers
 
 using LinearAlgebra: BlasFloat, BlasInt, Diagonal, I, SVD, UniformScaling,
                      checksquare, factorize,ishermitian, issymmetric, mul!,
-                     mul1!, qr
+                     rmul!, qr
 import LinearAlgebra
 
 export eigs, svds
@@ -317,10 +317,10 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         # left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
         if size(X, 1) >= size(X, 2)
             V = ex[2]
-            U = qr(mul1!(X*V, Diagonal(inv.(svals))))[1]
+            U = qr(rmul!(X*V, Diagonal(inv.(svals))))[1]
         else
             U = ex[2]
-            V = qr(mul1!(X'U, Diagonal(inv.(svals))))[1]
+            V = qr(rmul!(X'U, Diagonal(inv.(svals))))[1]
         end
 
         # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]

@@ -231,7 +231,7 @@ end
 
 const libllvm_version = VersionNumber(libllvm_version_string)
 
-function banner(io::IO = STDOUT)
+function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)

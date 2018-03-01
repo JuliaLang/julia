@@ -387,7 +387,7 @@ to point to different objects.
 Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
 discussed in the next section.
 
-Composite types with no fields are singletons; there can be only one instance of such types:
+Immutable composite types with no fields are singletons; there can be only one instance of such types:
 
 ```jldoctest
 julia> struct NoFields
@@ -907,7 +907,7 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 ### Named Tuple Types
 
-Named tuples are instances of the `NamedTuple` type, which has two parameters: a tuple of
+Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
 
 ```jldoctest
@@ -1251,8 +1251,8 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 ```
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
+the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
+which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1269,7 +1269,7 @@ A `Polar` object will then display automatically using HTML in an environment th
 display, but you can call `show` manually to get HTML output if you want:
 
 ```jldoctest polartype
-julia> show(STDOUT, "text/html", Polar(3.0,4.0))
+julia> show(stdout, "text/html", Polar(3.0,4.0))
 <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 ```
 

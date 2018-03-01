@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: llvmcall
+using InteractiveUtils: code_llvm
 
 #function add1234(x::Tuple{Int32,Int32,Int32,Int32})
 #    llvmcall("""%3 = add <4 x i32> %1, %0
@@ -188,7 +189,7 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
             ret void""",
         Cvoid, Tuple{})
     end
-    code_llvm(DevNull, foo, ())
+    code_llvm(devnull, foo, ())
 else
     @info "Skipping gep parentage test on llvm < 3.6"
 end

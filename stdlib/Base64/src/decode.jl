@@ -77,7 +77,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             end
         end
         if p < p_end
-            if i + 4 ≤ endof(buffer)
+            if i + 4 ≤ lastindex(buffer)
                 b1 = decode(buffer[i+1])
                 b2 = decode(buffer[i+2])
                 b3 = decode(buffer[i+3])
@@ -140,7 +140,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         else
             break
         end
-        if i + 1 ≤ endof(buffer)
+        if i + 1 ≤ lastindex(buffer)
             b4 = decode(buffer[i+=1])
         elseif !eof(input)
             b4 = decode(read(input, UInt8))

@@ -179,7 +179,7 @@ readdlm(input, dlm::Char, eol::Char; opts...) =
     readdlm_auto(input, dlm, Float64, eol, true; opts...)
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
+    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=false, comment_char='#')
 
 Read a matrix from the source where each line (separated by `eol`) gives one row, with
 elements separated by the given delimiter. The source can be a text file, stream or byte
@@ -381,7 +381,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, lastindex(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -400,7 +400,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, lastindex(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end
@@ -442,7 +442,7 @@ end
 function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm(Char))
     quotes = get(optsd, :quotes, true)
-    comments = get(optsd, :comments, true)
+    comments = get(optsd, :comments, false)
     comment_char = get(optsd, :comment_char, '#')
     dims = get(optsd, :dims, nothing)
 
@@ -730,7 +730,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
 end
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"" => "\"\""), '"')
@@ -824,6 +824,8 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)

@@ -53,10 +53,12 @@ function run_test_server(srv, text)
         try
             sock = accept(srv)
             try
-                write(sock,text)
+                write(sock, text)
             catch e
-                if typeof(e) != Base.UVError
-                    rethrow(e)
+                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
+                        rethrow(e)
+                    end
                 end
             finally
                 close(sock)
@@ -130,7 +132,7 @@ function cleanup()
     end
     empty!(open_streams)
     for tsk in tasks
-        wait(tsk)
+        Base._wait(tsk)
     end
     empty!(tasks)
 end
@@ -161,12 +163,16 @@ for (name, f) in l
             ("αααβγ", "αβ", "αα", "αααβ"),
             ("αααβγ", "ααβ", "α", "αααβ"),
             ("αααβγ", "αγ", "αααβγ", "αααβγ"),
-            ("barbarbarians", "barbarian", "bar", "barbarbarian")]
+            ("barbarbarians", "barbarian", "bar", "barbarbarian"),
+            ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
+            ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
+            ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+           ]
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
-        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
-        @test readuntil(io(t), SubString(s, start(s), endof(s)), keep=true) == kept
+        @test readuntil(io(t), SubString(s, firstindex(s))) == m
+        @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
         @test readuntil(io(t), GenericString(s), keep=true) == kept
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
@@ -339,7 +345,7 @@ for (name, f) in l
     @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(codeunits(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), read=false, write=true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -394,17 +400,17 @@ end
 test_read_nbyte()
 
 
-# DevNull
-@test !isreadable(DevNull)
-@test iswritable(DevNull)
-@test isopen(DevNull)
-@test write(DevNull, 0xff) === 1
-@test write(DevNull, Int32(1234)) === 4
-@test_throws EOFError read(DevNull, UInt8)
-@test close(DevNull) === nothing
-@test flush(DevNull) === nothing
-@test eof(DevNull)
-@test print(DevNull, "go to /dev/null") === nothing
+# devnull
+@test !isreadable(devnull)
+@test iswritable(devnull)
+@test isopen(devnull)
+@test write(devnull, 0xff) === 1
+@test write(devnull, Int32(1234)) === 4
+@test_throws EOFError read(devnull, UInt8)
+@test close(devnull) === nothing
+@test flush(devnull) === nothing
+@test eof(devnull)
+@test print(devnull, "go to /dev/null") === nothing
 
 
 let s = "qwerty"
@@ -533,21 +539,24 @@ rm(f)
 end # mktempdir() do dir
 
 @testset "countlines" begin
+    @test countlines(IOBuffer("")) == 0
     @test countlines(IOBuffer("\n")) == 1
-    @test countlines(IOBuffer("\n"), eol = '\r') == 0
+    @test countlines(IOBuffer("\n"), eol = '\r') == 1
+    @test countlines(IOBuffer("\r\r\n\r"), eol = '\r') == 3
     @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
     @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
     @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    @test countlines(IOBuffer("foo\nbar")) == length(readlines(IOBuffer("foo\nbar"))) == 2
     file = tempname()
     write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
     @test countlines(file) == 4
-    @test countlines(file, eol = '\r') == 0
+    @test countlines(file, eol = '\r') == 1
     @test countlines(file, eol = '\n') == 4
     rm(file)
 end
 
 let p = Pipe()
-    Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     t = @schedule read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
@@ -556,7 +565,7 @@ let p = Pipe()
         end
         @async close(p.in)
     end
-    s = reinterpret(UInt16, wait(t))
+    s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end

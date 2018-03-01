@@ -20,7 +20,7 @@ on global variables (aside from constants like [`pi`](@ref)).
 Code should be as generic as possible. Instead of writing:
 
 ```julia
-convert(Complex{Float64}, x)
+Complex{Float64}(x)
 ```
 
 it's better to use available generic functions:
@@ -92,7 +92,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a
@@ -103,7 +103,7 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i = firstindex(a):lastindex(a)
         a[i] *= 2
     end
     return a

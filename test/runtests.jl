@@ -16,10 +16,16 @@ const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
 else
     typemax(Csize_t)
 end
+limited_worker_rss = max_worker_rss != typemax(Csize_t)
 
 function test_path(test)
-    if test in STDLIBS
-        return joinpath(STDLIB_DIR, test, "test", "runtests")
+    t = split(test, '/')
+    if t[1] in STDLIBS
+        if length(t) == 2
+            return joinpath(STDLIB_DIR, t[1], "test", t[2])
+        else
+            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
+        end
     else
         return joinpath(@__DIR__, test)
     end
@@ -27,7 +33,7 @@ end
 
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
-if any(equalto(false), isfiles)
+if !all(isfiles)
     error("did not find test files for the following tests: ",
           join(tests[.!(isfiles)], ", "))
 end
@@ -46,7 +52,7 @@ move_to_node1("SharedArrays")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
-max_worker_rss != typemax(Csize_t) && move_to_node1("Distributed")
+limited_worker_rss && move_to_node1("Distributed")
 
 import LinearAlgebra
 cd(dirname(@__FILE__)) do
@@ -61,34 +67,38 @@ cd(dirname(@__FILE__)) do
     @everywhere include("testdefs.jl")
 
     #pretty print the information about gc and mem usage
-    name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
+    testgroupheader = "Test"
+    workerheader = "(Worker)"
+    name_align    = maximum([length(testgroupheader) + length(" ") + length(workerheader); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
     elapsed_align = length("Time (s)")
     gc_align      = length("GC (s)")
     percent_align = length("GC %")
     alloc_align   = length("Alloc (MB)")
     rss_align     = length("RSS (MB)")
-    print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
-    print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
+    printstyled(testgroupheader, color=:white)
+    printstyled(lpad(workerheader, name_align - length(testgroupheader) + 1), " | ", color=:white)
+    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results=[]
     print_lock = ReentrantLock()
 
     function print_testworker_stats(test, wrkr, resp)
         lock(print_lock)
         try
-            print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+            printstyled(test, color=:white)
+            printstyled(lpad("($wrkr)", name_align - length(test) + 1, " "), " | ", color=:white)
             time_str = @sprintf("%7.2f",resp[2])
-            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
-            gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
-            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+            printstyled(lpad(time_str, elapsed_align, " "), " | ", color=:white)
+            gc_str = @sprintf("%5.2f", resp[5].total_time / 10^9)
+            printstyled(lpad(gc_str, gc_align, " "), " | ", color=:white)
 
             # since there may be quite a few digits in the percentage,
             # the left-padding here is less to make sure everything fits
-            percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
-            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
-            alloc_str = @sprintf("%5.2f",resp[3]/2^20)
-            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
-            rss_str = @sprintf("%5.2f",resp[6]/2^20)
-            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
+            percent_str = @sprintf("%4.1f", 100 * resp[5].total_time / (10^9 * resp[2]))
+            printstyled(lpad(percent_str, percent_align, " "), " | ", color=:white)
+            alloc_str = @sprintf("%5.2f", resp[3] / 2^20)
+            printstyled(lpad(alloc_str, alloc_align, " "), " | ", color=:white)
+            rss_str = @sprintf("%5.2f", resp[6] / 2^20)
+            printstyled(lpad(rss_str, rss_align, " "), "\n", color=:white)
         finally
             unlock(print_lock)
         end
@@ -99,11 +109,11 @@ cd(dirname(@__FILE__)) do
     local stdin_monitor
     all_tasks = Task[]
     try
-        if isa(STDIN, Base.TTY)
+        if isa(stdin, Base.TTY)
             t = current_task()
-            # Monitor STDIN and kill this task on ^C
+            # Monitor stdin and kill this task on ^C
             stdin_monitor = @async begin
-                term = REPL.Terminals.TTYTerminal("xterm", STDIN, STDOUT, STDERR)
+                term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     REPL.Terminals.raw!(term, true)
                     while true
@@ -184,7 +194,7 @@ cd(dirname(@__FILE__)) do
         foreach(task->try; schedule(task, InterruptException(); error=true); end, all_tasks)
         foreach(wait, all_tasks)
     finally
-        if isa(STDIN, Base.TTY)
+        if isa(stdin, Base.TTY)
             schedule(stdin_monitor, InterruptException(); error=true)
         end
     end
@@ -233,7 +243,7 @@ cd(dirname(@__FILE__)) do
             Test.pop_testset()
         elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
-            Base.showerror(STDOUT,res[2][1].captured)
+            Base.showerror(stdout,res[2][1].captured)
             fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1].captured.ex.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))

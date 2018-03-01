@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-print(xs...)   = print(STDOUT::IO, xs...)
-println(xs...) = println(STDOUT::IO, xs...)
+print(xs...)   = print(stdout::IO, xs...)
+println(xs...) = println(stdout::IO, xs...)
 println(io::IO) = print(io, '\n')
 
 struct DevNullStream <: IO end
-const DevNull = DevNullStream()
+const devnull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
@@ -26,6 +26,6 @@ let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
 end
 
-STDIN = DevNull
-STDOUT = Core.STDOUT
-STDERR = Core.STDERR
+stdin = devnull
+stdout = Core.stdout
+stderr = Core.stderr

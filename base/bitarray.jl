@@ -9,7 +9,7 @@
 
 Space-efficient `N`-dimensional boolean array, which stores one bit per boolean value.
 """
-mutable struct BitArray{N} <: DenseArray{Bool, N}
+mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
@@ -656,6 +656,9 @@ indexoffset(::Colon) = 0
     f0 = indexoffset(I0)+1
     fill_chunks!(B.chunks, y, f0, l0)
     return B
+end
+@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}})
+    _setindex!(IndexStyle(B), B, X, to_indices(B, (J0,))[1])
 end
 
 # logical indexing
@@ -1636,8 +1639,8 @@ findall(::typeof(!iszero), B::BitArray) = findall(B)
 
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+, A, region)
-sum(B::BitArray) = count(B)
+_sum(A::BitArray, dims)    = reduce(+, A, dims=dims)
+_sum(B::BitArray, ::Colon) = count(B)
 
 function all(B::BitArray)
     isempty(B) && return true

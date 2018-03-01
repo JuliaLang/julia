@@ -119,8 +119,8 @@ end
     @test [linreg(x,y)...] ≈ [2.5559090909090867, 1.6960139860139862]
     @test [linreg(view(x,1:6),view(y,1:6))...] ≈ [3.8366666666666642,1.3271428571428574]
 
-    # check (LinSpace, UnitRange)
-    x = linspace(1.0, 12.0, 100)
+    # check (LinRange, UnitRange)
+    x = range(1.0, stop=12.0, length=100)
     y = -100:-1
     @test [linreg(x, y)...] ≈ [-109.0, 9.0]
 
@@ -129,9 +129,9 @@ end
     y = 12:-1:1
     @test [linreg(x, y)...] ≈ [13.0, -1.0]
 
-    # check (LinSpace, LinSpace)
-    x = linspace(-5, 10, 100)
-    y = linspace(50, 200, 100)
+    # check (LinRange, LinRange)
+    x = range(-5, stop=10, length=100)
+    y = range(50, stop=200, length=100)
     @test [linreg(x, y)...] ≈ [100.0, 10.0]
 
     # check (Array, Array)
@@ -182,19 +182,19 @@ end
     aa = reshape([1.:6;], (2,3))
     for a in (aa, view(aa, 1:2, 1:2))
         am, an = size(a)
-        @testset "Scaling with mul1! and mul2" begin
-            @test mul1!(copy(a), 5.) == a*5
-            @test mul2!(5., copy(a)) == a*5
+        @testset "Scaling with rmul! and lmul" begin
+            @test rmul!(copy(a), 5.) == a*5
+            @test lmul!(5., copy(a)) == a*5
             b = randn(LinearAlgebra.SCAL_CUTOFF) # make sure we try BLAS path
             subB = view(b, :, :)
-            @test mul1!(copy(b), 5.) == b*5
-            @test mul1!(copy(subB), 5.) == subB*5
-            @test mul2!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
-            @test mul2!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
-            @test mul1!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test mul1!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch mul2!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
-            @test_throws DimensionMismatch mul1!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
+            @test rmul!(copy(b), 5.) == b*5
+            @test rmul!(copy(subB), 5.) == subB*5
+            @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
+            @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
+            @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
+            @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
+            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
+            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -212,7 +212,7 @@ end
 end
 
 @testset "scale real matrix by complex type" begin
-    @test_throws InexactError mul1!([1.0], 2.0im)
+    @test_throws InexactError rmul!([1.0], 2.0im)
     @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
     @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
     @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
@@ -226,7 +226,7 @@ end
 @testset "* and mul! for non-commutative scaling" begin
     q = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
     qmat = [Quaternion(0.015007, 0.355067, 0.418645, 0.318373)]
-    @test mul2!(q, copy(qmat)) != mul1!(copy(qmat), q)
+    @test lmul!(q, copy(qmat)) != rmul!(copy(qmat), q)
     @test q*qmat ≉ qmat*q
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q

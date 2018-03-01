@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module REPL
 
 using Base.Meta
+import InteractiveUtils
 
 export
     AbstractREPL,
@@ -41,6 +44,9 @@ import ..LineEdit:
 
 include("REPLCompletions.jl")
 using .REPLCompletions
+
+include("TerminalMenus/TerminalMenus.jl")
+include("docview.jl")
 
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
@@ -332,7 +338,7 @@ beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, endof(partial))
+    ret, range, should_complete = completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
@@ -340,14 +346,14 @@ function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = shell_completions(full, endof(partial))
+    ret, range, should_complete = shell_completions(full, lastindex(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
-    ret, range, should_complete = bslash_completions(full, endof(partial))[2]
+    ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return ret, partial[range], should_complete
 end
 
@@ -612,7 +618,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # into the search data to index into the response string
     b = a + sizeof(searchdata)
     b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
-    b = min(endof(response_str), b) # ensure that b is valid
+    b = min(lastindex(response_str), b) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -623,7 +629,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    if 1 <= searchstart <= endof(response_str)
+    if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match) - 1)
@@ -665,16 +671,8 @@ function return_callback(s)
     end
 end
 
-function find_hist_file()
-    filename = ".julia_history"
-    if isfile(filename)
-        return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
-        return ENV["JULIA_HISTORY"]
-    else
-        return joinpath(homedir(), filename)
-    end
-end
+find_hist_file() = get(ENV, "JULIA_HISTORY",
+    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -802,7 +800,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(Docs.helpmode, repl, julia_prompt, pass_empty=true))
+        on_done = respond(helpmode, repl, julia_prompt, pass_empty=true))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -831,6 +829,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
@@ -903,10 +902,10 @@ function setup_interface(
             LineEdit.push_undo(s)
             edit_insert(sbuffer, input)
             input = String(take!(sbuffer))
-            oldpos = start(input)
+            oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            while !done(input, oldpos) # loop until all lines have been executed
+            while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
                     # skip it. But first skip whitespace
@@ -978,7 +977,7 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
-            Base.edit(linfos[n][1], linfos[n][2])
+            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1136,8 +1135,5 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
-
-include("precompile.jl")
-_precompile_()
 
 end # module

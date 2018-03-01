@@ -122,4 +122,14 @@ end
     end
 end
 
+@testset "text/plain (REPL) printing of Eigen and GeneralizedEigen" begin
+    A, B = randn(5,5), randn(5,5)
+    e    = eigfact(A)
+    ge   = eigfact(A, B)
+    valsstring = sprint((t, s) -> show(t, "text/plain", s), e.values)
+    vecsstring = sprint((t, s) -> show(t, "text/plain", s), e.vectors)
+    factstring = sprint((t, s) -> show(t, "text/plain", s), e)
+    @test factstring == "$(summary(e))\neigenvalues:\n$valsstring\neigenvectors:\n$vecsstring"
+end
+
 end # module TestEigen

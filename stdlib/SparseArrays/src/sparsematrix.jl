@@ -260,6 +260,11 @@ function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
     return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
+## Alias detection and prevention
+using Base: dataids, unaliascopy
+Base.dataids(S::SparseMatrixCSC) = (dataids(S.colptr)..., dataids(S.rowval)..., dataids(S.nzval)...)
+Base.unaliascopy(S::SparseMatrixCSC) = typeof(S)(S.m, S.n, unaliascopy(S.colptr), unaliascopy(S.rowval), unaliascopy(S.nzval))
+
 ## Constructors
 
 copy(S::SparseMatrixCSC) =
@@ -1667,7 +1672,7 @@ function _mapreducecols!(f, op, R::AbstractArray, A::SparseMatrixCSC{Tv,Ti}) whe
         end
     end
     @inbounds for i = 1:m
-        R[i, 1] = _mapreducezeros(f, op, Tv, rownz[i], R[i, 1])
+        R[i, 1] = _mapreducezeros(f, op, Tv, Int(rownz[i]), R[i, 1])
     end
     R
 end

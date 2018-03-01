@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 using REPL
 using Random
 import REPL.LineEdit
+using Markdown
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -19,25 +21,25 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin = Pipe()
-    stdout = Pipe()
-    stderr = Pipe()
-    Base.link_pipe(stdin, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
+    input = Pipe()
+    output = Pipe()
+    err = Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
-    f(stdin.in, stdout.out, repl)
+    f(input.in, output.out, repl)
     t = @async begin
-        close(stdin.in)
-        close(stdout.in)
-        close(stderr.in)
+        close(input.in)
+        close(output.in)
+        close(err.in)
     end
-    @test read(stderr.out, String) == ""
-    #display(read(stdout.out, String))
-    wait(t)
+    @test read(err.out, String) == ""
+    #display(read(output.out, String))
+    Base._wait(t)
     nothing
 end
 
@@ -156,25 +158,34 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #10120
     # ensure that command quoting works correctly
-    let s, old_stdout = STDOUT
+    let s, old_stdout = stdout
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
+        readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
         try
-            write(stdin_write, ";")
-            readuntil(stdout_read, "shell> ")
-            Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-            write(stdin_write, """ -e "println(\\"HI\\")"\n""")
-            while true
+            write(stdin_write, '\n')
+            s = readuntil(stdout_read, "\n", keep=true)
+            if s == "\n"
+                # if shell width is precisely the text width,
+                # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
-                s == "\e[0m\n" && break # the child has exited
-                @test contains(s, "shell> ") # check for the echo of the prompt
+                @test contains(s, "shell> ")
+                s = readuntil(stdout_read, "\n", keep=true)
+                @test s == "\r\r\n"
+            else
+                @test contains(s, "shell> ")
             end
+            s = readuntil(stdout_read, "\n", keep=true)
+            @test s == "\e[0m\n" # the child has exited
         finally
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
-        @test contains(wait(get_stdout), "HI\n")
-        @test wait(get_stdout) == "HI\n"
+        @test fetch(get_stdout) == "HI\n"
     end
 
     # Issue #7001
@@ -238,7 +249,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 function buffercontents(buf::IOBuffer)
@@ -607,7 +618,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close repl
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Simple non-standard REPL tests
@@ -647,7 +658,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
@@ -665,18 +676,18 @@ let exename = Base.julia_cmd()
                 # valgrind banner here, not just the prompt.
                 @test output == "julia> "
             end
-            write(master,"1\nquit()\n")
+            write(master,"1\nexit()\n")
 
             wait(p)
             output = readuntil(master,' ',keep=true)
-            @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+            @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
             @test bytesavailable(master) == 0
         end
     end
 
     # Test stream mode
     p = open(`$exename --startup-file=no -q`, "r+")
-    write(p, "1\nquit()\n")
+    write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
 end # let exename
 
@@ -818,7 +829,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close REPL ^D
             write(stdin_write, '\x04')
-            wait(repltask)
+            Base._wait(repltask)
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
@@ -875,5 +886,26 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
+end
+
+# Docs.helpmode tests: we test whether the correct expressions are being generated here,
+# rather than complete integration with Julia's REPL mode system.
+for (line, expr) in Pair[
+    "sin"          => :sin,
+    "Base.sin"     => :(Base.sin),
+    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
+    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
+    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
+    "ccall"        => :ccall, # keyword
+    "while       " => :while, # keyword, trailing spaces should be stripped.
+    "0"            => 0,
+    "\"...\""      => "...",
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    ]
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
+    buf = IOBuffer()
+    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

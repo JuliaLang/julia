@@ -55,7 +55,7 @@ for idx in [0, 1, 4]
     @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
 end
 
-# index beyond endof("∀∀")
+# index beyond lastindex("∀∀")
 for idx in [2:3; 5:6]
     @test_throws StringIndexError SubString("∀∀", 1, idx)
 end
@@ -64,10 +64,10 @@ for idx in 7:8
 end
 
 let str="tempus fugit"              #length(str)==12
-    ss=SubString(str,1,endof(str)) #match source string
+    ss=SubString(str,1,lastindex(str)) #match source string
     @test length(ss)==length(str)
 
-    ss=SubString(str,1:endof(str))
+    ss=SubString(str,1:lastindex(str))
     @test length(ss)==length(str)
 
     ss=SubString(str,1,0)    #empty SubString
@@ -188,6 +188,43 @@ let s = "lorem ipsum", sdict = Dict(
     end
 end
 
+# proper nextind/prevind/thisind for SubString{String}
+let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
+                                      String(rand(rng, UInt8, 50))]
+    for s in strs
+        a = 0
+        while !done(s, a)
+            a = nextind(s, a)
+            b = a - 1
+            while !done(s, b)
+                ss = SubString(s, a:b)
+                s2 = s[a:b]
+                @test ncodeunits(ss) == ncodeunits(s2)
+                for i in 0:ncodeunits(ss)+1
+                    @test thisind(ss, i) == thisind(s2, i)
+                end
+                for i in 0:ncodeunits(ss)
+                    @test nextind(ss, i) == nextind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test nextind(ss, i, j) == nextind(s2, i, j)
+                        end
+                    end
+                end
+                for i in 1:ncodeunits(ss)+1
+                    @test prevind(ss, i) == prevind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test prevind(ss, i, j) == prevind(s2, i, j)
+                        end
+                    end
+                end
+                b = nextind(s, b)
+            end
+        end
+    end
+end
+
 # for isvalid(SubString{String})
 let s = "Σx + βz - 2"
     for i in -1:ncodeunits(s)+2
@@ -241,8 +278,8 @@ end
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
-                sb = SubString(s, nextind(pre, endof(pre)),
-                               endof(convert(T, string(prefix, prefix, c, suffix))))
+                sb = SubString(s, nextind(pre, lastindex(pre)),
+                               lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
                 ri = findfirst(equalto(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]

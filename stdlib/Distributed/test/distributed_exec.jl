@@ -180,6 +180,25 @@ testval = remotecall_fetch(wid2, fstore) do x
 end
 @test testval == 1
 
+# Issue number #25847
+@everywhere function f25847(ref)
+    fetch(ref)
+    return true
+end
+
+f = remotecall_wait(identity, id_other, ones(10))
+rrid = Distributed.RRID(f.whence, f.id)
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+finalize(f)
+yield() # flush gc msgs
+@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
+
+
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
     rr = RemoteChannel(id)
@@ -434,7 +453,7 @@ let ex
     @test ((ex.captured::CapturedException).ex::ErrorException).msg == "A.error"
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
-    frame, repeated = bt[1]::Tuple{StackFrame, Int}
+    frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
     @test frame.func == :foo
     @test frame.linfo == nothing
     @test repeated == 1
@@ -693,7 +712,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException wait(t)
+    @test_throws ErrorException Base._wait(t)
 end
 
 # issue #8207
@@ -716,7 +735,7 @@ let t = schedule(@task f13168(100))
     yield()
     @test t.state == :done
     @test_throws ErrorException schedule(t)
-    @test isa(wait(t),Float64)
+    @test isa(fetch(t),Float64)
 end
 
 # issue #13122
@@ -1004,7 +1023,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    wait(rmprocs(p; waitfor=0))
+    Base._wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1036,8 +1055,8 @@ end
 # Test the following addprocs error conditions
 # - invalid host name - github issue #20372
 # - julia exe exiting with an error
-# - timeout reading host:port from worker STDOUT
-# - host:port not found in worker STDOUT in the first 1000 lines
+# - timeout reading host:port from worker stdout
+# - host:port not found in worker stdout in the first 1000 lines
 
 struct ErrorSimulator <: ClusterManager
     mode
@@ -1079,7 +1098,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
-    old_stdout = STDOUT
+    old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @schedule filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")
@@ -1092,7 +1111,7 @@ for (addp_testf, expected_errstr, env) in testruns
     catch ex
         redirect_stdout(old_stdout)
         close(stdout_in)
-        @test isempty(wait(stdout_txt))
+        @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end

@@ -2,8 +2,7 @@
 
 # test core language features
 
-using Random
-using SparseArrays
+using Random, SparseArrays, InteractiveUtils
 
 const Bottom = Union{}
 
@@ -127,6 +126,21 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+# promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
+for T in (Nothing, Missing)
+    @test Base.promote_typejoin(Int, Float64) === Real
+    @test Base.promote_typejoin(Int, T) === Union{Int, T}
+    @test Base.promote_typejoin(T, String) === Union{T, String}
+    @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
+    @test Base.promote_typejoin(Vector, T) === Any
+    @test Base.promote_typejoin(Real, T) === Any
+    @test Base.promote_typejoin(Int, String) === Any
+    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
+    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(T, Union{}) === T
+    @test Base.promote_typejoin(Union{}, T) === T
+end
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -512,11 +526,11 @@ function f21900()
         x = 0
     end
     global f21900_cnt += 1
-    x
+    x # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError f21900()
+@test_throws UndefVarError(:x) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
@@ -2207,7 +2221,7 @@ t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
 g7652() = fieldtype(DataType, :types)
-@test g7652() == fieldtype(DataType, :types) == SimpleVector
+@test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
 h7652() = setfield!(a7652, 1, 2)
 h7652()
@@ -2541,9 +2555,11 @@ const N10281 = 1000
     end
 end === nothing
 
+
 # issue #10221
 module GCbrokentype
-OLD_STDOUT = STDOUT
+using InteractiveUtils
+OLD_STDOUT = stdout
 fname = tempname()
 file = open(fname, "w")
 redirect_stdout(file)
@@ -3170,6 +3186,23 @@ function f11065()
     end
 end
 @test_throws UndefVarError f11065()
+
+# issue #25724
+a25724 = Any[]
+for i = 1:3
+    needX = false
+    try
+        X = X
+        X[1] = X[1] + 1
+    catch err
+        needX = true
+    end
+    if needX
+        X = [0]
+    end
+    push!(a25724, copy(X))
+end
+@test a25724 == [[0], [0], [0]]
 
 # for loop iterator expression should be evaluated in outer scope
 let
@@ -3824,14 +3857,14 @@ foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 
 # issue #6846
 f6846() = (please6846; 2)
-@test_throws UndefVarError f6846()
+@test_throws UndefVarError(:please6846) f6846()
 
 module M6846
     macro f()
-        return :(please6846; 2)
+        return esc(:(please6846; 2))
     end
 end
-@test_throws UndefVarError @M6846.f()
+@test_throws UndefVarError(:please6846) @M6846.f()
 
 # issue #14758
 @test isa(@eval(f14758(; $([]...)) = ()), Function)
@@ -3924,6 +3957,15 @@ let ex = quote
          end
     @test ex.args[2] == :test
 end
+
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
 
 # issue #15180
 function f15180(x::T) where T
@@ -4257,7 +4299,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::CodeInfo)
+function metadata_matches(ast::Core.CodeInfo)
     inbounds_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
@@ -4332,11 +4374,11 @@ end
 @test f16158("abc") == "abcaba"
 
 # LLVM verifier error for noreturn function
-# the `code_llvm(DevNull, ...)` tests are only meaningful on debug build
+# the `code_llvm(devnull, ...)` tests are only meaningful on debug build
 # with verifier on (but should still pass on release build).
 module TestSSA16244
 
-using Test
+using Test, InteractiveUtils
 @noinline k(a) = a
 
 # unreachable branch due to `ccall(:jl_throw)`
@@ -4348,7 +4390,7 @@ function f1(a)
     end
     b[1]
 end
-code_llvm(DevNull, f1, Tuple{Bool})
+code_llvm(devnull, f1, Tuple{Bool})
 @test f1(true) == 2
 @test_throws DivideError f1(false)
 
@@ -4363,7 +4405,7 @@ function f2(a)
     end
     b[1]
 end
-code_llvm(DevNull, f2, Tuple{Bool})
+code_llvm(devnull, f2, Tuple{Bool})
 @test f2(true) == 2
 @test_throws ErrorException f2(false)
 
@@ -4374,7 +4416,7 @@ function f3(a)
     end
     b[1]
 end
-code_llvm(DevNull, f3, Tuple{Bool})
+code_llvm(devnull, f3, Tuple{Bool})
 @test f3(true) == 2
 ex = try
     f3(false)
@@ -4393,7 +4435,7 @@ function f4(a, p)
     end
     b[1]
 end
-code_llvm(DevNull, f4, Tuple{Bool,Ptr{Cvoid}})
+code_llvm(devnull, f4, Tuple{Bool,Ptr{Cvoid}})
 @test f4(true, C_NULL) == 2
 @test_throws UndefRefError f4(false, C_NULL)
 
@@ -4405,7 +4447,7 @@ function f5(a)
     end
     b[1]
 end
-code_llvm(DevNull, f5, Tuple{Bool})
+code_llvm(devnull, f5, Tuple{Bool})
 @test f5(true) == 2
 @test f5(false) == 1
 
@@ -4416,7 +4458,7 @@ function f6(a)
     end
     b[1]
 end
-code_llvm(DevNull, f6, Tuple{Bool})
+code_llvm(devnull, f6, Tuple{Bool})
 @test f6(true) == 2
 @test f6(false) == 1
 
@@ -4429,7 +4471,7 @@ function f7(a)
     end
     b[1]
 end
-code_llvm(DevNull, f7, Tuple{Bool})
+code_llvm(devnull, f7, Tuple{Bool})
 @test f7(true) == 2
 @test_throws TypeError f7(false)
 
@@ -4442,7 +4484,7 @@ function f8(a, c)
     end
     b[1]
 end
-code_llvm(DevNull, f8, Tuple{Bool,Int})
+code_llvm(devnull, f8, Tuple{Bool,Int})
 @test f8(true, 1) == 2
 @test_throws TypeError f8(false, 1)
 
@@ -4456,7 +4498,7 @@ function f9(a)
     end
     b[1]
 end
-code_llvm(DevNull, f9, Tuple{Bool})
+code_llvm(devnull, f9, Tuple{Bool})
 @test f9(true) == 2
 ex = try
     f9(false)
@@ -4490,7 +4532,7 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-mutable struct A12238{T} end
+struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
@@ -4538,10 +4580,10 @@ end
 B14878(ng) = B14878()
 function trigger14878()
     w = A14878()
-    w.ext[:14878] = B14878(junk)  # junk not defined!
+    w.ext[:14878] = B14878(junk)  # global junk not defined!
     return w
 end
-@test_throws UndefVarError trigger14878()
+@test_throws UndefVarError(:junk) trigger14878()
 
 # issue #1090
 function f1090(x)::Int
@@ -4775,14 +4817,6 @@ function f18173()
 end
 @test f18173() == false
 
-let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
-    @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f())
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
-    @test g() == 0
-end
-
 fVararg(x) = Vararg{x}
 gVararg(a::fVararg(Int)) = length(a)
 @test gVararg(1,2,3,4,5) == 5
@@ -4849,7 +4883,7 @@ GC.enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
-@test isa(@which(bad_tvars()), Method)
+@test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
 bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
@@ -4944,12 +4978,12 @@ function let_Box5()
         return g
     end
 end
-@test any(contains_Box, (@code_lowered let_Box1()).code)
-@test any(contains_Box, (@code_lowered let_Box2()).code)
-@test any(contains_Box, (@code_lowered let_Box3()).code)
-@test any(contains_Box, (@code_lowered let_Box4()).code)
-@test any(contains_Box, (@code_lowered let_Box5()).code)
-@test !any(contains_Box, (@code_lowered let_noBox()).code)
+@test any(contains_Box, code_lowered(let_Box1,())[1].code)
+@test any(contains_Box, code_lowered(let_Box2,())[1].code)
+@test any(contains_Box, code_lowered(let_Box3,())[1].code)
+@test any(contains_Box, code_lowered(let_Box4,())[1].code)
+@test any(contains_Box, code_lowered(let_Box5,())[1].code)
+@test !any(contains_Box, code_lowered(let_noBox,())[1].code)
 @test let_Box1()() == 22
 @test let_Box2()() == 23
 @test let_Box3()() == 24
@@ -5525,7 +5559,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test @which(sincos) === Base.Math
+    @test which(Main, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -5945,3 +5979,17 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue 17149
+mutable struct Foo17149
+end
+@test Foo17149() !== Foo17149()
+let a = Foo17149()
+    @test a === a
+end
+
+# issue #25907
+g25907a(x) = x[1]::Integer
+@test g25907a(Union{Int, UInt, Nothing}[1]) === 1
+g25907b(x) = x[1]::Complex
+@test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im

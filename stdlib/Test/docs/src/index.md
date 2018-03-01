@@ -1,9 +1,7 @@
 # Unit Testing
 
 ```@meta
-DocTestSetup = quote
-    using Test
-end
+DocTestSetup = :(using Test)
 ```
 
 ## Testing Base Julia

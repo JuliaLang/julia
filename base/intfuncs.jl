@@ -79,8 +79,18 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
-lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,one(eltype(abc)),abc)
+
+function gcd(abc::AbstractArray{<:Integer})
+    a = zero(eltype(abc))
+    for b in abc
+        a = gcd(a,b)
+        if a == 1
+            return a
+        end
+    end
+    return a
+end
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
@@ -209,7 +219,6 @@ end
 
 ^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
-^(x, p::Integer)          = power_by_squaring(x,p)
 
 # x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val(p))
 # to enable compile-time optimizations specialized to p.
@@ -777,7 +786,7 @@ julia> digits(10, base = 2, pad = 6)
  0
 ```
 """
-digits(n::Integer; base = base::Integer = 10, pad = pad::Integer = 1) =
+digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
     digits(typeof(base), n, base = base, pad = pad)
 
 function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer = 1)

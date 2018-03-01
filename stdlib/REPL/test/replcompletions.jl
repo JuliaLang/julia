@@ -3,6 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
+import Pkg
 
 let ex = quote
     module CompletionFoo
@@ -87,7 +88,7 @@ end
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
-    # clone METADATA (only pkg and libgit2-online tests should need internet access)
+    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
@@ -101,9 +102,9 @@ function temp_pkg_dir_noinit(fn::Function)
     end
 end
 
-test_complete(s) = completions(s,endof(s))
-test_scomplete(s) = shell_completions(s,endof(s))
-test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
+test_complete(s) = completions(s,lastindex(s))
+test_scomplete(s) = shell_completions(s,lastindex(s))
+test_bslashcomplete(s) = bslash_completions(s,lastindex(s))[2]
 
 let s = ""
     c, r = test_complete(s)
@@ -206,7 +207,7 @@ let
 end
 
 # inexistent completion inside a string
-let s = "Pkg.add(\"lol"
+let s = "Base.print(\"lol"
     c, r, res = test_complete(s)
     @test res == false
 end
@@ -446,35 +447,35 @@ end
 let s = "(1+2im)."
     c,r = test_complete(s)
     @test length(c) == 2
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c == ["im", "re"]
 end
 
 let s = "((1+2im))."
     c, r = test_complete(s)
     @test length(c) == 2
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c == ["im", "re"]
 end
 
 let s = "CompletionFoo.test_y_array[1]."
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == (endof(s) + 1):endof(s)
+    @test r == (lastindex(s) + 1):lastindex(s)
     @test c[1] == "yy"
 end
 
 let s = "CompletionFoo.Test_y(rand()).y"
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == endof(s):endof(s)
+    @test r == lastindex(s):lastindex(s)
     @test c[1] == "yy"
 end
 
 let s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
     c, r = test_complete(s)
     @test length(c) == 1
-    @test r == endof(s):endof(s)
+    @test r == lastindex(s):lastindex(s)
     @test c[1] == "yy"
 end
 
@@ -613,11 +614,11 @@ let s, c, r
         @test s[r] == ""
     end
 
-    s = "cd \$(Pk"
+    s = "cd \$(Iter"
     c,r = test_scomplete(s)
-    @test "Pkg" in c
-    @test r == 6:7
-    @test s[r] == "Pk"
+    @test "Iterators" in c
+    @test r == 6:9
+    @test s[r] == "Iter"
 
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current
@@ -721,12 +722,12 @@ let path = tempdir(),
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
-            @test r == endof(s)-4:endof(s)
+            @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
-            @test r == endof(s)-4:endof(s)
+            @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
@@ -834,7 +835,7 @@ function test_dict_completion(dict_name)
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
-    c, r = completions(s, endof(s) - 1)
+    c, r = completions(s, lastindex(s) - 1)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)

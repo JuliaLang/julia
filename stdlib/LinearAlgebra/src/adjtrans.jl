@@ -47,12 +47,38 @@ end
 Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
-# wrapping lowercase quasi-constructors
-adjoint(A::AbstractVecOrMat) = Adjoint(A)
-"""
-    transpose(A::AbstractMatrix)
+Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
+Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
 
-Lazy matrix transpose. Mutating the returned object should appropriately mutate `A`. Often,
+# wrapping lowercase quasi-constructors
+"""
+    adjoint(A)
+
+Lazy adjoint (conjugate transposition) (also postfix `'`).
+Note that `adjoint` is applied recursively to elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
+adjoint(A::AbstractVecOrMat) = Adjoint(A)
+
+"""
+    transpose(A)
+
+Lazy transpose. Mutating the returned object should appropriately mutate `A`. Often,
 but not always, yields `Transpose(A)`, where `Transpose` is a lazy transpose wrapper. Note
 that this operation is recursive.
 
@@ -61,17 +87,15 @@ This operation is intended for linear algebra usage - for general data manipulat
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
 
 julia> transpose(A)
-3×3 Transpose{Int64,Array{Int64,2}}:
- 1  4  7
- 2  5  8
- 3  6  9
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)

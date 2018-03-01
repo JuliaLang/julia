@@ -3,7 +3,7 @@
 module TestSpecial
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul1!
+using LinearAlgebra: rmul!
 
 n= 10 #Size of matrix to test
 srand(1)
@@ -118,10 +118,10 @@ end
         b = rand(n,n)
         qrb = qrfact(b,Val(true))
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test mul1!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         qrb = qrfact(b,Val(false))
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test mul1!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
     end
 end
 

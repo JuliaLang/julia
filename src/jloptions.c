@@ -78,7 +78,7 @@ static const char opts[]  =
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
-    " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
+    " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes|no}\n"
     "                           Use native code from system image if available\n"
@@ -98,8 +98,8 @@ static const char opts[]  =
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
     " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no}         Enable or disable startup banner\n"
-    " --color={yes|no}          Enable or disable color text\n"
+    " --banner={yes|no|auto}    Enable or disable startup banner\n"
+    " --color={yes|no|auto}     Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n\n"
 
     // error and warning options
@@ -343,12 +343,14 @@ restart_switch:
                 jl_options.banner = 0;
             break;
         case opt_banner: // banner
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg, "yes"))
                 jl_options.banner = 1;
-            else if (!strcmp(optarg,"no"))
+            else if (!strcmp(optarg, "no"))
                 jl_options.banner = 0;
+            else if (!strcmp(optarg, "auto"))
+                jl_options.banner = -1;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
             break;
         case opt_use_precompiled:
             jl_printf(JL_STDOUT, "WARNING: julia --precompiled option is deprecated, use --sysimage-native-code instead.\n");
@@ -398,12 +400,14 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case opt_color:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg, "yes"))
                 jl_options.color = JL_OPTIONS_COLOR_ON;
-            else if (!strcmp(optarg,"no"))
+            else if (!strcmp(optarg, "no"))
                 jl_options.color = JL_OPTIONS_COLOR_OFF;
+            else if (!strcmp(optarg, "auto"))
+                jl_options.color = JL_OPTIONS_COLOR_AUTO;
             else
-                jl_errorf("julia: invalid argument to --color={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --color={yes|no|auto} (%s)", optarg);
             break;
         case opt_history_file:
             if (!strcmp(optarg,"yes"))

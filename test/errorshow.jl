@@ -318,8 +318,8 @@ let err_str,
     err_str = @except_str randn(1)() MethodError
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
-@test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
-@test contains(stringmime("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
+@test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
+@test contains(repr("text/plain", getfield(Base, Symbol("@doc"))), r"^@doc \(macro with \d+ method[s]?\)$")
 
 method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
@@ -356,8 +356,8 @@ let err_str,
                      "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
-    @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
-    @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
+    @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
+    @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
     @test err_str == "Symbol() at $sn:$(method_defs_lineno + 0)"
@@ -375,45 +375,6 @@ let err_str,
     @test err_str == "(::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
     err_str = @except_stackframe FunctionLike()() ErrorException
     @test err_str == "(::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
-end
-
-# Issue #13032
-withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
-    # Make sure editor doesn't error when no ENV editor is set.
-    @test isa(Base.editor(), Array)
-
-    # Invalid editor
-    ENV["JULIA_EDITOR"] = ""
-    @test_throws ErrorException Base.editor()
-
-    # Note: The following testcases should work regardless of whether these editors are
-    # installed or not.
-
-    # Editor on the path.
-    ENV["JULIA_EDITOR"] = "vim"
-    @test Base.editor() == ["vim"]
-
-    # Absolute path to editor.
-    ENV["JULIA_EDITOR"] = "/usr/bin/vim"
-    @test Base.editor() == ["/usr/bin/vim"]
-
-    # Editor on the path using arguments.
-    ENV["JULIA_EDITOR"] = "subl -w"
-    @test Base.editor() == ["subl", "-w"]
-
-    # Absolute path to editor with spaces.
-    ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl"
-    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"]
-
-    # Paths with spaces and arguments (#13032).
-    ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl -w"
-    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
-
-    ENV["JULIA_EDITOR"] = "'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w"
-    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
-
-    ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
-    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
 
 # Issue #20108

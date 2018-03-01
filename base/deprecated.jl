@@ -122,18 +122,18 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
-macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
-    dep_message == nothing && (dep_message = ", use $new instead")
+macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
+    dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
-         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         constant ? Expr(:const, Expr(:(=), esc(old), esc(new))) : Expr(:(=), esc(old), esc(new)),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
 macro deprecate_stdlib(old, mod, export_old=true)
     dep_message = """: it has been moved to the standard library package `$mod`.
-                        Add a `using $mod` to your imports."""
+                        Add `using $mod` to your imports."""
     new = GlobalRef(Base.root_module(Base, mod), old)
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
@@ -203,10 +203,6 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
     return i == 1 ? getfield(p, p.openstream) : p
 end
 
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
-
 # also remove all support machinery in src for current_module when removing this deprecation
 # and make Base.include an error
 _current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
@@ -250,23 +246,11 @@ DEPRECATED: use @__MODULE__ instead
 end
 export current_module
 
-# PR #22062
-function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(repo, remote, url)
-end
-function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(path, remote, url)
-end
+@deprecate_binding colon (:)
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
-               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
+               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^,
                :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
@@ -274,6 +258,7 @@ module Operators
             @eval Base.@deprecate_binding $op Base.$op
         end
     end
+    Base.@deprecate_binding colon (:)
 end
 export Operators
 
@@ -311,9 +296,9 @@ export conv, conv2, deconv, filt, filt!, xcorr
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, vardim, corrected=corrected)
+@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
 @deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, vardim, corrected=corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
 
 # PR #22325
 # TODO: when this replace is removed from deprecated.jl:
@@ -418,16 +403,6 @@ end
 # issue #6466
 # `write` on non-isbits arrays is deprecated in io.jl.
 
-# PR #23092
-@eval LibGit2 begin
-    function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-        Base.depwarn(string(
-            "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
-            "`result = Base.prompt(msg, default=default, password=password); result === nothing ? \"\" : result` instead."), :prompt)
-        coalesce(Base.prompt(msg, default=default, password=password), "")
-    end
-end
-
 # PR #23187
 @deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+textwidth(s), 2), p), n, p) false
 
@@ -499,6 +474,9 @@ function (::Type{T})(arg) where {T}
 end
 # related items to remove in: abstractarray.jl, dates/periods.jl, compiler.jl
 # also remove all uses of is_default_method
+
+@deprecate convert(::Type{UInt128},     u::UUID)     UInt128(u)
+@deprecate convert(::Type{UUID}, s::AbstractString)  UUID(s)
 
 # Issue #19923
 @deprecate ror                  circshift
@@ -603,41 +581,13 @@ import .Iterators.enumerate
 @deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
 @deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
 
-# PR #23640
-# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
-#  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
-@eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
-        # Note: Be careful not to show the contents of the credentials as it could reveal a
-        # password.
-        if payload === nothing
-            msg = "`LibGit2.$f($sig; payload=nothing)` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload())` instead."
-            p = CredentialPayload()
-        else
-            cred = payload
-            C = typeof(cred)
-            msg = "`LibGit2.$f($sig; payload=$C(...))` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...)))` instead."
-            p = CredentialPayload(cred)
-        end
-        Base.depwarn(msg, f)
-    else
-        p = payload::CredentialPayload
-    end
-    return p
-end
-
-# ease transition for return type change of e.g. argmax due to PR #22907 when used in the
-# common pattern `ind2sub(size(a), argmax(a))`
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
 # PR #23690
 # `SSHCredential` and `UserPasswordCredential` constructors using `prompt_if_incorrect`
-# are deprecated in base/libgit2/types.jl.
+# are deprecated in stdlib/LibGit2/types.jl.
 
 # deprecate ones/zeros methods accepting an array as first argument
 function ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T}
@@ -691,11 +641,6 @@ function zeros(a::AbstractArray)
     return fill!(similar(a), zero(eltype(a)))
 end
 
-# PR #23711
-@eval LibGit2 begin
-    @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
-end
-
 export tic, toq, toc
 function tic()
     depwarn("`tic()` is deprecated, use `@time`, `@elapsed`, or calls to `time_ns()` instead.", :tic)
@@ -743,14 +688,6 @@ Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getinde
     end
     nothing
 end
-
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
 
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
@@ -844,8 +781,8 @@ findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, 
 # issue #20899
 # TODO: delete JULIA_HOME deprecation in src/init.c
 
-@deprecate cumsum(A::AbstractArray)     cumsum(A, 1)
-@deprecate cumprod(A::AbstractArray)    cumprod(A, 1)
+# cumsum and cumprod have deprecations in multidimensional.jl
+# when the message is removed, the `dims` keyword argument should become required.
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
@@ -905,12 +842,8 @@ end
 @deprecate trues(A::AbstractArray) trues(size(A))
 
 # issue #24794
-@deprecate linspace(start, stop)     linspace(start, stop, 50)
-@deprecate logspace(start, stop)     logspace(start, stop, 50)
-
-@deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
-@deprecate push!(w::LibGit2.GitRevWalker, arg) LibGit2.push!(w, arg)
-
+@deprecate linspace(start, stop)     range(start, stop=stop, length=50)
+@deprecate logspace(start, stop)     exp10.(range(start, stop=stop, length=50))
 
 # 24490 - warnings and messages
 const log_info_to = Dict{Tuple{Union{Module,Nothing},Union{Symbol,Nothing}},IO}()
@@ -1023,19 +956,19 @@ function info(io::IO, msg...; prefix="INFO: ")
     depwarn("`info()` is deprecated, use `@info` instead.", :info)
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_info_to, :info)
-    print_with_color(info_color(), iob, prefix; bold = true)
-    println_with_color(info_color(), iob, chomp(string(msg...)))
+    printstyled(iob, prefix; bold=true, color=info_color())
+    printstyled(iob, chomp(string(msg...)), '\n', color=info_color())
     print(io, String(take!(buf)))
     return
 end
-info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+info(msg...; prefix="INFO: ") = info(stderr, msg..., prefix=prefix)
 
 # print a warning only once
 
 const have_warned = Set()
 
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
-warn_once(msg...) = warn(STDERR, msg..., once=true)
+warn_once(msg...) = warn(stderr, msg..., once=true)
 
 """
     warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
@@ -1061,8 +994,8 @@ function warn(io::IO, msg...;
     end
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_warn_to, :warn)
-    print_with_color(warn_color(), iob, prefix; bold = true)
-    print_with_color(warn_color(), iob, str)
+    printstyled(iob, prefix; bold=true, color=warn_color())
+    printstyled(iob, str, color=warn_color())
     if bt !== nothing
         show_backtrace(iob, bt)
     end
@@ -1085,19 +1018,19 @@ julia> warn("Beep Beep")
 WARNING: Beep Beep
 ```
 """
-warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+warn(msg...; kw...) = warn(stderr, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     warn(io, sprint(showerror, err), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
-    warn(STDERR, err, prefix=prefix; kw...)
+    warn(stderr, err, prefix=prefix; kw...)
 
 info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
     info(io, sprint(showerror, err), prefix=prefix; kw...)
 
 info(err::Exception; prefix="ERROR: ", kw...) =
-    info(STDERR, err, prefix=prefix; kw...)
+    info(stderr, err, prefix=prefix; kw...)
 
 # issue #25082
 @deprecate_binding Void Nothing
@@ -1138,13 +1071,6 @@ end
 @deprecate similar(s::AbstractSet) empty(s)
 @deprecate similar(s::AbstractSet, ::Type{T}) where {T} empty(s, T)
 
-# PR #24594
-@eval LibGit2 begin
-    @deprecate AbstractCredentials AbstractCredential false
-    @deprecate UserPasswordCredentials UserPasswordCredential false
-    @deprecate SSHCredentials SSHCredential false
-end
-
 # issue #24804
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
@@ -1164,6 +1090,8 @@ end
 
 # Associative -> AbstractDict (#25012)
 @deprecate_binding Associative AbstractDict
+
+@deprecate_binding KeyIterator KeySet false
 
 # issue #25016
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
@@ -1298,9 +1226,9 @@ end
 @deprecate rsearch(s::AbstractString, r::Regex) findlast(r, s)
 @deprecate rsearch(s::AbstractString, c::Char, i::Integer) findprev(equalto(c), s, i)
 @deprecate rsearch(s::AbstractString, c::Char) findlast(equalto(c), s)
-@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(b), a, i)
-@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = endof(a)) findprev(equalto(Char(b)), a, i)
-@deprecate rsearch(a::ByteArray, b::Char, i::Integer = endof(a)) findprev(equalto(UInt8(b)), a, i)
+@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(b), a, i)
+@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) findprev(equalto(Char(b)), a, i)
+@deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) findprev(equalto(UInt8(b)), a, i)
 
 @deprecate searchindex(s::AbstractString, t::AbstractString) first(findfirst(t, s))
 @deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(findnext(t, s, i))
@@ -1317,6 +1245,10 @@ end
 @deprecate findin(a, b) findall(occursin(b), a)
 
 @deprecate find findall
+@deprecate find(A::AbstractVector) findall(A)
+@deprecate find(A::AbstractArray) LinearIndices(A)[findall(A)]
+@deprecate find(f::Function, A::AbstractVector) findall(f, A)
+@deprecate find(f::Function, A::AbstractArray) LinearIndices(A)[findall(f, A)]
 
 @deprecate findn(x::AbstractVector) (findall(!iszero, x),)
 @deprecate findn(x::AbstractMatrix) (I = findall(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
@@ -1339,6 +1271,9 @@ end
 @deprecate skipchars(io::IO, predicate; linecomment=nothing) skipchars(predicate, io, linecomment=linecomment)
 # this method is to avoid ambiguity, delete at the same time as deprecation of skipchars above:
 skipchars(::IO, ::IO; linecomment=nothing) = throw(ArgumentError("the first argument of `skipchars` must be callable"))
+
+# Issue #25745
+@deprecate print_shortest Base.Grisu.print_shortest
 
 # issue #9053
 if Sys.iswindows()
@@ -1374,25 +1309,88 @@ export readandwrite
 @deprecate datatype_name(t::DataType) nameof(t) false
 @deprecate datatype_name(t::UnionAll) nameof(t) false
 
+# issue #25501
+@deprecate sum(a::AbstractArray, dims)        sum(a, dims=dims)
+@deprecate sum(f, a::AbstractArray, dims)     sum(f, a, dims=dims)
+@deprecate prod(a::AbstractArray, dims)       prod(a, dims=dims)
+@deprecate prod(f, a::AbstractArray, dims)    prod(f, a, dims=dims)
+@deprecate maximum(a::AbstractArray, dims)    maximum(a, dims=dims)
+@deprecate maximum(f, a::AbstractArray, dims) maximum(f, a, dims=dims)
+@deprecate minimum(a::AbstractArray, dims)    minimum(a, dims=dims)
+@deprecate minimum(f, a::AbstractArray, dims) minimum(f, a, dims=dims)
+@deprecate all(a::AbstractArray, dims)        all(a, dims=dims)
+@deprecate all(f, a::AbstractArray, dims)     all(f, a, dims=dims)
+@deprecate any(a::AbstractArray, dims)        any(a, dims=dims)
+@deprecate any(f, a::AbstractArray, dims)     any(f, a, dims=dims)
+@deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
+@deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
+
+@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
+@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
+@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
+@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
+@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
+@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
+@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
+@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
+@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
+
+@deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+
+@deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
+
+@deprecate accumulate(op, A, dim::Integer)               accumulate(op, A, dims=dim)
+@deprecate accumulate!(op, B, A, dim::Integer)           accumulate!(op, B, A, dims=dim)
+@deprecate cumsum(A::AbstractArray, dim::Integer)        cumsum(A, dims=dim)
+@deprecate cumsum!(B, A, dim::Integer)                   cumsum!(B, A, dims=dim)
+@deprecate cumsum!(out, A::AbstractVector, dim::Integer) cumsum!(out, A, dims=dim)
+@deprecate cumprod(A::AbstractArray, dim::Integer)       cumprod(A, dims=dim)
+@deprecate cumprod!(B, A, dim::Integer)                  cumprod!(B, A, dims=dim)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
+
+@deprecate quit() exit()
 
 # PR #25654
 @deprecate indmin argmin
 @deprecate indmax argmax
 
+# PR #25896
+@deprecate range(start, length) range(start, length=length)
+@deprecate range(start, step, length) range(start, step=step, length=length)
+@deprecate linspace(start, stop, length::Integer) range(start, stop=stop, length=length)
+@deprecate linspace(start, stop, length::Real) range(start, stop=stop, length=Int(length))
+@deprecate_binding LinSpace LinRange
+@deprecate logspace(start, stop, n; base=10) base.^range(start, stop=stop, length=n)
+
 @deprecate runtests(tests, ncores; kw...) runtests(tests; ncores = ncores, kw...) false
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
 @deprecate code_lowered(f, types, generated) code_lowered(f, types, generated = generated)
 
+# PR 25458
+@deprecate endof(a) lastindex(a)
+function firstindex(a)
+    depwarn("if appropriate you should implement `firstindex` for type $(typeof(a)), which might just return 1", :firstindex)
+    1
+end
+
+# PR 25763
+function lastindex(a, n)
+    depwarn("if appropriate you should implement `lastindex(a, n)` for type $(typeof(a))`, which might just return `last(axes(a, n))`", :lastindex)
+    last(axes(a, n))
+end
+
+@deprecate_binding repmat repeat
+
 @deprecate Timer(timeout, repeat) Timer(timeout, interval = repeat)
-@deprecate Timer(callback, delay, repeat) Time(callback, delay, interval = repeat)
+@deprecate Timer(callback, delay, repeat) Timer(callback, delay, interval = repeat)
 @deprecate names(m, all) names(m, all = all)
 @deprecate names(m, all, imported) names(m, all = all, imported = imported)
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
 @deprecate eachmatch(re, str, overlap) eachmatch(re, str, overlap = overlap)
-@deprecate matchall(re, str, overlap) matchall(re, str, overlap = overlap)
+@deprecate matchall(re, str, overlap) collect(m.match for m in eachmatch(re, str, overlap = overlap))
 @deprecate chop(s, head) chop(s, head = head)
 @deprecate chop(s, head, tail) chop(s, head = head, tail = tail)
 @deprecate tryparse(T::Type{<:Integer}, s, base) tryparse(T, s, base = base)
@@ -1402,6 +1400,80 @@ export readandwrite
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
+@deprecate digits(n, base, pad) digits(n, base = base, pad = pad)
+@deprecate digits(T, n, base, pad) digits(T, n, base = base, pad = pad)
+
+@deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
+
+@deprecate which(s::Symbol) which(Main, s)
+
+@deprecate IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool=false, maxsize::Integer=typemax(Int)) IOBuffer(data, read=read, write=write, maxsize=maxsize)
+@deprecate IOBuffer(read::Bool, write::Bool) IOBuffer(read=read, write=write)
+@deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
+
+@deprecate reprmime(mime, x) repr(mime, x)
+@deprecate mimewritable(mime, x) showable(mime, x)
+
+# PR #23332
+@deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
+
+# Issue #25979
+# The `remove_destination` keyword to `cp`, `mv`, and the unexported `cptree` has been
+# renamed to `force`. To remove this deprecation, remove the `remove_destination` keyword
+# argument from the function signatures as well as the internal logic that deals with the
+# renaming. These live in base/file.jl.
+
+# issue #25928
+@deprecate wait(t::Task) fetch(t)
+
+# issue #18326
+@deprecate slicedim(A::AbstractArray, d::Integer, i) copy(selectdim(A, d, i))
+@deprecate slicedim(A::BitVector, d::Integer, i::Number) copy(selectdim(A, d, i))
+function slicedim(A::AbstractVector, d::Integer, i::Number)
+    if d == 1
+        # slicedim would have returned a scalar value, selectdim always returns views
+        depwarn("`slicedim(A::AbstractVector, d::Integer, i)` is deprecated, use `selectdim(A, d, i)[]` instead.", :slicedim)
+        selectdim(A, d, i)[]
+    else
+        depwarn("`slicedim(A::AbstractArray, d::Integer, i)` is deprecated, use `copy(selectdim(A, d, i))` instead.", :slicedim)
+        copy(selectdim(A, d, i))
+    end
+end
+
+# Issue #25786
+@deprecate_binding DevNull devnull
+# TODO: When these are removed, also remove the uppercase variants in libuv.jl and stream.jl
+@deprecate_binding STDIN stdin true nothing false
+@deprecate_binding STDOUT stdout true nothing false
+@deprecate_binding STDERR stderr true nothing false
+
+# PR 25062
+@deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),
+           link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write),
+           false)
+
+# PR 26156
+@deprecate trunc(x, digits, base) trunc(x, digits, base = base)
+@deprecate floor(x, digits, base) floor(x, digits, base = base)
+@deprecate ceil(x, digits, base) ceil(x, digits, base = base)
+@deprecate round(x, digits, base) round(x, digits, base = base)
+@deprecate signif(x, digits, base) signif(x, digits, base = base)
+
+# Remember to delete the module when removing this
+@eval Base.Math module JuliaLibm
+    Base.@deprecate log Base.log
+end
+
+# PR 26071
+@deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
+           collect(m.match for m in eachmatch(r, s, overlap = overlap)))
+
+# PR 26194
+export assert
+function assert(x)
+    depwarn("`assert` is deprecated, use `@assert` instead.", :assert)
+    @assert x ""
+end
 
 # END 0.7 deprecations
 

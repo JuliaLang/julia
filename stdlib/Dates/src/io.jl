@@ -154,7 +154,7 @@ end
     # the last n digits of y
     # will be 0 padded if y has less than n digits
     str = dec(y, n)
-    l = endof(str)
+    l = lastindex(str)
     if l == n
         # fast path
         write(io, str)
@@ -265,7 +265,7 @@ const CONVERSION_SPECIFIERS = Dict{Char, Type}(
 # Default values are needed when a conversion specifier is used in a DateFormat for parsing
 # and we have reached the end of the input string.
 # Note: Allow `Any` value as a default to support extensibility
-const CONVERSION_DEFAULTS = Dict{Type, Any}(
+const CONVERSION_DEFAULTS = IdDict{Type, Any}(
     Year => Int64(1),
     Month => Int64(1),
     DayOfWeekToken => Int64(0),
@@ -280,7 +280,7 @@ const CONVERSION_DEFAULTS = Dict{Type, Any}(
 
 # Specifies the required fields in order to parse a TimeType
 # Note: Allows for addition of new TimeTypes
-const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
+const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond),
@@ -348,7 +348,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:endof(f)], r"\\(.)" => s"\1")
+    tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev
@@ -481,7 +481,7 @@ end
 
 function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     # preallocate to reduce resizing
-    io = IOBuffer(Vector{UInt8}(uninitialized, bufsize), true, true)
+    io = IOBuffer(Vector{UInt8}(uninitialized, bufsize), read=true, write=true)
     format(io, dt, fmt)
     String(io.data[1:io.ptr - 1])
 end

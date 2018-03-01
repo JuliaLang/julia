@@ -163,9 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
-objects by address in memory and immutable objects (such as numbers) by contents at the bit
-level. This function is sometimes called "egal".
+them. First the types of `x` and `y` are compared. If those are identical, mutable objects
+are compared by address in memory and immutable objects (such as numbers) are compared by
+contents at the bit level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest
@@ -654,6 +654,8 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
+See also: [`fld1`](@ref), [`fldmod1`](@ref).
+
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
@@ -664,8 +666,6 @@ julia> mod1(4, 3)
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
-# efficient version for integers
-mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -673,7 +673,7 @@ mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref).
+See also: [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -689,9 +689,11 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
-# efficient version for integers
-fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+function fld1(x::T, y::T) where T<:Integer
+    d = div(x, y)
+    return d + (!signbit(x ⊻ y) & (d * y != x))
+end
 
 """
     fldmod1(x, y)
@@ -700,9 +702,7 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
-# efficient version for integers
-fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 conj(x) = x
 
@@ -823,3 +823,26 @@ The returned function is of type `Base.OccursIn`. This allows dispatching to
 specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
 """
 const occursin = OccursIn
+
+"""
+    splat(f)
+
+Defined as
+```julia
+    splat(f) = args->f(args...)
+```
+i.e. given a function returns a new function that takes one argument and splats
+its argument into the original function. This is useful as an adaptor to pass
+a multi-argument function in a context that expects a single argument, but
+passes a tuple as that single argument.
+
+# Example usage:
+```jldoctest
+julia> map(splat(+), zip(1:3,4:6))
+3-element Array{Int64,1}:
+ 5
+ 7
+ 9
+```
+"""
+splat(f) = args->f(args...)
