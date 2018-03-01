@@ -370,6 +370,7 @@ export
     conj!,
     copy!,
     copyto!,
+    diff,
     cumprod,
     cumprod!,
     cumsum,

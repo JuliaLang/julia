@@ -739,7 +739,6 @@ end
     @deprecate_stdlib diag        LinearAlgebra true
     @deprecate_stdlib diagind     LinearAlgebra true
     @deprecate_stdlib diagm       LinearAlgebra true
-    @deprecate_stdlib diff        LinearAlgebra true
     @deprecate_stdlib dot         LinearAlgebra true
     @deprecate_stdlib eig         LinearAlgebra true
     @deprecate_stdlib eigfact!    LinearAlgebra true
