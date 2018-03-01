@@ -64,14 +64,14 @@ isless(::Any, ::Missing) = true
 
 # Unary operators/functions
 for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
-          :(abs), :(abs2), :(sign),
+          :(abs), :(abs2), :(sign), :(real), :(imag),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
           :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma),
           :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan), :(isempty),
-          :(iszero), :(transpose), :(float))
+          :(iszero), :(transpose), :(float), :(conj))
     @eval Math.$(f)(::Missing) = missing
 end
 

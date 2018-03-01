@@ -733,8 +733,6 @@ See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
-conj(x) = x
-
 
 """
     widen(x)
