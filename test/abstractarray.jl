@@ -893,6 +893,7 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
         @test Base.MemoryLayout(view(A,:,1))         == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:,1:1))       == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,1:1,1))       == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,2))         == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,1,1:1))       == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1,:))         == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.ColumnMajor()
@@ -908,14 +909,14 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
         @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == Base.DenseColumnMajor()
     end
 
-    # TODO: implement subarraylayout for arbitrary dimensions
-    let A = randn(3,3,3)
+    let A = randn(2,2,2)
         @test Base.MemoryLayout(A)                   == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:,:,:))       == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:))           == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:,:,1))       == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:,:,1:1))     == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,1:1,1,1))     == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,2,2))       == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,1,1:1,1:1))   == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1,:,:))       == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1:1,1:2,1:2)) == Base.ColumnMajor()
