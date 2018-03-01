@@ -1414,6 +1414,12 @@ end
 @deprecate reprmime(mime, x) repr(mime, x)
 @deprecate mimewritable(mime, x) showable(mime, x)
 
+# PR #26284
+@deprecate (+)(i::Integer, index::CartesianIndex) (i*one(index) + index)
+@deprecate (+)(index::CartesianIndex, i::Integer) (index + i*one(index))
+@deprecate (-)(i::Integer, index::CartesianIndex) (i*one(index) - index)
+@deprecate (-)(index::CartesianIndex, i::Integer) (index - i*one(index))
+
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
