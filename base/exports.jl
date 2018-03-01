@@ -460,6 +460,7 @@ export
     findmax!,
     findnext,
     findprev,
+    ismatch,
     occursin,
     match,
     searchsorted,

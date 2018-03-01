@@ -141,19 +141,39 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-function contains(s::AbstractString, r::Regex, offset::Integer=0)
+"""
+    ismatch(r::Regex, s::AbstractString) -> Bool
+
+Test whether a string contains a match of the given regular expression.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> ismatch(rx, "aba")
+true
+
+julia> ismatch(rx, "abba")
+false
+
+julia> rx("aba")
+true
+```
+"""
+function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
-function contains(s::SubString, r::Regex, offset::Integer=0)
+function ismatch(r::Regex, s::SubString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
                      r.match_data)
 end
 
-(r::Regex)(s) = contains(s, r)
+(r::Regex)(s) = ismatch(r, s)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])

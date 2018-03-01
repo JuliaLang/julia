@@ -533,10 +533,10 @@ end
 
 # Test for warning messages (deprecated)
 
-contains_warn(output, s::AbstractString) = contains(output, s)
-contains_warn(output, s::Regex) = contains(output, s)
-contains_warn(output, s::Function) = s(output)
-contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
 
 """
     @test_warn msg expr
@@ -558,7 +558,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test contains_warn(read(fname, String), $(esc(msg)))
+                @test ismatch_warn($(esc(msg)), read(fname, String))
                 ret
             finally
                 rm(fname, force=true)

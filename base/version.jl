@@ -21,7 +21,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +31,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -83,7 +83,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        contains(ident, r"^\d+$") ? parse(UInt64, ident) : String(ident)
+        ismatch(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
     end
 end
 
