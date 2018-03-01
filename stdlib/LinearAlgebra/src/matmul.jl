@@ -6,17 +6,27 @@ matprod(x, y) = x*y + x*y
 
 # Dot products
 
-_vecdot(x::AbstractArray{T}, y::AbstractArray{T}, ::DenseColumnMajor, ::DenseColumnMajor) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractArray{T}, ::AbstractStridedLayout, ::DenseColumnMajor) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractArray{T}, y::AbstractVector{T}, ::DenseColumnMajor, ::AbstractStridedLayout) where {T<:BlasReal} = BLAS.dot(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasReal} = BLAS.dot(x, y)
+for (typ, bdot) in ((:BlasReal, :(BLAS.dot)), (:BlasComplex, :(BLAS.dotc)))
+    @eval begin
+        _vecdot(x::AbstractArray{T},        y::AbstractArray{T},
+                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractVector{T},        y::AbstractVector{T},
+                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractVector{T},        y::AbstractArray{T},
+                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractArray{T},        y::AbstractVector{T},
+                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractVector{T},       y::AbstractArray{T},
+                 ::AbstractStridedLayout,    ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractArray{T},        y::AbstractVector{T},
+                 ::DenseColumnMajor,         ::AbstractStridedLayout) where T<:$typ = $bdot(x, y)
+        _vecdot(x::AbstractVector{T},       y::AbstractVector{T},
+                 ::AbstractStridedLayout,    ::AbstractStridedLayout) where T<:$typ = $bdot(x, y)
+     end
+ end
 
-_vecdot(x::AbstractArray{T}, y::AbstractArray{T}, ::DenseColumnMajor, ::DenseColumnMajor) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractArray{T}, ::AbstractStridedLayout, ::DenseColumnMajor) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractArray{T}, y::AbstractVector{T}, ::DenseColumnMajor, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
-_vecdot(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotc(x, y)
-
-_dotu(x::AbstractVector{T}, y::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotu(x, y)
+_dotu(x::AbstractVector{T},     y::AbstractVector{T},
+       ::AbstractStridedLayout,  ::AbstractStridedLayout) where {T<:BlasComplex} = BLAS.dotu(x, y)
 
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
