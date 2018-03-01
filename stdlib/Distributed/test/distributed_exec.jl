@@ -1402,7 +1402,7 @@ let
         rm(tmp_file, force=true)
         rm(tmp_file2, force=true)
         rm(tmp_dir2, force=true)
-        rm(tmp_dir, force=true)
+        #rm(tmp_dir, force=true)
     end
 end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
