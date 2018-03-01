@@ -4917,7 +4917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -7029,7 +7029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -12529,171 +12529,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network/#Base.connect-Tuple{TCPSocket,Integer}",
-    "page": "I/O and Network",
-    "title": "Base.connect",
-    "category": "Method",
-    "text": "connect([host], port::Integer) -> TCPSocket\n\nConnect to the host host on port port.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.connect-Tuple{AbstractString}",
-    "page": "I/O and Network",
-    "title": "Base.connect",
-    "category": "Method",
-    "text": "connect(path::AbstractString) -> PipeEndpoint\n\nConnect to the named pipe / UNIX domain socket at path.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.listen-Tuple{Any}",
-    "page": "I/O and Network",
-    "title": "Base.listen",
-    "category": "Method",
-    "text": "listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer\n\nListen on port on the address specified by addr. By default this listens on localhost only. To listen on all interfaces pass IPv4(0) or IPv6(0) as appropriate. backlog determines how many connections can be pending (not having called accept) before the server will begin to reject them. The default value of backlog is 511.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.listen-Tuple{AbstractString}",
-    "page": "I/O and Network",
-    "title": "Base.listen",
-    "category": "Method",
-    "text": "listen(path::AbstractString) -> PipeServer\n\nCreate and listen on a named pipe / UNIX domain socket.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.getaddrinfo",
-    "page": "I/O and Network",
-    "title": "Base.getaddrinfo",
-    "category": "Function",
-    "text": "getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr\n\nGets the first IP address of the host of the specified IPAddr type. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.getalladdrinfo",
-    "page": "I/O and Network",
-    "title": "Base.getalladdrinfo",
-    "category": "Function",
-    "text": "getalladdrinfo(host::AbstractString) -> Vector{IPAddr}\n\nGets all of the IP addresses of the host. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.getnameinfo",
-    "page": "I/O and Network",
-    "title": "Base.getnameinfo",
-    "category": "Function",
-    "text": "getnameinfo(host::IPAddr) -> String\n\nPerforms a reverse-lookup for IP address to return a hostname and service using the operating system\'s underlying getnameinfo implementation.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.getsockname",
-    "page": "I/O and Network",
-    "title": "Base.getsockname",
-    "category": "Function",
-    "text": "getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)\n\nGet the IP address and port that the given socket is bound to.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.getpeername",
-    "page": "I/O and Network",
-    "title": "Base.getpeername",
-    "category": "Function",
-    "text": "getpeername(sock::TCPSocket) -> (IPAddr, UInt16)\n\nGet the IP address and port of the remote endpoint that the given socket is connected to. Valid only for connected TCP sockets.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.IPv4",
-    "page": "I/O and Network",
-    "title": "Base.IPv4",
-    "category": "Type",
-    "text": "IPv4(host::Integer) -> IPv4\n\nReturns an IPv4 object from ip address host formatted as an Integer.\n\njulia> IPv4(3223256218)\nip\"192.30.252.154\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.IPv6",
-    "page": "I/O and Network",
-    "title": "Base.IPv6",
-    "category": "Type",
-    "text": "IPv6(host::Integer) -> IPv6\n\nReturns an IPv6 object from ip address host formatted as an Integer.\n\njulia> IPv6(3223256218)\nip\"::c01e:fc9a\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.TCPSocket",
-    "page": "I/O and Network",
-    "title": "Base.TCPSocket",
-    "category": "Type",
-    "text": "TCPSocket(; delay=true)\n\nOpen a TCP socket using libuv. If delay is true, libuv delays creation of the socket\'s file descriptor till the first bind call. TCPSocket has various fields to denote the state of the socket as well as its send/receive buffers.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.UDPSocket",
-    "page": "I/O and Network",
-    "title": "Base.UDPSocket",
-    "category": "Type",
-    "text": "UDPSocket()\n\nOpen a UDP socket using libuv. UDPSocket has various fields to denote the state of the socket.\n\n\n\n\n\n"
-},
-
-{
     "location": "base/io-network/#Base.bytesavailable",
     "page": "I/O and Network",
     "title": "Base.bytesavailable",
     "category": "Function",
     "text": "bytesavailable(io)\n\nReturn the number of bytes available for reading before a read from this stream or buffer will block.\n\nExamples\n\njulia> io = IOBuffer(\"JuliaLang is a GitHub organization\");\n\njulia> bytesavailable(io)\n34\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.accept",
-    "page": "I/O and Network",
-    "title": "Base.accept",
-    "category": "Function",
-    "text": "accept(server[,client])\n\nAccepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.listenany",
-    "page": "I/O and Network",
-    "title": "Base.listenany",
-    "category": "Function",
-    "text": "listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)\n\nCreate a TCPServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.bind",
-    "page": "I/O and Network",
-    "title": "Base.bind",
-    "category": "Function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.send",
-    "page": "I/O and Network",
-    "title": "Base.send",
-    "category": "Function",
-    "text": "send(socket::UDPSocket, host, port::Integer, msg)\n\nSend msg over socket to host:port.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.recv",
-    "page": "I/O and Network",
-    "title": "Base.recv",
-    "category": "Function",
-    "text": "recv(socket::UDPSocket)\n\nRead a UDP packet from the specified socket, and return the bytes received. This call blocks.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.recvfrom",
-    "page": "I/O and Network",
-    "title": "Base.recvfrom",
-    "category": "Function",
-    "text": "recvfrom(socket::UDPSocket) -> (address, data)\n\nRead a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/io-network/#Base.setopt",
-    "page": "I/O and Network",
-    "title": "Base.setopt",
-    "category": "Function",
-    "text": "setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)\n\nSet UDP socket options.\n\nmulticast_loop: loopback for multicast packets (default: true).\nmulticast_ttl: TTL for multicast packets (default: nothing).\nenable_broadcast: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false).\nttl: Time-to-live of packets sent on the socket (default: nothing).\n\n\n\n\n\n"
 },
 
 {
@@ -12741,7 +12581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Network I/O",
     "category": "section",
-    "text": "Base.connect(::TCPSocket, ::Integer)\nBase.connect(::AbstractString)\nBase.listen(::Any)\nBase.listen(::AbstractString)\nBase.getaddrinfo\nBase.getalladdrinfo\nBase.getnameinfo\nBase.getsockname\nBase.getpeername\nBase.IPv4\nBase.IPv6\nBase.TCPSocket\nBase.UDPSocket\nBase.bytesavailable\nBase.accept\nBase.listenany\nBase.bind\nBase.send\nBase.recv\nBase.recvfrom\nBase.setopt\nBase.ntoh\nBase.hton\nBase.ltoh\nBase.htol\nBase.ENDIAN_BOM"
+    "text": "Base.bytesavailable\nBase.ntoh\nBase.hton\nBase.ltoh\nBase.htol\nBase.ENDIAN_BOM"
 },
 
 {
@@ -14821,7 +14661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
@@ -15129,9 +14969,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed/#Base.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
+    "location": "stdlib/Distributed/#Sockets.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
     "page": "Distributed Computing",
-    "title": "Base.connect",
+    "title": "Sockets.connect",
     "category": "Method",
     "text": "connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)\n\nImplemented by cluster managers using custom transports. It should establish a logical connection to worker with id pid, specified by config and return a pair of IO objects. Messages from pid to current process will be read off instrm, while messages to be sent to pid will be written to outstrm. The custom transport implementation must ensure that messages are delivered and received completely and in order. connect(manager::ClusterManager.....) sets up TCP/IP socket connections in-between workers.\n\n\n\n\n\n"
 },
@@ -18502,6 +18342,190 @@ var documenterSearchIndex = {"docs": [
     "title": "Shared Arrays",
     "category": "section",
     "text": "SharedArrays.SharedArray\nSharedArrays.procs(::SharedArray)\nSharedArrays.sdata\nSharedArrays.indexpids\nSharedArrays.localindices"
+},
+
+{
+    "location": "stdlib/Sockets/#",
+    "page": "-",
+    "title": "-",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.connect-Tuple{TCPSocket,Integer}",
+    "page": "-",
+    "title": "Sockets.connect",
+    "category": "Method",
+    "text": "connect([host], port::Integer) -> TCPSocket\n\nConnect to the host host on port port.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.connect-Tuple{AbstractString}",
+    "page": "-",
+    "title": "Sockets.connect",
+    "category": "Method",
+    "text": "connect(path::AbstractString) -> PipeEndpoint\n\nConnect to the named pipe / UNIX domain socket at path.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.listen-Tuple{Any}",
+    "page": "-",
+    "title": "Sockets.listen",
+    "category": "Method",
+    "text": "listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer\n\nListen on port on the address specified by addr. By default this listens on localhost only. To listen on all interfaces pass IPv4(0) or IPv6(0) as appropriate. backlog determines how many connections can be pending (not having called accept) before the server will begin to reject them. The default value of backlog is 511.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.listen-Tuple{AbstractString}",
+    "page": "-",
+    "title": "Sockets.listen",
+    "category": "Method",
+    "text": "listen(path::AbstractString) -> PipeServer\n\nCreate and listen on a named pipe / UNIX domain socket.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getaddrinfo",
+    "page": "-",
+    "title": "Sockets.getaddrinfo",
+    "category": "Function",
+    "text": "getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr\n\nGets the first IP address of the host of the specified IPAddr type. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getipaddr",
+    "page": "-",
+    "title": "Sockets.getipaddr",
+    "category": "Function",
+    "text": "getipaddr() -> IPAddr\n\nGet the IP address of the local machine.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getalladdrinfo",
+    "page": "-",
+    "title": "Sockets.getalladdrinfo",
+    "category": "Function",
+    "text": "getalladdrinfo(host::AbstractString) -> Vector{IPAddr}\n\nGets all of the IP addresses of the host. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getnameinfo",
+    "page": "-",
+    "title": "Sockets.getnameinfo",
+    "category": "Function",
+    "text": "getnameinfo(host::IPAddr) -> String\n\nPerforms a reverse-lookup for IP address to return a hostname and service using the operating system\'s underlying getnameinfo implementation.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getsockname",
+    "page": "-",
+    "title": "Sockets.getsockname",
+    "category": "Function",
+    "text": "getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)\n\nGet the IP address and port that the given socket is bound to.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.getpeername",
+    "page": "-",
+    "title": "Sockets.getpeername",
+    "category": "Function",
+    "text": "getpeername(sock::TCPSocket) -> (IPAddr, UInt16)\n\nGet the IP address and port of the remote endpoint that the given socket is connected to. Valid only for connected TCP sockets.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.IPv4",
+    "page": "-",
+    "title": "Sockets.IPv4",
+    "category": "Type",
+    "text": "IPv4(host::Integer) -> IPv4\n\nReturns an IPv4 object from ip address host formatted as an Integer.\n\njulia> IPv4(3223256218)\nip\"192.30.252.154\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.IPv6",
+    "page": "-",
+    "title": "Sockets.IPv6",
+    "category": "Type",
+    "text": "IPv6(host::Integer) -> IPv6\n\nReturns an IPv6 object from ip address host formatted as an Integer.\n\njulia> IPv6(3223256218)\nip\"::c01e:fc9a\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.TCPSocket",
+    "page": "-",
+    "title": "Sockets.TCPSocket",
+    "category": "Type",
+    "text": "TCPSocket(; delay=true)\n\nOpen a TCP socket using libuv. If delay is true, libuv delays creation of the socket\'s file descriptor till the first bind call. TCPSocket has various fields to denote the state of the socket as well as its send/receive buffers.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.UDPSocket",
+    "page": "-",
+    "title": "Sockets.UDPSocket",
+    "category": "Type",
+    "text": "UDPSocket()\n\nOpen a UDP socket using libuv. UDPSocket has various fields to denote the state of the socket.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.accept",
+    "page": "-",
+    "title": "Sockets.accept",
+    "category": "Function",
+    "text": "accept(server[,client])\n\nAccepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.listenany",
+    "page": "-",
+    "title": "Sockets.listenany",
+    "category": "Function",
+    "text": "listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)\n\nCreate a TCPServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Base.bind",
+    "page": "-",
+    "title": "Base.bind",
+    "category": "Function",
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.send",
+    "page": "-",
+    "title": "Sockets.send",
+    "category": "Function",
+    "text": "send(socket::UDPSocket, host, port::Integer, msg)\n\nSend msg over socket to host:port.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.recv",
+    "page": "-",
+    "title": "Sockets.recv",
+    "category": "Function",
+    "text": "recv(socket::UDPSocket)\n\nRead a UDP packet from the specified socket, and return the bytes received. This call blocks.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.recvfrom",
+    "page": "-",
+    "title": "Sockets.recvfrom",
+    "category": "Function",
+    "text": "recvfrom(socket::UDPSocket) -> (address, data)\n\nRead a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets.setopt",
+    "page": "-",
+    "title": "Sockets.setopt",
+    "category": "Function",
+    "text": "setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)\n\nSet UDP socket options.\n\nmulticast_loop: loopback for multicast packets (default: true).\nmulticast_ttl: TTL for multicast packets (default: nothing).\nenable_broadcast: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false).\nttl: Time-to-live of packets sent on the socket (default: nothing).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Sockets/#Sockets-1",
+    "page": "-",
+    "title": "Sockets",
+    "category": "section",
+    "text": "Sockets.connect(::TCPSocket, ::Integer)\nSockets.connect(::AbstractString)\nSockets.listen(::Any)\nSockets.listen(::AbstractString)\nSockets.getaddrinfo\nSockets.getipaddr\nSockets.getalladdrinfo\nSockets.getnameinfo\nSockets.getsockname\nSockets.getpeername\nSockets.IPv4\nSockets.IPv6\nSockets.TCPSocket\nSockets.UDPSocket\nSockets.accept\nSockets.listenany\nSockets.bind\nSockets.send\nSockets.recv\nSockets.recvfrom\nSockets.setopt"
 },
 
 {
