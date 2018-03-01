@@ -459,7 +459,7 @@ Library improvements
     less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
-    take character arguments now accept any `AbstractChar`.
+    take character arguments now accept any `AbstractChar` ([#26286]).
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
