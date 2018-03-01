@@ -132,6 +132,18 @@ mutable struct Error <: Result
     value
     backtrace
     source::LineNumberNode
+
+    function Error(test_type, orig_expr, value, bt, source)
+        if test_type === :test_error
+            bt = scrub_backtrace(bt)
+        end
+        if test_type === :test_error || test_type === :nontest_error
+            bt_str = sprint(showerror, value, bt)
+        else
+            bt_str = ""
+        end
+        new(test_type, orig_expr, repr(value), bt_str, source)
+    end
 end
 function Base.show(io::IO, t::Error)
     if t.test_type == :test_interrupted
@@ -146,12 +158,11 @@ function Base.show(io::IO, t::Error)
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw an exception of type ", typeof(t.value))
+        println(io, "  Test threw exception ", t.value)
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -159,11 +170,10 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
+        println(io, "  Got exception $(t.value) outside of a @test")
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     end
 end
 
