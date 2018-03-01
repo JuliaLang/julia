@@ -267,4 +267,12 @@ end
     """
 end
 
+# Issue #26273
+let m = Module(:Bare26273i, false)
+    eval(m, :(import Base: @error))
+    @test_logs (:error, "Hello") eval(m, quote
+        @error "Hello"
+    end)
+end
+
 end
