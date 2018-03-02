@@ -91,7 +91,7 @@ push!(empty!(DEPOT_PATH), "depot")
 
 @test load_path() == [abspath("project","Project.toml")]
 
-@testset "project & manifest identify_package & locate_package" begin
+@testset "project & lockfile identify_package & locate_package" begin
     local path
     for (names, uuid, path) in [
         ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"      ),
@@ -138,7 +138,7 @@ push!(empty!(DEPOT_PATH), "depot")
     end
 end
 
-@testset "project & manifest import" begin
+@testset "project & lockfile import" begin
     @test !@isdefined Foo
     @test !@isdefined Bar
     import Foo
@@ -304,7 +304,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    # count manifest entries
+    # count lockfile entries
     counts = Dict(name => 0 for name in NAMES)
     for (i, _) in graph
         i == root && continue
@@ -312,8 +312,8 @@ for (flat, root, roots, graph) in graphs
         counts[L(i)] += 1
     end
 
-    # generate manifest file
-    open(joinpath(dir, "Manifest.toml"), "w") do io
+    # generate lockfile file
+    open(joinpath(dir, "Lockfile.toml"), "w") do io
         for (i, deps) in graph
             i == root && continue
             name, uuid = L(i), UUIDS[i]

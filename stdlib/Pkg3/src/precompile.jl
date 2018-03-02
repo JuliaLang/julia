@@ -164,7 +164,7 @@ precompile(Tuple{getfield(Base, Symbol("#kw##show_trace_entry")), NamedTuple{(:p
 precompile(Tuple{typeof(Base.setindex!), Base.Dict{String, Any}, Base.Dict{String, String}, String})
 precompile(Tuple{getfield(Pkg3.TOML, Symbol("#kw##printvalue")), NamedTuple{(:sorted,), Tuple{Bool}}, typeof(Pkg3.TOML.printvalue), Base.IOStream,Array{String, 1}})
 precompile(Tuple{typeof(Base.isempty), Array{Base.Dict{String, Any}, 1}})
-precompile(Tuple{typeof(Pkg3.Display.manifest_diff), Base.Dict{String, Any}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Pkg3.Display.lockfile_diff), Base.Dict{String, Any}, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.length), Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promote_typejoin), Type{Union{}}, Type{Int32}})
 precompile(Tuple{typeof(Base.push!), Array{Pkg3.Pkg2.Reqs.Line, 1}, Pkg3.Pkg2.Reqs.Comment})
@@ -242,7 +242,7 @@ precompile(Tuple{typeof(Base.print), Base.GenericIOBuffer{Array{UInt8, 1}}, Stri
 precompile(Tuple{typeof(Base.done), Tuple{Base.BitArray{1}}, Int64})
 precompile(Tuple{typeof(Base.merge!), Base.Dict{Base.UUID, Int64}, Base.Dict{Union{}, Union{}}})
 precompile(Tuple{typeof(Base.vcat), Base.BitArray{2}, Base.BitArray{2}, Base.BitArray{2}, Base.BitArray{2}})
-precompile(Tuple{typeof(Pkg3.Display.filter_manifest), Pkg3.Display.InProject{Base.Dict{String, Any}}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Pkg3.Display.filter_lockfile), Pkg3.Display.InProject{Base.Dict{String, Any}}, Base.Dict{String, Any}})
 
 @assert precompile(Tuple{typeof(Pkg3.REPLMode.do_help!), Pkg3.Types.Context, Vector{Pkg3.REPLMode.Token}, REPL.LineEditREPL})
 @assert precompile(Tuple{typeof(Pkg3.REPLMode.do_status!), Pkg3.Types.Context, Vector{Pkg3.REPLMode.Token}})

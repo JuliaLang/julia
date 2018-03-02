@@ -253,7 +253,7 @@ function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name)
     for env in load_path()
-        found_or_uuid = manifest_deps_get(env, where, name)
+        found_or_uuid = lockfile_deps_get(env, where, name)
         found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
         found_or_uuid && return nothing
     end
@@ -291,21 +291,21 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
             found_or_uuid = project_deps_get(env, pkg.name)
             found_or_uuid isa UUID &&
                 return locate_package(PkgId(found_or_uuid, pkg.name))
-            found_or_uuid && return implicit_manifest_uuid_path(env, pkg)
+            found_or_uuid && return implicit_lockfile_uuid_path(env, pkg)
         end
     else
         for env in load_path()
-            path = manifest_uuid_path(env, pkg)
+            path = lockfile_uuid_path(env, pkg)
             path != nothing && return entry_path(path, pkg.name)
         end
     end
 end
 locate_package(::Nothing) = nothing
 
-## generic project & manifest API ##
+## generic project & lockfile API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const lockfile_names = ("JuliaLockfile.toml", "Lockfile.toml")
 
 # return means
 #  - `false`: nothing to see here
@@ -332,41 +332,41 @@ function project_deps_get(env::String, name::String)::Union{Bool,UUID}
     project_file && implicit_project_deps_get(env, name)
 end
 
-function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Bool,UUID}
+function lockfile_deps_get(env::String, where::PkgId, name::String)::Union{Bool,UUID}
     @assert where.uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
         proj_name, proj_uuid = project_file_name_uuid_path(project_file, where.name)
         if proj_name == where.name && proj_uuid == where.uuid
-            # `where` matches the project, use deps as manifest
+            # `where` matches the project, use deps as lockfile
             found_or_uuid = explicit_project_deps_get(project_file, name)
             return found_or_uuid isa UUID ? found_or_uuid : true
         end
-        # look for `where` stanza in manifest file
-        manifest_file = project_file_manifest_path(project_file)
-        if isfile_casesensitive(manifest_file)
-            return explicit_manifest_deps_get(manifest_file, where.uuid, name)
+        # look for `where` stanza in lockfile file
+        lockfile_file = project_file_lockfile_path(project_file)
+        if isfile_casesensitive(lockfile_file)
+            return explicit_lockfile_deps_get(lockfile_file, where.uuid, name)
         end
         return false # `where` stanza not found
     end
-    project_file && implicit_manifest_deps_get(env, where, name)
+    project_file && implicit_lockfile_deps_get(env, where, name)
 end
 
-function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
+function lockfile_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
     project_file = env_project_file(env)
     if project_file isa String
         proj_name, proj_uuid, path = project_file_name_uuid_path(project_file, pkg.name)
         proj_name == pkg.name && proj_uuid == pkg.uuid && return path
-        manifest_file = project_file_manifest_path(project_file)
-        if isfile_casesensitive(manifest_file)
-            return explicit_manifest_uuid_path(manifest_file, pkg)
+        lockfile_file = project_file_lockfile_path(project_file)
+        if isfile_casesensitive(lockfile_file)
+            return explicit_lockfile_uuid_path(lockfile_file, pkg)
         end
         return nothing
     end
-    project_file ? implicit_manifest_uuid_path(env, pkg) : nothing
+    project_file ? implicit_lockfile_uuid_path(env, pkg) : nothing
 end
 
-# regular expressions for scanning project & manifest files
+# regular expressions for scanning project & lockfile files
 
 const re_section            = r"^\s*\["
 const re_array_of_tables    = r"^\s*\[\s*\["
@@ -378,7 +378,7 @@ const re_uuid_to_string     = r"^\s*uuid\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_name_to_string     = r"^\s*name\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_path_to_string     = r"^\s*path\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_hash_to_string     = r"^\s*git-tree-sha1\s*=\s*\"(.*)\"\s*(?:#|$)"
-const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
+const re_lockfile_to_string = r"^\s*lockfile\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
 # find project file's top-level UUID entry (or nothing)
@@ -402,27 +402,27 @@ function project_file_name_uuid_path(project_file::String,
     end
 end
 
-# find project file's corresponding manifest file
-function project_file_manifest_path(project_file::String)::Union{Nothing,String}
+# find project file's corresponding lockfile file
+function project_file_lockfile_path(project_file::String)::Union{Nothing,String}
     open(project_file) do io
         dir = abspath(dirname(project_file))
         for line in eachline(io)
             contains(line, re_section) && break
-            if (m = match(re_manifest_to_string, line)) != nothing
+            if (m = match(re_lockfile_to_string, line)) != nothing
                 return normpath(joinpath(dir, m.captures[1]))
             end
         end
-        local manifest_file
-        for mfst in manifest_names
-            manifest_file = joinpath(dir, mfst)
-            isfile_casesensitive(manifest_file) && return manifest_file
+        local lockfile_file
+        for mfst in lockfile_names
+            lockfile_file = joinpath(dir, mfst)
+            isfile_casesensitive(lockfile_file) && return lockfile_file
         end
-        return manifest_file
+        return lockfile_file
     end
 end
 
-# find `name` in a manifest file and return its UUID
-function manifest_file_name_uuid(manifest_file::String, name::String, io::IO)::Union{Nothing,UUID}
+# find `name` in a lockfile file and return its UUID
+function lockfile_file_name_uuid(lockfile_file::String, name::String, io::IO)::Union{Nothing,UUID}
     uuid = name′ = nothing
     for line in eachline(io)
         if (m = match(re_section_capture, line)) != nothing
@@ -475,7 +475,7 @@ function package_path_to_project_file(path::String)::Union{Nothing,String}
     end
 end
 
-## explicit project & manifest API ##
+## explicit project & lockfile API ##
 
 # find project file root or deps `name => uuid` mapping
 #  - `false` means: did not find `name`
@@ -519,8 +519,8 @@ end
 #  - `true` means: found `where` but `name` not in its deps
 #  - `uuid` means: found `where` and `name` mapped to `uuid` in its deps
 
-function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::String)::Union{Bool,UUID}
-    open(manifest_file) do io
+function explicit_lockfile_deps_get(lockfile_file::String, where::UUID, name::String)::Union{Bool,UUID}
+    open(lockfile_file) do io
         uuid = deps = nothing
         state = :other
         for line in eachline(io)
@@ -553,13 +553,13 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         end
         contains(deps, repr(name)) || return true
         seekstart(io) # rewind IO handle
-        manifest_file_name_uuid(manifest_file, name, io)
+        lockfile_file_name_uuid(lockfile_file, name, io)
     end
 end
 
 # find `uuid` stanza, return the corresponding path
-function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{Nothing,String}
-    open(manifest_file) do io
+function explicit_lockfile_uuid_path(lockfile_file::String, pkg::PkgId)::Union{Nothing,String}
+    open(lockfile_file) do io
         uuid = name = path = hash = nothing
         for line in eachline(io)
             if (m = match(re_section_capture, line)) != nothing
@@ -577,7 +577,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
         uuid == pkg.uuid || return nothing
         name == pkg.name || return nothing # TODO: allow a mismatch?
         if path != nothing
-            path = normpath(abspath(dirname(manifest_file), path))
+            path = normpath(abspath(dirname(lockfile_file), path))
             return entry_path(path, name)
         end
         hash == nothing && return nothing
@@ -589,7 +589,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
     end
 end
 
-## implicit project & manifest API ##
+## implicit project & lockfile API ##
 
 # look for an entry point for `name`:
 #  - `false` means: did not find `name`
@@ -607,7 +607,7 @@ end
 #  - `false` means: did not find `where`
 #  - `true` means: found `where` but `name` not in its deps
 #  - `uuid` means: found `where` and `name` mapped to `uuid` in its deps
-function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Union{Bool,UUID}
+function implicit_lockfile_deps_get(dir::String, where::PkgId, name::String)::Union{Bool,UUID}
     @assert where.uuid !== nothing
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return false
@@ -618,7 +618,7 @@ function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Un
 end
 
 # look for an entry-point for `pkg` and return its path if UUID matches
-function implicit_manifest_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,String}
+function implicit_lockfile_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,String}
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     pkg.uuid === nothing && project_file === nothing && return path
     pkg.uuid === nothing || project_file === nothing && return nothing

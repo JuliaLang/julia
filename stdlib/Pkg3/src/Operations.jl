@@ -71,7 +71,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
     fix_deps_map = Dict{UUID,Vector{PackageSpec}}()
     uuid_to_pkg = Dict{UUID,PackageSpec}()
     for pkg in pkgs
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         if pkg.special_action == PKGSPEC_FREED
             continue
         elseif pkg.special_action == PKGSPEC_CHECKED_OUT
@@ -200,7 +200,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
     for uuid in uuids
         uuid == uuid_julia && continue
         uuid_to_name[uuid] = registered_name(ctx.env, uuid)
-        info = manifest_info(ctx.env, uuid)
+        info = lockfile_info(ctx.env, uuid)
         info ≡ nothing && continue
         uuid_to_name[UUID(info["uuid"])] = info["name"]
     end
@@ -219,7 +219,7 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
     for (name::String, uuidstr::String) in ctx.env.project["deps"]
         uuid = UUID(uuidstr)
         uuid_to_name[uuid] = name
-        info = manifest_info(ctx.env, uuid)
+        info = lockfile_info(ctx.env, uuid)
         info == nothing && continue
         haskey(info, "version") || continue
         ver = VersionNumber(info["version"])
@@ -387,7 +387,7 @@ function install_git(
     return
 end
 
-# install & update manifest
+# install & update lockfile
 function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     BinaryProvider.probe_platform_engines!()
     names, hashes, urls = version_data(ctx, pkgs)
@@ -465,7 +465,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     end
 
     ##########################################
-    # Installation done, update the manifest #
+    # Installation done, update the lockfile #
     ##########################################
     for pkg in pkgs
         uuid = pkg.uuid
@@ -476,15 +476,15 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
         else
             hash = nothing
         end
-        update_manifest(ctx, pkg, hash)
+        update_lockfile(ctx, pkg, hash)
     end
 
-    prune_manifest(ctx.env)
+    prune_lockfile(ctx.env)
     return new_versions
 end
 
 ################################
-# Manifest update and pruning #
+# Lockfile update and pruning #
 ################################
 function find_stdlib_deps(ctx::Context, path::String)
     stdlib_deps = Dict{UUID, String}()
@@ -503,11 +503,11 @@ function find_stdlib_deps(ctx::Context, path::String)
     return stdlib_deps
 end
 
-function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
+function update_lockfile(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
     env = ctx.env
     uuid, name, version, path, special_action = pkg.uuid, pkg.name, pkg.version, pkg.path, pkg.special_action
     hash == nothing && @assert path != nothing
-    infos = get!(env.manifest, name, Dict{String,Any}[])
+    infos = get!(env.lockfile, name, Dict{String,Any}[])
     info = nothing
     for i in infos
         UUID(i["uuid"]) == uuid || continue
@@ -562,11 +562,11 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     return info
 end
 
-function prune_manifest(env::EnvCache)
+function prune_lockfile(env::EnvCache)
     keep = map(UUID, values(env.project["deps"]))
     while !isempty(keep)
         clean = true
-        for (name, infos) in env.manifest, info in infos
+        for (name, infos) in env.lockfile, info in infos
             haskey(info, "uuid") && haskey(info, "deps") || continue
             UUID(info["uuid"]) ∈ keep || continue
             for dep in map(UUID, values(info["deps"]))
@@ -577,7 +577,7 @@ function prune_manifest(env::EnvCache)
         end
         clean && break
     end
-    filter!(env.manifest) do (_, infos)
+    filter!(env.lockfile) do (_, infos)
         filter!(infos) do info
             haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
         end
@@ -588,7 +588,7 @@ end
 function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=true, do_resolve=false)
     localctx = deepcopy(ctx)
     empty!(localctx.env.project["deps"])
-    info = manifest_info(localctx.env, pkg.uuid)
+    info = lockfile_info(localctx.env, pkg.uuid)
     # If package or its dependencies are checked out, will need to resolve
     # unless we already have resolved for the current environment
     if allow_self_load
@@ -598,7 +598,7 @@ function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=t
     # Allow to load dependent packages at top level by putting them in the project
     deps = PackageSpec[]
     for (dpkg, duuid) in get(info, "deps", [])
-        dinfo = manifest_info(localctx.env, UUID(duuid))
+        dinfo = lockfile_info(localctx.env, UUID(duuid))
         dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
         localctx.env.project["deps"][dpkg] = string(duuid)
     end
@@ -609,11 +609,11 @@ function with_local_project(f, ctx::Context, pkg::PackageSpec; allow_self_load=t
         resolve_versions!(localctx, pkgs)
         new = apply_versions(localctx, pkgs)
     else
-        prune_manifest(localctx.env)
+        prune_lockfile(localctx.env)
     end
     mktempdir() do tmpdir
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
-        localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
+        localctx.env.lockfile_file = joinpath(tmpdir, "Lockfile.toml")
         write_env(localctx, no_output = true)
         will_resolve && build_versions(localctx, new)
         withenv("JULIA_LOAD_PATH" => joinpath(tmpdir)) do
@@ -635,7 +635,7 @@ function dependency_order_uuids(ctx::Context, uuids::Vector{UUID})::Dict{UUID,In
             return @warn("Dependency graph not a DAG, linearizing anyway")
         haskey(order, uuid) && return
         push!(seen, uuid)
-        info = manifest_info(ctx.env, uuid)
+        info = lockfile_info(ctx.env, uuid)
         haskey(info, "deps") &&
             foreach(visit, values(info["deps"]))
         pop!(seen)
@@ -652,7 +652,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; do_resolve=false)
     builds = Tuple{UUID,String,Union{String,SHA1},String}[]
     for uuid in uuids
         uuid in keys(ctx.stdlibs) && continue
-        info = manifest_info(ctx.env, uuid)
+        info = lockfile_info(ctx.env, uuid)
         name = info["name"]
         if haskey(info, "git-tree-sha1")
             hash_or_path = SHA1(info["git-tree-sha1"])
@@ -708,21 +708,21 @@ end
 ##############
 function rm(ctx::Context, pkgs::Vector{PackageSpec})
     drop = UUID[]
-    # find manifest-mode drops
+    # find lockfile-mode drops
     for pkg in pkgs
-        pkg.mode == PKGMODE_MANIFEST || continue
-        info = manifest_info(ctx.env, pkg.uuid)
+        pkg.mode == PKGMODE_LOCKFILE || continue
+        info = lockfile_info(ctx.env, pkg.uuid)
         if info != nothing
             pkg.uuid in drop || push!(drop, pkg.uuid)
         else
             str = has_name(pkg) ? pkg.name : string(pkg.uuid)
-            @warn("`$str` not in manifest, ignoring")
+            @warn("`$str` not in lockfile, ignoring")
         end
     end
     # drop reverse dependencies
     while !isempty(drop)
         clean = true
-        for (name, infos) in ctx.env.manifest, info in infos
+        for (name, infos) in ctx.env.lockfile, info in infos
             haskey(info, "uuid") && haskey(info, "deps") || continue
             deps = map(UUID, values(info["deps"]))
             isempty(drop ∩ deps) && continue
@@ -762,9 +762,9 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
         @info "No changes"
         return
     end
-    # only keep reachable manifest entires
-    prune_manifest(ctx.env)
-    # update project & manifest
+    # only keep reachable lockfile entires
+    prune_lockfile(ctx.env)
+    # update project & lockfile
     write_env(ctx)
 end
 
@@ -778,11 +778,11 @@ function add(ctx::Context, pkgs::Vector{PackageSpec})
         ctx.env.project["deps"][pkg.name] = string(pkg.uuid)
     end
     # if a package is in the project file and
-    # the manifest version in the specified version set
+    # the lockfile version in the specified version set
     # then leave the package as is at the installed version
     for (name::String, uuidstr::String) in ctx.env.project["deps"]
         uuid = UUID(uuidstr)
-        info = manifest_info(ctx.env, uuid)
+        info = lockfile_info(ctx.env, uuid)
         info != nothing && haskey(info, "version") || continue
         version = VersionNumber(info["version"])
         for pkg in pkgs
@@ -802,7 +802,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
     for pkg in pkgs
         pkg.version isa UpgradeLevel || continue
         level = pkg.version
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         ver = VersionNumber(info["version"])
         if level == UPLEVEL_FIXED
             pkg.version = VersionNumber(info["version"])
@@ -823,7 +823,7 @@ end
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec})
     for pkg in pkgs
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         if pkg.version == VersionSpec()
             pkg.version = VersionNumber(info["version"])
         end
@@ -840,7 +840,7 @@ function free(ctx::Context, pkgs::Vector{PackageSpec})
     need_to_resolve = false
     for pkg in pkgs
         pkg.special_action = PKGSPEC_FREED
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         if haskey(info, "path")
             need_to_resolve = true
         else
@@ -902,7 +902,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     testfiles        = String[]
     version_paths    = String[]
     for pkg in pkgs
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         if haskey(info, "git-tree-sha1")
             version_path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
         elseif haskey(info, "path")

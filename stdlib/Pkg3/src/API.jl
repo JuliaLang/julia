@@ -38,7 +38,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
-    manifest_resolve!(ctx.env, pkgs)
+    lockfile_resolve!(ctx.env, pkgs)
     Pkg3.Operations.rm(ctx, pkgs)
 end
 
@@ -109,15 +109,15 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
                 uuid = UUID(uuidstr)
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
-        elseif mode == PKGMODE_MANIFEST
-            for (name, infos) in ctx.env.manifest, info in infos
+        elseif mode == PKGMODE_LOCKFILE
+            for (name, infos) in ctx.env.lockfile, info in infos
                 uuid = UUID(info["uuid"])
                 push!(pkgs, PackageSpec(name, uuid, level))
             end
         end
     else
         project_resolve!(ctx.env, pkgs)
-        manifest_resolve!(ctx.env, pkgs)
+        lockfile_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs)
     end
     Pkg3.Operations.up(ctx, pkgs)
@@ -181,13 +181,13 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
-    manifest_resolve!(ctx.env, pkgs)
+    lockfile_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Pkg3.Operations.test(ctx, pkgs; coverage=coverage)
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
+function installed(mode::PackageMode=PKGMODE_LOCKFILE)::Dict{String, VersionNumber}
     diffs = Pkg3.Display.status(Context(), mode, #=use_as_api=# true)
     version_status = Dict{String, VersionNumber}()
     diffs == nothing && return version_status
@@ -214,29 +214,29 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     ctx.preview && preview_info()
     env = ctx.env
 
-    # If the manifest was not used
+    # If the lockfile was not used
     gc_time = Dates.now() - period
-    usage_file = joinpath(logdir(), "manifest_usage.toml")
+    usage_file = joinpath(logdir(), "lockfile_usage.toml")
 
-    # Collect only the manifest that is least recently used
-    manifest_date = Dict{String, Dates.DateTime}()
-    for (manifest_file, infos) in TOML.parse(String(read(usage_file)))
+    # Collect only the lockfile that is least recently used
+    lockfile_date = Dict{String, Dates.DateTime}()
+    for (lockfile_file, infos) in TOML.parse(String(read(usage_file)))
         for info in infos
             date = info["time"]
-            manifest_date[manifest_file] = haskey(manifest_date, date) ? max(manifest_date[date], date) : date
+            lockfile_date[lockfile_file] = haskey(lockfile_date, date) ? max(lockfile_date[date], date) : date
         end
     end
 
-    # Find all reachable packages through manifests recently used
+    # Find all reachable packages through lockfiles recently used
     new_usage = Dict{String, Any}()
     paths_to_keep = String[]
-    for (manifestfile, date) in manifest_date
-        !isfile(manifestfile) && continue
+    for (lockfilefile, date) in lockfile_date
+        !isfile(lockfilefile) && continue
         if date < gc_time
             continue
         end
-        infos = read_manifest(manifestfile)
-        new_usage[manifestfile] = [Dict("time" => date)]
+        infos = read_lockfile(lockfilefile)
+        new_usage[lockfilefile] = [Dict("time" => date)]
         for entry in infos
             entry isa Pair || continue
             name, _stanzas = entry
@@ -302,7 +302,7 @@ end
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
-        info = manifest_info(ctx.env, pkg.uuid)
+        info = lockfile_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
         if haskey(info, "deps")
@@ -321,15 +321,15 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     if isempty(pkgs)
-        for (name, infos) in ctx.env.manifest, info in infos
+        for (name, infos) in ctx.env.lockfile, info in infos
             uuid = UUID(info["uuid"])
             push!(pkgs, PackageSpec(name, uuid))
         end
     end
     for pkg in pkgs
-        pkg.mode = PKGMODE_MANIFEST
+        pkg.mode = PKGMODE_LOCKFILE
     end
-    manifest_resolve!(ctx.env, pkgs)
+    lockfile_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)

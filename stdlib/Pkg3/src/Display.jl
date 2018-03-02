@@ -30,35 +30,35 @@ end
 function status(ctx::Context, mode::PackageMode, use_as_api=false)
     env = ctx.env
     project₀ = project₁ = env.project
-    manifest₀ = manifest₁ = env.manifest
+    lockfile₀ = lockfile₁ = env.lockfile
     diff = nothing
 
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
-        manifest_path = relpath(env.manifest_file, git_path)
+        lockfile_path = relpath(env.lockfile_file, git_path)
         project₀ = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        manifest₀ = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        lockfile₀ = read_lockfile(git_file_stream(env.git, "HEAD:$lockfile_path", fakeit=true))
     end
     if mode == PKGMODE_PROJECT || mode == PKGMODE_COMBINED
-        # TODO: handle project deps missing from manifest
-        m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
-        m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
+        # TODO: handle project deps missing from lockfile
+        m₀ = filter_lockfile(in_project(project₀["deps"]), lockfile₀)
+        m₁ = filter_lockfile(in_project(project₁["deps"]), lockfile₁)
         use_as_api || @info("Status $(pathrepr(env, env.project_file))")
-        diff = manifest_diff(m₀, m₁)
+        diff = lockfile_diff(m₀, m₁)
         use_as_api || print_diff(diff)
     end
-    if mode == PKGMODE_MANIFEST
-        use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
-        diff = manifest_diff(manifest₀, manifest₁)
+    if mode == PKGMODE_LOCKFILE
+        use_as_api || @info("Status $(pathrepr(env, env.lockfile_file))")
+        diff = lockfile_diff(lockfile₀, lockfile₁)
         use_as_api || print_diff(diff)
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
-        m₀ = filter_manifest(p, manifest₀)
-        m₁ = filter_manifest(p, manifest₁)
-        c_diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
+        m₀ = filter_lockfile(p, lockfile₀)
+        m₁ = filter_lockfile(p, lockfile₁)
+        c_diff = filter!(x->x.old != x.new, lockfile_diff(m₀, m₁))
         if !isempty(c_diff)
-            use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
+            use_as_api || @info("Status $(pathrepr(env, env.lockfile_file))")
             use_as_api || print_diff(c_diff)
             diff = Base.vcat(c_diff, diff)
         end
@@ -67,9 +67,9 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
 end
 
 function print_project_diff(env₀::EnvCache, env₁::EnvCache)
-    pm₀ = filter_manifest(in_project(env₀.project["deps"]), env₀.manifest)
-    pm₁ = filter_manifest(in_project(env₁.project["deps"]), env₁.manifest)
-    diff = filter!(x->x.old != x.new, manifest_diff(pm₀, pm₁))
+    pm₀ = filter_lockfile(in_project(env₀.project["deps"]), env₀.lockfile)
+    pm₁ = filter_lockfile(in_project(env₁.project["deps"]), env₁.lockfile)
+    diff = filter!(x->x.old != x.new, lockfile_diff(pm₀, pm₁))
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
     else
@@ -77,8 +77,8 @@ function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     end
 end
 
-function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
-    diff = manifest_diff(env₀.manifest, env₁.manifest)
+function print_lockfile_diff(env₀::EnvCache, env₁::EnvCache)
+    diff = lockfile_diff(env₀.lockfile, env₁.lockfile)
     diff = filter!(x->x.old != x.new, diff)
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
@@ -156,11 +156,11 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
 end
 print_diff(diff::Vector{DiffEntry}) = print_diff(stdout, diff)
 
-function manifest_by_uuid(manifest::Dict)
+function lockfile_by_uuid(lockfile::Dict)
     entries = Dict{UUID,Dict}()
-    for (name, infos) in manifest, info in infos
+    for (name, infos) in lockfile, info in infos
         uuid = UUID(info["uuid"])
-        haskey(entries, uuid) && @warn("Duplicate UUID in manifest: $uuid")
+        haskey(entries, uuid) && @warn("Duplicate UUID in lockfile: $uuid")
         entries[uuid] = merge(info, Dict("name" => name))
     end
     return entries
@@ -175,10 +175,10 @@ function name_ver_info(info::Dict)
     name, VerInfo(hash, path, ver, pin)
 end
 
-function manifest_diff(manifest₀::Dict, manifest₁::Dict)
+function lockfile_diff(lockfile₀::Dict, lockfile₁::Dict)
     diff = DiffEntry[]
-    entries₀ = manifest_by_uuid(manifest₀)
-    entries₁ = manifest_by_uuid(manifest₁)
+    entries₀ = lockfile_by_uuid(lockfile₀)
+    entries₁ = lockfile_by_uuid(lockfile₁)
     for uuid in union(keys(entries₀), keys(entries₁))
         name₀ = name₁ = v₀ = v₁ = nothing
         haskey(entries₀, uuid) && ((name₀, v₀) = name_ver_info(entries₀[uuid]))
@@ -195,21 +195,21 @@ function manifest_diff(manifest₀::Dict, manifest₁::Dict)
     sort!(diff, by=x->(x.name, x.uuid))
 end
 
-function filter_manifest!(predicate, manifest::Dict)
+function filter_lockfile!(predicate, lockfile::Dict)
     empty = String[]
-    for (name, infos) in manifest
+    for (name, infos) in lockfile
         filter!(infos) do info
             predicate(name, info)
         end
         isempty(infos) && push!(empty, name)
     end
     for name in empty
-        pop!(manifest, name)
+        pop!(lockfile, name)
     end
-    return manifest
+    return lockfile
 end
-filter_manifest(predicate, manifest::Dict) =
-    filter_manifest!(predicate, deepcopy(manifest))
+filter_lockfile(predicate, lockfile::Dict) =
+    filter_lockfile!(predicate, deepcopy(lockfile))
 
 # This is precompilable, an anonymous function is not.
 struct InProject{D <: Dict}

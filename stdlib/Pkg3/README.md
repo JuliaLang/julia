@@ -27,7 +27,7 @@ INFO: Cloning [682c06a0-de6a-54ab-a142-c8b1cf79cde6] JSON
 INFO: Installing JSON v0.13.0 [9003b4622ec7e553]
 INFO: Updating project file /Users/stefan/projects/julia/Project.toml
 INFO:  [+] JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-INFO: Updating manifest file /Users/stefan/projects/julia/Manifest.toml
+INFO: Updating lockfile file /Users/stefan/projects/julia/Lockfile.toml
 INFO:  [34da2185] + Compat v0.31.0
 INFO:  [682c06a0] + JSON v0.13.0
 
@@ -36,14 +36,14 @@ INFO: Resolving package versions
 INFO: Installing Compat v0.28.0 [0427af7e2c8610c8]
 INFO: Updating project file /Users/stefan/projects/julia/Project.toml
 INFO:  [+] Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
-INFO: Updating manifest file /Users/stefan/projects/julia/Manifest.toml
+INFO: Updating lockfile file /Users/stefan/projects/julia/Lockfile.toml
 INFO:  [34da2185] ↓ Compat v0.31.0 ⇒ v0.28.0
 
 pkg> rm Compat
 INFO: Updating project file /Users/stefan/projects/julia/Project.toml
 INFO:  [-] Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 INFO:  [-] JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-INFO: Updating manifest file /Users/stefan/projects/julia/Manifest.toml
+INFO: Updating lockfile file /Users/stefan/projects/julia/Lockfile.toml
 INFO:  [34da2185] - Compat v0.28.0
 INFO:  [682c06a0] - JSON v0.13.0
 
@@ -52,7 +52,7 @@ INFO: Resolving package versions
 INFO: Installing JSON v0.10.0 [77699b5cc09b169c]
 INFO: Updating project file /Users/stefan/projects/julia/Project.toml
 INFO:  [+] JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-INFO: Updating manifest file /Users/stefan/projects/julia/Manifest.toml
+INFO: Updating lockfile file /Users/stefan/projects/julia/Lockfile.toml
 INFO:  [34da2185] + Compat v0.31.0
 INFO:  [682c06a0] + JSON v0.10.0
 
@@ -60,8 +60,8 @@ pkg> up
 INFO: Resolving package versions
 INFO: Updating project file /Users/stefan/projects/julia/Project.toml
 INFO:  [no changes]
-INFO: Updating manifest file /Users/stefan/projects/julia/Manifest.toml
+INFO: Updating lockfile file /Users/stefan/projects/julia/Lockfile.toml
 INFO:  [682c06a0] ↑ JSON v0.10.0 ⇒ v0.13.0
 ```
 
-Package operations create a `Project.toml` file that record what dependencies your project (or named global environment) has – i.e. what you've explicitly added. It also creates a `Manifest.toml` file that records the exact versions of each of those dependenices and their transitive dependencies – and the graph between them. You can load top-level dependencies via the usual `using JSON` or `import JSON` constructs in the REPL or in Julia scripts.
+Package operations create a `Project.toml` file that record what dependencies your project (or named global environment) has – i.e. what you've explicitly added. It also creates a `Lockfile.toml` file that records the exact versions of each of those dependenices and their transitive dependencies – and the graph between them. You can load top-level dependencies via the usual `using JSON` or `import JSON` constructs in the REPL or in Julia scripts.
