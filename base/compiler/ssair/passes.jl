@@ -35,7 +35,7 @@ function type_lift_pass!(ir::IRCode)
                     def = ir.stmts[item]
                     edges = copy(def.edges)
                     values = Vector{Any}(uninitialized, length(edges))
-                    new_phi = insert_node!(ir, item, Bool, PhiNode(edges, values))
+                    new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiNode(edges, values))
                     processed[item] = new_phi
                     if first
                         lifted_undef[stmt_id] = new_phi

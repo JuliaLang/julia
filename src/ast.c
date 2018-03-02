@@ -36,6 +36,7 @@ jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *unreachable_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -332,6 +333,7 @@ void jl_init_frontend(void)
     goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
+    unreachable_sym = jl_symbol("unreachable");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");

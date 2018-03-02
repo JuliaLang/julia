@@ -12,6 +12,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :const => 1:1,
     :new => 1:typemax(Int),
     :return => 1:1,
+    :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,

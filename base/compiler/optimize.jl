@@ -4194,8 +4194,7 @@ function copy_duplicated_expr_pass!(sv::OptimizationState)
 end
 
 # fix label numbers to always equal the statement index of the label
-function reindex_labels!(sv::OptimizationState)
-    body = sv.src.code
+function reindex_labels!(body::Vector{Any})
     mapping = get_label_map(body)
     for i = 1:length(body)
         el = body[i]
@@ -4233,6 +4232,11 @@ function reindex_labels!(sv::OptimizationState)
             pop!(body)
         end
     end
+end
+
+
+function reindex_labels!(sv::OptimizationState)
+    reindex_labels!(sv.src.code)
 end
 
 function return_type(@nospecialize(f), @nospecialize(t))
