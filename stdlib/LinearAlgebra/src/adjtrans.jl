@@ -170,6 +170,15 @@ strides(A::AdjOrTrans) = (stride(parent(A),2), stride(parent(A),1))
 # conversion of underlying storage
 convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
+convert(::Type{AbstractArray{T}}, A::Transpose{T}) where {T} = A
+convert(::Type{AbstractArray{T}}, A::Adjoint{T}) where {T} = A
+convert(::Type{AbstractMatrix{T}}, A::Transpose{T}) where {T} = A
+convert(::Type{AbstractMatrix{T}}, A::Adjoint{T}) where {T} = A
+convert(::Type{AbstractArray{T}}, A::Adjoint) where {T} = Adjoint(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractArray{T}}, A::Transpose) where {T} = Transpose(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractMatrix{T}}, A::Adjoint) where {T} = Adjoint(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractMatrix{T}}, A::Transpose) where {T} = Transpose(convert(AbstractArray{T}, A.parent))
+
 
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible

@@ -56,11 +56,13 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector
 end
 
 # Matrix-vector multiplication
-function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
+(*)(A::AbstractVecOrMat, B::AbstractVecOrMat) = _mul(A, B, MemoryLayout(A), MemoryLayout(B))
+
+function _mul(A::AbstractMatrix{T}, x::AbstractVector{S}, ::StridedLayout, ::StridedLayout) where {T<:BlasFloat,S}
     TS = promote_op(matprod, T, S)
     mul!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
 end
-function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
+function _mul(A::AbstractMatrix{T}, x::AbstractVector{S}, _1, _2) where {T,S}
     TS = promote_op(matprod, T, S)
     mul!(similar(x,TS,size(A,1)), A, x)
 end
@@ -110,7 +112,7 @@ _mul!(y::AbstractVector{T}, adjA::AbstractMatrix{T}, x::AbstractVector{T}, ::Abs
 
 # Vector-matrix multiplication
 
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
+_mul(a::AbstractVector, B::AbstractMatrix, _1, _2) = reshape(a,length(a),1)*B
 
 # these enable treating vectors as n x 1 matrices for important use-cases
 mul!(y::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) = mul!(y, reshape(a,length(a),1), B)
@@ -131,7 +133,9 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix, B::AbstractMatrix)
+*(::AbstractMatrix, ::AbstractMatrix)
+
+function _mul(A::AbstractMatrix, B::AbstractMatrix, _1, _2)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
