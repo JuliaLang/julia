@@ -4341,7 +4341,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unicode Input",
     "title": "Unicode Input",
     "category": "section",
-    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\nimport REPL\nconst NBSP = \'\\u00A0\'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(Sys.BINDIR, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = titlecase(lowercase(\n                name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e \'\\u00A0\'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.Unicode.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(uppercase(hex(char, 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        REPL.REPLCompletions.latex_symbols,\n        REPL.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
+    "text": "The following table lists Unicode characters that can be entered via tab completion of LaTeX-like abbreviations in the Julia REPL (and in various other editing environments).  You can also get information on how to type a symbol by entering it in the REPL help, i.e. by typing ? and then entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw the symbol).warning: Warning\nThis table may appear to contain missing characters in the second column, or even show characters that are inconsistent with the characters as they are rendered in the Julia REPL. In these cases, users are strongly advised to check their choice of fonts in their browser and REPL environment, as there are known issues with glyphs in many fonts.#\n# Generate a table containing all LaTeX and Emoji tab completions available in the REPL.\n#\nimport REPL\nconst NBSP = \'\\u00A0\'\n\nfunction tab_completions(symbols...)\n    completions = Dict{String, Vector{String}}()\n    for each in symbols, (k, v) in each\n        completions[v] = push!(get!(completions, v, String[]), k)\n    end\n    return completions\nend\n\nfunction unicode_data()\n    file = normpath(Sys.BINDIR, \"..\", \"..\", \"doc\", \"UnicodeData.txt\")\n    names = Dict{UInt32, String}()\n    open(file) do unidata\n        for line in readlines(unidata)\n            id, name, desc = split(line, \";\")[[1, 2, 11]]\n            codepoint = parse(UInt32, \"0x$id\")\n            names[codepoint] = titlecase(lowercase(\n                name == \"\" ? desc : desc == \"\" ? name : \"$name / $desc\"))\n        end\n    end\n    return names\nend\n\n# Surround combining characters with no-break spaces (i.e \'\\u00A0\'). Follows the same format\n# for how unicode is displayed on the unicode.org website:\n# http://unicode.org/cldr/utility/character.jsp?a=0300\nfunction fix_combining_chars(char)\n    cat = Base.Unicode.category_code(char)\n    return cat == 6 || cat == 8 ? \"$NBSP$char$NBSP\" : \"$char\"\nend\n\n\nfunction table_entries(completions, unicode_dict)\n    entries = [[\n        \"Code point(s)\", \"Character(s)\",\n        \"Tab completion sequence(s)\", \"Unicode name(s)\"\n    ]]\n    for (chars, inputs) in sort!(collect(completions), by = first)\n        code_points, unicode_names, characters = String[], String[], String[]\n        for char in chars\n            push!(code_points, \"U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))\")\n            push!(unicode_names, get(unicode_dict, UInt32(char), \"(No Unicode name)\"))\n            push!(characters, isempty(characters) ? fix_combining_chars(char) : \"$char\")\n        end\n        push!(entries, [\n            join(code_points, \" + \"), join(characters),\n            join(inputs, \", \"), join(unicode_names, \" + \")\n        ])\n    end\n    return Markdown.Table(entries, [:l, :l, :l, :l])\nend\n\ntable_entries(\n    tab_completions(\n        REPL.REPLCompletions.latex_symbols,\n        REPL.REPLCompletions.emoji_symbols\n    ),\n    unicode_data()\n)"
 },
 
 {
@@ -4917,7 +4917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
 },
 
 {
@@ -5485,7 +5485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.:∘",
     "category": "Function",
-    "text": "f ∘ g\n\nCompose functions: i.e. (f ∘ g)(args...) means f(g(args...)). The ∘ symbol can be entered in the Julia REPL (and most editors, appropriately configured) by typing \\circ<tab>.\n\nExamples\n\njulia> map(uppercase∘hex, 250:255)\n6-element Array{String,1}:\n \"FA\"\n \"FB\"\n \"FC\"\n \"FD\"\n \"FE\"\n \"FF\"\n\n\n\n\n\n"
+    "text": "f ∘ g\n\nCompose functions: i.e. (f ∘ g)(args...) means f(g(args...)). The ∘ symbol can be entered in the Julia REPL (and most editors, appropriately configured) by typing \\circ<tab>.\n\nExamples\n\njulia> map(uppercase∘first, [\"apple\", \"banana\", \"carrot\"])\n3-element Array{Char,1}:\n \'A\'\n \'B\'\n \'C\'\n\n\n\n\n\n"
 },
 
 {
@@ -7021,7 +7021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -8389,7 +8389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.ndigits",
     "category": "Function",
-    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\nExamples\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> base(16, 1022)\n\"3fe\"\n\n\n\n\n\n"
+    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\nExamples\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> string(1022, base = 16)\n\"3fe\"\n\n\n\n\n\n"
 },
 
 {
@@ -8785,46 +8785,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers/#Base.bin",
-    "page": "Numbers",
-    "title": "Base.bin",
-    "category": "Function",
-    "text": "bin(n, pad::Int=1)\n\nConvert an integer to a binary string, optionally specifying a number of digits to pad to.\n\njulia> bin(10,2)\n\"1010\"\n\njulia> bin(10,8)\n\"00001010\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.hex",
-    "page": "Numbers",
-    "title": "Base.hex",
-    "category": "Function",
-    "text": "hex(n, pad::Int=1)\n\nConvert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.\n\njulia> hex(20)\n\"14\"\n\njulia> hex(20, 3)\n\"014\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.dec",
-    "page": "Numbers",
-    "title": "Base.dec",
-    "category": "Function",
-    "text": "dec(n, pad::Int=1)\n\nConvert an integer to a decimal string, optionally specifying a number of digits to pad to.\n\nExamples\n\njulia> dec(20)\n\"20\"\n\njulia> dec(20, 3)\n\"020\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.oct",
-    "page": "Numbers",
-    "title": "Base.oct",
-    "category": "Function",
-    "text": "oct(n, pad::Int=1)\n\nConvert an integer to an octal string, optionally specifying a number of digits to pad to.\n\njulia> oct(20)\n\"24\"\n\njulia> oct(20, 3)\n\"024\"\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.base",
-    "page": "Numbers",
-    "title": "Base.base",
-    "category": "Function",
-    "text": "base(base::Integer, n::Integer, pad::Integer=1)\n\nConvert an integer n to a string in the given base, optionally specifying a number of digits to pad to.\n\njulia> base(13,5,4)\n\"0005\"\n\njulia> base(5,13,4)\n\"0023\"\n\n\n\n\n\n"
-},
-
-{
     "location": "base/numbers/#Base.digits",
     "page": "Numbers",
     "title": "Base.digits",
@@ -8925,7 +8885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bswap",
     "category": "Function",
-    "text": "bswap(n)\n\nByte-swap an integer. Flip the bits of its binary representation.\n\nExamples\n\njulia> a = bswap(4)\n288230376151711744\n\njulia> bswap(a)\n4\n\njulia> bin(1)\n\"1\"\n\njulia> bin(bswap(1))\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n\n\n"
+    "text": "bswap(n)\n\nByte-swap an integer. Flip the bits of its binary representation.\n\nExamples\n\njulia> a = bswap(4)\n288230376151711744\n\njulia> bswap(a)\n4\n\njulia> string(1, base = 2)\n\"1\"\n\njulia> string(bswap(1), base = 2)\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n\n\n"
 },
 
 {
@@ -8933,7 +8893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.hex2bytes",
     "category": "Function",
-    "text": "hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})\n\nGiven a string or array s of ASCII codes for a sequence of hexadecimal digits, returns a Vector{UInt8} of bytes  corresponding to the binary representation: each successive pair of hexadecimal digits in s gives the value of one byte in the return vector.\n\nThe length of s must be even, and the returned array has half of the length of s. See also hex2bytes! for an in-place version, and bytes2hex for the inverse.\n\nExamples\n\njulia> s = hex(12345)\n\"3039\"\n\njulia> hex2bytes(s)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> a = b\"01abEF\"\n6-element Array{UInt8,1}:\n 0x30\n 0x31\n 0x61\n 0x62\n 0x45\n 0x46\n\njulia> hex2bytes(a)\n3-element Array{UInt8,1}:\n 0x01\n 0xab\n 0xef\n\n\n\n\n\n"
+    "text": "hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})\n\nGiven a string or array s of ASCII codes for a sequence of hexadecimal digits, returns a Vector{UInt8} of bytes  corresponding to the binary representation: each successive pair of hexadecimal digits in s gives the value of one byte in the return vector.\n\nThe length of s must be even, and the returned array has half of the length of s. See also hex2bytes! for an in-place version, and bytes2hex for the inverse.\n\nExamples\n\njulia> s = string(12345, base = 16)\n\"3039\"\n\njulia> hex2bytes(s)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> a = b\"01abEF\"\n6-element Array{UInt8,1}:\n 0x30\n 0x31\n 0x61\n 0x62\n 0x45\n 0x46\n\njulia> hex2bytes(a)\n3-element Array{UInt8,1}:\n 0x01\n 0xab\n 0xef\n\n\n\n\n\n"
 },
 
 {
@@ -8949,7 +8909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bytes2hex",
     "category": "Function",
-    "text": "bytes2hex(bin_arr::Array{UInt8, 1}) -> String\n\nConvert an array of bytes to its hexadecimal representation. All characters are in lower-case.\n\nExamples\n\njulia> a = hex(12345)\n\"3039\"\n\njulia> b = hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> bytes2hex(b)\n\"3039\"\n\n\n\n\n\n"
+    "text": "bytes2hex(bin_arr::Array{UInt8, 1}) -> String\n\nConvert an array of bytes to its hexadecimal representation. All characters are in lower-case.\n\nExamples\n\njulia> a = string(12345, base = 16)\n\"3039\"\n\njulia> b = hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> bytes2hex(b)\n\"3039\"\n\n\n\n\n\n"
 },
 
 {
@@ -8957,7 +8917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Data Formats",
     "category": "section",
-    "text": "Base.bin\nBase.hex\nBase.dec\nBase.oct\nBase.base\nBase.digits\nBase.digits!\nBase.bitstring\nBase.parse\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.hex2bytes\nBase.hex2bytes!\nBase.bytes2hex"
+    "text": "Base.digits\nBase.digits!\nBase.bitstring\nBase.parse\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.hex2bytes\nBase.hex2bytes!\nBase.bytes2hex"
 },
 
 {
@@ -9421,7 +9381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.string",
     "category": "Function",
-    "text": "string(xs...)\n\nCreate a string from any values using the print function.\n\nExamples\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n\n\n"
+    "text": "string(n::Integer; base::Integer = 10, pad::Integer = 1)\n\nConvert an integer n to a string in the given base, optionally specifying a number of digits to pad to.\n\njulia> string(5, base = 13, pad = 4)\n\"0005\"\n\njulia> string(13, base = 5, pad = 4)\n\"0023\"\n\n\n\n\n\nstring(xs...)\n\nCreate a string from any values using the print function.\n\nExamples\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n\n\n"
 },
 
 {
@@ -18477,7 +18437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "-",
     "title": "Base.bind",
     "category": "Function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
