@@ -685,7 +685,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             while true
                 x, state = next(itr, state)
                 show(IOContext(recur_io, :typeinfo =>
-                               typeinfo <: Tuple ? typeinfo.parameters[i1+i0] : typeinfo),
+                               typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo),
                      x)
                 i1 += 1
                 if done(itr, state) || i1 > n

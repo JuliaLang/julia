@@ -1130,6 +1130,9 @@ end
     # Issue #25038
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
+
+    # issue #25857
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
