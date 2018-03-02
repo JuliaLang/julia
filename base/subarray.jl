@@ -386,7 +386,7 @@ _row_subarraylayout(par::DenseRowMajor, ::DenseRowMajor, inds::Tuple{I, Vararg{A
 _row_subarraylayout(par::AbstractRowMajor, ::AbstractRowMajor, inds::Tuple{I, Vararg{Any}}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
     _row_subarraylayout(par, RowMajor(), tail(inds))
 _row_subarraylayout(par::AbstractRowMajor, ::AbstractStridedLayout, inds::Tuple{I, Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
-    _row_subarraylayout(par, StridedLayout(), tail(inds))
+    _row_subarraylayout(par, StridedLayout(), tail(inds)) 
 
 _strided_subarraylayout(par, inds) = UnknownLayout()
 _strided_subarraylayout(par, ::Tuple{}) = StridedLayout()

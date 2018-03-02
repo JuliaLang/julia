@@ -884,9 +884,17 @@ end
 end
 
 struct MyDenseArray{T,N} <: DenseArray{T,N} end
+struct RowMajorArray{T,N} <: AbstractArray{T,N}
+    A::Array{T,N}
+end
+
+Base.getindex(A::RowMajorArray{T,N}, inds::Vararg{Int,N}) where {T,N} = A.A[reverse(inds)...]
+Base.setindex!(A::RowMajorArray, v, inds::Vararg{Int,N}) where {T,N} = (A.A[reverse(inds)...] = v)
+Base.MemoryLayout(::RowMajorArray) = Base.DenseRowMajor()
+Base.size(A::RowMajorArray) = reverse(size(A.A))
 
 @testset "MemoryLayout for Array, SubArray, and ReinterpretArray" begin
-    let A = [1.0 2; 3 4]
+    let A = randn(2,2)
         @test Base.MemoryLayout(A)                   == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:,:))         == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,:))           == Base.DenseColumnMajor()
@@ -896,11 +904,15 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
         @test Base.MemoryLayout(view(A,1,2))         == Base.DenseColumnMajor()
         @test Base.MemoryLayout(view(A,1,1:1))       == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1,:))         == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,:,1:-2:1))    == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:1,1:-2:1))  == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.ColumnMajor()
         @test Base.MemoryLayout(view(A,1:1,:))       == Base.ColumnMajor()
         @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,1:2:1,:))     == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:2:1,1:2))   == Base.StridedLayout()
         @test Base.MemoryLayout(view(A,[1,2],:))     == Base.UnknownLayout()
+        @test Base.MemoryLayout(view(A,:,[1,2]))     == Base.UnknownLayout()
 
         @test Base.MemoryLayout(Base.ReshapedArray(A,(4,),()))            == Base.DenseColumnMajor()
         @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,:),(4,),()))  == Base.DenseColumnMajor()
@@ -930,6 +942,42 @@ struct MyDenseArray{T,N} <: DenseArray{T,N} end
         @test Base.MemoryLayout(Base.ReshapedArray(view(A,:,1,1),(1,3),()))   == Base.DenseColumnMajor()
 
         @test Base.MemoryLayout(reinterpret(ComplexF64,A)) == Base.DenseColumnMajor()
+    end
+
+    let A = RowMajorArray(randn(2,2))
+        @test Base.MemoryLayout(A)                   == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,:,:))         == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,:))           == Base.UnknownLayout()
+        @test Base.MemoryLayout(view(A,:,1))         == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,:,1:1))       == Base.RowMajor()
+        @test Base.MemoryLayout(view(A,1:1,1))       == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1,2))         == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,1:1))       == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,:))         == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1:1,1:2))     == Base.RowMajor()
+        @test Base.MemoryLayout(view(A,1:1,:))       == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,1:2:1,1:2:1)) == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:-2:1,:))    == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:-2:1,1:2))  == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,[1,2],:))     == Base.UnknownLayout()
+        @test Base.MemoryLayout(view(A,:,[1,2]))     == Base.UnknownLayout()
+    end
+
+    let A = RowMajorArray(randn(2,2,2))
+        @test Base.MemoryLayout(A)                   == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,:,:,:))       == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,:))           == Base.UnknownLayout()
+        @test Base.MemoryLayout(view(A,:,:,1))       == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,:,:,1:1))     == Base.RowMajor()
+        @test Base.MemoryLayout(view(A,1:1,1,1))     == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1,2,2))       == Base.DenseColumnMajor()
+        @test Base.MemoryLayout(view(A,1,1:1,1:1))   == Base.RowMajor()
+        @test Base.MemoryLayout(view(A,1,:,:))       == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,1:1,1:2,1:2)) == Base.RowMajor()
+        @test Base.MemoryLayout(view(A,1:1,:,:))     == Base.DenseRowMajor()
+        @test Base.MemoryLayout(view(A,1:2:1,1:2:1,1:2:1)) == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,1:2:1,:,:))   == Base.StridedLayout()
+        @test Base.MemoryLayout(view(A,[1,2],:,:))   == Base.UnknownLayout()
     end
 
     @test Base.MemoryLayout(MyDenseArray{Float64,1}()) == Base.DenseColumnMajor()

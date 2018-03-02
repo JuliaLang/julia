@@ -298,59 +298,68 @@ UnknownLayout
     AbstractStridedLayout
 
 is an abstract type whose subtypes are returned by `MemoryLayout(A)`
-if a matrix or vector `A` have storage laid out at regular offsets in memory,
+if an array `A` has storage laid out at regular offsets in memory,
 and which can therefore be passed to external C and Fortran functions expecting
 this memory layout.
+
+Julia's internal linear algebra machinery will automatically (and invisibly)
+dispatch to BLAS and LAPACK routines if the memory layout is BLAS compatible and
+the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
+In this case, one must implement the strided array interface, which requires
+overrides of `strides(A::MyMatrix)` and `unknown_convert(::Type{Ptr{T}}, A::MyMatrix)`.
 """
 AbstractStridedLayout
 
 """
     DenseColumnMajor()
 
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-equivalent to an `Array`, so that `stride(A,1) == 1` and `stride(A,2) == size(A,1)`.
-Arrays with `DenseColumnMajor` must conform to the `DenseArray` interface.
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+equivalent to an `Array`, so that `stride(A,1) == 1` and
+`stride(A,i) ≡ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`. In particular,
+if `A` is a matrix then `strides(A) == `(1, size(A,1))`.
+
+Arrays with `DenseColumnMajor` memory layout must conform to the `DenseArray` interface.
 """
 DenseColumnMajor
 
 """
     ColumnMajor()
 
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage in memory
-as a column major matrix. In other words, the columns are stored in memory with
-offsets of one, while the rows are stored with offsets given by `stride(A,2)`.
-Arrays with `ColumnMajor` must conform to the `DenseArray` interface.
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a column major array, so that `stride(A,1) == 1` and
+`stride(A,i) ≥ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`.
+
+Arrays with `ColumnMajor` memory layout must conform to the `DenseArray` interface.
 """
 ColumnMajor
 
 """
     DenseRowMajor()
 
-is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
-equivalent to the transpose of an `Array`, so that `stride(A,1) == size(A,1)` and
-`stride(A,2) == 1`. Arrays with `DenseRowMajor` must conform to the
-`DenseArray` interface.
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a row major array with dense entries, so that `stride(A,ndims(A)) == 1` and
+`stride(A,i) ≡ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`. In particular,
+if `A` is a matrix then `strides(A) == `(size(A,2), 1)`.
 """
 DenseRowMajor
 
 """
     RowMajor()
 
-is returned by `MemoryLayout(A)` if a matrix `A` has storage in memory
-as a row major matrix. In other words, the rows are stored in memory with
-offsets of one, while the columns are stored with offsets given by `stride(A,1)`.
-Arrays with `RowMajor` must conform to the `DenseArray` interface,
-and `transpose(A)` should return a matrix whose layout is `ColumnMajor()`.
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a row major array, so that `stride(A,ndims(A)) == 1` and
+stride(A,i) ≥ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`.
+
+If `A` is a matrix  with `RowMajor` memory layout, then
+`transpose(A)` should return a matrix whose layout is `ColumnMajor`.
 """
 RowMajor
 
 """
     StridedLayout()
 
-is returned by `MemoryLayout(A)` if a vector or matrix `A` has storage laid out at regular
-offsets in memory. In other words, the columns are stored with offsets given
-by `stride(A,1)` and for matrices the rows are stored in memory with offsets
-of `stride(A,2)`. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
+is returned by `MemoryLayout(A)` if an array `A` has storage laid out at regular
+offsets in memory. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
 """
 StridedLayout
 
@@ -362,7 +371,7 @@ StridedLayout
 you define a new `AbstractArray` type, you can choose to implement
 memory layout to indicate that an array is strided in memory. If you decide to
 implement memory layout, then you must set this trait for your array
-type: for example, if your matrix is column major with `stride(A,2) == size(A,1)`,
+type. For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
 then override as follows:
 
     Base.MemoryLayout(::Type{M}) where M <: MyMatrix = Base.DenseColumnMajor()
@@ -371,10 +380,7 @@ The default is `Base.UnknownLayout()` to indicate that the layout
 in memory is unknown.
 
 Julia's internal linear algebra machinery will automatically (and invisibly)
-dispatch to BLAS and LAPACK routines if the memory layout is BLAS and
-the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
-In this case, one must implement the strided array interface, which requires
-overrides of `strides(A::MyMatrix)` and `unknown_convert(::Type{Ptr{T}}, A::MyMatrix)`.
+dispatch to BLAS and LAPACK routines if the memory layout is compatible.
 """
 MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout()
 
