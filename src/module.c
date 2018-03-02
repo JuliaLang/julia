@@ -648,7 +648,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             int hidden = jl_symbol_name(b->name)[0]=='#';
             if ((b->exportp ||
                  (imported && b->imported) ||
-                 ((b->owner == m) && (all || m == jl_main_module))) &&
+                 (b->owner == m && !b->imported && (all || m == jl_main_module))) &&
                 (all || (!b->deprecated && !hidden))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
