@@ -140,8 +140,10 @@ print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
-write(to::GenericIOBuffer, s::SubString{String}) =
-    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset+1), UInt(s.ncodeunits))
+# optimized methods to avoid iterating over chars
+write(io::IO, s::Union{String,SubString{String}}) =
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
 

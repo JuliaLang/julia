@@ -81,9 +81,6 @@ codeunit(s::String) = UInt8
     GC.@preserve s unsafe_load(pointer(s, i))
 end
 
-write(io::IO, s::String) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
-
 ## comparison ##
 
 function cmp(a::String, b::String)
@@ -320,7 +317,7 @@ codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3
 function string(a::Union{String,AbstractChar}...)
     sprint() do io
         for x in a
-            write(io, x)
+            print(io, x)
         end
     end
 end
