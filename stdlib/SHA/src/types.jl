@@ -138,15 +138,15 @@ copy(ctx::T) where {T<:SHA3_CTX} = T(copy(ctx.state), ctx.bytecount, copy(ctx.bu
 
 # Make printing these types a little friendlier
 import Base.show
-show(io::IO, ::SHA1_CTX) = write(io, "SHA1 hash state")
-show(io::IO, ::SHA2_224_CTX) = write(io, "SHA2 224-bit hash state")
-show(io::IO, ::SHA2_256_CTX) = write(io, "SHA2 256-bit hash state")
-show(io::IO, ::SHA2_384_CTX) = write(io, "SHA2 384-bit hash state")
-show(io::IO, ::SHA2_512_CTX) = write(io, "SHA2 512-bit hash state")
-show(io::IO, ::SHA3_224_CTX) = write(io, "SHA3 224-bit hash state")
-show(io::IO, ::SHA3_256_CTX) = write(io, "SHA3 256-bit hash state")
-show(io::IO, ::SHA3_384_CTX) = write(io, "SHA3 384-bit hash state")
-show(io::IO, ::SHA3_512_CTX) = write(io, "SHA3 512-bit hash state")
+show(io::IO, ::SHA1_CTX) = print(io, "SHA1 hash state")
+show(io::IO, ::SHA2_224_CTX) = print(io, "SHA2 224-bit hash state")
+show(io::IO, ::SHA2_256_CTX) = print(io, "SHA2 256-bit hash state")
+show(io::IO, ::SHA2_384_CTX) = print(io, "SHA2 384-bit hash state")
+show(io::IO, ::SHA2_512_CTX) = print(io, "SHA2 512-bit hash state")
+show(io::IO, ::SHA3_224_CTX) = print(io, "SHA3 224-bit hash state")
+show(io::IO, ::SHA3_256_CTX) = print(io, "SHA3 256-bit hash state")
+show(io::IO, ::SHA3_384_CTX) = print(io, "SHA3 384-bit hash state")
+show(io::IO, ::SHA3_512_CTX) = print(io, "SHA3 512-bit hash state")
 
 
 # use our types to define a method to get a pointer to the state buffer

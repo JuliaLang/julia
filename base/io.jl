@@ -83,7 +83,7 @@ Return `true` if the specified IO object is readable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            isreadable(io)
        end
 false
@@ -106,7 +106,7 @@ Return `true` if the specified IO object is writable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            iswritable(io)
        end
 true
@@ -152,7 +152,8 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.
+Return the number of bytes written into the stream.   See also [`print`](@ref) to
+write a text representation (with an encoding that may depend upon `io`).
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -570,7 +571,8 @@ function write(io::IO, c::Char)
         n += 1
     end
 end
-write(io::IO, c::AbstractChar) = write(io, Char(c)) # fallback
+# write(io, ::AbstractChar) is not defined: implementations
+# must provide their own encoding-specific method.
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
@@ -628,7 +630,8 @@ function read(io::IO, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
-read(io::IO, ::Type{T}) where {T<:AbstractChar} = T(read(io, Char)) # fallback
+# read(io, T) is not defined for other AbstractChar: implementations
+# must provide their own encoding-specific method.
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream

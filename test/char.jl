@@ -267,5 +267,4 @@ Base.UInt32(c::ASCIIChar) = UInt32(UInt8(c))
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
-    @test read(IOBuffer("x"), ASCIIChar) === ASCIIChar('x')
 end

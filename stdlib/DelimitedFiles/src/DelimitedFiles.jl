@@ -747,7 +747,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     for i = axes(a, 1)
         for j = axes(a, 2)
             writedlm_cell(pb, a[i, j], dlm, quotes)
-            j == lastc ? write(pb,'\n') : print(pb,dlm)
+            j == lastc ? print(pb,'\n') : print(pb,dlm)
         end
         (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
@@ -763,7 +763,7 @@ function writedlm_row(io::IO, row, dlm, quotes)
     while !done(row, state)
         (x, state) = next(row, state)
         writedlm_cell(io, x, dlm, quotes)
-        done(row, state) ? write(io,'\n') : print(io,dlm)
+        done(row, state) ? print(io,'\n') : print(io,dlm)
     end
 end
 
@@ -773,7 +773,7 @@ end
 # purely as an optimization.
 function writedlm_row(io::IO, row::Union{Number,AbstractString}, dlm, quotes)
     writedlm_cell(io, row, dlm, quotes)
-    write(io, '\n')
+    print(io, '\n')
 end
 
 # write an iterable collection of iterable rows
