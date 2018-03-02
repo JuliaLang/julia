@@ -180,7 +180,7 @@ fake_repl() do stdin_write, stdout_read, repl
                 @test contains(s, "shell> ")
             end
             s = readuntil(stdout_read, "\n", keep=true)
-            @test s == "\e[0m\n" # the child has exited
+            @test s == "\e[0mnothing\n" # the child has exited
         finally
             redirect_stdout(old_stdout)
         end

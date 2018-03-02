@@ -146,7 +146,7 @@ function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, hav
                 Base.invokelatest(Base.display_error, errio, val, bt)
                 iserr, lasterr = false, ()
             else
-                if val !== nothing && show_value
+                if show_value
                     try
                         if specialdisplay === nothing
                             Base.invokelatest(display, val)
