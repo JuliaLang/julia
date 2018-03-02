@@ -44,10 +44,10 @@ end
 IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
-print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
-                                  dec((ip.host&(0xFF0000))>>16),".",
-                                  dec((ip.host&(0xFF00))>>8),".",
-                                  dec(ip.host&0xFF))
+print(io::IO,ip::IPv4) = print(io,string((ip.host&(0xFF000000))>>24),".",
+                                  string((ip.host&(0xFF0000))>>16),".",
+                                  string((ip.host&(0xFF00))>>8),".",
+                                  string(ip.host&0xFF))
 
 struct IPv6 <: IPAddr
     host::UInt128
@@ -97,7 +97,7 @@ end
 IPv6(str::AbstractString) = parse(IPv6, str)
 
 # Suppress leading '0's and "0x"
-print_ipv6_field(io,field::UInt16) = print(io,hex(field))
+print_ipv6_field(io,field::UInt16) = print(io,string(field, base = 16))
 
 print_ipv6_field(io,ip,i) = print_ipv6_field(io,ipv6_field(ip,i))
 function ipv6_field(ip::IPv6,i)

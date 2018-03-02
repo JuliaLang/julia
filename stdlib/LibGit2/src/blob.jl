@@ -56,7 +56,7 @@ Return the [`GitHash`](@ref) of the resulting blob.
 
 # Examples
 ```julia
-hash_str = hex(commit_oid)
+hash_str = string(commit_oid)
 blob_file = joinpath(repo_path, ".git", "objects", hash_str[1:2], hash_str[3:end])
 id = LibGit2.addblob!(repo, blob_file)
 ```

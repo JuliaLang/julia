@@ -782,14 +782,11 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> map(uppercase∘hex, 250:255)
-6-element Array{String,1}:
- "FA"
- "FB"
- "FC"
- "FD"
- "FE"
- "FF"
+julia> map(uppercase∘first, ["apple", "banana", "carrot"])
+3-element Array{Char,1}:
+ 'A'
+ 'B'
+ 'C'
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
