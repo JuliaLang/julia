@@ -114,5 +114,5 @@ function write_toml(f::Function, names::String...)
     end
 end
 
-toml_key(str::String) = contains(str, r"[^\w-]") ? repr(str) : str
+toml_key(str::String) = occursin(r"[^\w-]", str) ? repr(str) : str
 toml_key(strs::String...) = join(map(toml_key, [strs...]), '.')

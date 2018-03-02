@@ -128,7 +128,7 @@ temp_pkg_dir() do project_path
         try
             Pkg3.add([PackageSpec(TEST_PKG.name, VersionSpec(v"55"))])
         catch e
-            @test contains(sprint(showerror, e), TEST_PKG.name)
+            @test occursin(TEST_PKG.name, sprint(showerror, e))
         end
     end
 

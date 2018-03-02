@@ -203,7 +203,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !contains(fmt, r"([^%]|^)%(a|A|j|w|Ow)")
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end

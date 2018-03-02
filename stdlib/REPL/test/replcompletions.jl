@@ -440,7 +440,7 @@ let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test contains(c[1], "x, y, w...")
+    @test occursin("x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion

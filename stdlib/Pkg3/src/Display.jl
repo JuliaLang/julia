@@ -107,7 +107,7 @@ struct VerInfo
     repo::Union{Types.GitRepo, Nothing}
 end
 
-revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
+revstring(str::String) = occursin(r"\b([a-f0-9]{40})\b", str) ? str[1:7] : str
 
 vstring(ctx::Context, a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",

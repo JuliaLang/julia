@@ -355,9 +355,9 @@ end
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
     result = String(take!(buf))
-    @test contains(result, "Dict")
-    @test contains(result, "(1=>2)=>(3=>45)")
-    @test contains(result, "(3=>10)=>(10=>11)")
+    @test occursin("Dict", result)
+    @test occursin("(1=>2)=>(3=>45)", result)
+    @test occursin("(3=>10)=>(10=>11)", result)
 end
 
 mutable struct Alpha end
@@ -368,7 +368,7 @@ Base.show(io::IO, ::Alpha) = print(io,"α")
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     local str = String(take!(sbuff))
-    @test !contains(str, "…")
+    @test !occursin("…", str)
     @test endswith(str, "α => 1")
 end
 

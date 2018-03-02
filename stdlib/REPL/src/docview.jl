@@ -479,7 +479,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
+filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));

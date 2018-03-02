@@ -388,7 +388,7 @@ function project_file_name_uuid_path(project_file::String,
         uuid = dummy_uuid(project_file)
         path = joinpath("src", "$name.jl")
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_name_to_string, line)) != nothing
                 name = String(m.captures[1])
             elseif (m = match(re_uuid_to_string, line)) != nothing
@@ -407,7 +407,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     open(project_file) do io
         dir = abspath(dirname(project_file))
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_manifest_to_string, line)) != nothing
                 return normpath(joinpath(dir, m.captures[1]))
             end
@@ -494,9 +494,9 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
         state = :top
         for line in eachline(io)
             if state == :top
-                if contains(line, re_section)
+                if occursin(re_section, line)
                     root_name == name && return root_uuid
-                    state = contains(line, re_section_deps) ? :deps : :other
+                    state = occursin(re_section_deps, line) ? :deps : :other
                 elseif (m = match(re_name_to_string, line)) != nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) != nothing
@@ -506,7 +506,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 if (m = match(re_key_to_string, line)) != nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
-            elseif contains(line, re_section)
+            elseif occursin(re_section, line)
                 state = :deps
             end
         end
@@ -524,7 +524,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         uuid = deps = nothing
         state = :other
         for line in eachline(io)
-            if contains(line, re_array_of_tables)
+            if occursin(re_array_of_tables, line)
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
@@ -533,9 +533,9 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) != nothing
                     deps = String(m.captures[1])
-                elseif contains(line, re_subsection_deps)
+                elseif occursin(re_subsection_deps, line)
                     state = :deps
-                elseif contains(line, re_section)
+                elseif occursin(re_section, line)
                     state = :other
                 end
             elseif state == :deps && uuid == where
@@ -551,7 +551,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             @warn "Unexpected TOML deps format:\n$deps"
             return nothing
         end
-        contains(deps, repr(name)) || return true
+        occursin(repr(name), deps) || return true
         seekstart(io) # rewind IO handle
         manifest_file_name_uuid(manifest_file, name, io)
     end
