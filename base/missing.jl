@@ -72,7 +72,7 @@ for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan), :(isempty),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj))
-    @eval Math.$(f)(::Missing) = missing
+    @eval $(f)(::Missing) = missing
 end
 
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
