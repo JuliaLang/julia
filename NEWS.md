@@ -1082,6 +1082,8 @@ Deprecated or removed
   * `contains` has been deprecated in favor of a more general `occursin` function, which
     takes its arguments in reverse order from `contains` ([#26283]).
 
+  * `Regex` objects are no longer callable. Use `occursin` instead ([#26283]).
+
   * The methods of `range` based on positional arguments have been deprecated in favor of
     keyword arguments ([#25896]).
 

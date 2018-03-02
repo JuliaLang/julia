@@ -1470,6 +1470,10 @@ end
 # PR #26283
 @deprecate contains(haystack, needle) occursin(needle, haystack)
 @deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
+function (r::Regex)(s)
+    depwarn("`(r::Regex)(s)` is deprecated, use `occursin(r, s)` instead.", :Regex)
+    occursin(r, s)
+end
 
 # Issue #25786
 @deprecate_binding DevNull devnull

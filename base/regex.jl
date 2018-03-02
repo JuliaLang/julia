@@ -153,8 +153,6 @@ function occursin(r::Regex, s::SubString; offset::Integer=0)
                      r.match_data)
 end
 
-(r::Regex)(s) = isfound(r, s)
-
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
