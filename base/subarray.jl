@@ -340,8 +340,12 @@ _column_subarraylayout1(par, inds::Tuple{I,Vararg{Int}}) where I<:AbstractUnitRa
     DenseColumnMajor() # view(A,1:3,1,2) is a DenseColumnMajor vector
 _column_subarraylayout1(::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:Slice =
     _column_subarraylayout(DenseColumnMajor(), DenseColumnMajor(), tail(inds))
+_column_subarraylayout1(par::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:AbstractUnitRange{Int} =
+    _column_subarraylayout(par, ColumnMajor(), tail(inds))
 _column_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:AbstractUnitRange{Int} =
     _column_subarraylayout(par, ColumnMajor(), tail(inds))
+_column_subarraylayout1(par::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _column_subarraylayout(par, StridedLayout(), tail(inds))
 _column_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
     _column_subarraylayout(par, StridedLayout(), tail(inds))
 _column_subarraylayout1(par, inds) = UnknownLayout()
