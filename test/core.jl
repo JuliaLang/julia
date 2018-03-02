@@ -4852,6 +4852,23 @@ f18095(::Number, ::Int) = 0x12
 @test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
 @test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
+# `invoke` with non-constant function
+struct CassetteLikeWrapper{F}
+    x
+    f::F
+end
+(foo::CassetteLikeWrapper)(args...) = foo.f(args...)
+(foo::CassetteLikeWrapper)(x) = invoke(foo, Tuple{Vararg{Any}}, x)
+@test CassetteLikeWrapper(1,-)(2) == -2
+
+f26301(x) = 1
+f26301(x::Int) = 2
+function g26301()
+    f = Any[f26301][1]
+    invoke(f, Tuple{Any}, 0)
+end
+@test g26301() == 1
+
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     # we introduce a new function `temp_vcat` to make sure there is no existing
