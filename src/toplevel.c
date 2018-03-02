@@ -516,14 +516,23 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
 static void import_module(jl_module_t *m, jl_module_t *import)
 {
     jl_sym_t *name = import->name;
+    jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
-        jl_binding_t *b = jl_get_binding(m, name);
+        b = jl_get_binding(m, name);
         if (b->owner != m || (b->value && b->value != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing identifier",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }
-    jl_set_const(m, name, (jl_value_t*)import);
+    else {
+        b = jl_get_binding_wr(m, name, 1);
+        b->imported = 1;
+    }
+    if (!b->constp) {
+        b->value = (jl_value_t*)import;
+        b->constp = 1;
+        jl_gc_wb(m, (jl_value_t*)import);
+    }
 }
 
 // replace Base.X with top-level X
