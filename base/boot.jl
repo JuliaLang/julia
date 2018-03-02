@@ -702,11 +702,6 @@ UInt32(x::BuiltinInts)  = toUInt32(x)::UInt32
 UInt64(x::BuiltinInts)  = toUInt64(x)::UInt64
 UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
 
-(::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-(::Type{AbstractChar})(x::Number) = Char(x)
-(::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(UInt32(x))
-(::Type{T})(x::T) where {T<:AbstractChar} = x
-
 (::Type{T})(x::T) where {T<:Number} = x
 
 Int(x::Ptr)  = bitcast(Int, x)

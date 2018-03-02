@@ -563,6 +563,7 @@ export
     bytes2hex,
     chomp,
     chop,
+    codepoint,
     codeunit,
     codeunits,
     digits,

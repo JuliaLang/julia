@@ -263,7 +263,7 @@ Base.UInt32(c::ASCIIChar) = UInt32(UInt8(c))
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
-    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x'))
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) == convert(Char, ASCIIChar('x'))
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"

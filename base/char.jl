@@ -3,9 +3,11 @@
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia.   A character represents a Unicode code point, and can be converted
-to/from `UInt32` in order to obtain the numerical value of the code point.
+to an integer via the [`codepoint`](@ref) function in order to obtain the
+numerical value of the code point, or constructed from the same integer.
 These numerical values determine how characters are compared with `<` and `==`,
-for example.
+for example.  New `T <: AbstractChar` types should define a `codepoint(::T)`
+method and a `T(::UInt32)` constructor, at minimum.
 
 A given `AbstractChar` subtype may be capable of representing only a subset
 of Unicode, in which case conversion from an unsupported `UInt32` value
@@ -16,15 +18,14 @@ The [`isvalid`](@ref) function can be used to check which codepoints are
 representable in a given `AbstractChar` type.
 
 Internally, an `AbstractChar` type may use a variety of encodings.  Conversion
-to `UInt32` will not reveal this encoding because it always returns the
-Unicode value of the character.  (Typically, the raw encoding can be obtained
-via [`reinterpret`](@ref).)
+via `codepoint(char)` will not reveal this encoding because it always returns the
+Unicode value of the character. `print(io, c)` of any `c::AbstractChar`
+produces UTF-8 output by default (via conversion to `Char` if necessary).
 
-`print(io, c)` of any `c::AbstractChar` produces UTF-8 output by default
-(via conversion to `Char` if necessary).   `write(io, c)`, in contrast,
-may emit a different encoding depending on `typeof(c)`, and `read(io, typeof(c))`
-should read the same encoding as `write`.  New `AbstractChar` types should provide
-their own implementations of `write` and `read`.
+`write(io, c)`, in contrast, may emit a different encoding depending on
+`typeof(c)`, and `read(io, typeof(c))` should read the same encoding as `write`.
+New `AbstractChar` types should typically provide their own implementations of
+`write` and `read`.
 """
 AbstractChar
 
@@ -43,14 +44,32 @@ represents a valid Unicode character.
 """
 Char
 
+(::Type{T})(x::Integer) where {T<:AbstractChar} = T(UInt32(x))
+(::Type{AbstractChar})(x::Number) = Char(x)
+(::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
+(::Type{T})(x::T) where {T<:AbstractChar} = x
+
+codepoint(c::Char) = UInt32(c)
+
+"""
+    codepoint(c::AbstractChar)
+
+Return the Unicode codepoint (an unsigned integer) corresponding
+to the character `c` (or throw an exception if `c` does not represent
+a valid character).   For `Char`, this is a `UInt32` value, but
+`AbstractChar` types that represent only a subset of Unicode may
+return a different-sized integer (e.g. `UInt8`).
+"""
+codepoint # defined for Char in boot.jl
+
 struct InvalidCharError{T<:AbstractChar} <: Exception
     char::T
 end
-struct CodePointError <: Exception
-    code::Integer
+struct CodePointError{T<:Integer} <: Exception
+    code::T
 end
 @noinline invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
-@noinline code_point_err(u::UInt32) = throw(CodePointError(u))
+@noinline code_point_err(u::Integer) = throw(CodePointError(u))
 
 function ismalformed(c::Char)
     u = reinterpret(UInt32, c)
@@ -145,8 +164,10 @@ end
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
 convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
 convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
+convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)
+convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
-rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(UInt32(x), T)
+rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
 
 typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
 typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
@@ -243,7 +264,7 @@ function show(io::IO, c::AbstractChar)
         print(io, c) # use print, not write, to use UTF-8 for any AbstractChar
         write(io, 0x27)
     else # unprintable, well-formed, non-overlong Unicode
-        u = UInt32(c)
+        u = codepoint(c)
         write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
         while 0 < d
@@ -263,7 +284,7 @@ function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
             u = decode_overlong(c)
             c = T(u)
         else
-            u = UInt32(c)
+            u = codepoint(c)
         end
         h = string(u, base = 16, pad = u ≤ 0xffff ? 4 : 6)
         print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)

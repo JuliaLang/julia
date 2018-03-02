@@ -3,6 +3,7 @@
 ```@docs
 Core.AbstractChar
 Core.Char
+Base.codepoint
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
 Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
