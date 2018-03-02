@@ -597,7 +597,7 @@ end
 # at top level. Therefore we would like to execute the build or testing of a dependency using its own Project file as
 # the current environment. Being backwards compatible with REQUIRE file complicates the story a bit since these packages
 # do not have any Project files.
-function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::PackageSpec; allow_self_load=true, might_need_to_resolve=false)
+function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::PackageSpec; might_need_to_resolve=false)
     # localctx is the context for the temporary environment we run the testing / building in
     localctx = deepcopy(mainctx)
     empty!(localctx.env.project["deps"])
@@ -606,9 +606,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     # unless we already have resolved for the current environment, which the calleer indicates
     # with `might_need_to_resolve`
     need_to_resolve = false
-    if allow_self_load
-        localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-    end
+    localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
     need_to_resolve |= haskey(info, "path")
     deps = PackageSpec[]
     for (dpkg, duuid) in get(info, "deps", [])
@@ -731,7 +729,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
-        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); allow_self_load=false, might_need_to_resolve=might_need_to_resolve) do
+        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); might_need_to_resolve=might_need_to_resolve) do
             open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
             end ? Base.rm(log_file, force=true) :
