@@ -330,10 +330,10 @@ julia> a = bswap(4)
 julia> bswap(a)
 4
 
-julia> bin(1)
+julia> string(1, base = 2)
 "1"
 
-julia> bin(bswap(1))
+julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
@@ -717,7 +717,7 @@ if Core.sizeof(Int) == 4
         return Int128(div(BigInt(x), BigInt(y)))
     end
     function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))
+        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
     end
 
     function rem(x::Int128, y::Int128)

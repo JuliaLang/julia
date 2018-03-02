@@ -7,7 +7,7 @@ export BigInt
 import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
+             sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
@@ -593,27 +593,16 @@ flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 
-string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
 
-bin(n::BigInt) = base( 2, n)
-oct(n::BigInt) = base( 8, n)
-dec(n::BigInt) = base(10, n)
-hex(n::BigInt) = base(16, n)
-
-bin(n::BigInt, pad::Int) = base( 2, n, pad)
-oct(n::BigInt, pad::Int) = base( 8, n, pad)
-dec(n::BigInt, pad::Int) = base(10, n, pad)
-hex(n::BigInt, pad::Int) = base(16, n, pad)
-
-function base(b::Integer, n::BigInt, pad::Integer=1)
-    b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
+    base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
+    2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, b)
+    nd1 = ndigits(n, base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end

@@ -150,7 +150,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, isempty, transpose, float]
+                            isinteger, isreal, isempty, transpose, adjoint, float]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -218,6 +218,7 @@ end
     x = convert(Vector{Union{Int, Missing}}, [missing])
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
+    @test eltype(adjoint([1, missing])) == Union{Int, Missing}
 end
 
 @testset "== and != on arrays" begin
