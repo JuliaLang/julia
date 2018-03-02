@@ -297,7 +297,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
-        if std_level >= _min_enabled_level[]
+        if std_level >= getindex(_min_enabled_level)
             logstate = current_logstate()
             if std_level >= logstate.min_enabled_level
                 logger = logstate.logger
