@@ -112,10 +112,6 @@ module IteratorsMD
     @inline max(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
-    @inline (+)(i::Integer, index::CartesianIndex) = index+i
-    @inline (+)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x+i, index.I))
-    @inline (-)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x-i, index.I))
-    @inline (-)(i::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->i-x, index.I))
     @inline (*)(a::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->a*x, index.I))
     @inline (*)(index::CartesianIndex, a::Integer) = *(a,index)
 
@@ -279,7 +275,7 @@ module IteratorsMD
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
         if any(map(>, iterfirst.I, iterlast.I))
-            return iterlast+1
+            return iterlast+one(iterlast)
         end
         iterfirst
     end

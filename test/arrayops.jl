@@ -1616,8 +1616,8 @@ end
     @test I2 + I1 == CartesianIndex((1,8,2))
     @test I1 - I2 == CartesianIndex((3,-2,-2))
     @test I2 - I1 == CartesianIndex((-3,2,2))
-    @test I1 + 1 == CartesianIndex((3,4,1))
-    @test I1 - 2 == CartesianIndex((0,1,-2))
+    @test I1 + 1*one(I1) == CartesianIndex((3,4,1))
+    @test I1 - 2*one(I1) == CartesianIndex((0,1,-2))
 
     @test zero(CartesianIndex{2}) == CartesianIndex((0,0))
     @test zero(CartesianIndex((2,3))) == CartesianIndex((0,0))

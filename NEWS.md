@@ -587,6 +587,9 @@ Library improvements
     collection `A`. There are also two other methods with a different API, and
     a mutating variant, `replace!` ([#22324]).
 
+  * Adding integers to `CartesianIndex` objects is now deprecated. Instead of
+    `i::Int + x::CartesianIndex`, use `i*one(x) + x` ([#26284]).
+
   * `CartesianRange` changes ([#24715]):
     - Inherits from `AbstractArray`, and linear indexing can be used to provide
       linear-to-cartesian conversion ([#24715])
