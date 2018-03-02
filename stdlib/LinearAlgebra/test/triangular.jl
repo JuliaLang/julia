@@ -572,47 +572,67 @@ end
     A = randn(Float64, 100, 100)
     x = randn(Float64, 100)
     @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+              view(UpperTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'N', 'N', A, copy(x)))
     @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+              view(UnitUpperTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'N', 'U', A, copy(x)))
     @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+              view(LowerTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'N', 'N', A, copy(x)))
     @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+              view(UnitLowerTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'N', 'U', A, copy(x)))
     @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+              view(UpperTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'T', 'N', A, copy(x)))
     @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+              view(UnitUpperTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'T', 'U', A, copy(x)))
     @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+              view(LowerTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'T', 'N', A, copy(x)))
     @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+              view(UnitLowerTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'T', 'U', A, copy(x)))
 
     A = randn(ComplexF64, 100, 100)
     x = randn(ComplexF64, 100)
     @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+              view(UpperTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'N', 'N', A, copy(x)))
     @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+              view(UnitUpperTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'N', 'U', A, copy(x)))
     @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+              view(LowerTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'N', 'N', A, copy(x)))
     @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
-                                            BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+              view(UnitLowerTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'N', 'U', A, copy(x)))
     @test all(transpose(UpperTriangular(A))*x .=== transpose(UpperTriangular(view(A',:,:)'))*x .===
-                                            BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+              view(transpose(UpperTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'T', 'N', A, copy(x)))
     @test all(transpose(UnitUpperTriangular(A))*x .=== transpose(UnitUpperTriangular(view(A',:,:)'))*x .===
-                                            BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+              view(transpose(UnitUpperTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'T', 'U', A, copy(x)))
     @test all(transpose(LowerTriangular(A))*x .=== transpose(LowerTriangular(view(A',:,:)'))*x .===
-                                            BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+              view(transpose(LowerTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'T', 'N', A, copy(x)))
     @test all(transpose(UnitLowerTriangular(A))*x .=== transpose(UnitLowerTriangular(view(A',:,:)'))*x .===
-                                            BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+              view(transpose(UnitLowerTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'T', 'U', A, copy(x)))
     @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('U', 'C', 'N', A, copy(x)))
+              view(UpperTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'C', 'N', A, copy(x)))
     @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('U', 'C', 'U', A, copy(x)))
+              view(UnitUpperTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'C', 'U', A, copy(x)))
     @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('L', 'C', 'N', A, copy(x)))
+              view(LowerTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'C', 'N', A, copy(x)))
     @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
-                                            BLAS.trmv!('L', 'C', 'U', A, copy(x)))
+              view(UnitLowerTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'C', 'U', A, copy(x)))
 end
 end # module TestTriangular

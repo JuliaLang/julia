@@ -449,6 +449,7 @@ MemoryLayout(A::LowerTriangular) = triangularlayout(LowerTriangularLayout, Memor
 MemoryLayout(A::UnitLowerTriangular) = triangularlayout(UnitLowerTriangularLayout, MemoryLayout(parent(A)))
 triangularlayout(_, ::MemoryLayout) = UnknownLayout()
 triangularlayout(::Type{Tri}, ML::AbstractColumnMajor) where {Tri} = Tri(ML)
+Base.subarraylayout(layout::AbstractTriangularLayout, ::Tuple{<:Union{Slice,Base.OneTo},<:Union{Slice,Base.OneTo}}) = layout
 
 for (TriLayout, TriLayoutTrans) in ((UpperTriangularLayout,     LowerTriangularLayout),
                                     (UnitUpperTriangularLayout, UnitLowerTriangularLayout),
@@ -462,6 +463,8 @@ end
 
 triangulardata(A::Adjoint) = Adjoint(triangulardata(parent(A)))
 triangulardata(A::Transpose) = Transpose(triangulardata(parent(A)))
+triangulardata(A::SubArray{<:Any,2,<:Any,<:Tuple{<:Union{Slice,Base.OneTo},<:Union{Slice,Base.OneTo}}}) =
+    view(triangulardata(parent(A)), parentindices(A)...)
 
 # Unary operations
 -(A::LowerTriangular) = LowerTriangular(-A.data)
