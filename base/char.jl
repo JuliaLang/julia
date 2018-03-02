@@ -18,7 +18,8 @@ representable in a given `AbstractChar` type.
 Internally, an `AbstractChar` type may use a variety of encodings.  Conversion
 to `UInt32` will not reveal this encoding because it always returns the
 Unicode value of the character.  (Typically, the raw encoding can be obtained
-via [`reinterpret`](@ref).)
+via [`reinterpret`](@ref).)   Character I/O uses UTF-8 by default for all
+character types, regardless of their internal encoding.
 """
 AbstractChar
 
@@ -148,8 +149,7 @@ hash(x::Char, h::UInt) =
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
 ==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
-hash(x::AbstractChar, h::UInt) =
-    hash_uint64(((UInt32(x) + UInt64(0xd060fad0)) << 32) ⊻ UInt64(h))
+hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
 -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)

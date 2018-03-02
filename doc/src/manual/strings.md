@@ -28,8 +28,9 @@ There are a few noteworthy high-level features about Julia's strings:
     additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
-  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type representing
-    a single character, called `AbstractChar`. This is just a special kind of 32-bit primitive type whose numeric value represents a Unicode code point.
+  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
+    a single character, called `AbstractChar`. The built-in `Char` subtype of `AbstractChar`
+    is a 32-bit primitive type that can represent any Unicode character.
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
     To construct a different string value, you construct a new string from parts of other strings.
   * Conceptually, a string is a *partial function* from indices to characters: for some index values,

@@ -14,8 +14,8 @@ about strings:
 * String indexing is done in terms of these code units:
   * Characters are extracted by `s[i]` with a valid string index `i`
   * Each `AbstractChar` in a string is encoded by one or more code units
-  * Only the index of the first code unit of a `AbstractChar` is a valid index
-  * The encoding of a `AbstractChar` is independent of what precedes or follows it
+  * Only the index of the first code unit of an `AbstractChar` is a valid index
+  * The encoding of an `AbstractChar` is independent of what precedes or follows it
   * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
 
 [self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
