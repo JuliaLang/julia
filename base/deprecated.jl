@@ -1488,6 +1488,9 @@ function assert(x)
     @assert x ""
 end
 
+# Issue #26248
+@deprecate conj(x) x
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
