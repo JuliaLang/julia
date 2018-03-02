@@ -216,9 +216,15 @@ julia> a = [1. 2.; 3. 4.]
  3.0  4.0
 
 julia> qrfact!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.316228 -0.948683; -0.948683 0.316228]
-[-3.16228 -4.42719; 0.0 -0.632456]
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.316228  -0.948683
+ -0.948683   0.316228
+R factor:
+2×2 Array{Float64,2}:
+ -3.16228  -4.42719
+  0.0      -0.632456
 
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -226,7 +232,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qrfact!(a)
-ERROR: InexactError: convert(Int64, -3.1622776601683795)
+ERROR: InexactError: Int64(Int64, -3.1622776601683795)
 Stacktrace:
 [...]
 ```
@@ -280,9 +286,16 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  0.0   1.0
 
 julia> F = qrfact(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
-[-5.0 10.0; 0.0 -1.0]
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.6   0.0   0.8
+ -0.8   0.0  -0.6
+  0.0  -1.0   0.0
+R factor:
+2×2 Array{Float64,2}:
+ -5.0  10.0
+  0.0  -1.0
 
 julia> F.Q * F.R == A
 true

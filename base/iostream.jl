@@ -48,7 +48,7 @@ iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
-    truncate(file,n)
+    truncate(file, n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
@@ -73,7 +73,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 julia> truncate(io, 40);
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.\0\0\0\0\0"
+"JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
 function truncate(s::IOStream, n::Integer)
@@ -354,8 +354,8 @@ descriptor upon completion.
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
-       end
+           write(io, "Hello world!")
+       end;
 
 julia> open(f->read(f, String), "myfile.txt")
 "Hello world!"

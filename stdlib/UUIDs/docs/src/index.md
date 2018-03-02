@@ -1,7 +1,7 @@
 # UUIDs
 
 ```@meta
-DocTestSetup = :(using UUIDs)
+DocTestSetup = :(using UUIDs, Random)
 ```
 
 ```@docs

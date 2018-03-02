@@ -530,15 +530,15 @@ end
 Determine whether a collection has a mapping for a given key.
 
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> haskey(a,'a')
+julia> haskey(D, 'a')
 true
 
-julia> haskey(a,'c')
+julia> haskey(D, 'c')
 false
 ```
 """
@@ -551,15 +551,15 @@ in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
 
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> getkey(a,'a',1)
+julia> getkey(D, 'a', 1)
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
-julia> getkey(a,'d','a')
+julia> getkey(D, 'd', 'a')
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """

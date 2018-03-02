@@ -1523,8 +1523,7 @@ julia> A = [false, false, true, false]
 julia> findnext(A, 1)
 3
 
-julia> findnext(A, 4) == nothing
-true
+julia> findnext(A, 4) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
@@ -1575,8 +1574,7 @@ julia> A = [false, false, true, false]
 julia> findfirst(A)
 3
 
-julia> findfirst(falses(3)) == nothing
-true
+julia> findfirst(falses(3)) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
@@ -1615,23 +1613,14 @@ and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
-A = [1, 4, 2, 2]
-4-element Array{Int64,1}:
- 1
- 4
- 2
- 2
+julia> A = [1, 4, 2, 2];
 
 julia> findnext(isodd, A, 1)
 1
 
-julia> findnext(isodd, A, 2) == nothing
-true
+julia> findnext(isodd, A, 2) # returns nothing, but not printed in the REPL
 
-julia> A = [1 4; 2 2]
-2×2 Array{Int64,2}:
- 1  4
- 2  2
+julia> A = [1 4; 2 2];
 
 julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
@@ -1670,8 +1659,7 @@ julia> A = [1, 4, 2, 2]
 julia> findfirst(iseven, A)
 2
 
-julia> findfirst(x -> x>10, A) == nothing
-true
+julia> findfirst(x -> x>10, A) # returns nothing, but not printed in the REPL
 
 julia> findfirst(equalto(4), A)
 2
@@ -1717,8 +1705,7 @@ julia> A = [false, false, true, true]
 julia> findprev(A, 3)
 3
 
-julia> findprev(A, 1) == nothing
-true
+julia> findprev(A, 1) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true true]
 2×2 Array{Bool,2}:
@@ -1767,8 +1754,7 @@ julia> findlast(A)
 
 julia> A = falses(2,2);
 
-julia> findlast(A) == nothing
-true
+julia> findlast(A) # returns nothing, but not printed in the REPL
 
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
@@ -1814,8 +1800,7 @@ julia> A = [4, 6, 1, 2]
  1
  2
 
-julia> findprev(isodd, A, 1) == nothing
-true
+julia> findprev(isodd, A, 1) # returns nothing, but not printed in the REPL
 
 julia> findprev(isodd, A, 3)
 3
@@ -1859,8 +1844,7 @@ julia> A = [1, 2, 3, 4]
 julia> findlast(isodd, A)
 3
 
-julia> findlast(x -> x > 5, A) == nothing
-true
+julia> findlast(x -> x > 5, A) # returns nothing, but not printed in the REPL
 
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1965,9 +1949,9 @@ julia> A = [true false; false true]
  false   true
 
 julia> findall(A)
-2-element Array{Int64,1}:
- 1
- 4
+2-element Array{CartesianIndex{2},1}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 2)
 
 julia> findall(falses(3))
 0-element Array{Int64,1}
@@ -2137,9 +2121,9 @@ array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
-julia> b = ['a', 'b', 'c']
+julia> b = ['a', 'b', 'c'];
 
 julia> indexin(a, b)
 6-element Array{Union{Nothing, Int64},1}:

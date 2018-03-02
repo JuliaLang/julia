@@ -315,9 +315,9 @@ julia> open("my_file.txt", "w") do io
 57
 
 julia> readuntil("my_file.txt", 'L')
-"JuliaL"
+"Julia"
 
-julia> readuntil("my_file.txt", '.')
+julia> readuntil("my_file.txt", '.', keep = true)
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -1003,7 +1003,7 @@ end with the EOL, matching the length returned by [`eachline`](@ref) and [`readl
 
 # Examples
 ```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization.\n");
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n");
 
 julia> countlines(io)
 1
@@ -1014,7 +1014,7 @@ julia> countlines(io)
 1
 
 julia> countlines(io, eol = '.')
-1
+0
 ```
 """
 function countlines(io::IO; eol::Char='\n')

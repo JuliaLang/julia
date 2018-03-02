@@ -621,8 +621,8 @@ julia> A = Matrix(2.7182818*I, 2, 2)
 
 julia> log(A)
 2×2 Array{Float64,2}:
- 1.0  0.0
- 0.0  1.0
+  1.0  0.0
+ -0.0  1.0
 ```
 """
 function log(A::StridedMatrix)
@@ -935,8 +935,8 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-8.32667e-17im  0.1-2.77556e-17im
- -0.2+2.77556e-16im  0.3-3.46945e-16im
+  0.5-5.55112e-17im  0.1-2.77556e-17im
+ -0.2+2.498e-16im    0.3-3.46945e-16im
 ```
 """
 function acos(A::AbstractMatrix)

@@ -924,25 +924,28 @@ OutOfMemoryError
 An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> A = fill(1.0, 7);
 
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:758
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:660
+ [2] top-level scope
 
 julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:759
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:661
+ [2] top-level scope
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:758
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:660
+ [2] top-level scope
 ```
 """
 BoundsError
@@ -955,9 +958,9 @@ Cannot exactly convert `val` to type `T` in a method of function `name`.
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError: convert(Float64, 1 + 2im)
+ERROR: InexactError: Float64(Float64, 1 + 2im)
 Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
+[...]
 ```
 """
 InexactError

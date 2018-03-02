@@ -344,20 +344,16 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: convert(Int64, 23.5)
+ERROR: InexactError: Int64(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
+[...]
 ```
 
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
 julia> fieldnames(Foo)
-3-element Array{Symbol,1}:
- :bar
- :baz
- :qux
+(:bar, :baz, :qux)
 ```
 
 You can access the field values of a composite object using the traditional `foo.bar` notation:
@@ -649,13 +645,11 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
-This may have arisen from a call to the constructor Point{Float64}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:114
+[...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+[...]
 ```
 
 Only one default constructor is generated for parametric types, since overriding it is not possible.

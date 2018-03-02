@@ -121,7 +121,7 @@ the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
 operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> a = [1 2; 3 4];
 
 julia> b = [5 6; 7 8];
@@ -141,7 +141,7 @@ julia> permutedims(X)
  [5 6; 7 8]  [13 14; 15 16]
 
 julia> transpose(X)
-2×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
+2×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
  [1 3; 2 4]  [9 11; 10 12]
  [5 7; 6 8]  [13 15; 14 16]
 ```
@@ -156,7 +156,7 @@ Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
 the operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> permutedims([1, 2, 3, 4])
 1×4 Array{Int64,2}:
  1  2  3  4
@@ -171,7 +171,7 @@ julia> permutedims(V)
  [1 2; 3 4]  [5 6; 7 8]
 
 julia> transpose(V)
-1×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
+1×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """

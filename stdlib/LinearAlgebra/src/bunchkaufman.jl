@@ -59,15 +59,15 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> bkfact(A)
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 2×2 Tridiagonal{Float64,Array{Float64,1}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:
+2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
  1.0  0.666667
- 0.0  1.0
+  ⋅   1.0
 permutation:
 2-element Array{Int64,1}:
  1
@@ -135,16 +135,16 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
  3  2  1
 
 julia> F = bkfact(Symmetric(A, :L))
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 3×3 Tridiagonal{Float64,Array{Float64,1}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
 L factor:
-3×3 LinearAlgebra.UnitLowerTriangular{Float64,Array{Float64,2}}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
+3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 0.0  1.0   ⋅
  0.5  0.5  1.0
 permutation:
 3-element Array{Int64,1}:

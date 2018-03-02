@@ -362,7 +362,6 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
-Stacktrace:
 [...]
 ```
 """

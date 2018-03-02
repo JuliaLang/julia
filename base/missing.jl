@@ -159,14 +159,13 @@ julia> sum(skipmissing([1, missing, 2]))
 
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
-1
-2
+ 1
+ 2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
 2-element Array{Int64,1}:
-1
-2
-
+ 1
+ 2
 ```
 """
 skipmissing(itr) = SkipMissing(itr)

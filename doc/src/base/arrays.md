@@ -138,7 +138,7 @@ Base.promote_shape
 ## Array functions
 
 ```@docs
-Base.accumulate(::Any, ::Any, ::Integer)
+Base.accumulate
 Base.accumulate!
 Base.cumprod
 Base.cumprod!
@@ -149,8 +149,6 @@ Base.repeat
 Base.rot180
 Base.rotl90
 Base.rotr90
-Base.reducedim
-Base.mapreducedim
 Base.mapslices
 ```
 

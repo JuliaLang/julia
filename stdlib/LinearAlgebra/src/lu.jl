@@ -39,11 +39,11 @@ element type of `A`, e.g. for integer types.
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
 2×2 Array{Float64,2}:
- 6.0  3.0
  4.0  3.0
+ 6.0  3.0
 
 julia> F = lufact!(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
  1.0       0.0
@@ -59,7 +59,7 @@ julia> iA = [4 3; 6 3]
  6  3
 
 julia> lufact!(iA)
-ERROR: InexactError: convert(Int64, 0.6666666666666666)
+ERROR: InexactError: Int64(Int64, 0.6666666666666666)
 Stacktrace:
 [...]
 ```
@@ -162,7 +162,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
  1.0  0.0

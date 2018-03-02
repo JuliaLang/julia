@@ -94,7 +94,7 @@ Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
 Base.Multimedia.showable
-Base.repr(::Any, ::Any)
+Base.repr(::MIME, ::Any)
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display

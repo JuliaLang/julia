@@ -1393,15 +1393,13 @@ distribution is used in case `rfn` is not specified. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
 # Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> sprand(rng, Bool, 2, 2, 0.5)
+```jldoctest; setup = :(using Random; srand(1234))
+julia> sprand(Bool, 2, 2, 0.5)
 2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:
   [1, 1]  =  true
   [2, 1]  =  true
 
-julia> sprand(rng, Float64, 3, 0.75)
+julia> sprand(Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [3]  =  0.298614
 ```
@@ -1444,14 +1442,11 @@ where nonzero values are sampled from the normal distribution. The optional `rng
 argument specifies a random number generator, see [Random Numbers](@ref).
 
 # Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> sprandn(rng, 2, 2, 0.75)
-2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  0.532813
-  [2, 1]  =  -0.271735
-  [2, 2]  =  0.502334
+```jldoctest; setup = :(using Random; srand(0))
+julia> sprandn(2, 2, 0.75)
+2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  0.586617
+  [1, 2]  =  0.297336
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)

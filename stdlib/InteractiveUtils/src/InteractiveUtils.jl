@@ -249,7 +249,7 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-3-element Array{Union{DataType, UnionAll},1}:
+3-element Array{Any,1}:
  Bool
  Signed
  Unsigned
