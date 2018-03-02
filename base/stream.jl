@@ -554,7 +554,7 @@ julia> err = Pipe()
 
 # After this `err` will be initialized and you may read `foo`'s
 # stderr from the `err` pipe.
-julia> spawn(pipeline(pipeline(`foo`, stderr=err), `cat`))
+julia> run(pipeline(pipeline(`foo`, stderr=err), `cat`), wait=false)
 ```
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())

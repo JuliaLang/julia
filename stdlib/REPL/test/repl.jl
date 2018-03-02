@@ -669,7 +669,7 @@ let exename = Base.julia_cmd()
         TestHelpers.with_fake_pty() do slave, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
-            p = spawn(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave)
+            p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
             output = readuntil(master,"julia> ",keep=true)
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a
