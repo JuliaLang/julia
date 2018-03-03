@@ -39,7 +39,7 @@ tests if there are any elements remaining, and `next(iter, state)`, which return
 the current element and an updated `state`. The `state` object can be anything, and is generally
 considered to be an implementation detail private to the iterable object.
 
-Any object defines these three methods is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
+Any object that defines these three methods is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
 It can also be used directly in a `for` loop since the syntax:
 
 ```julia
