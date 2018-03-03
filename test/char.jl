@@ -255,16 +255,17 @@ end
 primitive type ASCIIChar <: AbstractChar 8 end
 ASCIIChar(c::UInt8) = reinterpret(ASCIIChar, c)
 ASCIIChar(c::UInt32) = ASCIIChar(UInt8(c))
-Base.UInt8(c::ASCIIChar) = reinterpret(UInt8, c)
-Base.UInt32(c::ASCIIChar) = UInt32(UInt8(c))
+Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
 @testset "abstractchar" begin
     @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
-    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) == convert(Char, ASCIIChar('x'))
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) === convert(Char, ASCIIChar('x'))
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
+    @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
+    @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end

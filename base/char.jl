@@ -20,11 +20,12 @@ representable in a given `AbstractChar` type.
 Internally, an `AbstractChar` type may use a variety of encodings.  Conversion
 via `codepoint(char)` will not reveal this encoding because it always returns the
 Unicode value of the character. `print(io, c)` of any `c::AbstractChar`
-produces UTF-8 output by default (via conversion to `Char` if necessary).
+produces an encoding determined by `io` (UTF-8 for all built-in [`IO`](@ref)
+types), via conversion to `Char` if necessary.
 
-`write(io, c)`, in contrast, may emit a different encoding depending on
+`write(io, c)`, in contrast, may emit an encoding depending on
 `typeof(c)`, and `read(io, typeof(c))` should read the same encoding as `write`.
-New `AbstractChar` types should typically provide their own implementations of
+New `AbstractChar` types must provide their own implementations of
 `write` and `read`.
 """
 AbstractChar
@@ -44,7 +45,7 @@ represents a valid Unicode character.
 """
 Char
 
-(::Type{T})(x::Integer) where {T<:AbstractChar} = T(UInt32(x))
+(::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
 (::Type{AbstractChar})(x::Number) = Char(x)
 (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 (::Type{T})(x::T) where {T<:AbstractChar} = x
