@@ -4917,7 +4917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ntranspose(A::AbstractMatrix)\n\nEager matrix transpose. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\n\n\n"
 },
 
 {
@@ -6725,7 +6725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
@@ -7021,7 +7021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -12189,7 +12189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stdout",
     "category": "Function",
-    "text": "redirect_stdout([stream]) -> (rd, wr)\n\nCreate a pipe to which all C and Julia level stdout output will be redirected. Returns a tuple (rd, wr) representing the pipe ends. Data written to stdout may now be read from the rd end of the pipe. The wr end is given for convenience in case the old stdout object was cached by the user and needs to be replaced elsewhere.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stdout([stream]) -> (rd, wr)\n\nCreate a pipe to which all C and Julia level stdout output will be redirected. Returns a tuple (rd, wr) representing the pipe ends. Data written to stdout may now be read from the rd end of the pipe. The wr end is given for convenience in case the old stdout object was cached by the user and needs to be replaced elsewhere.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -12197,7 +12197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stdout",
     "category": "Method",
-    "text": "redirect_stdout(f::Function, stream)\n\nRun the function f while redirecting stdout to stream. Upon completion, stdout is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stdout(f::Function, stream)\n\nRun the function f while redirecting stdout to stream. Upon completion, stdout is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -12205,7 +12205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stderr",
     "category": "Function",
-    "text": "redirect_stderr([stream]) -> (rd, wr)\n\nLike redirect_stdout, but for stderr.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stderr([stream]) -> (rd, wr)\n\nLike redirect_stdout, but for stderr.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -12213,7 +12213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stderr",
     "category": "Method",
-    "text": "redirect_stderr(f::Function, stream)\n\nRun the function f while redirecting stderr to stream. Upon completion, stderr is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stderr(f::Function, stream)\n\nRun the function f while redirecting stderr to stream. Upon completion, stderr is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -12221,7 +12221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stdin",
     "category": "Function",
-    "text": "redirect_stdin([stream]) -> (rd, wr)\n\nLike redirect_stdout, but for stdin. Note that the order of the return tuple is still (rd, wr), i.e. data to be read from stdin may be written to wr.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stdin([stream]) -> (rd, wr)\n\nLike redirect_stdout, but for stdin. Note that the order of the return tuple is still (rd, wr), i.e. data to be read from stdin may be written to wr.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -12229,7 +12229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.redirect_stdin",
     "category": "Method",
-    "text": "redirect_stdin(f::Function, stream)\n\nRun the function f while redirecting stdin to stream. Upon completion, stdin is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a TCPSocket.\n\n\n\n\n\n"
+    "text": "redirect_stdin(f::Function, stream)\n\nRun the function f while redirecting stdin to stream. Upon completion, stdin is restored to its prior setting.\n\nnote: Note\nstream must be a TTY, a Pipe, or a socket.\n\n\n\n\n\n"
 },
 
 {
@@ -14613,7 +14613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "Function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -18437,7 +18437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "-",
     "title": "Base.bind",
     "category": "Function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
