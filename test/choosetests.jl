@@ -57,10 +57,6 @@ function choosetests(choices = [])
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
-    if isdir(joinpath(Sys.BINDIR, Base.DOCDIR, "examples"))
-        push!(testnames, "examples")
-    end
-
     tests = []
     skip_tests = []
     exit_on_error = false

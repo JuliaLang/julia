@@ -269,7 +269,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # --worker takes default / custom as argument (default/custom arguments
-    # tested in test/parallel.jl, test/examples.jl)
+    # tested in test/parallel.jl)
     @test !success(`$exename --worker=true`)
 
     # test passing arguments
