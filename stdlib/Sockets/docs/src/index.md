@@ -1,4 +1,4 @@
-## Sockets
+# Sockets
 
 ```@meta
 DocTestSetup = :(using Sockets)
