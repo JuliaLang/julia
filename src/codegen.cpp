@@ -5895,7 +5895,7 @@ static std::unique_ptr<Module> emit_function(
                 mallocVisitLine(ctx, props.file, props.line);
             }
         }
-        if (cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
+        if ((size_t)cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
         find_next_stmt(cursor + 1);
     }
