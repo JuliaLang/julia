@@ -123,6 +123,9 @@ benchmarks/java.csv: java/src/main/java/PerfBLAS.java
 benchmarks/scala.csv: scala/src/main/scala/perf.scala scala/build.sbt
 	cd scala; for t in 1 2 3 4 5; do sbt run; done >../$@
 
+benchmarks/rust.csv: rust/src/main.rs rust/Cargo.toml rust/Cargo.lock
+	cd rust; for t in 1 2 3 4 5; do cargo run -q --release; done >../$@
+
 BENCHMARKS = \
 	benchmarks/c.csv \
 	benchmarks/fortran.csv \
@@ -135,7 +138,8 @@ BENCHMARKS = \
 	benchmarks/matlab.csv \
 	benchmarks/octave.csv \
 	benchmarks/python.csv \
-	benchmarks/r.csv
+	benchmarks/r.csv \
+	benchmarks/rust.csv
 
 # These were formerly listed in BENCHMARKS, but I can't get them to run
 # 2017-09-27 johnfgibson
