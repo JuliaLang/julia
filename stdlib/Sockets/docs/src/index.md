@@ -1,4 +1,4 @@
-## Sockets
+# Sockets
 
 ```@docs
 Sockets.connect(::TCPSocket, ::Integer)
