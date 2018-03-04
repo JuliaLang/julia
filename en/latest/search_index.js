@@ -7485,7 +7485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -18906,15 +18906,15 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#",
-    "page": "-",
-    "title": "-",
+    "page": "Sockets",
+    "title": "Sockets",
     "category": "page",
     "text": ""
 },
 
 {
     "location": "stdlib/Sockets/#Sockets.connect-Tuple{TCPSocket,Integer}",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.connect",
     "category": "method",
     "text": "connect([host], port::Integer) -> TCPSocket\n\nConnect to the host host on port port.\n\n\n\n\n\n"
@@ -18922,7 +18922,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.connect-Tuple{AbstractString}",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.connect",
     "category": "method",
     "text": "connect(path::AbstractString) -> PipeEndpoint\n\nConnect to the named pipe / UNIX domain socket at path.\n\n\n\n\n\n"
@@ -18930,7 +18930,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.listen-Tuple{Any}",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.listen",
     "category": "method",
     "text": "listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer\n\nListen on port on the address specified by addr. By default this listens on localhost only. To listen on all interfaces pass IPv4(0) or IPv6(0) as appropriate. backlog determines how many connections can be pending (not having called accept) before the server will begin to reject them. The default value of backlog is 511.\n\n\n\n\n\n"
@@ -18938,7 +18938,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.listen-Tuple{AbstractString}",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.listen",
     "category": "method",
     "text": "listen(path::AbstractString) -> PipeServer\n\nCreate and listen on a named pipe / UNIX domain socket.\n\n\n\n\n\n"
@@ -18946,7 +18946,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getaddrinfo",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getaddrinfo",
     "category": "function",
     "text": "getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr\n\nGets the first IP address of the host of the specified IPAddr type. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
@@ -18954,7 +18954,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getipaddr",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getipaddr",
     "category": "function",
     "text": "getipaddr() -> IPAddr\n\nGet the IP address of the local machine.\n\n\n\n\n\n"
@@ -18962,7 +18962,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getalladdrinfo",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getalladdrinfo",
     "category": "function",
     "text": "getalladdrinfo(host::AbstractString) -> Vector{IPAddr}\n\nGets all of the IP addresses of the host. Uses the operating system\'s underlying getaddrinfo implementation, which may do a DNS lookup.\n\n\n\n\n\n"
@@ -18970,7 +18970,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getnameinfo",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getnameinfo",
     "category": "function",
     "text": "getnameinfo(host::IPAddr) -> String\n\nPerforms a reverse-lookup for IP address to return a hostname and service using the operating system\'s underlying getnameinfo implementation.\n\n\n\n\n\n"
@@ -18978,7 +18978,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getsockname",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getsockname",
     "category": "function",
     "text": "getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)\n\nGet the IP address and port that the given socket is bound to.\n\n\n\n\n\n"
@@ -18986,7 +18986,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.getpeername",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.getpeername",
     "category": "function",
     "text": "getpeername(sock::TCPSocket) -> (IPAddr, UInt16)\n\nGet the IP address and port of the remote endpoint that the given socket is connected to. Valid only for connected TCP sockets.\n\n\n\n\n\n"
@@ -18994,7 +18994,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.IPv4",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.IPv4",
     "category": "type",
     "text": "IPv4(host::Integer) -> IPv4\n\nReturns an IPv4 object from ip address host formatted as an Integer.\n\njulia> IPv4(3223256218)\nip\"192.30.252.154\"\n\n\n\n\n\n"
@@ -19002,7 +19002,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.IPv6",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.IPv6",
     "category": "type",
     "text": "IPv6(host::Integer) -> IPv6\n\nReturns an IPv6 object from ip address host formatted as an Integer.\n\njulia> IPv6(3223256218)\nip\"::c01e:fc9a\"\n\n\n\n\n\n"
@@ -19010,7 +19010,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.TCPSocket",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.TCPSocket",
     "category": "type",
     "text": "TCPSocket(; delay=true)\n\nOpen a TCP socket using libuv. If delay is true, libuv delays creation of the socket\'s file descriptor till the first bind call. TCPSocket has various fields to denote the state of the socket as well as its send/receive buffers.\n\n\n\n\n\n"
@@ -19018,7 +19018,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.UDPSocket",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.UDPSocket",
     "category": "type",
     "text": "UDPSocket()\n\nOpen a UDP socket using libuv. UDPSocket has various fields to denote the state of the socket.\n\n\n\n\n\n"
@@ -19026,7 +19026,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.accept",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.accept",
     "category": "function",
     "text": "accept(server[,client])\n\nAccepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.\n\n\n\n\n\n"
@@ -19034,7 +19034,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.listenany",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.listenany",
     "category": "function",
     "text": "listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)\n\nCreate a TCPServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.\n\n\n\n\n\n"
@@ -19042,7 +19042,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Base.bind",
-    "page": "-",
+    "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
     "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
@@ -19050,7 +19050,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.send",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.send",
     "category": "function",
     "text": "send(socket::UDPSocket, host, port::Integer, msg)\n\nSend msg over socket to host:port.\n\n\n\n\n\n"
@@ -19058,7 +19058,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.recv",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.recv",
     "category": "function",
     "text": "recv(socket::UDPSocket)\n\nRead a UDP packet from the specified socket, and return the bytes received. This call blocks.\n\n\n\n\n\n"
@@ -19066,7 +19066,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.recvfrom",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.recvfrom",
     "category": "function",
     "text": "recvfrom(socket::UDPSocket) -> (address, data)\n\nRead a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.\n\n\n\n\n\n"
@@ -19074,7 +19074,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets.setopt",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets.setopt",
     "category": "function",
     "text": "setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)\n\nSet UDP socket options.\n\nmulticast_loop: loopback for multicast packets (default: true).\nmulticast_ttl: TTL for multicast packets (default: nothing).\nenable_broadcast: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false).\nttl: Time-to-live of packets sent on the socket (default: nothing).\n\n\n\n\n\n"
@@ -19082,7 +19082,7 @@ var documenterSearchIndex = {"docs": [
 
 {
     "location": "stdlib/Sockets/#Sockets-1",
-    "page": "-",
+    "page": "Sockets",
     "title": "Sockets",
     "category": "section",
     "text": "DocTestSetup = :(using Sockets)Sockets.connect(::TCPSocket, ::Integer)\nSockets.connect(::AbstractString)\nSockets.listen(::Any)\nSockets.listen(::AbstractString)\nSockets.getaddrinfo\nSockets.getipaddr\nSockets.getalladdrinfo\nSockets.getnameinfo\nSockets.getsockname\nSockets.getpeername\nSockets.IPv4\nSockets.IPv6\nSockets.TCPSocket\nSockets.UDPSocket\nSockets.accept\nSockets.listenany\nSockets.bind\nSockets.send\nSockets.recv\nSockets.recvfrom\nSockets.setoptDocTestSetup = nothing"
