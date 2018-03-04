@@ -50,9 +50,12 @@ julia&gt; g(2,3)
 hypot (generic function with 1 method)
 
 julia&gt; hypot(3, 4)
-5.0</code></pre><p>There are three possible points of return from this function, returning the values of three different expressions, depending on the values of <code>x</code> and <code>y</code>. The <code>return</code> on the last line could be omitted since it is the last expression.</p><p>A return type can also be specified in the function declaration using the <code>::</code> operator. This converts the return value to the specified type.</p><pre><code class="language-julia">function g(x,y)::Int8
-    return x * y
-end</code></pre><p>This function will always return an <code>Int8</code> regardless of the types of <code>x</code> and <code>y</code>. See <a href="../types/#Type-Declarations-1">Type Declarations</a> for more on return types.</p><h2><a class="nav-anchor" id="Operators-Are-Functions-1" href="#Operators-Are-Functions-1">Operators Are Functions</a></h2><p>In Julia, most operators are just functions with support for special syntax. (The exceptions are operators with special evaluation semantics like <code>&amp;&amp;</code> and <code>||</code>. These operators cannot be functions since <a href="../control-flow/#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a> requires that their operands are not evaluated before evaluation of the operator.) Accordingly, you can also apply them using parenthesized argument lists, just as you would any other function:</p><pre><code class="language-julia-repl">julia&gt; 1 + 2 + 3
+5.0</code></pre><p>There are three possible points of return from this function, returning the values of three different expressions, depending on the values of <code>x</code> and <code>y</code>. The <code>return</code> on the last line could be omitted since it is the last expression.</p><p>A return type can also be specified in the function declaration using the <code>::</code> operator. This converts the return value to the specified type.</p><pre><code class="language-julia-repl">julia&gt; function g(x, y)::Int8
+           return x * y
+       end;
+
+julia&gt; typeof(g(1, 2))
+Int8</code></pre><p>This function will always return an <code>Int8</code> regardless of the types of <code>x</code> and <code>y</code>. See <a href="../types/#Type-Declarations-1">Type Declarations</a> for more on return types.</p><h2><a class="nav-anchor" id="Operators-Are-Functions-1" href="#Operators-Are-Functions-1">Operators Are Functions</a></h2><p>In Julia, most operators are just functions with support for special syntax. (The exceptions are operators with special evaluation semantics like <code>&amp;&amp;</code> and <code>||</code>. These operators cannot be functions since <a href="../control-flow/#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a> requires that their operands are not evaluated before evaluation of the operator.) Accordingly, you can also apply them using parenthesized argument lists, just as you would any other function:</p><pre><code class="language-julia-repl">julia&gt; 1 + 2 + 3
 6
 
 julia&gt; +(1,2,3)

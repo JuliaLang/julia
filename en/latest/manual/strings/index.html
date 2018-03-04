@@ -16,7 +16,7 @@ Char</code></pre><p>You can convert a <code>Char</code> to its integer value, i.
 julia&gt; typeof(ans)
 Int64</code></pre><p>On 32-bit architectures, <a href="../../base/base/#Core.typeof"><code>typeof(ans)</code></a> will be <a href="../../base/numbers/#Core.Int32"><code>Int32</code></a>. You can convert an integer value back to a <code>Char</code> just as easily:</p><pre><code class="language-julia-repl">julia&gt; Char(120)
 &#39;x&#39;: ASCII/Unicode U+0078 (category Ll: Letter, lowercase)</code></pre><p>Not all integer values are valid Unicode code points, but for performance, the <code>Char</code> conversion does not check that every character value is valid. If you want to check that each converted value is a valid code point, use the <a href="../../base/strings/#Base.isvalid-Tuple{Any}"><code>isvalid</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; Char(0x110000)
-&#39;\U110000&#39;: Unicode U+110000 (category Cn: Other, not assigned)
+&#39;\U110000&#39;: Unicode U+110000 (category In: Invalid, too high)
 
 julia&gt; isvalid(Char, 0x110000)
 false</code></pre><p>As of this writing, the valid Unicode code points are <code>U+00</code> through <code>U+d7ff</code> and <code>U+e000</code> through <code>U+10ffff</code>. These have not all been assigned intelligible meanings yet, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.</p><p>You can input any Unicode character in single quotes using <code>\u</code> followed by up to four hexadecimal digits or <code>\U</code> followed by up to eight hexadecimal digits (the longest valid value only requires six):</p><pre><code class="language-julia-repl">julia&gt; &#39;\u0&#39;
@@ -45,10 +45,7 @@ julia&gt; Int(&#39;\x7f&#39;)
 127
 
 julia&gt; Int(&#39;\177&#39;)
-127
-
-julia&gt; Int(&#39;\xff&#39;)
-255</code></pre><p>You can do comparisons and a limited amount of arithmetic with <code>Char</code> values:</p><pre><code class="language-julia-repl">julia&gt; &#39;A&#39; &lt; &#39;a&#39;
+127</code></pre><p>You can do comparisons and a limited amount of arithmetic with <code>Char</code> values:</p><pre><code class="language-julia-repl">julia&gt; &#39;A&#39; &lt; &#39;a&#39;
 true
 
 julia&gt; &#39;A&#39; &lt;= &#39;a&#39; &lt;= &#39;Z&#39;
@@ -102,11 +99,12 @@ SubString{String}</code></pre><p>Several standard functions like <a href="../../
 &#39;∀&#39;: Unicode U+2200 (category Sm: Symbol, math)
 
 julia&gt; s[2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError(&quot;∀ x ∃ y&quot;, 2)
 [...]
 
 julia&gt; s[3]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError(&quot;∀ x ∃ y&quot;, 3)
+Stacktrace:
 [...]
 
 julia&gt; s[4]
@@ -114,11 +112,12 @@ julia&gt; s[4]
 &quot;∀&quot;
 
 julia&gt; s[1:2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError(&quot;∀ x ∃ y&quot;, 2)
+Stacktrace:
 [...]
 
 julia&gt; s[1:4]
-&quot;∀ &quot;</code></pre><p>Because of variable-length encodings, the number of characters in a string (given by <a href="../../base/strings/#Base.length-Tuple{AbstractString}"><code>length(s)</code></a>) is not always the same as the last index. If you iterate through the indices 1 through <a href="../../base/collections/#Base.lastindex"><code>lastindex(s)</code></a> and index into <code>s</code>, the sequence of characters returned when errors aren&#39;t thrown is the sequence of characters comprising the string <code>s</code>. Thus we have the identity that <code>length(s) &lt;= lastindex(s)</code>, since each character in a string must have its own index. The following is an inefficient and verbose way to iterate through the characters of <code>s</code>:</p><pre><code class="language-julia-repl">julia&gt; for i = begindex(s):lastindex(s)
+&quot;∀ &quot;</code></pre><p>Because of variable-length encodings, the number of characters in a string (given by <a href="../../base/strings/#Base.length-Tuple{AbstractString}"><code>length(s)</code></a>) is not always the same as the last index. If you iterate through the indices 1 through <a href="../../base/collections/#Base.lastindex"><code>lastindex(s)</code></a> and index into <code>s</code>, the sequence of characters returned when errors aren&#39;t thrown is the sequence of characters comprising the string <code>s</code>. Thus we have the identity that <code>length(s) &lt;= lastindex(s)</code>, since each character in a string must have its own index. The following is an inefficient and verbose way to iterate through the characters of <code>s</code>:</p><pre><code class="language-julia-repl">julia&gt; for i = firstindex(s):lastindex(s)
            try
                println(s[i])
            catch
@@ -310,7 +309,7 @@ r&quot;a+.*b+.*?d$&quot;ims
 
 julia&gt; match(r&quot;a+.*b+.*?d$&quot;ism, &quot;Goodbye,\nOh, angry,\nBad world\n&quot;)
 RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>Triple-quoted regex strings, of the form <code>r&quot;&quot;&quot;...&quot;&quot;&quot;</code>, are also supported (and may be convenient for regular expressions containing quotation marks or newlines).</p><h2><a class="nav-anchor" id="man-byte-array-literals-1" href="#man-byte-array-literals-1">Byte Array Literals</a></h2><p>Another useful non-standard string literal is the byte-array string literal: <code>b&quot;...&quot;</code>. This form lets you use string notation to express literal byte arrays – i.e. arrays of <a href="../../base/numbers/#Core.UInt8"><code>UInt8</code></a> values. The rules for byte array literals are the following:</p><ul><li><p>ASCII characters and ASCII escapes produce a single byte.</p></li><li><p><code>\x</code> and octal escape sequences produce the <em>byte</em> corresponding to the escape value.</p></li><li><p>Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.</p></li></ul><p>There is some overlap between these rules since the behavior of <code>\x</code> and octal escapes less than 0x80 (128) are covered by both of the first two rules, but here these rules agree. Together, these rules allow one to easily use ASCII characters, arbitrary byte values, and UTF-8 sequences to produce arrays of bytes. Here is an example using all three:</p><pre><code class="language-julia-repl">julia&gt; b&quot;DATA\xff\u2200&quot;
-8-element Array{UInt8,1}:
+8-element Base.CodeUnits{UInt8,String}:
  0x44
  0x41
  0x54
@@ -320,11 +319,11 @@ RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>Triple-quoted regex str
  0x88
  0x80</code></pre><p>The ASCII string &quot;DATA&quot; corresponds to the bytes 68, 65, 84, 65. <code>\xff</code> produces the single byte 255. The Unicode escape <code>\u2200</code> is encoded in UTF-8 as the three bytes 226, 136, 128. Note that the resulting byte array does not correspond to a valid UTF-8 string – if you try to use this as a regular string literal, you will get a syntax error:</p><pre><code class="language-julia-repl">julia&gt; &quot;DATA\xff\u2200&quot;
 ERROR: syntax: invalid UTF-8 sequence</code></pre><p>Also observe the significant distinction between <code>\xff</code> and <code>\uff</code>: the former escape sequence encodes the <em>byte 255</em>, whereas the latter escape sequence represents the <em>code point 255</em>, which is encoded as two bytes in UTF-8:</p><pre><code class="language-julia-repl">julia&gt; b&quot;\xff&quot;
-1-element Array{UInt8,1}:
+1-element Base.CodeUnits{UInt8,String}:
  0xff
 
 julia&gt; b&quot;\uff&quot;
-2-element Array{UInt8,1}:
+2-element Base.CodeUnits{UInt8,String}:
  0xc3
  0xbf</code></pre><p>Character literals use the same behavior.</p><p>For code points less than <code>\u80</code>, it happens that the UTF-8 encoding of each code point is just the single byte produced by the corresponding <code>\x</code> escape, so the distinction can safely be ignored. For the escapes <code>\x80</code> through <code>\xff</code> as compared to <code>\u80</code> through <code>\uff</code>, however, there is a major difference: the former escapes all encode single bytes, which – unless followed by very specific continuation bytes – do not form valid UTF-8 data, whereas the latter escapes all represent Unicode code points with two-byte encodings.</p><p>If this is all extremely confusing, try reading <a href="https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/">&quot;The Absolute Minimum Every Software Developer Absolutely, Positively Must Know About Unicode and Character Sets&quot;</a>. It&#39;s an excellent introduction to Unicode and UTF-8, and may help alleviate some confusion regarding the matter.</p><h2><a class="nav-anchor" id="man-version-number-literals-1" href="#man-version-number-literals-1">Version Number Literals</a></h2><p>Version numbers can easily be expressed with non-standard string literals of the form <code>v&quot;...&quot;</code>. Version number literals create <code>VersionNumber</code> objects which follow the specifications of <a href="http://semver.org">semantic versioning</a>, and therefore are composed of major, minor and patch numeric values, followed by pre-release and build alpha-numeric annotations. For example, <code>v&quot;0.2.1-rc1+win64&quot;</code> is broken into major version <code>0</code>, minor version <code>2</code>, patch version <code>1</code>, pre-release <code>rc1</code> and build <code>win64</code>. When entering a version literal, everything except the major version number is optional, therefore e.g.  <code>v&quot;0.2&quot;</code> is equivalent to <code>v&quot;0.2.0&quot;</code> (with empty pre-release/build annotations), <code>v&quot;2&quot;</code> is equivalent to <code>v&quot;2.0.0&quot;</code>, and so on.</p><p><code>VersionNumber</code> objects are mostly useful to easily and correctly compare two (or more) versions. For example, the constant <code>VERSION</code> holds Julia version number as a <code>VersionNumber</code> object, and therefore one can define some version-specific behavior using simple statements as:</p><pre><code class="language-julia">if v&quot;0.2&quot; &lt;= VERSION &lt; v&quot;0.3-&quot;
     # do something specific to 0.2 release series

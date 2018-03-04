@@ -55,31 +55,31 @@ function bar(...)
 end
 end
 using Bar</code></pre><p>This imports all the symbols from <code>Foo</code>, but only inside the module <code>Bar</code>.</p></li></ol><h3><a class="nav-anchor" id="What-does-the-...-operator-do?-1" href="#What-does-the-...-operator-do?-1">What does the <code>...</code> operator do?</a></h3><h3><a class="nav-anchor" id="The-two-uses-of-the-...-operator:-slurping-and-splatting-1" href="#The-two-uses-of-the-...-operator:-slurping-and-splatting-1">The two uses of the <code>...</code> operator: slurping and splatting</a></h3><p>Many newcomers to Julia find the use of <code>...</code> operator confusing. Part of what makes the <code>...</code> operator confusing is that it means two different things depending on context.</p><h3><a class="nav-anchor" id="...-combines-many-arguments-into-one-argument-in-function-definitions-1" href="#...-combines-many-arguments-into-one-argument-in-function-definitions-1"><code>...</code> combines many arguments into one argument in function definitions</a></h3><p>In the context of function definitions, the <code>...</code> operator is used to combine many different arguments into a single argument. This use of <code>...</code> for combining many different arguments into a single argument is called slurping:</p><pre><code class="language-julia-repl">julia&gt; function printargs(args...)
-           @printf(&quot;%s\n&quot;, typeof(args))
+           println(typeof(args))
            for (i, arg) in enumerate(args)
-               @printf(&quot;Arg %d = %s\n&quot;, i, arg)
+               println(&quot;Arg #$i = $arg&quot;)
            end
        end
 printargs (generic function with 1 method)
 
 julia&gt; printargs(1, 2, 3)
 Tuple{Int64,Int64,Int64}
-Arg 1 = 1
-Arg 2 = 2
-Arg 3 = 3</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the slurping operator might have been written as <code>&lt;-...</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="...-splits-one-argument-into-many-different-arguments-in-function-calls-1" href="#...-splits-one-argument-into-many-different-arguments-in-function-calls-1"><code>...</code> splits one argument into many different arguments in function calls</a></h3><p>In contrast to the use of the <code>...</code> operator to denote slurping many different arguments into one argument when defining a function, the <code>...</code> operator is also used to cause a single function argument to be split apart into many different arguments when used in the context of a function call. This use of <code>...</code> is called splatting:</p><pre><code class="language-julia-repl">julia&gt; function threeargs(a, b, c)
-           @printf(&quot;a = %s::%s\n&quot;, a, typeof(a))
-           @printf(&quot;b = %s::%s\n&quot;, b, typeof(b))
-           @printf(&quot;c = %s::%s\n&quot;, c, typeof(c))
+Arg #1 = 1
+Arg #2 = 2
+Arg #3 = 3</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the slurping operator might have been written as <code>&lt;-...</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="...-splits-one-argument-into-many-different-arguments-in-function-calls-1" href="#...-splits-one-argument-into-many-different-arguments-in-function-calls-1"><code>...</code> splits one argument into many different arguments in function calls</a></h3><p>In contrast to the use of the <code>...</code> operator to denote slurping many different arguments into one argument when defining a function, the <code>...</code> operator is also used to cause a single function argument to be split apart into many different arguments when used in the context of a function call. This use of <code>...</code> is called splatting:</p><pre><code class="language-julia-repl">julia&gt; function threeargs(a, b, c)
+           println(&quot;a = $a::$(typeof(a))&quot;)
+           println(&quot;b = $b::$(typeof(b))&quot;)
+           println(&quot;c = $c::$(typeof(c))&quot;)
        end
 threeargs (generic function with 1 method)
 
-julia&gt; vec = [1, 2, 3]
+julia&gt; x = [1, 2, 3]
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia&gt; threeargs(vec...)
+julia&gt; threeargs(x...)
 a = 1::Int64
 b = 2::Int64
 c = 3::Int64</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the splatting operator might have been written as <code>...-&gt;</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="What-is-the-return-value-of-an-assignment?-1" href="#What-is-the-return-value-of-an-assignment?-1">What is the return value of an assignment?</a></h3><p>The operator <code>=</code> always returns the right-hand side, therefore:</p><pre><code class="language-julia-repl">julia&gt; function threeint()

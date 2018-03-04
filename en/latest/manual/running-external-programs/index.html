@@ -13,7 +13,7 @@ ga('send', 'pageview');
 julia&gt; typeof(mycommand)
 Cmd
 
-julia&gt; run(mycommand)
+julia&gt; run(mycommand);
 hello</code></pre><p>The <code>hello</code> is the output of the <code>echo</code> command, sent to <a href="../../base/io-network/#Base.stdout"><code>stdout</code></a>. The run method itself returns <code>nothing</code>, and throws an <a href="../../base/base/#Core.ErrorException"><code>ErrorException</code></a> if the external command fails to run successfully.</p><p>If you want to read the output of the external command, <a href="../../base/io-network/#Base.read"><code>read</code></a> can be used instead:</p><pre><code class="language-julia-repl">julia&gt; a = read(`echo hello`, String)
 &quot;hello\n&quot;
 
@@ -86,7 +86,7 @@ sh$ perl -le &#39;$|=1; print for @ARGV&#39; &quot;1: $first&quot; &quot;2: $sec
 2: B</code></pre><p>In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as is into backticks and they will work: the escaping, quoting, and interpolation behaviors are the same as the shell&#39;s. The only difference is that the interpolation is integrated and aware of Julia&#39;s notion of what is a single string value, and what is a container for multiple values. Let&#39;s try the above two examples in Julia:</p><pre><code class="language-julia-repl">julia&gt; A = `perl -le &#39;$|=1; for (0..3) { print }&#39;`
 `perl -le &#39;$|=1; for (0..3) { print }&#39;`
 
-julia&gt; run(A)
+julia&gt; run(A);
 0
 1
 2
@@ -97,47 +97,39 @@ julia&gt; first = &quot;A&quot;; second = &quot;B&quot;;
 julia&gt; B = `perl -le &#39;print for @ARGV&#39; &quot;1: $first&quot; &quot;2: $second&quot;`
 `perl -le &#39;print for @ARGV&#39; &#39;1: A&#39; &#39;2: B&#39;`
 
-julia&gt; run(B)
+julia&gt; run(B);
 1: A
-2: B</code></pre><p>The results are identical, and Julia&#39;s interpolation behavior mimics the shell&#39;s with some improvements due to the fact that Julia supports first-class iterable objects while most shells use strings split on spaces for this, which introduces ambiguities. When trying to port shell commands to Julia, try cut and pasting first. Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation without doing any damage.</p><h2><a class="nav-anchor" id="Pipelines-1" href="#Pipelines-1">Pipelines</a></h2><p>Shell metacharacters, such as <code>|</code>, <code>&amp;</code>, and <code>&gt;</code>, need to be quoted (or escaped) inside of Julia&#39;s backticks:</p><pre><code class="language-julia-repl">julia&gt; run(`echo hello &#39;|&#39; sort`)
+2: B</code></pre><p>The results are identical, and Julia&#39;s interpolation behavior mimics the shell&#39;s with some improvements due to the fact that Julia supports first-class iterable objects while most shells use strings split on spaces for this, which introduces ambiguities. When trying to port shell commands to Julia, try cut and pasting first. Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation without doing any damage.</p><h2><a class="nav-anchor" id="Pipelines-1" href="#Pipelines-1">Pipelines</a></h2><p>Shell metacharacters, such as <code>|</code>, <code>&amp;</code>, and <code>&gt;</code>, need to be quoted (or escaped) inside of Julia&#39;s backticks:</p><pre><code class="language-julia-repl">julia&gt; run(`echo hello &#39;|&#39; sort`);
 hello | sort
 
-julia&gt; run(`echo hello \| sort`)
-hello | sort</code></pre><p>This expression invokes the <code>echo</code> command with three words as arguments: <code>hello</code>, <code>|</code>, and <code>sort</code>. The result is that a single line is printed: <code>hello | sort</code>. How, then, does one construct a pipeline? Instead of using <code>&#39;|&#39;</code> inside of backticks, one uses <a href="../../base/base/#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N} where N}"><code>pipeline</code></a>:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`echo hello`, `sort`))
+julia&gt; run(`echo hello \| sort`);
+hello | sort</code></pre><p>This expression invokes the <code>echo</code> command with three words as arguments: <code>hello</code>, <code>|</code>, and <code>sort</code>. The result is that a single line is printed: <code>hello | sort</code>. How, then, does one construct a pipeline? Instead of using <code>&#39;|&#39;</code> inside of backticks, one uses <a href="../../base/base/#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N} where N}"><code>pipeline</code></a>:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`echo hello`, `sort`));
 hello</code></pre><p>This pipes the output of the <code>echo</code> command to the <code>sort</code> command. Of course, this isn&#39;t terribly interesting since there&#39;s only one line to sort, but we can certainly do much more interesting things:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
 210
 211
 212
 213
-214</code></pre><p>This prints the highest five user IDs on a UNIX system. The <code>cut</code>, <code>sort</code> and <code>tail</code> commands are all spawned as immediate children of the current <code>julia</code> process, with no intervening shell process. Julia itself does the work to setup pipes and connect file descriptors that is normally done by the shell. Since Julia does this itself, it retains better control and can do some things that shells cannot.</p><p>Julia can run multiple commands in parallel:</p><pre><code class="language-julia-repl">julia&gt; run(`echo hello` &amp; `echo world`)
+214</code></pre><p>This prints the highest five user IDs on a UNIX system. The <code>cut</code>, <code>sort</code> and <code>tail</code> commands are all spawned as immediate children of the current <code>julia</code> process, with no intervening shell process. Julia itself does the work to setup pipes and connect file descriptors that is normally done by the shell. Since Julia does this itself, it retains better control and can do some things that shells cannot.</p><p>Julia can run multiple commands in parallel:</p><pre><code class="language-jldoctest" id="hello">julia&gt; run(`echo hello` &amp; `echo world`);
 world
-hello</code></pre><p>The order of the output here is non-deterministic because the two <code>echo</code> processes are started nearly simultaneously, and race to make the first write to the <a href="../../base/io-network/#Base.stdout"><code>stdout</code></a> descriptor they share with each other and the <code>julia</code> parent process. Julia lets you pipe the output from both of these processes to another program:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`echo world` &amp; `echo hello`, `sort`))
+hello</code></pre><p>The order of the output here is non-deterministic because the two <code>echo</code> processes are started nearly simultaneously, and race to make the first write to the <a href="../../base/io-network/#Base.stdout"><code>stdout</code></a> descriptor they share with each other and the <code>julia</code> parent process. Julia lets you pipe the output from both of these processes to another program:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`echo world` &amp; `echo hello`, `sort`));
 hello
 world</code></pre><p>In terms of UNIX plumbing, what&#39;s happening here is that a single UNIX pipe object is created and written to by both <code>echo</code> processes, and the other end of the pipe is read from by the <code>sort</code> command.</p><p>IO redirection can be accomplished by passing keyword arguments <code>stdin</code>, <code>stdout</code>, and <code>stderr</code> to the <code>pipeline</code> function:</p><pre><code class="language-julia">pipeline(`do_work`, stdout=pipeline(`sort`, &quot;out.txt&quot;), stderr=&quot;errs.txt&quot;)</code></pre><h3><a class="nav-anchor" id="Avoiding-Deadlock-in-Pipelines-1" href="#Avoiding-Deadlock-in-Pipelines-1">Avoiding Deadlock in Pipelines</a></h3><p>When reading and writing to both ends of a pipeline from a single process, it is important to avoid forcing the kernel to buffer all of the data.</p><p>For example, when reading all of the output from a command, call <code>read(out, String)</code>, not <code>wait(process)</code>, since the former will actively consume all of the data written by the process, whereas the latter will attempt to store the data in the kernel&#39;s buffers while waiting for a reader to be connected.</p><p>Another common solution is to separate the reader and writer of the pipeline into separate <a href="../../base/parallel/#Core.Task"><code>Task</code></a>s:</p><pre><code class="language-julia">writer = @async write(process, &quot;data&quot;)
 reader = @async do_compute(read(process, String))
 wait(process)
 fetch(reader)</code></pre><h3><a class="nav-anchor" id="Complex-Example-1" href="#Complex-Example-1">Complex Example</a></h3><p>The combination of a high-level programming language, a first-class command abstraction, and automatic setup of pipes between processes is a powerful one. To give some sense of the complex pipelines that can be created easily, here are some more sophisticated examples, with apologies for the excessive use of Perl one-liners:</p><pre><code class="language-julia-repl">julia&gt; prefixer(prefix, sleep) = `perl -nle &#39;$|=1; print &quot;&#39;$prefix&#39; &quot;, $_; sleep &#39;$sleep&#39;;&#39;`;
 
-julia&gt; run(pipeline(`perl -le &#39;$|=1; for(0..9){ print; sleep 1 }&#39;`, prefixer(&quot;A&quot;,2) &amp; prefixer(&quot;B&quot;,2)))
-A 0
-B 1
-A 2
-B 3
-A 4
-B 5
-A 6
-B 7
-A 8
-B 9</code></pre><p>This is a classic example of a single producer feeding two concurrent consumers: one <code>perl</code> process generates lines with the numbers 0 through 9 on them, while two parallel processes consume that output, one prefixing lines with the letter &quot;A&quot;, the other with the letter &quot;B&quot;. Which consumer gets the first line is non-deterministic, but once that race has been won, the lines are consumed alternately by one process and then the other. (Setting <code>$|=1</code> in Perl causes each print statement to flush the <a href="../../base/io-network/#Base.stdout"><code>stdout</code></a> handle, which is necessary for this example to work. Otherwise all the output is buffered and printed to the pipe at once, to be read by just one consumer process.)</p><p>Here is an even more complex multi-stage producer-consumer example:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`perl -le &#39;$|=1; for(0..9){ print; sleep 1 }&#39;`,
+julia&gt; run(pipeline(`perl -le &#39;$|=1; for(0..5){ print; sleep 1 }&#39;`, prefixer(&quot;A&quot;,2) &amp; prefixer(&quot;B&quot;,2)));
+B 0
+A 1
+B 2
+A 3
+B 4
+A 5</code></pre><p>This is a classic example of a single producer feeding two concurrent consumers: one <code>perl</code> process generates lines with the numbers 0 through 5 on them, while two parallel processes consume that output, one prefixing lines with the letter &quot;A&quot;, the other with the letter &quot;B&quot;. Which consumer gets the first line is non-deterministic, but once that race has been won, the lines are consumed alternately by one process and then the other. (Setting <code>$|=1</code> in Perl causes each print statement to flush the <a href="../../base/io-network/#Base.stdout"><code>stdout</code></a> handle, which is necessary for this example to work. Otherwise all the output is buffered and printed to the pipe at once, to be read by just one consumer process.)</p><p>Here is an even more complex multi-stage producer-consumer example:</p><pre><code class="language-julia-repl">julia&gt; run(pipeline(`perl -le &#39;$|=1; for(0..5){ print; sleep 1 }&#39;`,
            prefixer(&quot;X&quot;,3) &amp; prefixer(&quot;Y&quot;,3) &amp; prefixer(&quot;Z&quot;,3),
-           prefixer(&quot;A&quot;,2) &amp; prefixer(&quot;B&quot;,2)))
+           prefixer(&quot;A&quot;,2) &amp; prefixer(&quot;B&quot;,2)));
 A X 0
 B Y 1
 A Z 2
 B X 3
 A Y 4
-B Z 5
-A X 6
-B Y 7
-A Z 8
-B X 9</code></pre><p>This example is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.</p><p>We strongly encourage you to try all these examples to see how they work.</p><footer><hr/><a class="previous" href="../parallel-computing/"><span class="direction">Previous</span><span class="title">Parallel Computing</span></a><a class="next" href="../calling-c-and-fortran-code/"><span class="direction">Next</span><span class="title">Calling C and Fortran Code</span></a></footer></article></body></html>
+B Z 5</code></pre><p>This example is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.</p><p>We strongly encourage you to try all these examples to see how they work.</p><footer><hr/><a class="previous" href="../parallel-computing/"><span class="direction">Previous</span><span class="title">Parallel Computing</span></a><a class="next" href="../calling-c-and-fortran-code/"><span class="direction">Next</span><span class="title">Calling C and Fortran Code</span></a></footer></article></body></html>

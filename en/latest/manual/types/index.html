@@ -66,14 +66,10 @@ Foo(&quot;Hello, world.&quot;, 23, 1.5)
 
 julia&gt; typeof(foo)
 Foo</code></pre><p>When a type is applied like a function it is called a <em>constructor</em>. Two constructors are generated automatically (these are called <em>default constructors</em>). One accepts any arguments and calls <a href="../../base/base/#Base.convert"><code>convert</code></a> to convert them to the types of the fields, and the other accepts arguments that match the field types exactly. The reason both of these are generated is that this makes it easier to add new definitions without inadvertently replacing a default constructor.</p><p>Since the <code>bar</code> field is unconstrained in type, any value will do. However, the value for <code>baz</code> must be convertible to <code>Int</code>:</p><pre><code class="language-julia-repl">julia&gt; Foo((), 23.5, 1)
-ERROR: InexactError: convert(Int64, 23.5)
+ERROR: InexactError: Int64(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2</code></pre><p>You may find a list of field names using the <code>fieldnames</code> function.</p><pre><code class="language-julia-repl">julia&gt; fieldnames(Foo)
-3-element Array{Symbol,1}:
- :bar
- :baz
- :qux</code></pre><p>You can access the field values of a composite object using the traditional <code>foo.bar</code> notation:</p><pre><code class="language-julia-repl">julia&gt; foo.bar
+[...]</code></pre><p>You may find a list of field names using the <code>fieldnames</code> function.</p><pre><code class="language-julia-repl">julia&gt; fieldnames(Foo)
+(:bar, :baz, :qux)</code></pre><p>You can access the field values of a composite object using the traditional <code>foo.bar</code> notation:</p><pre><code class="language-julia-repl">julia&gt; foo.bar
 &quot;Hello, world.&quot;
 
 julia&gt; foo.baz
@@ -138,13 +134,11 @@ Point{Float64}(1.0, 2.0)
 julia&gt; typeof(ans)
 Point{Float64}</code></pre><p>For the default constructor, exactly one argument must be supplied for each field:</p><pre><code class="language-julia-repl">julia&gt; Point{Float64}(1.0)
 ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
-This may have arisen from a call to the constructor Point{Float64}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:114
+[...]
 
 julia&gt; Point{Float64}(1.0,2.0,3.0)
-ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)</code></pre><p>Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.</p><p>In many cases, it is redundant to provide the type of <code>Point</code> object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply <code>Point</code> itself as a constructor, provided that the implied value of the parameter type <code>T</code> is unambiguous:</p><pre><code class="language-julia-repl">julia&gt; Point(1.0,2.0)
+ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+[...]</code></pre><p>Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.</p><p>In many cases, it is redundant to provide the type of <code>Point</code> object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply <code>Point</code> itself as a constructor, provided that the implied value of the parameter type <code>T</code> is unambiguous:</p><pre><code class="language-julia-repl">julia&gt; Point(1.0,2.0)
 Point{Float64}(1.0, 2.0)
 
 julia&gt; typeof(ans)

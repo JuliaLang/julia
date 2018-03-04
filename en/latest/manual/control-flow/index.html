@@ -55,7 +55,7 @@ x is equal to y</code></pre><p>The <code>elseif</code> and <code>else</code> blo
 test (generic function with 1 method)
 
 julia&gt; test(2, 1)
-x is greater than y.</code></pre><p>The variable <code>relation</code> is declared inside the <code>if</code> block, but used outside. However, when depending on this behavior, make sure all possible code paths define a value for the variable. The following change to the above function results in a runtime error</p><pre><code class="language-julia-repl">julia&gt; function test(x,y)
+x is greater than y.</code></pre><p>The variable <code>relation</code> is declared inside the <code>if</code> block, but used outside. However, when depending on this behavior, make sure all possible code paths define a value for the variable. The following change to the above function results in a runtime error</p><pre><code class="language-jldoctest">julia&gt; function test(x,y)
            if x &lt; y
                relation = &quot;less than&quot;
            elseif x == y
@@ -150,7 +150,7 @@ true
 julia&gt; f(1) || f(2)
 1
 2
-false</code></pre><p>You can easily experiment in the same way with the associativity and precedence of various combinations of <code>&amp;&amp;</code> and <code>||</code> operators.</p><p>This behavior is frequently used in Julia to form an alternative to very short <code>if</code> statements. Instead of <code>if &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; &amp;&amp; &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>and then</em> &lt;statement&gt;). Similarly, instead of <code>if ! &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; || &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>or else</em> &lt;statement&gt;).</p><p>For example, a recursive factorial routine could be defined like this:</p><pre><code class="language-julia-repl">julia&gt; function fact(n::Int)
+false</code></pre><p>You can easily experiment in the same way with the associativity and precedence of various combinations of <code>&amp;&amp;</code> and <code>||</code> operators.</p><p>This behavior is frequently used in Julia to form an alternative to very short <code>if</code> statements. Instead of <code>if &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; &amp;&amp; &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>and then</em> &lt;statement&gt;). Similarly, instead of <code>if ! &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; || &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>or else</em> &lt;statement&gt;).</p><p>For example, a recursive factorial routine could be defined like this:</p><pre><code class="language-jldoctest">julia&gt; function fact(n::Int)
            n &gt;= 0 || error(&quot;n must be non-negative&quot;)
            n == 0 &amp;&amp; return 1
            n * fact(n-1)
@@ -166,7 +166,9 @@ julia&gt; fact(0)
 julia&gt; fact(-1)
 ERROR: n must be non-negative
 Stacktrace:
- [1] fact(::Int64) at ./none:2</code></pre><p>Boolean operations <em>without</em> short-circuit evaluation can be done with the bitwise boolean operators introduced in <a href="../mathematical-operations/#Mathematical-Operations-and-Elementary-Functions-1">Mathematical Operations and Elementary Functions</a>: <code>&amp;</code> and <code>|</code>. These are normal functions, which happen to support infix operator syntax, but always evaluate their arguments:</p><pre><code class="language-julia-repl">julia&gt; f(1) &amp; t(2)
+ [1] error at ./error.jl:33 [inlined]
+ [2] fact(::Int64) at ./none:2
+ [3] top-level scope</code></pre><p>Boolean operations <em>without</em> short-circuit evaluation can be done with the bitwise boolean operators introduced in <a href="../mathematical-operations/#Mathematical-Operations-and-Elementary-Functions-1">Mathematical Operations and Elementary Functions</a>: <code>&amp;</code> and <code>|</code>. These are normal functions, which happen to support infix operator syntax, but always evaluate their arguments:</p><pre><code class="language-julia-repl">julia&gt; f(1) &amp; t(2)
 1
 2
 false
@@ -261,7 +263,7 @@ julia&gt; for j = 1:1000
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
-[...]</code></pre><p>You may define your own exceptions in the following way:</p><pre><code class="language-julia-repl">julia&gt; struct MyCustomException &lt;: Exception end</code></pre><h3><a class="nav-anchor" id="The-[throw](@ref)-function-1" href="#The-[throw](@ref)-function-1">The <a href="../../base/base/#Core.throw"><code>throw</code></a> function</a></h3><p>Exceptions can be created explicitly with <a href="../../base/base/#Core.throw"><code>throw</code></a>. For example, a function defined only for nonnegative numbers could be written to <a href="../../base/base/#Core.throw"><code>throw</code></a> a <a href="../../base/base/#Core.DomainError"><code>DomainError</code></a> if the argument is negative:</p><pre><code class="language-julia-repl">julia&gt; f(x) = x&gt;=0 ? exp(-x) : throw(DomainError(x, &quot;argument must be nonnegative&quot;))
+[...]</code></pre><p>You may define your own exceptions in the following way:</p><pre><code class="language-julia-repl">julia&gt; struct MyCustomException &lt;: Exception end</code></pre><h3><a class="nav-anchor" id="The-[throw](@ref)-function-1" href="#The-[throw](@ref)-function-1">The <a href="../../base/base/#Core.throw"><code>throw</code></a> function</a></h3><p>Exceptions can be created explicitly with <a href="../../base/base/#Core.throw"><code>throw</code></a>. For example, a function defined only for nonnegative numbers could be written to <a href="../../base/base/#Core.throw"><code>throw</code></a> a <a href="../../base/base/#Core.DomainError"><code>DomainError</code></a> if the argument is negative:</p><pre><code class="language-jldoctest">julia&gt; f(x) = x&gt;=0 ? exp(-x) : throw(DomainError(x, &quot;argument must be nonnegative&quot;))
 f (generic function with 1 method)
 
 julia&gt; f(1)
@@ -289,7 +291,9 @@ julia&gt; fussy_sqrt(2)
 julia&gt; fussy_sqrt(-1)
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt(::Int64) at ./none:1</code></pre><p>If <code>fussy_sqrt</code> is called with a negative value from another function, instead of trying to continue execution of the calling function, it returns immediately, displaying the error message in the interactive session:</p><pre><code class="language-julia-repl">julia&gt; function verbose_fussy_sqrt(x)
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt(::Int64) at ./none:1
+ [3] top-level scope</code></pre><p>If <code>fussy_sqrt</code> is called with a negative value from another function, instead of trying to continue execution of the calling function, it returns immediately, displaying the error message in the interactive session:</p><pre><code class="language-julia-repl">julia&gt; function verbose_fussy_sqrt(x)
            println(&quot;before fussy_sqrt&quot;)
            r = fussy_sqrt(x)
            println(&quot;after fussy_sqrt&quot;)
@@ -306,8 +310,10 @@ julia&gt; verbose_fussy_sqrt(-1)
 before fussy_sqrt
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt at ./none:1 [inlined]
- [2] verbose_fussy_sqrt(::Int64) at ./none:3</code></pre><h3><a class="nav-anchor" id="The-try/catch-statement-1" href="#The-try/catch-statement-1">The <code>try/catch</code> statement</a></h3><p>The <code>try/catch</code> statement allows for <code>Exception</code>s to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using <code>Exception</code>s :</p><pre><code class="language-julia-repl">julia&gt; f(x) = try
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt at ./none:1 [inlined]
+ [3] verbose_fussy_sqrt(::Int64) at ./none:3
+ [4] top-level scope</code></pre><h3><a class="nav-anchor" id="The-try/catch-statement-1" href="#The-try/catch-statement-1">The <code>try/catch</code> statement</a></h3><p>The <code>try/catch</code> statement allows for <code>Exception</code>s to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using <code>Exception</code>s :</p><pre><code class="language-julia-repl">julia&gt; f(x) = try
            sqrt(x)
        catch
            sqrt(complex(x, 0))

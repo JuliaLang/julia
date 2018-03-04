@@ -97,15 +97,15 @@ julia&gt; baz()
 22
 
 julia&gt; x, y # verify that global x and y are unchanged
-(1, 2)</code></pre><p>The reason to allow <em>modifying local</em> variables of parent scopes in nested functions is to allow constructing <a href="https://en.wikipedia.org/wiki/Closure_%28computer_programming%29"><code>closures</code></a> which have a private state, for instance the <span>$state$</span> variable in the following example:</p><pre><code class="language-julia">    julia&gt; let state = 0
-               global counter() = (state += 1)
-           end;
+(1, 2)</code></pre><p>The reason to allow <em>modifying local</em> variables of parent scopes in nested functions is to allow constructing <a href="https://en.wikipedia.org/wiki/Closure_%28computer_programming%29"><code>closures</code></a> which have a private state, for instance the <span>$state$</span> variable in the following example:</p><pre><code class="language-julia-repl">julia&gt; let state = 0
+           global counter() = (state += 1)
+       end;
 
-    julia&gt; counter()
-    1
+julia&gt; counter()
+1
 
-    julia&gt; counter()
-    2</code></pre><p>See also the closures in the examples in the next two sections.</p><p>The distinction between inheriting global scope and nesting local scope can lead to some slight differences between functions defined in local vs. global scopes for variable assignments. Consider the modification of the last example by moving <code>bar</code> to the global scope:</p><pre><code class="language-julia-repl">julia&gt; x, y = 1, 2;
+julia&gt; counter()
+2</code></pre><p>See also the closures in the examples in the next two sections.</p><p>The distinction between inheriting global scope and nesting local scope can lead to some slight differences between functions defined in local vs. global scopes for variable assignments. Consider the modification of the last example by moving <code>bar</code> to the global scope:</p><pre><code class="language-julia-repl">julia&gt; x, y = 1, 2;
 
 julia&gt; function bar()
            x = 10 # local, no longer a closure variable

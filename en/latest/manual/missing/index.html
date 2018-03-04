@@ -114,11 +114,7 @@ julia&gt; y = Union{Missing, String}[missing, &quot;b&quot;]
  &quot;b&quot;
 
 julia&gt; convert(Array{String}, y)
-ERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String
-This may have arisen from a call to the constructor String(...),
-since type constructors fall back to convert methods.
-Stacktrace:
-[...</code></pre><h2><a class="nav-anchor" id="Skipping-Missing-Values-1" href="#Skipping-Missing-Values-1">Skipping Missing Values</a></h2><p>Since <code>missing</code> values propagate with standard mathematical operators, reduction functions return <code>missing</code> when called on arrays which contain missing values</p><pre><code class="language-julia-repl">julia&gt; sum([1, missing])
+ERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String</code></pre><h2><a class="nav-anchor" id="Skipping-Missing-Values-1" href="#Skipping-Missing-Values-1">Skipping Missing Values</a></h2><p>Since <code>missing</code> values propagate with standard mathematical operators, reduction functions return <code>missing</code> when called on arrays which contain missing values</p><pre><code class="language-julia-repl">julia&gt; sum([1, missing])
 missing</code></pre><p>In this situation, use the <a href="../../base/base/#Base.skipmissing"><code>skipmissing</code></a> function to skip missing values</p><pre><code class="language-julia-repl">julia&gt; sum(skipmissing([1, missing]))
 1</code></pre><p>This convenience function returns an iterator which filters out <code>missing</code> values efficiently. It can therefore be used with any function which supports iterators</p><pre><code class="language-julia-repl">julia&gt; maximum(skipmissing([3, missing, 2, 1]))
 3
