@@ -244,8 +244,8 @@ julia> findnext("z", "Hello to the world", 1)
 julia> findnext("o", "Hello to the world", 6)
 8:8
 
-julia> findnext("Julia", "JuliaLang", 2)
-1:5
+julia> findnext("Lang", "JuliaLang", 2)
+6:9
 ```
 """
 findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)

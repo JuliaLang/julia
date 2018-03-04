@@ -21,14 +21,14 @@ julia> rng = MersenneTwister(1234);
 
 julia> bitrand(rng, 10)
 10-element BitArray{1}:
+ false
+  true
   true
   true
   true
  false
   true
  false
- false
-  true
  false
   true
 ```
@@ -53,10 +53,10 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> srand(0); randstring()
-"c03rgKi1"
+"Qgt7sUOP"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"wijzek"
+"oevnou"
 
 julia> randstring("ACGT")
 "TATCGGTC"

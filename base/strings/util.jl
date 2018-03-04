@@ -455,7 +455,7 @@ julia> hex2bytes(s)
  0x39
 
 julia> a = b"01abEF"
-6-element Array{UInt8,1}:
+6-element Base.CodeUnits{UInt8,String}:
  0x30
  0x31
  0x61

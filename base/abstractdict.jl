@@ -90,15 +90,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(keys(a))
+julia> collect(keys(D))
 2-element Array{Char,1}:
- 'b'
  'a'
+ 'b'
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
@@ -115,15 +115,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(values(a))
+julia> collect(values(D))
 2-element Array{Int64,1}:
- 3
  2
+ 3
 ```
 """
 values(a::AbstractDict) = ValueIterator(a)

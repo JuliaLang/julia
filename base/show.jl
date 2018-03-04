@@ -236,7 +236,7 @@ julia> io = IOBuffer();
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
 julia> String(take!(io))
-"\e[31mstring\e[39m"
+"\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
@@ -823,7 +823,7 @@ operators. Return `0` if `s` is not a valid operator.
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9, 11, 15)
+(11, 13, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)

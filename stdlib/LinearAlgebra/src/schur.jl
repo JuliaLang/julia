@@ -22,11 +22,19 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schurfact!(A)
-LinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:
-[3.0 9.0; 0.0 -2.0]
-[0.961524 0.274721; -0.274721 0.961524]
-and values:
-[3.0, -2.0]
+Schur{Float64,Array{Float64,2}}
+T factor:
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+Z factor:
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+eigenvalues:
+2-element Array{Float64,1}:
+  3.0
+ -2.0
 
 julia> A
 2×2 Array{Float64,2}:
@@ -52,11 +60,19 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schurfact(A)
-LinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:
-[3.0 9.0; 0.0 -2.0]
-[0.961524 0.274721; -0.274721 0.961524]
-and values:
-[3.0, -2.0]
+Schur{Float64,Array{Float64,2}}
+T factor:
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+Z factor:
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+eigenvalues:
+2-element Array{Float64,1}:
+  3.0
+ -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
 2×2 Array{Float64,2}:

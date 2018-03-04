@@ -1209,7 +1209,7 @@ inferred by the compiler. It is useful to check for type stability.
 Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
-```jldoctest
+```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
 julia> f(a,b,c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1224,14 +1224,19 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
+      # meta: location operators.jl > 279
+      # meta: location int.jl < 49
+      Core.SSAValue(2) = (Base.slt_int)(1, b::Int64)::Bool
+      # meta: pop locations (2)
+      unless Core.SSAValue(2) goto 7
       return 1
-      3:
+      7:
       return 1.0
   end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
+Stacktrace:
 [...]
 
 julia> @inferred max(1,2)

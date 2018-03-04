@@ -207,7 +207,7 @@ julia> f = open("test_file.txt", "w");
 julia> isfile(f)
 true
 
-julia> close(f)
+julia> close(f); rm("test_file.txt")
 ```
 """
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000

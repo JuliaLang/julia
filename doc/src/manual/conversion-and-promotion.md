@@ -88,7 +88,8 @@ doesn't know how to perform the requested conversion:
 
 ```jldoctest
 julia> convert(AbstractFloat, "foo")
-ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat.
+ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
+[...]
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions

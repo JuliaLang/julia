@@ -251,15 +251,15 @@ which have a private state, for instance the ``state`` variable in the
 following example:
 
 ```jldoctest
-    julia> let state = 0
-               global counter() = (state += 1)
-           end;
+julia> let state = 0
+           global counter() = (state += 1)
+       end;
 
-    julia> counter()
-    1
+julia> counter()
+1
 
-    julia> counter()
-    2
+julia> counter()
+2
 ```
 
 See also the closures in the examples in the next two sections.

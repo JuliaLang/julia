@@ -191,8 +191,8 @@ module IteratorsMD
 
     julia> CartesianIndices(fill(1, (2,3)))
     2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
-      CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
-      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+     CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
+     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
     ```
 
     ## Conversion between linear and cartesian indices
@@ -391,9 +391,9 @@ module IteratorsMD
     ```jldoctest subarray
     julia> linear = LinearIndices(1:3,1:2)
     LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
-      1  4
-      2  5
-      3  6
+     1  4
+     2  5
+     3  6
 
     julia> linear[1,2]
     4
@@ -861,9 +861,9 @@ julia> cumprod(fill(1//2, 3))
 
 julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
 3-element Array{Array{Rational{Int64},2},1}:
- Rational{Int64}[1//3 1//3; 1//3 1//3]
- Rational{Int64}[2//9 2//9; 2//9 2//9]
- Rational{Int64}[4//27 4//27; 4//27 4//27]
+ [1//3 1//3; 1//3 1//3]
+ [2//9 2//9; 2//9 2//9]
+ [4//27 4//27; 4//27 4//27]
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
