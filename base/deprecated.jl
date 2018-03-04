@@ -1377,6 +1377,10 @@ function Broadcast.collect_unknown(::Broadcast.Unknown, x)
     depwarn("treating x::$(typeof(x)) as a scalar in broadcast is deprecated, use `Ref(x)` instead", (:broadcast, :broadcast!))
     return Ref(x)
 end
+function Broadcast.collect_unknown(::Broadcast.Unknown, x::Union{AbstractArray,Ref})
+    depwarn("treating x::$(typeof(x)) as a scalar in broadcast is deprecated, use `fill(x)` instead", (:broadcast, :broadcast!))
+    return fill(x)
+end
 
 # Issue #25979
 # The `remove_destination` keyword to `cp`, `mv`, and the unexported `cptree` has been
