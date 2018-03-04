@@ -228,7 +228,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         for (int i = 0; i < jl_array_len(exprs); i++) {
             // process toplevel form
             ptls->world_age = jl_world_counter;
-            form = jl_expand(jl_array_ptr_ref(exprs, i), newm);
+            form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
             ptls->world_age = jl_world_counter;
             (void)jl_toplevel_eval_flex(newm, form, 1, 1);
         }
