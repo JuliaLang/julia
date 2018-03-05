@@ -1774,13 +1774,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_function_ptr)) {
         assert(!isVa && !llvmcall && nargt == 3);
         assert(lrt == T_size);
-        jl_value_t *f = argv[0].constant;
+        jl_value_t *ft = argv[0].typ;
         jl_value_t *frt = argv[1].constant;
         if (!frt) {
             if (jl_is_type_type(argv[1].typ) && !jl_has_free_typevars(argv[1].typ))
                 frt = jl_tparam0(argv[1].typ);
         }
-        if (f && frt) {
+        if (ft != jl_bottom_type && frt) {
             jl_value_t *fargt = argv[2].constant;;
             JL_GC_PUSH1(&fargt);
             if (!fargt && jl_is_type_type(argv[2].typ)) {
@@ -1794,7 +1794,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             if (fargt && jl_is_tuple_type(fargt)) {
                 Value *llvmf = NULL;
                 JL_TRY {
-                    llvmf = jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt);
+                    llvmf = jl_cfunction_cache(ft, frt, (jl_tupletype_t*)fargt);
                 }
                 JL_CATCH {
                     llvmf = NULL;

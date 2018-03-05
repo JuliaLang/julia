@@ -129,7 +129,6 @@ jl_value_t *jl_interrupt_exception;
 jl_datatype_t *jl_boundserror_type;
 jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
-union jl_typemap_t jl_cfunction_list;
 
 jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL};
 
@@ -2217,8 +2216,6 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_sym_type);
-
-    jl_cfunction_list.unknown = jl_nothing;
 }
 
 #ifdef __cplusplus
