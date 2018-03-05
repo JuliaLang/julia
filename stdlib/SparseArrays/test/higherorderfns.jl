@@ -299,10 +299,12 @@ end
     elT = Float64
     s = Float32(2.0)
     V = sprand(elT, N, p)
+    Vᵀ = transpose(sprand(elT, 1, N, p))
     A = sprand(elT, N, M, p)
-    fV, fA = Array(V), Array(A)
+    Aᵀ = transpose(sprand(elT, M, N, p))
+    fV, fA, fVᵀ, fAᵀ = Array(V), Array(A), Array(Vᵀ), Array(Aᵀ)
     # test combinations involving one to three scalars and one to five sparse vectors/matrices
-    spargseq, dargseq = Iterators.cycle((A, V)), Iterators.cycle((fA, fV))
+    spargseq, dargseq = Iterators.cycle((A, V, Aᵀ, Vᵀ)), Iterators.cycle((fA, fV, fAᵀ, fVᵀ))
     for nargs in 1:5 # number of tensor arguments
         nargsl = cld(nargs, 2) # number in "left half" of tensor arguments
         nargsr = fld(nargs, 2) # number in "right half" of tensor arguments
