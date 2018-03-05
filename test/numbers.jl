@@ -2544,6 +2544,13 @@ end
     end
 end
 
+# issue #26324
+@testset "irrational promotion" begin
+    @test π*ComplexF32(2) isa ComplexF32
+    @test π/ComplexF32(2) isa ComplexF32
+    @test atan2(π,ComplexF32(2)) isa ComplexF32
+end
+
 @testset "printing non finite floats" begin
     let float_types = Set()
         allsubtypes!(Base, AbstractFloat, float_types)
