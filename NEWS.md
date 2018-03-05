@@ -208,6 +208,8 @@ Language changes
   * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
     parser. ([#25564])
 
+  * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
+
 Breaking changes
 ----------------
 
@@ -229,6 +231,10 @@ This section lists changes that do not have deprecation warnings.
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
     Previously an empty tuple was returned ([#21697]).
+
+  * `⋮`, `⋱`, `⋰`, and `⋯` are now parsed as binary operators, not ordinary
+    identifiers.  `≔`, `≕`, and `⩴` now parse with assignment rather than comparison
+    precedence ([#26262]).
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
 
@@ -587,6 +593,9 @@ Library improvements
   * A new `replace(A, old=>new)` function is introduced to replace `old` by `new` in
     collection `A`. There are also two other methods with a different API, and
     a mutating variant, `replace!` ([#22324]).
+
+  * Adding integers to `CartesianIndex` objects is now deprecated. Instead of
+    `i::Int + x::CartesianIndex`, use `i*one(x) + x` ([#26284]).
 
   * `CartesianRange` changes ([#24715]):
     - Inherits from `AbstractArray`, and linear indexing can be used to provide

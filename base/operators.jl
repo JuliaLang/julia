@@ -362,7 +362,6 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
-Stacktrace:
 [...]
 ```
 """
@@ -733,8 +732,6 @@ See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
-conj(x) = x
-
 
 """
     widen(x)
@@ -782,14 +779,11 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> map(uppercase∘hex, 250:255)
-6-element Array{String,1}:
- "FA"
- "FB"
- "FC"
- "FD"
- "FE"
- "FF"
+julia> map(uppercase∘first, ["apple", "banana", "carrot"])
+3-element Array{Char,1}:
+ 'A'
+ 'B'
+ 'C'
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))

@@ -94,7 +94,7 @@ Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
 Base.Multimedia.showable
-Base.repr(::Any, ::Any)
+Base.repr(::MIME, ::Any)
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display
@@ -126,27 +126,7 @@ Base.Multimedia.istextmime
 ## Network I/O
 
 ```@docs
-Base.connect(::TCPSocket, ::Integer)
-Base.connect(::AbstractString)
-Base.listen(::Any)
-Base.listen(::AbstractString)
-Base.getaddrinfo
-Base.getalladdrinfo
-Base.getnameinfo
-Base.getsockname
-Base.getpeername
-Base.IPv4
-Base.IPv6
-Base.TCPSocket
-Base.UDPSocket
 Base.bytesavailable
-Base.accept
-Base.listenany
-Base.bind
-Base.send
-Base.recv
-Base.recvfrom
-Base.setopt
 Base.ntoh
 Base.hton
 Base.ltoh

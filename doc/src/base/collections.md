@@ -88,20 +88,16 @@ Base.foldl(::Any, ::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
-Base.maximum(::Any)
-Base.maximum(::Any, ::Any)
+Base.maximum
 Base.maximum!
-Base.minimum(::Any)
-Base.minimum(::Any, ::Any)
+Base.minimum
 Base.minimum!
 Base.extrema(::Any)
 Base.extrema(::AbstractArray, ::Any)
 Base.argmax
 Base.argmin
-Base.findmax(::Any)
-Base.findmax(::AbstractArray, ::Any)
-Base.findmin(::Any)
-Base.findmin(::AbstractArray, ::Any)
+Base.findmax
+Base.findmin
 Base.findmax!
 Base.findmin!
 Base.sum

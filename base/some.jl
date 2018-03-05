@@ -51,8 +51,7 @@ julia> coalesce(missing, 1)
 julia> coalesce(1, nothing)
 1
 
-julia> coalesce(nothing, nothing)
-nothing
+julia> coalesce(nothing, nothing) # returns nothing, but not printed in the REPL
 
 julia> coalesce(Some(1))
 1

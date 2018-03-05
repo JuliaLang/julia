@@ -1592,8 +1592,8 @@ end
     @test I2 + I1 == CartesianIndex((1,8,2))
     @test I1 - I2 == CartesianIndex((3,-2,-2))
     @test I2 - I1 == CartesianIndex((-3,2,2))
-    @test I1 + 1 == CartesianIndex((3,4,1))
-    @test I1 - 2 == CartesianIndex((0,1,-2))
+    @test I1 + 1*one(I1) == CartesianIndex((3,4,1))
+    @test I1 - 2*one(I1) == CartesianIndex((0,1,-2))
 
     @test zero(CartesianIndex{2}) == CartesianIndex((0,0))
     @test zero(CartesianIndex((2,3))) == CartesianIndex((0,0))
@@ -2158,6 +2158,21 @@ end
     @test size(a) ==  size(b) == (9,8,7,6,5,4,3,2,1)
     @test all(x -> x isa U, a)
     @test all(x -> x isa U, b)
+end
+
+@testset "diff" begin
+    # test diff, throw ArgumentError for invalid dimension argument
+    X = [3  9   5;
+         7  4   2;
+         2  1  10]
+    @test diff(X,1) == [4  -5 -3; -5  -3  8]
+    @test diff(X,2) == [6 -4; -3 -2; -1 9]
+    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
+    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
+    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
+    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
+    @test_throws ArgumentError diff(X,3)
+    @test_throws ArgumentError diff(X,-1)
 end
 
 @testset "accumulate, accumulate!" begin

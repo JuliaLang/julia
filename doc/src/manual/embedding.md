@@ -44,7 +44,7 @@ gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JU
 Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
 can be executed.
 
-Alternatively, look at the `embedding.c` program in the Julia source tree in the `examples/` folder.
+Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
 The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
 linking against `libjulia`.
 

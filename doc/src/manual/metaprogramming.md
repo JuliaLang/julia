@@ -216,7 +216,7 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 
 ```jldoctest interp1
 julia> $a + b
-ERROR: unsupported or misplaced expression $
+ERROR: syntax: "$" expression outside quote
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:

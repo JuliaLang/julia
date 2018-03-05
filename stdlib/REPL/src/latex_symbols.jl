@@ -2576,6 +2576,8 @@ const latex_symbols = Dict(
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
 
+    "\\tricolon" => "⁝",  # tricolon
+
     # fractions
     "\\1/4" => "¼", # vulgar fraction one quarter
     "\\1/2" => "½", # vulgar fraction one half

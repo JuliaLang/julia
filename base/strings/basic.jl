@@ -113,7 +113,7 @@ julia> isvalid(str, 2)
 false
 
 julia> str[2]
-ERROR: StringIndexError: invalid character index
+ERROR: StringIndexError("αβγdef", 2)
 Stacktrace:
 [...]
 ```
@@ -410,7 +410,10 @@ julia> prevind("αβγdef", 1)
 0
 
 julia> prevind("αβγdef", 0)
--1
+ERROR: BoundsError: attempt to access "αβγdef"
+  at index [0]
+Stacktrace:
+[...]
 
 julia> prevind("αβγdef", 3, 2)
 0

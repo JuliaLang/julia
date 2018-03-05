@@ -236,7 +236,7 @@ julia> io = IOBuffer();
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
 julia> String(take!(io))
-"\e[31mstring\e[39m"
+"\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
@@ -341,7 +341,7 @@ function show_default(io::IO, @nospecialize(x))
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
-                print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
+                print(io, string(unsafe_load(convert(Ptr{UInt8}, p + i)), base = 16, pad = 2))
             end
         end
     end
@@ -552,11 +552,11 @@ end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
-show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
-print(io::IO, n::Unsigned) = print(io, dec(n))
+show(io::IO, n::Signed) = (write(io, string(n)); nothing)
+show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+print(io::IO, n::Unsigned) = print(io, string(n))
 
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
+show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
@@ -685,7 +685,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             while true
                 x, state = next(itr, state)
                 show(IOContext(recur_io, :typeinfo =>
-                               typeinfo <: Tuple ? typeinfo.parameters[i1+i0] : typeinfo),
+                               typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo),
                      x)
                 i1 += 1
                 if done(itr, state) || i1 > n
@@ -823,7 +823,7 @@ operators. Return `0` if `s` is not a valid operator.
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9, 11, 15)
+(11, 13, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)

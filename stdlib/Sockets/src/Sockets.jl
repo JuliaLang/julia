@@ -1,259 +1,45 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## IP ADDRESS HANDLING ##
-abstract type IPAddr end
+module Sockets
 
-Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
-(dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
+export
+    accept,
+    bind,
+    connect,
+    getaddrinfo,
+    getalladdrinfo,
+    getnameinfo,
+    getipaddr,
+    getpeername,
+    getsockname,
+    listen,
+    listenany,
+    recv,
+    recvfrom,
+    send,
+    TCPSocket,
+    UDPSocket,
+    @ip_str,
+    IPAddr,
+    IPv4,
+    IPv6
 
-struct IPv4 <: IPAddr
-    host::UInt32
-    IPv4(host::UInt32) = new(host)
-    IPv4(a::UInt8,b::UInt8,c::UInt8,d::UInt8) = new(UInt32(a)<<24|
-                                                    UInt32(b)<<16|
-                                                    UInt32(c)<<8|
-                                                    d)
-    function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
-        if !(0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255)
-            throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
-        end
-        IPv4(UInt8(a),UInt8(b),UInt8(c),UInt8(d))
-    end
-end
+import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
 
-"""
-    IPv4(host::Integer) -> IPv4
+using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
+    notify_error, stream_wait, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, UVError,
+    eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
+    uv_status_string, check_open, wait_connected,
+    UV_EINVAL, UV_ENOMEM, UV_ENOBUFS, UV_EAGAIN, UV_ECONNABORTED, UV_EADDRINUSE, UV_EACCES, UV_EADDRNOTAVAIL,
+    UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+    UV_EAI_SOCKTYPE, UV_EAI_MEMORY
 
-Returns an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
+include("IPAddr.jl")
+include("addrinfo.jl")
 
-```jldoctest
-julia> IPv4(3223256218)
-ip"192.30.252.154"
-```
-"""
-function IPv4(host::Integer)
-    if host < 0
-        throw(ArgumentError("IPv4 address must be positive"))
-    elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
-        throw(ArgumentError("IPv4 address must fit within 32 bits"))
-    else
-        return IPv4(UInt32(host))
-    end
-end
-
-# constructor: ("1.2.3.4")
-IPv4(str::AbstractString) = parse(IPv4, str)
-
-show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
-print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
-                                  dec((ip.host&(0xFF0000))>>16),".",
-                                  dec((ip.host&(0xFF00))>>8),".",
-                                  dec(ip.host&0xFF))
-
-struct IPv6 <: IPAddr
-    host::UInt128
-    IPv6(host::UInt128) = new(host)
-    IPv6(a::UInt16,b::UInt16,c::UInt16,d::UInt16,
-     e::UInt16,f::UInt16,g::UInt16,h::UInt16) = new(UInt128(a)<<(7*16)|
-                            UInt128(b)<<(6*16)|
-                            UInt128(c)<<(5*16)|
-                            UInt128(d)<<(4*16)|
-                            UInt128(e)<<(3*16)|
-                            UInt128(f)<<(2*16)|
-                            UInt128(g)<<(1*16)|
-                            h)
-    function IPv6(a::Integer,b::Integer,c::Integer,d::Integer,
-          e::Integer,f::Integer,g::Integer,h::Integer)
-        if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
-             0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
-            throw(ArgumentError("IPv6 field out of range (must be 0-65535)"))
-        end
-        IPv6(UInt16(a),UInt16(b),UInt16(c),UInt16(d),
-             UInt16(e),UInt16(f),UInt16(g),UInt16(h))
-    end
-end
-
-"""
-    IPv6(host::Integer) -> IPv6
-
-Returns an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
-
-```jldoctest
-julia> IPv6(3223256218)
-ip"::c01e:fc9a"
-```
-"""
-function IPv6(host::Integer)
-    if host < 0
-        throw(ArgumentError("IPv6 address must be positive"))
-        # We allow passing bigger integer types, but need to be careful to avoid overflow
-        # Let's hope promotion rules are sensible
-    elseif typemax(typeof(host)) > typemax(UInt128) && host > typemax(UInt128)
-        throw(ArgumentError("IPv6 address must fit within 128 bits"))
-    else
-        return IPv6(UInt128(host))
-    end
-end
-
-IPv6(str::AbstractString) = parse(IPv6, str)
-
-# Suppress leading '0's and "0x"
-print_ipv6_field(io,field::UInt16) = print(io,hex(field))
-
-print_ipv6_field(io,ip,i) = print_ipv6_field(io,ipv6_field(ip,i))
-function ipv6_field(ip::IPv6,i)
-    if i < 0 || i > 7
-        throw(BoundsError())
-    end
-    UInt16(ip.host&(UInt128(0xFFFF)<<(i*16))>>(i*16))
-end
-
-show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
-# RFC 5952 compliant show function
-# http://tools.ietf.org/html/rfc5952
-function print(io::IO,ip::IPv6)
-    i = 8
-    m = 0
-    longest_sub_i = -1
-    while i!=0
-        i-=1
-        field = ipv6_field(ip,i)
-        if field == 0 && longest_sub_i == -1
-            # Find longest subsequence of 0
-            longest_sub_i,j,m,c = i,i,1,1
-            while j != 0
-                j-=1
-                if ipv6_field(ip,j) == 0
-                    c += 1
-                else
-                    c = 0
-                end
-                if c > m
-                    if j+c != longest_sub_i+1
-                        longest_sub_i = j+c-1
-                    end
-                    m = c
-                end
-            end
-            # Prevent single 0 from contracting to :: as required
-            if m == 1
-                longest_sub_i = 9
-            end
-        end
-        if i == longest_sub_i
-            print(io,":")
-            i -= m-1
-            if i == 0
-                print(io,":")
-                break
-            end
-        else
-            if i != 7
-                print(io,":")
-            end
-            print_ipv6_field(io,field)
-        end
-    end
-end
-
-# Parsing
-
-const ipv4_leading_zero_error = """
-Leading zeros in IPv4 addresses are disallowed due to ambiguity.
-If the address is in octal or hexadecimal, convert it to decimal, otherwise remove the leading zero.
-"""
-
-function parse(::Type{IPv4}, str::AbstractString)
-    fields = split(str,'.')
-    i = 1
-    ret = 0
-    for f in fields
-        if isempty(f)
-            throw(ArgumentError("empty field in IPv4 address"))
-        end
-        if length(f) > 1 && f[1] == '0'
-            throw(ArgumentError(ipv4_leading_zero_error))
-        else
-            r = parse(Int, f, base = 10)
-        end
-        if i != length(fields)
-            if r < 0 || r > 255
-                throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
-            end
-            ret |= UInt32(r) << ((4-i)*8)
-        else
-            if r > ((UInt64(1)<<((5-length(fields))*8))-1)
-                throw(ArgumentError("IPv4 field too large"))
-            end
-            ret |= r
-        end
-        i+=1
-    end
-    IPv4(ret)
-end
-
-function parseipv6fields(fields,num_fields)
-    if length(fields) > num_fields
-        throw(ArgumentError("too many fields in IPv6 address"))
-    end
-    cf = 7
-    ret = UInt128(0)
-    for f in fields
-        if isempty(f)
-            # ::abc:... and ..:abc::
-            if cf != 7 && cf != 0
-                cf -= num_fields-length(fields)
-            end
-            cf -= 1
-            continue
-        end
-        ret |= UInt128(parse(Int, f, base = 16))<<(cf*16)
-        cf -= 1
-    end
-    ret
-end
-parseipv6fields(fields) = parseipv6fields(fields,8)
-
-function parse(::Type{IPv6}, str::AbstractString)
-    fields = split(str,':')
-    if length(fields) > 8
-        throw(ArgumentError("too many fields in IPv6 address"))
-    elseif length(fields) == 8
-        return IPv6(parseipv6fields(fields))
-    elseif in('.',fields[end])
-        return IPv6((parseipv6fields(fields[1:(end-1)],6))
-            | parse(IPv4, fields[end]).host )
-    else
-        return IPv6(parseipv6fields(fields))
-    end
-end
-
-#
-# This support IPv4 addresses in the common dot (IPv4) or colon (IPv6)
-# separated formats. Most other common formats use a standard integer encoding
-# of the appropriate size and should use the appropriate constructor
-#
-
-function parse(::Type{IPAddr}, str::AbstractString)
-    if ':' in str
-        return parse(IPv6, str)
-    else
-        return parse(IPv4, str)
-    end
-end
-
-macro ip_str(str)
-    return parse(IPAddr, str)
-end
-
-struct InetAddr{T<:IPAddr}
-    host::T
-    port::UInt16
-end
-
-InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
-
-## SOCKETS ##
 """
     TCPSocket(; delay=true)
 
@@ -282,7 +68,7 @@ mutable struct TCPSocket <: LibuvStream
                 Condition(),
                 nothing,
                 ReentrantLock(),
-                DEFAULT_READ_BUFFER_SZ)
+                Base.DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(tcp.handle, tcp)
         finalizer(uvfinalize, tcp)
         return tcp
@@ -291,7 +77,7 @@ end
 
 # kw arg "delay": if true, libuv delays creation of the socket fd till the first bind call
 function TCPSocket(; delay=true)
-    tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    tcp = TCPSocket(Libc.malloc(Base._sizeof_uv_tcp), StatusUninit)
     af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
     err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cuint),
                 eventloop(), tcp.handle, af_spec)
@@ -322,7 +108,7 @@ end
 # It can be set to false if there is a need to set socket options before
 # further calls to `bind` and `listen`, e.g. `SO_REUSEPORT`.
 function TCPServer(; delay=true)
-    tcp = TCPServer(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    tcp = TCPServer(Libc.malloc(Base._sizeof_uv_tcp), StatusUninit)
     af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
     err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cuint),
                 eventloop(), tcp.handle, af_spec)
@@ -334,15 +120,6 @@ end
 isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
 iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
-## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
-
-_jl_connect_raw(sock::TCPSocket, sockaddr::Ptr{Cvoid}) =
-    ccall(:jl_connect_raw, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), sock.handle, sockaddr, uv_jl_connectcb::Ptr{Cvoid})
-_jl_sockaddr_from_addrinfo(addrinfo::Ptr{Cvoid}) =
-    ccall(:jl_sockaddr_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
-_jl_sockaddr_set_port(ptr::Ptr{Cvoid}, port::UInt16) =
-    ccall(:jl_sockaddr_set_port, Cvoid, (Ptr{Cvoid}, UInt16), ptr, port)
-
 """
     accept(server[,client])
 
@@ -351,7 +128,6 @@ uninitialized client stream may be provided, in which case it will be used inste
 creating a new stream.
 """
 accept(server::TCPServer) = accept(server, TCPSocket())
-accept(server::PipeServer) = accept(server, PipeEndpoint())
 
 # UDP
 """
@@ -380,7 +156,7 @@ mutable struct UDPSocket <: LibuvStream
     end
 end
 function UDPSocket()
-    this = UDPSocket(Libc.malloc(_sizeof_uv_udp), StatusUninit)
+    this = UDPSocket(Libc.malloc(Base._sizeof_uv_udp), StatusUninit)
     err = ccall(:uv_udp_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}),
                 eventloop(), this.handle)
     uv_error("failed to create udp socket", err)
@@ -517,7 +293,7 @@ function recvfrom(sock::UDPSocket)
     end
     if ccall(:uv_is_active, Cint, (Ptr{Cvoid},), sock.handle) == 0
         uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                                    sock.handle, uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_recvcb::Ptr{Cvoid}))
+                                    sock.handle, Base.uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_recvcb::Ptr{Cvoid}))
     end
     sock.status = StatusActive
     return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
@@ -590,243 +366,23 @@ function uv_sendcb(handle::Ptr{Cvoid}, status::Cint)
     nothing
 end
 
-##
 
-struct DNSError <: Exception
-    host::String
-    code::Int32
-end
-
-function show(io::IO, err::DNSError)
-    print(io, "DNSError: ", err.host, ", ", struverror(err.code),
-                                      " (", uverrorname(err.code), ")")
-end
-
-function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
-    data = uv_req_data(req)
-    if data != C_NULL
-        t = unsafe_pointer_to_objref(data)::Task
-        uv_req_set_data(req, C_NULL)
-        if status != 0 || addrinfo == C_NULL
-            schedule(t, UVError("getaddrinfocb", status))
-        else
-            freeaddrinfo = addrinfo
-            addrs = IPAddr[]
-            while addrinfo != C_NULL
-                sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
-                if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
-                    ip4addr = ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)
-                    push!(addrs, IPv4(ntoh(ip4addr)))
-                elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
-                    ip6addr = Ref{UInt128}()
-                    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddr, ip6addr)
-                    push!(addrs, IPv6(ntoh(ip6addr[])))
-                end
-                addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
-            end
-            ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
-            schedule(t, addrs)
-        end
+#from `connect`
+function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
+    hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
+    sock = @handle_as hand LibuvStream
+    @assert sock.status == StatusConnecting
+    if status >= 0
+        sock.status = StatusOpen
+        notify(sock.connectnotify)
     else
-        # no owner for this req, safe to just free it
-        Libc.free(req)
+        sock.status = StatusInit
+        err = UVError("connect", status)
+        notify_error(sock.connectnotify, err)
     end
+    Libc.free(conn)
     nothing
 end
-
-"""
-    getalladdrinfo(host::AbstractString) -> Vector{IPAddr}
-
-Gets all of the IP addresses of the `host`.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
-"""
-function getalladdrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
-    req = Libc.malloc(_sizeof_uv_getaddrinfo)
-    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
-    status = ccall(:jl_getaddrinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Ptr{Cvoid}),
-                   eventloop(), req, host, #=service=#C_NULL, uv_jl_getaddrinfocb::Ptr{Cvoid})
-    if status < 0
-        Libc.free(req)
-        if status == UV_EINVAL
-            throw(ArgumentError("Invalid getaddrinfo argument"))
-        elseif status == UV_ENOMEM || status == UV_ENOBUFS
-            throw(OutOfMemoryError())
-        end
-        uv_error("getaddrinfo", status)
-    end
-    ct = current_task()
-    preserve_handle(ct)
-    r = try
-        uv_req_set_data(req, ct)
-        wait()
-    finally
-        if uv_req_data(req) != C_NULL
-            # req is still alive,
-            # so make sure we don't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-            ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req) # try to let libuv know we don't care anymore
-        else
-            # done with req
-            Libc.free(req)
-        end
-        unpreserve_handle(ct)
-    end
-    if isa(r, UVError)
-        code = r.code
-        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
-                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
-                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
-                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
-                    UV_EAI_SOCKTYPE)
-            throw(DNSError(host, code))
-        elseif code == UV_EAI_MEMORY
-            throw(OutOfMemoryError())
-        else
-            throw(UVError("getaddrinfo", code))
-        end
-    end
-    return r::Vector{IPAddr}
-end
-getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
-
-"""
-    getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
-
-Gets the first IP address of the `host` of the specified `IPAddr` type.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
-"""
-function getaddrinfo(host::String, T::Type{<:IPAddr})
-    addrs = getalladdrinfo(host)
-    for addr in addrs
-        if addr isa T
-            return addr
-        end
-    end
-    throw(DNSError(host, UV_EAI_NONAME))
-end
-getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
-getaddrinfo(host::AbstractString) = getaddrinfo(String(host), IPv4)
-
-function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
-    data = uv_req_data(req)
-    if data != C_NULL
-        t = unsafe_pointer_to_objref(data)::Task
-        uv_req_set_data(req, C_NULL)
-        if status != 0
-            schedule(t, UVError("getnameinfocb", status))
-        else
-            schedule(t, unsafe_string(hostname))
-        end
-    else
-        # no owner for this req, safe to just free it
-        Libc.free(req)
-    end
-    nothing
-end
-
-"""
-    getnameinfo(host::IPAddr) -> String
-
-Performs a reverse-lookup for IP address to return a hostname and service
-using the operating system's underlying getnameinfo implementation.
-"""
-function getnameinfo(address::Union{IPv4, IPv6})
-    req = Libc.malloc(_sizeof_uv_getnameinfo)
-    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
-    ev = eventloop()
-    port = hton(UInt16(0))
-    flags = 0
-    uvcb = uv_jl_getnameinfocb::Ptr{Cvoid}
-    status = UV_EINVAL
-    if address isa IPv4
-        status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt32, UInt16, Cint, Ptr{Cvoid}),
-                       ev, req, hton(address.host), port, flags, uvcb)
-    elseif address isa IPv6
-        status = ccall(:jl_getnameinfo6, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ref{UInt128}, UInt16, Cint, Ptr{Cvoid}),
-                       ev, req, hton(address.host), port, flags, uvcb)
-    end
-    if status < 0
-        Libc.free(req)
-        if status == UV_EINVAL
-            throw(ArgumentError("Invalid getnameinfo argument"))
-        elseif status == UV_ENOMEM || status == UV_ENOBUFS
-            throw(OutOfMemoryError())
-        end
-        uv_error("getnameinfo", status)
-    end
-    ct = current_task()
-    preserve_handle(ct)
-    r = try
-        uv_req_set_data(req, ct)
-        wait()
-    finally
-        if uv_req_data(req) != C_NULL
-            # req is still alive,
-            # so make sure we don't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-            ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req) # try to let libuv know we don't care anymore
-        else
-            # done with req
-            Libc.free(req)
-        end
-        unpreserve_handle(ct)
-    end
-    if isa(r, UVError)
-        code = r.code
-        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
-                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
-                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
-                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
-                    UV_EAI_SOCKTYPE)
-            throw(DNSError(repr(address), code))
-        elseif code == UV_EAI_MEMORY
-            throw(OutOfMemoryError())
-        else
-            throw(UVError("getnameinfo", code))
-        end
-    end
-    return r::String
-end
-
-
-const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
-
-"""
-    getipaddr() -> IPAddr
-
-Get the IP address of the local machine.
-"""
-function getipaddr()
-    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
-    count_ref = Ref{Int32}(1)
-    lo_present = false
-    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
-    uv_error("getlocalip", err)
-    addr, count = addr_ref[], count_ref[]
-    for i = 0:(count-1)
-        current_addr = addr + i*_sizeof_uv_interface_address
-        if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
-            lo_present = true
-            continue
-        end
-        sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
-        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
-            rv = IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)))
-            ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
-            return rv
-        # Uncomment to enbable IPv6
-        #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
-        #   host = Vector{UInt128}(uninitialized, 1)
-        #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddrr, host)
-        #   return IPv6(ntoh(host[1]))
-        end
-    end
-    ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
-    return lo_present ? localhost : error("No networking interface available")
-end
-
-##
 
 function connect!(sock::TCPSocket, host::IPv4, port::Integer)
     if sock.status != StatusInit
@@ -871,8 +427,6 @@ connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
 connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
 connect(addr::InetAddr) = connect(TCPSocket(), addr)
 
-default_connectcb(sock, status) = nothing
-
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
         error("TCPSocket is not in initialization state")
@@ -884,7 +438,15 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
+function connect(sock::LibuvStream, args...)
+    connect!(sock, args...)
+    wait_connected(sock)
+    return sock
+end
+
 ##
+
+const BACKLOG_DEFAULT = 511
 
 """
     listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer
@@ -923,6 +485,31 @@ function listen(callback, server::Union{TCPSocket, UDPSocket})
     return sock
 end
 
+function listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
+    uv_error("listen", trylisten(sock))
+    return sock
+end
+
+# from `listen`
+function uv_connectioncb(stream::Ptr{Cvoid}, status::Cint)
+    sock = @handle_as stream LibuvServer
+    if status >= 0
+        notify(sock.connectnotify)
+    else
+        err = UVError("connection", status)
+        notify_error(sock.connectnotify, err)
+    end
+    nothing
+end
+
+function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
+    check_open(sock)
+    err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
+                sock, backlog, uv_jl_connectioncb::Ptr{Cvoid})
+    sock.status = StatusActive
+    return err
+end
+
 ##
 
 function accept_nonblock(server::TCPServer, client::TCPSocket)
@@ -940,6 +527,22 @@ function accept_nonblock(server::TCPServer)
     client = TCPSocket()
     uv_error("accept", accept_nonblock(server, client))
     return client
+end
+
+function accept(server::LibuvServer, client::LibuvStream)
+    if server.status != StatusActive
+        throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
+    end
+    while isopen(server)
+        err = accept_nonblock(server, client)
+        if err == 0
+            return client
+        elseif err != UV_EAGAIN
+            uv_error("accept", err)
+        end
+        stream_wait(server, server.connectnotify)
+    end
+    uv_error("accept", UV_ECONNABORTED)
 end
 
 ## Utility functions
@@ -1032,4 +635,34 @@ function _sockname(sock, self=true)
         error("cannot obtain socket name")
     end
     return addr, port
+end
+
+# domain sockets
+
+include("PipeServer.jl")
+
+# libuv callback handles
+
+function __init__()
+    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}})
+    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cstring, Cstring})
+    global uv_jl_recvcb        = cfunction(uv_recvcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint})
+    global uv_jl_sendcb        = cfunction(uv_sendcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_connectcb     = cfunction(uv_connectcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+end
+
+# deprecations
+
+@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
+
+@noinline function getaddrinfo(callback::Function, host::AbstractString)
+    Base.depwarn("`getaddrinfo` with a callback function is deprecated, wrap code in `@async` instead for deferred execution.", :getaddrinfo)
+    @async begin
+        r = getaddrinfo(host)
+        callback(r)
+    end
+    nothing
+end
+
 end

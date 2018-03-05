@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random
+using Random, Sockets
 
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
 const STDLIBS = readdir(STDLIB_DIR)
@@ -43,7 +43,7 @@ function choosetests(choices = [])
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "file", "read", "version", "namedtuple",
-        "mpfr", "broadcast", "complex", "socket",
+        "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show",
@@ -56,10 +56,6 @@ function choosetests(choices = [])
         "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
-
-    if isdir(joinpath(Sys.BINDIR, Base.DOCDIR, "examples"))
-        push!(testnames, "examples")
-    end
 
     tests = []
     skip_tests = []
@@ -164,7 +160,7 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["socket", "LibGit2"]
+    net_required_for = ["Sockets", "LibGit2"]
     net_on = true
     try
         ipa = getipaddr()

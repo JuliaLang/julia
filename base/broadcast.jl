@@ -700,7 +700,7 @@ would be the broadcast `inds`). The shape of the output is equal to the shape of
 element of `indsb`.
 
 # Examples
-```jldoctest
+```jldoctest bc_getindex
 julia> A = [11 12; 21 22]
 2×2 Array{Int64,2}:
  11  12
@@ -729,7 +729,7 @@ julia> broadcast_getindex(A, 1:2, 2:-1:1)
 Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
 where `i` and `j` are the two index vectors.
 
-```jldoctest
+```jldoctest bc_getindex
 julia> broadcast_getindex(A, 1:2, (1:2)')
 2×2 Array{Int64,2}:
  11  12

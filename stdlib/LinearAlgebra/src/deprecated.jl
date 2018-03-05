@@ -333,8 +333,6 @@ end
 
 @deprecate chol!(x::Number, uplo) chol(x) false
 
-@deprecate diff(A::AbstractMatrix) diff(A, 1)
-
 ### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
 
 # deprecate ConjArray

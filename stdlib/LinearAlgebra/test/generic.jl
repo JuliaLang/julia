@@ -89,21 +89,6 @@ n = 5 # should be odd
     end
 end
 
-@testset "diff" begin
-    # test diff, throw ArgumentError for invalid dimension argument
-    X = [3  9   5;
-         7  4   2;
-         2  1  10]
-    @test diff(X,1) == [4  -5 -3; -5  -3  8]
-    @test diff(X,2) == [6 -4; -3 -2; -1 9]
-    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
-    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
-    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
-    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
-    @test_throws ArgumentError diff(X,3)
-    @test_throws ArgumentError diff(X,-1)
-end
-
 @testset "linrange" begin
     # make sure unequal input arrays throw an error
     x = [2; 5; 6]
@@ -350,6 +335,7 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.conj(a::ModInt{n}) where {n} = a
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)

@@ -278,7 +278,7 @@ iterations derived from [`eigs`](@ref).
 * `resid`: Final residual vector.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"2-element Array{Float64,1}:\\n.*\\n.*"
 julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];

@@ -246,7 +246,7 @@ conjugating the first vector.
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.dotc(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
+julia> BLAS.dotc(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
 10.0 - 10.0im
 ```
 """
@@ -260,7 +260,7 @@ with stride `incx` and `n` elements of array `Y` with stride `incy`.
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
+julia> BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
 -10.0 + 10.0im
 ```
 """
@@ -350,10 +350,10 @@ end
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.nrm2(4, fill(1.0, 8), 2)
+julia> BLAS.nrm2(4, fill(1.0, 8), 2)
 2.0
 
-julia> Base.BLAS.nrm2(1, fill(1.0, 8), 2)
+julia> BLAS.nrm2(1, fill(1.0, 8), 2)
 1.0
 ```
 """
@@ -383,10 +383,10 @@ Sum of the absolute values of the first `n` elements of array `X` with stride `i
 
 # Examples
 ```jldoctest
-julia> Base.BLAS.asum(5, fill(1.0im, 10), 2)
+julia> BLAS.asum(5, fill(1.0im, 10), 2)
 5.0
 
-julia> Base.BLAS.asum(2, fill(1.0im, 10), 5)
+julia> BLAS.asum(2, fill(1.0im, 10), 5)
 2.0
 ```
 """
@@ -420,7 +420,7 @@ julia> x = [1; 2; 3];
 
 julia> y = [4; 5; 6];
 
-julia> Base.BLAS.axpy!(2, x, y)
+julia> BLAS.axpy!(2, x, y)
 3-element Array{Int64,1}:
   6
   9
@@ -483,7 +483,7 @@ julia> x = [1., 2, 3];
 
 julia> y = [4., 5, 6];
 
-julia> Base.BLAS.axpby!(2., x, 3., y)
+julia> BLAS.axpby!(2., x, 3., y)
 3-element Array{Float64,1}:
 14.0
 19.0

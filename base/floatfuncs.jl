@@ -90,7 +90,7 @@ julia> round(pi, 3, base = 2)
     rounded to 1.2.
 
     # Examples
-    ```jldoctest
+    ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
 

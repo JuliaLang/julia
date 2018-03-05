@@ -469,7 +469,7 @@ The fields represent:
      flags. The `i`th bit of this integer sets the `i`th flag.
   * `mode`: the [`stat`](@ref) mode for the item.
   * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
-     The length of the `id` field when converted using [`hex`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
+     The length of the `id` field when converted using [`string`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
 """
 struct DiffFile
     id::GitHash

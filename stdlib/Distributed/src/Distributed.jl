@@ -9,7 +9,7 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, close, showerror
+             hash, ==, kill, close, showerror
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
@@ -18,8 +18,9 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
             AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, coalesce, notnothing
 
-using Serialization
+using Serialization, Sockets
 import Serialization: serialize, deserialize
+import Sockets: connect
 
 # NOTE: clusterserialize.jl imports additional symbols from Serialization for use
 

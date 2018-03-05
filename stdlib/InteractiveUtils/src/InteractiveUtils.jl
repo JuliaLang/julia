@@ -249,7 +249,7 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-3-element Array{Union{DataType, UnionAll},1}:
+3-element Array{Any,1}:
  Bool
  Signed
  Unsigned
@@ -258,7 +258,7 @@ julia> subtypes(Integer)
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 
 # dumptype is for displaying abstract type hierarchies,
-# based on Jameson Nash's examples/typetree.jl
+# based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested

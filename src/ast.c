@@ -829,7 +829,11 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                     form = jl_expand_macros(form, inmodule, NULL, 0);
                     expression = julia_to_scm(fl_ctx, form);
                 }
-                expression = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), expression);
+                // expand non-final expressions in statement position (value unused)
+                expression =
+                    fl_applyn(fl_ctx, 1,
+                              symbol_value(symbol(fl_ctx, iscons(cdr_(ast)) ? "jl-expand-to-thunk-stmt" : "jl-expand-to-thunk")),
+                              expression);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
@@ -1111,6 +1115,18 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
     expr = jl_call_scm_on_ast("jl-expand-to-thunk", expr, inmodule);
+    JL_GC_POP();
+    return expr;
+}
+
+// expand in a context where the expression value is unused
+JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_call_scm_on_ast("jl-expand-to-thunk-stmt", expr, inmodule);
     JL_GC_POP();
     return expr;
 }

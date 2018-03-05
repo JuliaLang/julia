@@ -275,9 +275,9 @@ split(str::T, splitter::Char;
     _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    i = start(str)
+    i = 1 # firstindex(str)
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), i - 1)
+    r = coalesce(findfirst(splitter,str), 0)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -342,22 +342,16 @@ rsplit(str::T, splitter::Char;
   _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
-    i = start(str)
     n = lastindex(str)
-    r = coalesce(findlast(splitter, str), i - 1)
-    j = first(r)-1
-    k = last(r)
-    while((0 <= j < n) && (length(strs) != limit-1))
-        if i <= k
-            (keep_empty || (k < n)) && pushfirst!(strs, SubString(str,k+1,n))
-            n = j
-        end
-        (k <= j) && (j = prevind(str,j))
-        r = coalesce(findprev(splitter,str,j), 0)
-        j = first(r)-1
-        k = last(r)
+    r = coalesce(findlast(splitter, str), 0)
+    j, k = first(r), last(r)
+    while j > 0 && k > 0 && length(strs) != limit-1
+        (keep_empty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
+        n = prevind(str, j)
+        r = coalesce(findprev(splitter,str,n), 0)
+        j, k = first(r), last(r)
     end
-    (keep_empty || (n > 0)) && pushfirst!(strs, SubString(str,1,n))
+    (keep_empty || n > 0) && pushfirst!(strs, SubString(str,1,n))
     return strs
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
@@ -452,7 +446,7 @@ See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) f
 
 # Examples
 ```jldoctest
-julia> s = hex(12345)
+julia> s = string(12345, base = 16)
 "3039"
 
 julia> hex2bytes(s)
@@ -461,7 +455,7 @@ julia> hex2bytes(s)
  0x39
 
 julia> a = b"01abEF"
-6-element Array{UInt8,1}:
+6-element Base.CodeUnits{UInt8,String}:
  0x30
  0x31
  0x61
@@ -518,7 +512,7 @@ Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
 # Examples
 ```jldoctest
-julia> a = hex(12345)
+julia> a = string(12345, base = 16)
 "3039"
 
 julia> b = hex2bytes(a)

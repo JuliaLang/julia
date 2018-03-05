@@ -78,7 +78,7 @@ is a valid code point, use the [`isvalid`](@ref) function:
 
 ```jldoctest
 julia> Char(0x110000)
-'\U110000': Unicode U+110000 (category Cn: Other, not assigned)
+'\U110000': Unicode U+110000 (category In: Invalid, too high)
 
 julia> isvalid(Char, 0x110000)
 false
@@ -129,9 +129,6 @@ julia> Int('\x7f')
 
 julia> Int('\177')
 127
-
-julia> Int('\xff')
-255
 ```
 
 You can do comparisons and a limited amount of arithmetic with `Char` values:
@@ -275,11 +272,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 2)
 [...]
 
 julia> s[3]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 3)
+Stacktrace:
 [...]
 
 julia> s[4]
@@ -297,7 +295,8 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 2)
+Stacktrace:
 [...]
 
 julia> s[1:4]
@@ -312,7 +311,7 @@ since each character in a string must have its own index. The following is an in
 verbose way to iterate through the characters of `s`:
 
 ```jldoctest unicodestring
-julia> for i = begindex(s):lastindex(s)
+julia> for i = firstindex(s):lastindex(s)
            try
                println(s[i])
            catch
@@ -824,7 +823,7 @@ produce arrays of bytes. Here is an example using all three:
 
 ```jldoctest
 julia> b"DATA\xff\u2200"
-8-element Array{UInt8,1}:
+8-element Base.CodeUnits{UInt8,String}:
  0x44
  0x41
  0x54
@@ -851,11 +850,11 @@ is encoded as two bytes in UTF-8:
 
 ```jldoctest
 julia> b"\xff"
-1-element Array{UInt8,1}:
+1-element Base.CodeUnits{UInt8,String}:
  0xff
 
 julia> b"\uff"
-2-element Array{UInt8,1}:
+2-element Base.CodeUnits{UInt8,String}:
  0xc3
  0xbf
 ```

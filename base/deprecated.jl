@@ -419,8 +419,8 @@ function hex2num(s::AbstractString)
 end
 export hex2num
 
-@deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
-@deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
+@deprecate num2hex(x::Union{Float16,Float32,Float64}) string(reinterpret(Unsigned, x), base = 16, pad = sizeof(x)*2)
+@deprecate num2hex(n::Integer) string(n, base = 16, pad = sizeof(n)*2)
 
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
@@ -456,8 +456,6 @@ end
 
 @deprecate (convert(::Type{Integer}, x::Enum{T}) where {T<:Integer})         Integer(x)
 @deprecate (convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer})  T(x)
-
-@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
 
 function (::Type{T})(arg) where {T}
     if applicable(convert, T, arg)
@@ -696,15 +694,6 @@ function Broadcast.dotview(A::AbstractArray, args::Number...)
 end
 Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
 # Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
-
-@noinline function getaddrinfo(callback::Function, host::AbstractString)
-    depwarn("`getaddrinfo` with a callback function is deprecated, wrap code in `@async` instead for deferred execution.", :getaddrinfo)
-    @async begin
-        r = getaddrinfo(host)
-        callback(r)
-    end
-    nothing
-end
 
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
@@ -1422,6 +1411,25 @@ end
 
 @deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
 
+@deprecate base(b, n)      string(n, base = b)
+@deprecate base(b, n, pad) string(n, base = b, pad = pad)
+@deprecate bin(n)          string(n, base = 2)
+@deprecate bin(n, pad)     string(n, base = 2, pad = pad)
+@deprecate oct(n)          string(n, base = 8)
+@deprecate oct(n, pad)     string(n, base = 8, pad = pad)
+@deprecate dec(n)          string(n)
+@deprecate dec(n, pad)     string(n, pad = pad)
+@deprecate hex(n)          string(n, base = 16)
+@deprecate hex(n, pad)     string(n, base = 16, pad = pad)
+@deprecate bin(n::Char)      string(UInt32(n), base = 2)
+@deprecate bin(n::Char, pad) string(UInt32(n), base = 2, pad = pad)
+@deprecate oct(n::Char)      string(UInt32(n), base = 8)
+@deprecate oct(n::Char, pad) string(UInt32(n), base = 8, pad = pad)
+@deprecate dec(n::Char)      string(UInt32(n))
+@deprecate dec(n::Char, pad) string(UInt32(n), pad = pad)
+@deprecate hex(n::Char)      string(UInt32(n), base = 16)
+@deprecate hex(n::Char, pad) string(UInt32(n), base = 16, pad = pad)
+
 @deprecate which(s::Symbol) which(Main, s)
 
 @deprecate IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool=false, maxsize::Integer=typemax(Int)) IOBuffer(data, read=read, write=write, maxsize=maxsize)
@@ -1430,6 +1438,12 @@ end
 
 @deprecate reprmime(mime, x) repr(mime, x)
 @deprecate mimewritable(mime, x) showable(mime, x)
+
+# PR #26284
+@deprecate (+)(i::Integer, index::CartesianIndex) (i*one(index) + index)
+@deprecate (+)(index::CartesianIndex, i::Integer) (index + i*one(index))
+@deprecate (-)(i::Integer, index::CartesianIndex) (i*one(index) - index)
+@deprecate (-)(index::CartesianIndex, i::Integer) (index - i*one(index))
 
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
@@ -1476,6 +1490,9 @@ end
 @deprecate round(x, digits, base) round(x, digits, base = base)
 @deprecate signif(x, digits, base) signif(x, digits, base = base)
 
+# issue #25965
+@deprecate spawn(cmds::AbstractCmd) run(cmds, wait = false)
+
 # Remember to delete the module when removing this
 @eval Base.Math module JuliaLibm
     Base.@deprecate log Base.log
@@ -1485,12 +1502,17 @@ end
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
+@deprecate diff(A::AbstractMatrix) diff(A, 1)
+
 # PR 26194
 export assert
 function assert(x)
     depwarn("`assert` is deprecated, use `@assert` instead.", :assert)
     @assert x ""
 end
+
+# Issue #26248
+@deprecate conj(x) x
 
 # END 0.7 deprecations
 
