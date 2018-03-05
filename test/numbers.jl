@@ -2548,7 +2548,7 @@ end
 @testset "irrational promotion" begin
     @test π*ComplexF32(2) isa ComplexF32
     @test π/ComplexF32(2) isa ComplexF32
-    @test atan2(π,ComplexF32(2)) isa ComplexF32
+    @test log(π,ComplexF32(2)) isa ComplexF32
 end
 
 @testset "printing non finite floats" begin
