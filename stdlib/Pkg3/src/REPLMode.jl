@@ -6,11 +6,8 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import Pkg3
-import Pkg3: devdir, print_first_command_header
-using Pkg3.Types
-using Pkg3.Display
-using Pkg3.Operations
+import ..devdir, ..print_first_command_header, ..API
+using ..Types, ..Display, ..Operations
 
 ############
 # Commands #
@@ -471,7 +468,7 @@ function do_rm!(ctx::Context, tokens::Vector{Token})
     end
     isempty(pkgs) &&
         cmderror("`rm` – list packages to remove")
-    Pkg3.API.rm(ctx, pkgs)
+    API.rm(ctx, pkgs)
 end
 
 function do_add!(ctx::Context, tokens::Vector{Token})
@@ -495,7 +492,7 @@ function do_add!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.add(ctx, pkgs)
+    API.add(ctx, pkgs)
 end
 
 function do_up!(ctx::Context, tokens::Vector{Token})
@@ -529,7 +526,7 @@ function do_up!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.up(ctx, pkgs; level=level, mode=mode)
+    API.up(ctx, pkgs; level=level, mode=mode)
 end
 
 function do_pin!(ctx::Context, tokens::Vector{Token})
@@ -553,7 +550,7 @@ function do_pin!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.pin(ctx, pkgs)
+    API.pin(ctx, pkgs)
 end
 
 function do_free!(ctx::Context, tokens::Vector{Token})
@@ -566,7 +563,7 @@ function do_free!(ctx::Context, tokens::Vector{Token})
             cmderror("free only takes a list of packages")
         end
     end
-    Pkg3.API.free(ctx, pkgs)
+    API.free(ctx, pkgs)
 end
 
 function do_checkout!(ctx::Context, tokens::Vector{Token})
@@ -597,7 +594,7 @@ function do_develop!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.develop(ctx, pkgs_branches; path = path)
+    API.develop(ctx, pkgs_branches; path = path)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})
@@ -614,7 +611,7 @@ function do_status!(ctx::Context, tokens::Vector{Token})
             cmderror("`status` does not take arguments")
         end
     end
-    Pkg3.Display.status(ctx, mode)
+    Display.status(ctx, mode)
 end
 
 # TODO , test recursive dependencies as on option.
@@ -639,12 +636,12 @@ function do_test!(ctx::Context, tokens::Vector{Token})
         end
     end
     isempty(pkgs) && cmderror("`test` takes a set of packages")
-    Pkg3.API.test(ctx, pkgs; coverage = coverage)
+    API.test(ctx, pkgs; coverage = coverage)
 end
 
 function do_gc!(ctx::Context, tokens::Vector{Token})
     !isempty(tokens) && cmderror("`gc` does not take any arguments")
-    Pkg3.API.gc(ctx)
+    API.gc(ctx)
 end
 
 function do_build!(ctx::Context, tokens::Vector{Token})
@@ -657,14 +654,14 @@ function do_build!(ctx::Context, tokens::Vector{Token})
             cmderror("`build` only takes a list of packages")
         end
     end
-    Pkg3.API.build(ctx, pkgs)
+    API.build(ctx, pkgs)
 end
 
 function do_init!(ctx::Context, tokens::Vector{Token})
     if !isempty(tokens)
         cmderror("`init` does currently not take any arguments")
     end
-    Pkg3.API.init(ctx)
+    API.init(ctx)
 end
 
 

@@ -3,9 +3,7 @@ module Display
 using UUIDs
 import LibGit2
 
-using Pkg3.Types
-import Pkg3: @info, Nothing
-
+using ..Types
 
 const colors = Dict(
     ' ' => :white,

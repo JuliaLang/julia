@@ -7,8 +7,8 @@ import LibGit2
 import REPL
 using REPL.TerminalMenus
 
-using Pkg3.TOML
-import Pkg3
+using ..TOML
+import ..Pkg3
 import Pkg3: depots, logdir
 
 import Base: SHA1, AbstractEnv

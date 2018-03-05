@@ -5,7 +5,7 @@ module Pkg2Types
 export VersionInterval, VersionSet
 import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal
 
-import Pkg3.Types: VersionBound, VersionRange
+import ...Types: VersionBound, VersionRange
 
 struct VersionInterval
     lower::VersionNumber

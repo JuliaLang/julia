@@ -6,14 +6,8 @@ import LibGit2
 
 import REPL
 using REPL.TerminalMenus
-using Pkg3.Types
-using Pkg3.GraphType
-using Pkg3.Resolve
-import Pkg3.Pkg2
-import Pkg3.BinaryProvider
-
-import Pkg3: depots, devdir
-import Pkg3.Types: uuid_julia
+using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider
+import ..depots, ..devdir, ..Types.uuid_julia
 
 function find_installed(name::String, uuid::UUID, sha1::SHA1)
     slug = Base.version_slug(uuid, sha1)
