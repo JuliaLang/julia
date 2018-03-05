@@ -948,7 +948,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
 
         # OSX BLAS looks at an environment variable
         if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
+            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
     end
 
@@ -969,11 +969,12 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
+    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)

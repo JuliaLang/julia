@@ -10,7 +10,7 @@ function writereadpipeline(input, exename)
         write(p.in, input)
         close(p.in)
     end
-    return read(p.out, String)
+    return (read(p.out, String), success(p))
 end
 
 # helper function for returning stderr and stdout
@@ -24,6 +24,52 @@ function readchomperrors(exename::Cmd)
     return (success(p), fetch(o), fetch(e))
 end
 
+
+let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
+    # tests for handling of ENV errors
+    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+                setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
+                    "JULIA_LOAD_PATH"=>"", "JULIA_DEPOT_PATH"=>""))
+        @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
+        @test v[2]
+    end
+    let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
+                setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
+                    "JULIA_LOAD_PATH"=>";;;:::", "JULIA_DEPOT_PATH"=>";;;:::"))
+        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
+        @test v[1] == "REPL: 3\n"
+        @test v[2]
+    end
+    let v = readchomperrors(`$exename -i -e '
+            empty!(LOAD_PATH)
+            Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+            '`)
+        # simulate not having a working version of InteractiveUtils,
+        # make sure this is a non-fatal error and the REPL still loads
+        @test v[1]
+        @test isempty(v[2])
+        @test startswith(v[3], """
+                         ┌ Warning: Failed to insert InteractiveUtils into module Main
+                         │   exception =
+                         │    ArgumentError: Module InteractiveUtils not found in current path.
+                         │    Run `Pkg.add("InteractiveUtils")` to install the InteractiveUtils package.
+                         │    Stacktrace:
+                         """)
+    end
+    for nc in ("0", "-2", "x", "2x", " ")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+        @test v[1]
+        @test v[2] == "1"
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
+    end
+    real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
+    for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+        @test v[1]
+        @test v[2] == (isempty(nc) ? real_cores : "1")
+        @test isempty(v[3])
+    end
+end
 
 let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # --version
@@ -173,19 +219,25 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = read(`$exename -g0 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
+        @test code[2]
+        code = code[1]
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g1 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
+        @test code[2]
+        code = code[1]
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = read(`$exename -g2 -i -e "code_llvm(stdout, +, (Int64, Int64), false, true); exit()"`, String)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
+        @test code[2]
+        code = code[1]
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -486,11 +538,11 @@ end
 
 # issue #6310
 let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test writereadpipeline("2+2", exename) == "4\n"
-    @test writereadpipeline("2+2\n3+3\n4+4", exename) == "4\n6\n8\n"
-    @test writereadpipeline("", exename) == ""
-    @test writereadpipeline("print(2)", exename) == "2"
-    @test writereadpipeline("print(2)\nprint(3)", exename) == "23"
+    @test writereadpipeline("2+2", exename) == ("4\n", true)
+    @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
+    @test writereadpipeline("", exename) == ("", true)
+    @test writereadpipeline("print(2)", exename) == ("2", true)
+    @test writereadpipeline("print(2)\nprint(3)", exename) == ("23", true)
     let infile = tempname()
         touch(infile)
         try

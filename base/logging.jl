@@ -367,8 +367,6 @@ end
 
 LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
 
-_global_logstate = LogState(NullLogger())
-
 function current_logstate()
     logstate = current_task().logstate
     (logstate != nothing ? logstate : _global_logstate)::LogState
@@ -492,5 +490,7 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     write(logger.stream, take!(buf))
     nothing
 end
+
+_global_logstate = LogState(SimpleLogger(Core.stderr, CoreLogging.Info))
 
 end # CoreLogging
