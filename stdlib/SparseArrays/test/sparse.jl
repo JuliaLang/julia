@@ -808,11 +808,11 @@ end
     a[1:0,2] = 1
     @test a[:,2] == sparse([1:10;])
 
-    @test_throws BoundsError a[:,11] .= spzeros(10,1)
-    @test_throws BoundsError a[11,:] .= spzeros(1,10)
-    @test_throws BoundsError a[:,-1] .= spzeros(10,1)
-    @test_throws BoundsError a[-1,:] .= spzeros(1,10)
-    @test_throws BoundsError a[0:9] .= spzeros(1,10)
+    @test_throws BoundsError (a[:,11] .= spzeros(10,1); nothing)
+    @test_throws BoundsError (a[11,:] .= spzeros(1,10); nothing)
+    @test_throws BoundsError (a[:,-1] .= spzeros(10,1); nothing)
+    @test_throws BoundsError (a[-1,:] .= spzeros(1,10); nothing)
+    @test_throws BoundsError (a[0:9] .= spzeros(1,10); nothing)
     @test_throws BoundsError a[:,11] = 0
     @test_throws BoundsError a[11,:] = 0
     @test_throws BoundsError a[:,-1] = 0
@@ -824,10 +824,10 @@ end
     @test_throws BoundsError a[-1,:] = 1
     @test_throws BoundsError a[0:9] = 1
 
-    @test_throws DimensionMismatch a[1:2,1:2] .= 1:3
-    @test_throws DimensionMismatch a[1:2,1] .= 1:3
-    @test_throws DimensionMismatch a[1,1:2] .= 1:3
-    @test_throws DimensionMismatch a[1:2] .= 1:3
+    @test_throws DimensionMismatch (a[1:2,1:2] .= 1:3; nothing)
+    @test_throws DimensionMismatch (a[1:2,1] .= 1:3; nothing)
+    @test_throws DimensionMismatch (a[1,1:2] .= 1:3; nothing)
+    @test_throws DimensionMismatch (a[1:2] .= 1:3; nothing)
 
     A = spzeros(Int, 10, 20)
     A[1:5,1:10] = 10

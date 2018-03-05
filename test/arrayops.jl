@@ -881,7 +881,7 @@ end
     @test a == [6,2,6,4,6]
     a[[true,false,true,false,true]] .= [7,8,9]
     @test a == [7,2,8,4,9]
-    @test_throws DimensionMismatch (a[[true,false,true,false,true]] .= [7,8,9,10])
+    @test_throws DimensionMismatch ((a[[true,false,true,false,true]] .= [7,8,9,10]; nothing))
     A = reshape(1:15, 3, 5)
     @test A[[true, false, true], [false, false, true, true, false]] == [7 10; 9 12]
     @test_throws BoundsError A[[true, false], [false, false, true, true, false]]
@@ -889,7 +889,7 @@ end
     @test_throws BoundsError A[[true, false, true, true], [false, false, true, true, false]]
     @test_throws BoundsError A[[true, false, true], [false, false, true, true, false, true]]
     A = fill(1, 3, 5)
-    @test_throws DimensionMismatch A[2,[true, false, true, true, false]] .= 2:5
+    @test_throws DimensionMismatch (A[2,[true, false, true, true, false]] .= 2:5; nothing)
     A[2,[true, false, true, true, false]] .= 2:4
     @test A == [1 1 1 1 1; 2 1 3 4 1; 1 1 1 1 1]
     @test_throws DimensionMismatch A[[true,false,true], 5] .= 19:21
