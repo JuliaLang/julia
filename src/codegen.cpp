@@ -2592,9 +2592,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf,
                                         data_owner, 0);
                         }
-                        *ret = ary;
-                        return true;
                     }
+                    *ret = ary;
+                    return true;
                 }
             }
         }
