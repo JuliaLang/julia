@@ -11,34 +11,9 @@ using Pkg3.Types
 import Random: randstring
 import LibGit2
 
-function temp_pkg_dir(fn::Function)
-    local env_dir
-    local old_load_path
-    local old_depot_path
-    try
-        old_load_path = copy(LOAD_PATH)
-        old_depot_path = copy(DEPOT_PATH)
-        empty!(LOAD_PATH)
-        empty!(DEPOT_PATH)
-        mktempdir() do env_dir
-            mktempdir() do depot_dir
-                pushfirst!(LOAD_PATH, env_dir)
-                pushfirst!(DEPOT_PATH, depot_dir)
-                # Add the standard library paths back
-                vers = "v$(VERSION.major).$(VERSION.minor)"
-                push!(LOAD_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia", "site", vers))
-                push!(LOAD_PATH, abspath(Sys.BINDIR, "..", "share", "julia", "site", vers))
-                fn(env_dir)
-            end
-        end
-    finally
-        append!(LOAD_PATH, old_load_path)
-        append!(DEPOT_PATH, old_depot_path)
-    end
-end
+include("utils.jl")
 
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
-isinstalled(pkg) = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name)) !== nothing
 
 temp_pkg_dir() do project_path
 

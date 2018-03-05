@@ -42,6 +42,9 @@ include("REPLMode.jl")
 
 import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop
 const update = up
+import .REPLMode: @pkg_str
+export @pkg_str
+
 
 function __init__()
     if isdefined(Base, :active_repl)

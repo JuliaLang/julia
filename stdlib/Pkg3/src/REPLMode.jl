@@ -668,6 +668,28 @@ end
 ######################
 # REPL mode creation #
 ######################
+
+# Provide a string macro pkg"cmd" that can be used in the same way
+# as the REPLMode `pkg> cmd`. Useful for testing and in environments
+# where we do not have a REPL, e.g. IJulia.
+struct MiniREPL <: REPL.AbstractREPL
+    display::TextDisplay
+    t::REPL.Terminals.TTYTerminal
+end
+function MiniREPL()
+    MiniREPL(TextDisplay(stdout), REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr))
+end
+REPL.REPLDisplay(repl::MiniREPL) = repl.display
+
+__init__() = minirepl[] = MiniREPL()
+
+const minirepl = Ref{MiniREPL}()
+
+macro pkg_str(str::String)
+    :($(do_cmd)(minirepl[], $str))
+end
+
+# Set up the repl Pkg REPLMode
 function create_mode(repl, main)
     pkg_mode = LineEdit.Prompt("pkg> ";
         prompt_prefix = Base.text_colors[:blue],
