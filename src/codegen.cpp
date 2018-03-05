@@ -161,7 +161,6 @@ extern void _chkstk(void);
 
 // llvm state
 JL_DLLEXPORT LLVMContext jl_LLVMContext;
-static bool nested_compile = false;
 TargetMachine *jl_TargetMachine;
 
 extern JITEventListener *CreateJuliaJITEventListener();
@@ -1032,8 +1031,9 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
 }
 
 // Snooping on which functions are being compiled, and how long it takes
-JL_STREAM *dump_compiles_stream = NULL;
-uint64_t last_time = 0;
+static JL_STREAM *dump_compiles_stream = NULL;
+static bool nested_compile = false;
+static uint64_t last_time = 0;
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles(void *s)
 {
@@ -1495,8 +1495,6 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
 
-    bool last_n_c = nested_compile;
-    nested_compile = true;
     // emit this function into a new module
     jl_llvm_functions_t declarations;
     std::unique_ptr<Module> m;
@@ -1505,13 +1503,11 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
     JL_CATCH {
         // something failed!
-        nested_compile = last_n_c;
+        m.reset();
         JL_UNLOCK(&codegen_lock); // Might GC
         const char *mname = name_from_method_instance(linfo);
         jl_rethrow_with_add("error compiling %s", mname);
     }
-    // Restore the previous compile context
-    nested_compile = last_n_c;
 
     if (optimize)
         jl_globalPM->run(*m.get());
@@ -4172,24 +4168,12 @@ static void emit_cfunc_invalidate(
     }
 }
 
-static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
+static Function *gen_cfun_wrapper(const function_sig_t &sig, jl_function_t *ff,
+                                  jl_value_t *jlrettype, jl_tupletype_t *argt,
                                   jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // Generate a c-callable wrapper
-    bool toboxed;
-    Type *crt = julia_struct_to_llvm(jlrettype, NULL, &toboxed);
-    if (crt == NULL)
-        jl_error("cfunction: return type doesn't correspond to a C type");
-    else if (toboxed)
-        crt = T_prjlvalue;
-
-    size_t nargs = jl_nparams(argt);
-    function_sig_t sig(crt, jlrettype, toboxed, argt->parameters, NULL, nargs, false, CallingConv::C, false);
-    if (!sig.err_msg.empty())
-        jl_error(sig.err_msg.c_str());
-    if (sig.fargt.size() + sig.sret != sig.fargt_sig.size())
-        jl_error("va_arg syntax not allowed for cfunction argument list");
-
+    size_t nargs = sig.nargs;
     const char *name = "cfunction";
     size_t world = jl_world_counter;
     // try to look up this function for direct invoking
@@ -4226,7 +4210,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     Module *M = new Module(name, jl_LLVMContext);
     jl_setup_module(M);
-    Function *cw = Function::Create(sig.functype,
+    FunctionType *functype = sig.functype();
+    Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
     jl_init_function(cw);
@@ -4235,6 +4220,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     cw->addFnAttr("no-frame-pointer-elim", "true");
 #endif
     Function *cw_proto = function_proto(cw);
+    // Save the Function object reference
+    sf->func.value = jl_box_voidpointer((void*)cw_proto);
+    jl_gc_wb(sf, sf->func.value);
 
     jl_codectx_t ctx(jl_LLVMContext);
     ctx.f = cw;
@@ -4273,9 +4261,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         age_ok = ctx.builder.CreateOr(ctx.builder.CreateNot(have_tls), age_ok);
     }
     ctx.builder.CreateStore(world_v, ctx.world_age_field);
-    // Save the Function object reference
-    sf->func.value = jl_box_voidpointer((void*)cw_proto);
-    jl_gc_wb(sf, sf->func.value);
 
     // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
@@ -4497,7 +4482,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // Prepare the return value
     Value *r;
-    if (toboxed) {
+    if (sig.retboxed) {
         assert(!sig.sret);
         // return a jl_value_t*
         r = boxed(ctx, retval);
@@ -4511,7 +4496,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (sig.sret)
             prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = julia_to_native(ctx, sig.lrt, toboxed, declrt, NULL, retval,
+        Value *v = julia_to_native(ctx, sig.lrt, sig.retboxed, declrt, NULL, retval,
                                    false, 0, NULL);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
@@ -4521,7 +4506,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     }
     else {
         assert(type_is_ghost(sig.lrt));
-        sig.sret = true;
         r = NULL;
     }
 
@@ -4565,7 +4549,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
         if (jl_is_typevar(declrt))
-            jl_error("cfunction: return type Ref should have an element type, not Ref{T}");
+            jl_error("cfunction: return type Ref should have an element type, not Ref{<:T}");
         if (declrt == (jl_value_t*)jl_any_type)
             jl_error("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.");
         if (!jl_is_concrete_type(declrt))
@@ -4584,12 +4568,12 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
         if (jl_is_abstract_ref_type(ati)) {
             ati = jl_tparam0(ati);
             if (jl_is_typevar(ati))
-                jl_error("cfunction: argument type Ref should have an element type, not Ref{T}");
+                jl_error("cfunction: argument type Ref should have an element type, not Ref{<:T}");
             if (ati != (jl_value_t*)jl_any_type && !jl_is_concrete_type(ati))
                 jl_svecset(cfunc_sig, i + 1, ati); // Ref{Abstract} is the same calling convention as Abstract
         }
         if (jl_is_pointer(ati) && jl_is_typevar(jl_tparam0(ati)))
-            jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
+            jl_error("cfunction: argument type Ptr should have an element type, Ptr{<:T}");
         jl_svecset(sigt, i + 1, ati);
     }
     sigt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)sigt);
@@ -4615,22 +4599,31 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
             NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
     }
 
-    // Backup the info for the nested compile
-    bool last_n_c = nested_compile;
-    nested_compile = true;
-    Function *f;
-    JL_TRY {
-        f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
+    bool toboxed;
+    Type *lcrt = julia_struct_to_llvm(crt, NULL, &toboxed);
+    if (lcrt == NULL)
+        jl_error("cfunction: return type doesn't correspond to a C type");
+    else if (toboxed)
+        lcrt = T_prjlvalue;
+    jl_value_t *err;
+    { // scope block for sig
+        function_sig_t sig("cfunction", lcrt, crt, toboxed,
+                           argt->parameters, NULL, nargs, false, CallingConv::C, false);
+        if (!sig.err_msg.empty()) {
+            err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
+        }
+        else if (sig.isVa || sig.fargt.size() + sig.sret != sig.fargt_sig.size()) {
+            err = NULL;
+        }
+        else {
+            Function *f = gen_cfun_wrapper(sig, ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
+            JL_GC_POP();
+            return f;
+        }
     }
-    JL_CATCH {
-        f = NULL;
-    }
-    // Restore the previous compile context
-    nested_compile = last_n_c;
-    JL_GC_POP();
-    if (f == NULL)
-        jl_rethrow();
-    return f;
+    if (err)
+        jl_throw(err);
+    jl_error("cfunction: Vararg syntax not allowed for cfunction argument list");
 }
 
 // generate a julia-callable function that calls f (AKA lam)

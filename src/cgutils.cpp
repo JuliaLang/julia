@@ -551,102 +551,104 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
         return T_void;
     if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt);
-    bool isTuple = jl_is_tuple_type(jt);
-    jl_datatype_t *jst = (jl_datatype_t*)jt;
-    if (jst->struct_decl != NULL)
-        return (Type*)jst->struct_decl;
-    if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout))) {
-        size_t i, ntypes = jl_svec_len(jst->types);
-        if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
-            return T_void;
-        if (!julia_struct_has_layout(jst, ua))
-            return NULL;
-        std::vector<Type*> latypes(0);
-        bool isarray = true;
-        bool isvector = true;
-        jl_value_t *jlasttype = NULL;
-        Type *lasttype = NULL;
-        bool allghost = true;
-        for (i = 0; i < ntypes; i++) {
-            jl_value_t *ty = jl_svecref(jst->types, i);
-            if (jlasttype != NULL && ty != jlasttype)
-                isvector = false;
-            jlasttype = ty;
-            bool isptr;
-            size_t fsz = 0, al = 0;
-            if (jst->layout) {
-                isptr = jl_field_isptr(jst, i);
-                fsz = jl_field_size(jst, i);
-                al = jl_field_align(jst, i);
-            }
-            else { // compute what jl_compute_field_offsets would say
-                isptr = !jl_islayout_inline(ty, &fsz, &al);
-                if (!isptr && jl_is_uniontype(jst))
-                    fsz += 1;
-            }
-            Type *lty;
-            if (isptr) {
-                lty = T_pjlvalue;
-            }
-            else if (ty == (jl_value_t*)jl_bool_type) {
-                lty = T_int8;
-            }
-            else if (jl_is_uniontype(ty)) {
-                // pick an Integer type size such that alignment will be correct
-                // and always end with an Int8 (selector byte)
-                Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
-                unsigned NumATy = (fsz - 1) / al;
-                unsigned remainder = (fsz - 1) % al;
-                while (NumATy--)
-                    latypes.push_back(AlignmentType);
-                while (remainder--)
+    if (jl_is_structtype(jt)) {
+        jl_datatype_t *jst = (jl_datatype_t*)jt;
+        bool isTuple = jl_is_tuple_type(jt);
+        if (jst->struct_decl != NULL)
+            return (Type*)jst->struct_decl;
+        if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout))) {
+            size_t i, ntypes = jl_svec_len(jst->types);
+            if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
+                return T_void;
+            if (!julia_struct_has_layout(jst, ua))
+                return NULL;
+            std::vector<Type*> latypes(0);
+            bool isarray = true;
+            bool isvector = true;
+            jl_value_t *jlasttype = NULL;
+            Type *lasttype = NULL;
+            bool allghost = true;
+            for (i = 0; i < ntypes; i++) {
+                jl_value_t *ty = jl_svecref(jst->types, i);
+                if (jlasttype != NULL && ty != jlasttype)
+                    isvector = false;
+                jlasttype = ty;
+                bool isptr;
+                size_t fsz = 0, al = 0;
+                if (jst->layout) {
+                    isptr = jl_field_isptr(jst, i);
+                    fsz = jl_field_size(jst, i);
+                    al = jl_field_align(jst, i);
+                }
+                else { // compute what jl_compute_field_offsets would say
+                    isptr = !jl_islayout_inline(ty, &fsz, &al);
+                    if (!isptr && jl_is_uniontype(jst))
+                        fsz += 1;
+                }
+                Type *lty;
+                if (isptr) {
+                    lty = T_pjlvalue;
+                }
+                else if (ty == (jl_value_t*)jl_bool_type) {
+                    lty = T_int8;
+                }
+                else if (jl_is_uniontype(ty)) {
+                    // pick an Integer type size such that alignment will be correct
+                    // and always end with an Int8 (selector byte)
+                    Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
+                    unsigned NumATy = (fsz - 1) / al;
+                    unsigned remainder = (fsz - 1) % al;
+                    while (NumATy--)
+                        latypes.push_back(AlignmentType);
+                    while (remainder--)
+                        latypes.push_back(T_int8);
                     latypes.push_back(T_int8);
-                latypes.push_back(T_int8);
-                isarray = false;
-                allghost = false;
-                continue;
+                    isarray = false;
+                    allghost = false;
+                    continue;
+                }
+                else {
+                    lty = julia_type_to_llvm(ty);
+                }
+                if (lasttype != NULL && lasttype != lty)
+                    isarray = false;
+                lasttype = lty;
+                if (!type_is_ghost(lty)) {
+                    allghost = false;
+                    latypes.push_back(lty);
+                }
+            }
+            Type *decl;
+            if (allghost) {
+                assert(jst->layout == NULL); // otherwise should have been caught above
+                decl = T_void;
+            }
+            else if (jl_is_vecelement_type(jt)) {
+                // VecElement type is unwrapped in LLVM
+                decl = latypes[0];
+            }
+            else if (isTuple && isarray && lasttype != T_int1 && !type_is_ghost(lasttype)) {
+                if (isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
+                    decl = VectorType::get(lasttype, ntypes);
+                else
+                    decl = ArrayType::get(lasttype, ntypes);
             }
             else {
-                lty = julia_type_to_llvm(ty);
-            }
-            if (lasttype != NULL && lasttype != lty)
-                isarray = false;
-            lasttype = lty;
-            if (!type_is_ghost(lty)) {
-                allghost = false;
-                latypes.push_back(lty);
-            }
-        }
-        Type *decl;
-        if (allghost) {
-            assert(jst->layout == NULL); // otherwise should have been caught above
-            decl = T_void;
-        }
-        else if (jl_is_vecelement_type(jt)) {
-            // VecElement type is unwrapped in LLVM
-            decl = latypes[0];
-        }
-        else if (isTuple && isarray && lasttype != T_int1 && !type_is_ghost(lasttype)) {
-            if (isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
-                decl = VectorType::get(lasttype, ntypes);
-            else
-                decl = ArrayType::get(lasttype, ntypes);
-        }
-        else {
 #if 0 // stress-test code that tries to assume julia-index == llvm-index
-      // (also requires change to emit_new_struct to not assume 0 == 0)
-            if (!isTuple && latypes.size() > 1) {
-                Type *NoopType = ArrayType::get(T_int1, 0);
-                latypes.insert(latypes.begin(), NoopType);
-            }
+          // (also requires change to emit_new_struct to not assume 0 == 0)
+                if (!isTuple && latypes.size() > 1) {
+                    Type *NoopType = ArrayType::get(T_int1, 0);
+                    latypes.insert(latypes.begin(), NoopType);
+                }
 #endif
-            decl = StructType::get(jl_LLVMContext, latypes);
+                decl = StructType::get(jl_LLVMContext, latypes);
+            }
+            jst->struct_decl = decl;
+            return decl;
         }
-        jst->struct_decl = decl;
-        return decl;
     }
     // TODO: enable this (with tests):
-    // if (jl_is_uniontype(ty)) {
+    // if (jl_is_uniontype(jt)) {
     //  // pick an Integer type size such that alignment will be correct
     //  // and always end with an Int8 (selector byte)
     //  lty = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (fsz - 1) / al);
