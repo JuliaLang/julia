@@ -1007,6 +1007,7 @@ extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
+extern jl_sym_t *unreachable_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;

@@ -5740,6 +5740,11 @@ static std::unique_ptr<Module> emit_function(
             handle_label(lname, true);
             continue;
         }
+        if (expr && expr->head == unreachable_sym) {
+            ctx.builder.CreateUnreachable();
+            find_next_stmt(-1);
+            continue;
+        }
         if (expr && expr->head == return_sym) {
             // this is basically a copy of emit_assignment,
             // but where the assignment slot is the retval

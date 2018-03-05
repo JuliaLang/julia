@@ -159,7 +159,7 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
                 new_stmt = Expr(:return, rename(stmt.val))
             else
                 # Unreachable, so no issue with this
-                new_stmt = nothing
+                new_stmt = Expr(:unreachable)
             end
         elseif isa(stmt, SSAValue)
             new_stmt = rename(stmt)
