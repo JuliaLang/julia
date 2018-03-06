@@ -8,10 +8,15 @@ Utilities for monitoring files and file descriptors for events.
 module FileWatching
 
 export
-    watch_file,
-    poll_fd,
-    poll_file,
+    # one-shot API (returns results):
+    watch_file, # efficient for small numbers of files
+    watch_folder, # efficient for large numbers of files
+    unwatch_folder,
+    poll_file, # very inefficient alternative to above
+    poll_fd, # very efficient, unrelated to above
+    # continuous API (returns objects):
     FileMonitor,
+    FolderMonitor,
     PollingFileWatcher,
     FDWatcher
 
@@ -30,17 +35,23 @@ struct FileEvent
     renamed::Bool
     changed::Bool
     timedout::Bool
+    FileEvent(r::Bool, c::Bool, t::Bool) = new(r, c, t)
 end
 FileEvent() = FileEvent(false, false, true)
 FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
                                       (flags & UV_CHANGE) != 0,
                                       false)
+|(a::FileEvent, b::FileEvent) =
+    FileEvent(a.renamed | b.renamed,
+              a.changed | b.changed,
+              a.timedout | b.timedout)
 
 struct FDEvent
     readable::Bool
     writable::Bool
     disconnect::Bool
     timedout::Bool
+    FDEvent(r::Bool, w::Bool, d::Bool, t::Bool) = new(r, w, d, t)
 end
 # libuv file descriptor event flags
 const UV_READABLE = 1
@@ -64,11 +75,12 @@ mutable struct FileMonitor
     handle::Ptr{Cvoid}
     file::String
     notify::Condition
+    events::Int32
     active::Bool
     FileMonitor(file::AbstractString) = FileMonitor(String(file))
     function FileMonitor(file::String)
         handle = Libc.malloc(_sizeof_uv_fs_event)
-        this = new(handle, file, Condition(), false)
+        this = new(handle, file, Condition(), 0, false)
         associate_julia_struct(handle, this)
         err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
@@ -76,6 +88,30 @@ mutable struct FileMonitor
             throw(UVError("FileMonitor", err))
         end
         finalizer(uvfinalize, this)
+        return this
+    end
+end
+
+
+mutable struct FolderMonitor
+    handle::Ptr{Cvoid}
+    notify::Channel{Any} # eltype = Union{Pair{String, FileEvent}, UVError}
+    open::Bool
+    FolderMonitor(folder::AbstractString) = FolderMonitor(String(folder))
+    function FolderMonitor(folder::String)
+        handle = Libc.malloc(_sizeof_uv_fs_event)
+        this = new(handle, Channel(Inf), false)
+        associate_julia_struct(handle, this)
+        err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
+        if err != 0
+            Libc.free(handle)
+            throw(UVError("FolderMonitor", err))
+        end
+        this.open = true
+        finalizer(uvfinalize, this)
+        uv_error("FolderMonitor (start)",
+                 ccall(:uv_fs_event_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32),
+                       handle, uv_jl_fseventscb_folder::Ptr{Cvoid}, folder, 0))
         return this
     end
 end
@@ -108,8 +144,8 @@ mutable struct _FDWatcher
     fdnum::Int # this is NOT the file descriptor
     refcount::Tuple{Int, Int}
     notify::Condition
-    active::Tuple{Bool, Bool}
     events::Int32
+    active::Tuple{Bool, Bool}
 
     let FDWatchers = Vector{Any}()
         global _FDWatcher, uvfinalize
@@ -138,8 +174,8 @@ mutable struct _FDWatcher
                     fdnum,
                     (Int(readable), Int(writable)),
                     Condition(),
-                    (false, false),
-                    0)
+                    0,
+                    (false, false))
                 associate_julia_struct(handle, this)
                 err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, RawFD), eventloop(), handle, fd)
                 if err != 0
@@ -186,8 +222,8 @@ mutable struct _FDWatcher
                 0,
                 (Int(readable), Int(writable)),
                 Condition(),
-                (false, false),
-                0)
+                0,
+                (false, false))
             associate_julia_struct(handle, this)
             err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid},   Ptr{Cvoid}, WindowsRawSocket),
                                                eventloop(), handle,    fd)
@@ -236,12 +272,12 @@ function close(t::FDWatcher)
     close(t.watcher, r, w)
 end
 
-function uvfinalize(uv::Union{FileMonitor, PollingFileWatcher})
+function uvfinalize(uv::Union{FileMonitor, FolderMonitor, PollingFileWatcher})
     disassociate_julia_struct(uv)
     close(uv)
 end
 
-function close(t::Union{FileMonitor, PollingFileWatcher})
+function close(t::Union{FileMonitor, FolderMonitor, PollingFileWatcher})
     if t.handle != C_NULL
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
     end
@@ -264,23 +300,42 @@ end
 function _uv_hook_close(uv::FileMonitor)
     uv.handle = C_NULL
     uv.active = false
-    notify(uv.notify, ("", FileEvent()))
+    notify(uv.notify, FileEvent())
+    nothing
+end
+
+function _uv_hook_close(uv::FolderMonitor)
+    uv.open = false
+    uv.handle = C_NULL
+    close(uv.notify)
     nothing
 end
 
 function __init__()
-    global uv_jl_pollcb        = cfunction(uv_pollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cint})
-    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
-    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
+    global uv_jl_pollcb = cfunction(uv_pollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cint})
+    global uv_jl_fspollcb = cfunction(uv_fspollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
+    global uv_jl_fseventscb_file = cfunction(uv_fseventscb_file, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
+    global uv_jl_fseventscb_folder = cfunction(uv_fseventscb_folder, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
 end
 
-function uv_fseventscb(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
+function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
-    fname = filename == C_NULL ? "" : unsafe_string(convert(Ptr{UInt8}, filename))
     if status != 0
         notify_error(t.notify, UVError("FileMonitor", status))
     else
-        notify(t.notify, (fname, FileEvent(events)))
+        t.events |= events
+        notify(t.notify, FileEvent(events))
+    end
+    nothing
+end
+
+function uv_fseventscb_folder(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
+    t = @handle_as handle FolderMonitor
+    if status != 0
+        put!(t.notify, UVError("FolderMonitor", status))
+    else
+        fname = (filename == C_NULL) ? "" : unsafe_string(convert(Cstring, filename))
+        put!(t.notify, fname => FileEvent(events))
     end
     nothing
 end
@@ -319,6 +374,7 @@ function uv_fspollcb(handle::Ptr{Cvoid}, status::Int32, prev::Ptr, curr::Ptr)
 end
 
 function start_watching(t::_FDWatcher)
+    t.handle == C_NULL && return throw(ArgumentError("FDWatcher is closed"))
     readable = t.refcount[1] > 0
     writable = t.refcount[2] > 0
     if t.active[1] != readable || t.active[2] != writable
@@ -334,6 +390,7 @@ function start_watching(t::_FDWatcher)
 end
 
 function start_watching(t::PollingFileWatcher)
+    t.handle == C_NULL && return throw(ArgumentError("PollingFileWatcher is closed"))
     if !t.active
         uv_error("PollingFileWatcher (start)",
                  ccall(:uv_fs_poll_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, UInt32),
@@ -353,10 +410,11 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function start_watching(t::FileMonitor)
+    t.handle == C_NULL && return throw(ArgumentError("FileMonitor is closed"))
     if !t.active
         uv_error("FileMonitor (start)",
                  ccall(:uv_fs_event_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32),
-                       t.handle, uv_jl_fseventscb::Ptr{Cvoid}, t.file, 0))
+                       t.handle, uv_jl_fseventscb_file::Ptr{Cvoid}, t.file, 0))
         t.active = true
     end
     nothing
@@ -440,10 +498,36 @@ end
 
 function wait(m::FileMonitor)
     start_watching(m)
-    filename, events = stream_wait(m, m.notify)::Tuple{String, FileEvent}
+    events = stream_wait(m, m.notify)::FileEvent
+    events |= FileEvent(m.events)
+    m.events = 0
     stop_watching(m)
-    return (filename, events)
+    return events
 end
+
+function wait(m::FolderMonitor)
+    m.handle == C_NULL && return throw(ArgumentError("FolderMonitor is closed"))
+    if isready(m.notify)
+        evt = take!(m.notify) # non-blocking fast-path
+    else
+        Base.preserve_handle(m)
+        evt = try
+                take!(m.notify)
+            catch ex
+                Base.unpreserve_handle(m)
+                if ex isa InvalidStateException && ex.state == :closed
+                    rethrow(EOFError()) # `wait(::Channel)` throws the wrong exception
+                end
+                rethrow(ex)
+            end
+    end
+    if evt isa Pair{String, FileEvent}
+        return evt
+    else
+        throw(evt)
+    end
+end
+
 
 """
     poll_fd(fd, timeout_s::Real=-1; readable=false, writable=false)
@@ -501,12 +585,79 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
         if timeout_s >= 0
             @schedule (sleep(timeout_s); close(fm))
         end
-        _, result = wait(fm)
-        return result
+        return wait(fm)
     finally
         close(fm)
     end
 end
+
+"""
+    watch_folder(path::AbstractString, timeout_s::Real=-1)
+
+Watches a file or directory `path` for changes until a change has occurred or `timeout_s`
+seconds have elapsed.
+
+This will continuing tracking changes for `path` in the background until
+`unwatch_folder` is called on the same `path`.
+
+The returned value is an pair where the first field is the name of the changed file (if available)
+and the second field is an object with boolean fields `changed`, `renamed`, and `timedout`,
+giving the event.
+
+This behavior of this function varies slightly across platforms. See
+<https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
+"""
+watch_folder(s::AbstractString, timeout_s::Real=-1) = watch_folder(String(s), timeout_s)
+function watch_folder(s::String, timeout_s::Real=-1)
+    wt = Condition()
+    fm = get!(watched_folders, s) do
+        return FolderMonitor(s)
+    end
+    if timeout_s >= 0 && !isready(fm.notify)
+        if timeout_s <= 0.010
+            # for very small timeouts, we can just sleep for the timeout-interval
+            (timeout_s == 0) ? yield() : sleep(timeout_s)
+            if !isready(fm.notify)
+                return "" => FileEvent() # timeout
+            end
+            # fall-through to a guaranteed non-blocking fast-path call to wait
+        else
+            # If we may need to be able to cancel via a timeout,
+            # create a second monitor object just for that purpose.
+            # We still take the events from the primary stream.
+            fm2 = FileMonitor(s)
+            try
+                @schedule (sleep(timeout_s); close(fm2))
+                while isopen(fm.notify) && !isready(fm.notify)
+                    fm2.handle == C_NULL && return "" => FileEvent() # timeout
+                    wait(fm2)
+                end
+            finally
+                close(fm2)
+            end
+            # guaranteed that next call to `wait(fm)` is non-blocking
+            # since we haven't entered the libuv event loop yet
+            # or the Base scheduler workqueue since last testing `isready`
+        end
+    end
+    return wait(fm)
+end
+
+"""
+    unwatch_folder(path::AbstractString)
+
+Stop background tracking of changes for `path`.
+It is not recommended to do this while another task is waiting for
+`watch_folder` to return on the same path, as the result may be unpredictable.
+"""
+unwatch_folder(s::AbstractString) = unwatch_folder(String(s))
+function unwatch_folder(s::String)
+    fm = pop!(watched_folders, s, nothing)
+    fm === nothing || close(fm)
+    nothing
+end
+
+const watched_folders = Dict{String, FolderMonitor}()
 
 """
     poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current)
