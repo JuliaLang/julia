@@ -172,7 +172,7 @@ _length(A) = (@_inline_meta; length(A))
     lastindex(collection) -> Integer
     lastindex(collection, d) -> Integer
 
-Return the last index of `collection`, optionally constrained to be within dimension `d`.
+Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
 `A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
@@ -193,7 +193,7 @@ lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
     firstindex(collection) -> Integer
     firstindex(collection, d) -> Integer
 
-Return the first index of `collection`, optionally constrained to be within dimension `d`.
+Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
 # Examples
 ```jldoctest
