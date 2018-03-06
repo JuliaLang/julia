@@ -56,7 +56,6 @@ const skipfiles = [
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
-    "../test/perf/micro/randmtzig.c",
     "../src/crc32c.c",
 ]
 
