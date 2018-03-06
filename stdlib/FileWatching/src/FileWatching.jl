@@ -31,11 +31,10 @@ struct FileEvent
     changed::Bool
     timedout::Bool
 end
-FileEvent() = FileEvent(false, false, false)
+FileEvent() = FileEvent(false, false, true)
 FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
-                                  (flags & UV_CHANGE) != 0,
-                                  (flags & FD_TIMEDOUT) != 0)
-fetimeout() = FileEvent(false, false, true)
+                                      (flags & UV_CHANGE) != 0,
+                                      false)
 
 struct FDEvent
     readable::Bool
@@ -47,16 +46,14 @@ end
 const UV_READABLE = 1
 const UV_WRITABLE = 2
 const UV_DISCONNECT = 4
-const FD_TIMEDOUT = 8
 
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
-FDEvent() = FDEvent(false, false, false, false)
+FDEvent() = FDEvent(false, false, false, true)
 FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
                                   (flags & UV_WRITABLE) != 0,
                                   (flags & UV_DISCONNECT) != 0,
-                                  (flags & FD_TIMEDOUT) != 0)
-fdtimeout() = FDEvent(false, false, false, true)
+                                  false)
 |(a::FDEvent, b::FDEvent) =
     FDEvent(a.readable | b.readable,
             a.writable | b.writable,
@@ -68,7 +65,8 @@ mutable struct FileMonitor
     file::String
     notify::Condition
     active::Bool
-    function FileMonitor(file::AbstractString)
+    FileMonitor(file::AbstractString) = FileMonitor(String(file))
+    function FileMonitor(file::String)
         handle = Libc.malloc(_sizeof_uv_fs_event)
         this = new(handle, file, Condition(), false)
         associate_julia_struct(handle, this)
@@ -165,7 +163,7 @@ mutable struct _FDWatcher
                     FDWatchers[t.fdnum] = nothing
                 end
             end
-            notify(t.notify, fdtimeout())
+            notify(t.notify, FDEvent())
             nothing
         end
     end
@@ -373,7 +371,7 @@ function wait(fdw::FDWatcher)
     return wait(fdw.watcher, readable = fdw.readable, writable = fdw.writable)
 end
 function wait(fdw::_FDWatcher; readable=true, writable=true)
-    events = FDEvent()
+    events = FDEvent(Int32(0))
     while true
         if isa(events, FDEvent)
             events = events::FDEvent
@@ -453,8 +451,8 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     fdw = _FDWatcher(s, readable, writable)
     try
         if timeout_s >= 0
-            result::FDEvent = fdtimeout()
-
+            result::FDEvent = FDEvent()
+            @schedule (sleep(timeout_s); notify(wt))
             @schedule begin
                 try
                     result = wait(fdw, readable=readable, writable=writable)
@@ -464,7 +462,6 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
                 end
                 notify(wt)
             end
-            @schedule (sleep(timeout_s); notify(wt))
 
             wait(wt)
             return result
@@ -489,28 +486,13 @@ This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 """
 function watch_file(s::AbstractString, timeout_s::Real=-1)
-    wt = Condition()
     fm = FileMonitor(s)
     try
         if timeout_s >= 0
-            result = fetimeout()
-
-            @schedule begin
-                try
-                    _, result = wait(fm)
-                catch e
-                    notify_error(wt, e)
-                    return
-                end
-                notify(wt)
-            end
-            @schedule (sleep(timeout_s); notify(wt))
-
-            wait(wt)
-            return result
-        else
-            return wait(fm)[2]
+            @schedule (sleep(timeout_s); close(fm))
         end
+        _, result = wait(fm)
+        return result
     finally
         close(fm)
     end
@@ -535,36 +517,17 @@ notification of changes. However, using [`watch_file`](@ref) for this operation 
 it is more reliable and efficient, although in some situations it may not be available.
 """
 function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)
-    wt = Condition()
     pfw = PollingFileWatcher(s, Float64(interval_seconds))
     try
         if timeout_s >= 0
-            result = :timeout
-
-            @schedule begin
-                try
-                    statdiff = wait(pfw)
-                    if statdiff[1] == StatStruct() && isa(statdiff[2], UVError)
-                        # file didn't initially exist, continue watching for it to be created (or the error to change)
-                        statdiff = wait(pfw)
-                    end
-                    result = statdiff
-                catch e
-                    notify_error(wt, e)
-                    return
-                end
-                notify(wt)
-            end
-            @schedule (sleep(timeout_s); notify(wt))
-
-            wait(wt)
-            if result === :timeout
-                return (StatStruct(), EOFError())
-            end
-            return result
-        else
-            return wait(pfw)
+            @schedule (sleep(timeout_s); close(pfw))
         end
+        statdiff = wait(pfw)
+        if statdiff[1] == StatStruct() && isa(statdiff[2], UVError)
+            # file didn't initially exist, continue watching for it to be created (or the error to change)
+            statdiff = wait(pfw)
+        end
+        return statdiff
     finally
         close(pfw)
     end
