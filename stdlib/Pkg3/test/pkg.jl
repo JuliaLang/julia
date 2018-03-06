@@ -149,4 +149,6 @@ temp_pkg_dir() do project_path
     Pkg3.rm(TEST_PKG.name)
 end
 
+include("repl.jl")
+
 end # module

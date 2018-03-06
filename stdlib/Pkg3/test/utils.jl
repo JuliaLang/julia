@@ -19,6 +19,8 @@ function temp_pkg_dir(fn::Function)
             end
         end
     finally
+        empty!(LOAD_PATH)
+        empty!(DEPOT_PATH)
         append!(LOAD_PATH, old_load_path)
         append!(DEPOT_PATH, old_depot_path)
     end

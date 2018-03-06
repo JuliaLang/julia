@@ -90,13 +90,18 @@ struct VerInfo
     path::Union{String,Nothing}
     ver::Union{VersionNumber,Nothing}
     pinned::Bool
+    repo::Union{Types.GitRepo, Nothing}
 end
+
+revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
 
 vstring(a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
            a.pinned == true ? "⚲" : "",
-           a.path != nothing ? " [$(a.path)]" : "")
+           a.path != nothing ? " [$(a.path)]" : "",
+           a.repo != nothing ? " #$(revstring(a.repo.rev))" : ""
+           )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
     a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
@@ -125,7 +130,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
                     verb = x.old.ver == nothing || x.new.ver == nothing ||
                            x.old.ver == x.new.ver ? '~' :
                            x.old.ver < x.new.ver  ? '↑' : '↓'
-                elseif x.old.ver == x.new.ver && x.old.pinned != x.new.pinned
+                elseif x.old.ver == x.new.ver && x.old.pinned != x.new.pinned ||
+                        x.old.repo != nothing || x.new.repo != nothing
                     verb = '~'
                 else
                     verb = '?'
@@ -171,7 +177,12 @@ function name_ver_info(info::Dict)
     ver  = haskey(info, "version")       ? VersionNumber(info["version"]) : nothing
     path =  get(info, "path", nothing)
     pin  =  get(info, "pinned", false)
-    name, VerInfo(hash, path, ver, pin)
+    if haskey(info, "repo-url")
+        repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
+    else
+        repo = nothing
+    end
+    name, VerInfo(hash, path, ver, pin, repo)
 end
 
 function manifest_diff(ctx::Context, manifest₀::Dict, manifest₁::Dict)

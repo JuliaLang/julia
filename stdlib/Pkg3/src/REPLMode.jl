@@ -53,6 +53,13 @@ const cmds = Dict(
     "dev"       => CMD_DEVELOP,
 )
 
+#################
+# Git revisions #
+#################
+struct Rev
+    rev::String
+end
+
 ###########
 # Options #
 ###########
@@ -129,8 +136,12 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString)::PackageSpec
-    if contains(word, uuid_re)
+function parse_package(word::AbstractString; from_cmd_add::Bool=false)# ::PackageSpec
+    if from_cmd_add && isdir(word)
+        pkg = PackageSpec()
+        pkg.repo = Types.GitRepo(word)
+        return pkg
+    elseif contains(word, uuid_re)
         return PackageSpec(UUID(word))
     elseif contains(word, name_re)
         return PackageSpec(String(match(name_re, word).captures[1]))
@@ -138,16 +149,23 @@ function parse_package(word::AbstractString)::PackageSpec
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
     else
-        cmderror("`$word` cannot be parsed as a package")
+        if from_cmd_add
+            # Guess it is a url then
+            pkg = PackageSpec()
+            pkg.repo = Types.GitRepo(word)
+            return pkg
+        else
+            cmderror("`$word` cannot be parsed as a package")
+        end
     end
 end
 
 ################
 # REPL parsing #
 ################
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s]+\s*=\s*[^@\#\s]+ | \#\s*[^@\#\s]* | @\s*[^@\#\s]* | [^@\#\s]+"x
 
-const Token = Union{Command, Option, VersionRange, String}
+const Token = Union{Command, Option, VersionRange, String, Rev}
 
 function tokenize(cmd::String)::Vector{Token}
     print_first_command_header()
@@ -178,10 +196,12 @@ function tokenize(cmd::String)::Vector{Token}
     # Now parse the arguments / options to the command
     while !isempty(words)
         word = popfirst!(words)
-        if word[1] == '-'
+        if first(word) == '-'
             push!(tokens, parse_option(word))
-        elseif word[1] == '@'
+        elseif first(word) == '@'
             push!(tokens, VersionRange(strip(word[2:end])))
+        elseif first(word) == '#'
+            push!(tokens, Rev(word[2:end]))
         else
             push!(tokens, String(word))
         end
@@ -326,7 +346,18 @@ const helps = Dict(
     multiple different packages, specifying `uuid` allows you to disambiguate.
     `@version` optionally allows specifying which versions of packages. Versions
     may be specified by `@1`, `@1.2`, `@1.2.3`, allowing any version with a prefix
-    that matches, or ranges thereof, such as `@1.2-3.4.5`.
+    that matches, or ranges thereof, such as `@1.2-3.4.5`. A git-revision can be
+    specified by `#branch` or `#commit`.
+
+    **Examples**
+    ```
+    pkg> add Example
+    pkg> add Example@0.5
+    pkg> add Example#master
+    pkg> add Example#c37b675
+    pkg> add https://github.com/JuliaLang/Example.jl#master
+    pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
+    ```
     """, CMD_RM => md"""
 
         rm [-p|--project] pkg[=uuid] ...
@@ -481,12 +512,22 @@ function do_add!(ctx::Context, tokens::Vector{Token})
         parsed_package = false
         token = popfirst!(tokens)
         if token isa String
-            push!(pkgs, parse_package(token))
+            push!(pkgs, parse_package(token; from_cmd_add=true))
             parsed_package = true
         elseif token isa VersionRange
             prev_token_was_package ||
                 cmderror("package name/uuid must precede version spec `@$token`")
             pkgs[end].version = VersionSpec(token)
+        elseif token isa Rev
+            prev_token_was_package ||
+                cmderror("package name/uuid must precede rev spec `#$(token.rev)`")
+            # WE did not get the repo from the
+            pkg = pkgs[end]
+            if pkg.repo == nothing
+                pkg.repo = Types.GitRepo("", token.rev)
+            else
+                pkgs[end].repo.rev = token.rev
+            end
         elseif token isa Option
             cmderror("`add` doesn't take options: $token")
         end
@@ -688,6 +729,8 @@ const minirepl = Ref{MiniREPL}()
 macro pkg_str(str::String)
     :($(do_cmd)(minirepl[], $str))
 end
+
+pkgstr(str::String) = do_cmd(minirepl[], str)
 
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)

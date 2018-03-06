@@ -58,6 +58,16 @@ end
 # Dependency gathering and resolution #
 #######################################
 
+function set_maximum_version_registry!(env::EnvCache, pkg::PackageSpec)
+    pkgversions = Set{VersionNumber}()
+    for path in registered_paths(env, pkg.uuid)
+        pathvers = keys(load_versions(path))
+        union!(pkgversions, pathvers)
+    end
+    max_version = maximum(pkgversions)
+    pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
+end
+
 # This also sets the .path field for fixed packages in `pkgs`
 function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::Dict{UUID, String})
     fix_deps = PackageSpec[]
@@ -65,31 +75,36 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
     fix_deps_map = Dict{UUID,Vector{PackageSpec}}()
     uuid_to_pkg = Dict{UUID,PackageSpec}()
     for pkg in pkgs
+        local path
         info = manifest_info(ctx.env, pkg.uuid)
         if pkg.special_action == PKGSPEC_FREED
             continue
         elseif pkg.special_action == PKGSPEC_DEVELOPED
-            @assert pkg.path != nothing
-        elseif info !== nothing && get(info, "path", false) != false
+            @assert pkg.path !== nothing
+            path = pkg.path
+        elseif pkg.special_action == PKGSPEC_REPO_ADDED
+            @assert pkg.repo !== nothing && pkg.repo.git_tree_sha1 !== nothing
+            path = find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+        elseif info !== nothing && haskey(info, "path")
             pkg.path = info["path"]
+            path = pkg.path
+        elseif info !== nothing && haskey(info, "repo-url")
+            path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
+            pkg.version = VersionNumber(info["version"])
+            pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"], SHA1(info["git-tree-sha1"]))
         else
             continue
         end
 
         # Checked out package has by definition a version higher than all registered.
-        pkgversions = Set{VersionNumber}()
-        for path in registered_paths(ctx.env, pkg.uuid)
-            pathvers = keys(load_versions(path))
-            union!(pkgversions, pathvers)
+        if pkg.path !== nothing
+            set_maximum_version_registry!(ctx.env, pkg)
         end
-        max_version = maximum(pkgversions)
-        pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
 
         uuid_to_pkg[pkg.uuid] = pkg
         uuid_to_name[pkg.uuid] = pkg.name
-
         # Backwards compatability with Pkg2 REQUIRE format
-        reqfile = joinpath(pkg.path, "REQUIRE")
+        reqfile = joinpath(path, "REQUIRE")
         fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
         !isfile(reqfile) && continue
         for r in Pkg2.Reqs.read(reqfile)
@@ -262,6 +277,8 @@ function version_data!(ctx::Context, pkgs::Vector{PackageSpec})
         if pkg.uuid in keys(ctx.stdlibs)
             names[pkg.uuid] = ctx.stdlibs[pkg.uuid]
             continue
+        elseif pkg.repo != nothing
+            continue
         end
         pkg.path == nothing || continue
         uuid = pkg.uuid
@@ -383,7 +400,6 @@ function install_git(
         checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
         target_directory = Base.unsafe_convert(Cstring, version_path)
     )
-    h = string(hash)[1:16]
     LibGit2.checkout_tree(repo, tree, options=opts)
     return
 end
@@ -398,6 +414,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
         pkg.path == nothing || continue
+        pkg.repo == nothing || continue
         path = find_installed(pkg.name, pkg.uuid, hashes[pkg.uuid])
         if !ispath(path)
             push!(pkgs_to_install, (pkg, path))
@@ -472,6 +489,8 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
         uuid = pkg.uuid
         if pkg.path !== nothing || uuid in keys(ctx.stdlibs)
             hash = nothing
+        elseif pkg.repo != nothing
+            hash = pkg.repo.git_tree_sha1
         else
             hash = hashes[uuid]
         end
@@ -504,8 +523,8 @@ end
 
 function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
     env = ctx.env
-    uuid, name, version, path, special_action = pkg.uuid, pkg.name, pkg.version, pkg.path, pkg.special_action
-    hash == nothing && @assert (path != nothing || pkg.uuid in keys(ctx.stdlibs))
+    uuid, name, version, path, special_action, repo = pkg.uuid, pkg.name, pkg.version, pkg.path, pkg.special_action, pkg.repo
+    hash == nothing && @assert (path != nothing || pkg.uuid in keys(ctx.stdlibs) || pkg.repo != nothing)
     infos = get!(env.manifest, name, Dict{String,Any}[])
     info = nothing
     for i in infos
@@ -522,10 +541,18 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
     path == nothing ? delete!(info, "path")          : (info["path"]          = path)
-    if special_action == PKGSPEC_FREED
+    if special_action in (PKGSPEC_FREED, PKGSPEC_DEVELOPED)
         delete!(info, "pinned")
+        delete!(info, "repo-url")
+        delete!(info, "repo-rev")
     elseif special_action == PKGSPEC_PINNED
         info["pinned"] = true
+    elseif special_action == PKGSPEC_REPO_ADDED
+        info["repo-url"] = repo.url
+        info["repo-rev"] = repo.rev
+        path = find_installed(name, uuid, hash)
+    elseif haskey(info, "repo-url")
+        path = find_installed(name, uuid, hash)
     end
 
     delete!(info, "deps")
@@ -837,15 +864,20 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         pkg.version isa UpgradeLevel || continue
         level = pkg.version
         info = manifest_info(ctx.env, pkg.uuid)
-        ver = VersionNumber(info["version"])
-        if level == UPLEVEL_FIXED
-            pkg.version = VersionNumber(info["version"])
+        if haskey(info, "repo-url")
+            pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
+            handle_repos!(ctx.env, [pkg]; upgrade = level == UPLEVEL_MAJOR)
         else
-            r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
-                level == UPLEVEL_MINOR ? VersionRange(ver.major) :
-                level == UPLEVEL_MAJOR ? VersionRange() :
-                    error("unexpected upgrade level: $level")
-            pkg.version = VersionSpec(r)
+            ver = VersionNumber(info["version"])
+            if level == UPLEVEL_FIXED
+                pkg.version = VersionNumber(info["version"])
+            else
+                r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
+                    level == UPLEVEL_MINOR ? VersionRange(ver.major) :
+                    level == UPLEVEL_MAJOR ? VersionRange() :
+                        error("unexpected upgrade level: $level")
+                pkg.version = VersionSpec(r)
+            end
         end
     end
     # resolve & apply package versions
@@ -875,7 +907,7 @@ function free(ctx::Context, pkgs::Vector{PackageSpec})
     for pkg in pkgs
         pkg.special_action = PKGSPEC_FREED
         info = manifest_info(ctx.env, pkg.uuid)
-        if haskey(info, "path")
+        if haskey(info, "path") || haskey(info, "repo-url")
             need_to_resolve = true
         else
             pkg.version = VersionNumber(info["version"])
