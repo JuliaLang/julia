@@ -222,11 +222,16 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     buf = IOBuffer()
    
     lines = m.pagesize-1
+    
+    if init
+        m.pageoffset = 0
+    else
+        # Move the cursor to the beginning of where it should print
+        print(buf, "\x1b[999D\x1b[$(lines)A")
+    end
+    
     firstline = m.pageoffset+1
     lastline = m.pagesize+m.pageoffset
-    
-    # Move the cursor to the beginning of where it should print
-    !init && print(buf, "\x1b[999D\x1b[$(lines)A")
     
     for i in firstline:lastline
         # clearline
