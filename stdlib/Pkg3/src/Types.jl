@@ -512,11 +512,11 @@ end
 ###########
 # Context #
 ###########
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-stdlib_path(stdlib::String) = joinpath(STDLIB_DIR, stdlib)
+stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
-    for stdlib in readdir(STDLIB_DIR)
+    for stdlib in readdir(stdlib_dir())
         projfile = joinpath(stdlib_path(stdlib), "Project.toml")
         if isfile(projfile)
             proj = TOML.parsefile(projfile)
