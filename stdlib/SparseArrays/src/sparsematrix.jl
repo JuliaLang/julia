@@ -377,7 +377,7 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
 end
 function SparseMatrixCSC{Tv,Ti}(M::Matrix) where {Tv,Ti}
-    nz = count(!equalto(0), M)
+    nz = count(t -> t != 0, M)
     colptr = zeros(Ti, size(M, 2) + 1)
     nzval = Vector{Tv}(uninitialized, nz)
     rowval = Vector{Ti}(uninitialized, nz)
