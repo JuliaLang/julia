@@ -407,7 +407,7 @@ julia> eval(ex)
 The value of `a` is used to construct the expression `ex` which applies the `+` function to the
 value 1 and the variable `b`. Note the important distinction between the way `a` and `b` are used:
 
-  * The value of the *variable*`a` at expression construction time is used as an immediate value in
+  * The value of the *variable* `a` at expression construction time is used as an immediate value in
     the expression. Thus, the value of `a` when the expression is evaluated no longer matters: the
     value in the expression is already `1`, independent of whatever the value of `a` might be.
   * On the other hand, the *symbol*`:b` is used in the expression construction, so the value of the
