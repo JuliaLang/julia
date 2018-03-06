@@ -271,4 +271,55 @@ end
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
 end
 
+module TrickyArithmetic
+    struct A
+        x::Int
+    end
+    Base.convert(::Type{A}, i::Int) = A(i)
+    Base.zero(::Union{A, Type{A}}) = A(0)
+    Base.one(::Union{A, Type{A}}) = A(1)
+    struct B
+        x::Int
+    end
+    struct C
+        x::Int
+    end
+    C(a::A) = C(a.x)
+    Base.zero(::Union{C, Type{C}}) = C(0)
+    Base.one(::Union{C, Type{C}}) = C(1)
+
+    Base.:(*)(a::A, b::A) = B(a.x*b.x)
+    Base.:(*)(x::Int, a::A) = B(x*a.x)
+    Base.:(*)(a::A, x::Int) = B(a.x*x)
+    Base.:(*)(a::C, b::C) = C(a.x+b.x)
+    Base.:(+)(a::Union{B,C}, b::Union{B,C}) = C(a.x+b.x)
+    Base.:(-)(a::Union{B,C}, b::Union{B,C}) = C(a.x-b.x)
+
+    struct D{NT, DT}
+        n::NT
+        d::DT
+    end
+    Base.zero(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = zero(NT) / one(DT)
+    Base.inv(a::D) = a.d / a.n
+    Base.convert(::Type{D{NT, DT}}, a::Union{A, B, C}) where {NT, DT} = NT(a) / one(DT)
+    #Base.convert(::Type{D{NT, DT}}, a::D) where {NT, DT} = NT(a.n) / DT(a.d)
+
+    Base.:(*)(a::D, b::D) = (a.n*b.n) / (a.d*b.d)
+    Base.:(/)(a::Union{A,B,C}, b::Union{A,B,C}) = D(a, b)
+    Base.:(/)(a::D, b::Union{A,B,C}) = a.n / (a.d*b)
+    Base.:(/)(a::Union{A,B,C}, b::D) = (a*b.d) / b.n
+    Base.:(+)(a::Union{A,B,C}, b::D) = (a*b.d+b.n) / b.d
+    Base.:(+)(b::D, a::Union{A,B,C}) = (b.n+b.d*a) / b.d
+    Base.:(-)(a::D, b::D) = (a.n*b.d-a.d*b.n) / (a.d*b.d)
+end
+
+@testset "lufact with type whose sum is another type" begin
+    A = TrickyArithmetic.A[1 2; 3 4]
+    ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
+    B = @inferred lufact(A)
+    @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+    C = @inferred lufact(A, Val(false))
+    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
 end # module TestLU
