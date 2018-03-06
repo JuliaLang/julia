@@ -396,16 +396,15 @@ let a = [1,2,3]
 end
 
 # Test that we can VirtualProtect jitted code to writable
-if Sys.iswindows()
-    @noinline function WeVirtualProtectThisToRWX(x, y)
-        x+y
-    end
-
-    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, Tuple{UInt64, UInt64})
-        addr = addr-(UInt64(addr)%4096)
+@noinline function WeVirtualProtectThisToRWX(x, y)
+    return x + y
+end
+@static if Sys.iswindows()
+    let addr = @cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+        addr = addr - (UInt64(addr) % 4096)
         PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
-        err18083 = ccall(:VirtualProtect,stdcall,Cint,
+        err18083 = ccall(:VirtualProtect, stdcall, Cint,
             (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
         err18083 == 0 && error(Libc.GetLastError())

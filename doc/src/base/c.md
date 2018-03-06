@@ -3,7 +3,7 @@
 ```@docs
 ccall
 Core.Intrinsics.cglobal
-Base.cfunction
+Base.@cfunction
 Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load

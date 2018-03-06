@@ -311,13 +311,6 @@ function _uv_hook_close(uv::FolderMonitor)
     nothing
 end
 
-function __init__()
-    global uv_jl_pollcb = cfunction(uv_pollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cint})
-    global uv_jl_fspollcb = cfunction(uv_fspollcb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}})
-    global uv_jl_fseventscb_file = cfunction(uv_fseventscb_file, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
-    global uv_jl_fseventscb_folder = cfunction(uv_fseventscb_folder, Cvoid, Tuple{Ptr{Cvoid}, Ptr{Int8}, Int32, Int32})
-end
-
 function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
     if status != 0
@@ -370,6 +363,14 @@ function uv_fspollcb(handle::Ptr{Cvoid}, status::Int32, prev::Ptr, curr::Ptr)
         prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
         notify(t.notify, prev_stat)
     end
+    nothing
+end
+
+function __init__()
+    global uv_jl_pollcb = @cfunction(uv_pollcb, Cvoid, (Ptr{Cvoid}, Cint, Cint))
+    global uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
+    global uv_jl_fseventscb_file = @cfunction(uv_fseventscb_file, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
+    global uv_jl_fseventscb_folder = @cfunction(uv_fseventscb_folder, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
     nothing
 end
 

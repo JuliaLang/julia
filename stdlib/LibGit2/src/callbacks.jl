@@ -260,8 +260,8 @@ For addition details see the LibGit2 guide on
 [authenticating against a server](https://libgit2.github.com/docs/guides/authentication/).
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
-                              username_ptr::Cstring,
-                              allowed_types::Cuint, p::CredentialPayload)
+                              username_ptr::Cstring, allowed_types::Cuint,
+                              p::CredentialPayload)
     err = Cint(0)
 
     # Parse URL only during the first call to this function. Future calls will use the
@@ -340,7 +340,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
                               username_ptr::Cstring, allowed_types::Cuint,
                               payloads::Dict)
     p = payloads[:credentials]
-    credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
+    return credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
@@ -352,8 +352,8 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
 end
 
 "C function pointer for `mirror_callback`"
-mirror_cb() = cfunction(mirror_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}})
+mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
-credentials_cb() = cfunction(credentials_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any})
+credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, Tuple{Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}})
+fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}))

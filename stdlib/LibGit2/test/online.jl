@@ -39,7 +39,7 @@ mktempdir() do dir
             status = Ref((current=0, total=-1))
             callbacks = LibGit2.Callbacks(
                 :transfer_progress => (
-                    cfunction(transfer_progress, Cint, Tuple{Ptr{LibGit2.TransferProgress}, Any}),
+                    @cfunction(transfer_progress, Cint, (Ptr{LibGit2.TransferProgress}, Any)),
                     status,
                 )
             )

@@ -4747,21 +4747,6 @@ let
     @test k(1) == 1
 end
 
-# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
-#            causing heap-use-after-free when compiling f18054
-function f18054()
-    return Cint(0)
-end
-cfunction(f18054, Cint, Tuple{})
-
-# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
-dummy18996() = return nothing
-function main18986()
-    cfunction(dummy18986, Cvoid, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
-end
-@test_throws ErrorException main18986()
-
 # issue #18085
 f18085(a, x...) = (0, )
 for (f, g) in ((:asin, :sin), (:acos, :cos))
@@ -4773,7 +4758,7 @@ end
 # issue #18236 constant VecElement in ast triggers codegen assertion/undef
 # VecElement of scalar
 v18236 = VecElement(1.0)
-ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
+ptr18236 = @cfunction(identity, VecElement{Float64}, (VecElement{Float64},))
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
@@ -4785,8 +4770,8 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 # We should be at least testing this on some platforms.
 # Not sure if there's a better way to trigger unboxing in codegen.
 v18236_2 = VecElement((Int8(1), Int8(2)))
-ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
-                       Tuple{VecElement{NTuple{2,Int8}}})
+ptr18236_2 = @cfunction(identity, VecElement{NTuple{2,Int8}},
+                        (VecElement{NTuple{2,Int8}},))
 @eval @noinline f18236_2(ptr) = ccall(ptr, VecElement{NTuple{2,Int8}},
                                       (VecElement{NTuple{2,Int8}},),
                                       $v18236_2)

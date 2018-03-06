@@ -495,6 +495,12 @@ end
 
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+@noinline function cfunction(f, r, a)
+    @nospecialize(f, r, a)
+    depwarn("The function `cfunction` is now written as a macro `@cfunction`.", :cfunction)
+    return ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
+end
+export cfunction
 
 # PR 23341
 @eval GMP @deprecate gmp_version() version() false

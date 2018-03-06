@@ -155,25 +155,28 @@ It is possible to pass Julia functions to native C functions that accept functio
 For example, to match C prototypes of the form:
 
 ```c
-typedef returntype (*functiontype)(argumenttype,...)
+typedef returntype (*functiontype)(argumenttype, ...)
 ```
 
-The function [`cfunction`](@ref) generates the C-compatible function pointer for a call to a
-Julia function. Arguments to [`cfunction`](@ref) are as follows:
+The macro [`@cfunction`](@ref) generates the C-compatible function pointer for a call to a
+Julia function. Arguments to [`@cfunction`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
-3. A tuple type of input types
+3. A literal tuple of input types
 
-Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
-be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
-(where `stdcall` is unified with C calling convention).
+Like ccall, all of these arguments will be evaluated at compile-time, when the containing method is defined.
+
+Currently, only the platform-default C calling convention is supported. This means that
+`@cfunction`-generated pointers cannot be used in calls where WINAPI expects `stdcall`
+function on 32-bit windows, but can be used on WIN64 (where `stdcall` is unified with the
+C calling convention).
 
 A classic example is the standard C library `qsort` function, declared as:
 
 ```c
 void qsort(void *base, size_t nmemb, size_t size,
-           int(*compare)(const void *a, const void *b));
+           int (*compare)(const void*, const void*));
 ```
 
 The `base` argument is a pointer to an array of length `nmemb`, with elements of `size` bytes
@@ -182,26 +185,26 @@ an integer less/greater than zero if `a` should appear before/after `b` (or zero
 is permitted). Now, suppose that we have a 1d array `A` of values in Julia that we want to sort
 using the `qsort` function (rather than Julia's built-in `sort` function). Before we worry about
 calling `qsort` and passing arguments, we need to write a comparison function that works for some
-arbitrary type T:
+arbitrary objects (which define `<`):
 
 ```jldoctest mycompare
-julia> function mycompare(a::T, b::T) where T
-           return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
+julia> function mycompare(a, b)::Cint
+           return (a < b) ? -1 : ((a > b) ? +1 : 0)
        end
 mycompare (generic function with 1 method)
 ```
 
 Notice that we have to be careful about the return type: `qsort` expects a function returning
-a C `int`, so we must be sure to return `Cint` via a call to `convert` and a `typeassert`.
+a C `int`, so we annotate the return type of the function to be sure it returns a `Cint`.
 
-In order to pass this function to C, we obtain its address using the function `cfunction`:
+In order to pass this function to C, we obtain its address using the macro `@cfunction`:
 
 ```jldoctest mycompare
-julia> const mycompare_c = cfunction(mycompare, Cint, Tuple{Ref{Cdouble}, Ref{Cdouble}});
+julia> mycompare_c = @cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}));
 ```
 
-[`cfunction`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple type of the input argument types, in this case to sort an array of `Cdouble`
+[`@cfunction`](@ref) requires three arguments: the Julia function (`mycompare`), the return type
+(`Cint`), and a literal tuple of the input argument types, in this case to sort an array of `Cdouble`
 ([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
@@ -227,7 +230,7 @@ julia> A
 
 As can be seen, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
 knows how to convert an array into a `Ptr{Cdouble}`, how to compute the size of a type in bytes
-(identical to C's `sizeof` operator), and so on. For fun, try inserting a `println("mycompare($a,$b)")`
+(identical to C's `sizeof` operator), and so on. For fun, try inserting a `println("mycompare($a, $b)")`
 line into `mycompare`, which will allow you to see the comparisons that `qsort` is performing
 (and to verify that it is really calling the Julia function that you passed to it).
 
@@ -518,16 +521,18 @@ unsafe_string(str + Core.sizeof(Cint), len)
 
 ### Type Parameters
 
-The type arguments to `ccall` are evaluated statically, when the method containing the `ccall` is defined.
-They therefore must take the form of a literal tuple, not a variable, and cannot reference local variables.
+The type arguments to `ccall` and `@cfunction` are evaluated statically,
+when the method containing the usage is defined.
+They therefore must take the form of a literal tuple, not a variable,
+and cannot reference local variables.
 
 This may sound like a strange restriction,
 but remember that since C is not a dynamic language like Julia,
 its functions can only accept argument types with a statically-known, fixed signature.
 
-However, while the type layout must be known statically to compute the `ccall` ABI,
+However, while the type layout must be known statically to compute the intended C ABI,
 the static parameters of the function are considered to be part of this static environment.
-The static parameters of the function may be used as type parameters in the `ccall` signature,
+The static parameters of the function may be used as type parameters in the call signature,
 as long as they don't affect the layout of the type.
 For example, `f(x::T) where {T} = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
 is valid, since `Ptr` is always a word-size primitive type.
@@ -603,7 +608,7 @@ Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
 
 ## Mapping C Functions to Julia
 
-### `ccall`/`cfunction` argument translation guide
+### `ccall` / `@cfunction` argument translation guide
 
 For translating a C argument list to Julia:
 
@@ -626,28 +631,27 @@ For translating a C argument list to Julia:
 
       * `Any`
       * argument value must be a valid Julia object
-      * currently unsupported by [`cfunction`](@ref)
   * `jl_value_t**`
 
       * `Ref{Any}`
       * argument value must be a valid Julia object (or `C_NULL`)
-      * currently unsupported by [`cfunction`](@ref)
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
       * argument value will be copied if it is an `isbits` type otherwise, the value must be a valid Julia
         object
-  * `(T*)(...)` (e.g. a pointer to a function)
+  * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
   * `...` (e.g. a vararg)
 
       * `T...`, where `T` is the Julia type
+      * currently unsupported by `@cfunction`
   * `va_arg`
 
-      * not supported
+      * not supported by `ccall` or `@cfunction`
 
-### `ccall`/`cfunction` return type translation guide
+### `ccall` / `@cfunction` return type translation guide
 
 For translating a C return type to Julia:
 
@@ -675,7 +679,7 @@ For translating a C return type to Julia:
       * argument value must be a valid Julia object
   * `jl_value_t**`
 
-      * `Ref{Any}`
+      * `Ptr{Any}` (`Ref{Any}` is invalid as a return type)
       * argument value must be a valid Julia object (or `C_NULL`)
   * `T*`
 
@@ -683,14 +687,14 @@ For translating a C return type to Julia:
 
           * `Ref{T}`, where `T` is the Julia type corresponding to `T`
           * a return type of `Ref{Any}` is invalid, it should either be `Any` (corresponding to `jl_value_t*`)
-            or `Ptr{Any}` (corresponding to `Ptr{Any}`)
+            or `Ptr{Any}` (corresponding to `jl_value_t**`)
           * C **MUST NOT** modify the memory returned via `Ref{T}` if `T` is an `isbits` type
       * If the memory is owned by C:
 
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
-  * `(T*)(...)` (e.g. a pointer to a function)
+  * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
 
 ### Passing Pointers for Modifying Inputs
 
@@ -880,8 +884,10 @@ expression, which is then evaluated. Keep in mind that `eval` only operates at t
 so within this expression local variables will not be available (unless their values are substituted
 with `$`). For this reason, `eval` is typically only used to form top-level definitions, for example
 when wrapping libraries that contain many similar functions.
+A similar example can be constructed for [`@cfunction`](@ref).
 
-If your usage is more dynamic, use indirect calls as described in the next section.
+However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep reading.
+The next section discusses how to use indirect calls to efficiently accomplish a similar effect.
 
 ## Indirect Calls
 
@@ -911,6 +917,34 @@ mylibvar = Libdl.dlopen("mylib")
 ccall(@dlsym("myfunc", mylibvar), Cvoid, ())
 ```
 
+## Closure cfunctions
+
+The first argument to [`@cfunction`](@ref) can be marked with a `$`, in which case
+the return value will instead be a `struct CFunction` which closes over the argument.
+You must ensure that this return object is kept alive until all uses of it are done.
+The contents and code at the cfunction pointer will be erased via a [`finalizer`](@ref)
+when this reference is dropped and atexit. This is not usually needed, since this
+functionality is not present in C, but can be useful for dealing with ill-designed APIs
+which don't provide a separate closure environment parameter.
+
+```julia
+function qsort(a::Vector{T}, cmp) where T
+    isbits(T) || throw(ArgumentError("this method can only qsort isbits arrays"))
+    callback = @cfunction $cmp Cint (Ref{T}, Ref{T})
+    # Here, `callback` isa Base.CFunction, which will be converted to Ptr{Cvoid}
+    # (and protected against finalization) by the ccall
+    ccall(:qsort, Cvoid, (Ptr{T}, Csize_t, Csize_t, Ptr{Cvoid}),
+        a, length(A), Base.elsize(A), callback)
+    # We could instead use:
+    #    GC.@preserve callback begin
+    #        use(Base.unsafe_convert(Ptr{Cvoid}, callback))
+    #    end
+    # if we needed to use it outside of a `ccall`
+    return a
+end
+```
+
+
 ## Closing a Library
 
 It is sometimes useful to close (unload) a library so that it can be reloaded.
@@ -922,7 +956,7 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the symbol instead of the (symbol, library) tuple (remaining arguments are the same).
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
 Libdl.dlclose(lib) # Close the library explicitly.
 ```
 

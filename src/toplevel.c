@@ -340,6 +340,10 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
              head == structtype_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
+    else if (head == cfunction_sym) {
+        *has_intrinsics = 1;
+        return;
+    }
     else if (head == foreigncall_sym) {
         *has_intrinsics = 1;
         return;
@@ -829,12 +833,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         // worthwhile and also unsound (see #24316).
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
+        size_t last_age = ptls->world_age;
+        size_t world = jl_world_counter;
+        ptls->world_age = world;
         if (!has_defs) {
-            size_t world = jl_get_ptls_states()->world_age;
             jl_type_infer(&li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
         result = li->invoke(li, &dummy_f_arg, 1);
+        ptls->world_age = last_age;
     }
     else {
         // use interpreter
