@@ -254,7 +254,8 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.1)
 test_watch_file_change(6)
 
-@test_throws Base.UVError watch_file("____nonexistent_file", 10)
+@test_throws(Base.UVError("FileMonitor (start)", Base.UV_ENOENT),
+             watch_file("____nonexistent_file", 10))
 @test(@elapsed(
     @test(poll_file("____nonexistent_file", 1, 3.1) ===
           (Base.Filesystem.StatStruct(), EOFError()))) > 3)
