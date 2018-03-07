@@ -26,6 +26,7 @@ jobs:
       - run: | # checkout merge commit, set versioning info and Make.user variables
           git config --global --unset url."ssh://git@github.com".insteadOf &&
           if [ -n "$CIRCLE_PULL_REQUEST" ]; then
+            git remote set-url origin git@github.com:JuliaLang/julia.git &&
             git fetch origin +refs/pull/$(basename $CIRCLE_PULL_REQUEST)/merge &&
             git checkout -qf FETCH_HEAD;
           fi &&
