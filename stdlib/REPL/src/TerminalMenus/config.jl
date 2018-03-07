@@ -46,8 +46,8 @@ function config(;charset::Symbol = :na,
 
     scroll ∉ [:wrap, :nowrap] && throw(ArgumentError("scroll must be :wrap or :nowrap, received $scroll"))
     scroll == :wrap   && (CONFIG[:scroll_wrap] = true)
-    scroll == :nowrap && (CONFIG[:scroll_wrap] = false)   
-    
+    scroll == :nowrap && (CONFIG[:scroll_wrap] = false)
+
     cursor     != '\0' && (CONFIG[:cursor]     = cursor)
     up_arrow   != '\0' && (CONFIG[:up_arrow]   = up_arrow)
     down_arrow != '\0' && (CONFIG[:down_arrow] = down_arrow)
@@ -55,7 +55,7 @@ function config(;charset::Symbol = :na,
     unchecked  != ""   && (CONFIG[:unchecked]  = unchecked)
     supress_output isa Bool   && (CONFIG[:supress_output]   = supress_output)
     ctrl_c_interrupt isa Bool && (CONFIG[:ctrl_c_interrupt] = ctrl_c_interrupt)
-    
+
     return nothing
 end
 
