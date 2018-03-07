@@ -56,7 +56,7 @@ abstract type AbstractMenu end
 """
     pick(m::AbstractMenu, cursor::Int)
 
-Defines what happens when a user presses the Enter key while the menu is open. 
+Defines what happens when a user presses the Enter key while the menu is open.
 If `true` is returned, `request()` will exit.
 """
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
@@ -126,7 +126,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
 
     raw_mode_enabled = enableRawMode(term)
     raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
-    
+
     lastoption = length(options(m))
     try
         while true
@@ -222,28 +222,28 @@ end
 """
     printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
-Display the state of a menu. 
+Display the state of a menu.
 """
 function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     CONFIG[:supress_output] && return
 
     buf = IOBuffer()
-   
+
     lines = m.pagesize-1
-    
+
     if init
         m.pageoffset = 0
     else
         # Move the cursor to the beginning of where it should print
         print(buf, "\x1b[999D\x1b[$(lines)A")
     end
-    
+
     firstline = m.pageoffset+1
     lastline = m.pagesize+m.pageoffset
-    
+
     for i in firstline:lastline
         # clearline
-        print(buf, "\x1b[2K") 
+        print(buf, "\x1b[2K")
 
         if i == firstline && m.pageoffset > 0
             print(buf, CONFIG[:up_arrow])
