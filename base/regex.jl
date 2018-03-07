@@ -212,8 +212,11 @@ function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     end
     opts = re.match_options
     compile(re)
-    PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
-        ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
+    if PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
+        (Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)
+    else
+        nothing
+    end
 end
 findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"

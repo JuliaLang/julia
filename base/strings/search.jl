@@ -217,8 +217,10 @@ function _search(s::Union{AbstractString,ByteArray},
     idx = _searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
+    elseif idx > 0
+        idx:(idx + lastindex(t) - 1)
     else
-        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
+        nothing
     end
 end
 
@@ -230,16 +232,16 @@ Find the next occurrence of `pattern` in `string` starting at position `start`.
 `pattern` can be either a string, or a regular expression, in which case `string`
 must be of type `String`.
 
-The return value is a range of indexes where the matching sequence is found, such that
+The return value is a range of indices where the matching sequence is found, such that
 `s[findnext(x, s, i)] == x`:
 
 `findnext("substring", string, i)` = `start:end` such that
-`string[start:end] == "substring"`, or `0:-1` if unmatched.
+`string[start:end] == "substring"`, or `nothing` if unmatched.
 
 # Examples
 ```jldoctest
-julia> findnext("z", "Hello to the world", 1)
-0:-1
+julia> findnext("z", "Hello to the world", 1) === nothing
+true
 
 julia> findnext("o", "Hello to the world", 6)
 8:8
@@ -392,8 +394,10 @@ function _rsearch(s::Union{AbstractString,ByteArray},
     idx = _rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
+    elseif idx > 0
+        idx:(idx + lastindex(t) - 1)
     else
-        idx:(idx > 0 ? idx + lastindex(t) - 1 : -1)
+        nothing
     end
 end
 
@@ -405,16 +409,16 @@ Find the previous occurrence of `pattern` in `string` starting at position `star
 `pattern` can be either a string, or a regular expression, in which case `string`
 must be of type `String`.
 
-The return value is a range of indexes where the matching sequence is found, such that
+The return value is a range of indices where the matching sequence is found, such that
 `s[findprev(x, s, i)] == x`:
 
 `findprev("substring", string, i)` = `start:end` such that
-`string[start:end] == "substring"`, or `0:-1` if unmatched.
+`string[start:end] == "substring"`, or `nothing` if unmatched.
 
 # Examples
 ```jldoctest
-julia> findprev("z", "Hello to the world", 18)
-0:-1
+julia> findprev("z", "Hello to the world", 18) === nothing
+true
 
 julia> findprev("o", "Hello to the world", 18)
 15:15
