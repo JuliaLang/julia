@@ -125,7 +125,7 @@ function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
     lu!(copy(A), pivot)
 end
 
-luop(x) = (x*x + x*x) / (x*x + x*x)
+rationalop(x) = (x*x + x*x) / (x*x + x*x)
 
 # for all other types we must promote to a type which is stable under division
 """
@@ -193,15 +193,14 @@ true
 ```
 """
 function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
-    S = typeof(zero(T)/one(T))
+    S = promote_op(rationalop, T)
     AA = similar(A, S)
     copyto!(AA, A)
     lu!(AA, pivot)
 end
 # We can't assume an ordered field so we first try without pivoting
 function lu(A::AbstractMatrix{T}) where T
-    S = typeof(zero(T)/one(T))
-    S = promote_op(luop, T)
+    S = promote_op(rationalop, T)
     AA = similar(A, S)
     copyto!(AA, A)
     F = lu!(AA, Val(false))
