@@ -64,8 +64,7 @@ end
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH,
-                  OPT_BRANCH,)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -91,7 +90,7 @@ struct Option
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
-        elseif kind in (OPT_ENV, OPT_PATH, OPT_BRANCH) && argument == nothing
+        elseif kind in (OPT_ENV, OPT_PATH) && argument == nothing
             cmderror("the `$val` option requires an argument")
         end
         if kind == OPT_PATH
@@ -115,7 +114,6 @@ const opts = Dict(
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
     "path"     => OPT_PATH,
-    "branch"   => OPT_BRANCH,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -136,8 +134,9 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString; from_cmd_add::Bool=false)# ::PackageSpec
-    if from_cmd_add && isdir(word)
+function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
+    word = replace(word, "~" => homedir())
+    if context in (CMD_ADD, CMD_DEVELOP) && isdir(word)
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(word)
         return pkg
@@ -149,7 +148,7 @@ function parse_package(word::AbstractString; from_cmd_add::Bool=false)# ::Packag
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
     else
-        if from_cmd_add
+        if context in (CMD_ADD, CMD_DEVELOP)
             # Guess it is a url then
             pkg = PackageSpec()
             pkg.repo = Types.GitRepo(word)
@@ -252,19 +251,19 @@ function do_cmd!(tokens::Vector{Token}, repl)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT     ? Base.invokelatest(    do_init!, ctx, tokens) :
-    cmd.kind == CMD_HELP     ? Base.invokelatest(    do_help!, ctx, tokens, repl) :
-    cmd.kind == CMD_RM       ? Base.invokelatest(      do_rm!, ctx, tokens) :
-    cmd.kind == CMD_ADD      ? Base.invokelatest(     do_add!, ctx, tokens) :
-    cmd.kind == CMD_UP       ? Base.invokelatest(      do_up!, ctx, tokens) :
-    cmd.kind == CMD_STATUS   ? Base.invokelatest(  do_status!, ctx, tokens) :
-    cmd.kind == CMD_TEST     ? Base.invokelatest(    do_test!, ctx, tokens) :
-    cmd.kind == CMD_GC       ? Base.invokelatest(      do_gc!, ctx, tokens) :
-    cmd.kind == CMD_BUILD    ? Base.invokelatest(   do_build!, ctx, tokens) :
-    cmd.kind == CMD_PIN      ? Base.invokelatest(     do_pin!, ctx, tokens) :
-    cmd.kind == CMD_FREE     ? Base.invokelatest(    do_free!, ctx, tokens) :
-    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_checkout!, ctx, tokens) :
-    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_develop!,  ctx, tokens) :
+    cmd.kind == CMD_INIT     ? Base.invokelatest(          do_init!, ctx, tokens) :
+    cmd.kind == CMD_HELP     ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM       ? Base.invokelatest(            do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD      ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
+    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_UP       ? Base.invokelatest(            do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS   ? Base.invokelatest(        do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST     ? Base.invokelatest(          do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC       ? Base.invokelatest(            do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD    ? Base.invokelatest(         do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -340,7 +339,7 @@ const helps = Dict(
     the project file is summarized.
     """, CMD_ADD => md"""
 
-        add pkg[=uuid] [@version] ...
+        add pkg[=uuid] [@version] [#rev] ...
 
     Add package `pkg` to the current project file. If `pkg` could refer to
     multiple different packages, specifying `uuid` allows you to disambiguate.
@@ -435,18 +434,19 @@ const helps = Dict(
     Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
     makes the package no longer being checked out.
     """, CMD_DEVELOP => md"""
-        develop pkg[=uuid] ...
+        develop pkg[=uuid] [#rev] ...
 
-        opts: --path | --branch
-
-    Check out a package by cloning the registered repo at `branch` to `path`. By default, `path` is `~/.julia/dev/` and the `branch`
-    is the default for the repo. Each package can be given a different branch.
-    A checked out package is considered having a higher version than all the registered versions of the package.
+    Make a package available for development. If `pkg` is an existing local path that path will be recorded in
+    the manifest and used. Otherwise, a full git clone of `pkg` at rev `rev` is made. The clone is stored in `devdir`,
+    which defaults to `~/.julia/dev` and is set by the environment variable `JULIA_PKG_DEVDIR`.
     This operation is undone by `free`.
 
     *Example*
     ```jl
-    pkg> develop --path=~/mydevpackages Example --branch=devel ACME --branch=feature/branch
+    pkg> develop Example
+    pkg> develop Example#master
+    pkg> develop Example#c37b675
+    pkg> develop https://github.com/JuliaLang/Example.jl#master
     ```
     """
 )
@@ -502,7 +502,8 @@ function do_rm!(ctx::Context, tokens::Vector{Token})
     API.rm(ctx, pkgs)
 end
 
-function do_add!(ctx::Context, tokens::Vector{Token})
+function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKind)
+    @assert cmd in (CMD_ADD, CMD_DEVELOP)
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
         cmderror("`add` – list packages to add")
@@ -512,7 +513,8 @@ function do_add!(ctx::Context, tokens::Vector{Token})
         parsed_package = false
         token = popfirst!(tokens)
         if token isa String
-            push!(pkgs, parse_package(token; from_cmd_add=true))
+            push!(pkgs, parse_package(token; context=CMD_ADD))
+            cmd == CMD_DEVELOP && pkgs[end].repo == nothing && (pkgs[end].repo = Types.GitRepo("", ""))
             parsed_package = true
         elseif token isa VersionRange
             prev_token_was_package ||
@@ -533,7 +535,7 @@ function do_add!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    API.add(ctx, pkgs)
+    return API.add_or_develop(ctx, pkgs, mode=(cmd == CMD_ADD ? :add : :develop))
 end
 
 function do_up!(ctx::Context, tokens::Vector{Token})
@@ -610,32 +612,6 @@ end
 function do_checkout!(ctx::Context, tokens::Vector{Token})
     Base.depwarn("`checkout`` is deprecated, use `develop`", :checkout)
     do_develop!(ctx, tokens)
-end
-
-function do_develop!(ctx::Context, tokens::Vector{Token})
-    pkgs_branches = Tuple{PackageSpec, Union{String, Nothing}}[] # (package, branch?)
-    path = devdir()
-    prev_token_was_package = false
-    while !isempty(tokens)
-        token = popfirst!(tokens)
-        parsed_package = false
-        if token isa String
-            push!(pkgs_branches, (parse_package(token), nothing))
-            parsed_package = true
-        elseif token isa Option
-            if token.kind == OPT_PATH
-                path = token.argument
-            elseif token.kind == OPT_BRANCH
-                pkgs_branches[end] = (pkgs_branches[end][1], token.argument)
-            else
-                cmderror("invalid option for `develop`: $token")
-            end
-        else
-            cmderror("unexpected token $token")
-        end
-        prev_token_was_package = parsed_package
-    end
-    API.develop(ctx, pkgs_branches; path = path)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})

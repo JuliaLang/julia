@@ -20,6 +20,7 @@ function git_init_package(tmp, path)
     return pkgpath
 end
 
+
 temp_pkg_dir() do project_path; cd(project_path) do
     tmp_pkg_path = mktempdir()
     pkg"init"
@@ -28,6 +29,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     v = Pkg3.installed()[TEST_PKG.name]
     pkg"rm Example"
     pkg"add Example#master"
+    pkg"test Example"
     @test isinstalled(TEST_PKG)
     @test Pkg3.installed()[TEST_PKG.name] > v
     pkg = "UnregisteredWithoutProject"
@@ -35,12 +37,16 @@ temp_pkg_dir() do project_path; cd(project_path) do
     Pkg3.REPLMode.pkgstr("add $p")
     @eval import $(Symbol(pkg))
     @test Pkg3.installed()[pkg] == v"0.0"
+    Pkg3.test("UnregisteredWithoutProject")
+
 
     pkg2 = "UnregisteredWithProject"
     p2 = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg2"))
     Pkg3.REPLMode.pkgstr("add $p2")
     @eval import $(Symbol(pkg2))
     @test Pkg3.installed()[pkg2] == v"0.1.0"
+    Pkg3.test("UnregisteredWithProject")
+
 
     write(joinpath(p2, "Project.toml"), """
         name = "UnregisteredWithProject"
@@ -87,6 +93,32 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end
     try rm(tmp_pkg_path; recurisve=true) end
     try rm(tmp_dev_dir; recurisve=true) end
+end # cd
+end
+
+
+locate_name(pkg) = Base.locate_package(Base.identify_package(pkg))
+
+temp_pkg_dir() do project_path; cd(project_path) do
+    mktempdir() do tmp
+        withenv("JULIA_PKG_DEVDIR" => tmp) do
+            pkg"init"
+            pkg"develop Example#c37b675"
+            @test locate_name("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
+            Pkg3.test("Example")
+            # Test an unregistered package
+            p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
+            p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
+            Pkg3.REPLMode.pkgstr("develop $(p1_path)")
+            Pkg3.REPLMode.pkgstr("develop $(p2_path)")
+            @test locate_name("UnregisteredWithProject") == joinpath(p1_path, "src", "UnregisteredWithProject.jl")
+            @test locate_name("UnregisteredWithoutProject") == joinpath(p2_path, "src", "UnregisteredWithoutProject.jl")
+            @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"
+            @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
+            Pkg3.test("UnregisteredWithoutProject")
+            Pkg3.test("UnregisteredWithProject")
+        end
+    end
 end # cd
 end
 

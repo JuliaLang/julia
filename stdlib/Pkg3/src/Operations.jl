@@ -64,6 +64,7 @@ function set_maximum_version_registry!(env::EnvCache, pkg::PackageSpec)
         pathvers = keys(load_versions(path))
         union!(pkgversions, pathvers)
     end
+    length(pkgversions) == 0 && return VersionNumber(0)
     max_version = maximum(pkgversions)
     pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
 end
@@ -96,8 +97,13 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             continue
         end
 
+        if !isdir(path)
+            cmderror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
+        end
+
         # Checked out package has by definition a version higher than all registered.
-        if pkg.path !== nothing
+        # TODO: Remove hardcoded names
+        if path !== nothing && !(isfile(path, "Project.toml") || isfile(path, "JuliaProject.toml"))
             set_maximum_version_registry!(ctx.env, pkg)
         end
 
@@ -825,7 +831,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
     write_env(ctx)
 end
 
-function add(ctx::Context, pkgs::Vector{PackageSpec})
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec})
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
     any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
@@ -866,7 +872,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         info = manifest_info(ctx.env, pkg.uuid)
         if haskey(info, "repo-url")
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
-            handle_repos!(ctx.env, [pkg]; upgrade = level == UPLEVEL_MAJOR)
+            handle_repos_add!(ctx.env, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
         else
             ver = VersionNumber(info["version"])
             if level == UPLEVEL_FIXED
@@ -917,49 +923,6 @@ function free(ctx::Context, pkgs::Vector{PackageSpec})
     new = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
     need_to_resolve && build_versions(ctx, new)
-end
-
-function develop(ctx::Context, pkgs_branches::Vector; path = devdir())
-    pkgs = PackageSpec[]
-    for (pkg, branch) in pkgs_branches
-        push!(pkgs, pkg)
-        ctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-        pkg.special_action = PKGSPEC_DEVELOPED
-        @info "Making $(pkg.name) [$(string(pkg.uuid)[1:8])] available for development..."
-
-        pkgpath = joinpath(path, pkg.name)
-        pkg.path = pkgpath
-        if ispath(pkgpath)
-            if !isfile(joinpath(pkgpath, "src", pkg.name * ".jl"))
-                cmderror("Path `$(pkgpath)` exists but it does not contain `src/$(pkg.name).jl")
-            else
-                @info "Path `$(pkgpath)` exists and looks like the correct package, using existing path instead of cloning"
-            end
-        else
-            successfully_cloned = false
-            for regpath in Types.registered_paths(ctx.env, pkg.uuid)
-                repos = Types.registered_info(ctx.env, pkg.uuid, "repo")
-                for (_, repo) in repos
-                    @info "Cloning $(pkg.name) from $(repo) to $path"
-                    try
-                        LibGit2.clone(repo, pkgpath; branch = branch == nothing ? "" : branch)
-                        successfully_cloned = true
-                        break
-                    catch err
-                        err isa LibGit2.GitError || rethrow(err)
-                        @error "Failed clone from $repo" exception = err
-                    end
-                end
-            end
-            if !successfully_cloned
-                cmderror("Failed to clone $(pkg.name) [$(string(pkg.uuid)[1:8])] to $(pkgpath)")
-            end
-        end
-    end
-    resolve_versions!(ctx, pkgs)
-    new = apply_versions(ctx, pkgs)
-    write_env(ctx) # write env before building
-    build_versions(ctx, new)
 end
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)

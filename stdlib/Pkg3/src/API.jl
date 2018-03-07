@@ -13,21 +13,29 @@ using ..Types, ..TOML
 
 preview_info() = @info("In preview mode")
 
-add(pkg::Union{String, PackageSpec}; kwargs...)               = add([pkg]; kwargs...)
-add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-add(pkgs::Vector{PackageSpec}; kwargs...) = add(Context(), pkgs; kwargs...)
+add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
+add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
-function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    handle_repos!(ctx.env, pkgs)
+    if mode == :develop
+        handle_repos_develop!(ctx.env, pkgs)
+    else
+        handle_repos_add!(ctx.env, pkgs; upgrade_or_add=true)
+    end
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, true)
-    Operations.add(ctx, pkgs)
+    Operations.add_or_develop(ctx, pkgs)
 end
+
+add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
+develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
+@deprecate checkout develop
 
 
 rm(pkg::Union{String, PackageSpec}; kwargs...)               = rm([pkg]; kwargs...)
@@ -152,27 +160,6 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Operations.free(ctx, pkgs)
 end
 
-
-#deprecated
-@deprecate checkout develop
-
-develop(pkg::Union{String, PackageSpec}; kwargs...)  = develop([pkg]; kwargs...)
-develop(pkg::String, branch::String; kwargs...)      = develop([(PackageSpec(pkg), branch)]; kwargs...)
-develop(pkg::PackageSpec, branch::String; kwargs...) = develop([(pkg, branch)]; kwargs...)
-develop(pkgs::Vector{String}; kwargs...)             = develop([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
-develop(pkgs::Vector{PackageSpec}; kwargs...)        = develop([(pkg, nothing) for pkg in pkgs]; kwargs...)
-develop(pkgs_branches::Vector; kwargs...)            = develop(Context(), pkgs_branches; kwargs...)
-
-function develop(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
-    print_first_command_header()
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-    pkgs = [p[1] for p in pkgs_branches]
-    project_resolve!(ctx.env, pkgs)
-    registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
-    Operations.develop(ctx, pkgs_branches; path = path)
-end
 
 
 test(;kwargs...)                                  = test(PackageSpec[], kwargs...)
