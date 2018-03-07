@@ -55,6 +55,7 @@ abstract type AbstractMenu end
 
 """
     pick(m::AbstractMenu, cursor::Int)
+
 Defines what happens when a user presses the Enter key while the menu is open. 
 If `true` is returned, `request()` will exit.
 """
@@ -62,19 +63,22 @@ pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
 
 """
     cancel(m::AbstractMenu)
+
 Define what happens when a user cancels ('q' or ctrl-c) a menu.
 `request()` will always exit after calling this function.
 """
 cancel(m::AbstractMenu) = error("unimplemented")
 
 """
-    options(m::AbstractMenu) 
+    options(m::AbstractMenu)
+
 Return a list of strings to be displayed as options in the current page.
 """
 options(m::AbstractMenu) = error("unimplemented")
 
 """
     writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
+
 Write the option at index `idx` to the buffer. If cursor is `true` display the cursor.
 """ 
 function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
@@ -88,12 +92,14 @@ end
 
 """
     header(m::AbstractMenu)
+
 Displays the header above the menu when it is rendered to the screen.
 """
 header(m::AbstractMenu) = ""
 
 """
     keypress(m::AbstractMenu, i::UInt32)
+
 Send any non-standard keypress event to this function.
 If `true` is returned, `request()` will exit.
 """
@@ -104,6 +110,7 @@ keypress(m::AbstractMenu, i::UInt32) = false
 
 """
     request(m::AbstractMenu)
+
 Display the menu and enter interactive mode. Returns `m.selected` which
 varies based on menu type.
 """
@@ -214,6 +221,7 @@ end
 
 """
     printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
+
 Display the state of a menu. 
 """
 function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
