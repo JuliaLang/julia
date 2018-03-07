@@ -1222,6 +1222,8 @@ function factorize(A::StridedMatrix{T}) where T
     end
     qrfact(A, Val(true))
 end
+factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
+factorize(A::Transpose) = transpose(factorize(parent(A)))
 
 ## Moore-Penrose pseudoinverse
 
