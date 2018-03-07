@@ -44,7 +44,7 @@ function config(;charset::Symbol = :na,
         throw(ArgumentError("charset should be :ascii or :unicode, received $charset"))
     end
 
-    scroll ∉ [:wrap, :nowrap] && throw(ArgumentError("scroll must be :wrap or :nowrap, received $scroll"))
+    scroll ∉ [:na, :wrap, :nowrap] && throw(ArgumentError("scroll must be :wrap or :nowrap, received $scroll"))
     scroll == :wrap   && (CONFIG[:scroll_wrap] = true)
     scroll == :nowrap && (CONFIG[:scroll_wrap] = false)
 
