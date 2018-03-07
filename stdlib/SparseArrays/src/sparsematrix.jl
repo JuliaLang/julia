@@ -376,6 +376,27 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     eltypeTvV = convert(Vector{Tv}, V)
     return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
 end
+function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
+    nz = count(t -> t != 0, M)
+    colptr = zeros(Ti, size(M, 2) + 1)
+    nzval = Vector{Tv}(uninitialized, nz)
+    rowval = Vector{Ti}(uninitialized, nz)
+    colptr[1] = 1
+    cnt = 1
+    @inbounds for j in 1:size(M, 2)
+        for i in 1:size(M, 1)
+            v = M[i, j]
+            if v != 0
+                rowval[cnt] = i
+                nzval[cnt] = v
+                cnt += 1
+            end
+        end
+        colptr[j+1] = cnt
+    end
+    return SparseMatrixCSC(size(M, 1), size(M, 2), colptr, rowval, nzval)
+end
+
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::SparseMatrixCSC{Tv}) where Tv
     # Handle cases where zero(Tv) is not defined but the array is dense.
