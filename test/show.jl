@@ -1085,9 +1085,15 @@ end
     @test contains(s, " in Base.Math ")
 end
 
+module AlsoExportsPair
+Pair = 0
+export Pair
+end
+
 module TestShowType
     export TypeA
     struct TypeA end
+    using ..AlsoExportsPair
 end
 
 @testset "module prefix when printing type" begin
@@ -1108,6 +1114,15 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+
+    # issue #26354; make sure testing for symbol visibility doesn't cause
+    # spurious binding resolutions
+    show(IOContext(b, :module => TestShowType), Base.Pair)
+    @test !Base.isbindingresolved(TestShowType, :Pair)
+    @test String(take!(b)) == "Base.Pair"
+    show(IOContext(b, :module => TestShowType), Base.Complex)
+    @test Base.isbindingresolved(TestShowType, :Complex)
+    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
