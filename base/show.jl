@@ -89,8 +89,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(uninitialized, min(rows, length(t)))
-        vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        ks = Vector{AbstractString}(undef, min(rows, length(t)))
+        vs = Vector{AbstractString}(undef, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
@@ -597,7 +597,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
     isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
-    printnames = Vector{String}(uninitialized, length(slotnames))
+    printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
@@ -1368,7 +1368,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if prec >= 0
             show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_args = Vector{Any}(uninitialized, length(args) - 1)
+            show_args = Vector{Any}(undef, length(args) - 1)
             show_args[1] = args[1]
             show_args[2:end] = args[3:end]
             show_list(io, show_args, ' ', indent)

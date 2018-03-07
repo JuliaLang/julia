@@ -434,7 +434,7 @@ end
         @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
     end
     @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(uninitialized, length(A.colptr) - 1))
+        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(undef, length(A.colptr) - 1))
     end
     @testset "common error checking of permute[!] methods / permutation validity" begin
         @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)

@@ -47,7 +47,7 @@ struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
 
     function SamplerBigFloat{I}(prec::Int) where I<:FloatInterval{BigFloat}
         nlimbs = (prec-1) ÷ bits_in_Limb + 1
-        limbs = Vector{Limb}(uninitialized, nlimbs)
+        limbs = Vector{Limb}(undef, nlimbs)
         shift = nlimbs * bits_in_Limb - prec
         new(prec, nlimbs, limbs, shift)
     end

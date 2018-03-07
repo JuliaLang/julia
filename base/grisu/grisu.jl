@@ -9,7 +9,7 @@ const SHORTEST = 1
 const FIXED = 2
 const PRECISION = 3
 
-const DIGITS = Vector{UInt8}(uninitialized, 309+17)
+const DIGITS = Vector{UInt8}(undef, 309+17)
 
 include(joinpath("grisu", "float.jl"))
 include(joinpath("grisu", "fastshortest.jl"))

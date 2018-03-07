@@ -23,7 +23,7 @@ function get_argtypes(result::InferenceResult)
     toplevel = !isa(linfo.def, Method)
     atypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
     nargs::Int = toplevel ? 0 : linfo.def.nargs
-    args = Vector{Any}(uninitialized, nargs)
+    args = Vector{Any}(undef, nargs)
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1

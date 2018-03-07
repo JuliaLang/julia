@@ -71,7 +71,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if e == C_NULL
         _E = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _E = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, n)
+        _E = Vector{CHOLMOD.SuiteSparse_long}(undef, n)
         for i in 1:n
             @inbounds _E[i] = unsafe_load(e, i) + 1
         end
@@ -86,7 +86,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if hpinv == C_NULL
         _HPinv = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, m)
+        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(undef, m)
         for i in 1:m
             @inbounds _HPinv[i] = unsafe_load(hpinv, i) + 1
         end

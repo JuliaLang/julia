@@ -224,7 +224,7 @@ function getipaddr()
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
-        #   host = Vector{UInt128}(uninitialized, 1)
+        #   host = Vector{UInt128}(undef, 1)
         #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddrr, host)
         #   return IPv6(ntoh(host[1]))
         end

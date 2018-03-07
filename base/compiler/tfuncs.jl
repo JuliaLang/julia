@@ -11,8 +11,8 @@ const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 const INT_INF = typemax(Int) # integer infinity
 
 const N_IFUNC = reinterpret(Int32, arraylen) + 1
-const T_IFUNC = Vector{Tuple{Int, Int, Any}}(uninitialized, N_IFUNC)
-const T_IFUNC_COST = Vector{Int}(uninitialized, N_IFUNC)
+const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
+const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
 const T_FFUNC_VAL = Vector{Tuple{Int, Int, Any}}()
 const T_FFUNC_COST = Vector{Int}()

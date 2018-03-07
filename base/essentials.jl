@@ -362,7 +362,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Vector{Any}(uninitialized, 4)
+    out = Vector{Any}(undef, 4)
     l = 4
     i = 1
     for x in xs

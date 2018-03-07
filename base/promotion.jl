@@ -48,26 +48,26 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = Vector{Any}(uninitialized, laf)
+                c = Vector{Any}(undef, laf)
                 c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
-                c = Vector{Any}(uninitialized, laf+1)
+                c = Vector{Any}(undef, laf+1)
                 c[laf+1] = Vararg{tailjoin(bp, laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = Vector{Any}(uninitialized, lbf)
+                c = Vector{Any}(undef, lbf)
                 c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
-                c = Vector{Any}(uninitialized, lbf+1)
+                c = Vector{Any}(undef, lbf+1)
                 c[lbf+1] = Vararg{tailjoin(ap, lbf+1)}
                 n = lbf
             end
         else
-            c = Vector{Any}(uninitialized, laf)
+            c = Vector{Any}(undef, laf)
             n = laf
         end
         for i = 1:n
@@ -90,7 +90,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(uninitialized, n)
+            p = Vector{Any}(undef, n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))

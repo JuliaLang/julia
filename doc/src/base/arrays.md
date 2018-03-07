@@ -11,7 +11,7 @@ Core.Array(::Uninitialized, ::Any)
 Core.Array(::Nothing, ::Any)
 Core.Array(::Missing, ::Any)
 Core.Uninitialized
-Core.uninitialized
+Core.undef
 Base.Vector
 Base.Vector(::Uninitialized, ::Any)
 Base.Vector(::Nothing, ::Any)

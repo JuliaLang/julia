@@ -264,7 +264,7 @@ Base.isempty(s::VersionSpec) = all(isempty, s.ranges)
 # Hot code, measure performance before changing
 function Base.intersect(A::VersionSpec, B::VersionSpec)
     (isempty(A) || isempty(B)) && return copy(empty_versionspec)
-    ranges = Vector{VersionRange}(uninitialized, length(A.ranges) * length(B.ranges))
+    ranges = Vector{VersionRange}(undef, length(A.ranges) * length(B.ranges))
     i = 1
     @inbounds for a in A.ranges, b in B.ranges
         ranges[i] = intersect(a, b)

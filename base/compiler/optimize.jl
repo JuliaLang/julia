@@ -230,7 +230,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 const META_POP_LOC = Expr(:meta, :pop_loc)
 
-const ENABLE_VERIFY_VALUEINFO = (tmp = Array{Bool,0}(uninitialized); tmp[] = false; tmp)
+const ENABLE_VERIFY_VALUEINFO = (tmp = Array{Bool,0}(undef); tmp[] = false; tmp)
 
 # allocation optimization, must not be mutated.
 const EMPTY_USES = ValueUse[]
@@ -753,7 +753,7 @@ function substitute!(
         return NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
     end
     if isa(e, PhiNode)
-        values = Vector{Any}(uninitialized, length(e.values))
+        values = Vector{Any}(undef, length(e.values))
         for i = 1:length(values)
             isassigned(e.values, i) || continue
             values[i] = substitute!(e.values[i], na, argexprs, spsig,
@@ -1766,7 +1766,7 @@ function ssavalue_increment(body::Expr, incr)
 end
 ssavalue_increment(body::PiNode, incr) = PiNode(ssavalue_increment(body.val, incr), body.typ)
 function ssavalue_increment(body::PhiNode, incr)
-    values = Vector{Any}(uninitialized, length(body.values))
+    values = Vector{Any}(undef, length(body.values))
     for i = 1:length(values)
         isassigned(body.values, i) || continue
         values[i] = ssavalue_increment(body.values[i], incr)
@@ -1925,7 +1925,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
     end
 =#
     for ninline = 1:100
-        ata = Vector{Any}(uninitialized, length(e.args))
+        ata = Vector{Any}(undef, length(e.args))
         ata[1] = ft
         for i = 2:length(e.args)
             a = exprtype(e.args[i], sv.src, sv.mod)
@@ -1954,7 +1954,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
 
         if f === _apply
             na = length(e.args)
-            newargs = Vector{Any}(uninitialized, na-2)
+            newargs = Vector{Any}(undef, na-2)
             newstmts = Any[]
             effect_free_upto = 0
             for i = 3:na
@@ -2857,7 +2857,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     isdispatchelem(widenconst(ctx.sv.src.slottypes[key.first])) && return false # no splitting can be necessary
     alltypes = IdDict()
     ndefs = length(info.defs)
-    deftypes = Vector{Any}(uninitialized, ndefs)
+    deftypes = Vector{Any}(undef, ndefs)
     for i in 1:ndefs
         def = info.defs[i]
         defex = (def.assign::Expr).args[2]
@@ -3040,9 +3040,9 @@ end
 function structinfo_constant(ctx::AllocOptContext, @nospecialize(v), vt::DataType)
     nf = fieldcount(vt)
     if vt <: Tuple
-        si = StructInfo(Vector{Any}(uninitialized, nf), Symbol[], vt, false, false)
+        si = StructInfo(Vector{Any}(undef, nf), Symbol[], vt, false, false)
     else
-        si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+        si = StructInfo(Vector{Any}(undef, nf), collect(Symbol, fieldnames(vt)),
                         vt, false, false)
     end
     for i in 1:nf
@@ -3059,7 +3059,7 @@ end
 structinfo_tuple(ex::Expr) = StructInfo(ex.args[2:end], Symbol[], Tuple, false, false)
 function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     nf = fieldcount(vt)
-    si = StructInfo(Vector{Any}(uninitialized, nf), collect(Symbol, fieldnames(vt)),
+    si = StructInfo(Vector{Any}(undef, nf), collect(Symbol, fieldnames(vt)),
                     vt, vt.mutable, true)
     ninit = length(ex.args) - 1
     for i in 1:nf
@@ -3556,9 +3556,9 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
     def = info.defs[1]
     si = ctx.structinfos[1]
     if !isempty(ctx.undef_fld) && has_setfield_undef
-        flag_vars = Vector{SlotNumber}(uninitialized, nf)
+        flag_vars = Vector{SlotNumber}(undef, nf)
     end
-    vars = Vector{Any}(uninitialized, nf)
+    vars = Vector{Any}(undef, nf)
     is_ssa = !var_has_static_undef(ctx.sv.src, key.first, key.second)
     def_exprs = Any[]
     if has_preserve

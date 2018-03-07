@@ -136,7 +136,7 @@ export
     AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, Method,
-    Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
+    Module, Symbol, Task, Array, Uninitialized, undef, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -375,7 +375,7 @@ const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 ## primitive Array constructors
 struct Uninitialized end
-const uninitialized = Uninitialized()
+const undef = Uninitialized()
 # type and dimensionality specified, accepting dims as series of Ints
 Array{T,1}(::Uninitialized, m::Int) where {T} =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
@@ -386,17 +386,17 @@ Array{T,3}(::Uninitialized, m::Int, n::Int, o::Int) where {T} =
 Array{T,N}(::Uninitialized, d::Vararg{Int,N}) where {T,N} =
     ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type and dimensionality specified, accepting dims as tuples of Ints
-Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(uninitialized, getfield(d,1))
-Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(uninitialized, getfield(d,1), getfield(d,2))
-Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(uninitialized, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
+Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
+Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
 Array{T,N}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type but not dimensionality specified
-Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(uninitialized, m)
-Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(uninitialized, m, n)
-Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(uninitialized, m, n, o)
-Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitialized, d)
+Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(undef, m)
+Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
+Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
+Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
 # empty vector constructor
-Array{T,1}() where {T} = Array{T,1}(uninitialized, 0)
+Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
 
 (::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
@@ -519,7 +519,7 @@ end
 function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
     if @generated
         N = nfields(names)
-        flds = Array{Any,1}(uninitialized, N)
+        flds = Array{Any,1}(undef, N)
         i = 1
         while sle_int(i, N)
             arrayset(false, flds, :(getfield(args, $i)), i)
@@ -529,7 +529,7 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
     else
         N = nfields(names)
         NT = NamedTuple{names,T}
-        flds = Array{Any,1}(uninitialized, N)
+        flds = Array{Any,1}(undef, N)
         i = 1
         while sle_int(i, N)
             arrayset(false, flds, getfield(args, i), i)

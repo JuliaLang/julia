@@ -393,7 +393,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Matrix{Int}(uninitialized, m+1, n+1)
+    d = Matrix{Int}(undef, m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n

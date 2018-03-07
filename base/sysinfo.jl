@@ -181,7 +181,7 @@ function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
     Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Vector{CPUinfo}(uninitialized, count[])
+    cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
@@ -206,7 +206,7 @@ end
 Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
 function loadavg()
-    loadavg_ = Vector{Float64}(uninitialized, 3)
+    loadavg_ = Vector{Float64}(undef, 3)
     ccall(:uv_loadavg, Cvoid, (Ptr{Float64},), loadavg_)
     return loadavg_
 end
@@ -220,7 +220,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
-    buf = Vector{UInt8}(uninitialized, 512)
+    buf = Vector{UInt8}(undef, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))

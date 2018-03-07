@@ -180,8 +180,8 @@ end
             @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
             @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
             @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
+            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -189,9 +189,9 @@ end
             @test mul!(similar(a), a, 5.) == a*5
             @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
             @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(uninitialized, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized, 3, 2), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
         end
@@ -243,7 +243,7 @@ end
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
-@test_throws ArgumentError norm(Matrix{Float64}(uninitialized,5,5),5)
+@test_throws ArgumentError norm(Matrix{Float64}(undef,5,5),5)
 
 @testset "generic vecnorm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]

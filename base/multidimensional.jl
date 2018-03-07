@@ -1193,13 +1193,13 @@ julia> fill!(A, 2.)
  2.0  2.0  2.0
  2.0  2.0  2.0
 
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(uninitialized, 3), a); a[1] = 2; A
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
  [2, 1, 1]
  [2, 1, 1]
  [2, 1, 1]
 
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(uninitialized, 3), f())
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
 3-element Array{Int64,1}:
  1
  1
@@ -1359,7 +1359,7 @@ julia> src = reshape(Vector(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(uninitialized, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
 
 julia> circcopy!(dest, src)
 OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
@@ -1866,7 +1866,7 @@ julia> extrema(A, (1,2))
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
     sz[[dims...]] = 1
-    B = Array{Tuple{eltype(A),eltype(A)}}(uninitialized, sz...)
+    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
     return extrema!(B, A)
 end
 

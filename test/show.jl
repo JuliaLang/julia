@@ -22,15 +22,15 @@ showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize =>
                                          :y => 2)
 end
 
-@test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
-@test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
-@test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
+@test replstr(Array{Any}(undef, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Vector{String}(uninitialized, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Vector{String}(undef, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
 @test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
 @test replstr(Meta.parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
@@ -166,7 +166,7 @@ end
     # line meta
     dims::NTuple{N,Int}
     # line meta
-    function BitArray(uninitialized, dims::Int...)
+    function BitArray(undef, dims::Int...)
         # line meta
         if length(dims) != N
             # line meta
@@ -187,7 +187,7 @@ end
         # line meta
         nc = num_bit_chunks(n)
         # line meta
-        chunks = Vector{UInt64}(uninitialized, nc)
+        chunks = Vector{UInt64}(undef, nc)
         # line meta
         if nc > 0
             # line meta
@@ -390,11 +390,11 @@ export D, E, F
 end"
 
 # issue #19840
-@test_repr "Array{Int}(uninitialized, 0)"
-@test_repr "Array{Int}(uninitialized, 0,0)"
-@test_repr "Array{Int}(uninitialized, 0,0,0)"
-@test_repr "Array{Int}(uninitialized, 0,1)"
-@test_repr "Array{Int}(uninitialized, 0,0,1)"
+@test_repr "Array{Int}(undef, 0)"
+@test_repr "Array{Int}(undef, 0,0)"
+@test_repr "Array{Int}(undef, 0,0,0)"
+@test_repr "Array{Int}(undef, 0,1)"
+@test_repr "Array{Int}(undef, 0,0,1)"
 
 # issue #8994
 @test_repr "get! => 2"
@@ -813,7 +813,7 @@ end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
 end
-let a = Vector{Any}(uninitialized, 10000)
+let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
@@ -987,7 +987,7 @@ end
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
     @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
-    A = Array{Pair,0}(uninitialized); A[] = 1=>2
+    A = Array{Pair,0}(undef); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==

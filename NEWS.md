@@ -120,12 +120,12 @@ Language changes
   * `global const` declarations may no longer appear inside functions ([#12010]).
 
   * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
-    deprecated in favor of equivalents accepting `uninitialized` (an alias for
+    deprecated in favor of equivalents accepting `undef` (an alias for
     `Uninitialized()`) as their first argument, as in
-    `BitArray[{N}](uninitialized, shape...)`. For example, `BitVector(3)` is now
-    `BitVector(uninitialized, 3)`, `BitMatrix((2, 4))` is now
-    `BitMatrix(uninitialized, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
-    `BitArray{3}(uninitialized, 11, 14, 17)` ([#24785]).
+    `BitArray[{N}](undef, shape...)`. For example, `BitVector(3)` is now
+    `BitVector(undef, 3)`, `BitMatrix((2, 4))` is now
+    `BitMatrix(undef, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
+    `BitArray{3}(undef, 11, 14, 17)` ([#24785]).
 
   * Dispatch rules have been simplified:
     method matching is now determined exclusively by subtyping;
@@ -662,11 +662,11 @@ Deprecated or removed
 
   * Uninitialized `Array` constructors of the form
     `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
-    accepting `uninitialized` (an alias for `Uninitialized()`) as their first argument,
-    as in `Array[{T,N}](uninitialized, shape...)`. For example,
-    `Vector(3)` is now `Vector(uninitialized, 3)`, `Matrix{Int}((2, 4))` is now,
-    `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
-    `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
+    accepting `uninit` (an alias for `Uninitialized()`) as their first argument,
+    as in `Array[{T,N}](undef, shape...)`. For example,
+    `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
+    `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
+    `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
 
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
@@ -692,11 +692,11 @@ Deprecated or removed
     output ([#12131]).
 
   * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been
-    deprecated in favor of equivalents accepting `uninitialized` (an alias for
+    deprecated in favor of equivalents accepting `uninit` (an alias for
     `Uninitialized()`) as their first argument, as in
-    `RowVector{T}(uninitialized, shape...)`. For example, `RowVector{Int}(3)` is now
-    `RowVector{Int}(uninitialized, 3)`, and `RowVector{Float32}((1, 4))` is now
-    `RowVector{Float32}(uninitialized, (1, 4))` ([#24786]).
+    `RowVector{T}(undef, shape...)`. For example, `RowVector{Int}(3)` is now
+    `RowVector{Int}(undef, 3)`, and `RowVector{Float32}((1, 4))` is now
+    `RowVector{Float32}(undef, (1, 4))` ([#24786]).
 
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
@@ -759,7 +759,7 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(undef, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 

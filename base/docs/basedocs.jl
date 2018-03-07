@@ -1310,13 +1310,13 @@ isdefined
 
 
 """
-    Vector{T}(uninitialized, n)
+    Vector{T}(undef, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`uninitialized`](@ref).
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> Vector{Float64}(uninitialized, 3)
+julia> Vector{Float64}(undef, 3)
 3-element Array{Float64,1}:
  6.90966e-310
  6.90966e-310
@@ -1360,13 +1360,13 @@ julia> Vector{Union{Missing, String}}(missing, 2)
 Vector{T}(::Missing, n)
 
 """
-    Matrix{T}(uninitialized, m, n)
+    Matrix{T}(undef, m, n)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`uninitialized`](@ref).
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> Matrix{Float64}(uninitialized, 2, 3)
+julia> Matrix{Float64}(undef, 2, 3)
 2×3 Array{Float64,2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
@@ -1409,24 +1409,24 @@ julia> Matrix{Union{Missing, String}}(missing, 2, 3)
 Matrix{T}(::Missing, m, n)
 
 """
-    Array{T}(uninitialized, dims)
-    Array{T,N}(uninitialized, dims)
+    Array{T}(undef, dims)
+    Array{T,N}(undef, dims)
 
 Construct an uninitialized `N`-dimensional [`Array`](@ref)
 containing elements of type `T`. `N` can either be supplied explicitly,
-as in `Array{T,N}(uninitialized, dims)`, or be determined by the length or number of `dims`.
+as in `Array{T,N}(undef, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`. See [`uninitialized`](@ref).
+match the length or number of `dims`. See [`uninit`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(uninitialized, 2, 3) # N given explicitly
+julia> A = Array{Float64,2}(undef, 2, 3) # N given explicitly
 2×3 Array{Float64,2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(uninitialized, 2) # N determined by the input
+julia> B = Array{Float64}(undef, 2) # N determined by the input
 2-element Array{Float64,1}:
  1.87103e-320
  0.0
@@ -1485,7 +1485,7 @@ Array{T,N}(::Missing, dims)
     Uninitialized
 
 Singleton type used in array initialization, indicating the array-constructor-caller
-would like an uninitialized array. See also [`uninitialized`](@ref),
+would like an uninitialized array. See also [`undef`](@ref),
 an alias for `Uninitialized()`.
 
 # Examples
@@ -1500,7 +1500,7 @@ julia> Array{Float64,1}(Uninitialized(), 3)
 Uninitialized
 
 """
-    uninitialized
+    undef
 
 Alias for `Uninitialized()`, which constructs an instance of the singleton type
 [`Uninitialized`](@ref), used in array initialization to indicate the
@@ -1508,14 +1508,14 @@ array-constructor-caller would like an uninitialized array.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(uninitialized, 3)
+julia> Array{Float64,1}(undef, 3)
 3-element Array{Float64,1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
 ```
 """
-uninitialized
+undef
 
 """
     +(x, y...)
