@@ -134,12 +134,16 @@ julia> string("a", 1, true)
 """
 string(xs...) = print_to_string(xs...)
 
-print(io::IO, s::AbstractString) = (write(io, s); nothing)
+# note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
+#       write uses an encoding determined by `s` (UTF-8 for `String`)
+print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
-write(to::GenericIOBuffer, s::SubString{String}) =
-    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset+1), UInt(s.ncodeunits))
+# optimized methods to avoid iterating over chars
+write(io::IO, s::Union{String,SubString{String}}) =
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
 
@@ -240,8 +244,8 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(c::Union{Nothing, Char}) = c !== nothing && isxdigit(c)
-escape_nul(c::Union{Nothing, Char}) =
+need_full_hex(c::Union{Nothing, AbstractChar}) = c !== nothing && isxdigit(c)
+escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
@@ -445,51 +449,51 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             elseif ch == '\n'
                 # Now we need to output enough indentation
                 for i = 1:col-indent
-                    write(buf, ' ')
+                    print(buf, ' ')
                 end
                 col = 0
-                write(buf, '\n')
+                print(buf, '\n')
             else
                 cutting = false
                 # Now we need to output enough indentation to get to
                 # correct place
                 for i = 1:col-indent
-                    write(buf, ' ')
+                    print(buf, ' ')
                 end
                 col += 1
-                write(buf, ch)
+                print(buf, ch)
             end
         elseif ch == '\t'       # Handle internal tabs
             upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
             for i = 1:(upd-col)
-                write(buf, ' ')
+                print(buf, ' ')
             end
             col = upd
         elseif ch == '\n'
             cutting = true
             col = 0
-            write(buf, '\n')
+            print(buf, '\n')
         else
             col += 1
-            write(buf, ch)
+            print(buf, ch)
         end
     end
     # If we were still "cutting" when we hit the end of the string,
     # we need to output the right number of spaces for the indentation
     if cutting
         for i = 1:col-indent
-            write(buf, ' ')
+            print(buf, ' ')
         end
     end
     String(take!(buf))
 end
 
-function String(chars::AbstractVector{Char})
+function String(chars::AbstractVector{<:AbstractChar})
     sprint(sizehint=length(chars)) do io
         for c in chars
-            write(io, c)
+            print(io, c)
         end
     end
 end

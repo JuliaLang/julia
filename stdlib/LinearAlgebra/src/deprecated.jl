@@ -49,7 +49,7 @@ end
 
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
-@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::AbstractChar) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
 @deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
 
 # PR #22925

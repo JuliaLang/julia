@@ -9,7 +9,7 @@ const liblapack = Base.liblapack_name
 
 import ..LinearAlgebra.BLAS.@blasfunc
 
-import ..LinearAlgebra: BlasFloat, Char, BlasInt, LAPACKException,
+import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
 
 using ..LinearAlgebra: triu, tril, dot
@@ -52,7 +52,7 @@ function chkposdef(ret::BlasInt)
 end
 
 "Check that upper/lower (for special matrices) is correctly specified"
-function chkuplo(uplo::Char)
+function chkuplo(uplo::AbstractChar)
     if !(uplo == 'U' || uplo == 'L')
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
@@ -60,7 +60,7 @@ function chkuplo(uplo::Char)
 end
 
 "Check that {c}transpose is correctly specified"
-function chktrans(trans::Char)
+function chktrans(trans::AbstractChar)
     if !(trans == 'N' || trans == 'C' || trans == 'T')
         throw(ArgumentError("trans argument must be 'N' (no transpose), 'T' (transpose), or 'C' (conjugate transpose), got $trans"))
     end
@@ -68,7 +68,7 @@ function chktrans(trans::Char)
 end
 
 "Check that left/right hand side multiply is correctly specified"
-function chkside(side::Char)
+function chkside(side::AbstractChar)
     if !(side == 'L' || side == 'R')
         throw(ArgumentError("side argument must be 'L' (left hand multiply) or 'R' (right hand multiply), got $side"))
     end
@@ -76,7 +76,7 @@ function chkside(side::Char)
 end
 
 "Check that unit diagonal flag is correctly specified"
-function chkdiag(diag::Char)
+function chkdiag(diag::AbstractChar)
     if !(diag == 'U' || diag =='N')
         throw(ArgumentError("diag argument must be 'U' (unit diagonal) or 'N' (non-unit diagonal), got $diag"))
     end
@@ -140,7 +140,7 @@ for (gbtrf, gbtrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   AB( LDAB, * ), B( LDB, * )
-        function gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer,
+        function gbtrs!(trans::AbstractChar, kl::Integer, ku::Integer, m::Integer,
                         AB::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt},
                         B::AbstractVecOrMat{$elty})
             chkstride1(AB, B, ipiv)
@@ -181,7 +181,7 @@ first subdiagonal containing a nonzero band, `ku` is the last superdiagonal
 containing one, and `m` is the first dimension of the matrix `AB`. `ipiv` is the vector
 of pivots returned from `gbtrf!`. Returns the vector or matrix `X`, overwriting `B` in-place.
 """
-gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer, AB::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+gbtrs!(trans::AbstractChar, kl::Integer, ku::Integer, m::Integer, AB::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty, relty) in
@@ -196,7 +196,7 @@ for (gebal, gebak, elty, relty) in
         #      INTEGER            IHI, ILP, INFO, LDA, N
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
-        function gebal!(job::Char, A::AbstractMatrix{$elty})
+        function gebal!(job::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
@@ -218,7 +218,7 @@ for (gebal, gebak, elty, relty) in
         #      INTEGER            IHI, ILP, INFO, LDV, M, N
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   SCALE( * ), V( LDV, * )
-        function gebak!(job::Char, side::Char,
+        function gebak!(job::AbstractChar, side::AbstractChar,
                         ilo::BlasInt, ihi::BlasInt, scale::AbstractVector{$relty},
                         V::AbstractMatrix{$elty})
             chkstride1(scale, V)
@@ -246,7 +246,7 @@ and scaled). Modifies `A` in-place and returns `ilo`, `ihi`, and `scale`. If
 permuting was turned on, `A[i,j] = 0` if `j > i` and `1 < j < ilo` or `j > ihi`.
 `scale` contains information about the scaling/permutations performed.
 """
-gebal!(job::Char, A::AbstractMatrix)
+gebal!(job::AbstractChar, A::AbstractMatrix)
 
 """
     gebak!(job, side, ilo, ihi, scale, V)
@@ -256,7 +256,7 @@ the unscaled/unpermuted eigenvectors of the original matrix. Modifies `V`
 in-place. `side` can be `L` (left eigenvectors are transformed) or `R`
 (right eigenvectors are transformed).
 """
-gebak!(job::Char, side::Char, ilo::BlasInt, ihi::BlasInt, scale::AbstractVector, V::AbstractMatrix)
+gebak!(job::AbstractChar, side::AbstractChar, ilo::BlasInt, ihi::BlasInt, scale::AbstractVector, V::AbstractMatrix)
 
 # (GE) general matrices, direct decompositions
 #
@@ -790,7 +790,7 @@ for (tzrzf, ormrz, elty) in
         #       ..
         #       .. Array Arguments ..
         #       COMPLEX*16         A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function ormrz!(side::Char, trans::Char, A::AbstractMatrix{$elty},
+        function ormrz!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
                         tau::AbstractVector{$elty}, C::AbstractMatrix{$elty})
             chktrans(trans)
             chkside(side)
@@ -834,7 +834,7 @@ can be unmodified (`trans = N`), transposed (`trans = T`), or conjugate
 transposed (`trans = C`). Returns matrix `C` which is modified in-place
 with the result of the multiplication.
 """
-ormrz!(side::Char, trans::Char, A::AbstractMatrix, tau::AbstractVector, C::AbstractMatrix)
+ormrz!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractMatrix)
 
 """
     tzrzf!(A) -> (A, tau)
@@ -856,7 +856,7 @@ for (gels, gesv, getrs, getri, elty) in
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-        function gels!(trans::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function gels!(trans::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkstride1(A, B)
             btrn  = trans == 'T'
@@ -923,7 +923,7 @@ for (gels, gesv, getrs, getri, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function getrs!(trans::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
+        function getrs!(trans::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkstride1(A, B, ipiv)
             n = checksquare(A)
@@ -982,7 +982,7 @@ may be one of `N` (no modification), `T` (transpose), or `C` (conjugate
 transpose). `gels!` searches for the minimum norm/least squares solution.
 `A` may be under or over determined. The solution is returned in `B`.
 """
-gels!(trans::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+gels!(trans::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 """
     gesv!(A, B) -> (B, A, ipiv)
@@ -1003,7 +1003,7 @@ is the `LU` factorization from `getrf!`, with `ipiv` the pivoting
 information. `trans` may be one of `N` (no modification), `T` (transpose),
 or `C` (conjugate transpose).
 """
-getrs!(trans::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+getrs!(trans::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
 """
     getri!(A, ipiv)
@@ -1034,8 +1034,8 @@ for (gesvx, elty) in
         #    $                   BERR( * ), C( * ), FERR( * ), R( * ),
         #    $                   WORK( * ), X( LDX, *
         #
-        function gesvx!(fact::Char, trans::Char, A::AbstractMatrix{$elty},
-                        AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::Char,
+        function gesvx!(fact::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
+                        AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::AbstractChar,
                         R::AbstractVector{$elty}, C::AbstractVector{$elty}, B::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkstride1(ipiv, R, C, B)
@@ -1103,8 +1103,8 @@ for (gesvx, elty, relty) in
         #    $                   RWORK( * )
         #     COMPLEX*16         A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
         #    $                   WORK( * ), X( LDX, * )
-        function gesvx!(fact::Char, trans::Char, A::AbstractMatrix{$elty},
-                        AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::Char,
+        function gesvx!(fact::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
+                        AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::AbstractChar,
                         R::AbstractVector{$relty}, C::AbstractVector{$relty}, B::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkstride1(A, AF, ipiv, R, C, B)
@@ -1179,8 +1179,8 @@ condition number of `A` after equilbrating; `ferr`, the forward error bound for
 each solution vector in `X`; `berr`, the forward error bound for each solution
 vector in `X`; and `work`, the reciprocal pivot growth factor.
 """
-gesvx!(fact::Char, trans::Char, A::AbstractMatrix, AF::AbstractMatrix,
-    ipiv::AbstractVector{BlasInt}, equed::Char, R::AbstractVector, C::AbstractVector, B::AbstractVecOrMat)
+gesvx!(fact::AbstractChar, trans::AbstractChar, A::AbstractMatrix, AF::AbstractMatrix,
+    ipiv::AbstractVector{BlasInt}, equed::AbstractChar, R::AbstractVector, C::AbstractVector, B::AbstractVecOrMat)
 
 """
     gesvx!(A, B)
@@ -1473,7 +1473,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
-        function geev!(jobvl::Char, jobvr::Char, A::AbstractMatrix{$elty})
+        function geev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
@@ -1529,7 +1529,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #      INTEGER            IWORK( * )
         #      DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
         #                        VT( LDVT, * ), WORK( * )
-        function gesdd!(job::Char, A::AbstractMatrix{$elty})
+        function gesdd!(job::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             m, n   = size(A)
             minmn  = min(m, n)
@@ -1609,7 +1609,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
         #      $                   VT( LDVT, * ), WORK( * )
-        function gesvd!(jobu::Char, jobvt::Char, A::AbstractMatrix{$elty})
+        function gesvd!(jobu::AbstractChar, jobvt::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             m, n   = size(A)
             minmn  = min(m, n)
@@ -1677,7 +1677,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #       DOUBLE PRECISION   ALPHA( * ), BETA( * ), RWORK( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
         #      $                   U( LDU, * ), V( LDV, * ), WORK( * )
-        function ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
             if size(B, 2) != n
@@ -1752,7 +1752,7 @@ aren't computed. If `jobvl = V` or `jobvr = V`, the corresponding
 eigenvectors are computed. Returns the eigenvalues in `W`, the right
 eigenvectors in `VR`, and the left eigenvectors in `VL`.
 """
-geev!(jobvl::Char, jobvr::Char, A::AbstractMatrix)
+geev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix)
 
 """
     gesdd!(job, A) -> (U, S, VT)
@@ -1764,7 +1764,7 @@ are computed. If `job = O`, `A` is overwritten with the columns of (thin) `U`
 and the rows of (thin) `V'`. If `job = S`, the columns of (thin) `U` and the
 rows of (thin) `V'` are computed and returned separately.
 """
-gesdd!(job::Char, A::AbstractMatrix)
+gesdd!(job::AbstractChar, A::AbstractMatrix)
 
 """
     gesvd!(jobu, jobvt, A) -> (U, S, VT)
@@ -1780,7 +1780,7 @@ computed and returned separately. `jobu` and `jobvt` can't both be `O`.
 
 Returns `U`, `S`, and `Vt`, where `S` are the singular values of `A`.
 """
-gesvd!(jobu::Char, jobvt::Char, A::AbstractMatrix)
+gesvd!(jobu::AbstractChar, jobvt::AbstractChar, A::AbstractMatrix)
 
 """
     ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
@@ -1793,13 +1793,13 @@ the orthogonal/unitary matrix `Q` is computed. If `jobu`, `jobv` or `jobq` is
 `N`, that matrix is not computed. This function is only available in LAPACK
 versions prior to 3.6.0.
 """
-ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::AbstractMatrix, B::AbstractMatrix)
+ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 
 for (f, elty) in ((:dggsvd3_, :Float64),
                   (:sggsvd3_, :Float32))
     @eval begin
-        function ggsvd3!(jobu::Char, jobv::Char, jobq::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function ggsvd3!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
             if size(B, 2) != n
@@ -1855,7 +1855,7 @@ end
 for (f, elty, relty) in ((:zggsvd3_, :ComplexF64, :Float64),
                          (:cggsvd3_, :ComplexF32, :Float32))
     @eval begin
-        function ggsvd3!(jobu::Char, jobv::Char, jobq::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function ggsvd3!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
             if size(B, 2) != n
@@ -1942,7 +1942,7 @@ for (geevx, ggev, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), RCONDE( * ), RCONDV( * ),
         #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
-        function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::AbstractMatrix{$elty})
+        function geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix{$elty})
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lda = max(1,stride(A,2))
@@ -2020,7 +2020,7 @@ for (geevx, ggev, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
         #      $                   B( LDB, * ), BETA( * ), VL( LDVL, * ),
         #      $                   VR( LDVR, * ), WORK( * )
-        function ggev!(jobvl::Char, jobvr::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A,B)
             n, m = checksquare(A,B)
             if n != m
@@ -2093,7 +2093,7 @@ for (geevx, ggev, elty, relty) in
         #      $                   SCALE( * )
         #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   W( * ), WORK( * )
-        function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::AbstractMatrix{$elty})
+        function geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix{$elty})
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lda = max(1,stride(A,2))
@@ -2166,7 +2166,7 @@ for (geevx, ggev, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
         #      $                   BETA( * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WORK( * )
-        function ggev!(jobvl::Char, jobvr::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
@@ -2238,7 +2238,7 @@ condition numbers are computed for the right eigenvectors and the
 eigenvectors. If `sense = E,B`, the right and left eigenvectors must be
 computed.
 """
-geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::AbstractMatrix)
+geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix)
 
 """
     ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
@@ -2248,7 +2248,7 @@ the left eigenvectors aren't computed. If `jobvr = N`, the right
 eigenvectors aren't computed. If `jobvl = V` or `jobvr = V`, the
 corresponding eigenvectors are computed.
 """
-ggev!(jobvl::Char, jobvr::Char, A::AbstractMatrix, B::AbstractMatrix)
+ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 # One step incremental condition estimation of max/min singular values
 for (laic1, elty) in
@@ -2387,7 +2387,7 @@ for (gtsv, gttrf, gttrs, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * ), DU2( * )
-        function gttrs!(trans::Char, dl::AbstractVector{$elty}, d::AbstractVector{$elty},
+        function gttrs!(trans::AbstractChar, dl::AbstractVector{$elty}, d::AbstractVector{$elty},
                         du::AbstractVector{$elty}, du2::AbstractVector{$elty}, ipiv::AbstractVector{BlasInt},
                         B::AbstractVecOrMat{$elty})
             chktrans(trans)
@@ -2443,7 +2443,7 @@ Solves the equation `A * X = B` (`trans = N`), `transpose(A) * X = B` (`trans = 
 or `adjoint(A) * X = B` (`trans = C`) using the `LU` factorization computed by
 `gttrf!`. `B` is overwritten with the solution `X`.
 """
-gttrs!(trans::Char, dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector,
+gttrs!(trans::AbstractChar, dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector,
        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
@@ -2596,7 +2596,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      INTEGER            INFO, K, LDA, LDC, LWORK, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function ormlq!(side::Char, trans::Char, A::AbstractMatrix{$elty},
+        function ormlq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
                         tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
@@ -2642,7 +2642,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      INTEGER            INFO, K, LDA, LDC, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function ormqr!(side::Char, trans::Char, A::AbstractMatrix{$elty},
+        function ormqr!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
                         tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
@@ -2691,7 +2691,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      INTEGER            INFO, K, LDA, LDC, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function ormql!(side::Char, trans::Char, A::AbstractMatrix{$elty},
+        function ormql!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
                         tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
@@ -2740,7 +2740,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      INTEGER            INFO, K, LDA, LDC, LWORK, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function ormrq!(side::Char, trans::Char, A::AbstractMatrix{$elty},
+        function ormrq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix{$elty},
                         tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
@@ -2779,7 +2779,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             C
         end
 
-        function gemqrt!(side::Char, trans::Char, V::AbstractMatrix{$elty}, T::AbstractMatrix{$elty}, C::AbstractVecOrMat{$elty})
+        function gemqrt!(side::AbstractChar, trans::AbstractChar, V::AbstractMatrix{$elty}, T::AbstractMatrix{$elty}, C::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
             chkstride1(V, T, C)
@@ -2874,7 +2874,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `LQ` factorization of `A` computed using
 `gelqf!`. `C` is overwritten.
 """
-ormlq!(side::Char, trans::Char, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormlq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
 
 """
     ormqr!(side, trans, A, tau, C)
@@ -2884,7 +2884,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrf!`. `C` is overwritten.
 """
-ormqr!(side::Char, trans::Char, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormqr!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
 
 """
     ormql!(side, trans, A, tau, C)
@@ -2894,7 +2894,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QL` factorization of `A` computed using
 `geqlf!`. `C` is overwritten.
 """
-ormql!(side::Char, trans::Char, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormql!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
 
 """
     ormrq!(side, trans, A, tau, C)
@@ -2904,7 +2904,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `RQ` factorization of `A` computed using
 `gerqf!`. `C` is overwritten.
 """
-ormrq!(side::Char, trans::Char, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
+ormrq!(side::AbstractChar, trans::AbstractChar, A::AbstractMatrix, tau::AbstractVector, C::AbstractVecOrMat)
 
 """
     gemqrt!(side, trans, V, T, C)
@@ -2914,7 +2914,7 @@ Computes `Q * C` (`trans = N`), `transpose(Q) * C` (`trans = T`), `adjoint(Q) * 
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrt!`. `C` is overwritten.
 """
-gemqrt!(side::Char, trans::Char, V::AbstractMatrix, T::AbstractMatrix, C::AbstractVecOrMat)
+gemqrt!(side::AbstractChar, trans::AbstractChar, V::AbstractMatrix, T::AbstractMatrix, C::AbstractVecOrMat)
 
 # (PO) positive-definite symmetric matrices,
 for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
@@ -2929,7 +2929,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function posv!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function posv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A, B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -2952,7 +2952,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function potrf!(uplo::Char, A::AbstractMatrix{$elty})
+        function potrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             checksquare(A)
             chkuplo(uplo)
@@ -2977,7 +2977,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       INTEGER            INFO, LDA, N
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function potri!(uplo::Char, A::AbstractMatrix{$elty})
+        function potri!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             chkuplo(uplo)
             info = Ref{BlasInt}()
@@ -2995,7 +2995,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function potrs!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function potrs!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A, B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3026,7 +3026,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), WORK( 2*N )
         #       INTEGER            PIV( N )
-        function pstrf!(uplo::Char, A::AbstractMatrix{$elty}, tol::Real)
+        function pstrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, tol::Real)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3053,7 +3053,7 @@ of `A` is computed. If `uplo = L` the lower Cholesky decomposition of `A`
 is computed. `A` is overwritten by its Cholesky decomposition. `B` is
 overwritten with the solution `X`.
 """
-posv!(uplo::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+posv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 """
     potrf!(uplo, A)
@@ -3062,7 +3062,7 @@ Computes the Cholesky (upper if `uplo = U`, lower if `uplo = L`)
 decomposition of positive-definite matrix `A`. `A` is overwritten and
 returned with an info code.
 """
-potrf!(uplo::Char, A::AbstractMatrix)
+potrf!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
     potri!(uplo, A)
@@ -3073,7 +3073,7 @@ decomposition.
 
 `A` is overwritten by its inverse and returned.
 """
-potri!(uplo::Char, A::AbstractMatrix)
+potri!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
     potrs!(uplo, A, B)
@@ -3084,7 +3084,7 @@ positive definite matrix whose Cholesky decomposition was computed by
 computed. If `uplo = L` the lower Cholesky decomposition of `A` was
 computed. `B` is overwritten with the solution `X`.
 """
-potrs!(uplo::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+potrs!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 """
     pstrf!(uplo, A, tol) -> (A, piv, rank, info)
@@ -3097,7 +3097,7 @@ Returns `A`, the pivots `piv`, the rank of `A`, and an `info` code. If `info = 0
 the factorization succeeded. If `info = i > 0 `, then `A` is indefinite or
 rank-deficient.
 """
-pstrf!(uplo::Char, A::AbstractMatrix, tol::Real)
+pstrf!(uplo::AbstractChar, A::AbstractMatrix, tol::Real)
 
 # (PT) positive-definite, symmetric, tri-diagonal matrices
 # Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
@@ -3210,7 +3210,7 @@ for (pttrs, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   D( * )
         #       COMPLEX*16         B( LDB, * ), E( * )
-        function pttrs!(uplo::Char, D::AbstractVector{$relty}, E::AbstractVector{$elty}, B::AbstractVecOrMat{$elty})
+        function pttrs!(uplo::AbstractChar, D::AbstractVector{$relty}, E::AbstractVector{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(B, D, E)
             chkuplo(uplo)
             n = length(D)
@@ -3253,7 +3253,7 @@ for (trtri, trtrs, elty) in
         #      INTEGER            INFO, LDA, N
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * )
-        function trtri!(uplo::Char, diag::Char, A::AbstractMatrix{$elty})
+        function trtri!(uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3274,7 +3274,7 @@ for (trtri, trtrs, elty) in
         #       INTEGER            INFO, LDA, LDB, N, NRHS
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function trtrs!(uplo::Char, trans::Char, diag::Char,
+        function trtrs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar,
                         A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chktrans(trans)
             chkdiag(diag)
@@ -3304,7 +3304,7 @@ triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
 If `diag = U`, all diagonal elements of `A` are one. `A` is overwritten
 with its inverse.
 """
-trtri!(uplo::Char, diag::Char, A::AbstractMatrix)
+trtri!(uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix)
 
 """
     trtrs!(uplo, trans, diag, A, B)
@@ -3315,7 +3315,7 @@ triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
 If `diag = U`, all diagonal elements of `A` are one. `B` is overwritten
 with the solution `X`.
 """
-trtrs!(uplo::Char, trans::Char, diag::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+trtrs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 #Eigenvector computation and condition number estimation
 for (trcon, trevc, trrfs, elty) in
@@ -3331,7 +3331,7 @@ for (trcon, trevc, trrfs, elty) in
         # .. Array Arguments ..
         # INTEGER            IWORK( * )
         # DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function trcon!(norm::Char, uplo::Char, diag::Char, A::AbstractMatrix{$elty})
+        function trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             chkdiag(diag)
             n = checksquare(A)
@@ -3360,7 +3360,7 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::Char, howmny::Char, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             # Extract
@@ -3418,7 +3418,7 @@ for (trcon, trevc, trrfs, elty) in
         # INTEGER            IWORK( * )
         # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
         #$                   WORK( * ), X( LDX, * )
-        function trrfs!(uplo::Char, trans::Char, diag::Char,
+        function trrfs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar,
                 A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, X::AbstractVecOrMat{$elty},
                 Ferr::AbstractVector{$elty} = similar(B, $elty, size(B,2)),
                 Berr::AbstractVector{$elty} = similar(B, $elty, size(B,2)))
@@ -3460,7 +3460,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         # .. Array Arguments ..
         # DOUBLE PRECISION   RWORK( * )
         # COMPLEX*16         A( LDA, * ), WORK( * )
-        function trcon!(norm::Char, uplo::Char, diag::Char, A::AbstractMatrix{$elty})
+        function trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3490,7 +3490,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         # DOUBLE PRECISION   RWORK( * )
         # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::Char, howmny::Char, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             # Extract
@@ -3548,7 +3548,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         # INTEGER            IWORK( * )
         # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
         #$                   WORK( * ), X( LDX, * )
-        function trrfs!(uplo::Char, trans::Char, diag::Char,
+        function trrfs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar,
                         A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, X::AbstractVecOrMat{$elty},
                         Ferr::AbstractVector{$relty} = similar(B, $relty, size(B,2)),
                         Berr::AbstractVector{$relty} = similar(B, $relty, size(B,2)))
@@ -3586,7 +3586,7 @@ diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
 If `norm = I`, the condition number is found in the infinity norm. If
 `norm = O` or `1`, the condition number is found in the one norm.
 """
-trcon!(norm::Char, uplo::Char, diag::Char, A::AbstractMatrix)
+trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix)
 
 """
     trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))
@@ -3599,7 +3599,7 @@ eigenvectors are found and backtransformed using `VL` and `VR`. If
 `howmny = S`, only the eigenvectors corresponding to the values in
 `select` are computed.
 """
-trevc!(side::Char, howmny::Char, select::AbstractVector{BlasInt}, T::AbstractMatrix,
+trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix,
         VL::AbstractMatrix = similar(T), VR::AbstractMatrix = similar(T))
 
 """
@@ -3614,7 +3614,7 @@ diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
 `Ferr` and `Berr` are optional inputs. `Ferr` is the forward error and
 `Berr` is the backward error, each component-wise.
 """
-trrfs!(uplo::Char, trans::Char, diag::Char, A::AbstractMatrix, B::AbstractVecOrMat,
+trrfs!(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat,
        X::AbstractVecOrMat, Ferr::AbstractVector, Berr::AbstractVector)
 
 ## (ST) Symmetric tridiagonal - eigendecomposition
@@ -3625,7 +3625,7 @@ for (stev, stebz, stegr, stein, elty) in
 #     , (:cstev_,:ComplexF32)
      )
     @eval begin
-        function stev!(job::Char, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
+        function stev!(job::AbstractChar, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
             chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
@@ -3646,7 +3646,7 @@ for (stev, stebz, stegr, stein, elty) in
         #*  matrix T.  The user may ask for all eigenvalues, all eigenvalues
         #*  in the half-open interval (VL, VU], or the IL-th through IU-th
         #*  eigenvalues.
-        function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
+        function stebz!(range::AbstractChar, order::AbstractChar, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
             chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
@@ -3676,7 +3676,7 @@ for (stev, stebz, stegr, stein, elty) in
             w[1:m[]], iblock[1:m[]], isplit[1:nsplit[1]]
         end
 
-        function stegr!(jobz::Char, range::Char, dv::AbstractVector{$elty}, ev::AbstractVector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
+        function stegr!(jobz::AbstractChar, range::AbstractChar, dv::AbstractVector{$elty}, ev::AbstractVector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
@@ -3767,7 +3767,7 @@ for (stev, stebz, stegr, stein, elty) in
         end
     end
 end
-stegr!(jobz::Char, dv::AbstractVector, ev::AbstractVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
+stegr!(jobz::AbstractChar, dv::AbstractVector, ev::AbstractVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
 
 # Allow user to skip specification of iblock and isplit
 stein!(dv::AbstractVector, ev::AbstractVector, w_in::AbstractVector) = stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
@@ -3782,7 +3782,7 @@ diagonal and `ev` as off-diagonal. If `job = N` only the eigenvalues are
 found and returned in `dv`. If `job = V` then the eigenvectors are also found
 and returned in `Zmat`.
 """
-stev!(job::Char, dv::AbstractVector, ev::AbstractVector)
+stev!(job::AbstractChar, dv::AbstractVector, ev::AbstractVector)
 
 """
     stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
@@ -3795,7 +3795,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 block. If `order = E`, they are ordered across all the blocks.
 `abstol` can be set as a tolerance for convergence.
 """
-stebz!(range::Char, order::Char, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector, ev::AbstractVector)
+stebz!(range::AbstractChar, order::AbstractChar, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector, ev::AbstractVector)
 
 """
     stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
@@ -3808,7 +3808,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 `il` and `iu` are found. The eigenvalues are returned in `w` and the eigenvectors
 in `Z`.
 """
-stegr!(jobz::Char, range::Char, dv::AbstractVector, ev::AbstractVector, vl::Real, vu::Real, il::Integer, iu::Integer)
+stegr!(jobz::AbstractChar, range::AbstractChar, dv::AbstractVector, ev::AbstractVector, vl::Real, vu::Real, il::Integer, iu::Integer)
 
 """
     stein!(dv, ev_in, w_in, iblock_in, isplit_in)
@@ -3834,7 +3834,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function syconv!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function syconv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3856,7 +3856,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
-        function sysv!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function sysv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3890,7 +3890,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytrf!(uplo::Char, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3922,7 +3922,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-#         function sytri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
+#         function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
 #             n = checksquare(A)
 #             chkuplo(uplo)
@@ -3951,7 +3951,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3974,7 +3974,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function sytrs!(uplo::Char, A::AbstractMatrix{$elty},
+        function sytrs!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4006,7 +4006,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
-        function sysv_rook!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function sysv_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4040,7 +4040,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytrf_rook!(uplo::Char, A::AbstractMatrix{$elty})
+        function sytrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4072,7 +4072,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytri_rook!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function sytri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4095,7 +4095,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function sytrs_rook!(uplo::Char, A::AbstractMatrix{$elty},
+        function sytrs_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4121,7 +4121,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         # .. Array Arguments ..
         # INTEGER            IPIV( * )
         # DOUBLE PRECISION   A( LDA, * ), E( * )
-        function syconvf_rook!(uplo::Char, way::Char,
+        function syconvf_rook!(uplo::AbstractChar, way::AbstractChar,
                                 A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt},
                                 e::AbstractVector{$elty} = Vector{$elty}(uninitialized, length(ipiv)))
             # extract
@@ -4170,7 +4170,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
        #        .. Array Arguments ..
        #        INTEGER            IPIV( * )
        #        COMPLEX*16         A( LDA, * ), WORK( * )
-        function syconv!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function syconv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4192,7 +4192,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function hesv!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function hesv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4226,7 +4226,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetrf!(uplo::Char, A::AbstractMatrix{$elty})
+        function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4256,7 +4256,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 # *     .. Array Arguments ..
 #       INTEGER            IPIV( * )
 #       COMPLEX*16         A( LDA, * ), WORK( * )
-#         function hetri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
+#         function hetri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
 #             n = checksquare(A)
 #             chkuplo(uplo)
@@ -4286,7 +4286,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function hetri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4308,7 +4308,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
-        function hetrs!(uplo::Char, A::AbstractMatrix{$elty},
+        function hetrs!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4338,7 +4338,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function hesv_rook!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function hesv_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4372,7 +4372,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetrf_rook!(uplo::Char, A::AbstractMatrix{$elty})
+        function hetrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4402,7 +4402,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetri_rook!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function hetri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4424,7 +4424,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
-        function hetrs_rook!(uplo::Char, A::AbstractMatrix{$elty},
+        function hetrs_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                              ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4455,7 +4455,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function sysv!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function sysv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4490,7 +4490,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytrf!(uplo::Char, A::AbstractMatrix{$elty})
+        function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4523,7 +4523,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 # *     .. Array Arguments ..
 #       INTEGER            IPIV( * )
 #       COMPLEX*16         A( LDA, * ), WORK( * )
-#         function sytri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
+#         function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
 #             n = checksquare(A)
 #             chkuplo(uplo)
@@ -4552,7 +4552,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytri!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4574,7 +4574,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
-        function sytrs!(uplo::Char, A::AbstractMatrix{$elty},
+        function sytrs!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4606,7 +4606,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function sysv_rook!(uplo::Char, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+        function sysv_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4641,7 +4641,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytrf_rook!(uplo::Char, A::AbstractMatrix{$elty})
+        function sytrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4674,7 +4674,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytri_rook!(uplo::Char, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+        function sytri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4696,7 +4696,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
-        function sytrs_rook!(uplo::Char, A::AbstractMatrix{$elty},
+        function sytrs_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                              ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             chkstride1(A,B,ipiv)
             n = checksquare(A)
@@ -4722,7 +4722,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         # .. Array Arguments ..
         # INTEGER            IPIV( * )
         # COMPLEX*16         A( LDA, * ), E( * )
-        function syconvf_rook!(uplo::Char, way::Char,
+        function syconvf_rook!(uplo::AbstractChar, way::AbstractChar,
                                 A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt},
                                 e::AbstractVector{$elty} = Vector{$elty}(uninitialized, length(ipiv)))
             chkstride1(A, ipiv, e)
@@ -4767,7 +4767,7 @@ is upper triangular. If `uplo = L`, it is lower triangular. `ipiv` is
 the pivot vector from the triangular factorization. `A` is overwritten
 by `L` and `D`.
 """
-syconv!(uplo::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+syconv!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
 
 """
     sysv!(uplo, A, B) -> (B, A, ipiv)
@@ -4778,7 +4778,7 @@ the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
 Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
 factorization.
 """
-sysv!(uplo::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+sysv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 """
     sytrf!(uplo, A) -> (A, ipiv, info)
@@ -4792,7 +4792,7 @@ the error code `info` which is a non-negative integer. If `info` is positive
 the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
-sytrf!(uplo::Char, A::AbstractMatrix)
+sytrf!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
     sytri!(uplo, A, ipiv)
@@ -4801,7 +4801,7 @@ Computes the inverse of a symmetric matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-sytri!(uplo::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+sytri!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
 
 """
     sytrs!(uplo, A, ipiv, B)
@@ -4811,7 +4811,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-sytrs!(uplo::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+sytrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
 
 """
@@ -4823,7 +4823,7 @@ the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
 Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
 factorization.
 """
-hesv!(uplo::Char, A::AbstractMatrix, B::AbstractVecOrMat)
+hesv!(uplo::AbstractChar, A::AbstractMatrix, B::AbstractVecOrMat)
 
 """
     hetrf!(uplo, A) -> (A, ipiv, info)
@@ -4837,7 +4837,7 @@ the error code `info` which is a non-negative integer. If `info` is positive
 the matrix is singular and the diagonal part of the factorization is exactly
 zero at position `info`.
 """
-hetrf!(uplo::Char, A::AbstractMatrix)
+hetrf!(uplo::AbstractChar, A::AbstractMatrix)
 
 """
     hetri!(uplo, A, ipiv)
@@ -4846,7 +4846,7 @@ Computes the inverse of a Hermitian matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-hetri!(uplo::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
+hetri!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt})
 
 """
     hetrs!(uplo, A, ipiv, B)
@@ -4856,7 +4856,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-hetrs!(uplo::Char, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
+hetrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
 # Symmetric (real) eigensolvers
 for (syev, syevr, sygvd, elty) in
@@ -4869,7 +4869,7 @@ for (syev, syevr, sygvd, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syev!(jobz::Char, uplo::Char, A::AbstractMatrix{$elty})
+        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             W     = similar(A, $elty, n)
@@ -4901,7 +4901,7 @@ for (syev, syevr, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            ISUPPZ( * ), IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )
-        function syevr!(jobz::Char, range::Char, uplo::Char, A::AbstractMatrix{$elty},
+        function syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = checksquare(A)
@@ -4950,7 +4950,7 @@ for (syev, syevr, sygvd, elty) in
             end
             w[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
         end
-        syevr!(jobz::Char, A::AbstractMatrix{$elty}) =
+        syevr!(jobz::AbstractChar, A::AbstractMatrix{$elty}) =
             syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 
         # Generalized eigenproblem
@@ -4963,7 +4963,7 @@ for (syev, syevr, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
-        function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
@@ -5013,7 +5013,7 @@ for (syev, syevr, sygvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syev!(jobz::Char, uplo::Char, A::AbstractMatrix{$elty})
+        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n = checksquare(A)
             W     = similar(A, $relty, n)
@@ -5048,7 +5048,7 @@ for (syev, syevr, sygvd, elty, relty) in
         #       INTEGER            ISUPPZ( * ), IWORK( * )
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * )
-        function syevr!(jobz::Char, range::Char, uplo::Char, A::AbstractMatrix{$elty},
+        function syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = checksquare(A)
@@ -5102,7 +5102,7 @@ for (syev, syevr, sygvd, elty, relty) in
             end
             w[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
         end
-        syevr!(jobz::Char, A::AbstractMatrix{$elty}) =
+        syevr!(jobz::AbstractChar, A::AbstractMatrix{$elty}) =
             syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 
         #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
@@ -5115,7 +5115,7 @@ for (syev, syevr, sygvd, elty, relty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
@@ -5164,7 +5164,7 @@ Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
 of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
 """
-syev!(jobz::Char, uplo::Char, A::AbstractMatrix)
+syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
 
 """
     syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)
@@ -5179,7 +5179,7 @@ found. `abstol` can be set as a tolerance for convergence.
 
 The eigenvalues are returned in `W` and the eigenvectors in `Z`.
 """
-syevr!(jobz::Char, range::Char, uplo::Char, A::AbstractMatrix,
+syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix,
        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
 
 """
@@ -5194,7 +5194,7 @@ of `A` and `B` are used. If `uplo = L`, the lower triangles of `A` and
 `A * B * x = lambda * x`. If `itype = 3`, the problem to solve is
 `B * A * x = lambda * x`.
 """
-sygvd!(itype::Integer, jobz::Char, uplo::Char, A::AbstractMatrix, B::AbstractMatrix)
+sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 ## (BD) Bidiagonal matrices - singular value decomposition
 for (bdsqr, relty, elty) in
@@ -5203,7 +5203,7 @@ for (bdsqr, relty, elty) in
      (:zbdsqr_,:Float64,:ComplexF64),
      (:cbdsqr_,:Float32,:ComplexF32))
     @eval begin
-        function bdsqr!(uplo::Char, d::AbstractVector{$relty}, e_::AbstractVector{$relty},
+        function bdsqr!(uplo::AbstractChar, d::AbstractVector{$relty}, e_::AbstractVector{$relty},
                         Vt::AbstractMatrix{$elty}, U::AbstractMatrix{$elty}, C::AbstractMatrix{$elty})
             chkstride1(d, e_, Vt, U, C)
             # Extract number
@@ -5255,7 +5255,7 @@ compute the product `Q' * C`.
 
 Returns the singular values in `d`, and the matrix `C` overwritten with `Q' * C`.
 """
-bdsqr!(uplo::Char, d::AbstractVector, e_::AbstractVector, Vt::AbstractMatrix, U::AbstractMatrix, C::AbstractMatrix)
+bdsqr!(uplo::AbstractChar, d::AbstractVector, e_::AbstractVector, Vt::AbstractMatrix, U::AbstractMatrix, C::AbstractMatrix)
 
 #Defined only for real types
 for (bdsdc, elty) in
@@ -5273,7 +5273,7 @@ for (bdsdc, elty) in
         #      INTEGER            IQ( * ), IWORK( * )
         #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
         #     $                   VT( LDVT, * ), WORK( * )
-        function bdsdc!(uplo::Char, compq::Char, d::AbstractVector{$elty}, e_::AbstractVector{$elty})
+        function bdsdc!(uplo::AbstractChar, compq::AbstractChar, d::AbstractVector{$elty}, e_::AbstractVector{$elty})
             chkstride1(d, e_)
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             chkuplo(uplo)
@@ -5326,7 +5326,7 @@ and vectors are found in compact form. Only works for real types.
 Returns the singular values in `d`, and if `compq = P`, the compact singular
 vectors in `iq`.
 """
-bdsdc!(uplo::Char, compq::Char, d::AbstractVector, e_::AbstractVector)
+bdsdc!(uplo::AbstractChar, compq::AbstractChar, d::AbstractVector, e_::AbstractVector)
 
 for (gecon, elty) in
     ((:dgecon_,:Float64),
@@ -5342,7 +5342,7 @@ for (gecon, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function gecon!(normtype::Char, A::AbstractMatrix{$elty}, anorm::$elty)
+        function gecon!(normtype::AbstractChar, A::AbstractMatrix{$elty}, anorm::$elty)
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
@@ -5376,7 +5376,7 @@ for (gecon, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function gecon!(normtype::Char, A::AbstractMatrix{$elty}, anorm::$relty)
+        function gecon!(normtype::AbstractChar, A::AbstractMatrix{$elty}, anorm::$relty)
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
@@ -5404,7 +5404,7 @@ the condition number is found in the infinity norm. If `normtype = O` or
 `1`, the condition number is found in the one norm. `A` must be the
 result of `getrf!` and `anorm` is the norm of `A` in the relevant norm.
 """
-gecon!(normtype::Char, A::AbstractMatrix, anorm)
+gecon!(normtype::AbstractChar, A::AbstractMatrix, anorm)
 
 for (gehrd, elty) in
     ((:dgehrd_,:Float64),
@@ -5515,7 +5515,7 @@ for (ormhr, elty) in
         # ..
         # .. Array Arguments ..
         # DOUBLE PRECISION   a( lda, * ), c( ldc, * ), tau( * ), work( * )
-        function ormhr!(side::Char, trans::Char, ilo::Integer, ihi::Integer, A::AbstractMatrix{$elty},
+        function ormhr!(side::AbstractChar, trans::AbstractChar, ilo::Integer, ihi::Integer, A::AbstractMatrix{$elty},
             tau::AbstractVector{$elty}, C::AbstractVecOrMat{$elty})
 
             chkstride1(A, tau, C)
@@ -5565,7 +5565,7 @@ for (gees, gges, elty) in
         #     LOGICAL            BWORK( * )
         #     DOUBLE PRECISION   A( LDA, * ), VS( LDVS, * ), WI( * ), WORK( * ),
         #    $                   WR( * )
-        function gees!(jobvs::Char, A::AbstractMatrix{$elty})
+        function gees!(jobvs::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n     = checksquare(A)
             sdim  = Vector{BlasInt}(uninitialized, 1)
@@ -5604,7 +5604,7 @@ for (gees, gges, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
         #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
         #      $                   VSR( LDVSR, * ), WORK( * )
-        function gges!(jobvsl::Char, jobvsr::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
@@ -5658,7 +5658,7 @@ for (gees, gges, elty, relty) in
         #       LOGICAL            BWORK( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
-        function gees!(jobvs::Char, A::AbstractMatrix{$elty})
+        function gees!(jobvs::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
             n     = checksquare(A)
             sort  = 'N'
@@ -5699,7 +5699,7 @@ for (gees, gges, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
         #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
         #      $                   WORK( * )
-        function gges!(jobvsl::Char, jobvsr::Char, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+        function gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
@@ -5750,7 +5750,7 @@ vectors (`jobvs = V`) of matrix `A`. `A` is overwritten by its Schur form.
 Returns `A`, `vs` containing the Schur vectors, and `w`, containing the
 eigenvalues.
 """
-gees!(jobvs::Char, A::AbstractMatrix)
+gees!(jobvs::AbstractChar, A::AbstractMatrix)
 
 
 """
@@ -5763,7 +5763,7 @@ vectors (`jobsvl = V`), or right Schur vectors (`jobvsr = V`) of `A` and
 The generalized eigenvalues are returned in `alpha` and `beta`. The left Schur
 vectors are returned in `vsl` and the right Schur vectors are returned in `vsr`.
 """
-gges!(jobvsl::Char, jobvsr::Char, A::AbstractMatrix, B::AbstractMatrix)
+gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 for (trexc, trsen, tgsen, elty) in
     ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),
@@ -5775,7 +5775,7 @@ for (trexc, trsen, tgsen, elty) in
         # *     ..
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
-        function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+        function trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
             chkstride1(T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -5806,7 +5806,7 @@ for (trexc, trsen, tgsen, elty) in
         #       LOGICAL            SELECT( * )
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
-        function trsen!(job::Char, compq::Char, select::AbstractVector{BlasInt},
+        function trsen!(job::AbstractChar, compq::AbstractChar, select::AbstractVector{BlasInt},
                         T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
             chkstride1(T, Q, select)
             n = checksquare(T)
@@ -5927,7 +5927,7 @@ for (trexc, trsen, tgsen, elty, relty) in
         #      ..
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
-        function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+        function trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
             chkstride1(T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -5956,7 +5956,7 @@ for (trexc, trsen, tgsen, elty, relty) in
         #      .. Array Arguments ..
         #      LOGICAL            SELECT( * )
         #      COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
-        function trsen!(job::Char, compq::Char, select::AbstractVector{BlasInt},
+        function trsen!(job::AbstractChar, compq::AbstractChar, select::AbstractVector{BlasInt},
                         T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
             chkstride1(select, T, Q)
             n = checksquare(T)
@@ -6068,7 +6068,7 @@ Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
 vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
 and `ilst` specify the reordering of the vectors.
 """
-trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix, Q::AbstractMatrix)
+trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix, Q::AbstractMatrix)
 
 """
     trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)
@@ -6086,7 +6086,7 @@ Returns `T`, `Q`, reordered eigenvalues in `w`, the condition number of the
 cluster of eigenvalues `s`, and the condition number of the invariant subspace
 `sep`.
 """
-trsen!(compq::Char, job::Char, select::AbstractVector{BlasInt}, T::AbstractMatrix, Q::AbstractMatrix)
+trsen!(compq::AbstractChar, job::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix, Q::AbstractMatrix)
 
 """
     tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
@@ -6101,7 +6101,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                    (:ztrsyl_, :ComplexF64, :Float64),
                    (:ctrsyl_, :ComplexF32, :Float32))
     @eval begin
-        function trsyl!(transa::Char, transb::Char, A::AbstractMatrix{$elty},
+        function trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix{$elty},
                         B::AbstractMatrix{$elty}, C::AbstractMatrix{$elty}, isgn::Int=1)
             chkstride1(A, B, C)
             m, n = checksquare(A, B)
@@ -6139,6 +6139,6 @@ transposed. Similarly for `transb` and `B`. If `isgn = 1`, the equation
 
 Returns `X` (overwriting `C`) and `scale`.
 """
-trsyl!(transa::Char, transb::Char, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
+trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
 
 end # module

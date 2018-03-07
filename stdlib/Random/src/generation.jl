@@ -156,9 +156,9 @@ rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
-function rand(r::AbstractRNG, ::SamplerType{Char})
+function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     c = rand(r, 0x00000000:0x0010f7ff)
-    (c < 0xd800) ? Char(c) : Char(c+0x800)
+    (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
 

@@ -247,7 +247,7 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
