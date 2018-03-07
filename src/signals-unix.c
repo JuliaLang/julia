@@ -25,7 +25,6 @@
 #define HAVE_KEVENT
 #elif defined(__FreeBSD__) // generic bsd
 #define HAVE_ITIMER
-#define HAVE_KEVENT
 #else // generic linux
 #define HAVE_TIMER
 #endif
@@ -81,7 +80,7 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #endif
 }
 
-static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
+static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
     // sigreturn oriented programming mitigation can work against us
@@ -154,17 +153,21 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
 #else
 #warning "julia: throw-in-context not supported on this platform"
     // TODO Add support for PowerPC(64)?
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
     fptr();
 #endif
 }
 
-static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, void *sigctx)
+static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx)
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                           jl_to_bt_context(sigctx));
     ptls->exception_in_transit = e;
-    jl_call_in_ctx(ptls, &jl_rethrow, sigctx);
+    jl_call_in_ctx(ptls, &jl_rethrow, sig, sigctx);
 }
 
 static pthread_t signals_thread;
@@ -200,16 +203,6 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     // fall-through return to re-execute faulting statement (but without the error handler)
 }
 
-static void jl_unblock_signal(int sig)
-{
-    // Put in a separate function to save some stack space since
-    // sigset_t can be pretty big.
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, sig);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-}
-
 #if defined(HAVE_MACH)
 #include <signals-mach.c>
 #else
@@ -233,7 +226,6 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     assert(sig == SIGSEGV || sig == SIGBUS);
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
-        jl_unblock_signal(sig);
 #ifdef JULIA_ENABLE_THREADING
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
@@ -245,13 +237,12 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ptls, jl_interrupt_exception, context);
+            jl_throw_in_ctx(ptls, jl_interrupt_exception, sig, context);
         }
         return;
     }
     if (ptls->safe_restore || is_addr_on_stack(ptls, info->si_addr)) { // stack overflow, or restarting jl_
-        jl_unblock_signal(sig);
-        jl_throw_in_ctx(ptls, jl_stackovf_exception, context);
+        jl_throw_in_ctx(ptls, jl_stackovf_exception, sig, context);
     }
     else if (jl_is_on_sigstack(ptls, info->si_addr, context)) {
         // This mainly happens when one of the finalizers during final cleanup
@@ -263,13 +254,11 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         _exit(sig + 128);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
-        jl_unblock_signal(sig);
-        jl_throw_in_ctx(ptls, jl_readonlymemory_exception, context);
+        jl_throw_in_ctx(ptls, jl_readonlymemory_exception, sig, context);
     }
     else {
 #ifdef SEGV_EXCEPTION
-        jl_unblock_signal(sig);
-        jl_throw_in_ctx(ptls, jl_segv_exception, context);
+        jl_throw_in_ctx(ptls, jl_segv_exception, sig, context);
 #else
         sigdie_handler(sig, info, context);
 #endif
@@ -386,7 +375,6 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     else
 #endif
     if (request == 2) {
-        jl_unblock_signal(sig);
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
             jl_safepoint_consume_sigint();
@@ -394,12 +382,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ptls, jl_interrupt_exception, ctx);
+            jl_throw_in_ctx(ptls, jl_interrupt_exception, sig, ctx);
         }
     }
     else if (request == 3) {
-        jl_unblock_signal(sig);
-        jl_call_in_ctx(ptls, jl_exit_thread0_cb, ctx);
+        jl_call_in_ctx(ptls, jl_exit_thread0_cb, sig, ctx);
     }
 }
 
@@ -585,7 +572,7 @@ static void *signal_listener(void *arg)
         errno = 0;
 #ifdef HAVE_KEVENT
         if (sigqueue != -1) {
-            int nevents =  kevent(sigqueue, NULL, 0, &ev, 1, NULL);
+            int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
             if (nevents == -1) {
                 if (errno == EINTR)
                     continue;
@@ -622,6 +609,7 @@ static void *signal_listener(void *arg)
         profile = (sig == SIGUSR1);
 #  endif
 #endif
+
         if (sig == SIGINT) {
             if (jl_ignore_sigint()) {
                 continue;
@@ -733,8 +721,7 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_unblock_signal(sig);
-    jl_throw_in_ctx(ptls, jl_diverror_exception, context);
+    jl_throw_in_ctx(ptls, jl_diverror_exception, sig, context);
 }
 
 static void sigint_handler(int sig)
