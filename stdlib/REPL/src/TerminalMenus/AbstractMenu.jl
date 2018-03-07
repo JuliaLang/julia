@@ -80,7 +80,7 @@ options(m::AbstractMenu) = error("unimplemented")
     writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
 
 Write the option at index `idx` to the buffer. If cursor is `true` display the cursor.
-""" 
+"""
 function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
     error("unimplemented")
 end
