@@ -3105,13 +3105,13 @@ function hcat(X::SparseMatrixCSC...)
 end
 
 """
-    blkdiag(A...)
+    blockdiag(A...)
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
 # Examples
 ```jldoctest
-julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
+julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
 5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
   [1, 1]  =  2
   [2, 2]  =  2
@@ -3120,7 +3120,7 @@ julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
   [5, 5]  =  4
 ```
 """
-function blkdiag(X::SparseMatrixCSC...)
+function blockdiag(X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
