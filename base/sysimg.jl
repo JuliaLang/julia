@@ -248,6 +248,10 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 include("osutils.jl")
 include("c.jl")
 
+# inlucde the runtime library
+include("rtlib/RTLIB.jl")
+using .RTLIB
+
 # Core I/O
 include("io.jl")
 include("iostream.jl")
