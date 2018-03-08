@@ -412,6 +412,8 @@ function Matrix(S::SparseMatrixCSC{Tv}) where Tv
 end
 Array(S::SparseMatrixCSC) = Matrix(S)
 
+convert(T::Type{<:SparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
+
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float.(S.nzval))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
 
