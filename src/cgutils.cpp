@@ -507,6 +507,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
         return T_int32;
     if (bt == (jl_value_t*)jl_int64_type)
         return T_int64;
+    if (bt == (jl_value_t*)jl_float16_type)
+        return T_float16;
     if (bt == (jl_value_t*)jl_float32_type)
         return T_float32;
     if (bt == (jl_value_t*)jl_float64_type)

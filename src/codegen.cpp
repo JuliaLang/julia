@@ -157,8 +157,6 @@ extern void _chkstk(void);
 #define __alignof__ __alignof
 #endif
 
-#define DISABLE_FLOAT16
-
 // llvm state
 JL_DLLEXPORT LLVMContext jl_LLVMContext;
 static bool nested_compile = false;
