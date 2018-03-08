@@ -33,14 +33,14 @@ end
 
 ### General Methods for Ref{T} type
 
-eltype(x::Type{Ref{T}}) where {T} = T
-convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
+eltype(x::Type{<:Ref{T}}) where {T} = T
+convert(::Type{<:Ref{T}}, x::Ref{T}) where {T} = x
 
 # create Ref objects for general object conversion
-unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
-unsafe_convert(::Type{Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{<:Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{<:Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
 
-convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
+convert(::Type{<:Ref{T}}, x) where {T} = RefValue{T}(x)
 
 ### Methods for a Ref object that is backed by an array at index i
 struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
@@ -51,7 +51,7 @@ struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
 end
 RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
-convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
+convert(::Type{<:Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if datatype_pointerfree(RefValue{T})
