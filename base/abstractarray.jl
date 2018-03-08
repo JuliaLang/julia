@@ -128,7 +128,13 @@ prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
-elsize(::AbstractArray{T}) where {T} = sizeof(T)
+
+"""
+    Base.elsize(::Type{<:CustomArray})
+
+Return the distance (in bytes) between two successive elements with stride 1.
+"""
+elsize(a::AbstractArray) = elsize(typeof(a))
 
 """
     ndims(A::AbstractArray) -> Integer
@@ -286,6 +292,8 @@ stride(A::AbstractArray, k::Integer) = strides(A)[k]
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
+strides(a::DenseArray) = size_to_strides(1, size(a)...)
+stride(a::DenseArray, k::Integer) = ifelse(k == 1, 1, k == 2 ? size(a, 1) : strides(a)[k])
 
 function isassigned(a::AbstractArray, i::Int...)
     try
@@ -911,8 +919,17 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(linearindices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + memoffset(x, convert(Int, i))
 end
+"""
+    memoffset(A::AbstractArray, inds...)
+
+Returns the distance in memory from `pointer(A)` to `A[inds...]`.
+"""
+memoffset(A::Array, i::Int) = (i-1)*elsize(A)
+memoffset(A::AbstractArray, i::Int) = _memoffset(0, strides(A), Tuple(CartesianIndices(A)[i]), elsize(A))
+_memoffset(v, strides, I, elsize) = (@_inline_meta; _memoffset(v + strides[1]*(I[1]-1), tail(strides), tail(I), elsize))
+_memoffset(v, ::Tuple{}, ::Tuple{}, elsize) = v*elsize
 
 ## Approach:
 # We only define one fallback method on getindex for all argument types.

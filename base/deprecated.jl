@@ -1156,6 +1156,17 @@ end
 
 @deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
 
+# Issue #26072 Also remove default Base.eltype implementation
+function elsize(t::Type{<:AbstractArray{T}}) where T
+    depwarn("""
+    `Base.elsize(::Type{<:AbstractArray})` is deprecated for general arrays.
+    Specialize `Base.elsize(::Type{<:$(t.name)})` for that has the appropriate
+    representation in memory such that it represents the distance between a unit-stride.
+    Warning: inappropriately implementing this method may lead to incorrect results or segfaults.
+    """, :elsize)
+    sizeof(T)
+end
+
 @deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
 @deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)
 @deprecate lexcmp(x::Complex, y::Complex)             cmp((real(x),imag(x)), (real(y),imag(y)))

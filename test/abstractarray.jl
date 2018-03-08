@@ -772,7 +772,6 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
-    @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
 end
 
 @testset "Issue #17811" begin
@@ -881,4 +880,51 @@ end
     @test vcat(1:3, fill(1, (2,1))) == vcat([1:3;], fill(1, (2,1))) == reshape([1,2,3,1,1], 5,1)
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
+end
+
+struct StridedWrapper{T,N,S} <: AbstractArray{T,N}
+    A::S
+end
+StridedWrapper(S::AbstractArray{T,N}) where {T,N} = StridedWrapper{T,N,typeof(S)}(S)
+Base.IndexStyle(::Type{<:StridedWrapper}) = Base.IndexLinear()
+Base.size(S::StridedWrapper) = size(S.A)
+Base.getindex(S::StridedWrapper, i::Int) = S.A[i]
+Base.strides(S::StridedWrapper) = strides(S.A)
+Base.elsize(::Type{<:StridedWrapper{<:Any,<:Any,P}}) where {P} = Base.elsize(P)
+Base.unsafe_convert(::Type{Ptr{T}}, S::StridedWrapper) where {T} = Base.unsafe_convert(Ptr{T}, S.A)
+
+@testset "abstract pointer implementation" begin
+    for T in (Int16, Float64, Complex{Float64}, Union{Int16, Missing}, Union{Int16, Int128}, NTuple{7,UInt8})
+        local A = Array{T}(uninitialized,7,5,3)
+        @views for V in (A[:], A[:,:,:], reshape(A[:,:,:], :))
+            W = StridedWrapper(V)
+            for i in 1:length(A)
+                @test pointer(A, i) == pointer(V, i) == pointer(W, i)
+            end
+        end
+        @views for V in (A[end:-1:1], A[1:2:end], A[end:-3:1],
+                         A[1:3:end, 1:2:end, :], A[:, 1:3:end, 1:2:end],
+                         A[end:-3:1, end:-2:1, :], A[end:-1:1, 1:2:end, end:-1:1])
+            W = StridedWrapper(V)
+            for i in 1:length(V)
+                @test pointer(V, i) == pointer(W, i)
+            end
+        end
+    end
+    for T in (Int32, Float64, Complex{Float64})
+        local A = Array{T}(uninitialized,7,5,3)
+        for V in reinterpret.((UInt8,UInt16,UInt32), (A,))
+            W = StridedWrapper(V)
+            for i in 1:length(A)
+                j = Int((i-1)*sizeof(eltype(A))/sizeof(eltype(V))+1)
+                @test pointer(A, i) == pointer(V, j) == pointer(W, j)
+            end
+        end
+    end
+    local A = Array{Int}(uninitialized,7,5,3)
+    V = reinterpret(NTuple{7, UInt8}, A)
+    W = StridedWrapper(V)
+    for i in 1:length(A)
+        @test pointer(A, i) == pointer(V, i)+i-1 == pointer(W, i)+i-1
+    end
 end
