@@ -256,8 +256,10 @@ end
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
-    _linspace(Float64, start, stop, len, 1)
-## for Float16, Float32, and Float64 see twiceprecision.jl
+    _linspace(float(T), start, stop, len)
+## for Float16, Float32, and Float64 we hit twiceprecision.jl to lift to higher precision StepRangeLen
+# for all other types we fall back to a plain old LinRange
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where T = LinRange{T}(start, stop, len)
 
 function show(io::IO, r::LinRange)
     print(io, "range(")
