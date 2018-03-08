@@ -362,10 +362,7 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If `X` is an array, it must have the same number of elements as the product of the lengths of
-the indices: `prod(length(I_1), length(I_2), ..., length(I_n))`. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]`
-of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is not an array, its value
-is written to all referenced locations of `A`.
+The value of `X` is written to all referenced locations of `A`.
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as

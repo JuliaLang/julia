@@ -62,17 +62,15 @@ S4 = OffsetArray(view(reshape(Vector(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1)
 @test A[:, :] == S[:, :] == A
 
 A_3_3 = OffsetArray(Matrix{Int}(uninitialized, 3,3), (-2,-1))
-A_3_3[:, :] = reshape(1:9, 3, 3)
+A_3_3[:, :] .= reshape(1:9, axes(A_3_3)...)
 for i = 1:9 @test A_3_3[i] == i end
-A_3_3[-1:1, 0:2] = reshape(1:9, 3, 3)
-for i = 1:9 @test A_3_3[i] == i end
-A_3_3[:, :] = 1:9
-for i = 1:9 @test A_3_3[i] == i end
-A_3_3[-1:1, 0:2] = 1:9
-for i = 1:9 @test A_3_3[i] == i end
-A_3_3[:] = 1:9
-for i = 1:9 @test A_3_3[i] == i end
-A_3_3[1:9] = 1:9
+A_3_3[-1:1, 0:2] .= reshape(2:10, 3, 3)
+for i = 1:9 @test A_3_3[i] == i+1 end
+A_3_3 .= reshape(3:11, axes(A_3_3)...)
+for i = 1:9 @test A_3_3[i] == i+2 end
+A_3_3[:] .= 4:12
+for i = 1:9 @test A_3_3[i] == i+3 end
+A_3_3[1:9] .= 1:9
 for i = 1:9 @test A_3_3[i] == i end
 
 # CartesianIndexing

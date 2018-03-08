@@ -1370,7 +1370,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         else
             show_args = Vector{Any}(uninitialized, length(args) - 1)
             show_args[1] = args[1]
-            show_args[2:end] = args[3:end]
+            show_args[2:end] .= args[3:end]
             show_list(io, show_args, ' ', indent)
         end
 

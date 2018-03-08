@@ -154,7 +154,7 @@ Same as [`ordschur`](@ref) but overwrites the factorization `F`.
 """
 function ordschur!(schur::Schur, select::Union{Vector{Bool},BitVector})
     _, _, vals = ordschur!(schur.T, schur.Z, select)
-    schur.values[:] = vals
+    schur.values .= vals
     return schur
 end
 
@@ -240,8 +240,8 @@ Same as `ordschur` but overwrites the factorization `F`.
 """
 function ordschur!(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})
     _, _, α, β, _, _ = ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
-    gschur.α[:] = α
-    gschur.β[:] = β
+    gschur.α .= α
+    gschur.β .= β
     return gschur
 end
 

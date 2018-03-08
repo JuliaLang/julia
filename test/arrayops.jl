@@ -256,7 +256,7 @@ end
     @test reshape(A, Val(2))[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
-    tmp[rng...] = A[rng...]
+    tmp[rng...] .= A[rng...]
     @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
     @test cat([1,2],1,2,3.,4.,5.) == diagm(0 => [1,2,3.,4.,5.])
@@ -278,11 +278,11 @@ end
     @test b[1] == x[2,2] && b[2] == x[3,2]
 
     B = zeros(4,5)
-    B[:,3] = 1:4
+    B[:,3] .= 1:4
     @test B == [0 0 1 0 0; 0 0 2 0 0; 0 0 3 0 0; 0 0 4 0 0]
-    B[2,:] = 11:15
+    B[2,:] .= 11:15
     @test B == [0 0 1 0 0; 11 12 13 14 15; 0 0 3 0 0; 0 0 4 0 0]
-    B[[3,1],[2,4]] = [21 22; 23 24]
+    B[[3,1],[2,4]] .= [21 22; 23 24]
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 0 4 0 0]
     B[4,[2,3]] = 7
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
@@ -360,7 +360,7 @@ end
     @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
-    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    Xv[1:2, 2:5] .= A[2:3, 7:-2:1]
     @test X == Xv
     X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
     @test X == X2
@@ -616,7 +616,7 @@ Base.hash(::HashCollision, h::UInt) = h
 # All rows and columns unique
 let A, B, C, D
     A = fill(1., 10, 10)
-    A[diagind(A)] = shuffle!([1:10;])
+    A[diagind(A)] .= shuffle!([1:10;])
     @test unique(A, 1) == A
     @test unique(A, 2) == A
 
@@ -833,10 +833,10 @@ end
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
     A = Array{Int}(uninitialized, 2, 2, 2)
-    A[:, :, 1] = [1 2;
-                    3 4]
-    A[:, :, 2] = [5 6;
-                    7 8]
+    A[:, :, 1] .= [1 2;
+                   3 4]
+    A[:, :, 2] .= [5 6;
+                   7 8]
     R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
     @test R[1, 1, 1] == 1
     @test R[2, 2, 2] == 1
@@ -901,9 +901,9 @@ end
     a = [1:5;]
     a[[true,false,true,false,true]] = 6
     @test a == [6,2,6,4,6]
-    a[[true,false,true,false,true]] = [7,8,9]
+    a[[true,false,true,false,true]] .= [7,8,9]
     @test a == [7,2,8,4,9]
-    @test_throws DimensionMismatch (a[[true,false,true,false,true]] = [7,8,9,10])
+    @test_throws DimensionMismatch ((a[[true,false,true,false,true]] .= [7,8,9,10]; nothing))
     A = reshape(1:15, 3, 5)
     @test A[[true, false, true], [false, false, true, true, false]] == [7 10; 9 12]
     @test_throws BoundsError A[[true, false], [false, false, true, true, false]]
@@ -911,12 +911,11 @@ end
     @test_throws BoundsError A[[true, false, true, true], [false, false, true, true, false]]
     @test_throws BoundsError A[[true, false, true], [false, false, true, true, false, true]]
     A = fill(1, 3, 5)
-    @test_throws DimensionMismatch A[2,[true, false, true, true, false]] = 2:5
-    A[2,[true, false, true, true, false]] = 2:4
+    @test_throws DimensionMismatch (A[2,[true, false, true, true, false]] .= 2:5; nothing)
+    A[2,[true, false, true, true, false]] .= 2:4
     @test A == [1 1 1 1 1; 2 1 3 4 1; 1 1 1 1 1]
-    @test_throws DimensionMismatch A[[true,false,true], 5] = [19]
-    @test_throws DimensionMismatch A[[true,false,true], 5] = 19:21
-    A[[true,false,true], 5] = 7
+    @test_throws DimensionMismatch A[[true,false,true], 5] .= 19:21
+    A[[true,false,true], 5] .= 7
     @test A == [1 1 1 1 7; 2 1 3 4 1; 1 1 1 1 7]
 
     B = cat(3, 1, 2, 3)
@@ -1038,14 +1037,6 @@ end
 end
 
 @testset "assigning an array into itself and other aliasing issues" begin
-    a = [1,3,5]
-    b = [3,1,2]
-    a[b] = a
-    @test a == [3,5,1]
-    a = [3,2,1]
-    a[a] = [4,5,6]
-    @test a == [6,5,4]
-
     A = [1,2,3,4]
     V = view(A, A)
     @test V == A
@@ -1053,21 +1044,6 @@ end
     @test V == A == [2,2,3,4]
     V[1] = 2^30
     @test V == A == [2^30, 2, 3, 4]
-
-    A = [2,1,4,3]
-    V = view(A, :)
-    A[V] = (1:4) .+ 2^30
-    @test A == [2,1,4,3] .+ 2^30
-
-    A = [2,1,4,3]
-    R = reshape(view(A, :), 2, 2)
-    A[R] = (1:4) .+ 2^30
-    @test A == [2,1,4,3] .+ 2^30
-
-    A = [2,1,4,3]
-    R = reshape(A, 2, 2)
-    A[R] = (1:4) .+ 2^30
-    @test A == [2,1,4,3] .+ 2^30
 
     # And broadcasting
     a = [1,3,5]
@@ -1542,7 +1518,7 @@ end
     @test isa(Base.IndexStyle(trues(2)), Base.IndexLinear)
     @test isa(Base.IndexStyle(BitArray{2}), Base.IndexLinear)
     aa = fill(99, 10)
-    aa[1:2:9] = a
+    aa[1:2:9] .= a
     shp = [5]
     for i = 1:10
         A = reshape(a, tuple(shp...))

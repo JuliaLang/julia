@@ -52,7 +52,7 @@ s = open(f->f,file,"w")
 @test Mmap.mmap(file,Vector{UInt8},0) == Vector{UInt8}()
 s = open(file, "r+")
 m = Mmap.mmap(s,Vector{UInt8},12)
-m[:] = b"Hello World\n"
+m .= b"Hello World\n"
 Mmap.sync!(m)
 close(s); finalize(m); m=nothing; GC.gc()
 @test open(x->read(x, String),file) == "Hello World\n"

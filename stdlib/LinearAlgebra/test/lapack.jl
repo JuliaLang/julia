@@ -95,10 +95,10 @@ end
         du = rand(elty,5)
         dl2 = rand(elty,4)
         AB = zeros(elty,6,6)
-        AB[6,1:4] = dl2
-        AB[5,1:5] = dl
-        AB[4,:] = d
-        AB[3,2:6] = du
+        AB[6,1:4] .= dl2
+        AB[5,1:5] .= dl
+        AB[4,:] .= d
+        AB[3,2:6] .= du
         AB,ipiv = LAPACK.gbtrf!(2,1,6,AB)
         C = rand(elty,6,6)
         D = copy(C)

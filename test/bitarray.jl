@@ -16,7 +16,7 @@ bitcheck(x) = true
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r1 = func(args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
-    ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
+    ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, typeof(r1)
     ret_type ≢ nothing && @test isa(r1, ret_type)
     @test tc(r1, r2)
     @test isequal(r1, ret_type ≡ nothing ? r2 : r2)
@@ -254,24 +254,24 @@ timesofar("constructors")
             @check_bit_operation setindex!(b1, x, 1:j) T
             b2 = bitrand(j)
             for bb in (b2, view(b2, 1:j), view(Array{Any}(b2), :))
-                @check_bit_operation setindex!(b1, bb, 1:j) T
+                @check_bit_operation broadcast!(identity, view(b1, 1:j), bb)
             end
             x = rand(Bool)
-            @check_bit_operation setindex!(b1, x, j+1:l) T
+            @check_bit_operation broadcast!(identity, view(b1, j+1:l), x)
             b2 = bitrand(l-j)
-            @check_bit_operation setindex!(b1, b2, j+1:l) T
+            @check_bit_operation broadcast!(identity, view(b1, j+1:l), b2)
         end
         for j in [1, 63, 64, 65, 127, 128, 129, div(l,2)]
             m1 = j:(l-j)
             x = rand(Bool)
             @check_bit_operation setindex!(b1, x, m1) T
             b2 = bitrand(length(m1))
-            @check_bit_operation setindex!(b1, b2, m1) T
+            @check_bit_operation broadcast!(identity, view(b1, m1), b2)
         end
         x = rand(Bool)
         @check_bit_operation setindex!(b1, x, 1:100) T
         b2 = bitrand(100)
-        @check_bit_operation setindex!(b1, b2, 1:100) T
+        @check_bit_operation broadcast!(identity, view(b1, 1:100), b2)
 
         y = rand(0.0:1.0)
         @check_bit_operation setindex!(b1, y, 1:100) T
@@ -280,7 +280,7 @@ timesofar("constructors")
         x = rand(Bool)
         @check_bit_operation setindex!(b1, x, t1) T
         b2 = bitrand(length(t1))
-        @check_bit_operation setindex!(b1, b2, t1) T
+        @check_bit_operation broadcast!(identity, view(b1, t1), b2)
 
         y = rand(0.0:1.0)
         @check_bit_operation setindex!(b1, y, t1) T
@@ -405,18 +405,18 @@ timesofar("constructors")
 
         for (b2, k1, k2) in Channel(gen_setindex_data)
             # println(typeof(b2), " ", typeof(k1), " ", typeof(k2)) # uncomment to debug
-            for bb in ((b2 isa AbstractArray) ? (b2, view(b2, :), view(Array{Any}(b2), :)) : (b2,))
-                @check_bit_operation setindex!(b1, bb, k1, k2) BitMatrix
+            if b2 isa AbstractArray
+                for bb in (b2, reshape(view(b2, :), axes(b2)), reshape(view(Array{Any}(b2), :), axes(b2)))
+                    @check_bit_operation broadcast!(identity, view(b1, k1, k2), bb)
+                end
+            else
+                @check_bit_operation setindex!(b1, b2, k1, k2) BitMatrix
             end
         end
 
-        m1, m2 = rand_m1m2()
-        b2 = bitrand(1, 1, m2)
-        @check_bit_operation setindex!(b1, b2, m1, 1:m2) BitMatrix
         x = rand(Bool)
         b2 = bitrand(1, m2, 1)
         @check_bit_operation setindex!(b1, x, m1, 1:m2, 1)  BitMatrix
-        @check_bit_operation setindex!(b1, b2, m1, 1:m2, 1) BitMatrix
 
         b1 = bitrand(s1, s2, s3, s4)
         function gen_setindex_data4(c)
@@ -461,7 +461,11 @@ timesofar("constructors")
 
         for (b2, k1, k2, k3, k4) in Channel(gen_setindex_data4)
             # println(typeof(b2), " ", typeof(k1), " ", typeof(k2), " ", typeof(k3), " ", typeof(k4)) # uncomment to debug
-            @check_bit_operation setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+            if b2 isa AbstractArray
+                @check_bit_operation broadcast!(identity, view(b1, k1, k2, k3, k4), b2)
+            else
+                @check_bit_operation setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+            end
         end
 
         for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
@@ -493,23 +497,23 @@ timesofar("constructors")
 
         t1 = bitrand(n1, n2)
         b2 = bitrand(count(t1))
-        @check_bit_operation setindex!(b1, b2, t1) BitMatrix
+        @check_bit_operation broadcast!(identity, view(b1, t1), b2)
 
         m1 = rand(1:n1)
         m2 = rand(1:n2)
         t1 = bitrand(n1)
         b2 = bitrand(count(t1), m2)
         k2 = randperm(m2)
-        @check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
-        @check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
-        @check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
+        @check_bit_operation broadcast!(identity, view(b1, t1, 1:m2), b2)
+        @check_bit_operation broadcast!(identity, view(b1, t1, n2-m2+1:n2), b2)
+        @check_bit_operation broadcast!(identity, view(b1, t1, k2), b2)
 
         t2 = bitrand(n2)
         b2 = bitrand(m1, count(t2))
         k1 = randperm(m1)
-        @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
-        @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
-        @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
+        @check_bit_operation broadcast!(identity, view(b1, 1:m1, t2), b2)
+        @check_bit_operation broadcast!(identity, view(b1, n1-m1+1:n1, t2), b2)
+        @check_bit_operation broadcast!(identity, view(b1, k1, t2), b2)
     end
 end
 
@@ -1145,7 +1149,7 @@ timesofar("find")
     n = maximum(elts)
     for c = [falses, trues]
         b1 = c(n)
-        b1[elts] = .!b1[elts]
+        b1[elts] .= .!b1[elts]
         b2 = .~b1
         i1 = Array(b1)
         for i = 1:n
@@ -1497,6 +1501,6 @@ timesofar("I/O")
     @test_throws ErrorException pointer(trues(1))
     @test_throws ErrorException pointer(trues(1),1)
     b = falses(3)
-    b[:] = view(trues(10), [1,3,7])
+    b .= view(trues(10), [1,3,7])
     @test b == trues(3)
 end

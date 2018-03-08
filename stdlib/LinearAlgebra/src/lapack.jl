@@ -3736,16 +3736,16 @@ for (stev, stebz, stegr, stein, elty) in
             isplit = similar(dv, BlasInt,n)
             w = similar(dv, $elty,n)
             if length(iblock_in) < m #Not enough block specifications
-                iblock[1:m] = fill(BlasInt(1), m)
-                w[1:m] = sort(w_in)
+                iblock[1:m] .= fill(BlasInt(1), m)
+                w[1:m] .= sort(w_in)
             else
-                iblock[1:m] = iblock_in
-                w[1:m] = w_in #Assume user has sorted the eigenvalues properly
+                iblock[1:m] .= iblock_in
+                w[1:m] .= w_in #Assume user has sorted the eigenvalues properly
             end
             if length(isplit_in) < 1 #Not enough block specifications
                 isplit[1] = n
             else
-                isplit[1:length(isplit_in)] = isplit_in
+                isplit[1:length(isplit_in)] .= isplit_in
             end
             z = similar(dv, $elty,(n,m))
             work  = Vector{$elty}(uninitialized, 5*n)

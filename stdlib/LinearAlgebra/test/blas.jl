@@ -212,9 +212,9 @@ srand(100)
                 x   = rand(elty,n)
                 #put TD into the BLAS format!
                 fTD = zeros(elty,3,n)
-                fTD[1,2:n] = TD.du
-                fTD[2,:] = TD.d
-                fTD[3,1:n-1] = TD.dl
+                fTD[1,2:n] .= TD.du
+                fTD[2,:] .= TD.d
+                fTD[3,1:n-1] .= TD.dl
                 @test BLAS.gbmv('N',n,1,1,fTD,x) ≈ TD*x
             end
             #will work for SymTridiagonal only!
@@ -224,15 +224,15 @@ srand(100)
                     x   = rand(elty,n)
                     #put TD into the BLAS format!
                     fST = zeros(elty,2,n)
-                    fST[1,2:n] = ST.ev
-                    fST[2,:] = ST.dv
+                    fST[1,2:n] .= ST.ev
+                    fST[2,:] .= ST.dv
                     @test BLAS.sbmv('U',1,fST,x) ≈ ST*x
                 else
                     dv = real(rand(elty,n))
                     ev = rand(elty,n-1)
                     bH = zeros(elty,2,n)
-                    bH[1,2:n] = ev
-                    bH[2,:] = dv
+                    bH[1,2:n] .= ev
+                    bH[2,:] .= dv
                     fullH = diagm(0 => dv, -1 => conj(ev), 1 => ev)
                     @test BLAS.hbmv('U',1,bH,x) ≈ fullH*x
                 end
@@ -251,7 +251,7 @@ srand(100)
         @test_throws DimensionMismatch BLAS.gemv!('C',one(elty),I43,o4,one(elty),o4cp)
         @test all(BLAS.gemv!('N', one(elty), I4, o4, elm1, o4cp) .== z4)
         @test all(o4cp .== z4)
-        o4cp[:] = o4
+        o4cp .= o4
         @test all(BLAS.gemv!('T', one(elty), I4, o4, elm1, o4cp) .== z4)
         @test all(o4cp .== z4)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
@@ -269,13 +269,13 @@ srand(100)
         I4cp = copy(I4)
         @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
-        I4cp[:] = I4
+        I4cp .= I4
         @test all(BLAS.gemm!('N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
-        I4cp[:] = I4
+        I4cp .= I4
         @test all(BLAS.gemm!('T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
-        I4cp[:] = I4
+        I4cp .= I4
         @test all(BLAS.gemm!('T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
         @test all(I4cp .== Z4)
         @test all(BLAS.gemm('N', 'N', I4, U4) .== U4)

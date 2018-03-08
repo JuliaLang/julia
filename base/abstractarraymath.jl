@@ -169,7 +169,7 @@ function flipdim(A::AbstractArray, d::Integer)
     let B=B # workaround #15276
         alli = [ axes(B,n) for n in 1:nd ]
         for i in indsd
-            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = selectdim(A, d, i)
+            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] .= selectdim(A, d, i)
         end
     end
     return B
@@ -278,7 +278,7 @@ function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
         R = d:d+p-1
         for i=1:m
             c = (i-1)*o+1
-            b[c:c+o-1, R] = a
+            b[c:c+o-1, R] .= a
         end
     end
     return b
@@ -289,7 +289,7 @@ function repeat(a::AbstractVector, m::Integer)
     b = similar(a, o*m)
     for i=1:m
         c = (i-1)*o+1
-        b[c:c+o-1] = a
+        b[c:c+o-1] .= a
     end
     return b
 end
@@ -378,7 +378,7 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        R[axes(A)...] = A
+        R[axes(A)...] .= A
     else
         inner_indices = [1:n for n in inner]
         for c in CartesianIndices(axes(A))
@@ -400,7 +400,7 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
         B = view(R, src_indices...)
         for j in 2:outer[i]
             dest_indices[i] = dest_indices[i] .+ inner_shape[i]
-            R[dest_indices...] = B
+            R[dest_indices...] .= B
         end
         src_indices[i] = dest_indices[i] = 1:shape[i]
     end

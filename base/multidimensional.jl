@@ -666,19 +666,12 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-_iterable(v::AbstractArray) = v
-_iterable(v) = Iterators.repeated(v)
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        x′ = _iterable(unalias(A, x))
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_lengths I
-        @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        xs = start(x′)
         @inbounds @nloops $N i d->I_d begin
-            v, xs = next(x′, xs)
-            @ncall $N setindex! A v i
+            @ncall $N setindex! A x i
         end
         A
     end
@@ -1252,6 +1245,18 @@ function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
+# For contiguous arrays (and contiguous views thereof) we can punt to an
+# optimized unsafe_copyto! method that acts upon the `Array` themselves
+_arrayparentoffset(::Array) = 1
+_arrayparentoffset(S::FastContiguousSubArray{<:Any,<:Any,<:Array}) = S.offset1+1
+function copyto!(dest::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}},
+                 src::Union{Array{T}, FastContiguousSubArray{T,<:Any,<:Array}}) where {T}
+    checkbounds(dest, linearindices(src))
+    return unsafe_copyto!(parent(dest), _arrayparentoffset(dest),
+                          parent(src), _arrayparentoffset(src), length(src))
+end
+
+
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
@@ -1548,32 +1553,33 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     end
 end
 
-# contiguous multidimensional indexing: if the first dimension is a range,
+# contiguous multidimensional B[] .= indexing: if the first index is a range,
 # we can get some performance from using copy_chunks!
-
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,UnitRange{Int}})
-    I0 = to_indices(B, (J0,))[1]
-    @boundscheck checkbounds(B, I0)
+function broadcast!(::typeof(identity), B::BitArray, X::Union{StridedArray,BitArray})
+    size(B) == size(X) || return Broadcast._broadcast!(identity, B, X)
+    copy_to_bitarray_chunks!(B.chunks, 1, X, 1, length(B))
+    return B
+end
+function broadcast!(::typeof(identity), V::SubArray{<:Any,<:Any,<:BitArray,<:Tuple{AbstractUnitRange}}, X::Union{StridedArray,BitArray})
+    size(V) == size(X) || return Broadcast._broadcast!(identity, V, X)
+    B = V.parent
+    I0 = V.indices[1]
     l0 = length(I0)
-    setindex_shape_check(X, l0)
     l0 == 0 && return B
     f0 = indexoffset(I0)+1
     copy_to_bitarray_chunks!(B.chunks, f0, X, 1, l0)
-    return B
+    return V
 end
-
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    J = to_indices(B, (I0, I...))
-    @boundscheck checkbounds(B, J...)
-    _unsafe_setindex!(B, X, J...)
-end
-@generated function _unsafe_setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
-    N = length(I)
+@generated function broadcast!(::typeof(identity),
+        V::SubArray{<:Any,<:Any,<:BitArray,VI}, X::Union{StridedArray,BitArray}) where
+        VI<:Tuple{AbstractUnitRange,Vararg{Union{AbstractUnitRange,Int}}}
+    N = length(VI.parameters)-1
     quote
+        size(V) == size(X) || return Broadcast._broadcast!(identity, V, X)
+        B = V.parent
+        I0 = V.indices[1]
+        I = tail(V.indices)
         idxlens = @ncall $N index_lengths I0 d->I[d]
-        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
         isempty(X) && return B
         f0 = indexoffset(I0)+1
         l0 = idxlens[1]
@@ -1599,7 +1605,7 @@ end
                     refind += l0
                 end)
 
-        return B
+        return V
     end
 end
 
@@ -1608,10 +1614,6 @@ end
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, x, J...)
-end
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
 @generated function _unsafe_setindex!(B::BitArray, x,

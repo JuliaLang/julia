@@ -1026,7 +1026,9 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
 """
     setindex!(A, X, inds...)
 
-Store values from array `X` within some subset of `A` as specified by `inds`.
+Store the value `X` to a location or multiple locations in `A` as specified by `inds`.
+
+See the manual section on [array indexing](@ref man-array-indexing) for details.
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
@@ -1179,7 +1181,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
     ind = findall(occursin(indices1(A)), I)
-    X[ind] = A[I[ind]]
+    X[ind] .= A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
     X[last(ind)+1:last(Xind)] = default
@@ -1188,7 +1190,7 @@ end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
     ind = findall(occursin(1:length(A)), I)
-    X[ind] = A[I[ind]]
+    X[ind] .= A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
     X
@@ -1199,7 +1201,7 @@ get(A::AbstractArray, I::AbstractRange, default) = get!(similar(A, typeof(defaul
 function get!(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T) where T
     fill!(X, default)
     dst, src = indcopy(size(A), I)
-    X[dst...] = A[src...]
+    X[dst...] .= A[src...]
     X
 end
 
@@ -1250,7 +1252,7 @@ function typed_vcat(::Type{T}, V::AbstractVector...) where T
     for k=1:length(V)
         Vk = V[k]
         p1 = pos+length(Vk)-1
-        a[pos:p1] = Vk
+        a[pos:p1] .= Vk
         pos = p1+1
     end
     a
@@ -1286,7 +1288,7 @@ function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
         for k=1:nargs
             Ak = A[k]
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
-            B[:, pos:p1] = Ak
+            B[:, pos:p1] .= Ak
             pos = p1+1
         end
     end
@@ -1310,7 +1312,7 @@ function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
     for k=1:nargs
         Ak = A[k]
         p1 = pos+size(Ak,1)-1
-        B[pos:p1, :] = Ak
+        B[pos:p1, :] .= Ak
         pos = p1+1
     end
     return B
@@ -1388,7 +1390,7 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
             end
         end
         I::NTuple{N, UnitRange{Int}} = (inds...,)
-        A[I...] = x
+        concatenate_setindex!(A, x, I...)
     end
     return A
 end
@@ -1587,7 +1589,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat..
             if c-1+szj > nc
                 throw(ArgumentError("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
             end
-            out[r:r-1+szi, c:c-1+szj] = Aj
+            out[r:r-1+szi, c:c-1+szj] .= Aj
             c += szj
         end
         if c != nc+1
@@ -1927,21 +1929,21 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     end
     nextra = max(0, length(dims)-ndims(r1))
     if eltype(Rsize) == Int
-        Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
+        Rsize[dims] .= [size(r1)..., ntuple(d->1, nextra)...]
     else
-        Rsize[dims] = [axes(r1)..., ntuple(d->OneTo(1), nextra)...]
+        Rsize[dims] .= [axes(r1)..., ntuple(d->OneTo(1), nextra)...]
     end
     R = similar(r1, tuple(Rsize...,))
 
     ridx = Any[map(first, axes(R))...]
     for d in dims
-        ridx[d] = axes(R,d)
+        ridx[d] = Slice(axes(R,d))
     end
 
-    R[ridx...] = r1
+    concatenate_setindex!(R, r1, ridx...)
 
     nidx = length(otherdims)
-    indices = Iterators.drop(CartesianIndices(itershape), 1)
+    indices = Iterators.drop(CartesianIndices(itershape), 1) # skip the first element, we already handled it
     inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
 end
 
@@ -1949,16 +1951,16 @@ end
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
-        for I in indices # skip the first element, we already handled it
+        for I in indices
             replace_tuples!(nidx, idx, ridx, otherdims, I)
             _unsafe_getindex!(Aslice, A, idx...)
-            R[ridx...] = f(Aslice)
+            concatenate_setindex!(R, f(Aslice), ridx...)
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indices
             replace_tuples!(nidx, idx, ridx, otherdims, I)
-            R[ridx...] = f(A[idx...])
+            concatenate_setindex!(R, f(A[idx...]), ridx...)
         end
     end
 
@@ -1970,6 +1972,9 @@ function replace_tuples!(nidx, idx, ridx, otherdims, I)
         idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
     end
 end
+
+concatenate_setindex!(R, v, I...) = R[I...] = v
+concatenate_setindex!(R, X::AbstractArray, I...) = R[I...] .= X
 
 
 ## 1 argument

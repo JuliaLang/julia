@@ -150,7 +150,7 @@
 
     @testset "Issues #18246,18244 - lufact sparse pivot" begin
         A = sparse(1.0I, 4, 4)
-        A[1:2,1:2] = [-.01 -200; 200 .001]
+        A[1:2,1:2] .= [-.01 -200; 200 .001]
         F = lufact(A)
         @test F.p == [3 ; 4 ; 2 ; 1]
     end

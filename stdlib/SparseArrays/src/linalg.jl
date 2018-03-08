@@ -739,7 +739,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
                 end
             end
         else
-            ind_hist[1:t] = ind[1:t]
+            ind_hist[1:t] .= ind[1:t]
             for j = 1:t
                 for i = 1:ind[j] - 1
                     X[i,j] = 0

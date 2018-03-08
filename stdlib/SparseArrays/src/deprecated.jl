@@ -227,6 +227,17 @@ import Base: asyncmap
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
 @deprecate droptol!(A, tol, trim) droptol!(A, tol, trim = trim)
 
+# Multi-value setindex broadcasting
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Colon) = Base.deprecate_nonscalar_indexed_assignment!(A, x, i)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Colon, j::Colon) = Base.deprecate_nonscalar_indexed_assignment!(A, x, i, j)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Colon, j::Union{Integer, AbstractVector}) = Base.deprecate_nonscalar_indexed_assignment!(A, x, i, j)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Union{Integer, AbstractVector}, j::Colon) = Base.deprecate_nonscalar_indexed_assignment!(A, x, i, j)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Integer, J::AbstractVector{<:Integer}) = Base.deprecate_nonscalar_indexed_assignment!(A, x, i, J)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractVector{<:Integer}, j::Integer) = Base.deprecate_nonscalar_indexed_assignment!(A, x, I, j)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer}) = Base.deprecate_nonscalar_indexed_assignment!(A, x, I, J)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractVector{<:Real}) = Base.deprecate_nonscalar_indexed_assignment!(A, x, I)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool}) = Base.deprecate_nonscalar_indexed_assignment!(A, x, I)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

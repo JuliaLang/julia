@@ -387,10 +387,10 @@ end
 import Base: securezero!, unsafe_securezero!
 let a = [1,2,3]
     @test securezero!(a) === a == [0,0,0]
-    a[:] = 1:3
+    a .= 1:3
     @test unsafe_securezero!(pointer(a), length(a)) == pointer(a)
     @test a == [0,0,0]
-    a[:] = 1:3
+    a .= 1:3
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end

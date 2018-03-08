@@ -549,6 +549,24 @@ function _depwarn_for_trailing_indices(t::Tuple)
     true
 end
 
+# issue #24368: nonscalar indexed assignment of many values to many locations
+function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractArray, I...)
+    J = to_indices(A, I)
+    shape = Base.index_shape(J...)
+    if shape == axes(X) || length(X) == prod(length, shape) <= 1
+        depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= X` to explicitly opt-in to broadcasting.", :setindex!)
+        A[J...] .= X
+    else
+        depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= reshape(X, axes(view(A, I...)))` to explicitly opt-in to broadcasting.", :setindex!)
+        A[J...] .= reshape(X, shape)
+    end
+    return A
+end
+_unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...) = deprecate_nonscalar_indexed_assignment!(A, X, I...)
+setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}}) = deprecate_nonscalar_indexed_assignment!(B, X, J0)
+setindex!(B::BitArray, X::AbstractArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...) = deprecate_nonscalar_indexed_assignment!(B, X, I0, I...)
+setindex!(B::BitArray, X::AbstractArray, I::BitArray) = deprecate_nonscalar_indexed_assignment!(B, X, I)
+
 # issue #22791
 @deprecate select partialsort
 @deprecate select! partialsort!

@@ -114,7 +114,7 @@ function kron(a::BitMatrix, b::BitMatrix)
         for j = 1:nA
             if a[i,j]
                 rj = (1:nB) .+ ((j-1)*nB)
-                R[ri,rj] = b
+                R[ri,rj] .= b
             end
         end
     end

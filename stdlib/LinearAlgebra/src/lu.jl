@@ -467,8 +467,8 @@ function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
         L = Array(Bidiagonal(fill(one(T), n), getfield(getfield(F, :factors), :dl), d))
         for i = 2:n
             tmp = L[getfield(F, :ipiv)[i], 1:i - 1]
-            L[getfield(F, :ipiv)[i], 1:i - 1] = L[i, 1:i - 1]
-            L[i, 1:i - 1] = tmp
+            L[getfield(F, :ipiv)[i], 1:i - 1] .= L[i, 1:i - 1]
+            L[i, 1:i - 1] .= tmp
         end
         return L
     elseif d == :U
