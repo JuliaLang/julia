@@ -3896,7 +3896,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             if n == 0
-                return A, ipiv
+                return A, ipiv, zero(BlasInt)
             end
             work  = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -4046,7 +4046,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             if n == 0
-                return A, ipiv
+                return A, ipiv, zero(BlasInt)
             end
             work  = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -4496,7 +4496,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             chkuplo(uplo)
             ipiv = similar(A, BlasInt, n)
             if n == 0
-                return A, ipiv
+                return A, ipiv, zero(BlasInt)
             end
             work  = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
@@ -4647,7 +4647,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             chkuplo(uplo)
             ipiv = similar(A, BlasInt, n)
             if n == 0
-                return A, ipiv
+                return A, ipiv, zero(BlasInt)
             end
             work  = Vector{$elty}(uninitialized, 1)
             lwork = BlasInt(-1)
