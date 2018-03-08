@@ -717,7 +717,7 @@ function test!(pkg::AbstractString,
     else
         @info "Testing $pkg"
         cd(dirname(test_path)) do
-            script = "using Test; include(\"$test_path\"); if Test.fallback_testset.is_empty; throw(Test.FallbackTestSetException(\"No Tests Found\")); end"
+            script = "using Test; Test.run_test_file(\"$test_path\")"
             try
                 cmd = ```
                     $(Base.julia_cmd())

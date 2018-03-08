@@ -557,16 +557,16 @@ temp_pkg_dir() do
 
         code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.test(\"$package\")"
         msg = read(`$(Base.julia_cmd()) -e $code`, String)
-        @test contains(msg, "No Tests Found")
+        @test contains(msg, "No tests found")
 
-        write(test_filename, "@test 1==1")
+        write(test_filename, "@test true")
         msg = read(`$(Base.julia_cmd()) -e $code`, String)
-        @test !contains(msg, "No Tests Found")
+        @test !contains(msg, "No tests found")
         @test contains(msg, "tests passed")
 
         rm(test_filename)
         write(test_filename, "@testset \"hi\" begin end")
-        @test !contains(msg, "No Tests Found")
+        @test !contains(msg, "No tests found")
         @test contains(msg, "tests passed")
     end
 
