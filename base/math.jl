@@ -723,6 +723,8 @@ end
     end
     z
 end
+@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))
+
 @inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
 @inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
