@@ -1146,8 +1146,8 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 # Issues #17812 Remove default stride implementation
 function strides(a::AbstractArray)
     depwarn("""
-    `strides(a::AbstractArray)` is deprecated for general arrays.
-    Specialize `strides` for custom array types that have the appropriate representation in memory.
+    The default `strides(a::AbstractArray)` implementation is deprecated for general arrays.
+    Specialize `strides(::$(typeof(a).name))` if `$(typeof(a).name)` indeed uses a strided representation in memory.
     Warning: inappropriately implementing this method for an array type that does not use strided
     storage may lead to incorrect results or segfaults.
     """, :strides)
@@ -1155,6 +1155,18 @@ function strides(a::AbstractArray)
 end
 
 @deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
+
+# Issue #26072 Also remove default Base.elsize implementation
+function elsize(t::Type{<:AbstractArray{T}}) where T
+    depwarn("""
+    The default `Base.elsize(::Type{<:AbstractArray})` implementation is deprecated for general arrays.
+    Specialize `Base.elsize(::Type{<:$(t.name)})` if `$(t.name)` indeed has a known representation
+    in memory such that it represents the distance between two contiguous elements.
+    Warning: inappropriately implementing this method may lead to incorrect results or segfaults.
+    """, :elsize)
+    sizeof(T)
+end
+
 
 @deprecate lexcmp(x::AbstractArray, y::AbstractArray) cmp(x, y)
 @deprecate lexcmp(x::Real, y::Real)                   cmp(isless, x, y)

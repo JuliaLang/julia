@@ -128,7 +128,7 @@ prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
-elsize(::AbstractArray{T}) where {T} = sizeof(T)
+elsize(A::AbstractArray) = elsize(typeof(A))
 
 """
     ndims(A::AbstractArray) -> Integer
