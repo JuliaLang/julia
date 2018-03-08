@@ -227,6 +227,8 @@ import Base: asyncmap
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
 @deprecate droptol!(A, tol, trim) droptol!(A, tol, trim = trim)
 
+Base.@deprecate_binding blkdiag blockdiag
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

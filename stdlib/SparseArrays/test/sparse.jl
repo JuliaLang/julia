@@ -110,8 +110,8 @@ end
         @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
-    @testset "blkdiag concatenation" begin
-        @test blkdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+    @testset "blockdiag concatenation" begin
+        @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
     end
 
     @testset "concatenation promotion" begin
