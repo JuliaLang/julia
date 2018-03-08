@@ -1495,6 +1495,19 @@ end
 # Issue #26248
 @deprecate conj(x) x
 
+@deprecate sind(z) sin(deg2rad(z))
+@deprecate cosd(z) cos(deg2rad(z))
+@deprecate tand(z) tan(deg2rad(z))
+@deprecate secd(z) sec(deg2rad(z))
+@deprecate cscd(z) csc(deg2rad(z))
+@deprecate cotd(z) cot(deg2rad(z))
+@deprecate asind(z) rad2deg(asin(z))
+@deprecate acosd(z) rad2deg(acos(z))
+@deprecate atand(z) rad2deg(atan(z))
+@deprecate asecd(z) rad2deg(asec(z))
+@deprecate acscd(z) rad2deg(acsc(z))
+@deprecate acotd(z) rad2deg(acot(z))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

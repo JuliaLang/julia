@@ -342,25 +342,6 @@ end
 @testset "degree-based trig functions" begin
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
-        for x = -400:40:400
-            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-        end
-        @testset "sind" begin
-            @test sind(convert(T,0.0))::fT === zero(fT)
-            @test sind(convert(T,180.0))::fT === zero(fT)
-            @test sind(convert(T,360.0))::fT === zero(fT)
-            T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
-            @test sind(convert(T,-180.0))::fT === -zero(fT)
-            @test sind(convert(T,-360.0))::fT === -zero(fT)
-        end
-        @testset "cosd" begin
-            @test cosd(convert(T,90))::fT === zero(fT)
-            @test cosd(convert(T,270))::fT === zero(fT)
-            @test cosd(convert(T,-90))::fT === zero(fT)
-            @test cosd(convert(T,-270))::fT === zero(fT)
-        end
-
         @testset "sinpi and cospi" begin
             for x = -3:0.3:3
                 @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
@@ -382,12 +363,7 @@ end
             @test_throws DomainError cospi(convert(T,Inf))
         end
         @testset "Check exact values" begin
-            @test sind(convert(T,30)) == 0.5
-            @test cosd(convert(T,60)) == 0.5
-            @test sind(convert(T,150)) == 0.5
             @test sinpi(one(T)/convert(T,6)) == 0.5
-            @test_throws DomainError sind(convert(T,Inf))
-            @test_throws DomainError cosd(convert(T,Inf))
             T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
             T == Rational{Int} && @test sinpi(5//6) == 0.5
         end
@@ -424,7 +400,7 @@ end
 end
 
 @testset "trig function type stability" begin
-    @testset "$T $f" for T = (Float32,Float64,BigFloat), f = (sind,cosd,sinpi,cospi)
+    @testset "$T $f" for T = (Float32,Float64,BigFloat), f = (sinpi,cospi)
         @test Base.return_types(f,Tuple{T}) == [T]
     end
 end
