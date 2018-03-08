@@ -341,7 +341,7 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
 end
 
 
-function trace(A::Matrix{T}) where T
+function tr(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
     for i=1:n

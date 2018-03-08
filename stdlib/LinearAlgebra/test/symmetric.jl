@@ -156,9 +156,9 @@ end
         end
 
         @testset "linalg unary ops" begin
-            @testset "trace" begin
-                @test trace(asym) == trace(Symmetric(asym))
-                @test trace(aherm) == trace(Hermitian(aherm))
+            @testset "tr" begin
+                @test tr(asym) == tr(Symmetric(asym))
+                @test tr(aherm) == tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin

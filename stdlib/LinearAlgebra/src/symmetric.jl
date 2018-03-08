@@ -323,7 +323,7 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.collect(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
-trace(A::Hermitian) = real(trace(A.data))
+tr(A::Hermitian) = real(tr(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
 Base.conj!(A::HermOrSym) = typeof(A)(conj!(A.data), A.uplo)

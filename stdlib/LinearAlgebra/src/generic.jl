@@ -731,7 +731,7 @@ end
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
-    trace(M)
+    tr(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
 
@@ -742,15 +742,15 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> trace(A)
+julia> tr(A)
 5
 ```
 """
-function trace(A::AbstractMatrix)
+function tr(A::AbstractMatrix)
     checksquare(A)
     sum(diag(A))
 end
-trace(x::Number) = x
+tr(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}

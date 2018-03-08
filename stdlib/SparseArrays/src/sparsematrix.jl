@@ -3360,7 +3360,7 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     return SparseVector{Tv,Ti}(l, ind, val)
 end
 
-function trace(A::SparseMatrixCSC{Tv}) where Tv
+function tr(A::SparseMatrixCSC{Tv}) where Tv
     n = checksquare(A)
     s = zero(Tv)
     for i in 1:n

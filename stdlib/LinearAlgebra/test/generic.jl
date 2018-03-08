@@ -162,7 +162,7 @@ end
 @test_throws DimensionMismatch cross(fill(1,3), fill(1,4))
 @test_throws DimensionMismatch cross(fill(1,2), fill(1,3))
 
-@test trace(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
+@test tr(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
 
 
 @testset "array and subarray" begin
@@ -222,7 +222,7 @@ end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
         a = rand(elty)
-        @test trace(a)         == a
+        @test tr(a)            == a
         @test rank(zero(elty)) == 0
         @test rank(one(elty))  == 1
         @test !isfinite(cond(zero(elty)))
