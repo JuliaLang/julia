@@ -1036,9 +1036,9 @@ timesofar("binary comparison")
         #for j = 1 : size(b1, d)
             @check_bit_operation selectdim(b1, d, j) SubArray{Bool, 3, BitArray{4}}
         #end
-        @check_bit_operation flipdim(b1, d) BitArray{4}
+        @check_bit_operation reverse(b1, dims=d) BitArray{4}
     end
-    @test_throws ArgumentError flipdim(b1, 5)
+    @test_throws ArgumentError reverse(b1, dims=5)
 
     b1 = bitrand(n1, n2)
     for k = 1:4

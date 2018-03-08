@@ -58,8 +58,8 @@ end
 
 ## data movement ##
 
-function flipdim(A::Array{T}, d::Integer) where T
-    nd = ndims(A)
+function reverse(A::Array{T}; dims::Integer) where T
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     if sd == 1 || isempty(A)
@@ -73,7 +73,7 @@ function flipdim(A::Array{T}, d::Integer) where T
         nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
-        # flip along the only non-singleton dimension
+        # reverse along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
         end

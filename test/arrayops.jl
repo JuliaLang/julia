@@ -1337,20 +1337,20 @@ end
     @test reverse!(Any[]) == Any[]
 end
 
-@testset "flipdim" begin
-    @test isequal(flipdim([2,3,1], 1), [1,3,2])
-    @test_throws ArgumentError flipdim([2,3,1], 2)
-    @test isequal(flipdim([2 3 1], 1), [2 3 1])
-    @test isequal(flipdim([2 3 1], 2), [1 3 2])
-    @test_throws ArgumentError flipdim([2,3,1], -1)
-    @test isequal(flipdim(1:10, 1), 10:-1:1)
-    @test_throws ArgumentError flipdim(1:10, 2)
-    @test_throws ArgumentError flipdim(1:10, -1)
-    @test isequal(flipdim(Matrix{Int}(undef, 0,0),1), Matrix{Int}(undef, 0,0))  # issue #5872
+@testset "reverse dim" begin
+    @test isequal(reverse([2,3,1], dims=1), [1,3,2])
+    @test_throws ArgumentError reverse([2,3,1], dims=2)
+    @test isequal(reverse([2 3 1], dims=1), [2 3 1])
+    @test isequal(reverse([2 3 1], dims=2), [1 3 2])
+    @test_throws ArgumentError reverse([2,3,1], dims=-1)
+    @test isequal(reverse(1:10, dims=1), 10:-1:1)
+    @test_throws ArgumentError reverse(1:10, dims=2)
+    @test_throws ArgumentError reverse(1:10, dims=-1)
+    @test isequal(reverse(Matrix{Int}(undef, 0,0),dims=1), Matrix{Int}(undef, 0,0))  # issue #5872
 
     a = rand(5,3)
-    @test flipdim(flipdim(a,2),2) == a
-    @test_throws ArgumentError flipdim(a,3)
+    @test reverse(reverse(a,dims=2),dims=2) == a
+    @test_throws ArgumentError reverse(a,dims=3)
 end
 
 @testset "isdiag, istril, istriu" begin
@@ -1954,8 +1954,8 @@ copyto!(S, A)
 @test mapslices(sort, A, 1) == mapslices(sort, B, 1) == mapslices(sort, S, 1)
 @test mapslices(sort, A, 2) == mapslices(sort, B, 2) == mapslices(sort, S, 2)
 
-@test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
-@test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
+@test reverse(A, dims=1) == reverse(B, dims=1) == reverse(S, dims=2)
+@test reverse(A, dims=2) == reverse(B, dims=2) == reverse(S, dims=2)
 
 @test A .+ 1 == B .+ 1 == S .+ 1
 @test 2*A == 2*B == 2*S

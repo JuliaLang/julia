@@ -1396,6 +1396,10 @@ function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindi
     end
     return B
 end
+
+# to resolve ambiguity with reverse(A; dims)
+reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
+
 function reverseind(a::AbstractVector, i::Integer)
     li = linearindices(a)
     first(li) + last(li) - i
