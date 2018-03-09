@@ -1281,6 +1281,18 @@ let args = (Int, Any)
     @test >:(reverse(args)...)
 end
 
+# issue #25947
+let getindex = 0, setindex! = 1, colon = 2, vcat = 3, hcat = 4, hvcat = 5
+    a = [10,9,8]
+    @test a[2] == 9
+    @test 1:2 isa AbstractRange
+    a[1] = 1
+    @test a[1] == 1
+    @test length([1; 2]) == 2
+    @test size([0 0]) == (1, 2)
+    @test size([1 2; 3 4]) == (2, 2)
+end
+
 # issue #25020
 @test_throws ParseError Meta.parse("using Colors()")
 
@@ -1351,3 +1363,6 @@ end
     Expr(:call, :<, :Y,
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
+
+# issue #25994
+@test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))

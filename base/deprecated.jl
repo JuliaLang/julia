@@ -131,10 +131,11 @@ macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constan
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
-macro deprecate_stdlib(old, mod, export_old=true)
-    dep_message = """: it has been moved to the standard library package `$mod`.
+macro deprecate_stdlib(old, mod, export_old=true, newname=old)
+    rename = old === newname ? "" : " as `$newname`"
+    dep_message = """: it has been moved to the standard library package `$mod`$rename.
                         Add `using $mod` to your imports."""
-    new = GlobalRef(Base.root_module(Base, mod), old)
+    new = GlobalRef(Base.root_module(Base, mod), newname)
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
@@ -1499,6 +1500,9 @@ end
 @deprecate_binding uninitialized undef
 @deprecate_binding Uninitialized UndefInitializer
 
+@deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
+@deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
+@deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
 
 # END 0.7 deprecations
 

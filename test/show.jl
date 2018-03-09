@@ -747,16 +747,6 @@ end
 @test !contains(repr(fill(1.,10,10)), "\u2026")
 @test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
 
-# showcompact() also sets :multiline=>false (#16817)
-let io = IOBuffer(),
-    x = [1, 2]
-
-    showcompact(io, x)
-    @test String(take!(io)) == "[1, 2]"
-    showcompact(IOContext(io, :compact => true), x)
-    @test String(take!(io)) == "[1, 2]"
-end
-
 let io = IOBuffer()
     ioc = IOContext(io, :limit => true)
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"

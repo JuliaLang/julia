@@ -1862,7 +1862,8 @@
              (if (and (not semicolon)
                       (length= outer 1)
                       (null? vec))
-                 (begin (expect-space-before s 'for)
+                 (begin ;; if we get here, there must have been some kind of space or separator
+                        ;;(expect-space-before s 'for)
                         (take-token s)
                         (parse-comprehension s (car outer) closer))
                  (error "invalid comprehension syntax")))
