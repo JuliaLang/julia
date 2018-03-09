@@ -653,7 +653,7 @@ end
 finish(ts::FallbackTestSet) = ts
 
 """
-    IntermediateTestSet
+    IntermediaryTestSet
 
 A hidden testset to check if any tests have been run. Throws immediately on a failure.
 """
@@ -672,10 +672,14 @@ function Base.showerror(io::IO, ex::NoTestsException, bt; backtrace=true)
 end
 
 # Throws an error immediately whenever a Fail or Error occurs.
-# Takes no action in the event of a Pass or Broken result.
+# Takes no action in the event of a Pass result.
 # TODO: check that testsets hold any tests
-function record(ts::IntermediaryTestSet, t::Union{Pass,Broken,AbstractTestSet})
+function record(ts::IntermediaryTestSet, t::Union{Pass,AbstractTestSet})
     ts.is_empty = false
+    t
+end
+
+function record(ts::IntermediaryTestSet, t::Broken)
     t
 end
 

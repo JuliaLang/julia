@@ -550,24 +550,29 @@ temp_pkg_dir() do
         @test contains(msg, Regex("- $package.*Restart Julia to use the updated versions","s"))
     end
 
-    let package = "RuntestsError"
-        test_filename = Pkg.dir(package, "test", "runtests.jl")
+    let package = "TestError"
+            test_filename = Pkg.dir(package, "test", "runtests.jl")
+            mkpath(dirname(test_filename))
 
-        write(test_filename, "")
+            open(test_filename, "w") do io
+                write(io, "using Test; @test true")
+            end
+            @test_nowarn Pkg.test(package)
 
-        code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.test(\"$package\")"
-        msg = read(`$(Base.julia_cmd()) -e $code`, String)
-        @test contains(msg, "No tests found")
+            open(test_filename, "w") do io
+                write(io, "using Test; @testset \"hi\" begin end")
+            end
+            @test_nowarn Pkg.test(package)
 
-        write(test_filename, "@test true")
-        msg = read(`$(Base.julia_cmd()) -e $code`, String)
-        @test !contains(msg, "No tests found")
-        @test contains(msg, "tests passed")
+            open(test_filename, "w") do io
+                write(io, "this = \"not a test\"")
+            end
+            #@test_throws Pkg.Entry.PkgTestError Pkg.test(package)
 
-        rm(test_filename)
-        write(test_filename, "@testset \"hi\" begin end")
-        @test !contains(msg, "No tests found")
-        @test contains(msg, "tests passed")
+            open(test_filename, "w") do io
+                write(io, "@test false")
+            end
+            #@test_throws Pkg.Entry.PkgTestError Pkg.test(package)
     end
 
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
@@ -575,6 +580,8 @@ temp_pkg_dir() do
         content = """
             @info "JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))"
             @info "Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))"
+            using Test
+            @test true
             """
 
         write_build(package, content)

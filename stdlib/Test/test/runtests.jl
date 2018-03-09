@@ -203,20 +203,21 @@ end
 end
 
 @testset "Testfile validation" begin
-    filename, str = mktemp()
-    close(str)
+    mktemp() do filename, io
+        close(io)
 
-    @test_throws Test.NoTestsException Test.run_test_file(filename)
-    open(filename, "w") do io
-        write(io, "using Test; @test false")
+        @test_throws Test.NoTestsException Test.run_test_file(filename)
+        open(filename, "w") do io
+            write(io, "using Test; @test false")
+        end
+
+        @test_throws Test.FallbackTestSetException Test.run_test_file(filename)
+
+        open(filename, "w") do io
+            write(io, "using Test; @test true")
+        end
+        @test_nowarn Test.run_test_file(filename)
     end
-
-    @test_throws Test.FallbackTestSetException Test.run_test_file(filename)
-
-    open(filename, "w") do io
-        write(io, "using Test; @test true")
-    end
-    @test_nowarn Test.run_test_file(filename)
 end
 
 @test Test.finish(Test.FallbackTestSet()) !== nothing
