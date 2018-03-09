@@ -574,6 +574,8 @@ function f13127()
 end
 @test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
 
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test !Base.inbase(LinearAlgebra)
