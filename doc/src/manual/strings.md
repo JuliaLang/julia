@@ -28,9 +28,10 @@ There are a few noteworthy high-level features about Julia's strings:
     additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
-  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type representing
-    a single character, called `Char`. This is just a special kind of 32-bit primitive type whose numeric
-    value represents a Unicode code point.
+  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
+    a single character, called `AbstractChar`. The built-in `Char` subtype of `AbstractChar`
+    is a 32-bit primitive type that can represent any Unicode character (and which is based
+    on the UTF-8 encoding).
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
     To construct a different string value, you construct a new string from parts of other strings.
   * Conceptually, a string is a *partial function* from indices to characters: for some index values,
@@ -41,9 +42,11 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
-representation and appropriate arithmetic behaviors, whose numeric value is interpreted as a
-[Unicode code point](https://en.wikipedia.org/wiki/Code_point). Here is how `Char` values are
+An `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
+representation and appropriate arithmetic behaviors, and which can be converted
+to a numeric value representing a
+[Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
+  other subtypes of `AbstractChar`, e.g. to optimize operations for other [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
 input and shown:
 
 ```jldoctest
@@ -428,7 +431,7 @@ julia> "v: $v"
 "v: [1, 2, 3]"
 ```
 
-[`string`](@ref) is the identity for `AbstractString` and `Char` values, so these are interpolated
+[`string`](@ref) is the identity for `AbstractString` and `AbstractChar` values, so these are interpolated
 into strings as themselves, unquoted and unescaped:
 
 ```jldoctest

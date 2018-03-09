@@ -7,8 +7,8 @@ import LibGit2
 import REPL
 using REPL.TerminalMenus
 
-using Pkg3.TOML
-import Pkg3
+using ..TOML
+import ..Pkg3
 import Pkg3: depots, logdir
 
 import Base: SHA1, AbstractEnv
@@ -18,12 +18,12 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
+    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED
 
 
 ## ordering of UUIDs ##
@@ -62,10 +62,10 @@ struct VersionBound
     n::Int
     function VersionBound(tin::NTuple{n,Integer}) where n
         n <= 3 || throw(ArgumentError("VersionBound: you can only specify major, minor and patch versions"))
-        n == 0 && return new( (     0,      0,      0), n)
-        n == 1 && return new( (tin[1],      0,      0), n)
-        n == 2 && return new( (tin[1], tin[2],      0), n)
-        n == 3 && return new( (tin[1], tin[2], tin[3]), n)
+        n == 0 && return new((0,      0,      0), n)
+        n == 1 && return new((tin[1],      0,      0), n)
+        n == 2 && return new((tin[1], tin[2],      0), n)
+        n == 3 && return new((tin[1], tin[2], tin[3]), n)
         error("invalid $n")
     end
 end
@@ -106,7 +106,7 @@ stricterlower(a::VersionBound, b::VersionBound) = isless_ll(a, b) ? b : a
 # (could be done with generated functions, or even manually unrolled...)
 function isless_uu(a::VersionBound, b::VersionBound)
     m, n = a.n, b.n
-    for i = 1:min(m,n)
+    for i = 1:min(m, n)
         a[i] < b[i] && return true
         a[i] > b[i] && return false
     end
@@ -143,7 +143,7 @@ end
 Base.hash(r::VersionBound, h::UInt) = hash(hash(r.t, h), r.n)
 
 VersionBound(s::AbstractString) =
-    s == "*" ? VersionBound() : VersionBound(map(x->parse(Int, x), split(s, '.'))...)
+    s == "*" ? VersionBound() : VersionBound(map(x -> parse(Int, x), split(s, '.'))...)
 
 ################
 # VersionRange #
@@ -195,20 +195,20 @@ Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
 Base.in(v::VersionNumber, r::VersionRange) = r.lower ≲ v ≲ r.upper
 Base.in(v::VersionNumber, r::VersionNumber) = v == r
 
-Base.intersect(a::VersionRange, b::VersionRange) = VersionRange(stricterlower(a.lower,b.lower), stricterupper(a.upper,b.upper))
+Base.intersect(a::VersionRange, b::VersionRange) = VersionRange(stricterlower(a.lower, b.lower), stricterupper(a.upper, b.upper))
 
 function Base.union!(ranges::Vector{<:VersionRange})
     l = length(ranges)
     l == 0 && return ranges
 
-    sort!(ranges, lt=(a,b)->(isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
+    sort!(ranges, lt=(a, b) -> (isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
 
     k0 = 1
     ks = findfirst(!isempty, ranges)
     ks == nothing && return empty!(ranges)
 
     lo, up, k0 = ranges[ks].lower, ranges[ks].upper, 1
-    for k = (ks+1):l
+    for k = (ks + 1):l
         isempty(ranges[k]) && continue
         lo1, up1 = ranges[k].lower, ranges[k].upper
         if isjoinable(up, lo1)
@@ -303,8 +303,8 @@ Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 const Requires = Dict{UUID,VersionSpec}
 
 function merge_requires!(A::Requires, B::Requires)
-    for (pkg,vers) in B
-        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
+    for (pkg, vers) in B
+        A[pkg] = haskey(A, pkg) ? intersect(A[pkg], vers) : vers
     end
     return A
 end
@@ -316,7 +316,7 @@ struct Fixed
     version::VersionNumber
     requires::Requires
 end
-Fixed(v::VersionNumber) = Fixed(v,Requires())
+Fixed(v::VersionNumber) = Fixed(v, Requires())
 
 Base.:(==)(a::Fixed, b::Fixed) = a.version == b.version && a.requires == b.requires
 Base.hash(f::Fixed, h::UInt) = hash((f.version, f.requires), h + (0x68628b809fd417ca % UInt))
@@ -328,7 +328,7 @@ Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
 
 struct ResolverError <: Exception
     msg::AbstractString
-    ex::Union{Exception, Nothing}
+    ex::Union{Exception,Nothing}
 end
 ResolverError(msg::AbstractString) = ResolverError(msg, nothing)
 
@@ -359,7 +359,7 @@ cmderror(msg::String...) = throw(CommandError(join(msg)))
 # No stacktrace shown
 Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
 function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
-    printstyled(color = Base.error_color(), io, string(ex.msg))
+    printstyled(io, string(ex.msg); color=Base.error_color())
 end
 
 ###############
@@ -376,19 +376,33 @@ function UpgradeLevel(s::Symbol)
 end
 
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
-@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_CHECKED_OUT)
+@enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED,
+                            PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
+
+mutable struct GitRepo
+    url::String
+    rev::String
+    git_tree_sha1::Union{Nothing,SHA1}
+end
+
+GitRepo(url::String, revspec) = GitRepo(url, revspec, nothing)
+GitRepo(url::String) = GitRepo(url, "", nothing)
 
 mutable struct PackageSpec
     name::String
     uuid::UUID
     version::VersionTypes
     mode::PackageMode
-    path::Union{Nothing, String}
+    path::Union{Nothing,String}
     special_action::PackageSpecialAction # If the package is currently being pinned, freed etc
-    PackageSpec(name::AbstractString, uuid::UUID, version::VersionTypes, mode::PackageMode=PKGMODE_PROJECT, path=nothing, special_action=PKGSPEC_NOTHING) =
-        new(String(name), uuid, version, mode, path, special_action)
+    repo::Union{Nothing,GitRepo}
+    PackageSpec() = new("", UUID(zero(UInt128)), VersionSpec(), PKGMODE_PROJECT, nothing, PKGSPEC_NOTHING, nothing)
+    PackageSpec(name::AbstractString, uuid::UUID, version::VersionTypes,
+                mode::PackageMode=PKGMODE_PROJECT, path=nothing, special_action=PKGSPEC_NOTHING,
+                repo=nothing) =
+        new(String(name), uuid, version, mode, path, special_action, repo)
 end
 PackageSpec(name::AbstractString, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
@@ -483,16 +497,50 @@ mutable struct EnvCache
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
-        return new(
-            env,
+        return new(env,
             git,
             project_file,
             manifest_file,
             project,
             manifest,
             uuids,
-            paths,
-        )
+            paths,)
+    end
+end
+
+
+###########
+# Context #
+###########
+stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
+function gather_stdlib_uuids()
+    stdlibs = Dict{UUID,String}()
+    for stdlib in readdir(stdlib_dir())
+        projfile = joinpath(stdlib_path(stdlib), "Project.toml")
+        if isfile(projfile)
+            proj = TOML.parsefile(projfile)
+            if haskey(proj, "uuid")
+                stdlibs[UUID(proj["uuid"])] = stdlib
+            end
+        end
+    end
+    return stdlibs
+end
+
+# ENV variables to set some of these defaults?
+Base.@kwdef mutable struct Context
+    env::EnvCache = EnvCache()
+    preview::Bool = false
+    use_libgit2_for_all_downloads::Bool = false
+    num_concurrent_downloads::Int = 8
+    graph_verbose::Bool = false
+    stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
+end
+
+function Context!(ctx::Context; kwargs...)
+    for (k, v) in kwargs
+        setfield!(ctx, k, v)
     end
 end
 
@@ -537,7 +585,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+        try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -546,9 +594,136 @@ function read_manifest(file::String)
 end
 
 
+const refspecs = ["+refs/*:refs/remotes/cache/*"]
+function handle_repos!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upgrade=true)
+    for pkg in pkgs
+        pkg.repo == nothing && continue
+        # If we did not get the url to the repo yet, try look it up from the registry
+        if isempty(pkg.repo.url)
+            if !has_uuid(pkg)
+                registry_resolve!(env, [pkg])
+                ensure_resolved(env, [pkg])
+            end
+            _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
+        end
+        # TODO: Should not be set here?
+        pkg.special_action = PKGSPEC_REPO_ADDED
+        clones_dir = joinpath(depots()[1], "clones")
+        ispath(clones_dir) || mkpath(clones_dir)
+        repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
+        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+            @info "Cloning package from $(pkg.repo.url)"
+            LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
+        end
+        if upgrade
+            LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+            rev = pkg.repo.rev
+        else
+            # Not upgrading so the rev should be the current git-tree-sha
+            info = manifest_info(env, pkg.uuid)
+            rev = info["git-tree-sha1"]
+            pkg.version = VersionNumber(info["version"])
+        end
+
+        gitobject = nothing
+        isbranch = false
+        try
+            # see if we can get rev as a branch
+            isempty(rev) && (rev = LibGit2.branch(repo))
+            gitobject = LibGit2.GitObject(repo, "remotes/cache/heads/" * rev)
+            pkg.repo.rev = rev
+            isbranch = true
+        catch err
+            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        end
+        if gitobject == nothing
+            try
+                gitobject = LibGit2.GitObject(repo, rev)
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+                cmderror("git object $(rev) could not be found in $(pkg.repo.url)")
+            end
+        end
+        if !isbranch && upgrade
+            # If the user gave a shortened commit SHA, might as well update it to the full one
+            git_commit = LibGit2.GitHash(gitobject)
+            pkg.repo.rev = string(git_commit)
+        end
+        git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
+        @assert git_tree isa LibGit2.GitTree
+        pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
+        version_path = nothing
+        folder_already_downloaded = false
+        if has_uuid(pkg) && has_name(pkg)
+            version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+            isdir(version_path) && (folder_already_downloaded = true)
+            info = manifest_info(env, pkg.uuid)
+            if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
+                # Same tree sha and this version already downloaded, nothing left to do
+                pkg.version = VersionNumber(info["version"])
+                continue
+            end
+        end
+        if folder_already_downloaded
+            project_path = version_path
+        else
+            project_path = mktempdir()
+            opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
+                target_directory=Base.unsafe_convert(Cstring, project_path))
+            LibGit2.checkout_tree(repo, git_tree, options=opts)
+        end
+        found_project_file = false
+        for projname in project_names
+            if isfile(joinpath(project_path, "Project.toml"))
+                found_project_file = true
+                project_data = parse_toml(project_path, "Project.toml")
+                pkg.uuid = UUID(project_data["uuid"])
+                pkg.name = project_data["name"]
+                pkg.version = VersionNumber(get(project_data, "version", "0.0"))
+                break
+            end
+        end
+        if !found_project_file
+            @warn "packages will require to have a [Julia]Project.toml file in the future"
+            # This is an old style package, get the name from the url.
+            m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", pkg.repo.url)
+            m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
+            pkg.name = m.captures[1]
+            reg_uuids = registered_uuids(env, pkg.name)
+            is_registered = !isempty(reg_uuids)
+            if !is_registered
+                # This is an unregistered old style package, give it a random UUID and a version
+                if !has_uuid(pkg)
+                    pkg.uuid = UUIDs.uuid1()
+                    @info "Giving the unregistered package without Project.toml file the UUID of $(pkg.uuid)"
+                end
+                pkg.version = v"0.0"
+            else
+                # TODO: Fix
+                @assert length(reg_uuids) == 1
+                pkg.uuid = reg_uuids[1]
+                # Old style registered package
+                # What version does this package have? We have no idea... let's give it the latest one with a `+`...
+                Pkg3.Operations.set_maximum_version_registry!(env, pkg)
+            end
+        end
+        if !folder_already_downloaded
+            @info "Updated $(pkg.name) from $(pkg.repo.url)"
+            version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+            mkpath(version_path)
+            mv(project_path, version_path; force=true)
+        else
+            @info "Already installed $(pkg.name) at $version_path"
+        end
+        @assert pkg.version isa VersionNumber
+    end
+end
+
+
 ########################################
 # Resolving packages from name or uuid #
 ########################################
+
 # Disambiguate name/uuid package specifications using project info.
 function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
@@ -592,7 +767,7 @@ end
 # Disambiguate name/uuid package specifications using registry info.
 function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     # if there are no half-specified packages, return early
-    any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
+    any(pkg -> has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
     # collect all names and uuids since we're looking anyway
     names = [pkg.name for pkg in pkgs if has_name(pkg)]
     uuids = [pkg.uuid for pkg in pkgs if has_uuid(pkg)]
@@ -609,12 +784,24 @@ function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     return pkgs
 end
 
+function stdlib_resolve!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    for pkg in pkgs
+        @assert has_name(pkg) || has_uuid(pkg)
+        if has_name(pkg) && !has_uuid(pkg)
+            for (uuid, name) in ctx.stdlibs
+                name == pkg.name && (pkg.uuid = uuid)
+            end
+        end
+        if has_uuid(pkg) && !has_name(pkg)
+            haskey(ctx.stdlibs, pkg.uuid) && (pkg.name = ctx.stdlibs[pkg.uuid])
+        end
+    end
+end
+
 # Ensure that all packages are fully resolved
-function ensure_resolved(
-    env::EnvCache,
+function ensure_resolved(env::EnvCache,
     pkgs::AbstractVector{PackageSpec},
-    registry::Bool = false,
-)::Nothing
+    registry::Bool=false,)::Nothing
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs
         has_uuid(pkg) && continue
@@ -624,33 +811,31 @@ function ensure_resolved(
             uuid = UUID(info["uuid"])
             uuid in uuids || push!(uuids, uuid)
         end
-        sort!(uuids, by=uuid->uuid.value)
+        sort!(uuids, by=uuid -> uuid.value)
         unresolved[pkg.name] = uuids
     end
     isempty(unresolved) && return
     msg = sprint() do io
         println(io, "The following package names could not be resolved:")
-        for (name, uuids) in sort!(collect(unresolved), by=lowercase∘first)
-            print(io, " * $name (")
-            if length(uuids) == 0
-                what = ["project", "manifest"]
-                registry && push!(what, "registry")
-                print(io, "not found in ")
-                join(io, what, ", ", " or ")
-            else
-                join(io, uuids, ", ", " or ")
-                print(io, " in manifest but not in project")
-            end
-            println(io, ")")
+        for (name, uuids) in sort!(collect(unresolved), by=lowercase ∘ first)
+        print(io, " * $name (")
+        if length(uuids) == 0
+            what = ["project", "manifest"]
+            registry && push!(what, "registry")
+            print(io, "not found in ")
+            join(io, what, ", ", " or ")
+        else
+            join(io, uuids, ", ", " or ")
+            print(io, " in manifest but not in project")
         end
+        println(io, ")")
+    end
         print(io, "Please specify by known `name=uuid`.")
     end
     cmderror(msg)
 end
 
-const DEFAULT_REGISTRIES = Dict(
-    "Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git"
-)
+const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git")
 
 # Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
@@ -688,15 +873,14 @@ const line_re = r"""
 """x
 
 # Lookup package names & uuids in a single pass through registries
-function find_registered!(
-    env::EnvCache,
+function find_registered!(env::EnvCache,
     names::Vector{String},
-    uuids::Vector{UUID} = UUID[];
-    force::Bool = false,
+    uuids::Vector{UUID}=UUID[];
+    force::Bool=false,
 )::Nothing
     # only look if there's something new to see (or force == true)
-    names = filter(name->!haskey(env.uuids, name), names)
-    uuids = filter(uuid->!haskey(env.paths, uuid), uuids)
+    names = filter(name -> !haskey(env.uuids, name), names)
+    uuids = filter(uuid -> !haskey(env.paths, uuid), uuids)
     !force && isempty(names) && isempty(uuids) && return
 
     # since we're looking anyway, look for everything
@@ -724,23 +908,23 @@ function find_registered!(
     # build regexs for names and uuids
     uuid_re = sprint() do io
         if !isempty(uuids)
-            print(io, raw"^( ")
-            for (i, uuid) in enumerate(uuids)
-                1 < i && print(io, " | ")
-                print(io, raw"\Q", uuid, raw"\E")
-            end
-            print(io, raw" )\b")
+        print(io, raw"^( ")
+        for (i, uuid) in enumerate(uuids)
+            1 < i && print(io, " | ")
+            print(io, raw"\Q", uuid, raw"\E")
         end
+        print(io, raw" )\b")
+    end
     end
     name_re = sprint() do io
         if !isempty(names)
-            print(io, raw"\bname \s* = \s* \"( ")
-            for (i, name) in enumerate(names)
-                1 < i && print(io, " | ")
-                print(io, raw"\Q", name, raw"\E")
-            end
-            print(io, raw" )\"")
+        print(io, raw"\bname \s* = \s* \"( ")
+        for (i, name) in enumerate(names)
+            1 < i && print(io, " | ")
+            print(io, raw"\Q", name, raw"\E")
         end
+        print(io, raw" )\"")
+    end
     end
     regex = if !isempty(uuids) && !isempty(names)
         Regex("( $uuid_re | $name_re )", "x")
@@ -762,20 +946,20 @@ function find_registered!(
         open(joinpath(registry, "Registry.toml")) do io
             # skip forward until [packages] section
             for line in eachline(io)
-                contains(line, r"^ \s* \[ \s* packages \s* \] \s* $"x) && break
-            end
+            contains(line, r"^ \s* \[ \s* packages \s* \] \s* $"x) && break
+        end
             # find lines with uuid or name we're looking for
             for line in eachline(io)
-                contains(line,regex) || continue
-                m = match(line_re, line)
-                m == nothing &&
+            contains(line, regex) || continue
+            m = match(line_re, line)
+            m == nothing &&
                     error("misformatted registry.toml package entry: $line")
-                uuid = UUID(m.captures[1])
-                name = Base.unescape_string(m.captures[2])
-                path = abspath(registry, Base.unescape_string(m.captures[3]))
-                push!(get!(env.uuids, name, typeof(uuid)[]), uuid)
-                push!(get!(env.paths, uuid, typeof(path)[]), path)
-            end
+            uuid = UUID(m.captures[1])
+            name = Base.unescape_string(m.captures[2])
+            path = abspath(registry, Base.unescape_string(m.captures[3]))
+            push!(get!(env.uuids, name, typeof(uuid)[]), uuid)
+            push!(get!(env.paths, uuid, typeof(path)[]), path)
+        end
         end
     end
 end
@@ -810,7 +994,7 @@ function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
     choices::Vector{String} = []
-    choices_cache::Vector{Tuple{UUID, String}} = []
+    choices_cache::Vector{Tuple{UUID,String}} = []
     for uuid in uuids
         values = registered_info(env, uuid, "repo")
         for value in values
@@ -893,42 +1077,7 @@ function pathrepr(env::EnvCache, path::String, base::String=pwd())
     return repr(path)
 end
 
-
-###########
-# Context #
-###########
-function gather_stdlib_uuids()
-    stdlibs = Dict{UUID, String}()
-    stdlib_dir = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-    for stdlib in readdir(stdlib_dir)
-        projfile = joinpath(stdlib_dir, stdlib, "Project.toml")
-        if isfile(projfile)
-            proj = TOML.parsefile(joinpath(stdlib_dir, stdlib, "Project.toml"))
-            if haskey(proj, "uuid")
-                stdlibs[UUID(proj["uuid"])] = stdlib
-            end
-        end
-    end
-    return stdlibs
-end
-
-# ENV variables to set some of these defaults?
-Base.@kwdef mutable struct Context
-    env::EnvCache = EnvCache()
-    preview::Bool = false
-    use_libgit2_for_all_downloads::Bool = false
-    num_concurrent_downloads::Int = 8
-    graph_verbose::Bool = false
-    stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
-end
-
-function Context!(ctx::Context; kwargs...)
-    for (k, v) in kwargs
-        setfield!(ctx, k, v)
-    end
-end
-
-function write_env(ctx::Context; no_output=false)
+function write_env(ctx::Context; display_diff=true)
     env = ctx.env
     # load old environment for comparison
     old_env = EnvCache(env.env)
@@ -936,8 +1085,8 @@ function write_env(ctx::Context; no_output=false)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        no_output || @info "Updating $(pathrepr(env, env.project_file))"
-        no_output || Pkg3.Display.print_project_diff(old_env, env)
+        display_diff && @info "Updating $(pathrepr(env, env.project_file))"
+        display_diff && Pkg3.Display.print_project_diff(ctx, old_env, env)
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -947,11 +1096,11 @@ function write_env(ctx::Context; no_output=false)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        no_output || @info "Updating $(pathrepr(env, env.manifest_file))"
-        no_output || Pkg3.Display.print_manifest_diff(old_env, env)
+        display_diff && @info "Updating $(pathrepr(env, env.manifest_file))"
+        display_diff && Pkg3.Display.print_manifest_diff(ctx, old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
-        filter!(name->length(manifest[name]) == 1, uniques)
+        filter!(name -> length(manifest[name]) == 1, uniques)
         uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
         for (name, infos) in manifest, info in infos
             haskey(info, "deps") || continue

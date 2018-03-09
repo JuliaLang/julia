@@ -83,7 +83,7 @@ Return `true` if the specified IO object is readable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            isreadable(io)
        end
 false
@@ -106,7 +106,7 @@ Return `true` if the specified IO object is writable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            iswritable(io)
        end
 true
@@ -152,7 +152,8 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.
+Return the number of bytes written into the stream.   See also [`print`](@ref) to
+write a text representation (with an encoding that may depend upon `io`).
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -229,7 +230,7 @@ read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::Char; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
@@ -303,7 +304,7 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
     readuntil(filename::AbstractString, delim; keep::Bool = false)
 
 Read a string from an I/O stream or a file, up to the given delimiter.
-The delimiter can be a `UInt8`, `Char`, string, or vector.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
@@ -570,6 +571,8 @@ function write(io::IO, c::Char)
         n += 1
     end
 end
+# write(io, ::AbstractChar) is not defined: implementations
+# must provide their own encoding-specific method.
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
@@ -627,12 +630,14 @@ function read(io::IO, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+# read(io, T) is not defined for other AbstractChar: implementations
+# must provide their own encoding-specific method.
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
 readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
 
-function readuntil(s::IO, delim::Char; keep::Bool=false)
+function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8, keep)
     end
@@ -994,7 +999,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
 end
 
 """
-    countlines(io::IO; eol::Char = '\\n')
+    countlines(io::IO; eol::AbstractChar = '\\n')
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
@@ -1017,7 +1022,7 @@ julia> countlines(io, eol = '.')
 0
 ```
 """
-function countlines(io::IO; eol::Char='\n')
+function countlines(io::IO; eol::AbstractChar='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
     a = Vector{UInt8}(uninitialized, 8192)
@@ -1034,4 +1039,4 @@ function countlines(io::IO; eol::Char='\n')
     nl
 end
 
-countlines(f::AbstractString; eol::Char = '\n') = open(io->countlines(io, eol = eol), f)::Int
+countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int

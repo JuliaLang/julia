@@ -82,7 +82,7 @@ function startswith(stream::IO, s::AbstractString; eat = true, padding = false, 
     return result
 end
 
-function startswith(stream::IO, c::Char; eat = true)
+function startswith(stream::IO, c::AbstractChar; eat = true)
     if !eof(stream) && peek(stream) == UInt8(c)
         eat && read(stream, Char)
         return true

@@ -11,34 +11,9 @@ using Pkg3.Types
 import Random: randstring
 import LibGit2
 
-function temp_pkg_dir(fn::Function)
-    local env_dir
-    local old_load_path
-    local old_depot_path
-    try
-        old_load_path = copy(LOAD_PATH)
-        old_depot_path = copy(DEPOT_PATH)
-        empty!(LOAD_PATH)
-        empty!(DEPOT_PATH)
-        mktempdir() do env_dir
-            mktempdir() do depot_dir
-                pushfirst!(LOAD_PATH, env_dir)
-                pushfirst!(DEPOT_PATH, depot_dir)
-                # Add the standard library paths back
-                vers = "v$(VERSION.major).$(VERSION.minor)"
-                push!(LOAD_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia", "site", vers))
-                push!(LOAD_PATH, abspath(Sys.BINDIR, "..", "share", "julia", "site", vers))
-                fn(env_dir)
-            end
-        end
-    finally
-        append!(LOAD_PATH, old_load_path)
-        append!(DEPOT_PATH, old_depot_path)
-    end
-end
+include("utils.jl")
 
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
-isinstalled(pkg) = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name)) !== nothing
 
 temp_pkg_dir() do project_path
 
@@ -101,12 +76,12 @@ temp_pkg_dir() do project_path
         Pkg3.rm(TEST_PKG.name)
     end
 
-    @testset "checking out / freeing" begin
+    @testset "develop / freeing" begin
         Pkg3.add(TEST_PKG.name)
         old_v = Pkg3.installed()[TEST_PKG.name]
         Pkg3.rm(TEST_PKG.name)
         mktempdir() do devdir
-            Pkg3.checkout(TEST_PKG.name; path = devdir)
+            Pkg3.develop(TEST_PKG.name; path = devdir)
             @test isinstalled(TEST_PKG)
             @test Pkg3.installed()[TEST_PKG.name] > old_v
             test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
@@ -138,9 +113,18 @@ temp_pkg_dir() do project_path
         end
         mktempdir() do tmp
             withenv("JULIA_PKG_DEVDIR" => tmp) do
-                @test_throws CommandError Pkg3.checkout(TEST_PKG.name, "nonexisting_branch",)
+                @test_throws CommandError Pkg3.develop(TEST_PKG.name, "nonexisting_branch",)
             end
         end
+    end
+
+    @testset "stdlibs as direct dependency" begin
+        uuid_pkg = (name = "CRC32c", uuid = UUID("8bf52ea8-c179-5cab-976a-9e18b702a9bc"))
+        Pkg3.add("CRC32c")
+        @test haskey(Pkg3.installed(), uuid_pkg.name)
+        Pkg3.up()
+        Pkg3.test("CRC32c")
+        Pkg3.rm("CRC32c")
     end
 
     @testset "package name in resolver errors" begin
@@ -164,5 +148,7 @@ temp_pkg_dir() do project_path
 
     Pkg3.rm(TEST_PKG.name)
 end
+
+include("repl.jl")
 
 end # module

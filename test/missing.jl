@@ -150,7 +150,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, isempty, transpose, adjoint, float]
+                            isinteger, isreal, transpose, adjoint, float]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -197,7 +197,7 @@ end
 
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
-    @test sprint(showcompact, missing) == "missing"
+    @test sprint(show, missing, context=:compact => true) == "missing"
     @test sprint(show, [missing]) == "$Missing[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()

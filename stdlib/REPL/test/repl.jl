@@ -213,10 +213,10 @@ fake_repl() do stdin_write, stdout_read, repl
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test findfirst("[2h", readline(stdout_read)) == 0:-1
+    @test findfirst("[2h", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test findfirst("[2~", readline(stdout_read)) == 0:-1
+    @test findfirst("[2~", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)

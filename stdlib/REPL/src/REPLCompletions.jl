@@ -417,7 +417,7 @@ function afterusing(string::String, startpos::Int)
     isempty(str) && return false
     rstr = reverse(str)
     r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
-    isempty(r) && return false
+    r === nothing && return false
     fr = reverseind(str, last(r))
     return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
 end

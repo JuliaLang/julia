@@ -1124,7 +1124,7 @@ function init_parallel()
     register_worker(LPROC)
 end
 
-write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
+write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
 function process_opts(opts)
     # startup worker.

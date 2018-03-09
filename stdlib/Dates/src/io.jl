@@ -76,14 +76,14 @@ end
 
 function _show_content(io::IO, d::DatePart{c}) where c
     for i = 1:d.width
-        write(io, c)
+        print(io, c)
     end
 end
 
 function Base.show(io::IO, d::DatePart{c}) where c
-    write(io, "DatePart(")
+    print(io, "DatePart(")
     _show_content(io, d)
-    write(io, ")")
+    print(io, ")")
 end
 
 ### Parse tokens
@@ -131,19 +131,19 @@ end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
-        write(io, string($fn(dt), base = 10, pad = d.width))
+        print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
 for (tok, fn) in zip("uU", [monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
-        write(io, $fn(month(dt), locale))
+        print(io, $fn(month(dt), locale))
     end
 end
 
 for (tok, fn) in zip("eE", [dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
-        write(io, $fn(dayofweek(dt), locale))
+        print(io, $fn(dayofweek(dt), locale))
     end
 end
 
@@ -157,9 +157,9 @@ end
     l = lastindex(str)
     if l == n
         # fast path
-        write(io, str)
+        print(io, str)
     else
-        write(io, SubString(str, l - (n - 1), l))
+        print(io, SubString(str, l - (n - 1), l))
     end
 end
 
@@ -173,7 +173,7 @@ function format(io, d::DatePart{'s'}, dt)
         str = string(ms, pad = 3)
     end
 
-    write(io, rpad(str, d.width, '0'))
+    print(io, rpad(str, d.width, '0'))
 end
 
 ### Delimiters
@@ -182,10 +182,10 @@ struct Delim{T, length} <: AbstractDateToken
     d::T
 end
 
-Delim(d::Char) = Delim{Char, 1}(d)
+Delim(d::T) where {T<:AbstractChar} = Delim{T, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
+@inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
     for j=1:N
         i > len && return (nothing, i)
         c, i = next(str, i)
@@ -211,17 +211,17 @@ end
 end
 
 @inline function format(io, d::Delim, dt, locale)
-    write(io, d.d)
+    print(io, d.d)
 end
 
-function _show_content(io::IO, d::Delim{Char, N}) where N
+function _show_content(io::IO, d::Delim{<:AbstractChar, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
-            write(io, '\\', d.d)
+            print(io, '\\', d.d)
         end
     else
         for i = 1:N
-            write(io, d.d)
+            print(io, d.d)
         end
     end
 end
@@ -229,16 +229,16 @@ end
 function _show_content(io::IO, d::Delim)
     for c in d.d
         if c in keys(CONVERSION_SPECIFIERS)
-            write(io, '\\')
+            print(io, '\\')
         end
-        write(io, c)
+        print(io, c)
     end
 end
 
 function Base.show(io::IO, d::Delim)
-    write(io, "Delim(")
+    print(io, "Delim(")
     _show_content(io, d)
-    write(io, ")")
+    print(io, ")")
 end
 
 ### DateFormat construction
@@ -370,11 +370,11 @@ function DateFormat(f::AbstractString, locale::AbstractString)
 end
 
 function Base.show(io::IO, df::DateFormat)
-    write(io, "dateformat\"")
+    print(io, "dateformat\"")
     for t in df.tokens
         _show_content(io, t)
     end
-    write(io, '"')
+    print(io, '"')
 end
 
 """

@@ -27,6 +27,8 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        # issue #26178
+        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
 
     @testset "Basic properties" begin

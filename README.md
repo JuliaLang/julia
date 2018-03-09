@@ -413,7 +413,6 @@ The Julia source code is organized as follows:
     doc/src/stdlib source for standard library function reference
     src/           source for Julia language core
     test/          test suites
-    test/perf      benchmark suites
     ui/            source for various front ends
     usr/           binaries and shared libraries loaded by Julia's standard libraries
 

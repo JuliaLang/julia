@@ -376,6 +376,27 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     eltypeTvV = convert(Vector{Tv}, V)
     return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
 end
+function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
+    nz = count(t -> t != 0, M)
+    colptr = zeros(Ti, size(M, 2) + 1)
+    nzval = Vector{Tv}(uninitialized, nz)
+    rowval = Vector{Ti}(uninitialized, nz)
+    colptr[1] = 1
+    cnt = 1
+    @inbounds for j in 1:size(M, 2)
+        for i in 1:size(M, 1)
+            v = M[i, j]
+            if v != 0
+                rowval[cnt] = i
+                nzval[cnt] = v
+                cnt += 1
+            end
+        end
+        colptr[j+1] = cnt
+    end
+    return SparseMatrixCSC(size(M, 1), size(M, 2), colptr, rowval, nzval)
+end
+
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::SparseMatrixCSC{Tv}) where Tv
     # Handle cases where zero(Tv) is not defined but the array is dense.
@@ -390,6 +411,8 @@ function Matrix(S::SparseMatrixCSC{Tv}) where Tv
     return A
 end
 Array(S::SparseMatrixCSC) = Matrix(S)
+
+convert(T::Type{<:SparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float.(S.nzval))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
@@ -3082,13 +3105,13 @@ function hcat(X::SparseMatrixCSC...)
 end
 
 """
-    blkdiag(A...)
+    blockdiag(A...)
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
 # Examples
 ```jldoctest
-julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
+julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
 5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
   [1, 1]  =  2
   [2, 2]  =  2
@@ -3097,7 +3120,7 @@ julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
   [5, 5]  =  4
 ```
 """
-function blkdiag(X::SparseMatrixCSC...)
+function blockdiag(X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]

@@ -350,7 +350,7 @@ end
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
-    showcompact(buf, d)
+    show(IOContext(buf, :compact => true), d)
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.

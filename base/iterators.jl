@@ -90,7 +90,7 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
-reverse(x::Union{Number,Char}) = x
+reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
 start(r::Reverse{<:Tuple}) = length(r.itr)

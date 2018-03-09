@@ -87,6 +87,10 @@ for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
             val = f(dep, d)
             val == nothing && continue
             haskey(data, ver) || (data[ver] = Dict{String,String}())
+            # BinDeps injects a dependency on Libdl
+            if name == "Deps" && dep == "BinDeps"
+                data[ver]["Libdl"] = "\"8f399da3-3557-5675-b5ff-fb832c97cbdb\""
+            end
             data[ver][dep] = val
         end
         compressed = compress_versions_data(data, versions)

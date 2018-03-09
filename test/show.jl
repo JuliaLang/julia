@@ -747,16 +747,6 @@ end
 @test !contains(repr(fill(1.,10,10)), "\u2026")
 @test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
 
-# showcompact() also sets :multiline=>false (#16817)
-let io = IOBuffer(),
-    x = [1, 2]
-
-    showcompact(io, x)
-    @test String(take!(io)) == "[1, 2]"
-    showcompact(IOContext(io, :compact => true), x)
-    @test String(take!(io)) == "[1, 2]"
-end
-
 let io = IOBuffer()
     ioc = IOContext(io, :limit => true)
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
@@ -1085,9 +1075,15 @@ end
     @test contains(s, " in Base.Math ")
 end
 
+module AlsoExportsPair
+Pair = 0
+export Pair
+end
+
 module TestShowType
     export TypeA
     struct TypeA end
+    using ..AlsoExportsPair
 end
 
 @testset "module prefix when printing type" begin
@@ -1108,6 +1104,15 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+
+    # issue #26354; make sure testing for symbol visibility doesn't cause
+    # spurious binding resolutions
+    show(IOContext(b, :module => TestShowType), Base.Pair)
+    @test !Base.isbindingresolved(TestShowType, :Pair)
+    @test String(take!(b)) == "Base.Pair"
+    show(IOContext(b, :module => TestShowType), Base.Complex)
+    @test Base.isbindingresolved(TestShowType, :Complex)
+    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin

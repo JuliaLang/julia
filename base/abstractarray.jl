@@ -12,7 +12,8 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 AbstractArray
 
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
-convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
+convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
+convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # catch undefined constructors before the deprecation kicks in
@@ -170,31 +171,42 @@ _length(A) = (@_inline_meta; length(A))
 
 """
     lastindex(collection) -> Integer
+    lastindex(collection, d) -> Integer
 
-Return the last index of the collection.
+Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
+
+The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
+`A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
 # Examples
 ```jldoctest
 julia> lastindex([1,2,4])
 3
+
+julia> lastindex(rand(3,4,5), 2)
+4
 ```
 """
 lastindex(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
-lastindex(a::AbstractArray, n) = (@_inline_meta; last(axes(a, n)))
+lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
 
 """
     firstindex(collection) -> Integer
+    firstindex(collection, d) -> Integer
 
-Return the first index of the collection.
+Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
 # Examples
 ```jldoctest
 julia> firstindex([1,2,4])
 1
+
+julia> firstindex(rand(3,4,5), 2)
+1
 ```
 """
 firstindex(a::AbstractArray) = (@_inline_meta; first(linearindices(a)))
-firstindex(a::AbstractArray, n) = (@_inline_meta; first(axes(a, n)))
+firstindex(a::AbstractArray, d) = (@_inline_meta; first(axes(a, d)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 

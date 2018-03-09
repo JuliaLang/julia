@@ -454,6 +454,7 @@ include("loading.jl")
 # misc useful functions & macros
 include("util.jl")
 
+creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = Sys.BINDIR
     init_depot_path(BINDIR)
@@ -711,7 +712,7 @@ end
     ## functions that were re-exported from Base
     @deprecate_stdlib nonzeros   SparseArrays true
     @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
     @deprecate_stdlib dropzeros  SparseArrays true
     @deprecate_stdlib dropzeros! SparseArrays true
     @deprecate_stdlib issparse   SparseArrays true
@@ -927,23 +928,27 @@ end
 # Clear global state
 empty!(Core.ARGS)
 empty!(Base.ARGS)
-empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
-@eval Base.Sys BINDIR = ""
+@eval Base creating_sysimg = false
+Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
+
 
 tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
 tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
 
 println("Sysimage built. Summary:")
 print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
-print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); showcompact((tot_time_base          / tot_time) * 100); println("%")
-print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); showcompact((Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
 if isfile("userimg.jl")
-print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); showcompact((tot_time_userimg       / tot_time) * 100); println("%")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
 end
-print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); showcompact((tot_time_precompile    / tot_time) * 100); println("%")
+print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_precompile    / tot_time) * 100); println("%")
 end
+
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)

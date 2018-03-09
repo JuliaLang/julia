@@ -196,7 +196,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
+@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
 
 
 # Distributed GC tests for RemoteChannels

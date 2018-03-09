@@ -159,6 +159,8 @@ end
 @test !issymmetric(fill(1,5,3))
 @test !ishermitian(fill(1,5,3))
 @test (x = fill(1,3); cross(x,x) == zeros(3))
+@test_throws DimensionMismatch cross(fill(1,3), fill(1,4))
+@test_throws DimensionMismatch cross(fill(1,2), fill(1,3))
 
 @test trace(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
 

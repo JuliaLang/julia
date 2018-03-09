@@ -631,7 +631,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # First the current response buffer
     if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
-        if match != 0:-1
+        if match !== nothing
             seek(response_buffer, first(match) - 1)
             return true
         end
@@ -642,7 +642,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc1(searchdata, h)
-        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)

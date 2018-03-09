@@ -549,4 +549,29 @@ end
         r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1")
 end
 
+@testset "adjoint/transpose triangular/vector multiplication" begin
+    for elty in (Float64, ComplexF64), trity in (UpperTriangular, LowerTriangular)
+        A1 = trity(rand(elty, 1, 1))
+        b1 = rand(elty, 1)
+        A4 = trity(rand(elty, 4, 4))
+        b4 = rand(elty, 4)
+        @test A1 * b1' ≈ Matrix(A1) * b1'
+        @test_throws DimensionMismatch A4 * b4'
+        @test A1 * transpose(b1) ≈ Matrix(A1) * transpose(b1)
+        @test_throws DimensionMismatch A4 * transpose(b4)
+        @test A1' * b1' ≈ Matrix(A1') * b1'
+        @test_throws DimensionMismatch A4' * b4'
+        @test A1' * transpose(b1) ≈  Matrix(A1') * transpose(b1)
+        @test_throws DimensionMismatch A4' * transpose(b4)
+        @test transpose(A1) * transpose(b1) ≈  Matrix(transpose(A1)) * transpose(b1)
+        @test_throws DimensionMismatch transpose(A4) * transpose(b4)
+        @test transpose(A1) * b1' ≈ Matrix(transpose(A1)) * b1'
+        @test_throws DimensionMismatch transpose(A4) * b4'
+        @test b1' * transpose(A1) ≈ b1' * Matrix(transpose(A1))
+        @test b4' * transpose(A4) ≈ b4' * Matrix(transpose(A4))
+        @test transpose(b1) * A1' ≈ transpose(b1) * Matrix(A1')
+        @test transpose(b4) * A4' ≈ transpose(b4) * Matrix(A4')
+    end
+end
+
 end # module TestTriangular
