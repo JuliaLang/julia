@@ -2,9 +2,8 @@
 
 module GraphType
 
-import ..Pkg3
-using Pkg3.Types
-import Pkg3: equalto, Nothing, Types.uuid_julia
+using ..Types
+import ..Types.uuid_julia
 
 export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, simplify_graph_soft!,
        get_resolve_log, showlog, push_snapshot!, pop_snapshot!, wipe_snapshots!

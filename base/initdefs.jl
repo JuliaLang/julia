@@ -116,8 +116,10 @@ function parse_load_path(str::String)
 end
 
 function init_load_path(BINDIR = Sys.BINDIR)
-    load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
-    append!(empty!(LOAD_PATH), parse_load_path(load_path))
+    if !Base.creating_sysimg
+        load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
+        append!(empty!(LOAD_PATH), parse_load_path(load_path))
+    end
     vers = "v$(VERSION.major).$(VERSION.minor)"
     push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
