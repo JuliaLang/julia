@@ -100,19 +100,23 @@ Note that `a` is written to [`stdout`](@ref) by the [`write`](@ref) function and
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the Julia Base reference for a detailed discussion of the difference between the two):
+the documentation for these two methods for a detailed discussion of the difference between them):
 
 ```jldoctest
 julia> print(stdout, 0x61)
 97
 ```
 
+See [Custom pretty-printing](@ref man-custom-pretty-printing) for more information on how to
+implement display methods for custom types.
+
 ## IO Output Contextual Properties
 
 Sometimes IO output can benefit from the ability to pass contextual information into show methods.
 The [`IOContext`](@ref) object provides this framework for associating arbitrary metadata with an IO object.
-For example, [`showcompact`](@ref) adds a hinting parameter to the IO object that the invoked show method
-should print a shorter output (if applicable).
+For example, `:compact => true` adds a hinting parameter to the IO object that the invoked show method
+should print a shorter output (if applicable). See the [`IOContext`](@ref) documentation for a list
+of common properties.
 
 ## Working with Files
 

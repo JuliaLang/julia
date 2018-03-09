@@ -150,7 +150,7 @@ macro enum(T, syms...)
                 print(io, x)
             else
                 print(io, x, "::")
-                showcompact(io, typeof(x))
+                show(IOContext(io, :compact => true), typeof(x))
                 print(io, " = ", $basetype(x))
             end
         end
