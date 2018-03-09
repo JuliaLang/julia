@@ -9,11 +9,6 @@ function register(f, rtype, argt, name)
 end
 
 # Trunc
-function truncdfhf2(x::Float64)
-    return Float16(Float32(x))
-end
-register(truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
-
 function truncsfhf2(x::Float32)
     f = reinterpret(UInt32, val)
     if isnan(val)
@@ -38,6 +33,13 @@ function truncsfhf2(x::Float32)
 end
 register(truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
 register(truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
+
+function truncdfhf2(x::Float64)
+    # Ideally we would have a specialised Float64->Float16 operation here
+    # but we can udr Core.Intrinsics for Float64->Float32.
+    return truncsfhf2(Core.Intrinsics.fptrunc(Float32, x))
+end
+register(truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
 
 # Extend
 function extendhfsf2(x::Float16)
@@ -85,7 +87,7 @@ register(extendhfsf2, Float32, Tuple{Float16}, "__extendhfsf2")
 register(extendhfsf2, Float32, Tuple{Float16}, "__gnu_h2f_ieee")
 
 function extendhfdf2(x::Float16)
-    return return Float32(Float16)
+    return Core.Intrinsics.fpext(Float64, extendhfsf2(x))
 end
 register(extendhfdf2, Float64, Tuple{Float16}, "__extendhfdf2")
 
