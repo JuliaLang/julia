@@ -38,7 +38,7 @@ function truncsfhf2(x::Float32)
 end
 register(truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
 register(truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
- 
+
 # Extend
 function extendhfsf2(x::Float16)
     local ival::UInt32 = reinterpret(UInt16, val)
