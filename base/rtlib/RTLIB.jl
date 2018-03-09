@@ -1,19 +1,23 @@
 module RTLIB
 
+import Core.Intrinsics: ne_float, bitcast, fpext, fptrunc
 
-# We would like to use `@ccallable` here,
-# but building the sysimage fails, so we use a bootstrapped version.
 function register(f, rtype, argt, name)
-    ccall(:jl_extern_c, Nothing, (Any, Any, Any, Cstring),
+    ccall(:jl_extern_c, Nothing, (Any, Any, Any, Ptr{UInt8}),
           f, rtype, argt, name)
 end
 
+isnan(x::Float32) = ne_float(x,x)
+
+const basetable = Vector{UInt16}(uninitialized, 512)
+const shifttable = Vector{UInt8}(uninitialized, 512)
+
 # Trunc
-function truncsfhf2(x::Float32)
-    f = reinterpret(UInt32, val)
+function truncsfhf2(val::Float32)
+    f = bitcast(UInt32, val)
     if isnan(val)
         t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
-        return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
+        return bitcast(Float16, t ⊻ ((f >> 0xd) % UInt16))
     end
     i = (f >> 23) & 0x1ff + 1
     sh = shifttable[i]
@@ -29,21 +33,19 @@ function truncsfhf2(x::Float32)
             h += 1
         end
     end
-    reinterpret(Float16, h)
+    return bitcast(Float16, h)
 end
 register(truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
 register(truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
 
 function truncdfhf2(x::Float64)
-    # Ideally we would have a specialised Float64->Float16 operation here
-    # but we can udr Core.Intrinsics for Float64->Float32.
-    return truncsfhf2(Core.Intrinsics.fptrunc(Float32, x))
+    return truncsfhf2(fptrunc(Float32, x))
 end
 register(truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
 
 # Extend
-function extendhfsf2(x::Float16)
-    local ival::UInt32 = reinterpret(UInt16, val)
+function extendhfsf2(val::Float16)
+    local ival::UInt32 = bitcast(UInt16, val)
     local sign::UInt32 = (ival & 0x8000) >> 15
     local exp::UInt32  = (ival & 0x7c00) >> 10
     local sig::UInt32  = (ival & 0x3ff) >> 0
@@ -81,22 +83,19 @@ function extendhfsf2(x::Float16)
         sig  = sig << (23 - 10)
         ret = sign | exp | sig
     end
-    return reinterpret(Float32, ret)
+    return bitcast(Float32, ret)
 end
 register(extendhfsf2, Float32, Tuple{Float16}, "__extendhfsf2")
 register(extendhfsf2, Float32, Tuple{Float16}, "__gnu_h2f_ieee")
 
 function extendhfdf2(x::Float16)
-    return Core.Intrinsics.fpext(Float64, extendhfsf2(x))
+    return fpext(Float64, extendhfsf2(x))
 end
 register(extendhfdf2, Float64, Tuple{Float16}, "__extendhfdf2")
 
 # Float32 -> Float16 algorithm from:
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-const basetable = Vector{UInt16}(uninitialized, 512)
-const shifttable = Vector{UInt8}(uninitialized, 512)
 
 for i = 0:255
     e = i - 127

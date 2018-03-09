@@ -186,6 +186,8 @@ include("namedtuple.jl")
 include("hashing.jl")
 include("rounding.jl")
 using .Rounding
+include("rtlib/RTLIB.jl")
+using .RTLIB
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -247,10 +249,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 include("osutils.jl")
 include("c.jl")
-
-# inlucde the runtime library
-include("rtlib/RTLIB.jl")
-using .RTLIB
 
 # Core I/O
 include("io.jl")
