@@ -121,7 +121,7 @@ Language changes
 
   * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
     deprecated in favor of equivalents accepting `undef` (an alias for
-    `Uninitialized()`) as their first argument, as in
+    `UndefInitializer()`) as their first argument, as in
     `BitArray[{N}](undef, shape...)`. For example, `BitVector(3)` is now
     `BitVector(undef, 3)`, `BitMatrix((2, 4))` is now
     `BitMatrix(undef, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
@@ -662,7 +662,7 @@ Deprecated or removed
 
   * Uninitialized `Array` constructors of the form
     `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
-    accepting `uninit` (an alias for `Uninitialized()`) as their first argument,
+    accepting `uninit` (an alias for `UndefInitializer()`) as their first argument,
     as in `Array[{T,N}](undef, shape...)`. For example,
     `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
     `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
@@ -693,7 +693,7 @@ Deprecated or removed
 
   * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been
     deprecated in favor of equivalents accepting `uninit` (an alias for
-    `Uninitialized()`) as their first argument, as in
+    `UndefInitializer()`) as their first argument, as in
     `RowVector{T}(undef, shape...)`. For example, `RowVector{Int}(3)` is now
     `RowVector{Int}(undef, 3)`, and `RowVector{Float32}((1, 4))` is now
     `RowVector{Float32}(undef, (1, 4))` ([#24786]).

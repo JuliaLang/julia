@@ -418,20 +418,20 @@ function RowVector{T}(vec::AbstractVector{T}) where {T}
 end
 
 # Constructors that take a size and default to Array
-function RowVector{T}(::Uninitialized, n::Int) where {T}
+function RowVector{T}(::UndefInitializer, n::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
     return RowVector{T}(Vector{transpose_type(T)}(undef, n))
 end
-function RowVector{T}(::Uninitialized, n1::Int, n2::Int) where {T}
+function RowVector{T}(::UndefInitializer, n1::Int, n2::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
     return n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n2)) :
         error("RowVector expects 1×N size, got ($n1,$n2)")
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
     return RowVector{T}(Vector{transpose_type(T)}(undef, n[1]))
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int,Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int,Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
     return n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n[2])) :
         error("RowVector expects 1×N size, got $n")

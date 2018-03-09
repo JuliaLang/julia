@@ -136,7 +136,7 @@ export
     AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, Method,
-    Module, Symbol, Task, Array, Uninitialized, undef, WeakRef, VecElement,
+    Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -374,27 +374,27 @@ const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 ## primitive Array constructors
-struct Uninitialized end
-const undef = Uninitialized()
+struct UndefInitializer end
+const undef = UndefInitializer()
 # type and dimensionality specified, accepting dims as series of Ints
-Array{T,1}(::Uninitialized, m::Int) where {T} =
+Array{T,1}(::UndefInitializer, m::Int) where {T} =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(::Uninitialized, m::Int, n::Int) where {T} =
+Array{T,2}(::UndefInitializer, m::Int, n::Int) where {T} =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(::Uninitialized, m::Int, n::Int, o::Int) where {T} =
+Array{T,3}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
-Array{T,N}(::Uninitialized, d::Vararg{Int,N}) where {T,N} =
+Array{T,N}(::UndefInitializer, d::Vararg{Int,N}) where {T,N} =
     ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type and dimensionality specified, accepting dims as tuples of Ints
-Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
-Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
-Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(::UndefInitializer, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
+Array{T,2}(::UndefInitializer, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
+Array{T,3}(::UndefInitializer, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type but not dimensionality specified
-Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(undef, m)
-Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
-Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
-Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
+Array{T}(::UndefInitializer, m::Int) where {T} = Array{T,1}(undef, m)
+Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
+Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
+Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 

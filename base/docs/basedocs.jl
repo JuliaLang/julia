@@ -1323,7 +1323,7 @@ julia> Vector{Float64}(undef, 3)
  6.90966e-310
 ```
 """
-Vector{T}(::Uninitialized, n)
+Vector{T}(::UndefInitializer, n)
 
 """
     Vector{T}(nothing, m)
@@ -1372,7 +1372,7 @@ julia> Matrix{Float64}(undef, 2, 3)
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
 """
-Matrix{T}(::Uninitialized, m, n)
+Matrix{T}(::UndefInitializer, m, n)
 
 """
     Matrix{T}(nothing, m, n)
@@ -1432,7 +1432,7 @@ julia> B = Array{Float64}(undef, 2) # N determined by the input
  0.0
 ```
 """
-Array{T,N}(::Uninitialized, dims)
+Array{T,N}(::UndefInitializer, dims)
 
 """
     Array{T}(nothing, dims)
@@ -1482,28 +1482,28 @@ julia> Array{Union{Missing, Int}}(missing, 2, 3)
 Array{T,N}(::Missing, dims)
 
 """
-    Uninitialized
+    UndefInitializer
 
 Singleton type used in array initialization, indicating the array-constructor-caller
 would like an uninitialized array. See also [`undef`](@ref),
-an alias for `Uninitialized()`.
+an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(Uninitialized(), 3)
+julia> Array{Float64,1}(UndefInitializer(), 3)
 3-element Array{Float64,1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
 ```
 """
-Uninitialized
+UndefInitializer
 
 """
     undef
 
-Alias for `Uninitialized()`, which constructs an instance of the singleton type
-[`Uninitialized`](@ref), used in array initialization to indicate the
+Alias for `UndefInitializer()`, which constructs an instance of the singleton type
+[`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
 # Examples

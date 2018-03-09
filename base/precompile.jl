@@ -17,7 +17,7 @@ for (_pkgid, _mod) in Base.loaded_modules
     end
 end
 @eval PrecompileStagingArea begin
-precompile(Tuple{Type{Array{Array{UInt8, 1}, 1}}, Uninitialized, Int64})
+precompile(Tuple{Type{Array{Array{UInt8, 1}, 1}}, UndefInitializer, Int64})
 precompile(Tuple{Type{Array{Float64, 1}}, Int64})
 precompile(Tuple{Type{Array{UInt8, 1}}, Int64})
 precompile(Tuple{Type{Base.Dict{K, V} where V where K}, Base.Generator{Base.Dict{UInt8, UInt8}, typeof(Base.reverse)}})

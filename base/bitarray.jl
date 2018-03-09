@@ -13,7 +13,7 @@ mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
-    function BitArray{N}(::Uninitialized, dims::Vararg{Int,N}) where N
+    function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
         n = 1
         i = 1
         for d in dims
@@ -54,10 +54,10 @@ julia> BitArray(undef, (3, 1))
  false
 ```
 """
-BitArray(::Uninitialized, dims::Integer...) = BitArray(undef, map(Int,dims))
-BitArray{N}(::Uninitialized, dims::Integer...) where {N} = BitArray{N}(undef, map(Int,dims))
-BitArray(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
-BitArray{N}(::Uninitialized, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
+BitArray(::UndefInitializer, dims::Integer...) = BitArray(undef, map(Int,dims))
+BitArray{N}(::UndefInitializer, dims::Integer...) where {N} = BitArray{N}(undef, map(Int,dims))
+BitArray(::UndefInitializer, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
+BitArray{N}(::UndefInitializer, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
 
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
