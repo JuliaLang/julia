@@ -1497,6 +1497,8 @@ end
 
 # rename uninitialized
 @deprecate_binding uninitialized undef
+@deprecate_binding Uninitialized UndefInitializer
+
 
 # END 0.7 deprecations
 
