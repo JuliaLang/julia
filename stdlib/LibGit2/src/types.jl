@@ -215,12 +215,16 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
 struct RemoteCallbacks
     cb::RemoteCallbacksStruct
     gcroot::Ref{Any}
-    function RemoteCallbacks(; payload::Union{Payload, Nothing}=nothing, kwargs...)
+    function RemoteCallbacks(; payload::Union{Payload, Nothing, Ptr{Cvoid}}=nothing, kwargs...)
         p = Ref{Any}(payload)
         if payload === nothing
             pp = C_NULL
-        else
+        elseif payload isa Payload
             pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
+        elseif payload isa Ptr{Cvoid}
+            pp = payload
+        else
+            error("unhandled type $payload")
         end
         return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
     end
@@ -321,6 +325,21 @@ end
     repository_cb_payload::Ptr{Cvoid}
     remote_cb::Ptr{Cvoid}
     remote_cb_payload::Ptr{Cvoid}
+end
+
+"""
+    LibGit2.GitTransferProgress
+
+Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/type/git_transfer_progress) struct.
+"""
+@kwdef struct GitTransferProgress
+    total_objects::Cuint
+    indexed_objects::Cuint
+    received_objects::Cuint
+    local_objects::Cuint
+    total_deltas::Cuint
+    indexed_deltas::Cuint
+    received_bytes::Csize_t
 end
 
 """
