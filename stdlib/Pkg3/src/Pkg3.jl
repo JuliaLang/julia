@@ -16,12 +16,8 @@ function print_first_command_header()
     isinteractive() || return
     @info """
     Pkg3 is still under development, please file issues at `https://github.com/JuliaLang/Pkg3.jl`.
+    Pkg3 is running without precompile statements, first action will be slow.
     """
-    if !PKG3_IS_PRECOMPILED && !haskey(ENV, "JULIA_PKG3_DISABLE_PRECOMPILE_WARNING")
-        @info """
-        Pkg3 is running without precompile statements, first action will be slow.
-        """
-    end
     have_warned_session = true
 end
 
