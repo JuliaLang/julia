@@ -20,8 +20,6 @@ function print_first_command_header()
     if !PKG3_IS_PRECOMPILED && !haskey(ENV, "JULIA_PKG3_DISABLE_PRECOMPILE_WARNING")
         @info """
         Pkg3 is running without precompile statements, first action will be slow.
-        Rebuild julia with the environment variable `JULIA_PKG3_PRECOMPILE` set to enable precompilation of Pkg3.
-        This message can be disabled by setting the env variable `JULIA_PKG3_DISABLE_PRECOMPILE_WARNING`.
         """
     end
     have_warned_session = true
@@ -59,16 +57,18 @@ function __init__()
     end
 end
 
+#=
 using ..Types
 using UUIDs
 import LibGit2
 # This crashes low memory systems and some of Julia's CI
-# so keep it disabled by default for now.
+# so keep it disabled for now.
 if haskey(ENV, "JULIA_PKG3_PRECOMPILE")
     const PKG3_IS_PRECOMPILED = true
     include("precompile.jl")
 else
     const PKG3_IS_PRECOMPILED = false
 end
+=#
 
 end # module
