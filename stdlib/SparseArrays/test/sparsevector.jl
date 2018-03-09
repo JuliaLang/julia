@@ -673,8 +673,7 @@ end
 @testset "Zero-preserving math functions: sparse -> sparse" begin
     x1operations = (floor, ceil, trunc, round)
     x0operations = (log1p,  expm1,  sinpi,
-                    sin,    tan,    sind,   tand,
-                    asin,   atan,   asind,  atand,
+                    sin,    tan,    asin,   atan,
                     sinh,   tanh,   asinh,  atanh)
 
     for (spvec, densevec, operations) in (
@@ -692,10 +691,10 @@ end
 end
 @testset "Non-zero-preserving math functions: sparse -> dense" begin
     for op in (exp, exp2, exp10, log, log2, log10,
-            cos, cosd, acos, cosh, cospi,
-            csc, cscd, acot, csch, acsch,
-            cot, cotd, acosd, coth,
-            sec, secd, acotd, sech, asech)
+            cos, acos, cosh, cospi,
+            csc, acot, csch, acsch,
+            cot, coth,
+            sec, sech, asech)
         spvec = rnd_x0
         densevec = rnd_x0f
         spresvec = op.(spvec)

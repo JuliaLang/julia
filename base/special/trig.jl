@@ -955,12 +955,11 @@ cosc(x::Complex{<:AbstractFloat}) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)
 cosc(x::Complex) = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
-for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :cosd, "secant"),
-                                            (:csc, :sin, :csch, :sinh, :cscd, :sind, "cosecant"),
-                                            (:cot, :tan, :coth, :tanh, :cotd, :tand, "cotangent"))
+for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
+                                 (:csc, :sin, :csch, :sinh, "cosecant"),
+                                 (:cot, :tan, :coth, :tanh, "cotangent"))
     name = string(finv)
     hname = string(finvh)
-    dname = string(finvd)
     @eval begin
         @doc """
             $($name)(x)
@@ -972,11 +971,6 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
 
         Compute the hyperbolic $($fn) of `x`.
         """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
-        @doc """
-            $($dname)(x)
-
-        Compute the $($fn) of `x`, where `x` is in degrees.
-        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
     end
 end
 
@@ -1013,82 +1007,3 @@ function deg2rad_ext(x::Float64)
 end
 deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
-
-function sind(x::Real)
-    if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
-    elseif isnan(x)
-        return oftype(x,NaN)
-    end
-
-    rx = copysign(float(rem(x,360)),x)
-    arx = abs(rx)
-
-    if rx == zero(rx)
-        return rx
-    elseif arx < oftype(rx,45)
-        return sin_kernel(deg2rad_ext(rx))
-    elseif arx <= oftype(rx,135)
-        y = deg2rad_ext(oftype(rx,90) - arx)
-        return copysign(cos_kernel(y),rx)
-    elseif arx == oftype(rx,180)
-        return copysign(zero(rx),rx)
-    elseif arx < oftype(rx,225)
-        y = deg2rad_ext((oftype(rx,180) - arx)*sign(rx))
-        return sin_kernel(y)
-    elseif arx <= oftype(rx,315)
-        y = deg2rad_ext(oftype(rx,270) - arx)
-        return -copysign(cos_kernel(y),rx)
-    else
-        y = deg2rad_ext(rx - copysign(oftype(rx,360),rx))
-        return sin_kernel(y)
-    end
-end
-
-function cosd(x::Real)
-    if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
-    elseif isnan(x)
-        return oftype(x,NaN)
-    end
-
-    rx = abs(float(rem(x,360)))
-
-    if rx <= oftype(rx,45)
-        return cos_kernel(deg2rad_ext(rx))
-    elseif rx < oftype(rx,135)
-        y = deg2rad_ext(oftype(rx,90) - rx)
-        return sin_kernel(y)
-    elseif rx <= oftype(rx,225)
-        y = deg2rad_ext(oftype(rx,180) - rx)
-        return -cos_kernel(y)
-    elseif rx < oftype(rx,315)
-        y = deg2rad_ext(rx - oftype(rx,270))
-        return sin_kernel(y)
-    else
-        y = deg2rad_ext(oftype(rx,360) - rx)
-        return cos_kernel(y)
-    end
-end
-
-tand(x::Real) = sind(x) / cosd(x)
-
-for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
-        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
-    end
-end
-
-for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
-                    (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
-
-        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
-    end
-end
