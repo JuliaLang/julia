@@ -712,7 +712,7 @@ end
     ## functions that were re-exported from Base
     @deprecate_stdlib nonzeros   SparseArrays true
     @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
     @deprecate_stdlib dropzeros  SparseArrays true
     @deprecate_stdlib dropzeros! SparseArrays true
     @deprecate_stdlib issparse   SparseArrays true
