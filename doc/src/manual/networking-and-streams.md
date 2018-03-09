@@ -100,12 +100,15 @@ Note that `a` is written to [`stdout`](@ref) by the [`write`](@ref) function and
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the Julia Base reference for a detailed discussion of the difference between the two):
+the documentation for these two methods for a detailed discussion of the difference between them):
 
 ```jldoctest
 julia> print(stdout, 0x61)
 97
 ```
+
+See [Custom pretty-printing](@ref man-custom-pretty-printing) for more information on how to
+implement display methods for custom types.
 
 ## IO Output Contextual Properties
 
