@@ -74,11 +74,11 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 empty!(DEPOT_PATH)
                 write("Project.toml", proj)
                 write("Manifest.toml", manifest)
-                mktempdir() do depot_dir
-                    pushfirst!(DEPOT_PATH, depot_dir)
-                    pkg"up --fixed"
-                    @test Pkg3.installed()[pkg2] == v"0.2.0"
-                end
+                depot_dir = mktempdir()
+                pushfirst!(DEPOT_PATH, depot_dir)
+                pkg"up --fixed"
+                @test Pkg3.installed()[pkg2] == v"0.2.0"
+                try rm(depot_dir; recurisve=true) end
             finally
                 empty!(DEPOT_PATH)
                 append!(DEPOT_PATH, old_depot)
