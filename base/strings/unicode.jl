@@ -314,7 +314,11 @@ function isupper(c::AbstractChar)
     cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
 end
 
-# Documented in Unicode module
+"""
+    iscased(c::AbstractChar) -> Bool
+
+Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+"""
 function iscased(c::AbstractChar)
     cat = category_code(c)
     return cat == UTF8PROC_CATEGORY_LU ||
