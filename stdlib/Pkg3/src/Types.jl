@@ -23,7 +23,8 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
+    printpkgstyle
 
 
 ## ordering of UUIDs ##
@@ -591,7 +592,8 @@ end
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
 const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
 
-function handle_repos_develop!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
+function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    env = ctx.env
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_DEVELOPED
@@ -609,7 +611,7 @@ function handle_repos_develop!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
             # from scratch.
             repo_path = joinpath(depots()[1], "clones", string(hash(pkg.repo.url), "_full"))
             repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-                @info "Cloning package from $(pkg.repo.url)"
+                printpkgstyle(ctx, :Cloning, " package from $(pkg.repo.url)")
                 LibGit2.clone(pkg.repo.url, repo_path)
             end
             LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
@@ -640,7 +642,8 @@ function handle_repos_develop!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     end
 end
 
-function handle_repos_add!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    env = ctx.env
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_REPO_ADDED
@@ -649,7 +652,7 @@ function handle_repos_add!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upg
         mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
         repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-            @info "Cloning package from $(pkg.repo.url)"
+            printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
             LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
         end
         if upgrade_or_add
@@ -694,7 +697,6 @@ function handle_repos_add!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upg
         end
         parse_package!(env, pkg, project_path)
         if !folder_already_downloaded
-            @info "Updated $(pkg.name) from $(pkg.repo.url)"
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
             mv(project_path, version_path; force=true)
@@ -727,7 +729,7 @@ function parse_package!(env, pkg, project_path)
             # This is an unregistered old style package, give it a random UUID and a version
             if !has_uuid(pkg)
                 pkg.uuid = UUIDs.uuid1()
-                @info "Giving the unregistered package without Project.toml file the UUID of $(pkg.uuid)"
+                @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
             pkg.version = v"0.0"
         else
@@ -903,9 +905,9 @@ function registries()::Vector{String}
     user_regs = abspath(depots()[1], "registries")
     if !ispath(user_regs)
         mkpath(user_regs)
-        @info "Cloning default registries into $user_regs"
+        printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
         for (reg, url) in DEFAULT_REGISTRIES
-            @info " [+] $reg = $(repr(url))"
+            printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
             path = joinpath(user_regs, reg)
             LibGit2.clone(url, path)
         end
@@ -1105,10 +1107,23 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
     return nothing
 end
 
+# TODO: redirect to ctx stream
+function printpkgstyle(io::IO, cmd::Symbol, text::String...; ignore_indent=false)
+    indent = textwidth(string(:Downloaded))
+    ignore_indent && (indent = 0)
+    printstyled(io, lpad(string(cmd), indent), color=:green, bold=true)
+    println(io, " ", text...)
+end
+
+# TODO: use ctx specific context
+function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
+    printpkgstyle(stdout, cmd, text...; kwargs...)
+end
+
 # Give a short path string representation
-function pathrepr(env::EnvCache, path::String, base::String=pwd())
+function pathrepr(env::EnvCache, path::String, base::String=pwd(); ignore_pwd=false)
     path = abspath(base, path)
-    if env.git != nothing
+    if env.git != nothing && !ignore_pwd
         repo = LibGit2.path(env.git)
         if startswith(base, repo)
             # we're in the repo => path relative to pwd()
@@ -1135,8 +1150,10 @@ function write_env(ctx::Context; display_diff=true)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        display_diff && @info "Updating $(pathrepr(env, env.project_file))"
-        display_diff && Pkg3.Display.print_project_diff(ctx, old_env, env)
+        if display_diff
+            printpkgstyle(ctx, :Updating, pathrepr(env, env.project_file))
+            Pkg3.Display.print_project_diff(ctx, old_env, env)
+        end
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -1146,8 +1163,10 @@ function write_env(ctx::Context; display_diff=true)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        display_diff && @info "Updating $(pathrepr(env, env.manifest_file))"
-        display_diff && Pkg3.Display.print_manifest_diff(ctx, old_env, env)
+        if display_diff
+            printpkgstyle(ctx, :Updating, pathrepr(env, env.manifest_file))
+            Pkg3.Display.print_manifest_diff(ctx, old_env, env)
+        end
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name -> length(manifest[name]) == 1, uniques)

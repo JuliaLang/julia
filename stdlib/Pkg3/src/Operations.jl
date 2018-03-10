@@ -226,7 +226,7 @@ end
 
 # Resolve a set of versions given package version specs
 function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,VersionNumber}
-    @info("Resolving package versions")
+    printpkgstyle(ctx, :Resolving, "package versions...")
     # anything not mentioned is fixed
     uuids = UUID[pkg.uuid for pkg in pkgs]
     uuid_to_name = Dict{UUID, String}(uuid => stdlib for (uuid, stdlib) in ctx.stdlibs)
@@ -380,7 +380,7 @@ function install_git(
     ispath(clones_dir) || mkpath(clones_dir)
     repo_path = joinpath(clones_dir, string(uuid))
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-        @info("Cloning [$uuid] $name from $(urls[1])")
+        printpkgstyle(ctx, :Cloning, "[$uuid] $name from $(urls[1])")
         LibGit2.clone(urls[1], repo_path, isbare=true)
     end
     git_hash = LibGit2.GitHash(hash.bytes)
@@ -470,7 +470,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
-            @info "Installed $(rpad(pkg.name * " ", max_name + 2, "─")) $vstr"
+            printpkgstyle(ctx, :Downloaded, string(rpad(pkg.name * " ", max_name + 2, "─"), " ", vstr))
         else
             push!(missed_packages, (pkg, path))
         end
@@ -711,7 +711,7 @@ end
 
 function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve=false)
     # collect builds for UUIDs with `deps/build.jl` files
-    ctx.preview && (@info "Skipping building in preview mode"; return)
+    ctx.preview && (printpkgstyle(ctx, :Building, "skipping building in preview mode"); return)
     builds = Tuple{UUID,String,Union{String,SHA1},String}[]
     for uuid in uuids
         uuid in keys(ctx.stdlibs) && continue
@@ -733,15 +733,13 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     # toposort builds by dependencies
     order = dependency_order_uuids(ctx, map(first, builds))
     sort!(builds, by = build -> order[first(build)])
+    max_name = isempty(builds) ? 0 : maximum(textwidth.([build[2] for build in builds]))
     # build each package verions in a child process
     for (uuid, name, hash_or_path, build_file) in builds
         log_file = splitext(build_file)[1] * ".log"
-        if hash_or_path isa SHA1
-            @info "Building $name [$(string(hash_or_path)[1:8])]..."
-        else
-            @info "Building $name [$(string(hash_or_path))]..."
-        end
-        @info " → $log_file"
+        printpkgstyle(ctx, :Building,
+            rpad(name * " ", max_name + 1, "─"), "→ ", Types.pathrepr(ctx.env, log_file; ignore_pwd=true))
+
         code = """
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
@@ -872,7 +870,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         info = manifest_info(ctx.env, pkg.uuid)
         if haskey(info, "repo-url")
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
-            handle_repos_add!(ctx.env, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
+            handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
         else
             ver = VersionNumber(info["version"])
             if level == UPLEVEL_FIXED
@@ -957,7 +955,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
 
     pkgs_errored = []
     for (pkg, testfile, version_path) in zip(pkgs, testfiles, version_paths)
-        @info("Testing $(pkg.name) located at $(abspath(version_path))")
+        printpkgstyle(ctx, :Testing, pkg.name)
         if ctx.preview
             @info("In preview mode, skipping tests for $(pkg.name)")
             continue
@@ -982,7 +980,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
         with_dependencies_loadable_at_toplevel(ctx, pkg; might_need_to_resolve=true) do
             try
                 run(cmd)
-                @info("$(pkg.name) tests passed")
+                printpkgstyle(ctx, :Testing, pkg.name, " tests passed ")
             catch err
                 push!(pkgs_errored, pkg.name)
             end
@@ -999,10 +997,10 @@ end
 function init(ctx::Context)
     project_file = ctx.env.project_file
     isfile(project_file) &&
-        cmderror("Environment already initialized at $project_file")
+        cmderror("Project already initialized at $project_file")
     mkpath(dirname(project_file))
     touch(project_file)
-    @info "Initialized environment by creating $project_file"
+    printpkgstyle(ctx, :Initialized, "project at ", pathrepr(ctx.env, dirname(project_file)))
 end
 
 end # module

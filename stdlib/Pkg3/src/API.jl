@@ -11,7 +11,7 @@ import ..Operations, ..Display
 using ..Types, ..TOML
 
 
-preview_info() = @info("In preview mode")
+preview_info() = printstyled("───── Preview mode ─────\n"; color=Base.info_color(), bold=true)
 
 include("generate.jl")
 
@@ -24,9 +24,9 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if mode == :develop
-        handle_repos_develop!(ctx.env, pkgs)
+        handle_repos_develop!(ctx, pkgs)
     else
-        handle_repos_add!(ctx.env, pkgs; upgrade_or_add=true)
+        handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
@@ -71,35 +71,35 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         info("Skipping updating registry in preview mode")
     else
         for reg in registries()
-            if !isdir(joinpath(reg, ".git"))
-                @info("Registry at $reg is not a git repo, skipping update")
-            end
-            @info("Updating registry at $reg")
-            LibGit2.with(LibGit2.GitRepo, reg) do repo
-                if LibGit2.isdirty(repo)
-                    push!(errors, (reg, "registry dirty"))
-                    return
-                end
-                if !LibGit2.isattached(repo)
-                    push!(errors, (reg, "registry detached"))
-                    return
-                end
-                branch = LibGit2.headname(repo)
-                LibGit2.fetch(repo)
-                ff_succeeded = try
-                    LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
-                catch e
-                    e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
-                    push!(errors, (reg, "branch origin/$branch not found"))
-                    return
-                end
-
-                if !ff_succeeded
-                    try LibGit2.rebase!(repo, "origin/$branch")
-                    catch e
-                        e isa LibGit2.GitError || rethrow(e)
-                        push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+            if isdir(joinpath(reg, ".git"))
+                regpath = pathrepr(ctx.env, reg; ignore_pwd=true)
+                printpkgstyle(ctx, :Updating, "registry at ", regpath)
+                LibGit2.with(LibGit2.GitRepo, reg) do repo
+                    if LibGit2.isdirty(repo)
+                        push!(errors, (regpath, "registry dirty"))
                         return
+                    end
+                    if !LibGit2.isattached(repo)
+                        push!(errors, (regpath, "registry detached"))
+                        return
+                    end
+                    branch = LibGit2.headname(repo)
+                    LibGit2.fetch(repo)
+                    ff_succeeded = try
+                        LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
+                    catch e
+                        e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
+                        push!(errors, (reg, "branch origin/$branch not found"))
+                        return
+                    end
+
+                    if !ff_succeeded
+                        try LibGit2.rebase!(repo, "origin/$branch")
+                        catch e
+                            e isa LibGit2.GitError || rethrow(e)
+                            push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+                            return
+                        end
                     end
                 end
             end
@@ -287,7 +287,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
         end
     end
     bytes, mb = Base.prettyprint_getunits(sz, length(Base._mem_units), Int64(1024))
-    byte_save_str = length(paths_to_delete) == 0 ? "" : (" saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
+    byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
 end
 
@@ -313,6 +313,7 @@ build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
     if isempty(pkgs)
         for (name, infos) in ctx.env.manifest, info in infos
             uuid = UUID(info["uuid"])
