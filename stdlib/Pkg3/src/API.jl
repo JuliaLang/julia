@@ -33,6 +33,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
     Operations.add_or_develop(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
@@ -51,6 +52,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     Operations.rm(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -132,6 +134,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         ensure_resolved(ctx.env, pkgs)
     end
     Operations.up(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -289,6 +292,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     bytes, mb = Base.prettyprint_getunits(sz, length(Base._mem_units), Int64(1024))
     byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
+    ctx.preview && preview_info()
 end
 
 
@@ -329,6 +333,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
     Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
+    ctx.preview && preview_info()
 end
 
 init() = init(Context())

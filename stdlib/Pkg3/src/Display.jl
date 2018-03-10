@@ -104,9 +104,9 @@ revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
 vstring(a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
-           a.pinned == true ? "⚲" : "",
            a.path != nothing ? " [$(a.path)]" : "",
-           a.repo != nothing ? " #$(revstring(a.repo.rev))" : ""
+           a.repo != nothing ? " #$(revstring(a.repo.rev))" : "",
+           a.pinned == true ? " ⚲" : "",
            )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =

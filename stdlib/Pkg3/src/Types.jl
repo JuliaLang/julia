@@ -610,11 +610,16 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             # develop from the same repo, this avoids having to reclone it
             # from scratch.
             repo_path = joinpath(depots()[1], "clones", string(hash(pkg.repo.url), "_full"))
-            repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-                printpkgstyle(ctx, :Cloning, " package from $(pkg.repo.url)")
-                LibGit2.clone(pkg.repo.url, repo_path)
+            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
+                r = LibGit2.clone(pkg.repo.url, repo_path)
+                LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+                r, true
             end
-            LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+            if !just_cloned
+                printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
+                LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+            end
 
             # Copy the repo to a temporary place and check out the rev
             project_path = mktempdir()
@@ -651,16 +656,22 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         clones_dir = joinpath(depots()[1], "clones")
         mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+        repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
             printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
-            LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
+            r = LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
+            LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+            r, true
         end
-        if upgrade_or_add
+        info = manifest_info(env, pkg.uuid)
+        pinned = (info != nothing && get(info, "pinned", false))
+        if upgrade_or_add  && !pinned && !just_cloned
+            printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
             LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+        end
+        if upgrade_or_add && !pinned
             rev = pkg.repo.rev
         else
             # Not upgrading so the rev should be the current git-tree-sha
-            info = manifest_info(env, pkg.uuid)
             rev = info["git-tree-sha1"]
             pkg.version = VersionNumber(info["version"])
         end
