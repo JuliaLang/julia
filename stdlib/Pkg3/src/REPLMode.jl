@@ -248,7 +248,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     if cmd.kind == CMD_PREVIEW
         ctx.preview = true
         isempty(tokens) && cmderror("expected a command to preview")
-        return do_cmd!(tokens, repl)
+        cmd = popfirst!(tokens)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
