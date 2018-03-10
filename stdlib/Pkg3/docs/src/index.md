@@ -16,7 +16,9 @@ Pkg3 is the package manager for Julia.
 
 ## Getting Started
 
-The Pkg REPL-mode is entered using from the Julia REPL using the key `]`. To generate the files for a new project, use `pkg> generate`.
+The Pkg REPL-mode is entered using from the Julia REPL using the key `]`.
+To return to the `julia>` prompt, either press backspace when the input line is empty or press Ctrl+C.
+To generate the files for a new project, use `pkg> generate`.
 
 ```
 pkg> generate HelloWorld

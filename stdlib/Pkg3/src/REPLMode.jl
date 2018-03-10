@@ -271,6 +271,11 @@ function do_cmd!(tokens::Vector{Token}, repl)
 end
 
 const help = md"""
+
+**Welcome to the Pkg3 REPL-mode**. To return to the `julia>` prompt, either press
+backspace when the input line is empty or press Ctrl+C.
+
+
 **Synopsis**
 
     pkg> [--env=...] cmd [opts] [args]
