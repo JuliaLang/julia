@@ -38,7 +38,11 @@
 #include <functional>
 
 // target machine computation
+#if JL_LLVM_VERSION >= 60000
+#include <llvm/CodeGen/TargetSubtargetInfo.h>
+#else
 #include <llvm/Target/TargetSubtargetInfo.h>
+#endif
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
