@@ -10,7 +10,7 @@ makedocs(
 )
 
 deploydocs(
-    repo = "https://github.com/JuliaLang/Pkg3.jl",
+    repo = "github.com/JuliaLang/Pkg3.jl",
     target = "build",
     julia = "nightly",
     deps = nothing,
