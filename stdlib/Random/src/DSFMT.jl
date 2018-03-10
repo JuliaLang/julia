@@ -190,7 +190,7 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     index = val[nval - 1]
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
-    dsfmt = Vector{UInt64}(uninitialized, nval >> 1)
+    dsfmt = Vector{UInt64}(undef, nval >> 1)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
           dsfmt, val, (nval - 1) * sizeof(Int32))
     dsfmt[end] = UInt64(N*2)

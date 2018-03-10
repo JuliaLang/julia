@@ -423,7 +423,7 @@ Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
 Base.broadcast_similar(f, ::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, As...) where {A,T} =
-    A(Array{T}(uninitialized, length.(inds)))
+    A(Array{T}(undef, length.(inds)))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}

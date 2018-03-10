@@ -223,7 +223,7 @@ end
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
-rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
+rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(undef, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
@@ -232,7 +232,7 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
+rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{eltype(X)}(undef, dims), X)
 rand(                ::Type{X}, dims::Dims) where {X} = rand(GLOBAL_RNG, X, dims)
 
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))

@@ -47,7 +47,7 @@ elseif Sys.isapple()
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
-        buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(undef, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
@@ -708,7 +708,7 @@ function _require_from_serialized(path::String)
         close(io)
     end
     ndeps = length(depmodnames)
-    depmods = Vector{Any}(uninitialized, ndeps)
+    depmods = Vector{Any}(undef, ndeps)
     for i in 1:ndeps
         modkey, build_id = depmodnames[i]
         dep = _tryrequire_from_serialized(modkey, build_id, nothing)
@@ -1338,7 +1338,7 @@ function stale_cachefile(modpath::String, cachefile::String)
 
         # Check if transitive dependencies can be fullfilled
         ndeps = length(required_modules)
-        depmods = Vector{Any}(uninitialized, ndeps)
+        depmods = Vector{Any}(undef, ndeps)
         for i in 1:ndeps
             req_key, req_build_id = required_modules[i]
             # Module is already loaded

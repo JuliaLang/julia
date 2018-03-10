@@ -10,7 +10,7 @@ if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Vector{UInt128}(uninitialized, 1))
+        RandomDevice() = new(Vector{UInt128}(undef, 1))
     end
 
     function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
@@ -96,8 +96,8 @@ end
 
 MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state,
-                    Vector{Float64}(uninitialized, MT_CACHE_F),
-                    Vector{UInt128}(uninitialized, MT_CACHE_I >> 4),
+                    Vector{Float64}(undef, MT_CACHE_F),
+                    Vector{UInt128}(undef, MT_CACHE_I >> 4),
                     MT_CACHE_F, 0)
 
 """

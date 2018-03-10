@@ -333,9 +333,9 @@ end
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
-@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(uninitialized, tuple(d1,dims...)))
-@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(uninitialized, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
-@deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(uninitialized, dims))
+@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(undef, tuple(d1,dims...)))
+@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(undef, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
+@deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(undef, dims))
 
 function CartesianIndices(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
     inds = map((f,l)->f:l, start.I, stop.I)
@@ -687,10 +687,10 @@ end
 # After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
 # Also un-comment the new definition in base/indices.jl
 
-# deprecate BitArray{...}(shape...) constructors to BitArray{...}(uninitialized, shape...) equivalents
-@deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(uninitialized, dims)
-@deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(uninitialized, dims...)
-@deprecate BitArray(dims::Integer...)                   BitArray(uninitialized, dims)
+# deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
+@deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
+@deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(undef, dims...)
+@deprecate BitArray(dims::Integer...)                   BitArray(undef, dims)
 
 ## deprecate full
 export full
@@ -729,26 +729,26 @@ findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, 
 # issue #24006
 @deprecate linearindices(s::AbstractString) eachindex(s)
 
-# deprecate Array(shape...)-like constructors to Array(uninitialized, shape...) equivalents
+# deprecate Array(shape...)-like constructors to Array(undef, shape...) equivalents
 # --> former primitive constructors
-@deprecate Array{T,1}(m::Int) where {T}                      Array{T,1}(uninitialized, m)
-@deprecate Array{T,2}(m::Int, n::Int) where {T}              Array{T,2}(uninitialized, m, n)
-@deprecate Array{T,3}(m::Int, n::Int, o::Int) where {T}      Array{T,3}(uninitialized, m, n, o)
-@deprecate Array{T,N}(d::Vararg{Int,N}) where {T,N}          Array{T,N}(uninitialized, d)
-@deprecate Array{T,N}(d::NTuple{N,Int}) where {T,N}          Array{T,N}(uninitialized, d)
-@deprecate Array{T}(m::Int) where {T}                        Array{T}(uninitialized, m)
-@deprecate Array{T}(m::Int, n::Int) where {T}                Array{T}(uninitialized, m, n)
-@deprecate Array{T}(m::Int, n::Int, o::Int) where {T}        Array{T}(uninitialized, m, n, o)
-@deprecate Array{T}(d::NTuple{N,Int}) where {T,N}            Array{T}(uninitialized, d)
+@deprecate Array{T,1}(m::Int) where {T}                      Array{T,1}(undef, m)
+@deprecate Array{T,2}(m::Int, n::Int) where {T}              Array{T,2}(undef, m, n)
+@deprecate Array{T,3}(m::Int, n::Int, o::Int) where {T}      Array{T,3}(undef, m, n, o)
+@deprecate Array{T,N}(d::Vararg{Int,N}) where {T,N}          Array{T,N}(undef, d)
+@deprecate Array{T,N}(d::NTuple{N,Int}) where {T,N}          Array{T,N}(undef, d)
+@deprecate Array{T}(m::Int) where {T}                        Array{T}(undef, m)
+@deprecate Array{T}(m::Int, n::Int) where {T}                Array{T}(undef, m, n)
+@deprecate Array{T}(m::Int, n::Int, o::Int) where {T}        Array{T}(undef, m, n, o)
+@deprecate Array{T}(d::NTuple{N,Int}) where {T,N}            Array{T}(undef, d)
 # --> former convenience constructors
-@deprecate Vector{T}(m::Integer) where {T}                          Vector{T}(uninitialized, m)
-@deprecate Matrix{T}(m::Integer, n::Integer) where {T}              Matrix{T}(uninitialized, m, n)
-@deprecate Array{T}(m::Integer) where {T}                           Array{T}(uninitialized, m)
-@deprecate Array{T}(m::Integer, n::Integer) where {T}               Array{T}(uninitialized, m, n)
-@deprecate Array{T}(m::Integer, n::Integer, o::Integer) where {T}   Array{T}(uninitialized, m, n, o)
-@deprecate Array{T}(d::Integer...) where {T}                        Array{T}(uninitialized, d)
-@deprecate Vector(m::Integer)                                       Vector(uninitialized, m)
-@deprecate Matrix(m::Integer, n::Integer)                           Matrix(uninitialized, m, n)
+@deprecate Vector{T}(m::Integer) where {T}                          Vector{T}(undef, m)
+@deprecate Matrix{T}(m::Integer, n::Integer) where {T}              Matrix{T}(undef, m, n)
+@deprecate Array{T}(m::Integer) where {T}                           Array{T}(undef, m)
+@deprecate Array{T}(m::Integer, n::Integer) where {T}               Array{T}(undef, m, n)
+@deprecate Array{T}(m::Integer, n::Integer, o::Integer) where {T}   Array{T}(undef, m, n, o)
+@deprecate Array{T}(d::Integer...) where {T}                        Array{T}(undef, d)
+@deprecate Vector(m::Integer)                                       Vector(undef, m)
+@deprecate Matrix(m::Integer, n::Integer)                           Matrix(undef, m, n)
 
 # deprecate IntSet to BitSet
 @deprecate_binding IntSet BitSet
@@ -1495,6 +1495,10 @@ end
 
 # Issue #26248
 @deprecate conj(x) x
+
+# rename uninitialized
+@deprecate_binding uninitialized undef
+@deprecate_binding Uninitialized UndefInitializer
 
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)

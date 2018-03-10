@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Vector{T}(uninitialized, n-m+1)
-    oldy = Vector{T}(uninitialized, n-m+1)
+    oldx = Vector{T}(undef, n-m+1)
+    oldy = Vector{T}(undef, n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))

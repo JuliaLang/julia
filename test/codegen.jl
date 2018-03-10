@@ -328,7 +328,7 @@ end
 
 str_22330 = """
 Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
-             copyto!(Array{T,n}(uninitialized, size(a)), a)
+             copyto!(Array{T,n}(undef, size(a)), a)
 
 empty(Dict(),  Pair{Union{},Union{}})
 """

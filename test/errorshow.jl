@@ -263,7 +263,7 @@ let undefvar
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
-    err_str = @except_str Vector{Any}(uninitialized, 1)[1] UndefRefError
+    err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
     @test err_str == "UndefVarError: undefvar not defined"

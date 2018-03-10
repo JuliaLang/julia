@@ -350,12 +350,12 @@ function domsort_ssa!(ir, domtree)
         end
     end
     bb_rename = IdDict{Int,Int}(i=>x for (x, i) in pairs(result_order) if i !== 0)
-    new_bbs = Vector{BasicBlock}(uninitialized, length(result_order))
+    new_bbs = Vector{BasicBlock}(undef, length(result_order))
     nstmts = sum(length(ir.cfg.blocks[i].stmts) for i in result_order if i !== 0)
-    result_stmts = Vector{Any}(uninitialized, nstmts+ncritbreaks+nnewfallthroughs)
+    result_stmts = Vector{Any}(undef, nstmts+ncritbreaks+nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
     result_ltable = Int[0 for i = 1:length(result_stmts)]
-    inst_rename = Vector{Any}(uninitialized, length(ir.stmts))
+    inst_rename = Vector{Any}(undef, length(ir.stmts))
     for i = 1:length(ir.new_nodes)
         push!(inst_rename, SSAValue(nstmts + i + ncritbreaks + nnewfallthroughs))
     end

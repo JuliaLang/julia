@@ -606,7 +606,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
-    Q = Matrix{T}(uninitialized, n,n)
+    Q = Matrix{T}(undef, n,n)
     blks = [0; findall(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'

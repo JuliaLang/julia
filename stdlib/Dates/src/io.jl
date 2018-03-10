@@ -481,7 +481,7 @@ end
 
 function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     # preallocate to reduce resizing
-    io = IOBuffer(Vector{UInt8}(uninitialized, bufsize), read=true, write=true)
+    io = IOBuffer(Vector{UInt8}(undef, bufsize), read=true, write=true)
     format(io, dt, fmt)
     String(io.data[1:io.ptr - 1])
 end

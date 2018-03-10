@@ -104,13 +104,13 @@ parent(A::AbstractTriangular) = A.data
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function Matrix{T}(A::LowerTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     tril!(B)
     B
 end
 function Matrix{T}(A::UnitLowerTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     tril!(B)
     for i = 1:size(B,1)
@@ -119,13 +119,13 @@ function Matrix{T}(A::UnitLowerTriangular) where T
     B
 end
 function Matrix{T}(A::UpperTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     triu!(B)
     B
 end
 function Matrix{T}(A::UnitUpperTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     triu!(B)
     for i = 1:size(B,1)
@@ -2160,7 +2160,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i+1,i] = R[i,i+1]
     end
     x,V = eig(R)
-    w = Vector{Float64}(uninitialized, m)
+    w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
         w[i] = V[1,i]^2

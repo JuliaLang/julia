@@ -268,8 +268,8 @@ mutable struct DLMOffsets <: DLMHandler
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Vector{Vector{Int}}(uninitialized, 1)
-        offsets[1] = Vector{Int}(uninitialized, offs_chunk_size)
+        offsets = Vector{Vector{Int}}(undef, 1)
+        offsets[1] = Vector{Int}(undef, offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, sizeof(sbuff))
     end
@@ -293,7 +293,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Vector{Int}(uninitialized, offs_chunk_size)
+        offsets = Vector{Int}(undef, offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -332,7 +332,7 @@ function DLMStore(::Type{T}, dims::NTuple{2,Integer},
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(uninitialized, nrows-hdr_offset, ncols),
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(undef, nrows-hdr_offset, ncols),
         nrows, ncols, 0, 0, hdr_offset, sbuff, auto, Char(eol))
 end
 

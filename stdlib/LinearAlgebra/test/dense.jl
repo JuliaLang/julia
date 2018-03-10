@@ -85,7 +85,7 @@ bimg  = randn(n,2)/2
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
-            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin

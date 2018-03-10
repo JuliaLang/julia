@@ -333,7 +333,7 @@ end
 
     @testset "Issue 23161" begin
         arr = b"0123456789abcdefABCDEF"
-        arr1 = Vector{UInt8}(uninitialized, length(arr) >> 1)
+        arr1 = Vector{UInt8}(undef, length(arr) >> 1)
         @test hex2bytes!(arr1, arr) === arr1 # check in-place
         @test "0123456789abcdefabcdef" == bytes2hex(arr1)
         @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)

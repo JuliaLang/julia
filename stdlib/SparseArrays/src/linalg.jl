@@ -156,9 +156,9 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Vector{Ti}(uninitialized, nB+1)
-    rowvalC = Vector{Ti}(uninitialized, nnzC)
-    nzvalC = Vector{Tv}(uninitialized, nnzC)
+    colptrC = Vector{Ti}(undef, nB+1)
+    rowvalC = Vector{Ti}(undef, nnzC)
+    nzvalC = Vector{Tv}(undef, nnzC)
 
     @inbounds begin
         ip = 1
@@ -334,7 +334,7 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
     end
-    colptr = Vector{Ti}(uninitialized, n+1)
+    colptr = Vector{Ti}(undef, n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
         colptr[col] = 1
@@ -346,8 +346,8 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         end
         colptr[col+1] = nnz+1
     end
-    rowval = Vector{Ti}(uninitialized, nnz)
-    nzval = Vector{Tv}(uninitialized, nnz)
+    rowval = Vector{Ti}(undef, nnz)
+    nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
@@ -366,7 +366,7 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
             "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
     end
-    colptr = Vector{Ti}(uninitialized, n+1)
+    colptr = Vector{Ti}(undef, n+1)
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
@@ -380,8 +380,8 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     for col = max(min(n, m+k)+2,1) : n+1
         colptr[col] = nnz+1
     end
-    rowval = Vector{Ti}(uninitialized, nnz)
-    nzval = Vector{Tv}(uninitialized, nnz)
+    rowval = Vector{Ti}(undef, nnz)
+    nzval = Vector{Tv}(undef, nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
@@ -400,10 +400,10 @@ end
 function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     m,n = size(S)
     m > 1 || return SparseMatrixCSC(0, n, fill(one(Ti),n+1), Ti[], Tv[])
-    colptr = Vector{Ti}(uninitialized, n+1)
+    colptr = Vector{Ti}(undef, n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
-    rowval = Vector{Ti}(uninitialized, numnz)
-    nzval = Vector{Tv}(uninitialized, numnz)
+    rowval = Vector{Ti}(undef, numnz)
+    nzval = Vector{Tv}(undef, numnz)
     numnz = 0
     colptr[1] = 1
     for col = 1 : n
@@ -439,10 +439,10 @@ end
 
 function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     m,n = size(a)
-    colptr = Vector{Ti}(uninitialized, max(n,1))
+    colptr = Vector{Ti}(undef, max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
-    rowval = Vector{Ti}(uninitialized, numnz)
-    nzval = Vector{Tv}(uninitialized, numnz)
+    rowval = Vector{Ti}(undef, numnz)
+    nzval = Vector{Tv}(undef, numnz)
 
     z = zero(Tv)
 
@@ -594,8 +594,8 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     if t > n
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
-    ind = Vector{Int64}(uninitialized, n)
-    ind_hist = Vector{Int64}(uninitialized, maxiter * t)
+    ind = Vector{Int64}(undef, n)
+    ind_hist = Vector{Int64}(undef, maxiter * t)
 
     Ti = typeof(float(zero(T)))
 
@@ -617,7 +617,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     end
 
     # Generate the block matrix
-    X = Matrix{Ti}(uninitialized, n, t)
+    X = Matrix{Ti}(undef, n, t)
     X[1:n,1] = 1
     for j = 2:t
         while true
@@ -767,9 +767,9 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
 
     m,n = mA*mB, nA*nB
 
-    colptr = Vector{Ti}(uninitialized, n+1)
-    rowval = Vector{Ti}(uninitialized, numnz)
-    nzval = Vector{Tv}(uninitialized, numnz)
+    colptr = Vector{Ti}(undef, n+1)
+    rowval = Vector{Ti}(undef, numnz)
+    nzval = Vector{Tv}(undef, numnz)
 
     colptr[1] = 1
 
@@ -826,8 +826,8 @@ function kron(x::SparseVector{Tv,Ti},y::SparseVector{Tv,Ti}) where {Tv,Ti}
     nnzx = nnz(x)
     nnzy = nnz(y)
     nnzz = nnzx*nnzy # number of nonzeros in new vector
-    nzind = Vector{Ti}(uninitialized, nnzz) # the indices of nonzeros
-    nzval = Vector{Tv}(uninitialized, nnzz) # the values of nonzeros
+    nzind = Vector{Ti}(undef, nnzz) # the indices of nonzeros
+    nzval = Vector{Tv}(undef, nnzz) # the values of nonzeros
     @inbounds for i = 1:nnzx, j = 1:nnzy
         this_ind = (i-1)*nnzy+j
         nzind[this_ind] = (x.nzind[i]-1)*y.n + y.nzind[j]

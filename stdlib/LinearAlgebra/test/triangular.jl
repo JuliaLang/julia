@@ -245,7 +245,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test sqrt(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
-        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(uninitialized,n+1))
+        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
 
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
@@ -359,7 +359,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(A1)*B1
             end
             #error handling
-            Ann, Bmm, bm = A1, Matrix{eltyB}(uninitialized, n+1, n+1), Vector{eltyB}(uninitialized, n+1)
+            Ann, Bmm, bm = A1, Matrix{eltyB}(undef, n+1, n+1), Vector{eltyB}(undef, n+1)
             @test_throws DimensionMismatch lmul!(Ann, bm)
             @test_throws DimensionMismatch rmul!(Bmm, Ann)
             @test_throws DimensionMismatch lmul!(transpose(Ann), bm)
@@ -378,7 +378,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test A1\B' ≈ Matrix(A1)\B'
             @test transpose(A1)\transpose(B) ≈ transpose(Matrix(A1))\transpose(B)
             @test A1'\B' ≈ Matrix(A1)'\B'
-            Ann, bm = A1, Vector{elty1}(uninitialized,n+1)
+            Ann, bm = A1, Vector{elty1}(undef,n+1)
             @test_throws DimensionMismatch Ann\bm
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm

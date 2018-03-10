@@ -308,7 +308,7 @@ end
 
 # For bootstrapping
 function my_sortperm(v)
-    p = Vector{Int}(uninitialized, length(v))
+    p = Vector{Int}(undef, length(v))
     for i = 1:length(v)
         p[i] = i
     end
@@ -332,9 +332,9 @@ mutable struct IncrementalCompact
     function IncrementalCompact(code::IRCode)
         perm = my_sortperm(Int[code.new_nodes[i][1] for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
-        result = Array{Any}(uninitialized, new_len)
-        result_types = Array{Any}(uninitialized, new_len)
-        result_lines = Array{Int}(uninitialized, new_len)
+        result = Array{Any}(undef, new_len)
+        result_types = Array{Any}(undef, new_len)
+        result_lines = Array{Int}(undef, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         used_ssas = fill(0, new_len)
         late_fixup = Vector{Int}()
@@ -420,7 +420,7 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
         result[result_idx] = renumber_ssa!(stmt, ssa_rename, true, used_ssas)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        values = Vector{Any}(uninitialized, length(stmt.values))
+        values = Vector{Any}(undef, length(stmt.values))
         for i = 1:length(stmt.values)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]
@@ -519,7 +519,7 @@ end
 function finish(compact::IncrementalCompact)
     for idx in compact.late_fixup
         stmt = compact.result[idx]::PhiNode
-        values = Vector{Any}(uninitialized, length(stmt.values))
+        values = Vector{Any}(undef, length(stmt.values))
         for i = 1:length(stmt.values)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]
