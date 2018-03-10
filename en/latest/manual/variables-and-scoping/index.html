@@ -147,7 +147,7 @@ julia&gt; let x = 1, z
            println(&quot;z: $z&quot;) # errors as z has not been assigned yet but is local
        end
 x: 1, y: -1
-ERROR: UndefVarError: z not defined</code></pre><p>The assignments are evaluated in order, with each right-hand side evaluated in the scope before the new variable on the left-hand side has been introduced. Therefore it makes sense to write something like <code>let x = x</code> since the two <code>x</code> variables are distinct and have separate storage. Here is an example where the behavior of <code>let</code> is needed:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(uninitialized, 2); i = 1;
+ERROR: UndefVarError: z not defined</code></pre><p>The assignments are evaluated in order, with each right-hand side evaluated in the scope before the new variable on the left-hand side has been introduced. Therefore it makes sense to write something like <code>let x = x</code> since the two <code>x</code> variables are distinct and have separate storage. Here is an example where the behavior of <code>let</code> is needed:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(undef, 2); i = 1;
 
 julia&gt; while i &lt;= 2
            Fs[i] = ()-&gt;i
@@ -158,7 +158,7 @@ julia&gt; Fs[1]()
 3
 
 julia&gt; Fs[2]()
-3</code></pre><p>Here we create and store two closures that return variable <code>i</code>. However, it is always the same variable <code>i</code>, so the two closures behave identically. We can use <code>let</code> to create a new binding for <code>i</code>:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(uninitialized, 2); i = 1;
+3</code></pre><p>Here we create and store two closures that return variable <code>i</code>. However, it is always the same variable <code>i</code>, so the two closures behave identically. We can use <code>let</code> to create a new binding for <code>i</code>:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(undef, 2); i = 1;
 
 julia&gt; while i &lt;= 2
            let i = i
@@ -178,7 +178,7 @@ julia&gt; Fs[2]()
            end
            x
        end
-1</code></pre><p>Since <code>let</code> introduces a new scope block, the inner local <code>x</code> is a different variable than the outer local <code>x</code>.</p><h3><a class="nav-anchor" id="For-Loops-and-Comprehensions-1" href="#For-Loops-and-Comprehensions-1">For Loops and Comprehensions</a></h3><p><code>for</code> loops, <code>while</code> loops, and <a href="../arrays/#Comprehensions-1">Comprehensions</a> have the following behavior: any new variables introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body were surrounded by a <code>let</code> block:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(uninitialized, 2);
+1</code></pre><p>Since <code>let</code> introduces a new scope block, the inner local <code>x</code> is a different variable than the outer local <code>x</code>.</p><h3><a class="nav-anchor" id="For-Loops-and-Comprehensions-1" href="#For-Loops-and-Comprehensions-1">For Loops and Comprehensions</a></h3><p><code>for</code> loops, <code>while</code> loops, and <a href="../arrays/#Comprehensions-1">Comprehensions</a> have the following behavior: any new variables introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body were surrounded by a <code>let</code> block:</p><pre><code class="language-julia-repl">julia&gt; Fs = Vector{Any}(undef, 2);
 
 julia&gt; for j = 1:2
            Fs[j] = ()-&gt;j
