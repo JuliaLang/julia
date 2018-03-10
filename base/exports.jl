@@ -382,7 +382,6 @@ export
     fill!,
     fill,
     first,
-    flipdim,
     hcat,
     hvcat,
     indexin,

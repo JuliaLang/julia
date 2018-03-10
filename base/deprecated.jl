@@ -1338,6 +1338,8 @@ export readandwrite
 @deprecate cumprod(A::AbstractArray, dim::Integer)       cumprod(A, dims=dim)
 @deprecate cumprod!(B, A, dim::Integer)                  cumprod!(B, A, dims=dim)
 
+@deprecate flipdim(A, d) reverse(A, dims=d)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 

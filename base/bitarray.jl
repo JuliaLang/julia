@@ -1205,8 +1205,8 @@ end
 
 # TODO some of this could be optimized
 
-function flipdim(A::BitArray, d::Integer)
-    nd = ndims(A)
+function reverse(A::BitArray; dims::Integer)
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     sd == 1 && return copy(A)
@@ -1218,7 +1218,7 @@ function flipdim(A::BitArray, d::Integer)
         nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd == nd
-        # flip along the only non-singleton dimension
+        # reverse along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
         end

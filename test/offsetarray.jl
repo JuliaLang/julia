@@ -420,8 +420,8 @@ v = OffsetArray(rand(8), (-2,))
 
 @test rotl90(A) == OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
-@test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
-@test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
+@test reverse(A, dims=1) == OffsetArray(reverse(parent(A), dims=1), A.offsets)
+@test reverse(A, dims=2) == OffsetArray(reverse(parent(A), dims=2), A.offsets)
 
 @test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)

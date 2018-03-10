@@ -765,8 +765,8 @@ end
     end
 end
 
-@testset "flipdim on empty" begin
-    @test flipdim(Diagonal([]),1) == Diagonal([])
+@testset "reverse dim on empty" begin
+    @test reverse(Diagonal([]),dims=1) == Diagonal([])
 end
 
 @testset "ndims and friends" begin
