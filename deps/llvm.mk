@@ -520,6 +520,7 @@ $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
+$(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0 (probably)
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
