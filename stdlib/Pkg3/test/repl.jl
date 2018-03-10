@@ -78,7 +78,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 pushfirst!(DEPOT_PATH, depot_dir)
                 pkg"up --fixed"
                 @test Pkg3.installed()[pkg2] == v"0.2.0"
-                try rm(depot_dir; recurisve=true) end
+                try rm(depot_dir; recursive=true) end
             finally
                 empty!(DEPOT_PATH)
                 append!(DEPOT_PATH, old_depot)
