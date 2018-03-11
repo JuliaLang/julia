@@ -56,9 +56,10 @@ function __init__()
     end
 end
 
-using ..Types
+using .Types
 using UUIDs
 import LibGit2
+import Dates
 # This crashes low memory systems and some of Julia's CI
 # so keep it disabled by default for now.
 if haskey(ENV, "JULIA_PKG3_PRECOMPILE")
