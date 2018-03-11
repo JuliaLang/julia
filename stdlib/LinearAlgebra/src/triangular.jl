@@ -625,7 +625,14 @@ for (t, memlay, memlaytrans, uploc, isunitc) in ((:LowerTriangular, :LowerTriang
                                                  (:UnitUpperTriangular, :UnitUpperTriangularLayout, :UnitLowerTriangularLayout, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}, ::AbstractStridedLayout, ::$memlay, ::AbstractStridedLayout) where {T<:BlasFloat} =
+        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T},
+              ::AbstractStridedLayout, ::$memlay{<:AbstractColumnMajor}, ::AbstractStridedLayout) where T =
+            lmul!(A, copyto!(y, b))
+        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T},
+              ::AbstractStridedLayout, ::$memlay{<:AbstractRowMajor}, ::AbstractStridedLayout) where T =
+            lmul!(A, copyto!(y, b))
+        _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T},
+              ::AbstractStridedLayout, ::$memlay{<:ConjLayout{<:AbstractRowMajor}}, ::AbstractStridedLayout) where T =
             lmul!(A, copyto!(y, b))
 
         _lmul!(A::AbstractMatrix{T}, b::AbstractVector{T}, ::$memlay{DC}, ::AbstractStridedLayout) where {T<:BlasFloat,DC<:AbstractColumnMajor} =

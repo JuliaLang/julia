@@ -290,12 +290,16 @@ size_to_strides(s) = ()
 abstract type MemoryLayout end
 struct UnknownLayout <: MemoryLayout end
 abstract type AbstractStridedLayout <: MemoryLayout end
-abstract type AbstractColumnMajor <: AbstractStridedLayout end
+abstract type AbstractIncreasingStrides <: AbstractStridedLayout end
+abstract type AbstractColumnMajor <: AbstractIncreasingStrides end
 struct DenseColumnMajor <: AbstractColumnMajor end
 struct ColumnMajor <: AbstractColumnMajor end
-abstract type AbstractRowMajor <: AbstractStridedLayout end
+struct IncreasingStrides <: AbstractIncreasingStrides end
+abstract type AbstractDecreasingStrides <: AbstractStridedLayout end
+abstract type AbstractRowMajor <: AbstractDecreasingStrides end
 struct DenseRowMajor <: AbstractRowMajor end
 struct RowMajor <: AbstractRowMajor end
+struct DecreasingStrides <: AbstractIncreasingStrides end
 struct StridedLayout <: AbstractStridedLayout end
 
 """
@@ -346,6 +350,15 @@ Arrays with `ColumnMajor` memory layout must conform to the `DenseArray` interfa
 ColumnMajor
 
 """
+    IncreasingStrides()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a strided array with  increasing strides, so that `stride(A,1) ≥ 1` and
+`stride(A,i) ≥ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`.
+"""
+IncreasingStrides
+
+"""
     DenseRowMajor()
 
 is returned by `MemoryLayout(A)` if an array `A` has storage in memory
@@ -366,6 +379,15 @@ If `A` is a matrix  with `RowMajor` memory layout, then
 `transpose(A)` should return a matrix whose layout is `ColumnMajor`.
 """
 RowMajor
+
+"""
+    DecreasingStrides()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a strided array with decreasing strides, so that `stride(A,ndims(A)) ≥ 1` and
+stride(A,i) ≥ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`.
+"""
+DecreasingStrides
 
 """
     StridedLayout()
