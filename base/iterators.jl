@@ -1045,11 +1045,7 @@ mutable struct Stateful{T, VS}
     @inline function Stateful(itr::T) where {T}
         state = start(itr)
         VS = fixpoint_iter_type(T, Union{}, typeof(state))
-        if done(itr, state)
-            new{T, VS}(itr, nothing, 0)
-        else
-            new{T, VS}(itr, next(itr, state)::VS, 0)
-        end
+        new{T, VS}(itr, done(itr, state) ? nothing : next(itr, state)::VS, 0)
     end
 end
 
@@ -1094,11 +1090,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        if done(s.itr, state)
-            s.nextvalstate = nothing
-        else
-            s.nextvalstate = next(s.itr, state)
-        end
+        # Until the optimizer can handle setproperty! better here, use explicit setfield!
+        setfield!(s, :nextvalstate, done(s.itr, state) ? nothing : next(s.itr, state))
         s.taken += 1
         return val
     end

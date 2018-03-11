@@ -151,6 +151,13 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
+function setindex!(x::IRCode, repl, s::SSAValue)
+    @assert s.id <= length(x.stmts)
+    x.stmts[s.id] = repl
+    nothing
+end
+
+
 struct OldSSAValue
     id::Int
 end
@@ -504,7 +511,7 @@ function next(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tup
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx)
-    effect_free = stmt_effect_free(compact.result[idx], compact.ir, compact.ir.mod)
+    effect_free = stmt_effect_free(compact.result[idx], compact, compact.ir.mod)
     if effect_free
         for ops in userefs(compact.result[idx])
             val = ops[]

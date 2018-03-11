@@ -182,7 +182,7 @@ function exprtype(@nospecialize(x), src, mod::Module)
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
     elseif isa(x, Argument)
-        return src.argtypes[x.n]
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
     elseif isa(x, Symbol)
         return abstract_eval_global(mod, x::Symbol)
     elseif isa(x, QuoteNode)

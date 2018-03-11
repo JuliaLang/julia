@@ -220,9 +220,9 @@ function typ_for_val(@nospecialize(val), ci::CodeInfo)
 end
 
 # Run iterated dominance frontier
-function idf(cfg::CFG, defuse, domtree::DomTree, slot::Int)
+function idf(cfg::CFG, defuse, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
-    defs = defuse[slot].defs
+    defs = defuse.defs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
@@ -241,7 +241,7 @@ function idf(cfg::CFG, defuse, domtree::DomTree, slot::Int)
                 push!(processed, succ)
                 # <- TODO: Use liveness here
                 push!(phiblocks, succ)
-                if !(succ in defuse[slot].defs)
+                if !(succ in defs)
                     push!(pq, (succ, succ_level))
                     sort!(pq, by=x->x[2])
                 end
@@ -451,7 +451,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             continue
         end
         # TODO: Perform liveness here to eliminate dead phi nodes
-        phiblocks = idf(cfg, defuse_blocks, domtree, idx)
+        phiblocks = idf(cfg, defuse_blocks[idx], domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()

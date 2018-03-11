@@ -129,9 +129,11 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode})
             IRCode(code, lines, cfg, argtypes, mod, meta)
         end
     ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs)
+    # TODO: Domsorting can produce an updated domtree - no need to recompute here
+    domtree = construct_domtree(cfg)
     ir = compact!(ir)
     verify_ir(ir)
-    ir = getfield_elim_pass!(ir)
+    ir = getfield_elim_pass!(ir, domtree)
     ir = compact!(ir)
     ir = type_lift_pass!(ir)
     ir = compact!(ir)
