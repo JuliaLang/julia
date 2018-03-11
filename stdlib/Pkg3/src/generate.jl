@@ -31,7 +31,7 @@ function project(pkg::String, dir::String)
     end
 
     if name == nothing
-        cmderror("could not determine user, please set ", Sys.iswindows ? "USERNAME" : "USER",
+        cmderror("could not determine user, please set ", Sys.iswindows() ? "USERNAME" : "USER",
                  " environment variable")
     end
 

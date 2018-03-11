@@ -26,12 +26,14 @@ mktempdir() do project_path
     cd(project_path) do
         push!(LOAD_PATH, Base.parse_load_path("@"))
         try
-            pkg"generate HelloWorld"
-            cd("HelloWorld")
-            pkg"st"
-            @eval using HelloWorld
-            Base.invokelatest(HelloWorld.greet)
-            @test isfile("Project.toml")
+            withenv("USER" => "Test User") do
+                pkg"generate HelloWorld"
+                cd("HelloWorld")
+                pkg"st"
+                @eval using HelloWorld
+                Base.invokelatest(HelloWorld.greet)
+                @test isfile("Project.toml")
+            end
         finally
             pop!(LOAD_PATH)
         end
