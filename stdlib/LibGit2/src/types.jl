@@ -188,8 +188,6 @@ The fields represent:
     perfdata_payload::Ptr{Cvoid}
 end
 
-abstract type Payload end
-
 @kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
     sideband_progress::Ptr{Cvoid}
@@ -206,6 +204,8 @@ abstract type Payload end
     payload::Ptr{Cvoid}
 end
 
+const Callbacks = Dict{Symbol, Tuple{Ptr{Cvoid}, Any}}
+
 """
     LibGit2.RemoteCallbacks
 
@@ -215,16 +215,26 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
 struct RemoteCallbacks
     cb::RemoteCallbacksStruct
     gcroot::Ref{Any}
-    function RemoteCallbacks(; payload::Union{Payload, Nothing}=nothing, kwargs...)
+
+    function RemoteCallbacks(; version::Cuint=Cuint(1), payload=C_NULL, callbacks...)
         p = Ref{Any}(payload)
-        if payload === nothing
-            pp = C_NULL
-        else
-            pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
-        end
-        return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
+        pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
+        return new(RemoteCallbacksStruct(; version=version, payload=pp, callbacks...), p)
     end
 end
+
+function RemoteCallbacks(c::Callbacks)
+    callbacks = Dict{Symbol, Ptr{Cvoid}}()
+    payloads = Dict{Symbol, Any}()
+
+    for (name, (callback, payload)) in c
+        callbacks[name] = callback
+        payloads[name] = payload
+    end
+
+    RemoteCallbacks(; payload=payloads, callbacks...)
+end
+
 
 """
     LibGit2.ProxyOptions
@@ -1250,7 +1260,7 @@ Retains the state between multiple calls to the credential callback for the same
 A `CredentialPayload` instance is expected to be `reset!` whenever it will be used with a
 different URL.
 """
-mutable struct CredentialPayload <: Payload
+mutable struct CredentialPayload
     explicit::Union{AbstractCredential, Nothing}
     cache::Union{CachedCredentials, Nothing}
     allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials

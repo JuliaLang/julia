@@ -268,28 +268,37 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
                payload::Creds=nothing,
-               credentials::Creds=payload)
-    deprecate_payload_keyword(:fetch, "repo", payload)
-    p = reset!(CredentialPayload(credentials), GitConfig(repo))
-
+               credentials::Creds=payload,
+               callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    deprecate_payload_keyword(:fetch, "repo", payload)
+    cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
     result = try
-        remote_callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p)
+        remote_callbacks = RemoteCallbacks(callbacks)
         fo = FetchOptions(callbacks=remote_callbacks)
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
-            reject(p)
+            reject(cred_payload)
         end
         rethrow()
     finally
         close(rmt)
     end
-    approve(p)
+    approve(cred_payload)
     return result
 end
 
@@ -314,28 +323,37 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
               payload::Creds=nothing,
-              credentials::Creds=payload)
-    deprecate_payload_keyword(:push, "repo", payload)
-    p = reset!(CredentialPayload(credentials), GitConfig(repo))
-
+              credentials::Creds=payload,
+              callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    deprecate_payload_keyword(:push, "repo", payload)
+    cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
     result = try
-        remote_callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p)
+        remote_callbacks = RemoteCallbacks(callbacks)
         push_opts = PushOptions(callbacks=remote_callbacks)
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
-            reject(p)
+            reject(cred_payload)
         end
         rethrow()
     finally
         close(rmt)
     end
-    approve(p)
+    approve(cred_payload)
     return result
 end
 
@@ -534,14 +552,22 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
                payload::Creds=nothing,
-               credentials::Creds=payload)
+               credentials::Creds=payload,
+               callbacks::Callbacks=Callbacks())
     deprecate_payload_keyword(:clone, "repo_url, repo_path", payload)
-    p = reset!(CredentialPayload(credentials))
+    cred_payload = reset!(CredentialPayload(credentials))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
 
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     GC.@preserve lbranch begin
-        remote_callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p)
+        remote_callbacks = RemoteCallbacks(callbacks)
         fetch_opts = FetchOptions(callbacks=remote_callbacks)
         clone_opts = CloneOptions(
                     bare = Cint(isbare),
@@ -553,12 +579,12 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
             clone(repo_url, repo_path, clone_opts)
         catch err
             if isa(err, GitError) && err.code == Error.EAUTH
-                reject(p)
+                reject(cred_payload)
             end
             rethrow()
         end
     end
-    approve(p)
+    approve(cred_payload)
     return repo
 end
 
