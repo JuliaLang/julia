@@ -11,16 +11,21 @@ function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     for (idx, stmt) in compact
+        # Step 1: Check whether the statement we're looking at is a getfield
         isa(stmt, Expr) || continue
         is_known_call(stmt, getfield, ir, ir.mod) || continue
         isa(stmt.args[2], SSAValue) || continue
+        ## Normalize the field argument to getfield
         field = stmt.args[3]
         isa(field, QuoteNode) && (field = field.value)
         isa(field, Union{Int, Symbol}) || continue
         orig_defidx = defidx = stmt.args[2].id
+
+        # Step 2: Figure out what the struct is defined as
         def = compact[defidx]
         typeconstraint = types(compact)[defidx]
         phi_locs = Tuple{Int, Int}[]
+        ## Track definitions through PiNode/PhiNode
         while true
             if isa(def, PiNode)
                 typeconstraint = typeintersect(typeconstraint, def.typ)
@@ -60,6 +65,8 @@ function getfield_elim_pass!(ir::IRCode)
             end
             break
         end
+        # Step 3: Check if the definition we eventually end up at is either
+        # a tuple(...) call or Expr(:new) and perform replacement.
         if isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod) && isa(field, Int) && 1 <= field < length(def.args)
             forwarded = def.args[1+field]
         elseif isexpr(def, :new)
@@ -79,6 +86,7 @@ function getfield_elim_pass!(ir::IRCode)
         else
             continue
         end
+        # Step 4: Remember any phinodes we need to insert
         if !isempty(phi_locs) && isa(forwarded, SSAValue)
             # TODO: We have have to use BB ids for phi_locs
             # to avoid index invalidation.
