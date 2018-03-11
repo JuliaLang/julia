@@ -630,6 +630,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
                 LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
             end
+            close(repo)
 
             # Copy the repo to a temporary place and check out the rev
             project_path = mktempdir()
@@ -638,6 +639,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             rev = pkg.repo.rev
             isempty(rev) && (rev = LibGit2.branch(repo))
             gitobject, isbranch = checkout_rev!(repo, rev)
+            close(repo); close(gitobject)
 
             parse_package!(env, pkg, project_path)
             dev_pkg_path = joinpath(Pkg3.devdir(), pkg.name)
@@ -716,6 +718,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                 target_directory=Base.unsafe_convert(Cstring, project_path))
             LibGit2.checkout_tree(repo, git_tree, options=opts)
         end
+        close(repo); close(git_tree); close(gitobject)
         parse_package!(env, pkg, project_path)
         if !folder_already_downloaded
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
@@ -930,7 +933,8 @@ function registries()::Vector{String}
         for (reg, url) in DEFAULT_REGISTRIES
             printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
             path = joinpath(user_regs, reg)
-            LibGit2.clone(url, path)
+            repo = LibGit2.clone(url, path)
+            close(repo)
         end
     end
     return [r for d in depots() for r in registries(d)]
@@ -1147,13 +1151,14 @@ pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
 function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd())
     path = abspath(base, path)
     if env isa EnvCache && env.git != nothing
-        repo = LibGit2.path(env.git)
-        if startswith(base, repo)
-            # we're in the repo => path relative to pwd()
-            path = relpath(path, base)
-        elseif startswith(path, repo)
-            # we're not in repo but path is => path relative to repo
-            path = relpath(path, repo)
+        LibGit2.with(LibGit2.GitRepo, LibGit2.path(env.git)) do repo
+            if startswith(base, repo)
+                # we're in the repo => path relative to pwd()
+                path = relpath(path, base)
+            elseif startswith(path, repo)
+                # we're not in repo but path is => path relative to repo
+                path = relpath(path, repo)
+            end
         end
     end
     if !Sys.iswindows() && isabspath(path)

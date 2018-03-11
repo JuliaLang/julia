@@ -384,7 +384,8 @@ function install_git(
     end
     git_hash = LibGit2.GitHash(hash.bytes)
     for i = 2:length(urls)
-        try LibGit2.GitObject(repo, git_hash)
+        try with(LibGit2.GitObject, repo, git_hash) do g
+            end
             break # object was found, we can stop
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
@@ -393,7 +394,8 @@ function install_git(
         LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
     end
     tree = try
-        LibGit2.GitObject(repo, git_hash)
+        with(LibGit2.GitObject, repo, git_hash) do g
+        end
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         error("$name: git object $(string(hash)) could not be found")
@@ -406,6 +408,7 @@ function install_git(
         target_directory = Base.unsafe_convert(Cstring, version_path)
     )
     LibGit2.checkout_tree(repo, tree, options=opts)
+    close(repo); close(tree); close(opts); close(git_hash)
     return
 end
 

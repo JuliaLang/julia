@@ -17,6 +17,7 @@ function git_init_package(tmp, path)
     repo = LibGit2.init(pkgpath)
     LibGit2.add!(repo, "*")
     LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+    close(repo)
     return pkgpath
 end
 
@@ -70,16 +71,17 @@ temp_pkg_dir() do project_path; cd(project_path) do
         version = "0.2.0"
         """
     )
-    repo = LibGit2.GitRepo(p2)
-    LibGit2.add!(repo, "*")
-    LibGit2.commit(repo, "bump version"; author = TEST_SIG, committer=TEST_SIG)
-    pkg"update"
-    @test Pkg3.installed()[pkg2] == v"0.2.0"
-    Pkg3.REPLMode.pkgstr("rm $pkg2")
+    LibGit2.with(LibGit2.GitRepo, p2) do repo
+        LibGit2.add!(repo, "*")
+        LibGit2.commit(repo, "bump version"; author = TEST_SIG, committer=TEST_SIG)
+        pkg"update"
+        @test Pkg3.installed()[pkg2] == v"0.2.0"
+        Pkg3.REPLMode.pkgstr("rm $pkg2")
 
-    c = LibGit2.commit(repo, "empty commit"; author = TEST_SIG, committer=TEST_SIG)
-    c_hash = LibGit2.GitHash(c)
-    Pkg3.REPLMode.pkgstr("add $p2#$c")
+        c = LibGit2.commit(repo, "empty commit"; author = TEST_SIG, committer=TEST_SIG)
+        c_hash = LibGit2.GitHash(c)
+        Pkg3.REPLMode.pkgstr("add $p2#$c")
+    end
 
     # TODO cleanup
     tmp_dev_dir = mktempdir()

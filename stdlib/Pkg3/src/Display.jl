@@ -17,12 +17,14 @@ const colors = Dict(
 const color_dark = :light_black
 
 function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
-    blob = try LibGit2.GitBlob(repo, spec)
+    blob = try LibGit2.GitBlob, repo, spec
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         fakeit && return devnull
     end
-    return IOBuffer(LibGit2.rawcontent(blob))
+    iob = IOBuffer(LibGit2.content(blob))
+    close(blob)
+    return iob
 end
 
 function status(ctx::Context, mode::PackageMode, use_as_api=false)
