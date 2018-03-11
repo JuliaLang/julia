@@ -38,8 +38,7 @@ mktempdir() do project_path
     end
 end
 
-temp_pkg_dir() do project_path; cd(project_path) do
-    tmp_pkg_path = mktempdir()
+temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     pkg"init"
     pkg"add Example"
     @test isinstalled(TEST_PKG)
@@ -56,14 +55,12 @@ temp_pkg_dir() do project_path; cd(project_path) do
     @test Pkg3.installed()[pkg] == v"0.0"
     Pkg3.test("UnregisteredWithoutProject")
 
-
     pkg2 = "UnregisteredWithProject"
     p2 = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg2"))
     Pkg3.REPLMode.pkgstr("add $p2")
     @eval import $(Symbol(pkg2))
     @test Pkg3.installed()[pkg2] == v"0.1.0"
     Pkg3.test("UnregisteredWithProject")
-
 
     write(joinpath(p2, "Project.toml"), """
         name = "UnregisteredWithProject"
@@ -84,7 +81,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end
 
     # TODO cleanup
-    tmp_dev_dir = mktempdir()
+    mktempdir() do tmp_dev_dir
     withenv("JULIA_PKG_DEVDIR" => tmp_dev_dir) do
         pkg"develop Example"
 
@@ -92,7 +89,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         # and get all the packages installed
         proj = read("Project.toml", String)
         manifest = read("Manifest.toml", String)
-        cd(mktempdir()) do
+        cd_tempdir() do tmp
             old_depot = copy(DEPOT_PATH)
             try
                 empty!(DEPOT_PATH)
@@ -107,12 +104,12 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 empty!(DEPOT_PATH)
                 append!(DEPOT_PATH, old_depot)
             end
-        end
-    end
-    try rm(tmp_pkg_path; recurisve=true) end
-    try rm(tmp_dev_dir; recurisve=true) end
+        end # cd_tempdir
+    end # withenv
+    end # mktempdir
+end # mktempdir
 end # cd
-end
+end # temp_pkg_dir
 
 
 locate_name(pkg) = Base.locate_package(Base.identify_package(pkg))
@@ -136,8 +133,8 @@ temp_pkg_dir() do project_path; cd(project_path) do
             Pkg3.test("UnregisteredWithoutProject")
             Pkg3.test("UnregisteredWithProject")
         end
-    end
-end # cd
-end
+    end # withenv
+end # mktempdir
+end # temp_pkg_dir
 
-end
+end # module
