@@ -737,7 +737,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     for (uuid, name, hash_or_path, build_file) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
-            rpad(name * " ", max_name + 1, "─"), "→ ", Types.pathrepr(ctx.env, log_file; ignore_pwd=true))
+            rpad(name * " ", max_name + 1, "─"), "→ ", Types.pathrepr(log_file))
 
         code = """
             empty!(Base.DEPOT_PATH)

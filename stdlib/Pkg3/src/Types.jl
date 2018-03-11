@@ -1132,9 +1132,11 @@ function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
 end
 
 # Give a short path string representation
-function pathrepr(env::EnvCache, path::String, base::String=pwd(); ignore_pwd=false)
+pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
+
+function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd())
     path = abspath(base, path)
-    if env.git != nothing && !ignore_pwd
+    if env isa EnvCache && env.git != nothing
         repo = LibGit2.path(env.git)
         if startswith(base, repo)
             # we're in the repo => path relative to pwd()
