@@ -592,6 +592,14 @@ end
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
 const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
 
+# Windows sometimes throw on `isdir`...
+function isdir_windows_workaround(path::String)
+    try isdir(path)
+    catch e
+        false
+    end
+end
+
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
     env = ctx.env
     for pkg in pkgs
@@ -599,7 +607,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
         pkg.special_action = PKGSPEC_DEVELOPED
         isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
 
-        if isdir(pkg.repo.url)
+        if isdir_windows_workaround(pkg.repo.url)
             # Developing a local package, just point `pkg.path` to it
             pkg.path = pkg.repo.url
             folder_already_downloaded = true
