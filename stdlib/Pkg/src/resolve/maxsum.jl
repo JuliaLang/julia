@@ -241,7 +241,7 @@ function getsolution(msgs::Messages)
 
     fld = msgs.fld
     np = length(fld)
-    sol = Vector{Int}(uninitialized, np)
+    sol = Vector{Int}(undef, np)
     for p0 = 1:np
         fld0 = fld[p0]
         s0 = argmax(fld0)

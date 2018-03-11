@@ -10,6 +10,8 @@ using Random
     @test eltype(GenericString) == Char
     @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test typemin(String) === ""
+    @test typemin("abc") === ""
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
@@ -64,7 +66,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n),  base = b) == n
+        @test parse(T, string(n, base = b),  base = b) == n
     end
     end
 end
@@ -237,7 +239,10 @@ end
     @test first(eachindex("")) === 1
     @test last(eachindex("foobar")) === lastindex("foobar")
     @test done(eachindex("foobar"),7)
-    @test eltype(Base.EachStringIndex) == Int
+    @test Int == eltype(Base.EachStringIndex) ==
+                 eltype(Base.EachStringIndex{String}) ==
+                 eltype(Base.EachStringIndex{GenericString}) ==
+                 eltype(eachindex("foobar")) == eltype(eachindex(gstr))
     @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
@@ -260,7 +265,7 @@ end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]

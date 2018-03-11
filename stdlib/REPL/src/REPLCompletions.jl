@@ -6,7 +6,6 @@ export completions, shell_completions, bslash_completions
 
 using Base.Meta
 using Base: propertynames, coalesce
-import Pkg
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -202,7 +201,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     end
 
     matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
-    startpos = pos - lastindex(prefix) + 1 - length(matchall(r" ", prefix))
+    startpos = pos - lastindex(prefix) + 1 - count(equalto(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
@@ -343,7 +342,7 @@ function try_get_type(sym::Expr, fn::Module)
         return get_type_call(sym)
     elseif sym.head === :thunk
         thk = sym.args[1]
-        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::Core.CodeInfo, fn)
         rt !== Any && return (rt, true)
     elseif sym.head === :ref
         # some simple cases of `expand`
@@ -418,7 +417,7 @@ function afterusing(string::String, startpos::Int)
     isempty(str) && return false
     rstr = reverse(str)
     r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
-    isempty(r) && return false
+    r === nothing && return false
     fr = reverseind(str, last(r))
     return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
 end
@@ -558,7 +557,8 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [Pkg.dir(); LOAD_PATH; pwd()]
+            for dir in [LOAD_PATH; pwd()]
+                dir isa Function && (dir = dir())
                 dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
@@ -646,10 +646,9 @@ function shell_completions(string, pos)
 
         return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        r = first(last_parse):prevind(last_parse, last(last_parse))
-        partial = scs[r]
+        partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
-        range = range .+ (first(r) - 1)
+        range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

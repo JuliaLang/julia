@@ -33,7 +33,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 """
 parse(T::Type, str; base = Int)
 
-function parse(::Type{T}, c::Char; base::Integer = 36) where T<:Integer
+function parse(::Type{T}, c::AbstractChar; base::Integer = 36) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -213,7 +213,8 @@ function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = n
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
+                                 base===nothing ? 0 : check_valid_base(base), true))
 end
 
 ## string to float functions ##
@@ -301,7 +302,9 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
-            return Complex{T}(tryparse_internal(T, s, i, e, raise))
+            x = tryparse_internal(T, s, i, e, raise)
+            x === nothing && return nothing
+            return Complex{T}(x)
         end
     end
 
@@ -322,7 +325,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
@@ -339,4 +342,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+
+tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false)

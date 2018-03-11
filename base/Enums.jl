@@ -36,7 +36,7 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
-```jldoctest
+```jldoctest fruitenum
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
@@ -58,6 +58,13 @@ end
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
+
+To list all the instances of an enum use `instances`, e.g.
+
+```jldoctest fruitenum
+julia> instances(Fruit)
+(apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
+```
 """
 macro enum(T, syms...)
     if isempty(syms)
@@ -143,7 +150,7 @@ macro enum(T, syms...)
                 print(io, x)
             else
                 print(io, x, "::")
-                showcompact(io, typeof(x))
+                show(IOContext(io, :compact => true), typeof(x))
                 print(io, " = ", $basetype(x))
             end
         end

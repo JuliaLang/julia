@@ -12,7 +12,7 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     rook::Bool
     info::BlasInt
 end
-BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool,
+BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::AbstractChar, symmetric::Bool,
              rook::Bool, info::BlasInt) where {T} =
         BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
 
@@ -59,15 +59,15 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> bkfact(A)
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 2×2 Tridiagonal{Float64,Array{Float64,1}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:
+2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
  1.0  0.666667
- 0.0  1.0
+  ⋅   1.0
 permutation:
 2-element Array{Int64,1}:
  1
@@ -88,7 +88,7 @@ size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi
@@ -135,16 +135,16 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
  3  2  1
 
 julia> F = bkfact(Symmetric(A, :L))
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 3×3 Tridiagonal{Float64,Array{Float64,1}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
 L factor:
-3×3 LinearAlgebra.UnitLowerTriangular{Float64,Array{Float64,2}}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
+3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 0.0  1.0   ⋅
  0.5  0.5  1.0
 permutation:
 3-element Array{Int64,1}:
@@ -205,7 +205,8 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     end
 end
 
-Base.propertynames(B::BunchKaufman, private::Bool=false) = append!([:p,:P,:L,:U,:D], private ? fieldnames(typeof(B)) : Symbol[])
+Base.propertynames(B::BunchKaufman, private::Bool=false) =
+    (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
 issuccess(B::BunchKaufman) = B.info == 0
 

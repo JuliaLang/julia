@@ -33,7 +33,7 @@ _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
 
 function replace_colon(A::AbstractArray, I)
-    Iout = Vector{Any}(uninitialized, length(I))
+    Iout = Vector{Any}(undef, length(I))
     I == (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
@@ -52,7 +52,7 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
-    Ac = Array{eltype(A)}(uninitialized, size(A))
+    Ac = Array{eltype(A)}(undef, size(A))
     copyto!(Ac, A)
 end
 
@@ -524,7 +524,7 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+@views let f!(x) = (x[1:end-1] .+= x[2:end].^2; nothing)
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]
@@ -577,7 +577,7 @@ let
 end
 
 # ref issue #17351
-@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+@test @inferred(reverse(view([1 2; 3 4], :, 1), dims=1)) == [3, 1]
 
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
@@ -588,9 +588,14 @@ end
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
 
-
 # PR #25321
 # checks that issue in type inference is resolved
 A = rand(5,5,5,5)
 V = view(A, 1:1 ,:, 1:3, :)
 @test @inferred(strides(V)) == (1, 5, 25, 125)
+
+# Issue #26263 — ensure that unaliascopy properly trims the array
+A = rand(5,5,5,5)
+V = view(A, 2:5, :, 2:5, 1:2:5)
+@test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
+@test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])

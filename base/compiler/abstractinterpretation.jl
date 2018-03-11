@@ -386,7 +386,7 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
     end
     res = Union{}
     nargs = length(fargs)
-    assert(nargs == length(aargtypes))
+    @assert nargs == length(aargtypes)
     splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     for i = 1:nargs

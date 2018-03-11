@@ -74,7 +74,6 @@ primitive type
 ```@docs
 Base.Docs
 Base.Iterators
-Base.LibGit2
 Base.Libc
 Base.Meta
 Base.StackTraces
@@ -230,8 +229,7 @@ Base.skipmissing
 
 ```@docs
 Base.run
-Base.spawn
-Base.DevNull
+Base.devnull
 Base.success
 Base.process_running
 Base.process_exited
@@ -275,7 +273,6 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.assert
 Base.@assert
 Base.ArgumentError
 Base.AssertionError
@@ -298,6 +295,7 @@ Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
 Base.InitError

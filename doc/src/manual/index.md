@@ -22,7 +22,7 @@
   * [Missing Values](@ref missing)
   * [Networking and Streams](@ref)
   * [Parallel Computing](@ref)
-  * [Date and DateTime](@ref)
+  * [Dates](@ref)
   * [Running External Programs](@ref)
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)

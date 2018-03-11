@@ -1,0 +1,5 @@
+name = "IterativeEigensolvers"
+uuid = "de555fa4-b82f-55e7-8b71-53f60bbc027d"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

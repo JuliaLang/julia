@@ -62,7 +62,7 @@ String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(uninitialized, length(s)), s)
+(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 
 String(a::AbstractVector{UInt8}) = String(copyto!(StringVector(length(a)), a))
 
@@ -81,9 +81,6 @@ codeunit(s::String) = UInt8
     GC.@preserve s unsafe_load(pointer(s, i))
 end
 
-write(io::IO, s::String) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
-
 ## comparison ##
 
 function cmp(a::String, b::String)
@@ -98,9 +95,15 @@ function ==(a::String, b::String)
     al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
-## thisind, prevind, nextind ##
+typemin(::Type{String}) = ""
+typemin(::String) = typemin(String)
 
-function thisind(s::String, i::Int)
+## thisind, nextind ##
+
+thisind(s::String, i::Int) = _thisind_str(s, i)
+
+# s should be String or SubString{String}
+function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
@@ -118,7 +121,10 @@ function thisind(s::String, i::Int)
     return i
 end
 
-function nextind(s::String, i::Int)
+nextind(s::String, i::Int) = _nextind_str(s, i)
+
+# s should be String or SubString{String}
+function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
@@ -308,10 +314,10 @@ end
 # TODO: delete or move to char.jl
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
-function string(a::Union{String,Char}...)
+function string(a::Union{String,AbstractChar}...)
     sprint() do io
         for x in a
-            write(io, x)
+            print(io, x)
         end
     end
 end
@@ -332,7 +338,7 @@ function repeat(s::String, r::Integer)
 end
 
 """
-    repeat(c::Char, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer) -> String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling [`c^r`](@ref ^).
 
@@ -342,6 +348,7 @@ julia> repeat('A', 3)
 "AAA"
 ```
 """
+repeat(c::AbstractChar, r::Integer) = repeat(Char(c), r) # fallback
 function repeat(c::Char, r::Integer)
     r == 0 && return ""
     r < 0 && throw(ArgumentError("can't repeat a character $r times"))

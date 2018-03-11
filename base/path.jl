@@ -61,8 +61,8 @@ Return the current user's home directory.
 """
 function homedir()
     path_max = 1024
-    buf = Vector{UInt8}(uninitialized, path_max)
-    sz = Ref{Csize_t}(path_max + 1)
+    buf = Vector{UInt8}(undef, path_max)
+    sz = RefValue{Csize_t}(path_max + 1)
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0

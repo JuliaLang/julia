@@ -475,7 +475,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws DimensionMismatch reshape(B, (0, 1))
 
     # copyto!(dest::AbstractArray, src::AbstractArray)
-    @test_throws BoundsError copyto!(Vector{Int}(uninitialized, 10), [1:11...])
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 10), [1:11...])
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
     X = [1:10...]
@@ -570,14 +570,14 @@ function test_cat(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
-    b2hcat = Array{Float64}(uninitialized, 3, 6, 3)
+    b2hcat = Array{Float64}(undef, 3, 6, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
-    b3hcat = Array{Float64}(uninitialized, 3, 9, 3)
+    b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
@@ -765,8 +765,8 @@ end
     end
 end
 
-@testset "flipdim on empty" begin
-    @test flipdim(Diagonal([]),1) == Diagonal([])
+@testset "reverse dim on empty" begin
+    @test reverse(Diagonal([]),dims=1) == Diagonal([])
 end
 
 @testset "ndims and friends" begin
@@ -835,12 +835,12 @@ end
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
     Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
-        copyto!(Array{T,n}(uninitialized, size(a)), a)
+        copyto!(Array{T,n}(undef, size(a)), a)
     @test isa(empty(Dict(:a=>1, :b=>2.0), Union{}, Union{}), Dict{Union{}, Union{}})
 end
 
 @testset "zero-dimensional copy" begin
-    Z = Array{Int,0}(uninitialized); Z[] = 17
+    Z = Array{Int,0}(undef); Z[] = 17
     @test Z == Array(Z) == copy(Z)
 end
 

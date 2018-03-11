@@ -23,7 +23,7 @@ isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
 
 # ---- show_sexpr: print an AST as an S-expression ----
 
-show_sexpr(ex) = show_sexpr(STDOUT, ex)
+show_sexpr(ex) = show_sexpr(stdout, ex)
 show_sexpr(io::IO, ex) = show_sexpr(io, ex, 0)
 show_sexpr(io::IO, ex, indent::Int) = show(io, ex)
 
@@ -152,7 +152,7 @@ julia> Meta.parse("x = ")
 :($(Expr(:incomplete, "incomplete: premature end of input")))
 
 julia> Meta.parse("1.0.2")
-ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
+ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
 Stacktrace:
 [...]
 

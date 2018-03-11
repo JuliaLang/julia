@@ -125,6 +125,21 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
+A return type can also be specified in the function declaration using the `::` operator. This converts
+the return value to the specified type.
+
+```jldoctest
+julia> function g(x, y)::Int8
+           return x * y
+       end;
+
+julia> typeof(g(1, 2))
+Int8
+```
+
+This function will always return an `Int8` regardless of the types of `x` and `y`.
+See [Type Declarations](@ref) for more on return types.
+
 ## Operators Are Functions
 
 In Julia, most operators are just functions with support for special syntax. (The exceptions are
@@ -164,7 +179,6 @@ A few special expressions correspond to calls to functions with non-obvious name
 | `[A; B; C; ...]`  | [`vcat`](@ref)          |
 | `[A B; C D; ...]` | [`hvcat`](@ref)         |
 | `A'`              | [`adjoint`](@ref)       |
-| `1:n`             | [`colon`](@ref)         |
 | `A[i]`            | [`getindex`](@ref)      |
 | `A[i] = x`        | [`setindex!`](@ref)     |
 | `A.n`             | [`getproperty`](@ref Base.getproperty) |
@@ -516,6 +530,17 @@ Extra keyword arguments can be collected using `...`, as in varargs functions:
 function f(x; y=0, kwargs...)
     ###
 end
+```
+
+If a keyword argument is not assigned a default value in the method definition,
+then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
+if the caller does not assign it a value:
+```julia
+function f(x; y)
+    ###
+end
+f(3, y=5) # ok, y is assigned
+f(3)      # throws UndefKeywordError(:y)
 ```
 
 Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as

@@ -24,7 +24,7 @@ Size: (DSFMT state array of Int128 + 1)*4 + Int32 index + Int32 padding
 const JN32 = (N+1)*4+1+1
 
 
-mutable struct DSFMT_state
+struct DSFMT_state
     val::Vector{Int32}
 
     function DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32))
@@ -106,7 +106,7 @@ struct GF2X
 end
 
 GF2X(s::AbstractString) = GF2X(parse(BigInt, reverse(s), base = 16))
-Base.string(f::GF2X) = reverse(base(16, f.z))
+Base.string(f::GF2X) = reverse(string(f.z, base = 16))
 Base.:(==)(f::GF2X, g::GF2X) = f.z == g.z
 Base.copy(f::GF2X) = GF2X(MPZ.set(f.z))
 
@@ -190,7 +190,7 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     index = val[nval - 1]
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
-    dsfmt = Vector{UInt64}(uninitialized, nval >> 1)
+    dsfmt = Vector{UInt64}(undef, nval >> 1)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
           dsfmt, val, (nval - 1) * sizeof(Int32))
     dsfmt[end] = UInt64(N*2)

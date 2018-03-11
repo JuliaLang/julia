@@ -5,7 +5,7 @@
 _directives(::Type{DateFormat{S,T}}) where {S,T} = T.parameters
 
 character_codes(df::Type{DateFormat{S,T}}) where {S,T} = character_codes(_directives(df))
-function character_codes(directives::SimpleVector)
+function character_codes(directives::Core.SimpleVector)
     letters = sizehint!(Char[], length(directives))
     for (i, directive) in enumerate(directives)
         if directive <: DatePart
@@ -298,7 +298,7 @@ number of components may be less than the total number of `DatePart`.
         values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
         t = values
         types = $(Expr(:tuple, tokens...))
-        result = Vector{Any}(uninitialized, num_parsed)
+        result = Vector{Any}(undef, num_parsed)
         for (i, typ) in enumerate(types)
             i > num_parsed && break
             result[i] = typ(t[i])  # Constructing types takes most of the time

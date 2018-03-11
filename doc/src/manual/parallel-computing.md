@@ -221,9 +221,9 @@ julia> addprocs(2)
 Module `Distributed` must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
-Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global
-state (such as global variables, new method definitions, and loaded modules) with any of the other
-running processes.
+Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+their global state (such as global variables, new method definitions, and loaded modules) with any
+of the other running processes.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -727,7 +727,8 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `examples/dictchannel.jl` which uses a dictionary as its
+A simple example of this is provided in `dictchannel.jl` in the
+[Examples repository](https://github.com/JuliaArchive/Examples), which uses a dictionary as its
 remote store.
 
 ## Channels and RemoteChannels
@@ -956,7 +957,7 @@ julia> @everywhere function myrange(q::SharedArray)
                return 1:0, 1:0
            end
            nchunks = length(procs(q))
-           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
+           splits = [round(Int, s) for s in range(0, stop=size(q,2), length=nchunks+1)]
            1:size(q,1), splits[idx]+1:splits[idx+1]
        end
 ```
@@ -1071,8 +1072,8 @@ manner:
   * [`addprocs`](@ref) is called on the master process with a `ClusterManager` object.
   * [`addprocs`](@ref) calls the appropriate [`launch`](@ref) method which spawns required number
     of worker processes on appropriate machines.
-  * Each worker starts listening on a free port and writes out its host and port information to [`STDOUT`](@ref).
-  * The cluster manager captures the [`STDOUT`](@ref) of each worker and makes it available to the
+  * Each worker starts listening on a free port and writes out its host and port information to [`stdout`](@ref).
+  * The cluster manager captures the [`stdout`](@ref) of each worker and makes it available to the
     master process.
   * The master process parses this information and sets up TCP/IP connections to each worker.
   * Every worker is also notified of other workers in the cluster.
@@ -1246,7 +1247,8 @@ transport and Julia's in-built parallel infrastructure.
 A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
-Folder `examples/clustermanager/0mq` contains an example of using ZeroMQ to connect Julia workers
+The folder `clustermanager/0mq` in the [Examples repository](https://github.com/JuliaArchive/Examples)
+contains an example of using ZeroMQ to connect Julia workers
 in a star topology with a 0MQ broker in the middle. Note: The Julia processes are still all *logically*
 connected to each other--any worker can message any other worker directly without any awareness
 of 0MQ being used as the transport layer.
@@ -1268,7 +1270,7 @@ When using custom transports:
 the corresponding `IO` objects must be closed by the implementation to ensure proper cleanup.
 The default implementation simply executes an `exit()` call on the specified remote worker.
 
-`examples/clustermanager/simple` is an example that shows a simple implementation using UNIX domain
+The Examples folder `clustermanager/simple` is an example that shows a simple implementation using UNIX domain
 sockets for cluster setup.
 
 ## Network Requirements for LocalManager and SSHManager
@@ -1315,7 +1317,7 @@ on the master process:
     are allowed to connect to each other.
   * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
     `--worker` is specified without the cookie, the worker tries to read the cookie from its
-    standard input ([`STDIN`](@ref)). The `STDIN` is closed immediately after the cookie is retrieved.
+    standard input ([`stdin`](@ref)). The `stdin` is closed immediately after the cookie is retrieved.
   * `ClusterManager`s can retrieve the cookie on the master by calling [`cluster_cookie()`](@ref).
     Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
     must call `init_worker(cookie, manager)` with the same cookie as on the master.
@@ -1346,8 +1348,8 @@ in future releases.
 
 ## Multi-Threading (Experimental)
 
-In addition to tasks, remote calls, and remote references, Julia from `v0.5` forwards will natively
-support multi-threading. Note that this section is experimental and the interfaces may change
+In addition to tasks, remote calls, and remote references, Julia from `v0.5` forwards natively
+supports multi-threading. Note that this section is experimental and the interfaces may change
 in the future.
 
 ### Setup
@@ -1504,6 +1506,96 @@ julia> acc[]
     are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
     `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
     `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
+
+When using multi-threading we have to be careful when using functions that are not
+[pure](https://en.wikipedia.org/wiki/Pure_function) as we might get a wrong answer.
+For instance functions that have their
+[name ending with `!`](https://docs.julialang.org/en/latest/manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1)
+by convention modify their arguments and thus are not pure. However, there are
+functions that have side effects and their name does not end with `!`. For
+instance [`findfirst(regex, str)`](@ref) mutates its `regex` argument or
+[`rand()`](@ref) changes `Base.GLOBAL_RNG` :
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreads()
+4
+
+julia> function f()
+           s = repeat(["123", "213", "231"], outer=1000)
+           x = similar(s, Int)
+           rx = r"1"
+           @threads for i in 1:3000
+               x[i] = findfirst(rx, s[i]).start
+           end
+           count(v -> v == 1, x)
+       end
+f (generic function with 1 method)
+
+julia> f() # the correct result is 1000
+1017
+
+julia> function g()
+           a = zeros(1000)
+           @threads for i in 1:1000
+               a[i] = rand()
+           end
+           length(unique(a))
+       end
+g (generic function with 1 method)
+
+julia> srand(1); g() # the result for a single thread is 1000
+781
+```
+
+In such cases one should redesign the code to avoid the possibility of a race condition or use
+[synchronization primitives](https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1).
+
+For example in order to fix `findfirst` example above one needs to have a
+separate copy of `rx` variable for each thread:
+
+```julia-repl
+julia> function f_fix()
+             s = repeat(["123", "213", "231"], outer=1000)
+             x = similar(s, Int)
+             rx = [Regex("1") for i in 1:nthreads()]
+             @threads for i in 1:3000
+                 x[i] = findfirst(rx[threadid()], s[i]).start
+             end
+             count(v -> v == 1, x)
+         end
+f_fix (generic function with 1 method)
+
+julia> f_fix()
+1000
+```
+
+We now use `Regex("1")` instead of `r"1"` to make sure that Julia
+creates separate instances of `Regex` object for each entry of `rx` vector.
+
+The case of `rand` is a bit more complex as we have to ensure that each thread
+uses non-overlapping pseudorandom number sequences. This can be simply ensured
+by using [`randjump`](@ref) function:
+
+
+```julia-repl
+julia> function g_fix(r)
+           a = zeros(1000)
+           @threads for i in 1:1000
+               a[i] = rand(r[threadid()])
+           end
+           length(unique(a))
+       end
+g_fix (generic function with 1 method)
+
+julia> r = randjump(MersenneTwister(1), big(10)^20, nthreads());
+julia> g_fix(r)
+1000
+```
+
+We pass `r` vector to `g_fix` as generating several RGNs is an expensive
+operation so we do not want to repeat it every time we run the function.
 
 ## @threadcall (Experimental)
 

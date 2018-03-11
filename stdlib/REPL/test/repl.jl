@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 using REPL
 using Random
@@ -20,25 +21,25 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin = Pipe()
-    stdout = Pipe()
-    stderr = Pipe()
-    Base.link_pipe(stdin, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
-    Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
+    input = Pipe()
+    output = Pipe()
+    err = Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
-    f(stdin.in, stdout.out, repl)
+    f(input.in, output.out, repl)
     t = @async begin
-        close(stdin.in)
-        close(stdout.in)
-        close(stderr.in)
+        close(input.in)
+        close(output.in)
+        close(err.in)
     end
-    @test read(stderr.out, String) == ""
-    #display(read(stdout.out, String))
-    wait(t)
+    @test read(err.out, String) == ""
+    #display(read(output.out, String))
+    Base._wait(t)
     nothing
 end
 
@@ -157,7 +158,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #10120
     # ensure that command quoting works correctly
-    let s, old_stdout = STDOUT
+    let s, old_stdout = stdout
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
@@ -184,7 +185,7 @@ fake_repl() do stdin_write, stdout_read, repl
             redirect_stdout(old_stdout)
         end
         close(proc_stdout)
-        @test wait(get_stdout) == "HI\n"
+        @test fetch(get_stdout) == "HI\n"
     end
 
     # Issue #7001
@@ -212,10 +213,10 @@ fake_repl() do stdin_write, stdout_read, repl
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test findfirst("[2h", readline(stdout_read)) == 0:-1
+    @test findfirst("[2h", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test findfirst("[2~", readline(stdout_read)) == 0:-1
+    @test findfirst("[2~", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
@@ -248,7 +249,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 function buffercontents(buf::IOBuffer)
@@ -617,7 +618,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close repl
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Simple non-standard REPL tests
@@ -657,7 +658,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test wait(c) == "a"
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
@@ -668,7 +669,7 @@ let exename = Base.julia_cmd()
         TestHelpers.with_fake_pty() do slave, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
-            p = spawn(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave)
+            p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
             output = readuntil(master,"julia> ",keep=true)
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a
@@ -828,7 +829,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close REPL ^D
             write(stdin_write, '\x04')
-            wait(repltask)
+            Base._wait(repltask)
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
@@ -885,7 +886,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Close REPL ^D
     write(stdin_write, '\x04')
-    wait(repltask)
+    Base._wait(repltask)
 end
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
@@ -904,7 +905,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
     buf = IOBuffer()
     @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

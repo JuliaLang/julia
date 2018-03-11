@@ -21,23 +21,23 @@ julia> rng = MersenneTwister(1234);
 
 julia> bitrand(rng, 10)
 10-element BitArray{1}:
+ false
+  true
   true
   true
   true
  false
   true
  false
- false
-  true
  false
   true
 ```
 """
-bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(uninitialized, dims))
-bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(uninitialized, convert(Dims, dims)))
+bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(undef, dims))
+bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(undef, convert(Dims, dims)))
 
-bitrand(dims::Dims)   = rand!(BitArray(uninitialized, dims))
-bitrand(dims::Integer...) = rand!(BitArray(uninitialized, convert(Dims, dims)))
+bitrand(dims::Dims)   = rand!(BitArray(undef, dims))
+bitrand(dims::Integer...) = rand!(BitArray(undef, convert(Dims, dims)))
 
 
 ## randstring (often useful for temporary filenames/dirnames)
@@ -53,10 +53,10 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> srand(0); randstring()
-"c03rgKi1"
+"Qgt7sUOP"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"wijzek"
+"oevnou"
 
 julia> randstring("ACGT")
 "TATCGGTC"
@@ -242,7 +242,7 @@ julia> randperm(MersenneTwister(1234), 4)
  3
 ```
 """
-randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(uninitialized, n))
+randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(undef, n))
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
@@ -255,7 +255,7 @@ optional `rng` argument specifies a random number generator (see
 
 # Examples
 ```jldoctest
-julia> randperm!(MersenneTwister(1234), Vector{Int}(uninitialized, 4))
+julia> randperm!(MersenneTwister(1234), Vector{Int}(undef, 4))
 4-element Array{Int64,1}:
  2
  1
@@ -271,7 +271,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     mask = 3
     @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i, mask))
-        if i != j # a[i] is uninitialized (and could be #undef)
+        if i != j # a[i] is undef (and could be #undef)
             a[i] = a[j]
         end
         a[j] = i
@@ -303,7 +303,7 @@ julia> randcycle(MersenneTwister(1234), 6)
  2
 ```
 """
-randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(uninitialized, n))
+randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(undef, n))
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 """
@@ -315,7 +315,7 @@ The optional `rng` argument specifies a random number generator, see
 
 # Examples
 ```jldoctest
-julia> randcycle!(MersenneTwister(1234), Vector{Int}(uninitialized, 6))
+julia> randcycle!(MersenneTwister(1234), Vector{Int}(undef, 6))
 6-element Array{Int64,1}:
  3
  5
@@ -341,67 +341,3 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
 end
 
 randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
-
-
-## random UUID generation
-
-import Base: UUID, uuid_version
-
-"""
-    uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
-
-Generates a version 1 (time-based) universally unique identifier (UUID), as specified
-by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
-according to section 4.5 of the RFC.
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> Random.uuid1(rng)
-2cc938da-5937-11e7-196e-0f4ef71aa64b
-```
-"""
-function uuid1(rng::AbstractRNG=GLOBAL_RNG)
-    u = rand(rng, UInt128)
-
-    # mask off clock sequence and node
-    u &= 0x00000000000000003fffffffffffffff
-
-    # set the unicast/multicast bit and version
-    u |= 0x00000000000010000000010000000000
-
-    # 0x01b21dd213814000 is the number of 100 nanosecond intervals
-    # between the UUID epoch and Unix epoch
-    timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
-    ts_low = timestamp & typemax(UInt32)
-    ts_mid = (timestamp >> 32) & typemax(UInt16)
-    ts_hi = (timestamp >> 48) & 0x0fff
-
-    u |= UInt128(ts_low) << 96
-    u |= UInt128(ts_mid) << 80
-    u |= UInt128(ts_hi) << 64
-
-    UUID(u)
-end
-
-"""
-    uuid4([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
-
-Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
-as specified by RFC 4122.
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> Random.uuid4(rng)
-82015f10-44cc-4827-996e-0f4ef71aa64b
-```
-"""
-function uuid4(rng::AbstractRNG=GLOBAL_RNG)
-    u = rand(rng, UInt128)
-    u &= 0xffffffffffff0fff3fffffffffffffff
-    u |= 0x00000000000040008000000000000000
-    UUID(u)
-end

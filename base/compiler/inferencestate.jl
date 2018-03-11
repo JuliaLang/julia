@@ -78,8 +78,8 @@ mutable struct InferenceState
         argtypes = get_argtypes(result)
         vararg_type_container = nothing
         nargs = length(argtypes)
-        s_argtypes = VarTable(uninitialized, nslots)
-        src.slottypes = Vector{Any}(uninitialized, nslots)
+        s_argtypes = VarTable(undef, nslots)
+        src.slottypes = Vector{Any}(undef, nslots)
         for i in 1:nslots
             at = (i > nargs) ? Bottom : argtypes[i]
             if !toplevel && linfo.def.isva && i == nargs
@@ -202,7 +202,7 @@ function add_backedge!(li::MethodInstance, caller::InferenceState)
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(mt::MethodTable, @nospecialize(typ), caller::InferenceState)
+function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     if caller.stmt_edges[caller.currpc] === ()
         caller.stmt_edges[caller.currpc] = []

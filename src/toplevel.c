@@ -35,9 +35,10 @@ jl_module_t *jl_internal_main_module = NULL;
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
-    assert(jl_base_module != NULL);
+    jl_module_t *base_module = jl_base_relative_to(m);
+    assert(base_module != NULL);
     // using Base
-    jl_module_using(m, jl_base_module);
+    jl_module_using(m, base_module);
 }
 
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
@@ -227,7 +228,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         for (int i = 0; i < jl_array_len(exprs); i++) {
             // process toplevel form
             ptls->world_age = jl_world_counter;
-            form = jl_expand(jl_array_ptr_ref(exprs, i), newm);
+            form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
             ptls->world_age = jl_world_counter;
             (void)jl_toplevel_eval_flex(newm, form, 1, 1);
         }
@@ -515,14 +516,23 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
 static void import_module(jl_module_t *m, jl_module_t *import)
 {
     jl_sym_t *name = import->name;
+    jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
-        jl_binding_t *b = jl_get_binding(m, name);
+        b = jl_get_binding(m, name);
         if (b->owner != m || (b->value && b->value != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing identifier",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }
-    jl_set_const(m, name, (jl_value_t*)import);
+    else {
+        b = jl_get_binding_wr(m, name, 1);
+        b->imported = 1;
+    }
+    if (!b->constp) {
+        b->value = (jl_value_t*)import;
+        b->constp = 1;
+        jl_gc_wb(m, (jl_value_t*)import);
+    }
 }
 
 // replace Base.X with top-level X

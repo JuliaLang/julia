@@ -27,7 +27,7 @@ function test_threaded_loop_and_atomic_add()
     # and were unique (via pigeon-hole principle).
     @test !(false in found)
     if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
+        println(stderr, "Warning: threaded loop executed in order")
     end
 end
 
@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Vector{T}(uninitialized, n-m+1)
-    oldy = Vector{T}(uninitialized, n-m+1)
+    oldx = Vector{T}(undef, n-m+1)
+    oldy = Vector{T}(undef, n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -463,7 +463,7 @@ test_nested_loops()
             ret void
         \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
     end
-    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
+    code_native(stdout, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
     """
 
     mktempdir() do dir

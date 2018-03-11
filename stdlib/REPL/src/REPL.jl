@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module REPL
 
 using Base.Meta
+import InteractiveUtils
 
 export
     AbstractREPL,
@@ -42,6 +45,7 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
+include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 function __init__()
@@ -627,7 +631,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # First the current response buffer
     if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
-        if match != 0:-1
+        if match !== nothing
             seek(response_buffer, first(match) - 1)
             return true
         end
@@ -638,7 +642,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc1(searchdata, h)
-        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -667,16 +671,8 @@ function return_callback(s)
     end
 end
 
-function find_hist_file()
-    filename = ".julia_history"
-    if isfile(filename)
-        return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
-        return ENV["JULIA_HISTORY"]
-    else
-        return joinpath(homedir(), filename)
-    end
-end
+find_hist_file() = get(ENV, "JULIA_HISTORY",
+    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -833,6 +829,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
@@ -980,7 +977,7 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
-            Base.edit(linfos[n][1], linfos[n][2])
+            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1138,8 +1135,5 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
-
-include("precompile.jl")
-_precompile_()
 
 end # module

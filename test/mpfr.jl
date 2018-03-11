@@ -291,6 +291,8 @@ end
         end
         # BigInt division
         @test a / BigInt(2) == c
+        # inv
+        @test inv(x) == one(x)/x == 1/x == x^-1 == Clong(1)/x
     end
     #^
     x = BigFloat(12)
@@ -893,7 +895,7 @@ end
         ends::String="",
         starts::String="")
         sx = sprint(show, x)
-        scx = sprint(showcompact, x)
+        scx = sprint(show, x, context=:compact => true)
         strx = string(x)
         @test sx == strx
         @test length(scx) < 20
@@ -913,8 +915,8 @@ end
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
 
     for to_string in [string,
-        x->sprint(show, x),
-        x->sprint(showcompact,x)]
+                      x->sprint(show, x),
+                      x->sprint(show, x, context=:compact => true)]
         @test to_string(big"0.0") == "0.0"
         @test to_string(big"-0.0") == "-0.0"
         @test to_string(big"1.0") == "1.0"

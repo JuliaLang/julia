@@ -90,6 +90,8 @@ jl_datatype_t *jl_globalref_type;
 jl_datatype_t *jl_linenumbernode_type;
 jl_datatype_t *jl_labelnode_type;
 jl_datatype_t *jl_gotonode_type;
+jl_datatype_t *jl_pinode_type;
+jl_datatype_t *jl_phinode_type;
 jl_datatype_t *jl_quotenode_type;
 jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_intrinsic_type;
@@ -1976,6 +1978,16 @@ void jl_init_types(void)
                         jl_perm_symsvec(1, "label"),
                         jl_svec(1, jl_long_type), 0, 0, 1);
 
+    jl_pinode_type =
+        jl_new_datatype(jl_symbol("PiNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(2, "val", "typ"),
+                        jl_svec(2, jl_any_type, jl_any_type), 0, 0, 2);
+
+    jl_phinode_type =
+        jl_new_datatype(jl_symbol("PhiNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(2, "edges", "values"),
+                        jl_svec(2, jl_array_any_type, jl_array_any_type), 0, 0, 2);
+
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "value"),
@@ -2198,6 +2210,8 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_labelnode_type);
     jl_compute_field_offsets(jl_gotonode_type);
     jl_compute_field_offsets(jl_quotenode_type);
+    jl_compute_field_offsets(jl_pinode_type);
+    jl_compute_field_offsets(jl_phinode_type);
     jl_compute_field_offsets(jl_module_type);
     jl_compute_field_offsets(jl_method_instance_type);
     jl_compute_field_offsets(jl_unionall_type);

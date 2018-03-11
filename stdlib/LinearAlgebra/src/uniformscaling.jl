@@ -195,16 +195,16 @@ end
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = mul2!(J.λ, inv(A))
+/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} =
-    mul1!(inv(A), J.λ)
+    rmul!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = mul1!(inv(A), J.λ)
+\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
@@ -268,7 +268,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(uninitialized, n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)

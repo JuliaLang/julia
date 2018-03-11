@@ -251,15 +251,15 @@ which have a private state, for instance the ``state`` variable in the
 following example:
 
 ```jldoctest
-    julia> let state = 0
-               global counter() = (state += 1)
-           end;
+julia> let state = 0
+           global counter() = (state += 1)
+       end;
 
-    julia> counter()
-    1
+julia> counter()
+1
 
-    julia> counter()
-    2
+julia> counter()
+2
 ```
 
 See also the closures in the examples in the next two sections.
@@ -359,7 +359,7 @@ something like `let x = x` since the two `x` variables are distinct and have sep
 Here is an example where the behavior of `let` is needed:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
@@ -378,7 +378,7 @@ variable `i`, so the two closures behave identically. We can use `let` to create
 for `i`:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            let i = i
@@ -418,7 +418,7 @@ introduced in their body scopes are freshly allocated for each loop iteration, a
 were surrounded by a `let` block:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2);
+julia> Fs = Vector{Any}(undef, 2);
 
 julia> for j = 1:2
            Fs[j] = ()->j

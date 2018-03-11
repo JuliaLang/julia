@@ -2,11 +2,11 @@
 
 module Broadcast
 
-using Base.Cartesian
-using Base: Indices, OneTo, linearindices, tail, to_shape,
+using .Base.Cartesian
+using .Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            isoperator, promote_typejoin
-import Base: broadcast, broadcast!
+            isoperator, promote_typejoin, unalias
+import .Base: broadcast, broadcast!
 export BroadcastStyle, broadcast_indices, broadcast_similar,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
@@ -406,7 +406,7 @@ end
         @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        C = Vector{Bool}(uninitialized, bitcache_size)
+        C = Vector{Bool}(undef, bitcache_size)
         Bc = B.chunks
         ind = 1
         cind = 1
@@ -472,13 +472,23 @@ end
     return dest
 end
 
+# For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
+# appears on both the LHS and the RHS of the `.=`, then we know we're only
+# going to make one pass through the array, and even though `A` is aliasing
+# against itself, the mutations won't affect the result as the indices on the
+# LHS and RHS will always match. This is not true in general, but with the `.op=`
+# syntax it's fairly common for an argument to be `===` a source.
+broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
+
 # This indirection allows size-dependent implementations.
 @inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
     shape = broadcast_indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
-    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    A′ = broadcast_unalias(C, A)
+    Bs′ = map(B->broadcast_unalias(C, B), Bs)
+    keeps, Idefaults = map_newindexer(shape, A′, Bs′)
     iter = CartesianIndices(shape)
-    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
+    _broadcast!(f, C, keeps, Idefaults, A′, Bs′, Val(N), iter)
     return C
 end
 
@@ -500,14 +510,13 @@ end
             @nexprs $nargs i->(@inbounds val_i = _broadcast_getindex(A_i, I_i))
             # call the function
             V = @ncall $nargs f val
-            S = typeof(V)
             # store the result
-            if S <: eltype(B)
+            if V isa eltype(B)
                 @inbounds B[I] = V
             else
                 # This element type doesn't fit in B. Allocate a new B with wider eltype,
                 # copy over old values, and continue
-                newB = Base.similar(B, promote_typejoin(eltype(B), S))
+                newB = Base.similar(B, promote_typejoin(eltype(B), typeof(V)))
                 for II in Iterators.take(iter, count)
                     newB[II] = B[II]
                 end
@@ -691,7 +700,7 @@ would be the broadcast `inds`). The shape of the output is equal to the shape of
 element of `indsb`.
 
 # Examples
-```jldoctest
+```jldoctest bc_getindex
 julia> A = [11 12; 21 22]
 2×2 Array{Int64,2}:
  11  12
@@ -716,11 +725,11 @@ julia> broadcast_getindex(A, 1:2, 2:-1:1)
 2-element Array{Int64,1}:
  12
  21
- ```
+```
 Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
 where `i` and `j` are the two index vectors.
 
-```jldoctest
+```jldoctest bc_getindex
 julia> broadcast_getindex(A, 1:2, (1:2)')
 2×2 Array{Int64,2}:
  11  12
@@ -818,7 +827,8 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 # broadcasting "dot" calls/assignments:
 
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
-dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
+# don't add dots to dot operators
+dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
 dottable(x::Expr) = x.head != :$
 undot(x) = x
 function undot(x::Expr)

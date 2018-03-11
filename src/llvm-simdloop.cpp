@@ -152,7 +152,11 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
     }
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         DEBUG(dbgs() << "LSL: marking " << **K << "\n");
+#if JL_LLVM_VERSION >= 60000
+        (*K)->setFast(true);
+#else
         (*K)->setHasUnsafeAlgebra(true);
+#endif
     }
 }
 

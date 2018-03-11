@@ -54,7 +54,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{Core.MethodInstance, CodeInfo, Nothing}
+    linfo::Union{Core.MethodInstance, Core.CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -106,7 +106,7 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Cvoid})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer - 1, false)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, convert(UInt64, pointer))]
-    res = Vector{StackFrame}(uninitialized, length(infos))
+    res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)
@@ -133,7 +133,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        assert(ip.code isa CodeInfo)
+        @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
@@ -265,7 +265,7 @@ function remove_frames!(stack::StackTrace, m::Module)
     return stack
 end
 
-is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
+is_top_level_frame(f::StackFrame) = f.linfo isa Core.CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
     if frame.linfo == nothing
@@ -285,7 +285,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.show(io, frame.linfo)
         end
-    elseif frame.linfo isa CodeInfo
+    elseif frame.linfo isa Core.CodeInfo
         print(io, "top-level scope")
     end
 end

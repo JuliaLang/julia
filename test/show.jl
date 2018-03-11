@@ -22,15 +22,15 @@ showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize =>
                                          :y => 2)
 end
 
-@test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
-@test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
-@test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
+@test replstr(Array{Any}(undef, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Vector{String}(uninitialized, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Vector{String}(undef, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
 @test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
 @test replstr(Meta.parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
@@ -142,6 +142,15 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+# range syntax
+@test_repr "1:2"
+@test_repr "3:4:5"
+let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
+    ex1 = Expr(:call, :(:), 1)
+    @test eval(Meta.parse(repr(ex4))) == ex4
+    @test eval(Meta.parse(repr(ex1))) == ex1
+end
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
@@ -157,7 +166,7 @@ end
     # line meta
     dims::NTuple{N,Int}
     # line meta
-    function BitArray(uninitialized, dims::Int...)
+    function BitArray(undef, dims::Int...)
         # line meta
         if length(dims) != N
             # line meta
@@ -178,7 +187,7 @@ end
         # line meta
         nc = num_bit_chunks(n)
         # line meta
-        chunks = Vector{UInt64}(uninitialized, nc)
+        chunks = Vector{UInt64}(undef, nc)
         # line meta
         if nc > 0
             # line meta
@@ -381,11 +390,11 @@ export D, E, F
 end"
 
 # issue #19840
-@test_repr "Array{Int}(uninitialized, 0)"
-@test_repr "Array{Int}(uninitialized, 0,0)"
-@test_repr "Array{Int}(uninitialized, 0,0,0)"
-@test_repr "Array{Int}(uninitialized, 0,1)"
-@test_repr "Array{Int}(uninitialized, 0,0,1)"
+@test_repr "Array{Int}(undef, 0)"
+@test_repr "Array{Int}(undef, 0,0)"
+@test_repr "Array{Int}(undef, 0,0,0)"
+@test_repr "Array{Int}(undef, 0,1)"
+@test_repr "Array{Int}(undef, 0,0,1)"
 
 # issue #8994
 @test_repr "get! => 2"
@@ -471,15 +480,15 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
-let oldout = STDOUT, olderr = STDERR
+let oldout = stdout, olderr = stderr
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
-        @test wrout === STDOUT
+        @test wrout === stdout
         out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
-        @test wrerr === STDERR
+        @test wrerr === stderr
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
@@ -487,7 +496,7 @@ let oldout = STDOUT, olderr = STDERR
             close(wrerr)
         end
 
-        for io in (Core.STDOUT, Core.STDERR)
+        for io in (Core.stdout, Core.stderr)
             Core.println(io, "TESTA")
             println(io, "TESTB")
             print(io, 'Α', 1)
@@ -503,8 +512,8 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
-        @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
+        @test fetch(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
         redirect_stderr(olderr)
@@ -522,13 +531,13 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            println(STDERR, "WARNING: hello")
+            println(stderr, "WARNING: hello")
             [2]
         end
     end
     @test ret == [2]
 
-    # STDIN is unavailable on the workers. Run test on master.
+    # stdin is unavailable on the workers. Run test on master.
     @test contains(read(filename, String), "WARNING: hello")
     ret = eval(Main, quote
         remotecall_fetch(1, $filename) do fname
@@ -564,6 +573,8 @@ function f13127()
     String(take!(buf))
 end
 @test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
+
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -738,26 +749,21 @@ end
 @test !contains(repr(fill(1.,10,10)), "\u2026")
 @test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
 
-# showcompact() also sets :multiline=>false (#16817)
-let io = IOBuffer(),
-    x = [1, 2]
-
-    showcompact(io, x)
-    @test String(take!(io)) == "[1, 2]"
-    showcompact(IOContext(io, :compact => true), x)
-    @test String(take!(io)) == "[1, 2]"
-end
-
 let io = IOBuffer()
     ioc = IOContext(io, :limit => true)
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
 end
 
-# PR 17117
-# test print_array
-let s = IOBuffer(Vector{UInt8}(), true, true)
+@testset "PR 17117: print_array" begin
+    s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    close(s)
+    s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
+    z = zeros(0,0,0,0,0,0,0,0)
+    Base.print_array(s2, z)
+    @test String(resize!(s2.data, s2.size)) == ""
+    close(s2)
 end
 
 let repr = sprint(dump, :(x = 1))
@@ -799,7 +805,7 @@ end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
 end
-let a = Vector{Any}(uninitialized, 10000)
+let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
@@ -850,7 +856,7 @@ test_repr("a.:(begin
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
-@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
+@test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
@@ -890,7 +896,7 @@ end
 
 function static_shown(x)
     p = Pipe()
-    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), p.in, x)
     @async close(p.in)
     return read(p.out, String)
@@ -919,7 +925,7 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = [0.0 0.0; 0.0 0.0]\n"
     finally
         rm(fname, force=true)
     end
@@ -973,7 +979,7 @@ end
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
     @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
-    A = Array{Pair,0}(uninitialized); A[] = 1=>2
+    A = Array{Pair,0}(undef); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==
@@ -1036,10 +1042,10 @@ end
     anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -1071,9 +1077,15 @@ end
     @test contains(s, " in Base.Math ")
 end
 
+module AlsoExportsPair
+Pair = 0
+export Pair
+end
+
 module TestShowType
     export TypeA
     struct TypeA end
+    using ..AlsoExportsPair
 end
 
 @testset "module prefix when printing type" begin
@@ -1094,6 +1106,15 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+
+    # issue #26354; make sure testing for symbol visibility doesn't cause
+    # spurious binding resolutions
+    show(IOContext(b, :module => TestShowType), Base.Pair)
+    @test !Base.isbindingresolved(TestShowType, :Pair)
+    @test String(take!(b)) == "Base.Pair"
+    show(IOContext(b, :module => TestShowType), Base.Complex)
+    @test Base.isbindingresolved(TestShowType, :Complex)
+    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -1116,6 +1137,9 @@ end
     # Issue #25038
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
+
+    # issue #25857
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1145,4 +1169,25 @@ end
     buf = IOBuffer()
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+
+@testset "Intrinsic printing" begin
+    @test sprint(show, Core.Intrinsics.arraylen) == "arraylen"
+    let io = IOBuffer()
+        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        str = String(take!(io))
+        @test contains(str, "arraylen")
+        @test contains(str, "(intrinsic function")
+    end
+end
+
+@testset "repr(mime, x)" begin
+    @test repr("text/plain", UInt8[1 2;3 4]) == "2×2 Array{UInt8,2}:\n 0x01  0x02\n 0x03  0x04"
+    @test repr("text/html", "raw html data") == "raw html data"
+    @test repr("text/plain", "string") == "\"string\""
+    @test repr("image/png", UInt8[2,3,4,7]) == UInt8[2,3,4,7]
+    @test repr("text/plain", 3.141592653589793) == "3.141592653589793"
+    @test repr("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
+    @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
+    @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
 Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in
@@ -34,6 +36,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
 end
 
 parent(a::ReinterpretArray) = a.parent
+dataids(a::ReinterpretArray) = dataids(a.parent)
 
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)

@@ -14,14 +14,14 @@ end
 @test isequal(map(sqrt, 2:6), [sqrt(i) for i in 2:6])
 
 # map on ranges should evaluate first value only once (#4453)
-let io=IOBuffer(3)
+let io=IOBuffer(maxsize=3)
     map(x->print(io,x), 1:2)
     @test String(take!(io))=="12"
 end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Vector{Union{}}(uninitialized, 0))), Vector{Union{}})
+@test isequal(typeof(map(x -> x, Vector{Union{}}(undef, 0))), Vector{Union{}})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -83,10 +83,10 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int,0}(uninitialized)),           0),
-                 ((i for i = Vector{Int}(uninitialized, 1)),          1),
-                 ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
-                 ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
+                 ((i for i = Array{Int,0}(undef)),           0),
+                 ((i for i = Vector{Int}(undef, 1)),          1),
+                 ((i for i = Matrix{Int}(undef, 1, 2)),       2),
+                 ((i for i = Array{Int}(undef, 1, 2, 3)),    3)]
     for (gen, dim) in gens_dims
         @test ndims(gen) == ndims(collect(gen)) == dim
     end

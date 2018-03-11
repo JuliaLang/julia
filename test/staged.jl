@@ -59,7 +59,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
+@generated function splat3(A::AbstractArray{T,N}, indx::Base.RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -77,7 +77,7 @@ B = view(A, 1:3, 2, 1:3)
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Vector{Expr}(uninitialized, NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int

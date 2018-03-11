@@ -10,7 +10,7 @@ if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Vector{UInt128}(uninitialized, 1))
+        RandomDevice() = new(Vector{UInt128}(undef, 1))
     end
 
     function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
@@ -96,8 +96,8 @@ end
 
 MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state,
-                    Vector{Float64}(uninitialized, MT_CACHE_F),
-                    Vector{UInt128}(uninitialized, MT_CACHE_I >> 4),
+                    Vector{Float64}(undef, MT_CACHE_F),
+                    Vector{UInt128}(undef, MT_CACHE_I >> 4),
                     MT_CACHE_F, 0)
 
 """
@@ -239,7 +239,7 @@ function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
     catch
-        println(STDERR,
+        println(stderr,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))

@@ -447,4 +447,17 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "aliasing with adjoint and transpose" begin
+    A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
+    B = copy(A)
+    B .= B'
+    @test B == A'
+    B = copy(A)
+    B .= transpose(B)
+    @test B == transpose(A)
+    B = copy(A)
+    B .= B .* B'
+    @test B == A .* A'
+end
+
 end # module TestAdjointTranspose

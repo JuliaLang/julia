@@ -5,13 +5,13 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V      # diagonal
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
-    function Bidiagonal{T}(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
+    function Bidiagonal{T}(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
     end
-    function Bidiagonal(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
+    function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         Bidiagonal{T}(dv, ev, uplo)
     end
 end
@@ -171,6 +171,8 @@ Bidiagonal{T}(A::Bidiagonal) where {T} =
     Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+
+convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 
@@ -604,7 +606,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
-    Q = Matrix{T}(uninitialized, n,n)
+    Q = Matrix{T}(undef, n,n)
     blks = [0; findall(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'

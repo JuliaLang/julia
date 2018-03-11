@@ -44,7 +44,7 @@ mutable struct MIState
     interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
-    mode_state::Dict
+    mode_state::IdDict{Any,Any}
     kill_ring::Vector{String}
     kill_idx::Int
     previous_key::Vector{Char}
@@ -1199,7 +1199,7 @@ end
 
 const wildcard = '\U10f7ff' # "Private Use" Char
 
-normalize_key(key::Char) = string(key)
+normalize_key(key::AbstractChar) = string(key)
 normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
@@ -1429,7 +1429,7 @@ function keymap_merge(target,source)
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
-        while isa(value, Union{Char,AbstractString})
+        while isa(value, Union{AbstractChar,AbstractString})
             value = normalize_key(value)
             if value in visited
                 error("Eager redirection cycle detected for key " * escape_string(key))
@@ -1441,7 +1441,7 @@ function keymap_merge(target,source)
             value = source[value]
         end
 
-        if isa(value, Union{Char,AbstractString})
+        if isa(value, Union{AbstractChar,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
                 error("Could not find redirected value " * escape_string(source[key]))
@@ -2205,7 +2205,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, Dict{Any,Any}())
+    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end

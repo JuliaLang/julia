@@ -18,6 +18,7 @@ macro macrocall(ex)
 end
 
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
+@test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
@@ -136,8 +137,13 @@ end
 @test repr(apple) == "apple::$(string(Fruit)) = 0"
 @test string(apple) == "apple"
 
-@test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test reprmime("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+@test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
+@test repr("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+let io = IOBuffer()
+    ioc = IOContext(io, :compact=>false)
+    show(io, Fruit)
+    @test String(take!(io)) == sprint(print, Fruit)
+end
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL

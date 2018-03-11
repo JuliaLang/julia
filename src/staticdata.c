@@ -5,6 +5,7 @@
 */
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h> // printf
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -1568,9 +1569,11 @@ static void jl_init_serializer2(int for_serialize)
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
+                     unreachable_sym,
                      lambda_sym, jl_symbol("tuple"), assign_sym,
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type,
+                     jl_pinode_type, jl_phinode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
                      jl_vararg_type, jl_abstractarray_type,
                      jl_densearray_type, jl_void_type, jl_function_type, jl_typeofbottom_type,
@@ -1595,6 +1598,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_unionall_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name,
+                     jl_pinode_type->name, jl_phinode_type->name,
                      jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
                      jl_namedtuple_type, jl_namedtuple_typename,

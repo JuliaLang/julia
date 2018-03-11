@@ -73,10 +73,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-e
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
-	$(JLDOWNLOAD) $(shell pwd)/cacert-2017-09-20.pem https://curl.haxx.se/ca/cacert-2017-09-20.pem
-	$(JLCHECKSUM) $(shell pwd)/cacert-2017-09-20.pem
+	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-01-17.pem https://curl.haxx.se/ca/cacert-2018-01-17.pem
+	$(JLCHECKSUM) $(shell pwd)/cacert-2018-01-17.pem
 	mkdir -p $(build_datarootdir)/julia
-	mv $(shell pwd)/cacert-2017-09-20.pem $@
+	mv $(shell pwd)/cacert-2018-01-17.pem $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
@@ -120,7 +120,7 @@ clean-libgit2:
 	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
-get-libgit2: $(LIBGIT2_SRC_FILE)
+get-libgit2: $(LIBGIT2_SRC_FILE) $(build_datarootdir)/julia/cert.pem
 extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled

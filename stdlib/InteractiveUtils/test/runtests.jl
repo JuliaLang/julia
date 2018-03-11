@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using InteractiveUtils
+using Test, InteractiveUtils
 
 # test methodswith
 # `methodswith` relies on exported symbols
@@ -114,8 +114,8 @@ end # module WarnType
 # Adds test for PR #17636
 let a = @code_typed 1 + 1
     b = @code_lowered 1 + 1
-    @test isa(a, Pair{CodeInfo, DataType})
-    @test isa(b, CodeInfo)
+    @test isa(a, Pair{Core.CodeInfo, DataType})
+    @test isa(b, Core.CodeInfo)
     @test isa(a[1].code, Array{Any,1})
     @test isa(b.code, Array{Any,1})
 
@@ -134,7 +134,7 @@ end
 
 # Issue #16326
 mktemp() do f, io
-    OLDSTDOUT = STDOUT
+    OLDSTDOUT = stdout
     redirect_stdout(io)
     @test try @code_native map(abs, rand(3)); true; catch; false; end
     redirect_stdout(OLDSTDOUT)

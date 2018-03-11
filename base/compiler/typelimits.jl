@@ -256,7 +256,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return type_more_complex(t, c.a, sources, depth, tupledepth, allowed_tuplelen) &&
                type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
-        return t !== 1 # alternatively, could use !(0 <= t < c)
+        return t !== 1 && !(0 <= t < c) # alternatively, could use !(abs(t) <= abs(c) || abs(t) < n) for some n
     end
     # base case for data types
     if isa(t, DataType)

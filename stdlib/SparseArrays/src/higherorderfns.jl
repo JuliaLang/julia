@@ -153,14 +153,14 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) 
 @inline _checked_maxnnzbcres(shape::NTuple{1}, As...) = shape[1] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline _checked_maxnnzbcres(shape::NTuple{2}, As...) = shape[1] != 0 && shape[2] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline function _allocres(shape::NTuple{1}, indextype, entrytype, maxnnz)
-    storedinds = Vector{indextype}(uninitialized, maxnnz)
-    storedvals = Vector{entrytype}(uninitialized, maxnnz)
+    storedinds = Vector{indextype}(undef, maxnnz)
+    storedvals = Vector{entrytype}(undef, maxnnz)
     return SparseVector(shape..., storedinds, storedvals)
 end
 @inline function _allocres(shape::NTuple{2}, indextype, entrytype, maxnnz)
-    pointers = Vector{indextype}(uninitialized, shape[2] + 1)
-    storedinds = Vector{indextype}(uninitialized, maxnnz)
-    storedvals = Vector{entrytype}(uninitialized, maxnnz)
+    pointers = Vector{indextype}(undef, shape[2] + 1)
+    storedinds = Vector{indextype}(undef, maxnnz)
+    storedvals = Vector{entrytype}(undef, maxnnz)
     return SparseMatrixCSC(shape..., pointers, storedinds, storedvals)
 end
 # Ambiguity killers, TODO: nix conflicting specializations
@@ -1008,12 +1008,14 @@ function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, A::SparseVecOrMat, Bs::
     if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(A)
         return copyto!(dest, A)
     end
-    _aresameshape(dest, A, Bs...) && return _noshapecheck_map!(f, dest, A, Bs...)
-    Base.Broadcast.check_broadcast_indices(axes(dest), A, Bs...)
-    fofzeros = f(_zeros_eltypes(A, Bs...)...)
+    A′ = Base.unalias(dest, A)
+    Bs′ = map(B->Base.unalias(dest, B), Bs)
+    _aresameshape(dest, A′, Bs′...) && return _noshapecheck_map!(f, dest, A′, Bs′...)
+    Base.Broadcast.check_broadcast_indices(axes(dest), A′, Bs′...)
+    fofzeros = f(_zeros_eltypes(A′, Bs′...)...)
     fpreszeros = _iszero(fofzeros)
-    fpreszeros ? _broadcast_zeropres!(f, dest, A, Bs...) :
-                        _broadcast_notzeropres!(f, fofzeros, dest, A, Bs...)
+    fpreszeros ? _broadcast_zeropres!(f, dest, A′, Bs′...) :
+                        _broadcast_notzeropres!(f, fofzeros, dest, A′, Bs′...)
     return dest
 end
 function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, mixedsrcargs::Vararg{Any,N}) where {Tf,N}

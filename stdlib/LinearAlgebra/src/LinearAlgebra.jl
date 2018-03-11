@@ -77,7 +77,6 @@ export
     diag,
     diagind,
     diagm,
-    diff,
     dot,
     eig,
     eigfact,
@@ -115,15 +114,14 @@ export
     lufact!,
     lyap,
     mul!,
-    mul1!,
-    mul2!,
+    lmul!,
+    rmul!,
     norm,
     normalize,
     normalize!,
     nullspace,
     ordschur!,
     ordschur,
-    peakflops,
     pinv,
     qr,
     qrfact!,
@@ -336,7 +334,7 @@ const × = cross
 export ⋅, ×
 
 
-function versioninfo(io::IO=STDOUT)
+function versioninfo(io::IO=stdout)
     if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")

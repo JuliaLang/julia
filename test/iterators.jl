@@ -30,13 +30,13 @@ end
 
 # check direct EachLine constructor
 let b = IOBuffer("foo\n")
-    @test collect(EachLine(b)) == ["foo"]
+    @test collect(Base.EachLine(b)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, keep=true)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true)) == ["foo\n"]
     seek(b, 0)
-    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    @test collect(Base.EachLine(b, ondone=()->0)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
 # enumerate (issue #6284)
@@ -431,7 +431,7 @@ end
     @test eltype(arr) == Int
 end
 
-@testset "IndexValue type" begin
+@testset "Pairs type" begin
     for A in ([4.0 5.0 6.0],
               [],
               (4.0, 5.0, 6.0),
@@ -478,7 +478,7 @@ end
 @testset "reverse iterators" begin
     squash(x::Number) = x
     squash(A) = reshape(A, length(A))
-    Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
+    Z = Array{Int,0}(undef); Z[] = 17 # zero-dimensional test case
     for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
                 eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
                 Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),

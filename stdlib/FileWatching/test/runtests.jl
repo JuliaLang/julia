@@ -1,26 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
+using Base: uv_error
 
 # This script does the following
-# Sets up n unix pipes
+# Sets up N unix pipes (or WSA sockets)
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
 # Nothing is written into the even numbered pipes
 # Odd numbered pipes are tested for reads
 # Even numbered pipes are tested for timeouts
-# Writable ends are always tested for writability before a write
+# Writable ends are always tested for write-ability before a write
 
 n = 20
 intvls = [2, .2, .1, .005]
 
-pipe_fds = Vector{Any}(uninitialized, n)
+pipe_fds = Vector{Any}(undef, n)
 for i in 1:n
     @static if Sys.iswindows()
-        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(uninitialized, 2)
-        0 == ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i]) || error(Libc.FormatMessage())
+        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(undef, 2)
+        uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{Libc.WindowsRawSocket}, Cint, Cint), 1, 6, pipe_fds[i], 0, 0))
     else
-        pipe_fds[i] = Array{RawFD}(uninitialized, 2)
-        @test 0 == ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
+        pipe_fds[i] = Vector{RawFD}(undef, 2)
+        uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{RawFD}, Cint, Cint), pipe_fds[i], 0, 0))
     end
 end
 
@@ -36,13 +37,13 @@ function pfd_tst_reads(idx, intvl)
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
-    @test evt === wait(evt2)
+    @test evt === fetch(evt2)
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
     # @test t_elapsed <= (intvl + 1)
 
-    dout = Vector{UInt8}(uninitialized, 1)
+    dout = Vector{UInt8}(undef, 1)
     @static if Sys.iswindows()
         1 == ccall(:recv, stdcall, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else
@@ -63,7 +64,7 @@ function pfd_tst_timeout(idx, intvl)
         @test evt.timedout
         @test !evt.readable
         @test !evt.writable
-        @test evt === wait(evt2)
+        @test evt === fetch(evt2)
     end
 
     # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
@@ -77,7 +78,7 @@ for (i, intvl) in enumerate(intvls)
     @sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(uninitialized, n)
+        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
                 t[idx] = @async pfd_tst_reads(idx, intvl)
@@ -107,7 +108,7 @@ for (i, intvl) in enumerate(intvls)
         end
         notify(ready_c, all=true)
         for idx in 1:n
-            wait(t[idx])
+            Base._wait(t[idx])
         end
     end
 end
@@ -120,32 +121,6 @@ for i in 1:n
             @test 0 == ccall(:close, Cint, (Cint,), pipe_fds[i][j])
         end
     end
-end
-
-# issue #12473
-# make sure 1-shot timers work
-let a = []
-    Timer(t -> push!(a, 1), 0.01, interval = 0)
-    sleep(0.2)
-    @test a == [1]
-end
-
-# make sure repeating timers work
-@noinline function make_unrooted_timer(a)
-    t = Timer(0.0, interval = 0.1)
-    finalizer(t -> a[] += 1, t)
-    wait(t)
-    e = @elapsed for i = 1:5
-        wait(t)
-    end
-    @test 1.5 > e >= 0.4
-    @test a[] == 0
-    nothing
-end
-let a = Ref(0)
-    make_unrooted_timer(a)
-    GC.gc()
-    @test a[] == 1
 end
 
 for f in (watch_file, poll_file)
@@ -226,7 +201,7 @@ end
 
 function test_watch_file_timeout(tval)
     watch = @async watch_file(file, tval)
-    @test wait(watch) == FileWatching.FileEvent(false, false, true)
+    @test fetch(watch) == FileWatching.FileEvent(false, false, true)
 end
 
 function test_watch_file_change(tval)
@@ -235,7 +210,7 @@ function test_watch_file_change(tval)
     open(file, "a") do f
         write(f, "small change\n")
     end
-    @test wait(watch) == FileWatching.FileEvent(false, true, false)
+    @test fetch(watch) == FileWatching.FileEvent(false, true, false)
 end
 
 function test_monitor_wait(tval)

@@ -142,7 +142,7 @@ Base.zero(::Type{Unit}) = Unit(0)
 Base.one(::Type{Unit}) = 1
 
 @testset "elementary functions" begin
-    elementary_functions = [abs, abs2, sign,
+    elementary_functions = [abs, abs2, sign, real, imag,
                             acos, acosh, asin, asinh, atan, atanh, sin, sinh,
                             conj, cos, cosh, tan, tanh,
                             exp, exp2, expm1, log, log10, log1p, log2,
@@ -150,7 +150,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, isempty, transpose, float]
+                            isinteger, isreal, transpose, adjoint, float]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -190,13 +190,14 @@ end
         @test ismissing(f(missing, 1))
         @test ismissing(f(missing, 1, 1))
         @test ismissing(f(Union{Int, Missing}, missing))
+        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
     end
 end
 
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
-    @test sprint(showcompact, missing) == "missing"
+    @test sprint(show, missing, context=:compact => true) == "missing"
     @test sprint(show, [missing]) == "$Missing[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
@@ -217,6 +218,7 @@ end
     x = convert(Vector{Union{Int, Missing}}, [missing])
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
+    @test eltype(adjoint([1, missing])) == Union{Int, Missing}
 end
 
 @testset "== and != on arrays" begin
@@ -260,11 +262,22 @@ end
     @test ismissing((missing, 2) == (1, missing))
     @test !((missing, 1) == (missing, 2))
 
+    longtuple = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
+    @test ismissing((longtuple...,17,missing) == (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) == (longtuple...,17,18))
+    @test !((longtuple...,17,missing) == (longtuple...,-17,18))
+    @test !((longtuple...,missing,18) == (longtuple...,17,-18))
+
     @test ismissing((1, missing) != (1, missing))
     @test ismissing(("a", missing) != ("a", missing))
     @test ismissing((missing,) != (missing,))
     @test ismissing((missing, 2) != (1, missing))
     @test (missing, 1) != (missing, 2)
+
+    @test ismissing((longtuple...,17,missing) != (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) != (longtuple...,17,18))
+    @test (longtuple...,17,missing) != (longtuple...,-17,18)
+    @test (longtuple...,missing,18) != (longtuple...,17,-18)
 end
 
 @testset "< and isless on tuples" begin

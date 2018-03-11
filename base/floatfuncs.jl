@@ -17,9 +17,13 @@ signbit(x::Float32) = signbit(bitcast(Int32, x))
 signbit(x::Float16) = signbit(bitcast(Int16, x))
 
 """
-    maxintfloat(T)
+    maxintfloat(T=Float64)
 
-The largest integer losslessly representable by the given floating-point DataType `T`.
+The largest consecutive integer that is exactly represented in the given floating-point type `T`
+(which defaults to `Float64`).
+
+That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
+is *not* exactly representable in the type `T`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -29,8 +33,9 @@ maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
 """
     maxintfloat(T, S)
 
-The largest integer losslessly representable by the given floating-point DataType `T` that
-also does not exceed the maximum integer representable by the integer DataType `S`.
+The largest consecutive integer representable in the given floating-point type `T` that
+also does not exceed the maximum integer representable by the integer type `S`.  Equivalently,
+it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
@@ -38,7 +43,8 @@ maxintfloat() = maxintfloat(Float64)
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
-    round([T,] x, [digits, [base]], [r::RoundingMode])
+    round([T,] x, [r::RoundingMode])
+    round(x, [digits; base = 10])
 
 Rounds `x` to an integer value according to the provided
 [`RoundingMode`](@ref), returning a value of the same type as `x`. When not
@@ -66,14 +72,14 @@ rounded.
 [`InexactError`](@ref) if the value is not representable.
 
 `round(x, digits)` rounds to the specified number of digits after the decimal place (or
-before if negative). `round(x, digits, base)` rounds using a base other than 10.
+before if negative). `round(x, digits, base = base)` rounds using a base other than 10.
 
 # Examples
 ```jldoctest
 julia> round(pi, 2)
 3.14
 
-julia> round(pi, 3, 2)
+julia> round(pi, 3, base = 2)
 3.125
 ```
 
@@ -84,7 +90,7 @@ julia> round(pi, 3, 2)
     rounded to 1.2.
 
     # Examples
-    ```jldoctest
+    ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
 
@@ -136,7 +142,7 @@ function _signif_og(x, digits, base)
 end
 
 """
-    signif(x, digits, [base])
+    signif(x, digits; base = 10)
 
 Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
 base `base` representation, default 10.
@@ -146,11 +152,11 @@ base `base` representation, default 10.
 julia> signif(123.456, 2)
 120.0
 
-julia> signif(357.913, 4, 2)
+julia> signif(357.913, 4, base = 2)
 352.0
 ```
 """
-function signif(x::Real, digits::Integer, base::Integer=10)
+function signif(x::Real, digits::Integer; base::Integer = 10)
     digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
 
     x = float(x)
@@ -166,7 +172,7 @@ end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x::Real, digits::Integer, base::Integer=10)
+        function ($f)(x::Real, digits::Integer; base::Integer = 10)
             x = float(x)
             og = convert(eltype(x),base)^digits
             r = ($f)(x * og) / og
@@ -189,7 +195,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? √eps : 0, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
@@ -209,6 +215,17 @@ approximately equal component-wise.
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
 
+Note that `x ≈ 0` (i.e., comparing to zero with the default tolerances) is
+equivalent to `x == 0` since the default `atol` is `0`.  In such cases, you should either
+supply an appropriate `atol` (or use `norm(x) ≤ atol`) or rearrange your code (e.g.
+use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `atol`
+automatically because it depends on the overall scaling (the "units") of your problem:
+for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x` is the
+[radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in meters,
+but an absurdly large tolerance if `x` is the
+[radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
+
+
 # Examples
 ```jldoctest
 julia> 0.1 ≈ (0.1 - 1e-10)
@@ -218,6 +235,12 @@ julia> isapprox(10, 11; atol = 2)
 true
 
 julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+true
+
+julia> 1e-10 ≈ 0
+false
+
+julia> isapprox(1e-10, 0, atol=1e-8)
 true
 ```
 """

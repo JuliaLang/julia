@@ -2,7 +2,7 @@
 
 # Tests for /base/stacktraces.jl
 
-using Serialization
+using Serialization, Base.StackTraces
 
 let
     @noinline child() = stacktrace()
@@ -100,7 +100,7 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = Meta.lower(Main, quote let x = 1 end end).args[1]::CodeInfo,
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 

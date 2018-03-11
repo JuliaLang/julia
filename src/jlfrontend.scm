@@ -97,12 +97,14 @@
 
 (define *in-expand* #f)
 
+(define (toplevel-only-expr? e)
+  (and (pair? e)
+       (or (memq (car e) '(toplevel line module import importall using export
+                                    error incomplete))
+           (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+
 (define (expand-toplevel-expr e)
-  (cond ((or (atom? e)
-             (and (pair? e)
-                  (or (memq (car e) '(toplevel line module import importall using export
-                                               error incomplete))
-                      (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+  (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
              (syntax-deprecation "underscores as an rvalue" "" #f))
          e)
@@ -209,6 +211,11 @@
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
                  (expand-toplevel-expr expr))))
+
+(define (jl-expand-to-thunk-stmt expr)
+  (jl-expand-to-thunk (if (toplevel-only-expr? expr)
+                          expr
+                          `(block ,expr (null)))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

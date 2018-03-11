@@ -683,7 +683,10 @@ static void jl_dump_asm_internal(
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-#if JL_LLVM_VERSION >= 40000
+#if JL_LLVM_VERSION >= 60000
+        MCTargetOptions Options;
+        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
+#elif JL_LLVM_VERSION >= 40000
         MCTargetOptions Options;
         MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu, Options);
 #else

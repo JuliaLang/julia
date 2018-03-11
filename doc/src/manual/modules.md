@@ -191,8 +191,9 @@ The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches 
 push!(LOAD_PATH, "/Path/To/My/Module/")
 ```
 
-Putting this statement in the file `~/.juliarc.jl` will extend [`LOAD_PATH`](@ref) on every Julia startup.
-Alternatively, the module load path can be extended by defining the environment variable `JULIA_LOAD_PATH`.
+Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
+every Julia startup. Alternatively, the module load path can be extended by defining the environment
+variable `JULIA_LOAD_PATH`.
 
 ### Namespace miscellanea
 
@@ -221,7 +222,7 @@ versions of modules to reduce this time.
 To create an incremental precompiled module file, add `__precompile__()` at the top of your module
 file (before the `module` starts). This will cause it to be automatically compiled the first time
 it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
-cache files will be stored in `Base.LOAD_CACHE_PATH[1]`. Subsequently, the module is automatically
+cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
 in the module file(s).
@@ -342,11 +343,11 @@ Other known potential failure scenarios include:
    of via its lookup path. For example, (in global scope):
 
    ```julia
-   #mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#
+   #mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module =#
    # instead use accessor functions:
-   getstdout() = Base.STDOUT #= best option =#
+   getstdout() = Base.stdout #= best option =#
    # or move the assignment into the runtime:
-   __init__() = global mystdout = Base.STDOUT #= also works =#
+   __init__() = global mystdout = Base.stdout #= also works =#
    ```
 
 Several additional restrictions are placed on the operations that can be done while precompiling

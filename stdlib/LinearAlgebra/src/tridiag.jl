@@ -305,14 +305,6 @@ end
 # Generic methods #
 ###################
 
-#Needed for inv_usmani()
-mutable struct ZeroOffsetVector
-    data::Vector
-end
-getindex(a::ZeroOffsetVector, i) = a.data[i+1]
-setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
-
-
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer, s::AbstractString)
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
@@ -327,11 +319,11 @@ end
 #    doi:10.1016/0024-3795(94)90414-6
 function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     n = length(b)
-    θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
-    θ[0] = 1
-    n>=1 && (θ[1] = b[1])
+    θ = zeros(T, n+1) #principal minors of A
+    θ[1] = 1
+    n>=1 && (θ[2] = b[1])
     for i=2:n
-        θ[i] = b[i]*θ[i-1]-a[i-1]*c[i-1]*θ[i-2]
+        θ[i+1] = b[i]*θ[i]-a[i-1]*c[i-1]*θ[i-1]
     end
     φ = zeros(T, n+1)
     φ[n+1] = 1
@@ -339,15 +331,15 @@ function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     for i=n-1:-1:1
         φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
     end
-    α = Matrix{T}(uninitialized, n, n)
+    α = Matrix{T}(undef, n, n)
     for i=1:n, j=1:n
         sign = (i+j)%2==0 ? (+) : (-)
         if i<j
-            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i-1]*φ[j+1]/θ[n]
+            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i]*φ[j+1]/θ[n+1]
         elseif i==j
-            α[i,i]=                       θ[i-1]*φ[i+1]/θ[n]
+            α[i,i]=                       θ[i]*φ[i+1]/θ[n+1]
         else #i>j
-            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j-1]*φ[i+1]/θ[n]
+            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j]*φ[i+1]/θ[n+1]
         end
     end
     α
