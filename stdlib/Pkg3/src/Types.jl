@@ -617,7 +617,9 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             # We save the repo in case another environement wants to
             # develop from the same repo, this avoids having to reclone it
             # from scratch.
-            repo_path = joinpath(depots()[1], "clones", string(hash(pkg.repo.url), "_full"))
+            clone_path = joinpath(depots()[1], "clones")
+            mkpath(clone_path)
+            repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
             repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
                 printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
                 r = LibGit2.clone(pkg.repo.url, repo_path)
