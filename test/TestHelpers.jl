@@ -61,10 +61,10 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-OffsetArray{T,N}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N,Array{T,N}}(Array{T,N}(uninitialized, map(length, inds)), map(indsoffset, inds))
-OffsetArray{T}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N}(uninitialized, inds)
+OffsetArray{T,N}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N,Array{T,N}}(Array{T,N}(undef, map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N}(undef, inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -98,9 +98,9 @@ end
 Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
     OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 

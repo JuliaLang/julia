@@ -5,11 +5,9 @@ module Resolve
 include(joinpath("resolve", "VersionWeights.jl"))
 include(joinpath("resolve", "MaxSum.jl"))
 
-using Pkg3.Types
-using Pkg3.GraphType
-using Pkg3.Resolve.MaxSum
-import Pkg3.Types: uuid_julia
-import Pkg3.GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
+using ..Types, ..GraphType, ..Resolve.MaxSum
+import ..Types: uuid_julia
+import ..GraphType: is_julia, check_constraints, log_event_global!, log_event_greedysolved!, log_event_maxsumsolved!, log_event_maxsumtrace!
 
 using Printf
 

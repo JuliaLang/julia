@@ -48,6 +48,10 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args
         // since it can go through the unrolled caches for this world
         // and if inference is successful, this meth would get updated anyways,
         // and we'll get the fast path here next time
+
+        // TODO: if `meth` came from an `invoke` call, we should make sure
+        // meth->def is called instead of doing normal dispatch.
+
         return jl_apply(args, nargs);
     }
 }

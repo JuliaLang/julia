@@ -87,8 +87,8 @@ if is_primary_base_module
             # this Array already has the right memory layout for the requested Ref
             return RefArray(a,1,false) # root something, so that this function is type-stable
         else
-            ptrs = Vector{P}(uninitialized, length(a)+1)
-            roots = Vector{Any}(uninitialized, length(a))
+            ptrs = Vector{P}(undef, length(a)+1)
+            roots = Vector{Any}(undef, length(a))
             for i = 1:length(a)
                 root = cconvert(P, a[i])
                 ptrs[i] = unsafe_convert(P, root)::P

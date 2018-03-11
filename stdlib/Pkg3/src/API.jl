@@ -6,10 +6,9 @@ import Random
 import Dates
 import LibGit2
 
-import Pkg3
-import Pkg3: depots, logdir, devdir, print_first_command_header
-using Pkg3.Types
-using Pkg3.TOML
+import ..depots, ..logdir, ..devdir, ..print_first_command_header
+import ..Operations, ..Display
+using ..Types, ..TOML
 
 
 preview_info() = @info("In preview mode")
@@ -22,10 +21,12 @@ function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
+    handle_repos!(ctx.env, pkgs)
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
+    stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, true)
-    Pkg3.Operations.add(ctx, pkgs)
+    Operations.add(ctx, pkgs)
 end
 
 
@@ -39,7 +40,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
-    Pkg3.Operations.rm(ctx, pkgs)
+    Operations.rm(ctx, pkgs)
 end
 
 
@@ -120,7 +121,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         manifest_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs)
     end
-    Pkg3.Operations.up(ctx, pkgs)
+    Operations.up(ctx, pkgs)
 end
 
 
@@ -134,7 +135,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.pin(ctx, pkgs)
+    Operations.pin(ctx, pkgs)
 end
 
 
@@ -146,20 +147,23 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
+    registry_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.free(ctx, pkgs)
+    Operations.free(ctx, pkgs)
 end
 
 
-checkout(pkg::Union{String, PackageSpec}; kwargs...)  = checkout([pkg]; kwargs...)
-checkout(pkg::String, branch::String; kwargs...)      = checkout([(PackageSpec(pkg), branch)]; kwargs...)
-checkout(pkg::PackageSpec, branch::String; kwargs...) = checkout([(pkg, branch)]; kwargs...)
-checkout(pkgs::Vector{String}; kwargs...)             = checkout([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs::Vector{PackageSpec}; kwargs...)        = checkout([(pkg, nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs_branches::Vector; kwargs...)            = checkout(Context(), pkgs_branches; kwargs...)
+#deprecated
+@deprecate checkout develop
 
-function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
+develop(pkg::Union{String, PackageSpec}; kwargs...)  = develop([pkg]; kwargs...)
+develop(pkg::String, branch::String; kwargs...)      = develop([(PackageSpec(pkg), branch)]; kwargs...)
+develop(pkg::PackageSpec, branch::String; kwargs...) = develop([(pkg, branch)]; kwargs...)
+develop(pkgs::Vector{String}; kwargs...)             = develop([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
+develop(pkgs::Vector{PackageSpec}; kwargs...)        = develop([(pkg, nothing) for pkg in pkgs]; kwargs...)
+develop(pkgs_branches::Vector; kwargs...)            = develop(Context(), pkgs_branches; kwargs...)
+
+function develop(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
@@ -167,7 +171,7 @@ function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs..
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.checkout(ctx, pkgs_branches; path = path)
+    Operations.develop(ctx, pkgs_branches; path = path)
 end
 
 
@@ -183,13 +187,13 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.test(ctx, pkgs; coverage=coverage)
+    Operations.test(ctx, pkgs; coverage=coverage)
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
-    diffs = Pkg3.Display.status(Context(), mode, #=use_as_api=# true)
-    version_status = Dict{String, VersionNumber}()
+function installed(mode::PackageMode=PKGMODE_MANIFEST)
+    diffs = Display.status(Context(), mode, #=use_as_api=# true)
+    version_status = Dict{String, Union{VersionNumber,Nothing}}()
     diffs == nothing && return version_status
     for entry in diffs
         version_status[entry.name] = entry.new.ver
@@ -244,7 +248,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
             stanzas = _stanzas[1]
             if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
                 push!(paths_to_keep,
-                      Pkg3.Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
+                      Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
             end
         end
     end
@@ -334,7 +338,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
-    Pkg3.Operations.build_versions(ctx, uuids; do_resolve=true)
+    Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
 end
 
 init() = init(Context())
@@ -342,7 +346,7 @@ init(path::String) = init(Context(), path)
 function init(ctx::Context, path::String=pwd())
     print_first_command_header()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
-    Pkg3.Operations.init(ctx)
+    Operations.init(ctx)
 end
 
 end # module

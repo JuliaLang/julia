@@ -120,12 +120,12 @@ Language changes
   * `global const` declarations may no longer appear inside functions ([#12010]).
 
   * Uninitialized `BitArray` constructors of the form `BitArray[{N}](shape...)` have been
-    deprecated in favor of equivalents accepting `uninitialized` (an alias for
-    `Uninitialized()`) as their first argument, as in
-    `BitArray[{N}](uninitialized, shape...)`. For example, `BitVector(3)` is now
-    `BitVector(uninitialized, 3)`, `BitMatrix((2, 4))` is now
-    `BitMatrix(uninitialized, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
-    `BitArray{3}(uninitialized, 11, 14, 17)` ([#24785]).
+    deprecated in favor of equivalents accepting `undef` (an alias for
+    `UndefInitializer()`) as their first argument, as in
+    `BitArray[{N}](undef, shape...)`. For example, `BitVector(3)` is now
+    `BitVector(undef, 3)`, `BitMatrix((2, 4))` is now
+    `BitMatrix(undef, (2, 4))`, and `BitArray{3}(11, 13, 17)` is now
+    `BitArray{3}(undef, 11, 14, 17)` ([#24785]).
 
   * Dispatch rules have been simplified:
     method matching is now determined exclusively by subtyping;
@@ -208,6 +208,8 @@ Language changes
   * Underscores for `_italics_` and `__bold__` are now supported by the Base Markdown
     parser. ([#25564])
 
+  * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
+
 Breaking changes
 ----------------
 
@@ -229,6 +231,10 @@ This section lists changes that do not have deprecation warnings.
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
     Previously an empty tuple was returned ([#21697]).
+
+  * `⋮`, `⋱`, `⋰`, and `⋯` are now parsed as binary operators, not ordinary
+    identifiers.  `≔`, `≕`, and `⩴` now parse with assignment rather than comparison
+    precedence ([#26262]).
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
 
@@ -415,9 +421,9 @@ This section lists changes that do not have deprecation warnings.
     and higher-dimensional arrays instead of linear indices as was previously the case.
     Use `LinearIndices(a)[findall(f, a)]` and similar constructs to compute linear indices.
 
-  * The `find*` functions which return scalars, i.e. `findnext`, `findprev`, `findfirst`,
+  * The `find*` functions, i.e. `findnext`, `findprev`, `findfirst`,
     and `findlast`, as well as `indexin`, now return `nothing` when no match is found rather
-    than 0 ([#25472], [#25662]).
+    than `0` or `0:-1` ([#25472], [#25662], [#26149])
 
   * The `Base.HasShape` iterator trait has gained a type parameter `N` indicating the
     number of dimensions, which must correspond to the length of the tuple returned by
@@ -451,6 +457,9 @@ Library improvements
 
   * The function `thisind(s::AbstractString, i::Integer)` returns the largest valid index
     less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
+
+  * `Char` is now a subtype of `AbstractChar`, and most of the functions that
+    take character arguments now accept any `AbstractChar` ([#26286]).
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
@@ -581,6 +590,9 @@ Library improvements
     collection `A`. There are also two other methods with a different API, and
     a mutating variant, `replace!` ([#22324]).
 
+  * Adding integers to `CartesianIndex` objects is now deprecated. Instead of
+    `i::Int + x::CartesianIndex`, use `i*one(x) + x` ([#26284]).
+
   * `CartesianRange` changes ([#24715]):
     - Inherits from `AbstractArray`, and linear indexing can be used to provide
       linear-to-cartesian conversion ([#24715])
@@ -650,11 +662,11 @@ Deprecated or removed
 
   * Uninitialized `Array` constructors of the form
     `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
-    accepting `uninitialized` (an alias for `Uninitialized()`) as their first argument,
-    as in `Array[{T,N}](uninitialized, shape...)`. For example,
-    `Vector(3)` is now `Vector(uninitialized, 3)`, `Matrix{Int}((2, 4))` is now,
-    `Matrix{Int}(uninitialized, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
-    `Array{Float32,3}(uninitialized, 11, 13, 17)` ([#24781]).
+    accepting `uninit` (an alias for `UndefInitializer()`) as their first argument,
+    as in `Array[{T,N}](undef, shape...)`. For example,
+    `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
+    `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
+    `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
 
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
@@ -680,11 +692,11 @@ Deprecated or removed
     output ([#12131]).
 
   * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been
-    deprecated in favor of equivalents accepting `uninitialized` (an alias for
-    `Uninitialized()`) as their first argument, as in
-    `RowVector{T}(uninitialized, shape...)`. For example, `RowVector{Int}(3)` is now
-    `RowVector{Int}(uninitialized, 3)`, and `RowVector{Float32}((1, 4))` is now
-    `RowVector{Float32}(uninitialized, (1, 4))` ([#24786]).
+    deprecated in favor of equivalents accepting `uninit` (an alias for
+    `UndefInitializer()`) as their first argument, as in
+    `RowVector{T}(undef, shape...)`. For example, `RowVector{Int}(3)` is now
+    `RowVector{Int}(undef, 3)`, and `RowVector{Float32}((1, 4))` is now
+    `RowVector{Float32}(undef, (1, 4))` ([#24786]).
 
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
@@ -747,7 +759,7 @@ Deprecated or removed
     in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
     Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(uninitialized, dims))` ([#21450]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(undef, dims))` ([#21450]).
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
@@ -1081,7 +1093,11 @@ Deprecated or removed
   * `DevNull`, `STDIN`, `STDOUT`, and `STDERR` have been renamed to `devnull`, `stdin`, `stdout`,
     and `stderr`, respectively ([#25786]).
 
-  * `wait` and `fetch` on `Task` now resemble the interface of `Future`
+  * `wait` and `fetch` on `Task` now resemble the interface of `Future`.
+
+  * `showcompact(io, x...)` has been deprecated in favor of
+    `show(IOContext(io, :compact => true), x...)` ([#26080]).
+    Use `sprint(show, x..., context=:compact => true)` instead of `sprint(showcompact, x...)`.
 
 Command-line option changes
 ---------------------------
@@ -1379,3 +1395,5 @@ Command-line option changes
 [#25998]: https://github.com/JuliaLang/julia/issues/25998
 [#26009]: https://github.com/JuliaLang/julia/issues/26009
 [#26071]: https://github.com/JuliaLang/julia/issues/26071
+[#26080]: https://github.com/JuliaLang/julia/issues/26080
+[#26149]: https://github.com/JuliaLang/julia/issues/26149

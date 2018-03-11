@@ -3,9 +3,7 @@ module Display
 using UUIDs
 import LibGit2
 
-using Pkg3.Types
-import Pkg3: @info, Nothing
-
+using ..Types
 
 const colors = Dict(
     ' ' => :white,
@@ -45,18 +43,18 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         use_as_api || @info("Status $(pathrepr(env, env.project_file))")
-        diff = manifest_diff(m₀, m₁)
+        diff = manifest_diff(ctx, m₀, m₁)
         use_as_api || print_diff(diff)
     end
     if mode == PKGMODE_MANIFEST
         use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
-        diff = manifest_diff(manifest₀, manifest₁)
+        diff = manifest_diff(ctx, manifest₀, manifest₁)
         use_as_api || print_diff(diff)
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
         m₀ = filter_manifest(p, manifest₀)
         m₁ = filter_manifest(p, manifest₁)
-        c_diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
+        c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
             use_as_api || print_diff(c_diff)
@@ -66,10 +64,10 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
     return diff
 end
 
-function print_project_diff(env₀::EnvCache, env₁::EnvCache)
+function print_project_diff(ctx::Context, env₀::EnvCache, env₁::EnvCache)
     pm₀ = filter_manifest(in_project(env₀.project["deps"]), env₀.manifest)
     pm₁ = filter_manifest(in_project(env₁.project["deps"]), env₁.manifest)
-    diff = filter!(x->x.old != x.new, manifest_diff(pm₀, pm₁))
+    diff = filter!(x->x.old != x.new, manifest_diff(ctx, pm₀, pm₁))
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
     else
@@ -77,8 +75,8 @@ function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     end
 end
 
-function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
-    diff = manifest_diff(env₀.manifest, env₁.manifest)
+function print_manifest_diff(ctx::Context, env₀::EnvCache, env₁::EnvCache)
+    diff = manifest_diff(ctx, env₀.manifest, env₁.manifest)
     diff = filter!(x->x.old != x.new, diff)
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
@@ -92,12 +90,18 @@ struct VerInfo
     path::Union{String,Nothing}
     ver::Union{VersionNumber,Nothing}
     pinned::Bool
+    repo::Union{Types.GitRepo, Nothing}
 end
 
+revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
+
 vstring(a::VerInfo) =
-    string(a.ver == nothing ? "[$(string(a.hash)[1:16])]" : "v$(a.ver)",
+    string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
+           a.ver != nothing ? "v$(a.ver)" : "",
            a.pinned == true ? "⚲" : "",
-           a.path != nothing ? " [$(a.path)]" : "")
+           a.path != nothing ? " [$(a.path)]" : "",
+           a.repo != nothing ? " #$(revstring(a.repo.rev))" : ""
+           )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
     a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
@@ -126,7 +130,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
                     verb = x.old.ver == nothing || x.new.ver == nothing ||
                            x.old.ver == x.new.ver ? '~' :
                            x.old.ver < x.new.ver  ? '↑' : '↓'
-                elseif x.old.ver == x.new.ver && x.old.pinned != x.new.pinned
+                elseif x.old.ver == x.new.ver && x.old.pinned != x.new.pinned ||
+                        x.old.repo != nothing || x.new.repo != nothing
                     verb = '~'
                 else
                     verb = '?'
@@ -150,8 +155,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
             vstr = "[unknown]"
         end
         v = same ? "" : " $verb"
-        printstyled(color = color_dark, " [$(string(x.uuid)[1:8])]")
-        printstyled(color = colors[verb], "$v $(x.name) $vstr\n")
+        printstyled(io, " [$(string(x.uuid)[1:8])]"; color = color_dark)
+        printstyled(io, "$v $(x.name) $vstr\n"; color = colors[verb])
     end
 end
 print_diff(diff::Vector{DiffEntry}) = print_diff(stdout, diff)
@@ -172,10 +177,15 @@ function name_ver_info(info::Dict)
     ver  = haskey(info, "version")       ? VersionNumber(info["version"]) : nothing
     path =  get(info, "path", nothing)
     pin  =  get(info, "pinned", false)
-    name, VerInfo(hash, path, ver, pin)
+    if haskey(info, "repo-url")
+        repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
+    else
+        repo = nothing
+    end
+    name, VerInfo(hash, path, ver, pin, repo)
 end
 
-function manifest_diff(manifest₀::Dict, manifest₁::Dict)
+function manifest_diff(ctx::Context, manifest₀::Dict, manifest₁::Dict)
     diff = DiffEntry[]
     entries₀ = manifest_by_uuid(manifest₀)
     entries₁ = manifest_by_uuid(manifest₁)
@@ -192,7 +202,7 @@ function manifest_diff(manifest₀::Dict, manifest₁::Dict)
             push!(diff, DiffEntry(uuid, name₁, nothing, v₁))
         end
     end
-    sort!(diff, by=x->(x.name, x.uuid))
+    sort!(diff, by=x->(x.uuid in keys(ctx.stdlibs), x.name, x.uuid))
 end
 
 function filter_manifest!(predicate, manifest::Dict)

@@ -27,6 +27,8 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        # issue #26178
+        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
 
     @testset "Basic properties" begin
@@ -415,8 +417,8 @@ end
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
-        fullDD = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
-        fullBB = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
+        fullDD = copyto!(Matrix{Matrix{T}}(undef, 2, 2), DD)
+        fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
                 (identity,  transpose), (transpose, identity ), (transpose, transpose) )

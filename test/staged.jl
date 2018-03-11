@@ -77,7 +77,7 @@ B = view(A, 1:3, 2, 1:3)
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Vector{Expr}(uninitialized, NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int

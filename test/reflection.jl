@@ -738,3 +738,12 @@ typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
 @test typeparam(Int, rand(Int, 2)) == 2
 
 end
+
+# issue #26267
+module M26267
+import Test
+foo(x) = x
+end
+@test !(:Test in names(M26267, all=true, imported=false))
+@test :Test in names(M26267, all=true, imported=true)
+@test :Test in names(M26267, all=false, imported=true)

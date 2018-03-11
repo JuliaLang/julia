@@ -80,9 +80,10 @@ function Base.show(io::IO, code::IRCode)
         bbrange = cfg.blocks[bb_idx].stmts
         bbrange = bbrange.first:bbrange.last
         bb_pad = max_bb_idx_size - length(string(bb_idx))
+        bb_start_str = string("$(bb_idx) ",length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄",  "─"^(bb_pad)," ")
         if idx != last(bbrange)
             if idx == first(bbrange)
-                print(io, "$(bb_idx) ","─"^(1+bb_pad)," ")
+                print(io, bb_start_str)
             else
                 print(io, "│  "," "^max_bb_idx_size)
             end
@@ -98,7 +99,7 @@ function Base.show(io::IO, code::IRCode)
             node_idx += length(code.stmts)
             if print_sep
                 if floop
-                    print(io, "$(bb_idx) ","─"^(1+bb_pad)," ")
+                    print(io, bb_start_str)
                 else
                     print(io, "│  "," "^max_bb_idx_size)
                 end
@@ -117,7 +118,7 @@ function Base.show(io::IO, code::IRCode)
         end
         if print_sep
             if idx == first(bbrange) && floop
-                print(io, "$(bb_idx) ","─"^(1+bb_pad)," ")
+                print(io, bb_start_str)
             else
                 print(io, idx == last(bbrange) ? string("└", "─"^(1+max_bb_idx_size), " ") :
                     string("│  ", " "^max_bb_idx_size))

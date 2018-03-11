@@ -22,15 +22,15 @@ showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize =>
                                          :y => 2)
 end
 
-@test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
-@test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
-@test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
+@test replstr(Array{Any}(undef, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Vector{String}(uninitialized, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Vector{String}(undef, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
 @test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
 @test replstr(Meta.parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
@@ -166,7 +166,7 @@ end
     # line meta
     dims::NTuple{N,Int}
     # line meta
-    function BitArray(uninitialized, dims::Int...)
+    function BitArray(undef, dims::Int...)
         # line meta
         if length(dims) != N
             # line meta
@@ -187,7 +187,7 @@ end
         # line meta
         nc = num_bit_chunks(n)
         # line meta
-        chunks = Vector{UInt64}(uninitialized, nc)
+        chunks = Vector{UInt64}(undef, nc)
         # line meta
         if nc > 0
             # line meta
@@ -390,11 +390,11 @@ export D, E, F
 end"
 
 # issue #19840
-@test_repr "Array{Int}(uninitialized, 0)"
-@test_repr "Array{Int}(uninitialized, 0,0)"
-@test_repr "Array{Int}(uninitialized, 0,0,0)"
-@test_repr "Array{Int}(uninitialized, 0,1)"
-@test_repr "Array{Int}(uninitialized, 0,0,1)"
+@test_repr "Array{Int}(undef, 0)"
+@test_repr "Array{Int}(undef, 0,0)"
+@test_repr "Array{Int}(undef, 0,0,0)"
+@test_repr "Array{Int}(undef, 0,1)"
+@test_repr "Array{Int}(undef, 0,0,1)"
 
 # issue #8994
 @test_repr "get! => 2"
@@ -574,6 +574,8 @@ function f13127()
 end
 @test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
 
+@test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "getfield($(@__MODULE__), Symbol(\"")
+
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test !Base.inbase(LinearAlgebra)
@@ -747,16 +749,6 @@ end
 @test !contains(repr(fill(1.,10,10)), "\u2026")
 @test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
 
-# showcompact() also sets :multiline=>false (#16817)
-let io = IOBuffer(),
-    x = [1, 2]
-
-    showcompact(io, x)
-    @test String(take!(io)) == "[1, 2]"
-    showcompact(IOContext(io, :compact => true), x)
-    @test String(take!(io)) == "[1, 2]"
-end
-
 let io = IOBuffer()
     ioc = IOContext(io, :limit => true)
     @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
@@ -813,7 +805,7 @@ end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
 end
-let a = Vector{Any}(uninitialized, 10000)
+let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
@@ -987,7 +979,7 @@ end
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
     @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
-    A = Array{Pair,0}(uninitialized); A[] = 1=>2
+    A = Array{Pair,0}(undef); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==
@@ -1085,9 +1077,15 @@ end
     @test contains(s, " in Base.Math ")
 end
 
+module AlsoExportsPair
+Pair = 0
+export Pair
+end
+
 module TestShowType
     export TypeA
     struct TypeA end
+    using ..AlsoExportsPair
 end
 
 @testset "module prefix when printing type" begin
@@ -1108,6 +1106,15 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+
+    # issue #26354; make sure testing for symbol visibility doesn't cause
+    # spurious binding resolutions
+    show(IOContext(b, :module => TestShowType), Base.Pair)
+    @test !Base.isbindingresolved(TestShowType, :Pair)
+    @test String(take!(b)) == "Base.Pair"
+    show(IOContext(b, :module => TestShowType), Base.Complex)
+    @test Base.isbindingresolved(TestShowType, :Complex)
+    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -1130,6 +1137,9 @@ end
     # Issue #25038
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
+
+    # issue #25857
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

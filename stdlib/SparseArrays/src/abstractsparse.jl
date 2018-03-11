@@ -86,7 +86,7 @@ function findnz(A::AbstractMatrix{T}) where T
     nnzA = count(t -> t != 0, A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
-    NZs = Vector{T}(uninitialized, nnzA)
+    NZs = Vector{T}(undef, nnzA)
     cnt = 1
     if nnzA > 0
         for j=axes(A,2), i=axes(A,1)
@@ -104,8 +104,8 @@ end
 
 function findnz(B::BitMatrix)
     nnzB = count(B)
-    I = Vector{Int}(uninitialized, nnzB)
-    J = Vector{Int}(uninitialized, nnzB)
+    I = Vector{Int}(undef, nnzB)
+    J = Vector{Int}(undef, nnzB)
     cnt = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]

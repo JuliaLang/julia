@@ -237,7 +237,7 @@ function log_record_id(_module, level, message_ex)
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
     while true
-        id = Symbol(modname, '_', hex(h, 8))
+        id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
         # compilation, to ensure uniqueness of ids.  Note that this state will
         # only persist during module compilation so it will be empty when a
@@ -297,7 +297,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
-        if std_level >= _min_enabled_level[]
+        if std_level >= getindex(_min_enabled_level)
             logstate = current_logstate()
             if std_level >= logstate.min_enabled_level
                 logger = logstate.logger
@@ -366,8 +366,6 @@ struct LogState
 end
 
 LogState(logger) = LogState(LogLevel(min_enabled_level(logger)), logger)
-
-_global_logstate = LogState(NullLogger())
 
 function current_logstate()
     logstate = current_task().logstate
@@ -492,5 +490,7 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     write(logger.stream, take!(buf))
     nothing
 end
+
+_global_logstate = LogState(SimpleLogger(Core.stderr, CoreLogging.Info))
 
 end # CoreLogging

@@ -308,14 +308,14 @@ end
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
-                @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(uninitialized, n+1)
+                @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
-                @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(uninitialized, n+1)
+                @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
@@ -563,7 +563,7 @@ end
 end
 
 @testset "#25625 recursive transposition" begin
-    A = Matrix{Matrix{Int}}(uninitialized, 2, 2)
+    A = Matrix{Matrix{Int}}(undef, 2, 2)
     A[1,1] = [1 2; 2 3]
     A[1,2] = [4 5 6; 7 8 9]
     A[2,1] = [4 7; 5 8; 6 9]
@@ -576,7 +576,7 @@ end
         @test S == transpose(S) == Matrix(S) == Matrix(transpose(S)) == transpose(Matrix(S))
     end
 
-    B = Matrix{Matrix{Complex{Int}}}(uninitialized, 2, 2)
+    B = Matrix{Matrix{Complex{Int}}}(undef, 2, 2)
     B[1,1] = [1 2+im; 2-im 3]
     B[1,2] = [4 5+1im 6-2im; 7+3im 8-4im 9+5im]
     B[2,1] = [4 7-3im; 5-1im 8+4im; 6+2im 9-5im]

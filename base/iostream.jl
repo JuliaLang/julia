@@ -48,7 +48,7 @@ iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
-    truncate(file,n)
+    truncate(file, n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
@@ -73,7 +73,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 julia> truncate(io, 40);
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.\0\0\0\0\0"
+"JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
 function truncate(s::IOStream, n::Integer)
@@ -354,8 +354,8 @@ descriptor upon completion.
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
-       end
+           write(io, "Hello world!")
+       end;
 
 julia> open(f->read(f, String), "myfile.txt")
 "Hello world!"
@@ -387,7 +387,7 @@ end
 # num bytes available without blocking
 bytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, bytesavailable(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(undef, bytesavailable(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
@@ -502,7 +502,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Vector{UInt8}(uninitialized, nb)
+    b = Vector{UInt8}(undef, nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end

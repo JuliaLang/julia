@@ -144,14 +144,14 @@ julia> dt2 = Date(2000,2,1)
 
 julia> dump(dt)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 734562
 
 julia> dump(dt2)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 730151
 
 julia> dt > dt2
@@ -170,7 +170,6 @@ ERROR: MethodError: no method matching *(::Date, ::Date)
 
 julia> dt / dt2
 ERROR: MethodError: no method matching /(::Date, ::Date)
-[...]
 
 julia> dt - dt2
 4411 days
@@ -240,12 +239,12 @@ One may also access the underlying `UTInstant` or integer value:
 ```jldoctest tdate
 julia> dump(t)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Dates.Day}(735264 days)
+Dates.UTInstant{Day}(735264 days)
 
 julia> Dates.value(t)
 735264
@@ -559,7 +558,7 @@ julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
 Unlike the numeric [`round`](@ref) method, which breaks ties toward the even number by default,
 the [`TimeType`](@ref)[`round`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
 difficult to guess what breaking ties to nearest "even" [`TimeType`](@ref) would entail.) Further
-details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates).
+details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates-api).
 
 Rounding should generally behave as expected, but there are a few cases in which the expected
 behaviour is not obvious.

@@ -85,7 +85,7 @@ bimg  = randn(n,2)/2
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
-            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin
@@ -847,6 +847,7 @@ end
     end
 end
 
+
 @testset "Dispatch to BLAS routines" begin
     A = rand(100,100)
     x = rand(100)
@@ -863,6 +864,21 @@ end
                         BLAS.gemv!('C', one(ComplexF64), B, y, zero(ComplexF64), similar(y)))
    @test all(transpose(B)*y .=== view(transpose(B),:,:)*y .=== transpose(view(B,:,:))*y .===
                                  BLAS.gemv!('T', one(ComplexF64), B, y, zero(ComplexF64), similar(y)))
+end
+
+@testset "inverse of Adjoint" begin
+    A = randn(n, n)
+
+    @test inv(A')*A'                     ≈ I
+    @test inv(transpose(A))*transpose(A) ≈ I
+
+    B = complex.(A, randn(n, n))
+    B = B + transpose(B)
+
+    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
+    # isn't implemented yet
+    @test_broken inv(B')*B'                     ≈ I
+    @test_broken inv(transpose(B))*transpose(B) ≈ I
 end
 
 end # module TestDense

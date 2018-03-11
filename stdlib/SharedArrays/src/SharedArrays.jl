@@ -44,7 +44,7 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
-        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(uninitialized, ntuple(d->0,N)), 1:0))
+        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(undef, ntuple(d->0,N)), 1:0))
         sa_refs[S.id] = WeakRef(S)
         S
     end
@@ -110,7 +110,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     pids, onlocalhost = shared_pids(pids)
 
     local shm_seg_name = ""
-    local s = Array{T}(uninitialized, ntuple(d->0,N))
+    local s = Array{T}(undef, ntuple(d->0,N))
     local S
     local shmmem_create_pid
     try
@@ -130,7 +130,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Vector{Future}(uninitialized, length(pids))
+        refs = Vector{Future}(undef, length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -207,11 +207,11 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     end
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Vector{Future}(uninitialized, length(pids))
+    refs = Vector{Future}(undef, length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
-    s = Array{T}(uninitialized, ntuple(d->0,N))
+    s = Array{T}(undef, ntuple(d->0,N))
     if onlocalhost
         s = func_mmap(mode)
         refs[1] = remotecall(pids[1]) do
@@ -272,7 +272,7 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
-        S.s = Array{T}(uninitialized, ntuple(d->0,N))
+        S.s = Array{T}(undef, ntuple(d->0,N))
         delete!(sa_refs, S.id)
     end
     S
@@ -291,7 +291,7 @@ function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
-    refs = Vector{Future}(uninitialized, length(a.pids))
+    refs = Vector{Future}(undef, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
             reshape(fetch(r),d)
@@ -362,6 +362,8 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
+convert(T::Type{<:SharedArray}, a::Array) = T(a)
+
 function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
     R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
@@ -423,9 +425,9 @@ function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     else
         S.pidx = 0
         if empty_local
-            S.s = Array{T}(uninitialized, ntuple(d->0,N))
+            S.s = Array{T}(undef, ntuple(d->0,N))
         end
-        S.loc_subarr_1d = view(Array{T}(uninitialized, ntuple(d->0,N)), 1:0)
+        S.loc_subarr_1d = view(Array{T}(undef, ntuple(d->0,N)), 1:0)
     end
 end
 
@@ -634,7 +636,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local A = nothing
 
     if (prod(dims) == 0) || (sizeof(T) == 0)
-        return Array{T}(uninitialized, dims)
+        return Array{T}(undef, dims)
     end
 
     try

@@ -95,7 +95,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(uninitialized, n), Vector{V}(uninitialized, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -191,8 +191,8 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     end
 
     slots = zeros(UInt8,newsz)
-    keys = Vector{K}(uninitialized, newsz)
-    vals = Vector{V}(uninitialized, newsz)
+    keys = Vector{K}(undef, newsz)
+    vals = Vector{V}(undef, newsz)
     age0 = h.age
     count = 0
     maxprobe = h.maxprobe
@@ -530,15 +530,15 @@ end
 Determine whether a collection has a mapping for a given key.
 
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> haskey(a,'a')
+julia> haskey(D, 'a')
 true
 
-julia> haskey(a,'c')
+julia> haskey(D, 'c')
 false
 ```
 """
@@ -551,15 +551,15 @@ in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
 
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> getkey(a,'a',1)
+julia> getkey(D, 'a', 1)
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
-julia> getkey(a,'d','a')
+julia> getkey(D, 'd', 'a')
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """

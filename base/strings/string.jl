@@ -62,7 +62,7 @@ String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
-(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(uninitialized, length(s)), s)
+(::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 
 String(a::AbstractVector{UInt8}) = String(copyto!(StringVector(length(a)), a))
 
@@ -80,9 +80,6 @@ codeunit(s::String) = UInt8
     @boundscheck checkbounds(s, i)
     GC.@preserve s unsafe_load(pointer(s, i))
 end
-
-write(io::IO, s::String) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
@@ -317,10 +314,10 @@ end
 # TODO: delete or move to char.jl
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
-function string(a::Union{String,Char}...)
+function string(a::Union{String,AbstractChar}...)
     sprint() do io
         for x in a
-            write(io, x)
+            print(io, x)
         end
     end
 end
@@ -341,7 +338,7 @@ function repeat(s::String, r::Integer)
 end
 
 """
-    repeat(c::Char, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer) -> String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling [`c^r`](@ref ^).
 
@@ -351,6 +348,7 @@ julia> repeat('A', 3)
 "AAA"
 ```
 """
+repeat(c::AbstractChar, r::Integer) = repeat(Char(c), r) # fallback
 function repeat(c::Char, r::Integer)
     r == 0 && return ""
     r < 0 && throw(ArgumentError("can't repeat a character $r times"))

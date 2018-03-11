@@ -38,7 +38,11 @@
 #include <functional>
 
 // target machine computation
+#if JL_LLVM_VERSION >= 60000
+#include <llvm/CodeGen/TargetSubtargetInfo.h>
+#else
 #include <llvm/Target/TargetSubtargetInfo.h>
+#endif
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
@@ -2592,9 +2596,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf,
                                         data_owner, 0);
                         }
-                        *ret = ary;
-                        return true;
                     }
+                    *ret = ary;
+                    return true;
                 }
             }
         }
@@ -5740,6 +5744,11 @@ static std::unique_ptr<Module> emit_function(
             handle_label(lname, true);
             continue;
         }
+        if (expr && expr->head == unreachable_sym) {
+            ctx.builder.CreateUnreachable();
+            find_next_stmt(-1);
+            continue;
+        }
         if (expr && expr->head == return_sym) {
             // this is basically a copy of emit_assignment,
             // but where the assignment slot is the retval
@@ -5895,7 +5904,7 @@ static std::unique_ptr<Module> emit_function(
                 mallocVisitLine(ctx, props.file, props.line);
             }
         }
-        if (cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
+        if ((size_t)cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
         find_next_stmt(cursor + 1);
     }

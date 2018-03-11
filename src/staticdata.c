@@ -1569,6 +1569,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
+                     unreachable_sym,
                      lambda_sym, jl_symbol("tuple"), assign_sym,
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type,

@@ -11,8 +11,8 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
-#showcompact
-@test sprint(showcompact, complex(1, 0)) == "1+0im"
+#show
+@test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
 @testset "arithmetic" begin

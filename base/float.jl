@@ -203,8 +203,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Vector{UInt16}(uninitialized, 512)
-const shifttable = Vector{UInt8}(uninitialized, 512)
+const basetable = Vector{UInt16}(undef, 512)
+const shifttable = Vector{UInt8}(undef, 512)
 
 for i = 0:255
     e = i - 127

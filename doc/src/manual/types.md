@@ -16,10 +16,11 @@ of function arguments to be deeply integrated with the language. Method dispatch
 detail in [Methods](@ref), but is rooted in the type system presented here.
 
 The default behavior in Julia when types are omitted is to allow values to be of any type. Thus,
-one can write many useful Julia programs without ever explicitly using types. When additional
+one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
-into previously "untyped" code. Doing so will typically increase both the performance and robustness
-of these systems, and perhaps somewhat counterintuitively, often significantly simplify them.
+into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
+of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
 is: dynamic, nominative and parametric. Generic types can be parameterized, and the hierarchical
@@ -246,7 +247,7 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
@@ -343,20 +344,16 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: convert(Int64, 23.5)
+ERROR: InexactError: Int64(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
+[...]
 ```
 
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
 julia> fieldnames(Foo)
-3-element Array{Symbol,1}:
- :bar
- :baz
- :qux
+(:bar, :baz, :qux)
 ```
 
 You can access the field values of a composite object using the traditional `foo.bar` notation:
@@ -648,13 +645,11 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
-This may have arisen from a call to the constructor Point{Float64}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:114
+[...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+[...]
 ```
 
 Only one default constructor is generated for parametric types, since overriding it is not possible.
@@ -1192,7 +1187,7 @@ Closest candidates are:
   supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
-## Custom pretty-printing
+## [Custom pretty-printing](@id man-custom-pretty-printing)
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
 overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
@@ -1325,6 +1320,37 @@ julia> :($a + 2)
 julia> :($a == 2)
 :(3.0 * exp(4.0im) == 2)
 ```
+
+In some cases, it is useful to adjust the behavior of `show` methods depending
+on the context. This can be achieved via the [`IOContext`](@ref) type, which allows
+passing contextual properties together with a wrapped IO stream.
+For example, we can build a shorter representation in our `show` method
+when the `:compact` property is set to `true`, falling back to the long
+representation if the property is `false` or absent:
+```jldoctest polartype
+julia> function Base.show(io::IO, z::Polar)
+           if get(io, :compact, false)
+               print(io, z.r, "ℯ", z.Θ, "im")
+           else
+               print(io, z.r, " * exp(", z.Θ, "im)")
+           end
+       end
+```
+
+This new compact representation will be used when the passed IO stream is an `IOContext`
+object with the `:compact` property set. In particular, this is the case when printing
+arrays with multiple columns (where horizontal space is limited):
+```jldoctest polartype
+julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
+3.0ℯ4.0im
+
+julia> [Polar(3, 4.0) Polar(4.0,5.3)]
+1×2 Array{Polar{Float64},2}:
+ 3.0ℯ4.0im  4.0ℯ5.3im
+```
+
+See the [`IOContext`](@ref) documentation for a list of common properties which can be used
+to adjust printing.
 
 ## "Value types"
 

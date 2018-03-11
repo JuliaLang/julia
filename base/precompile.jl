@@ -17,7 +17,7 @@ for (_pkgid, _mod) in Base.loaded_modules
     end
 end
 @eval PrecompileStagingArea begin
-precompile(Tuple{Type{Array{Array{UInt8, 1}, 1}}, Uninitialized, Int64})
+precompile(Tuple{Type{Array{Array{UInt8, 1}, 1}}, UndefInitializer, Int64})
 precompile(Tuple{Type{Array{Float64, 1}}, Int64})
 precompile(Tuple{Type{Array{UInt8, 1}}, Int64})
 precompile(Tuple{Type{Base.Dict{K, V} where V where K}, Base.Generator{Base.Dict{UInt8, UInt8}, typeof(Base.reverse)}})
@@ -133,7 +133,6 @@ precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, 
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, :color), Tuple{Bool, Symbol}}, typeof(Base.printstyled), REPL.Terminals.TTYTerminal, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:color,), Tuple{Symbol}}, typeof(Base.printstyled), Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##show_trace_entry")), NamedTuple{(:prefix,), Tuple{String}}, typeof(Base.show_trace_entry), Base.IOContext{REPL.Terminals.TTYTerminal}, Base.StackTraces.StackFrame, Int64})
-precompile(Tuple{getfield(Base, Symbol("#kw##spawn")), NamedTuple{(:chain,), Tuple{Nothing}}, typeof(Base.spawn), Base.Cmd, Tuple{Base.Pipe, Base.TTY, Base.IOStream}})
 precompile(Tuple{getfield(Base, Symbol("#kw##unindent")), NamedTuple{(:tabwidth,), Tuple{Int64}}, typeof(Base.unindent), String, Int64})
 precompile(Tuple{getfield(Base, Symbol("#kw##with_output_color")), NamedTuple{(:bold,), Tuple{Bool}}, typeof(Base.with_output_color), typeof(Base.print), Symbol, Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##with_output_color")), NamedTuple{(:bold,), Tuple{Bool}}, typeof(Base.with_output_color), typeof(Base.print), Symbol, REPL.Terminals.TTYTerminal, String})
@@ -579,7 +578,6 @@ precompile(Tuple{typeof(Base.similar), Array{Float64, 1}})
 precompile(Tuple{typeof(Base.sort!), Array{Int64, 1}, Base.Sort.QuickSortAlg, Base.Order.Perm{Base.Order.ForwardOrdering, Array{Tuple{Float64, Int64}, 1}}})
 precompile(Tuple{typeof(Base.sort!), Array{Int64, 1}, Base.Sort.QuickSortAlg, Base.Order.Perm{Base.Order.ForwardOrdering, Array{Tuple{Int64, Float64}, 1}}})
 precompile(Tuple{typeof(Base.sort), Array{Float64, 1}})
-precompile(Tuple{typeof(Base.spawn), Base.CmdRedirect, Tuple{Base.Pipe, Base.TTY, Base.IOStream}})
 precompile(Tuple{typeof(Base.start), Array{AbstractString, 1}})
 precompile(Tuple{typeof(Base.start), Array{Expr, 1}})
 precompile(Tuple{typeof(Base.start), Array{Function, 1}})

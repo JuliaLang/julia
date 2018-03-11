@@ -432,7 +432,7 @@ end
 
 @testset "Concatenation" begin
     let m = 80, n = 100
-        A = Vector{SparseVector{Float64,Int}}(uninitialized, n)
+        A = Vector{SparseVector{Float64,Int}}(undef, n)
         tnnz = 0
         for i = 1:length(A)
             A[i] = sprand(m, 0.3)

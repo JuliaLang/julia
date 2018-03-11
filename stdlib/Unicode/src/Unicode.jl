@@ -74,13 +74,6 @@ true
 isassigned(c) = Base.Unicode.isassigned(c)
 
 """
-    iscased(c::Char) -> Bool
-
-Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
-"""
-iscased(c::Char) = Base.Unicode.iscased(c)
-
-"""
     graphemes(s::AbstractString) -> GraphemeIterator
 
 Returns an iterator over substrings of `s` that correspond to the extended graphemes in the

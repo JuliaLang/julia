@@ -89,21 +89,6 @@ n = 5 # should be odd
     end
 end
 
-@testset "diff" begin
-    # test diff, throw ArgumentError for invalid dimension argument
-    X = [3  9   5;
-         7  4   2;
-         2  1  10]
-    @test diff(X,1) == [4  -5 -3; -5  -3  8]
-    @test diff(X,2) == [6 -4; -3 -2; -1 9]
-    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
-    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
-    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
-    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
-    @test_throws ArgumentError diff(X,3)
-    @test_throws ArgumentError diff(X,-1)
-end
-
 @testset "linrange" begin
     # make sure unequal input arrays throw an error
     x = [2; 5; 6]
@@ -174,6 +159,8 @@ end
 @test !issymmetric(fill(1,5,3))
 @test !ishermitian(fill(1,5,3))
 @test (x = fill(1,3); cross(x,x) == zeros(3))
+@test_throws DimensionMismatch cross(fill(1,3), fill(1,4))
+@test_throws DimensionMismatch cross(fill(1,2), fill(1,3))
 
 @test trace(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
 
@@ -193,8 +180,8 @@ end
             @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
             @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
             @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
+            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -202,9 +189,9 @@ end
             @test mul!(similar(a), a, 5.) == a*5
             @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
             @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(uninitialized, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized, 3, 2), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
         end
@@ -256,7 +243,7 @@ end
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
-@test_throws ArgumentError norm(Matrix{Float64}(uninitialized,5,5),5)
+@test_throws ArgumentError norm(Matrix{Float64}(undef,5,5),5)
 
 @testset "generic vecnorm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
@@ -350,6 +337,7 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.conj(a::ModInt{n}) where {n} = a
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)

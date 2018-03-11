@@ -126,9 +126,9 @@ julia> selectdim(A, 2, 3)
 end
 
 """
-    flipdim(A, d::Integer)
+    reverse(A; dims::Integer)
 
-Reverse `A` in dimension `d`.
+Reverse `A` in dimension `dims`.
 
 # Examples
 ```jldoctest
@@ -137,14 +137,14 @@ julia> b = [1 2; 3 4]
  1  2
  3  4
 
-julia> flipdim(b,2)
+julia> reverse(b, dims=2)
 2×2 Array{Int64,2}:
  2  1
  4  3
 ```
 """
-function flipdim(A::AbstractArray, d::Integer)
-    nd = ndims(A)
+function reverse(A::AbstractArray; dims::Integer)
+    nd = ndims(A); d = dims
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
@@ -160,7 +160,7 @@ function flipdim(A::AbstractArray, d::Integer)
     indsd = inds[d]
     sd = first(indsd)+last(indsd)
     if nnd==nd
-        # flip along the only non-singleton dimension
+        # reverse along the only non-singleton dimension
         for i in indsd
             B[i] = A[sd-i]
         end

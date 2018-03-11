@@ -1224,3 +1224,11 @@ end
     @test_throws ArgumentError range(nothing, length=2)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
 end
+
+@testset "issue #23300#issuecomment-371575548" begin
+    for (start, stop) in ((-5, 5), (-5.0, 5), (-5, 5.0), (-5.0, 5.0))
+        @test @inferred(range(big(start), stop=big(stop), length=11)) isa LinRange{BigFloat}
+        @test Float64.(@inferred(range(big(start), stop=big(stop), length=11))) == range(start, stop=stop, length=11)
+        @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
+    end
+end

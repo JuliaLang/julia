@@ -79,7 +79,6 @@ export
     diag,
     diagind,
     diagm,
-    diff,
     dot,
     eig,
     eigfact,

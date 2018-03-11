@@ -16,7 +16,6 @@ const print_result = true  # prints files which where not processed.
 const rootdirs = [
     "../base",
     "../contrib",
-    "../examples",
     "../src",
     "../stdlib",
     "../test",
@@ -57,9 +56,7 @@ const skipfiles = [
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
-    "../test/perf/micro/randmtzig.c",
     "../src/crc32c.c",
-    "../examples/quine.jl", # has license text in code
 ]
 
 const ext_prefix = Dict([

@@ -101,7 +101,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
 # pr #17155
 @testset "function composition" begin
-    @test (uppercase∘hex)(239487) == "3A77F"
+    @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
 end
 @testset "function negation" begin
     str = randstring(20)

@@ -74,9 +74,9 @@ const UMFVTypes = Union{Float64,ComplexF64}
 ## UMFPACK
 
 # the control and info arrays
-const umf_ctrl = Vector{Float64}(uninitialized, UMFPACK_CONTROL)
+const umf_ctrl = Vector{Float64}(undef, UMFPACK_CONTROL)
 ccall((:umfpack_dl_defaults,:libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
-const umf_info = Vector{Float64}(uninitialized, UMFPACK_INFO)
+const umf_info = Vector{Float64}(undef, UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
@@ -203,7 +203,7 @@ for itype in UmfpackIndexTypes
     @eval begin
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Vector{Ptr{Cvoid}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             @isok ccall(($sym_r, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
@@ -214,7 +214,7 @@ for itype in UmfpackIndexTypes
         end
         function umfpack_symbolic!(U::UmfpackLU{ComplexF64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Vector{Ptr{Cvoid}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             @isok ccall(($sym_c, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
@@ -226,7 +226,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Vector{Ptr{Cvoid}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_r, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
@@ -241,7 +241,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Vector{Ptr{Cvoid}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_c, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
@@ -330,15 +330,15 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(uninitialized, n_row + 1)
-            Lj = Vector{$itype}(uninitialized, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(uninitialized, lnz)
-            Up = Vector{$itype}(uninitialized, n_col + 1)
-            Ui = Vector{$itype}(uninitialized, unz)
-            Ux = Vector{Float64}(uninitialized, unz)
-            P  = Vector{$itype}(uninitialized, n_row)
-            Q  = Vector{$itype}(uninitialized, n_col)
-            Rs = Vector{Float64}(uninitialized, n_row)
+            Lp = Vector{$itype}(undef, n_row + 1)
+            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Vector{Float64}(undef, lnz)
+            Up = Vector{$itype}(undef, n_col + 1)
+            Ui = Vector{$itype}(undef, unz)
+            Ux = Vector{Float64}(undef, unz)
+            P  = Vector{$itype}(undef, n_row)
+            Q  = Vector{$itype}(undef, n_col)
+            Rs = Vector{Float64}(undef, n_row)
             @isok ccall(($get_num_r,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
@@ -355,17 +355,17 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{ComplexF64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(uninitialized, n_row + 1)
-            Lj = Vector{$itype}(uninitialized, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(uninitialized, lnz)
-            Lz = Vector{Float64}(uninitialized, lnz)
-            Up = Vector{$itype}(uninitialized, n_col + 1)
-            Ui = Vector{$itype}(uninitialized, unz)
-            Ux = Vector{Float64}(uninitialized, unz)
-            Uz = Vector{Float64}(uninitialized, unz)
-            P  = Vector{$itype}(uninitialized, n_row)
-            Q  = Vector{$itype}(uninitialized, n_col)
-            Rs = Vector{Float64}(uninitialized, n_row)
+            Lp = Vector{$itype}(undef, n_row + 1)
+            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Vector{Float64}(undef, lnz)
+            Lz = Vector{Float64}(undef, lnz)
+            Up = Vector{$itype}(undef, n_col + 1)
+            Ui = Vector{$itype}(undef, unz)
+            Ux = Vector{Float64}(undef, unz)
+            Uz = Vector{Float64}(undef, unz)
+            P  = Vector{$itype}(undef, n_row)
+            Q  = Vector{$itype}(undef, n_col)
+            Rs = Vector{Float64}(undef, n_row)
             @isok ccall(($get_num_z,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},

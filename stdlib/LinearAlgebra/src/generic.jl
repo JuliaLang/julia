@@ -109,8 +109,14 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+function cross(a::AbstractVector, b::AbstractVector)
+    if !(length(a) == length(b) == 3)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+end
 
 """
     triu(M)
@@ -237,44 +243,6 @@ Lower triangle of a matrix, overwriting `M` in the process.
 See also [`tril`](@ref).
 """
 tril!(M::AbstractMatrix) = tril!(M,0)
-
-diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
-
-"""
-    diff(A::AbstractVector)
-    diff(A::AbstractMatrix, dim::Integer)
-
-Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dim` argument.
-
-# Examples
-```jldoctest
-julia> a = [2 4; 6 16]
-2×2 Array{Int64,2}:
- 2   4
- 6  16
-
-julia> diff(a,2)
-2×1 Array{Int64,2}:
-  2
- 10
-
-julia> diff(vec(a))
-3-element Array{Int64,1}:
-  4
- -2
- 12
-```
-"""
-function diff(A::AbstractMatrix, dim::Integer)
-    if dim == 1
-        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dim == 2
-        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
-    else
-        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
-    end
-end
 
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 

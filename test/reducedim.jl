@@ -122,7 +122,7 @@ end
 @test typeof(@inferred(reduce(+, 0.0, ones(3,3,3), dims=1))) == Array{Float64, 3}
 
 @testset "empty cases" begin
-    A = Matrix{Int}(uninitialized, 0,1)
+    A = Matrix{Int}(undef, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)

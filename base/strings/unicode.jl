@@ -12,7 +12,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
     isvalid(value) -> Bool
 
 Returns `true` if the given value is valid for its type, which currently can be either
-`Char` or `String`.
+`AbstractChar` or `String`.
 
 # Examples
 ```jldoctest
@@ -29,7 +29,7 @@ isvalid(value)
     isvalid(T, value) -> Bool
 
 Returns `true` if the given value is valid for that type. Types currently can
-be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
+be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
 
 # Examples
@@ -43,10 +43,10 @@ true
 """
 isvalid(T,value)
 
-isvalid(c::Char) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
-isvalid(::Type{Char}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
-isvalid(::Type{Char}, c::Integer)  = isvalid(Char, Unsigned(c))
-isvalid(::Type{Char}, c::Char)     = isvalid(c)
+isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
+isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
+isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -218,8 +218,8 @@ julia> textwidth('❤')
 2
 ```
 """
-function textwidth(c::Char)
-    ismalformed(c) && (c = '\ufffd')
+function textwidth(c::AbstractChar)
+    ismalformed(c) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
@@ -236,17 +236,17 @@ julia> textwidth("March")
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
-lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
-    Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
-uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
-titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    Char(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
+    T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
+    T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
-function category_code(c::Char)
+function category_code(c::AbstractChar)
     !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
 end
 
@@ -255,7 +255,7 @@ function category_code(x::Integer)
 end
 
 # more human-readable representations of the category code
-function category_abbrev(c::Char)
+function category_abbrev(c::AbstractChar)
     ismalformed(c) && return "Ma"
     c ≤ '\U10ffff' || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
@@ -268,7 +268,7 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 ## libc character class predicates ##
 
 """
-    islower(c::Char) -> Bool
+    islower(c::AbstractChar) -> Bool
 
 Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
@@ -286,12 +286,12 @@ julia> islower('❤')
 false
 ```
 """
-islower(c::Char) = category_code(c) == UTF8PROC_CATEGORY_LL
+islower(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_LL
 
 # true for Unicode upper and mixed case
 
 """
-    isupper(c::Char) -> Bool
+    isupper(c::AbstractChar) -> Bool
 
 Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
@@ -309,13 +309,17 @@ julia> isupper('❤')
 false
 ```
 """
-function isupper(c::Char)
+function isupper(c::AbstractChar)
     cat = category_code(c)
     cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
 end
 
-# Documented in Unicode module
-function iscased(c::Char)
+"""
+    iscased(c::AbstractChar) -> Bool
+
+Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+"""
+function iscased(c::AbstractChar)
     cat = category_code(c)
     return cat == UTF8PROC_CATEGORY_LU ||
            cat == UTF8PROC_CATEGORY_LT ||
@@ -324,7 +328,7 @@ end
 
 
 """
-    isdigit(c::Char) -> Bool
+    isdigit(c::AbstractChar) -> Bool
 
 Tests whether a character is a decimal digit (0-9).
 
@@ -340,10 +344,10 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::Char) = '0' <= c <= '9'
+isdigit(c::AbstractChar) = '0' <= c <= '9'
 
 """
-    isalpha(c::Char) -> Bool
+    isalpha(c::AbstractChar) -> Bool
 
 Tests whether a character is alphabetic.
 A character is classified as alphabetic if it belongs to the Unicode general
@@ -361,10 +365,10 @@ julia> isalpha('9')
 false
 ```
 """
-isalpha(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
+isalpha(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
 
 """
-    isnumeric(c::Char) -> Bool
+    isnumeric(c::AbstractChar) -> Bool
 
 Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
@@ -388,12 +392,12 @@ julia> isnumeric('❤')
 false
 ```
 """
-isnumeric(c::Char) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
+isnumeric(c::AbstractChar) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO
 
 # following C++ only control characters from the Latin-1 subset return true
 
 """
-    iscntrl(c::Char) -> Bool
+    iscntrl(c::AbstractChar) -> Bool
 
 Tests whether a character is a control character.
 Control characters are the non-printing characters of the Latin-1 subset of Unicode.
@@ -407,10 +411,10 @@ julia> iscntrl('a')
 false
 ```
 """
-iscntrl(c::Char) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
+iscntrl(c::AbstractChar) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 
 """
-    ispunct(c::Char) -> Bool
+    ispunct(c::AbstractChar) -> Bool
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
 character whose category code begins with 'P'.
@@ -427,12 +431,12 @@ julia> ispunct(';')
 true
 ```
 """
-ispunct(c::Char) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO
+ispunct(c::AbstractChar) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO
 
 # \u85 is the Unicode Next Line (NEL) character
 
 """
-    isspace(c::Char) -> Bool
+    isspace(c::AbstractChar) -> Bool
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
@@ -453,12 +457,12 @@ julia> isspace('\\x20')
 true
 ```
 """
-@inline isspace(c::Char) =
+@inline isspace(c::AbstractChar) =
     c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
     '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
-    isprint(c::Char) -> Bool
+    isprint(c::AbstractChar) -> Bool
 
 Tests whether a character is printable, including spaces, but not a control character.
 
@@ -471,12 +475,12 @@ julia> isprint('A')
 true
 ```
 """
-isprint(c::Char) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
+isprint(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
 
 # true in principal if a printer would use ink
 
 """
-    isxdigit(c::Char) -> Bool
+    isxdigit(c::AbstractChar) -> Bool
 
 Test whether a character is a valid hexadecimal digit. Note that this does not
 include `x` (as in the standard `0x` prefix).
@@ -490,7 +494,7 @@ julia> isxdigit('x')
 false
 ```
 """
-isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 ## uppercase, lowercase, and titlecase transformations ##
 
@@ -608,14 +612,14 @@ end
 ############################################################################
 # iterators for grapheme segmentation
 
-isgraphemebreak(c1::Char, c2::Char) =
+isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
     ismalformed(c1) || ismalformed(c2) ||
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-function isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char)
+function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
     if ismalformed(c1) || ismalformed(c2)
         state[] = 0
         return true
@@ -634,8 +638,8 @@ graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
-function length(g::GraphemeIterator)
-    c0 = typemax(Char)
+function length(g::GraphemeIterator{S}) where {S}
+    c0 = eltype(S)(0x00000000)
     n = 0
     state = Ref{Int32}(0)
     for c in g.s

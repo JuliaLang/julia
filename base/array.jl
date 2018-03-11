@@ -104,7 +104,7 @@ function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]
     # TODO: this is currently much faster. should figure out why. not clear.
-    return copyto!(Vector{T}(uninitialized, length(X)), X)
+    return copyto!(Vector{T}(undef, length(X)), X)
 end
 
 size(a::Array, d) = arraysize(a, d)
@@ -259,14 +259,14 @@ end
 
 ## Constructors ##
 
-similar(a::Array{T,1}) where {T}                    = Vector{T}(uninitialized, size(a,1))
-similar(a::Array{T,2}) where {T}                    = Matrix{T}(uninitialized, size(a,1), size(a,2))
-similar(a::Array{T,1}, S::Type) where {T}           = Vector{S}(uninitialized, size(a,1))
-similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(uninitialized, size(a,1), size(a,2))
-similar(a::Array{T}, m::Int) where {T}              = Vector{T}(uninitialized, m)
-similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(uninitialized, dims)
-similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(uninitialized, dims)
-similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(uninitialized, to_shape(shape))
+similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
+similar(a::Array{T,2}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
+similar(a::Array{T,1}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
+similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
+similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
+similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
+similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(undef, to_shape(shape))
 
 # T[x...] constructs Array{T,1}
 """
@@ -291,7 +291,7 @@ julia> getindex(Int8, 1, 2, 3)
 ```
 """
 function getindex(::Type{T}, vals...) where T
-    a = Vector{T}(uninitialized, length(vals))
+    a = Vector{T}(undef, length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
@@ -299,12 +299,12 @@ function getindex(::Type{T}, vals...) where T
 end
 
 getindex(::Type{T}) where {T} = (@_inline_meta; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Vector{T}(uninitialized, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Vector{T}(uninitialized, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Vector{T}(uninitialized, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
+getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
-    a = Vector{Any}(uninitialized, length(vals))
+    a = Vector{Any}(undef, length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
@@ -345,8 +345,8 @@ julia> fill(1.0, (5,5))
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
-fill(v, dims::Dims)       = fill!(Array{typeof(v)}(uninitialized, dims), v)
-fill(v, dims::Integer...) = fill!(Array{typeof(v)}(uninitialized, dims...), v)
+fill(v, dims::Dims)       = fill!(Array{typeof(v)}(undef, dims), v)
+fill(v, dims::Integer...) = fill!(Array{typeof(v)}(undef, dims...), v)
 
 """
     zeros([T=Float64,] dims...)
@@ -390,7 +390,7 @@ function ones end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, convert(Dims, dims)::Dims), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(undef, convert(Dims, dims)::Dims), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)
@@ -413,8 +413,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-# arises in similar(dest, Pair{Union{},Union{}}) where dest::Dict:
-convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -422,7 +421,7 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
-Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(uninitialized, size(x)), x)
+Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
 end
 
@@ -445,7 +444,7 @@ julia> collect(Float64, 1:2:5)
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
-_collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(uninitialized, Int(length(itr)::Integer)), itr)
+_collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(undef, Int(length(itr)::Integer)), itr)
 _collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
@@ -499,11 +498,11 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(uninitialized), A)
+_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(uninitialized, length.(indsA)), A)
+    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
 function _collect_indices(indsA, A)
-    B = Array{eltype(A)}(uninitialized, length.(indsA))
+    B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
@@ -535,7 +534,7 @@ else
     end
 end
 
-_array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(uninitialized, Int(length(itr)::Integer))
+_array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
 _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
 
 function collect(itr::Generator)
@@ -1397,6 +1396,10 @@ function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindi
     end
     return B
 end
+
+# to resolve ambiguity with reverse(A; dims)
+reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
+
 function reverseind(a::AbstractVector, i::Integer)
     li = linearindices(a)
     first(li) + last(li) - i
@@ -1464,7 +1467,7 @@ function vcat(arrays::Vector{T}...) where T
     for a in arrays
         n += length(a)
     end
-    arr = Vector{T}(uninitialized, n)
+    arr = Vector{T}(undef, n)
     ptr = pointer(arr)
     if isbits(T)
         elsz = Core.sizeof(T)
@@ -1523,8 +1526,7 @@ julia> A = [false, false, true, false]
 julia> findnext(A, 1)
 3
 
-julia> findnext(A, 4) == nothing
-true
+julia> findnext(A, 4) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
@@ -1575,8 +1577,7 @@ julia> A = [false, false, true, false]
 julia> findfirst(A)
 3
 
-julia> findfirst(falses(3)) == nothing
-true
+julia> findfirst(falses(3)) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
@@ -1615,23 +1616,14 @@ and [`pairs(A)`](@ref).
 
 # Examples
 ```jldoctest
-A = [1, 4, 2, 2]
-4-element Array{Int64,1}:
- 1
- 4
- 2
- 2
+julia> A = [1, 4, 2, 2];
 
 julia> findnext(isodd, A, 1)
 1
 
-julia> findnext(isodd, A, 2) == nothing
-true
+julia> findnext(isodd, A, 2) # returns nothing, but not printed in the REPL
 
-julia> A = [1 4; 2 2]
-2×2 Array{Int64,2}:
- 1  4
- 2  2
+julia> A = [1 4; 2 2];
 
 julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
@@ -1670,8 +1662,7 @@ julia> A = [1, 4, 2, 2]
 julia> findfirst(iseven, A)
 2
 
-julia> findfirst(x -> x>10, A) == nothing
-true
+julia> findfirst(x -> x>10, A) # returns nothing, but not printed in the REPL
 
 julia> findfirst(equalto(4), A)
 2
@@ -1717,8 +1708,7 @@ julia> A = [false, false, true, true]
 julia> findprev(A, 3)
 3
 
-julia> findprev(A, 1) == nothing
-true
+julia> findprev(A, 1) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true true]
 2×2 Array{Bool,2}:
@@ -1767,8 +1757,7 @@ julia> findlast(A)
 
 julia> A = falses(2,2);
 
-julia> findlast(A) == nothing
-true
+julia> findlast(A) # returns nothing, but not printed in the REPL
 
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
@@ -1814,8 +1803,7 @@ julia> A = [4, 6, 1, 2]
  1
  2
 
-julia> findprev(isodd, A, 1) == nothing
-true
+julia> findprev(isodd, A, 1) # returns nothing, but not printed in the REPL
 
 julia> findprev(isodd, A, 3)
 3
@@ -1859,8 +1847,7 @@ julia> A = [1, 2, 3, 4]
 julia> findlast(isodd, A)
 3
 
-julia> findlast(x -> x > 5, A) == nothing
-true
+julia> findlast(x -> x > 5, A) # returns nothing, but not printed in the REPL
 
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1965,9 +1952,9 @@ julia> A = [true false; false true]
  false   true
 
 julia> findall(A)
-2-element Array{Int64,1}:
- 1
- 4
+2-element Array{CartesianIndex{2},1}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 2)
 
 julia> findall(falses(3))
 0-element Array{Int64,1}
@@ -1982,7 +1969,7 @@ end
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})
     n = count(A)
-    I = Vector{eltype(keys(A))}(uninitialized, n)
+    I = Vector{eltype(keys(A))}(undef, n)
     cnt = 1
     for (i,a) in pairs(A)
         if a
@@ -2137,9 +2124,9 @@ array contains `nothing` wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
-julia> a = ['a', 'b', 'c', 'b', 'd', 'a']
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
-julia> b = ['a', 'b', 'c']
+julia> b = ['a', 'b', 'c'];
 
 julia> indexin(a, b)
 6-element Array{Union{Nothing, Int64},1}:

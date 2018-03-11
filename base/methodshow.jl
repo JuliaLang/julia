@@ -46,7 +46,7 @@ function method_argnames(m::Method)
     if !isdefined(m, :source) && isdefined(m, :generator)
         return m.generator.argnames
     end
-    argnames = Vector{Any}(uninitialized, m.nargs)
+    argnames = Vector{Any}(undef, m.nargs)
     ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
     return argnames
 end
