@@ -17,12 +17,14 @@ const colors = Dict(
 const color_dark = :light_black
 
 function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
-    blob = try LibGit2.GitBlob(repo, spec)
+    blob = try LibGit2.GitBlob, repo, spec
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         fakeit && return devnull
     end
-    return IOBuffer(LibGit2.rawcontent(blob))
+    iob = IOBuffer(LibGit2.content(blob))
+    close(blob)
+    return iob
 end
 
 function status(ctx::Context, mode::PackageMode, use_as_api=false)
@@ -42,22 +44,28 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         # TODO: handle project deps missing from manifest
         m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
-        use_as_api || @info("Status $(pathrepr(env, env.project_file))")
         diff = manifest_diff(ctx, m₀, m₁)
-        use_as_api || print_diff(diff)
+        if !use_as_api
+            printpkgstyle(ctx, :Status, pathrepr(env, env.project_file); ignore_indent=true)
+            print_diff(diff)
+        end
     end
     if mode == PKGMODE_MANIFEST
-        use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
         diff = manifest_diff(ctx, manifest₀, manifest₁)
-        use_as_api || print_diff(diff)
+        if !use_as_api
+            printpkgstyle(ctx, :Status, pathrepr(env, env.manifest_file); ignore_indent=true)
+            print_diff(diff)
+        end
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
         m₀ = filter_manifest(p, manifest₀)
         m₁ = filter_manifest(p, manifest₁)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
-            use_as_api || @info("Status $(pathrepr(env, env.manifest_file))")
-            use_as_api || print_diff(c_diff)
+            if !use_as_api
+                printpkgstyle(ctx, :Status, pathrepr(env, env.project_file); ignore_indent=true)
+                print_diff(c_diff)
+            end
             diff = Base.vcat(c_diff, diff)
         end
     end
@@ -98,9 +106,9 @@ revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
 vstring(a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
-           a.pinned == true ? "⚲" : "",
-           a.path != nothing ? " [$(a.path)]" : "",
-           a.repo != nothing ? " #$(revstring(a.repo.rev))" : ""
+           a.path != nothing ? " [$(pathrepr(a.path))]" : "",
+           a.repo != nothing ? " #$(revstring(a.repo.rev))" : "",
+           a.pinned == true ? " ⚲" : "",
            )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =

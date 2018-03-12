@@ -18,12 +18,13 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos!, ensure_resolved,
+    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
-    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED
+    PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
+    printpkgstyle
 
 
 ## ordering of UUIDs ##
@@ -62,7 +63,7 @@ struct VersionBound
     n::Int
     function VersionBound(tin::NTuple{n,Integer}) where n
         n <= 3 || throw(ArgumentError("VersionBound: you can only specify major, minor and patch versions"))
-        n == 0 && return new((0,      0,      0), n)
+        n == 0 && return new((0,           0,      0), n)
         n == 1 && return new((tin[1],      0,      0), n)
         n == 2 && return new((tin[1], tin[2],      0), n)
         n == 3 && return new((tin[1], tin[2], tin[3]), n)
@@ -103,7 +104,6 @@ end
 stricterlower(a::VersionBound, b::VersionBound) = isless_ll(a, b) ? b : a
 
 # Comparison between two upper bounds
-# (could be done with generated functions, or even manually unrolled...)
 function isless_uu(a::VersionBound, b::VersionBound)
     m, n = a.n, b.n
     for i = 1:min(m, n)
@@ -356,11 +356,6 @@ struct CommandError <: Exception
 end
 cmderror(msg::String...) = throw(CommandError(join(msg)))
 
-# No stacktrace shown
-Base.showerror(io::IO, ex::CommandError) = showerror(io, ex, [])
-function Base.showerror(io::IO, ex::CommandError, bt; backtrace=true)
-    printstyled(io, string(ex.msg); color=Base.error_color())
-end
 
 ###############
 # PackageSpec #
@@ -595,59 +590,110 @@ end
 
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
-function handle_repos!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upgrade=true)
+const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
+
+# Windows sometimes throw on `isdir`...
+function isdir_windows_workaround(path::String)
+    try isdir(path)
+    catch e
+        false
+    end
+end
+
+function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    env = ctx.env
     for pkg in pkgs
         pkg.repo == nothing && continue
-        # If we did not get the url to the repo yet, try look it up from the registry
-        if isempty(pkg.repo.url)
-            if !has_uuid(pkg)
-                registry_resolve!(env, [pkg])
-                ensure_resolved(env, [pkg])
+        pkg.special_action = PKGSPEC_DEVELOPED
+        isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
+
+        if isdir_windows_workaround(pkg.repo.url)
+            # Developing a local package, just point `pkg.path` to it
+            pkg.path = pkg.repo.url
+            folder_already_downloaded = true
+            project_path = pkg.repo.url
+            parse_package!(env, pkg, project_path)
+        else
+            # We save the repo in case another environement wants to
+            # develop from the same repo, this avoids having to reclone it
+            # from scratch.
+            clone_path = joinpath(depots()[1], "clones")
+            mkpath(clone_path)
+            repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
+            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
+                r = LibGit2.clone(pkg.repo.url, repo_path)
+                LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+                r, true
             end
-            _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
+            if !just_cloned
+                printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
+                LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+            end
+            close(repo)
+
+            # Copy the repo to a temporary place and check out the rev
+            project_path = mktempdir()
+            cp(repo_path, project_path; force=true)
+            repo = LibGit2.GitRepo(project_path)
+            rev = pkg.repo.rev
+            isempty(rev) && (rev = LibGit2.branch(repo))
+            gitobject, isbranch = checkout_rev!(repo, rev)
+            close(repo); close(gitobject)
+
+            parse_package!(env, pkg, project_path)
+            dev_pkg_path = joinpath(Pkg3.devdir(), pkg.name)
+            if isdir(dev_pkg_path)
+                if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
+                    cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
+                else
+                    @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
+                end
+            else
+                mkpath(dev_pkg_path)
+                mv(project_path, dev_pkg_path; force=true)
+            end
+            pkg.path = dev_pkg_path
         end
-        # TODO: Should not be set here?
+        @assert pkg.path != nothing
+    end
+end
+
+function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    env = ctx.env
+    for pkg in pkgs
+        pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_REPO_ADDED
+        isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
         clones_dir = joinpath(depots()[1], "clones")
-        ispath(clones_dir) || mkpath(clones_dir)
+        mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-            @info "Cloning package from $(pkg.repo.url)"
-            LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
+        repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+            printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
+            r = LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
+            LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+            r, true
         end
-        if upgrade
+        info = manifest_info(env, pkg.uuid)
+        pinned = (info != nothing && get(info, "pinned", false))
+        if upgrade_or_add  && !pinned && !just_cloned
+            printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
             LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+        end
+        if upgrade_or_add && !pinned
             rev = pkg.repo.rev
         else
             # Not upgrading so the rev should be the current git-tree-sha
-            info = manifest_info(env, pkg.uuid)
             rev = info["git-tree-sha1"]
             pkg.version = VersionNumber(info["version"])
         end
 
-        gitobject = nothing
-        isbranch = false
-        try
-            # see if we can get rev as a branch
-            isempty(rev) && (rev = LibGit2.branch(repo))
-            gitobject = LibGit2.GitObject(repo, "remotes/cache/heads/" * rev)
-            pkg.repo.rev = rev
-            isbranch = true
-        catch err
-            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        end
-        if gitobject == nothing
-            try
-                gitobject = LibGit2.GitObject(repo, rev)
-            catch err
-                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-                cmderror("git object $(rev) could not be found in $(pkg.repo.url)")
-            end
-        end
-        if !isbranch && upgrade
+        # see if we can get rev as a branch
+        isempty(rev) && (rev = LibGit2.branch(repo); pkg.repo.rev = rev)
+        gitobject, isbranch = checkout_rev!(repo, rev)
+        if !isbranch
             # If the user gave a shortened commit SHA, might as well update it to the full one
-            git_commit = LibGit2.GitHash(gitobject)
-            pkg.repo.rev = string(git_commit)
+            pkg.repo.rev = string(LibGit2.GitHash(gitobject))
         end
         git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
         @assert git_tree isa LibGit2.GitTree
@@ -672,53 +718,83 @@ function handle_repos!(env::EnvCache, pkgs::AbstractVector{PackageSpec}; upgrade
                 target_directory=Base.unsafe_convert(Cstring, project_path))
             LibGit2.checkout_tree(repo, git_tree, options=opts)
         end
-        found_project_file = false
-        for projname in project_names
-            if isfile(joinpath(project_path, "Project.toml"))
-                found_project_file = true
-                project_data = parse_toml(project_path, "Project.toml")
-                pkg.uuid = UUID(project_data["uuid"])
-                pkg.name = project_data["name"]
-                pkg.version = VersionNumber(get(project_data, "version", "0.0"))
-                break
-            end
-        end
-        if !found_project_file
-            @warn "packages will require to have a [Julia]Project.toml file in the future"
-            # This is an old style package, get the name from the url.
-            m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", pkg.repo.url)
-            m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
-            pkg.name = m.captures[1]
-            reg_uuids = registered_uuids(env, pkg.name)
-            is_registered = !isempty(reg_uuids)
-            if !is_registered
-                # This is an unregistered old style package, give it a random UUID and a version
-                if !has_uuid(pkg)
-                    pkg.uuid = UUIDs.uuid1()
-                    @info "Giving the unregistered package without Project.toml file the UUID of $(pkg.uuid)"
-                end
-                pkg.version = v"0.0"
-            else
-                # TODO: Fix
-                @assert length(reg_uuids) == 1
-                pkg.uuid = reg_uuids[1]
-                # Old style registered package
-                # What version does this package have? We have no idea... let's give it the latest one with a `+`...
-                Pkg3.Operations.set_maximum_version_registry!(env, pkg)
-            end
-        end
+        close(repo); close(git_tree); close(gitobject)
+        parse_package!(env, pkg, project_path)
         if !folder_already_downloaded
-            @info "Updated $(pkg.name) from $(pkg.repo.url)"
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
             mv(project_path, version_path; force=true)
-        else
-            @info "Already installed $(pkg.name) at $version_path"
         end
         @assert pkg.version isa VersionNumber
     end
 end
 
+function parse_package!(env, pkg, project_path)
+    found_project_file = false
+    for projname in project_names
+        if isfile(joinpath(project_path, "Project.toml"))
+            found_project_file = true
+            project_data = parse_toml(project_path, "Project.toml")
+            pkg.uuid = UUID(project_data["uuid"])
+            pkg.name = project_data["name"]
+            pkg.version = VersionNumber(get(project_data, "version", "0.0"))
+            break
+        end
+    end
+    if !found_project_file
+        @warn "packages will require to have a [Julia]Project.toml file in the future"
+        # This is an old style package, get the name from the url.
+        m = match(reg_pkg, pkg.repo.url)
+        m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
+        pkg.name = m.captures[1]
+        reg_uuids = registered_uuids(env, pkg.name)
+        is_registered = !isempty(reg_uuids)
+        if !is_registered
+            # This is an unregistered old style package, give it a random UUID and a version
+            if !has_uuid(pkg)
+                pkg.uuid = UUIDs.uuid1()
+                @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
+            end
+            pkg.version = v"0.0"
+        else
+            # TODO: Fix
+            @assert length(reg_uuids) == 1
+            pkg.uuid = reg_uuids[1]
+            # Old style registered package
+            # What version does this package have? We have no idea... let's give it the latest one with a `+`...
+            Pkg3.Operations.set_maximum_version_registry!(env, pkg)
+        end
+    end
+end
+
+function set_repo_for_pkg!(env, pkg)
+    if !has_uuid(pkg)
+        registry_resolve!(env, [pkg])
+        ensure_resolved(env, [pkg]; registry=true)
+    end
+    # TODO: look into [1]
+    _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
+end
+
+function checkout_rev!(repo, rev)
+    gitobject = nothing
+    isbranch = false
+    try
+        gitobject = LibGit2.GitObject(repo, "remotes/cache/heads/" * rev)
+        isbranch = true
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    end
+    if gitobject == nothing
+        try
+            gitobject = LibGit2.GitObject(repo, rev)
+        catch err
+            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            cmderror("git object $(rev) could not be found")
+        end
+    end
+    return gitobject, isbranch
+end
 
 ########################################
 # Resolving packages from name or uuid #
@@ -800,7 +876,7 @@ end
 
 # Ensure that all packages are fully resolved
 function ensure_resolved(env::EnvCache,
-    pkgs::AbstractVector{PackageSpec},
+    pkgs::AbstractVector{PackageSpec};
     registry::Bool=false,)::Nothing
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs
@@ -853,11 +929,12 @@ function registries()::Vector{String}
     user_regs = abspath(depots()[1], "registries")
     if !ispath(user_regs)
         mkpath(user_regs)
-        @info "Cloning default registries into $user_regs"
+        printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
         for (reg, url) in DEFAULT_REGISTRIES
-            @info " [+] $reg = $(repr(url))"
+            printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
             path = joinpath(user_regs, reg)
-            LibGit2.clone(url, path)
+            repo = LibGit2.clone(url, path)
+            close(repo)
         end
     end
     return [r for d in depots() for r in registries(d)]
@@ -1055,17 +1132,33 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
     return nothing
 end
 
+# TODO: redirect to ctx stream
+function printpkgstyle(io::IO, cmd::Symbol, text::String...; ignore_indent=false)
+    indent = textwidth(string(:Downloaded))
+    ignore_indent && (indent = 0)
+    printstyled(io, lpad(string(cmd), indent), color=:green, bold=true)
+    println(io, " ", text...)
+end
+
+# TODO: use ctx specific context
+function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
+    printpkgstyle(stdout, cmd, text...; kwargs...)
+end
+
 # Give a short path string representation
-function pathrepr(env::EnvCache, path::String, base::String=pwd())
+pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
+
+function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd())
     path = abspath(base, path)
-    if env.git != nothing
-        repo = LibGit2.path(env.git)
-        if startswith(base, repo)
-            # we're in the repo => path relative to pwd()
-            path = relpath(path, base)
-        elseif startswith(path, repo)
-            # we're not in repo but path is => path relative to repo
-            path = relpath(path, repo)
+    if env isa EnvCache && env.git != nothing
+        LibGit2.with(LibGit2.GitRepo, LibGit2.path(env.git)) do repo
+            if startswith(base, repo)
+                # we're in the repo => path relative to pwd()
+                path = relpath(path, base)
+            elseif startswith(path, repo)
+                # we're not in repo but path is => path relative to repo
+                path = relpath(path, repo)
+            end
         end
     end
     if !Sys.iswindows() && isabspath(path)
@@ -1085,8 +1178,10 @@ function write_env(ctx::Context; display_diff=true)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        display_diff && @info "Updating $(pathrepr(env, env.project_file))"
-        display_diff && Pkg3.Display.print_project_diff(ctx, old_env, env)
+        if display_diff
+            printpkgstyle(ctx, :Updating, pathrepr(env, env.project_file))
+            Pkg3.Display.print_project_diff(ctx, old_env, env)
+        end
         if !ctx.preview
             mkpath(dirname(env.project_file))
             open(env.project_file, "w") do io
@@ -1096,8 +1191,10 @@ function write_env(ctx::Context; display_diff=true)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        display_diff && @info "Updating $(pathrepr(env, env.manifest_file))"
-        display_diff && Pkg3.Display.print_manifest_diff(ctx, old_env, env)
+        if display_diff
+            printpkgstyle(ctx, :Updating, pathrepr(env, env.manifest_file))
+            Pkg3.Display.print_manifest_diff(ctx, old_env, env)
+        end
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name -> length(manifest[name]) == 1, uniques)
