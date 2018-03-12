@@ -81,6 +81,9 @@ static const intptr_t Array1d_tag      = 30;
 static const intptr_t Singleton_tag    = 31;
 static const intptr_t CommonSym_tag    = 32;
 static const intptr_t NearbyGlobal_tag = 33;  // a GlobalRef pointing to tree_enclosing_module
+static const intptr_t CoreMod_tag      = 34;
+static const intptr_t BaseMod_tag      = 35;
+static const intptr_t BITypeName_tag   = 36;  // builtin TypeName
 static const intptr_t Null_tag         = 253;
 static const intptr_t ShortBackRef_tag = 254;
 static const intptr_t BackRef_tag      = 255;
@@ -484,7 +487,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
 
     if (s->mode == MODE_AST) {
         // compressing tree
-        if (!as_literal && !is_ast_node(v)) {
+        if (v == (jl_value_t*)jl_core_module) {
+            writetag(s->s, (jl_value_t*)CoreMod_tag);
+            return;
+        }
+        else if (v == (jl_value_t*)jl_base_module) {
+            writetag(s->s, (jl_value_t*)BaseMod_tag);
+            return;
+        }
+        else if (!as_literal && !is_ast_node(v)) {
             writetag(s->s, (jl_value_t*)LiteralVal_tag);
             int id = literal_val_id(s, v);
             assert(id >= 0 && id < UINT16_MAX);
@@ -788,6 +799,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 return;
             }
             assert(!t->instance && "detected singleton construction corruption");
+
+            if (t == jl_typename_type) {
+                void **bp = ptrhash_bp(&ser_tag, ((jl_typename_t*)t)->wrapper);
+                if (*bp != HT_NOTFOUND) {
+                    writetag(s->s, (jl_value_t*)BITypeName_tag);
+                    write_uint8(s->s, (uint8_t)(intptr_t)*bp);
+                    return;
+                }
+            }
             if (t->size <= 255) {
                 writetag(s->s, (jl_value_t*)SmallDataType_tag);
                 write_uint8(s->s, t->size);
@@ -1849,6 +1869,17 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     else if (vtag == (jl_value_t*)Singleton_tag) {
         return jl_deserialize_value_singleton(s, loc);
     }
+    else if (vtag == (jl_value_t*)CoreMod_tag) {
+        return (jl_value_t*)jl_core_module;
+    }
+    else if (vtag == (jl_value_t*)BaseMod_tag) {
+        return (jl_value_t*)jl_base_module;
+    }
+    else if (vtag == (jl_value_t*)BITypeName_tag) {
+        jl_value_t *ty = deser_tag[read_uint8(s->s)];
+        jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
+        return (jl_value_t*)dt->name;
+    }
     else if (vtag == (jl_value_t*)jl_string_type) {
         size_t n = read_int32(s->s);
         jl_value_t *str = jl_alloc_string(n);
@@ -2825,6 +2856,7 @@ void jl_init_serializer(void)
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
+                     (void*)CoreMod_tag, (void*)BaseMod_tag, (void*)BITypeName_tag,
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
@@ -2845,7 +2877,7 @@ void jl_init_serializer(void)
                      jl_box_int32(21), jl_box_int32(22), jl_box_int32(23),
                      jl_box_int32(24), jl_box_int32(25), jl_box_int32(26),
                      jl_box_int32(27), jl_box_int32(28), jl_box_int32(29),
-                     jl_box_int32(30),
+
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
                      jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
@@ -2856,7 +2888,8 @@ void jl_init_serializer(void)
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
-                     jl_box_int64(30),
+
+                     jl_bool_type, jl_int32_type, jl_int64_type,
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
                      jl_quotenode_type, jl_pinode_type, jl_phinode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2867,23 +2900,8 @@ void jl_init_serializer(void)
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
-                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_typeofbottom_type,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
-                     jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
-                     jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
-                     jl_typename_type->name, jl_type_typename, jl_methtable_type->name,
-                     jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name,
-                     jl_vararg_typename, jl_void_type->name, jl_method_instance_type->name, jl_method_type->name,
-                     jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
-                     jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
-                     jl_intrinsic_type->name, jl_task_type->name, jl_labelnode_type->name,
-                     jl_linenumbernode_type->name, jl_builtin_type->name, jl_gotonode_type->name,
-                     jl_quotenode_type->name, jl_globalref_type->name, jl_typeofbottom_type->name,
-                     jl_string_type->name, jl_abstractstring_type->name, jl_namedtuple_type,
-                     jl_namedtuple_typename,
+                     jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
+                     jl_typeofbottom_type, jl_namedtuple_type,
 
                      ptls->root_task,
 
