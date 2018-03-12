@@ -6,7 +6,7 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..print_first_command_header, ..API
+import ..devdir, ..API
 using ..Types, ..Display, ..Operations
 
 ############
@@ -168,7 +168,6 @@ const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s]+\s*=\s*[^@\#\s]+ | \#\s*[^@\#\s]*
 const Token = Union{Command, Option, VersionRange, String, Rev}
 
 function tokenize(cmd::String)::Vector{Token}
-    print_first_command_header()
     tokens = Token[]
     words = map(m->m.match, eachmatch(lex_re, cmd))
     help_mode = false

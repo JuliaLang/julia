@@ -6,7 +6,7 @@ import Random
 import Dates
 import LibGit2
 
-import ..depots, ..logdir, ..devdir, ..print_first_command_header
+import ..depots, ..logdir, ..devdir
 import ..Operations, ..Display
 using ..Types, ..TOML
 
@@ -20,7 +20,6 @@ add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([Pac
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if mode == :develop
@@ -46,7 +45,6 @@ rm(pkgs::Vector{String}; kwargs...)      = rm([PackageSpec(pkg) for pkg in pkgs]
 rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(Context(), pkgs; kwargs...)
 
 function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
@@ -63,7 +61,6 @@ up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
             level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
 
@@ -143,7 +140,6 @@ pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg 
 pin(pkgs::Vector{PackageSpec}; kwargs...)       = pin(Context(), pkgs; kwargs...)
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
@@ -157,7 +153,6 @@ free(pkgs::Vector{String}; kwargs...)            = free([PackageSpec(pkg) for pk
 free(pkgs::Vector{PackageSpec}; kwargs...)       = free(Context(), pkgs; kwargs...)
 
 function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
@@ -173,7 +168,6 @@ test(pkgs::Vector{String}; kwargs...)             = test([PackageSpec(pkg) for p
 test(pkgs::Vector{PackageSpec}; kwargs...)        = test(Context(), pkgs; kwargs...)
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
@@ -195,7 +189,6 @@ end
 
 
 function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
-    print_first_command_header()
     function recursive_dir_size(path)
         sz = 0
         for (root, dirs, files) in walkdir(path)
@@ -315,7 +308,6 @@ build(pkg::PackageSpec) = build([pkg])
 build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
-    print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if isempty(pkgs)
@@ -339,7 +331,6 @@ end
 init() = init(Context())
 init(path::String) = init(Context(), path)
 function init(ctx::Context, path::String=pwd())
-    print_first_command_header()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Operations.init(ctx)
 end
