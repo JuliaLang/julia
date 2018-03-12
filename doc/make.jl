@@ -147,7 +147,7 @@ for stdlib in STDLIB_DOCS
 end
 
 makedocs(
-    build     = joinpath(pwd(), "_build/html/en"),
+    build     = joinpath(@__DIR__, "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = "doctest" in ARGS,

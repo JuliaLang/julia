@@ -97,7 +97,7 @@ respect to the working directory. If `$JULIA_PKGDIR` is not set, then
 $HOME/.julia
 ```
 
-Then the repository location [`Pkg.dir`](@ref) for a given Julia version is
+Then the repository location `Pkg.dir` for a given Julia version is
 
 ```
 $JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)
@@ -128,7 +128,7 @@ $HOME/.julia_history
 ### `JULIA_PKGRESOLVE_ACCURACY`
 
 A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver [`Base.Pkg.resolve`](@ref)
+`MaxSum.maxsum()` of the package dependency resolver `Pkg.resolve`
 will devote to attempting satisfying constraints before giving up: this value is
 by default `1`, and larger values correspond to larger amounts of time.
 
@@ -164,7 +164,7 @@ exists, or `emacs` otherwise.
 !!! note
 
     `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    [`Base.Pkg.edit`](@ref): this function checks `$VISUAL` and `$EDITOR` alone.
+    `Pkg.edit`: this function checks `$VISUAL` and `$EDITOR` alone.
 
 ## Parallelization
 
