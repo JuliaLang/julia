@@ -1301,7 +1301,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
+    tol = eps(real(float(one(T))))*max(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)
