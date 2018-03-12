@@ -130,7 +130,7 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode})
         end
     ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    domtree = construct_domtree(cfg)
+    domtree = construct_domtree(ir.cfg)
     ir = compact!(ir)
     verify_ir(ir)
     ir = getfield_elim_pass!(ir, domtree)

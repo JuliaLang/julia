@@ -315,17 +315,6 @@ if opt_level > 0
     @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
 end
 
-# Issue 24632
-function foo24632(y::Bool)
-    x::Union{Int, String} = y ? "ABC" : 1
-    isa(x, Int) ? x : 0
-end
-
-# A bit coarse-grained perhaps, but ok for now. What we want to check is that the load from
-# the semi-boxed union on the if-branch of the `isa` is not annotated !nonnull
-@test contains(get_llvm_noopt(foo24632, (Bool,), false), "!dereferenceable_or_null")
-@test !contains(get_llvm_noopt(foo24632, (Bool,), false), "!nonnull")
-
 str_22330 = """
 Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
              copyto!(Array{T,n}(undef, size(a)), a)

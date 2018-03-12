@@ -373,12 +373,20 @@ function setindex!(compact::IncrementalCompact, v, idx)
             val = ops[]
             isa(val, SSAValue) && (compact.used_ssas[val.id] -= 1)
         end
+        compact.result[idx] = v
         # Add count for new use
-        isa(v, SSAValue) && (compact.used_ssas[v.id] += 1)
-        return compact.result[idx] = v
+        if isa(v, SSAValue)
+            compact.used_ssas[v.id] += 1
+        else
+            for ops in userefs(compact.result[idx])
+                val = ops[]
+                isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
+            end
+        end
     else
-        return compact.ir.stmts[idx] = v
+        compact.ir.stmts[idx] = v
     end
+    return nothing
 end
 
 function getindex(view::TypesView, idx)

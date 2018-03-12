@@ -120,7 +120,7 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
 
 """
     @eval [mod,] ex

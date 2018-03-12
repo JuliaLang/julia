@@ -7,11 +7,24 @@ function compact_exprtype(compact, value)
     exprtype(value, compact.ir, compact.ir.mod)
 end
 
+"""
+    This struct keeps track of all uses of some mutable struct allocated
+    in the current function. `uses` are all instances of `getfield` on the
+    struct. `defs` are all instances of `setfield!` on the struct. The terminology
+    refers to the uses/defs of the ``slot bundle'' that the mutable struct represents.
+
+    In addition we keep track of all instances of a foreigncall preserve of this mutable
+    struct. Somewhat counterintuitively, we don't actually need to make sure that the
+    struct itself is live (or even allocated) at a ccall site. If there are no other places
+    where the struct escapes (and thus e.g. where its address is taken), it need not be
+    allocated. We do however, need to make sure to preserve any elments of this struct.
+"""
 struct SSADefUse
     uses::Vector{Int}
     defs::Vector{Int}
+    ccall_preserve_uses::Vector{Int}
 end
-SSADefUse() = SSADefUse(Int[], Int[])
+SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
 function try_compute_fieldidx(typ, use_expr)
     field = use_expr.args[3]
@@ -29,7 +42,9 @@ end
 function lift_defuse(cfg::CFG, ssa::SSADefUse)
     SSADefUse(
         Int[block_for_inst(cfg, x) for x in ssa.uses],
-        Int[block_for_inst(cfg, x) for x in ssa.defs])
+        Int[block_for_inst(cfg, x) for x in ssa.defs],
+        Int[block_for_inst(cfg, x) for x in ssa.ccall_preserve_uses],
+        )
 end
 
 function find_curblock(domtree, allblocks, curblock)
@@ -84,6 +99,76 @@ function compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use_i
     end
 end
 
+function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=true, phi_locs=Tuple{Int, Int}[])
+    orig_defidx = defidx = def.id
+    # Step 2: Figure out what the struct is defined as
+    def = compact[defidx]
+    typeconstraint = types(compact)[defidx]
+    ## Track definitions through PiNode/PhiNode
+    found_def = false
+    ## Track which PhiNodes, SSAValue intermediaries
+    ## we forwarded through.
+    while true
+        if isa(def, PiNode)
+            push!(intermediaries, defidx)
+            typeconstraint = typeintersect(typeconstraint, def.typ)
+            if isa(def.val, SSAValue)
+                defidx = def.val.id
+                def = compact[defidx]
+            else
+                def = def.val
+            end
+            continue
+        elseif isa(def, PhiNode)
+            # For now, we don't track setfields structs through phi nodes
+            allow_phinode || break
+            possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
+                isassigned(def.values, n) || return false
+                value = def.values[n]
+                edge_typ = compact_exprtype(compact, value)
+                return edge_typ ⊑ typeconstraint
+            end)
+            # For now, only look at unique predecessors
+            if length(possible_predecessors) == 1
+                n = possible_predecessors[1]
+                pred = def.edges[n]
+                val = def.values[n]
+                if isa(val, SSAValue)
+                    push!(phi_locs, (pred, defidx))
+                    defidx = val.id
+                    def = compact[defidx]
+                elseif def == val
+                    # This shouldn't really ever happen, but
+                    # patterns like this can occur in dead code,
+                    # so bail out.
+                    break
+                else
+                    def = val
+                end
+                continue
+            end
+        elseif isa(def, SSAValue)
+            push!(intermediaries, defidx)
+            defidx = def.id
+            def = compact[def.id]
+            continue
+        end
+        found_def = true
+        break
+    end
+    found_def ? (def, defidx) : nothing
+end
+
+is_tuple_call(ir, def) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod)
+
+function process_immutable_preserve(new_preserves, compact, def)
+    for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
+        if !isbits(compact_exprtype(compact, arg))
+            push!(new_preserves, arg)
+        end
+    end
+end
+
 function getfield_elim_pass!(ir::IRCode, domtree)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
@@ -91,11 +176,50 @@ function getfield_elim_pass!(ir::IRCode, domtree)
     for (idx, stmt) in compact
         isa(stmt, Expr) || continue
         is_getfield = false
+        is_ccall = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, ir, ir.mod)
             is_setfield = true
         elseif is_known_call(stmt, getfield, ir, ir.mod)
             is_getfield = true
+        elseif isexpr(stmt, :foreigncall)
+            nccallargs = stmt.args[5]
+            new_preserves = Any[]
+            old_preserves = stmt.args[(6+nccallargs):end]
+            for (pidx, preserved_arg) in enumerate(old_preserves)
+                intermediaries = IdSet()
+                isa(preserved_arg, SSAValue) || continue
+                def = walk_to_def(compact, preserved_arg, intermediaries, false)
+                def !== nothing || continue
+                (def, defidx) = def
+                if is_tuple_call(ir, def)
+                    process_immutable_preserve(new_preserves, compact, def)
+                    old_preserves[pidx] = nothing
+                    continue
+                elseif isexpr(def, :new)
+                    typ = def.typ
+                    if isa(typ, UnionAll)
+                        typ = unwrap_unionall(typ)
+                    end
+                    if !typ.mutable
+                        process_immutable_preserve(new_preserves, compact, def)
+                        old_preserves[pidx] = nothing
+                        continue
+                    end
+                else
+                    continue
+                end
+                mid, defuse = get!(defuses, defidx, (IdSet{Int}(), SSADefUse()))
+                push!(defuse.ccall_preserve_uses, idx)
+                union!(mid, intermediaries)
+                continue
+            end
+            if !isempty(new_preserves)
+                old_preserves = filter(ssa->ssa !== nothing, old_preserves)
+                compact[idx] = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
+                    old_preserves..., new_preserves...)
+            end
+            continue
         else
             continue
         end
@@ -104,66 +228,13 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         field = stmt.args[3]
         isa(field, QuoteNode) && (field = field.value)
         isa(field, Union{Int, Symbol}) || continue
-        orig_defidx = defidx = stmt.args[2].id
 
-        # Step 2: Figure out what the struct is defined as
-        def = compact[defidx]
-        typeconstraint = types(compact)[defidx]
+        intermediaries = IdSet()
         phi_locs = Tuple{Int, Int}[]
-        ## Track definitions through PiNode/PhiNode
-        found_def = false
-        ## Track which PhiNodes, SSAValue intermediaries
-        ## we forwarded through.
-        intermediaries = IdSet{Int}()
-        while true
-            if isa(def, PiNode)
-                push!(intermediaries, defidx)
-                typeconstraint = typeintersect(typeconstraint, def.typ)
-                if isa(def.val, SSAValue)
-                    defidx = def.val.id
-                    def = compact[defidx]
-                else
-                    def = def.val
-                end
-                continue
-            elseif isa(def, PhiNode)
-                # For now, we don't track setfields structs through phi nodes
-                is_getfield || break
-                possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
-                    isassigned(def.values, n) || return false
-                    value = def.values[n]
-                    edge_typ = compact_exprtype(compact, value)
-                    return edge_typ ⊑ typeconstraint
-                end)
-                # For now, only look at unique predecessors
-                if length(possible_predecessors) == 1
-                    n = possible_predecessors[1]
-                    pred = def.edges[n]
-                    val = def.values[n]
-                    if isa(val, SSAValue)
-                        push!(phi_locs, (pred, defidx))
-                        defidx = val.id
-                        def = compact[defidx]
-                    elseif def == val
-                        # This shouldn't really ever happen, but
-                        # patterns like this can occur in dead code,
-                        # so bail out.
-                        break
-                    else
-                        def = val
-                    end
-                    continue
-                end
-            elseif isa(def, SSAValue)
-                push!(intermediaries, defidx)
-                defidx = def.id
-                def = compact[def.id]
-                continue
-            end
-            found_def = true
-            break
-        end
-        found_def || continue
+        def = walk_to_def(compact, stmt.args[2], intermediaries, is_getfield, phi_locs)
+        def !== nothing || continue
+        (def, defidx) = def
+
         if !is_getfield
             mid, defuse = get!(defuses, defidx, (IdSet{Int}(), SSADefUse()))
             push!(defuse.defs, idx)
@@ -172,7 +243,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         end
         # Step 3: Check if the definition we eventually end up at is either
         # a tuple(...) call or Expr(:new) and perform replacement.
-        if isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod) && isa(field, Int) && 1 <= field < length(def.args)
+        if is_tuple_call(ir, def) && isa(field, Int) && 1 <= field < length(def.args)
             forwarded = def.args[1+field]
         elseif isexpr(def, :new)
             typ = def.typ
@@ -201,7 +272,6 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         compact[idx] = forwarded
     end
     ir = finish(compact)
-    @Base.show length(defuses)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -209,9 +279,8 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # escapes and we cannot eliminate the allocation. This works, because we're guaranteed
         # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
         # show up in the nuses_total count.
-        nleaves = length(defuse.uses) + length(defuse.defs)
+        nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
         nuses_total = compact.used_ssas[idx] + mapreduce(idx->compact.used_ssas[idx], +, 0, intermediaries) - length(intermediaries)
-        @Base.show (nleaves, nuses_total)
         nleaves == nuses_total || continue
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]
@@ -238,6 +307,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             push!(fielddefuse[field].defs, use)
         end
         ok || continue
+        preserve_uses = IdDict{Int, Vector{Any}}((idx=>Any[] for idx in IdSet{Int}(defuse.ccall_preserve_uses)))
         # Everything accounted for. Go field by field and perform idf
         for (fidx, du) in pairs(fielddefuse)
             ftyp = fieldtype(typ, fidx)
@@ -255,6 +325,11 @@ function getfield_elim_pass!(ir::IRCode, domtree)
                 for stmt in du.uses
                     ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end
+                if !isbits(fieldtype(typ, fidx))
+                    for (use, list) in preserve_uses
+                        push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
+                    end
+                end
                 for b in phiblocks
                     for p in ir.cfg.blocks[b].preds
                         n = ir[phinodes[b]]
@@ -269,6 +344,16 @@ function getfield_elim_pass!(ir::IRCode, domtree)
                 ir[SSAValue(stmt)] = nothing
             end
             continue
+        end
+        isempty(defuse.ccall_preserve_uses) && continue
+        push!(intermediaries, idx)
+        # Insert the new preserves
+        for (use, new_preserves) in preserve_uses
+            useexpr = ir[SSAValue(use)]
+            nccallargs = useexpr.args[5]
+            old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
+            ir[SSAValue(use)] = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
+                old_preserves..., new_preserves...)
         end
     end
     for (idx, phi_locs) in insertions
