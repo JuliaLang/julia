@@ -1,10 +1,8 @@
 # Install dependencies needed to build the documentation.
-ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
-using OldPkg
-OldPkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), OldPkg.dir("REQUIRE"); force = true)
-OldPkg.update()
-OldPkg.resolve()
+using Pkg
+empty!(DEPOT_PATH)
+pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+Pkg.instantiate()
 
 using Documenter
 
