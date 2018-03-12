@@ -899,6 +899,23 @@ end
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
 end
 
+@testset "Dict reduce merge" begin
+    f = (i::Vector{<:Dict}, o) -> begin
+        r1 = reduce(merge, i)
+        r2 = merge(i...)
+        t = typeof(o)
+        @test r1 == o
+        @test r2 == o
+        @test typeof(r1) == t
+        @test typeof(r2) == t
+    end
+    f([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
+    f([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
+      Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
+    f([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
+    f([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
+end
+
 @testset "misc error/io" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test_throws ErrorException 'a' in d
