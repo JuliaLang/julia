@@ -48,15 +48,14 @@ BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
 
 struct Unknown <: BroadcastStyle end
 BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type) = Unknown()
 
 """
 `Broadcast.Scalar()` is a [`BroadcastStyle`](@ref) indicating that an object is not
-treated as a container for the purposes of broadcasting. This is the default for objects
-that have not customized `BroadcastStyle`.
+treated as a container for the purposes of broadcasting.
 """
 struct Scalar <: BroadcastStyle end
-BroadcastStyle(::Type) = Scalar()
-BroadcastStyle(::Type{<:Ptr}) = Scalar()
+BroadcastStyle(::Type{<:Union{Number,Symbol,String,Type,Function,Uninitialized,RoundingMode,Nothing,Missing}}) = Scalar()
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
@@ -366,7 +365,7 @@ end
 Base.@propagate_inbounds _broadcast_getindex(::Type{T}, I) where T = T
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(combine_styles(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::DefaultArrayStyle{0}, A::Ref, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(::Union{Unknown,Scalar}, A, I) = A
+Base.@propagate_inbounds _broadcast_getindex(::Scalar, A, I) = A
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
 
@@ -432,6 +431,12 @@ end
     end
 end
 
+collect_unknowns() = ()
+@inline collect_unknowns(x, rest...) = (collect_unknown(x), collect_unknowns(rest...)...)
+@inline collect_unknown(x) = collect_unknown(BroadcastStyle(typeof(x)), x)
+collect_unknown(::Any, x) = x
+collect_unknown(::Unknown, x) = collect(x)
+
 """
     broadcast!(f, dest, As...)
 
@@ -441,7 +446,10 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, combine_styles(As...), As...)
+@inline function broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N}
+    As′ = collect_unknowns(As...)
+    broadcast!(f, dest, combine_styles(As′...), As′...)
+end
 @inline broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
 
 # Default behavior (separated out so that it can be called by users who want to extend broadcast!).
@@ -539,7 +547,7 @@ maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
 # )::_broadcast_getindex_eltype(A)
 _broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(combine_styles(A), A)
 _broadcast_getindex_eltype(::Scalar, ::Type{T}) where T = Type{T}
-_broadcast_getindex_eltype(::Union{Unknown,Scalar}, A) = typeof(A)
+_broadcast_getindex_eltype(::Scalar, A) = typeof(A)
 _broadcast_getindex_eltype(::BroadcastStyle, A) = eltype(A)  # Tuple, Array, etc.
 
 # Inferred eltype of result of broadcast(f, xs...)
@@ -621,8 +629,11 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-@inline broadcast(f, A, Bs...) =
-    broadcast(f, combine_styles(A, Bs...), nothing, nothing, A, Bs...)
+@inline function broadcast(f, A, Bs...)
+    A′ = collect_unknown(A)
+    Bs′ = collect_unknowns(Bs...)
+    broadcast(f, combine_styles(A′, Bs′...), nothing, nothing, A′, Bs′...)
+end
 
 @inline broadcast(f, s::BroadcastStyle, ::Nothing, ::Nothing, A, Bs...) =
     broadcast(f, s, combine_eltypes(f, A, Bs...), combine_indices(A, Bs...),
@@ -665,7 +676,7 @@ function broadcast_nonleaf(f, s::NonleafHandlingTypes, ::Type{ElType}, shape::In
     _broadcast!(f, dest, keeps, Idefaults, As, Val(nargs), iter, st, 1)
 end
 
-broadcast(f, ::Union{Scalar,Unknown}, ::Nothing, ::Nothing, a...) = f(a...)
+broadcast(f, ::Scalar, ::Nothing, ::Nothing, a...) = f(a...)
 
 @inline broadcast(f, ::Style{Tuple}, ::Nothing, ::Nothing, A, Bs...) =
     tuplebroadcast(f, longest_tuple(A, Bs...), A, Bs...)
