@@ -6,7 +6,7 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..print_first_command_header, ..API
+import ..devdir, ..API
 using ..Types, ..Display, ..Operations
 
 ############
@@ -180,7 +180,6 @@ function tokenize(cmd::String)::Vector{Vector{Token}}
 end
 
 function tokenize!(words::Vector{<:AbstractString})::Vector{Token}
-    print_first_command_header()
     tokens = Token[]
     help_mode = false
     preview_mode = false
