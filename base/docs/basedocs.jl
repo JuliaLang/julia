@@ -1417,7 +1417,7 @@ containing elements of type `T`. `N` can either be supplied explicitly,
 as in `Array{T,N}(undef, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`. See [`uninit`](@ref).
+match the length or number of `dims`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl

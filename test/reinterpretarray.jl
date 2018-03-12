@@ -31,3 +31,13 @@ let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
     reinterpret(Float32, a)[1] = 2.0
     @test reinterpret(Float32, a)[1] == 2.0
 end
+
+# ensure that reinterpret arrays aren't erroneously classified as strided
+let A = reshape(1:20, 5, 4)
+    V = view(A, :, :)
+    R = reinterpret(Int32, V)
+    R2 = reinterpret(Int32, A)
+    @test !(R isa StridedArray)
+    @test !(R2 isa StridedArray)
+    @test R * ones(4, 5) == R2 * ones(4,5) == copy(R) * ones(4,5) == copy(R2) * ones(4,5)
+end

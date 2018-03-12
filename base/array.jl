@@ -135,7 +135,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = isbits(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)

@@ -81,39 +81,36 @@ temp_pkg_dir() do project_path
         old_v = Pkg3.installed()[TEST_PKG.name]
         Pkg3.rm(TEST_PKG.name)
         mktempdir() do devdir
-            Pkg3.develop(TEST_PKG.name; path = devdir)
-            @test isinstalled(TEST_PKG)
-            @test Pkg3.installed()[TEST_PKG.name] > old_v
-            test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
-            @test isfile(test_pkg_main_file)
-            # Pkg3 #152
-            write(test_pkg_main_file,
-                """
-                module Example
-                    export hello, domath
-                    const example2path = joinpath(@__DIR__, "..", "deps", "deps.jl")
-                    if !isfile(example2path)
-                        error("Example is not installed correctly")
+            withenv("JULIA_PKG_DEVDIR" => devdir) do
+                Pkg3.REPLMode.pkgstr("develop $(TEST_PKG.name)")
+                @test isinstalled(TEST_PKG)
+                @test Pkg3.installed()[TEST_PKG.name] > old_v
+                test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
+                @test isfile(test_pkg_main_file)
+                # Pkg3 #152
+                write(test_pkg_main_file,
+                    """
+                    module Example
+                        export hello, domath
+                        const example2path = joinpath(@__DIR__, "..", "deps", "deps.jl")
+                        if !isfile(example2path)
+                            error("Example is not installed correctly")
+                        end
+                        hello(who::String) = "Hello, \$who"
+                        domath(x::Number) = x + 5
                     end
-                    hello(who::String) = "Hello, \$who"
-                    domath(x::Number) = x + 5
-                end
-                """)
-            mkpath(joinpath(devdir, TEST_PKG.name, "deps"))
-            write(joinpath(devdir, TEST_PKG.name, "deps", "build.jl"),
-                """
-                touch("deps.jl")
-                """
-            )
-            Pkg3.build(TEST_PKG.name)
-            @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
-            Pkg3.test(TEST_PKG.name)
-            Pkg3.free(TEST_PKG.name)
-            @test Pkg3.installed()[TEST_PKG.name] == old_v
-        end
-        mktempdir() do tmp
-            withenv("JULIA_PKG_DEVDIR" => tmp) do
-                @test_throws CommandError Pkg3.develop(TEST_PKG.name, "nonexisting_branch",)
+                    """)
+                mkpath(joinpath(devdir, TEST_PKG.name, "deps"))
+                write(joinpath(devdir, TEST_PKG.name, "deps", "build.jl"),
+                    """
+                    touch("deps.jl")
+                    """
+                )
+                Pkg3.build(TEST_PKG.name)
+                @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
+                Pkg3.test(TEST_PKG.name)
+                Pkg3.free(TEST_PKG.name)
+                @test Pkg3.installed()[TEST_PKG.name] == old_v
             end
         end
     end
