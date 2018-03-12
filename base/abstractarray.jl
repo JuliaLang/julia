@@ -399,16 +399,14 @@ StridedLayout
 
 """
     MemoryLayout(A)
-    MemoryLayout(typeof(A))
 
-`MemoryLayout` specifies the layout in memory for an array `A`. When
-you define a new `AbstractArray` type, you can choose to implement
-memory layout to indicate that an array is strided in memory. If you decide to
-implement memory layout, then you must set this trait for your array
-type. For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
+specifies the layout in memory for an array `A`. When
+you define a new `AbstractArray` type, you can choose to override
+`MemoryLayout` to indicate how an array is stored in memory.
+For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
 then override as follows:
 
-    Base.MemoryLayout(::Type{M}) where M <: MyMatrix = Base.DenseColumnMajor()
+    Base.MemoryLayout(::MyMatrix) = Base.DenseColumnMajor()
 
 The default is `Base.UnknownLayout()` to indicate that the layout
 in memory is unknown.
@@ -417,7 +415,6 @@ Julia's internal linear algebra machinery will automatically (and invisibly)
 dispatch to BLAS and LAPACK routines if the memory layout is compatible.
 """
 MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout()
-
 MemoryLayout(A::DenseArray{T}) where T = DenseColumnMajor()
 
 
