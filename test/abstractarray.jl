@@ -772,7 +772,6 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
-    @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
 end
 
 @testset "Issue #17811" begin

@@ -266,6 +266,8 @@ compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
+elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false
 iscontiguous(::Type{<:FastContiguousSubArray}) = true
