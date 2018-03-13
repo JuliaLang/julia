@@ -117,6 +117,9 @@ function compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use_i
 end
 
 function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=true, phi_locs=Tuple{Int, Int}[])
+    if !isa(def, SSAValue)
+        return (def, 0)
+    end
     orig_defidx = defidx = def.id
     # Step 2: Figure out what the struct is defined as
     def = compact[defidx]
@@ -233,14 +236,15 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             end
             if !isempty(new_preserves)
                 old_preserves = filter(ssa->ssa !== nothing, old_preserves)
-                compact[idx] = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
+                new_expr = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
                     old_preserves..., new_preserves...)
+                new_expr.typ = stmt.typ
+                compact[idx] = new_expr
             end
             continue
         else
             continue
         end
-        isa(stmt.args[2], SSAValue) || continue
         ## Normalize the field argument to getfield/setfield
         field = stmt.args[3]
         isa(field, QuoteNode) && (field = field.value)
@@ -253,6 +257,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         (def, defidx) = def
 
         if !is_getfield
+            (defidx == 0) && continue
             mid, defuse = get!(defuses, defidx, (IdSet{Int}(), SSADefUse()))
             push!(defuse.defs, idx)
             union!(mid, intermediaries)
@@ -269,6 +274,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             end
             isa(typ, DataType) || continue
             if typ.mutable
+                @assert defidx != 0
                 mid, defuse = get!(defuses, defidx, (IdSet{Int}(), SSADefUse()))
                 push!(defuse.uses, idx)
                 union!(mid, intermediaries)
@@ -278,7 +284,16 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             field === nothing && continue
             forwarded = def.args[1+field]
         else
-            continue
+            obj = compact_exprtype(compact, def)
+            isa(obj, Const) || continue
+            obj = obj.val
+            isimmutable(obj) || continue
+            field = try_compute_fieldidx(typeof(obj), stmt)
+            field === nothing && continue
+            isdefined(obj, field) || continue
+            val = getfield(obj, field)
+	    is_inlineable_constant(val) || continue
+            forwarded = quoted(val)
         end
         # Step 4: Remember any phinodes we need to insert
         if !isempty(phi_locs) && isa(forwarded, SSAValue)
@@ -372,8 +387,10 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             useexpr = ir[SSAValue(use)]
             nccallargs = useexpr.args[5]
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
-            ir[SSAValue(use)] = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
+            new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
+	    new_expr.typ = useexpr.typ
+	    ir[SSAValue(use)] = new_expr
         end
     end
     for (idx, phi_locs) in insertions

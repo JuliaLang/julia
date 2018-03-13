@@ -667,6 +667,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             (pt, typ, new_to_regular(renumber_ssa!(stmt, ssavalmap)), line)
         end for i in 1:length(new_nodes)]
     ir = IRCode(ir, code, types, ir.lines, ir.cfg, new_nodes)
-    #ir = domsort_ssa!(ir, domtree)
+    ir = domsort_ssa!(ir, domtree)
     ir
 end

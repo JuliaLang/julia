@@ -65,7 +65,9 @@ str = String(take!(iob))
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
-@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
+# No variable information with the new optimizer. Eventually might be able to recover
+# some of this info with debug info.
+#@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
 # Make sure that "expected" unions are highlighted with warning color instead of error color
 iob = IOBuffer()
