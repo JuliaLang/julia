@@ -386,11 +386,31 @@ end
     broadcastable(x)
 
 Return either `x` or an object like `x` such that it supports `axes` and indexing.
+
+If `x` supports iteration, the returned value should have the same `axes` and indexing behaviors as [`collect(x)`](@ref).
+
+# Examples
+```jldoctest
+julia> broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
+Base.RefValue{Type{Int64}}(Int64)
+
+julia> broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
+Base.RefValue{String}("hello")
+```
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing}) = Ref(x)
 broadcastable(x::Ptr) = Ref{Ptr}(x) # Cannot use Ref(::Ptr) until ambiguous deprecation goes through
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::AbstractArray) = x
+# In the future, default to collecting arguments. TODO: uncomment once deprecations are removed
+# broadcastable(x) = BroadcastStyle(typeof(x)) isa Unknown ? collect(x) : x
+# broadcastable(::Union{AbstractDict, NamedTuple}) = error("intentionally unimplemented to allow development in 1.x")
 
 """
     broadcast!(f, dest, As...)
@@ -511,17 +531,23 @@ combine_eltypes(f, A, As...) =
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref`s and/or scalars `As` to a
-container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`
-is considered a scalar. The resulting container is established by
-the following rules:
+Broadcast the function `f` over the arrays, tuples, collections, `Ref`s and/or scalars `As`.
 
- - If all the arguments are scalars, it returns a scalar.
- - If the arguments are tuples and zero or more scalars, it returns a tuple.
- - If the arguments contain at least one array or `Ref`, it returns an array
-   (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
-   and tuples as 1-dimensional arrays.
+Broadcasting applies the function `f` over the elements of the container arguments and the
+scalars themselves in `As`. Singleton and missing dimensions are expanded to match the
+extents of the other arguments by virtually repeating the value. By default, only a limited
+number of types are considered scalars, including `Number`s, `String`s, `Symbol`s, `Type`s,
+`Function`s and some common singletons like `missing` and `nothing`. All other arguments are
+iterated over or indexed into elementwise.
+
+The resulting container type is established by the following rules:
+
+ - If all the arguments are scalars or zero-dimensional arrays, it returns an unwrapped scalar.
+ - If at least one argument is a tuple and all others are scalars or zero-dimensional arrays,
+   it returns a tuple.
+ - All other combinations of arguments default to returning an `Array`, but
+   custom container types can define their own implementation and promotion-like
+   rules to customize the result when they appear as arguments.
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
