@@ -933,6 +933,8 @@ end
 
 nonscalararg(::SparseVecOrMat) = true
 nonscalararg(::Any) = false
+scalarwrappedarg(::Union{AbstractArray{<:Any,0},Ref}) = true
+scalarwrappedarg(::Any) = false
 
 @inline function _capturescalars()
     return (), () -> ()
@@ -941,6 +943,8 @@ end
     let (rest, f) = _capturescalars(mixedargs...)
         if nonscalararg(arg)
             return (arg, rest...), (head, tail...) -> (head, f(tail...)...) # pass-through to broadcast
+        elseif scalarwrappedarg(arg)
+            return rest, (tail...) -> (arg[], f(tail...)...) # unwrap and add back scalararg after (in makeargs)
         else
             return rest, (tail...) -> (arg, f(tail...)...) # add back scalararg after (in makeargs)
         end
@@ -949,6 +953,8 @@ end
 @inline function _capturescalars(arg) # this definition is just an optimization (to bottom out the recursion slightly sooner)
     if nonscalararg(arg)
         return (arg,), (head,) -> (head,) # pass-through
+    elseif scalarwrappedarg(arg)
+        return (), () -> (arg[],) # unwrap
     else
         return (), () -> (arg,) # add scalararg
     end
@@ -977,9 +983,10 @@ Broadcast.BroadcastStyle(::Type{<:StructuredMatrix}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
 
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{0}) = PromoteToSparse()
+Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
+
 Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
 Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
 
@@ -992,7 +999,8 @@ is_supported_sparse_broadcast(::AbstractSparseArray, rest...) = is_supported_spa
 is_supported_sparse_broadcast(::StructuredMatrix, rest...) = is_supported_sparse_broadcast(rest...)
 is_supported_sparse_broadcast(::Array, rest...) = is_supported_sparse_broadcast(rest...)
 is_supported_sparse_broadcast(t::Union{Transpose, Adjoint}, rest...) = is_supported_sparse_broadcast(t.parent, rest...)
-is_supported_sparse_broadcast(x, rest...) = BroadcastStyle(typeof(x)) === Broadcast.Scalar() && is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(x, rest...) = axes(x) === () && is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(x::Ref, rest...) = is_supported_sparse_broadcast(rest...)
 function broadcast(f, s::PromoteToSparse, ::Nothing, ::Nothing, As::Vararg{Any,N}) where {N}
     if is_supported_sparse_broadcast(As...)
         return broadcast(f, map(_sparsifystructured, As)...)
