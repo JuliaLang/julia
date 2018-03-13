@@ -40,11 +40,28 @@ function try_compute_fieldidx(typ, use_expr)
 end
 
 function lift_defuse(cfg::CFG, ssa::SSADefUse)
-    SSADefUse(
-        Int[block_for_inst(cfg, x) for x in ssa.uses],
-        Int[block_for_inst(cfg, x) for x in ssa.defs],
-        Int[block_for_inst(cfg, x) for x in ssa.ccall_preserve_uses],
-        )
+    # We remove from `uses` any block where all uses are dominated
+    # by a def. This prevents insertion of dead phi nodes at the top
+    # of such a block if that block happens to be in a loop
+    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in ssa.uses]
+    for x in ssa.defs
+        push!(ordered, (x, block_for_inst(cfg, x), false))
+    end
+    ordered = sort(ordered, by=x->x[1])
+    bb_defs = Int[]
+    bb_uses = Int[]
+    last_bb = last_def_bb = 0
+    for (_, bb, is_use) in ordered
+        if bb != last_bb && is_use
+            push!(bb_uses, bb)
+        end
+        last_bb = bb
+        if last_def_bb != bb && !is_use
+            push!(bb_defs, bb)
+            last_def_bb = bb
+        end
+    end
+    SSADefUse(bb_uses, bb_defs, Int[])
 end
 
 function find_curblock(domtree, allblocks, curblock)
@@ -314,7 +331,10 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             if !isempty(du.uses)
                 push!(du.defs, idx)
                 ldu = lift_defuse(ir.cfg, du)
-                phiblocks = idf(ir.cfg, ldu, domtree)
+                phiblocks = []
+                if !isempty(ldu.uses)
+                    phiblocks = idf(ir.cfg, ldu, domtree)
+                end
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
                     n = PhiNode()
