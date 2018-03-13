@@ -330,9 +330,9 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             ftyp = fieldtype(typ, fidx)
             if !isempty(du.uses)
                 push!(du.defs, idx)
-                ldu = lift_defuse(ir.cfg, du)
+                ldu = compute_live_ins(ir.cfg, du)
                 phiblocks = []
-                if !isempty(ldu.uses)
+                if !isempty(ldu.live_in_bbs)
                     phiblocks = idf(ir.cfg, ldu, domtree)
                 end
                 phinodes = IdDict{Int, SSAValue}()
@@ -341,7 +341,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
                     phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts), ftyp, n)
                 end
                 # Now go through all uses and rewrite them
-                allblocks = sort(vcat(phiblocks, ldu.defs))
+                allblocks = sort(vcat(phiblocks, ldu.def_bbs))
                 for stmt in du.uses
                     ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end

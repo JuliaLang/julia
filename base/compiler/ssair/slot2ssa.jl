@@ -219,10 +219,15 @@ function typ_for_val(@nospecialize(val), ci::CodeInfo)
     return Const(val)
 end
 
+struct BlockLiveness
+    def_bbs::Vector{Int}
+    live_in_bbs::Vector{Int}
+end
+
 # Run iterated dominance frontier
-function idf(cfg::CFG, defuse, domtree::DomTree)
+function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
-    defs = defuse.defs
+    defs = liveness.def_bbs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
@@ -239,14 +244,15 @@ function idf(cfg::CFG, defuse, domtree::DomTree)
                 succ_level > level && continue
                 succ in processed && continue
                 push!(processed, succ)
-                # <- TODO: Use liveness here
+                if !(succ in liveness.live_in_bbs)
+                    continue
+                end
                 push!(phiblocks, succ)
                 if !(succ in defs)
                     push!(pq, (succ, succ_level))
                     sort!(pq, by=x->x[2])
                 end
             end
-
             for child in domtree.nodes[active].children
                 child in visited && continue
                 push!(visited, child)
@@ -419,10 +425,48 @@ function domsort_ssa!(ir, domtree)
     new_ir
 end
 
+function compute_live_ins(cfg, defuse)
+    # We remove from `uses` any block where all uses are dominated
+    # by a def. This prevents insertion of dead phi nodes at the top
+    # of such a block if that block happens to be in a loop
+    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in defuse.uses]
+    for x in defuse.defs
+        push!(ordered, (x, block_for_inst(cfg, x), false))
+    end
+    ordered = sort(ordered, by=x->x[1])
+    bb_defs = Int[]
+    bb_uses = Int[]
+    last_bb = last_def_bb = 0
+    for (_, bb, is_use) in ordered
+        if bb != last_bb && is_use
+            push!(bb_uses, bb)
+        end
+        last_bb = bb
+        if last_def_bb != bb && !is_use
+            push!(bb_defs, bb)
+            last_def_bb = bb
+        end
+    end
+    # To obtain live ins from bb_uses, recursively add predecessors
+    extra_liveins = IdSet{Int}()
+    worklist = Int[]
+    for bb in bb_uses
+        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[bb].preds))
+    end
+    while !isempty(worklist)
+        elem = pop!(worklist)
+        (elem in bb_uses || elem in extra_liveins) && continue
+        push!(extra_liveins, elem)
+        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[elem].preds))
+    end
+    append!(bb_uses, extra_liveins)
+    BlockLiveness(bb_defs, bb_uses)
+end
+
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int)
     cfg = ir.cfg
     left = Int[]
-    defuse_blocks = lift_defuse(ir.cfg, defuse)
+    livenesses = map(du->compute_live_ins(cfg, du), defuse)
     phi_slots = Vector{Int}[Vector{Int}() for _ = 1:length(ir.cfg.blocks)]
     phi_nodes = Vector{Pair{Int,PhiNode}}[Vector{Pair{Int,PhiNode}}() for _ = 1:length(cfg.blocks)]
     phi_ssas = SSAValue[]
@@ -451,7 +495,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             continue
         end
         # TODO: Perform liveness here to eliminate dead phi nodes
-        phiblocks = idf(cfg, defuse_blocks[idx], domtree)
+        phiblocks = idf(cfg, livenesses[idx], domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
@@ -623,6 +667,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             (pt, typ, new_to_regular(renumber_ssa!(stmt, ssavalmap)), line)
         end for i in 1:length(new_nodes)]
     ir = IRCode(ir, code, types, ir.lines, ir.cfg, new_nodes)
-    ir = domsort_ssa!(ir, domtree)
+    #ir = domsort_ssa!(ir, domtree)
     ir
 end
