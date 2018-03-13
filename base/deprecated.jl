@@ -1518,6 +1518,11 @@ end
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
 
+@deprecate isupper isuppercase
+@deprecate islower islowercase
+@deprecate ucfirst uppercasefirst
+@deprecate lcfirst lowercasefirst
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

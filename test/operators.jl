@@ -105,8 +105,8 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 end
 @testset "function negation" begin
     str = randstring(20)
-    @test filter(!isupper, str) == replace(str, r"[A-Z]" => "")
-    @test filter(!islower, str) == replace(str, r"[a-z]" => "")
+    @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
+    @test filter(!islowercase, str) == replace(str, r"[a-z]" => "")
 end
 
 # issue #19891

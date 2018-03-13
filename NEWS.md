@@ -1099,6 +1099,9 @@ Deprecated or removed
     `show(IOContext(io, :compact => true), x...)` ([#26080]).
     Use `sprint(show, x..., context=:compact => true)` instead of `sprint(showcompact, x...)`.
 
+  * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
+    `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
+
 Command-line option changes
 ---------------------------
 
@@ -1397,3 +1400,4 @@ Command-line option changes
 [#26071]: https://github.com/JuliaLang/julia/issues/26071
 [#26080]: https://github.com/JuliaLang/julia/issues/26080
 [#26149]: https://github.com/JuliaLang/julia/issues/26149
+[#26442]: https://github.com/JuliaLang/julia/issues/26442

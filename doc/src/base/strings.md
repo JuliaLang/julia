@@ -53,8 +53,8 @@ Base.last(::AbstractString, ::Integer)
 Base.uppercase
 Base.lowercase
 Base.titlecase
-Base.ucfirst
-Base.lcfirst
+Base.uppercasefirst
+Base.lowercasefirst
 Base.join
 Base.chop
 Base.chomp
@@ -66,12 +66,12 @@ Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
-Base.islower
+Base.islowercase
 Base.isnumeric
 Base.isprint
 Base.ispunct
 Base.isspace
-Base.isupper
+Base.isuppercase
 Base.isxdigit
 Core.Symbol
 Base.escape_string
