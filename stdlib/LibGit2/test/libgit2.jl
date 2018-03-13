@@ -153,8 +153,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_SSH), f) > 0
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_HTTPS), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) > 0
 end
 
 @testset "OID" begin

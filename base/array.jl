@@ -1664,7 +1664,7 @@ julia> findfirst(iseven, A)
 
 julia> findfirst(x -> x>10, A) # returns nothing, but not printed in the REPL
 
-julia> findfirst(equalto(4), A)
+julia> findfirst(isequal(4), A)
 2
 
 julia> A = [1 4; 2 2]

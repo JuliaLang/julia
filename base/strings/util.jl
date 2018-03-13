@@ -269,10 +269,10 @@ split(str::T, splitter;
     _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
 split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+    _split(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 split(str::T, splitter::AbstractChar;
       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+    _split(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = 1 # firstindex(str)
@@ -336,10 +336,10 @@ rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractSt
     _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
 rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
        limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+  _rsplit(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 rsplit(str::T, splitter::AbstractChar;
        limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+  _rsplit(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     n = lastindex(str)
@@ -363,12 +363,12 @@ _replace(io, repl::Function, str, r, pattern::Function) =
     print(io, repl(str[first(r)]))
 
 replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
-    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+    replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
 
 replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
                                             AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
         count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count=count)
+    replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
 
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl

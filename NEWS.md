@@ -557,8 +557,8 @@ Library improvements
 
   * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
-  * New function `equalto(x)`, which returns a function that compares its argument to `x`
-    using `isequal` ([#23812]).
+  * `isequal`, `==`, and `in` have one argument "curried" forms. For example `isequal(x)`
+    returns a function that compares its argument to `x` using `isequal` ([#23812]).
 
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
@@ -1022,7 +1022,7 @@ Deprecated or removed
     `F.Q` instead of `F[:Q]` ([#25184]).
 
   * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
-    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
+    `findlast`/`findprev` respectively, in combination with curried `isequal` and `in`
     predicates for some methods ([#24673]
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
@@ -1033,7 +1033,7 @@ Deprecated or removed
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
 
-  * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
+  * `findin(a, b)` has been deprecated in favor of `findall(in(b), a)` ([#24673]).
 
   * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
     the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor

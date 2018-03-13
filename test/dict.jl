@@ -906,15 +906,15 @@ end
 end
 
 @testset "find" begin
-    @test findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test isempty(findall(equalto(1), Dict()))
-    @test isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+    @test findall(isequal(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test sort(findall(isequal(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test isempty(findall(isequal(1), Dict()))
+    @test isempty(findall(isequal(1), Dict(:a=>2, :b=>3)))
 
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>2)) == :a
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
-    @test findfirst(equalto(1), Dict()) === nothing
-    @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
+    @test findfirst(isequal(1), Dict()) === nothing
+    @test findfirst(isequal(1), Dict(:a=>2, :b=>3)) === nothing
 end
 
 @testset "Dict printing with limited rows" begin
