@@ -138,6 +138,33 @@ temp_pkg_dir() do project_path; cd(project_path) do
             @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
             Pkg3.test("UnregisteredWithoutProject")
             Pkg3.test("UnregisteredWithProject")
+        end # withenv
+    end # mktempdir
+    # nested
+    try
+        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        mktempdir() do other_dir
+            mktempdir() do tmp; cd(tmp) do
+                pkg"generate HelloWorld"
+                cd("HelloWorld") do
+                    pkg"generate SubModule1"
+                    pkg"generate SubModule2"
+                    pkg"develop SubModule1"
+                    mkdir("tests")
+                    cd("tests") do
+                        pkg"develop ../SubModule2"
+                    end
+                    @test Pkg3.installed()["SubModule1"] == v"0.1.0"
+                    @test Pkg3.installed()["SubModule2"] == v"0.1.0"
+                end
+                cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
+            end end
+            # Check that these didnt generate absolute paths in the Manifest by copying
+            # to another directory
+            cd(joinpath(other_dir, "HelloWorld")) do
+                @test locate_name("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
+                @test locate_name("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+            end
         end
     finally
         popfirst!(LOAD_PATH)

@@ -631,7 +631,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
 
         if isdir_windows_workaround(pkg.repo.url)
             # Developing a local package, just point `pkg.path` to it
-            pkg.path = pkg.repo.url
+            pkg.path = abspath(pkg.repo.url)
             folder_already_downloaded = true
             project_path = pkg.repo.url
             parse_package!(env, pkg, project_path)
@@ -1183,16 +1183,17 @@ end
 # Give a short path string representation
 pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
 
-function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd())
-    path = abspath(base, path)
-    if env isa EnvCache && env.git != nothing
-        LibGit2.with(LibGit2.GitRepo, LibGit2.path(env.git)) do repo
-            if startswith(base, repo)
-                # we're in the repo => path relative to pwd()
+function pathrepr(ctx::Union{Nothing, Context}, path::String, base::String=pwd())
+    if ctx isa Context
+        project_path = abspath(dirname(ctx.env.project_file))
+        path = joinpath(project_path, path)
+        if startswith(path, project_path)
+            # Path in project
+            if startswith(base, project_path)
+                # We are in project
                 path = relpath(path, base)
-            elseif startswith(path, repo)
-                # we're not in repo but path is => path relative to repo
-                path = relpath(path, repo)
+            else
+                path = relpath(path, project_path)
             end
         end
     end
@@ -1202,7 +1203,7 @@ function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd(
             path = joinpath("~", path[nextind(path, lastindex(home)):end])
         end
     end
-    return repr(path)
+    return "`" * path * "`"
 end
 
 function write_env(ctx::Context; display_diff=true)
@@ -1214,7 +1215,7 @@ function write_env(ctx::Context; display_diff=true)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
         if display_diff
-            printpkgstyle(ctx, :Updating, pathrepr(env, env.project_file))
+            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
             Pkg3.Display.print_project_diff(ctx, old_env, env)
         end
         if !ctx.preview
@@ -1227,7 +1228,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         if display_diff
-            printpkgstyle(ctx, :Updating, pathrepr(env, env.manifest_file))
+            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
             Pkg3.Display.print_manifest_diff(ctx, old_env, env)
         end
         manifest = deepcopy(env.manifest)
