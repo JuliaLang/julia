@@ -1676,7 +1676,7 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianIndices(2:5, 3:5)
+    R = CartesianIndices((2:5, 3:5))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
@@ -1701,8 +1701,8 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianIndices((3:5,-7:7)) == CartesianIndices(3:5,-7:7)
-    @test CartesianIndices((3,-7:7)) == CartesianIndices(3:3,-7:7)
+    @test CartesianIndices((3:5,-7:7)) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
+    @test CartesianIndices((3,-7:7)) == CartesianIndex.(3, reshape(-7:7, 1, :))
 end
 
 # All we really care about is that we have an optimized

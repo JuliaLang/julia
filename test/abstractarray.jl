@@ -116,13 +116,15 @@ end
 
 @testset "index conversion" begin
     @testset "0-dimensional" begin
-        @test LinearIndices()[1] == 1
-        @test_throws BoundsError LinearIndices()[2]
-        @test LinearIndices()[1,1] == 1
-        @test LinearIndices()[] == 1
-        @test size(LinearIndices()) == ()
-        @test CartesianIndices()[1] == CartesianIndex()
-        @test_throws BoundsError CartesianIndices()[2]
+        for i in ((), fill(0))
+            @test LinearIndices(i)[1] == 1
+            @test_throws BoundsError LinearIndices(i)[2]
+            @test LinearIndices(i)[1,1] == 1
+            @test LinearIndices(i)[] == 1
+            @test size(LinearIndices(i)) == ()
+            @test CartesianIndices(i)[1] == CartesianIndex()
+            @test_throws BoundsError CartesianIndices(i)[2]
+        end
     end
 
     @testset "1-dimensional" begin
@@ -149,8 +151,8 @@ end
             k += 1
             @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
-            @test LinearIndices(0:3,3:5)[i-1,j+2] == k
-            @test CartesianIndices(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
+            @test LinearIndices((0:3,3:5))[i-1,j+2] == k
+            @test CartesianIndices((0:3,3:5))[k] == CartesianIndex(i-1,j+2)
         end
         @test linear[linear] == linear
         @test linear[vec(linear)] == vec(linear)
@@ -170,14 +172,14 @@ end
             @test LinearIndices((4,3,2))[l] == l
             @test CartesianIndices((4,3,2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((4,3,2))[l] == CartesianIndex(i,j,k)
-            @test LinearIndices(1:4,1:3,1:2)[i,j,k] == l
-            @test LinearIndices(1:4,1:3,1:2)[l] == l
-            @test CartesianIndices(1:4,1:3,1:2)[i,j,k] == CartesianIndex(i,j,k)
-            @test CartesianIndices(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
-            @test LinearIndices(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
-            @test LinearIndices(0:3,3:5,-101:-100)[l] == l
-            @test CartesianIndices(0:3,3:5,-101:-100)[i,j,k] == CartesianIndex(i-1, j+2, k-102)
-            @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
+            @test LinearIndices((1:4,1:3,1:2))[i,j,k] == l
+            @test LinearIndices((1:4,1:3,1:2))[l] == l
+            @test CartesianIndices((1:4,1:3,1:2))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices((1:4,1:3,1:2))[l] == CartesianIndex(i,j,k)
+            @test LinearIndices((0:3,3:5,-101:-100))[i-1,j+2,k-102] == l
+            @test LinearIndices((0:3,3:5,-101:-100))[l] == l
+            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i-1, j+2, k-102)
+            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i-1, j+2, k-102)
         end
 
         local A = reshape(Vector(1:9), (3,3))
