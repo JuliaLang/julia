@@ -33,7 +33,7 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+Determine whether an object - such as a stream or timer
 -- is not yet closed. Once an object is closed, it will never produce a new event.
 However, since a closed stream may still have data to read in its buffer,
 use [`eof`](@ref) to check for the ability to read data.

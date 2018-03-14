@@ -113,14 +113,13 @@ julia> Meta.lower(@__MODULE__, :(f() = 1) )
 
 Inspecting the lowered form for functions requires selection of the specific method to display,
 because generic functions may have many methods with different type signatures. For this purpose,
-method-specific code-lowering is available using [`code_lowered(f::Function, (Argtypes...))`](@ref),
-and the type-inferred form is available using [`code_typed(f::Function, (Argtypes...))`](@ref).
-[`code_warntype(f::Function, (Argtypes...))`](@ref) adds highlighting to the output of [`code_typed`](@ref)
-(see [`@code_warntype`](@ref)).
+method-specific code-lowering is available using [`code_lowered`](@ref),
+and the type-inferred form is available using [`code_typed`](@ref).
+[`code_warntype`](@ref) adds highlighting to the output of [`code_typed`](@ref).
 
 Closer to the machine, the LLVM intermediate representation of a function may be printed using
-by [`code_llvm(f::Function, (Argtypes...))`](@ref), and finally the compiled machine code is available
-using [`code_native(f::Function, (Argtypes...))`](@ref) (this will trigger JIT compilation/code
+by [`code_llvm`](@ref), and finally the compiled machine code is available
+using [`code_native`](@ref) (this will trigger JIT compilation/code
 generation for any function which has not previously been called).
 
 For convenience, there are macro versions of the above functions which take standard function
@@ -137,4 +136,5 @@ top:
 }
 ```
 
-(likewise `@code_typed`, `@code_warntype`, `@code_lowered`, and `@code_native`)
+See [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
+[`@code_llvm`](@ref), and [`@code_native`](@ref).
