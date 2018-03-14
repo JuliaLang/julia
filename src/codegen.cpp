@@ -6264,15 +6264,6 @@ static GlobalVariable *julia_const_gv(jl_value_t *val)
     return nullptr;
 }
 
-static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
-{
-    Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
-    add_return_attr(f, Attribute::NonNull);
-    f->addFnAttr("thunk");
-    add_named_global(f, addr);
-    return f;
-}
-
 extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int specsig)
 {
     if (imaging_mode) {
@@ -6291,7 +6282,8 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
             funcName << "jsys1_"; // it's a jlcall without a specsig
         const char* unadorned_name = jl_symbol_name(lam->def.method->name);
         funcName << unadorned_name << "_" << globalUnique++;
-        Function *f = jlcall_func_to_llvm(funcName.str(), fptr, NULL);
+        Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, funcName.str());
+        add_named_global(f, fptr);
         if (specsig) {
             if (lam->functionObjectsDecls.specFunctionObject == NULL) {
                 lam->functionObjectsDecls.specFunctionObject = strdup(f->getName().str().c_str());
@@ -6333,6 +6325,15 @@ static void init_julia_llvm_meta(void)
     tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
     tbaa_arrayselbyte = tbaa_make_child("jtbaa_arrayselbyte", tbaa_array_scalar).first;
     tbaa_unionselbyte = tbaa_make_child("jtbaa_unionselbyte", tbaa_data_scalar).first;
+}
+
+static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
+{
+    Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
+    add_return_attr(f, Attribute::NonNull);
+    f->addFnAttr("thunk");
+    add_named_global(f, addr);
+    return f;
 }
 
 static void init_julia_llvm_env(Module *m)
