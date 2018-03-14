@@ -387,7 +387,7 @@ CXX := $(CROSS_COMPILE)g++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti
+JCXXFLAGS :=  -D_GLIBCXX_USE_C99 -pipe $(fPIC) -fno-rtti
 ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
