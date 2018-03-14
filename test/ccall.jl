@@ -1250,9 +1250,9 @@ end
 @noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
 @test code_llvm(devnull, f21104at, (Type{Float64},)) === nothing
 @test code_llvm(devnull, f21104rt, (Type{Float64},)) === nothing
-@test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
+@test_throws(ErrorException("ccall argument 1 doesn't correspond to a C type"),
              f21104at(Float64))
-@test_throws(ErrorException("ccall: return type doesn't correspond to a C type"),
+@test_throws(ErrorException("ccall return type doesn't correspond to a C type"),
              f21104rt(Float64))
 
 # test for malformed syntax errors
@@ -1286,8 +1286,18 @@ evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::
 evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = cfunction(
     evalf_callback_19805, Float64, Tuple{callinfos_19805{FUNC_FT}})
 
-@test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
+@test_throws(ErrorException("cfunction argument 1 doesn't correspond to a C type"),
              evalf_callback_c_19805( callinfos_19805(sin) ))
+@test_throws(ErrorException("cfunction argument 2 doesn't correspond to a C type"),
+             cfunction(+, Int, Tuple{Int, Nothing}))
+@test_throws(ErrorException("cfunction: Vararg syntax not allowed for cfunction argument list"),
+             cfunction(+, Int, Tuple{Vararg{Int}}))
+@test_throws(ErrorException("cfunction: argument type Ref should have an element type, not Ref{<:T}"),
+             cfunction(+, Int, Tuple{Ref{T}, Ref{T}}) where T)
+@test_throws(ErrorException("cfunction: return type Ref should have an element type, not Ref{<:T}"),
+             cfunction(+, Ref{T}, Tuple{Int, Int}) where T)
+@test_throws(ErrorException("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead."),
+             cfunction(+, Ref{Any}, Tuple{Int, Int}))
 
 # test Ref{abstract_type} calling parameter passes a heap box
 abstract type Abstract22734 end

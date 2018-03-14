@@ -245,7 +245,6 @@ Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname
-Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
@@ -291,7 +290,6 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
-Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -336,6 +334,7 @@ Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
+Meta.ParseError
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

@@ -19,7 +19,7 @@ the symbol).
 #
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
-import REPL
+import REPL, Markdown
 const NBSP = '\u00A0'
 
 function tab_completions(symbols...)
