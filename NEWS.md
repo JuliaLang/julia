@@ -461,6 +461,11 @@ Library improvements
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
 
+  * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
+    inputs, it "steals" the memory buffer, leaving them with an empty buffer which
+    is guaranteed not to be shared with the `String` object. For other types of vectors
+    (in particular immutable vectors), a copy is made and the input is not truncated ([#26093]).
+
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
   * Introduced the `empty` function, the functional pair to `empty!` which returns a new,
@@ -1398,6 +1403,7 @@ Command-line option changes
 [#26009]: https://github.com/JuliaLang/julia/issues/26009
 [#26071]: https://github.com/JuliaLang/julia/issues/26071
 [#26080]: https://github.com/JuliaLang/julia/issues/26080
+[#26093]: https://github.com/JuliaLang/julia/issues/26093
 [#26149]: https://github.com/JuliaLang/julia/issues/26149
 [#26154]: https://github.com/JuliaLang/julia/issues/26154
 [#26156]: https://github.com/JuliaLang/julia/issues/26156

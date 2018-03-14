@@ -3,8 +3,21 @@
 using Random
 
 @testset "constructors" begin
-    @test String([0x61,0x62,0x63,0x21]) == "abc!"
+    v = [0x61,0x62,0x63,0x21]
+    @test String(v) == "abc!" && isempty(v)
     @test String("abc!") == "abc!"
+    @test String(0x61:0x63) == "abc"
+
+    # Check that resizing empty source vector does not corrupt string
+    b = IOBuffer()
+    write(b, "ab")
+    x = take!(b)
+    s = String(x)
+    resize!(x, 0)
+    empty!(x) # Another method which must be tested
+    @test s == "ab"
+    resize!(x, 1)
+    @test s == "ab"
 
     @test isempty(string())
     @test eltype(GenericString) == Char
