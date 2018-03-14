@@ -173,9 +173,6 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
             new_stmt = ssaargmap(rename, stmt)
         end
         if haskey(mapping, idx)
-            if isa(new_stmt, Expr)
-                new_stmt.typ = code.types[idx]
-            end
             new_stmt = Expr(:(=), SSAValue(mapping[idx]), new_stmt)
         end
         # record fixup targets
@@ -193,8 +190,9 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
         end
         if isa(val, PhiNode)
             # Translate from BB edges to statement edges
-            edges = Any[terminator_mapping[edge] for edge in val.edges]
-            val = PhiNode(convert(Vector{Any}, edges), val.values)
+            edges = Any[edge == 0 ? 0 : terminator_mapping[edge] for edge in val.edges]
+            @assert all(x->x >= 0, edges)
+            val = PhiNode(convert(Vector{Any}, edges), copy(val.values))
         elseif isa(val, GotoNode)
             val = GotoNode(label_mapping[val.label])
         elseif isexpr(val, :gotoifnot)

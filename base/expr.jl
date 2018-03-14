@@ -40,6 +40,14 @@ copy(e::Expr) = (n = Expr(e.head);
 # copy parts of an AST that the compiler mutates
 copy_exprs(x::Expr) = copy(x)
 copy_exprs(@nospecialize(x)) = x
+function copy_exprs(x::PhiNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.edges)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    PhiNode(copy(x.edges), new_values)
+end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
