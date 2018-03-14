@@ -689,7 +689,6 @@ export
     trylock,
     unlock,
     yield,
-    yieldto,
     wait,
     timedwait,
     asyncmap,

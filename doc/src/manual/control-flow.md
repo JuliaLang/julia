@@ -7,7 +7,7 @@ Julia provides a variety of control flow constructs:
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
   * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
-  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
+  * [Tasks (aka Coroutines)](@ref man-tasks): [`schedule`](@ref).
 
 The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
 are not so standard: they provide non-local control flow, making it possible to switch between
@@ -918,27 +918,28 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
+Task switching is based on a low level, internal construct called `yieldto`.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
+that task's last `yieldto` call to return the specified `value`. Notice that `yieldto`
 is the only operation required to use task-style control flow; instead of calling and returning
 we are always just switching to a different task. This is why this feature is also called "symmetric
 coroutines"; each task is switched to and from using the same mechanism.
 
-[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
+`yieldto` is powerful, but is not used explicitly in Julia's task API. Consider why
 this might be. If you switch away from the current task, you will probably want to switch back
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
 of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
-are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
-easier to use than the low-level [`yieldto`](@ref).
+(blocking operations on channels) need to maintain state to remember who the consumers are.
+Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
+easier to use than the low-level `yieldto`.
 
-In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
+The following basic functions are needed to use tasks effectively:
 
   * [`current_task`](@ref) gets a reference to the currently-running task.
   * [`istaskdone`](@ref) queries whether a task has exited.
   * [`istaskstarted`](@ref) queries whether a task has run yet.
   * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
+  * [`schedule`](@ref) hands a task to the scheduler so it can begin execution.
 
 ### Tasks and events
 
@@ -958,8 +959,8 @@ The scheduler will then pick another task to run, or block waiting for external 
 goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
 tasks waiting for that condition to become runnable again.
 
-A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
+A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler.
+However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
 waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)

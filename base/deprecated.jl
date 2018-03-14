@@ -1518,6 +1518,9 @@ end
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
 
+@deprecate yieldto(t::Task)    (schedule(t); yield())
+@deprecate yieldto(t::Task, x) (schedule(t,x); yield())
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -52,7 +52,7 @@ end
 
 let ct = current_task()
     # After a task switch, there should be nothing in catch_backtrace
-    yieldto(@task yieldto(ct))
+    Base._yieldto(@task Base._yieldto(ct))
     @test catch_backtrace() == StackFrame[]
 
     @noinline bad_function() = throw(UndefVarError(:nonexistent))

@@ -233,7 +233,7 @@ end
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
-    garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
+    garbage_finalizer((x) -> (run[] += 1; schedule(@task () -> ()); yield()))
     t = @task begin
         GC.enable(true)
         GC.gc()
