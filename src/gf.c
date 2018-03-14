@@ -463,7 +463,7 @@ static void foreach_mtable_in_module(
                     jl_typename_t *tn = ((jl_datatype_t*)v)->name;
                     if (tn->module == m && tn->name == b->name) {
                         jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL && (jl_value_t*)mt != jl_nothing) {
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt) {
                             visit(mt, env);
                         }
                     }
@@ -487,6 +487,7 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
     jl_array_t *mod_array = NULL;
     JL_GC_PUSH2(&visited, &mod_array);
     mod_array = jl_get_loaded_modules();
+    visit(jl_type_type_mt, env);
     if (mod_array) {
         int i;
         for (i = 0; i < jl_array_len(mod_array); i++) {
