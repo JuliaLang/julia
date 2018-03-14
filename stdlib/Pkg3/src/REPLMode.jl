@@ -752,11 +752,7 @@ end
 
 function complete_command(s, i1, i2)
     cmp = filter(cmd -> startswith(cmd, s), commands_sorted)
-    if length(cmp) == 1
-        return cmp, i1:i2, true
-    else
-        return cmp, 0:-1, false
-    end
+    return cmp, i1:i2, length(cmp) == 1
 end
 
 function complete_option(s, i1, i2)
@@ -780,8 +776,17 @@ function complete_option(s, i1, i2)
 end
 
 function complete_package(s, i1, i2, lastcommand)
-    # to be implemented
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+        return complete_installed_package(s, i1, i2)
+    end
     return [], 0:-1, false
+end
+
+import .API
+function complete_installed_package(s, i1, i2)
+    ips = collect(keys(filter((p) -> p[2] != nothing, API.installed())))
+    cmp = filter(cmd -> startswith(cmd, s), ips)
+    return cmp, i1:i2, length(cmp) == 1
 end
 
 function completions(full, index)
@@ -800,13 +805,15 @@ function completions(full, index)
         end
 
         twocommands = false
-        lastcommand = ""
+        lastcommand = nothing
         # this should consume any words up to the current one
         while length(pre_words) > 1
             twocommands = false
             word = popfirst!(pre_words)
             (word == "preview" || word == "help") && (twocommands = true)
-            (!isempty(word) && first(word) != '-') && (lastcommand = word)
+            if !isempty(word) && haskey(cmds, word)
+                lastcommand = cmds[word]
+            end
         end
 
         if twocommands
