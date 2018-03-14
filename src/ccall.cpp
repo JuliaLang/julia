@@ -1325,11 +1325,11 @@ std::string generate_func_sig(const char *fname)
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
 #if JL_LLVM_VERSION >= 50000
-                paramattrs.push_back(std::copy(ab));
+                AttributeSet params = AttributeSet::get(jl_LLVMContext, ab);
 #else
                 AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
-                paramattrs.push_back(params);
 #endif
+                paramattrs.push_back(params);
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
