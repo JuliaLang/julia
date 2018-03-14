@@ -4,7 +4,8 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-print_ssa(io::IO, val) = isa(val, SSAValue) ? print(io, "%$(val.id)") : print(io, val)
+print_ssa(io::IO, val) = isa(val, SSAValue) ? print(io, "%$(val.id)") :
+                         isa(val, Argument) ? print(io, "%%$(val.n)") : print(io, val)
 function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
@@ -76,7 +77,14 @@ function Base.show(io::IO, code::IRCode)
     bb_idx = 1
     perm = sortperm(code.new_nodes, by = x->x[1])
     new_nodes_perm = Iterators.Stateful(perm)
-    for (idx, stmt) in Iterators.enumerate(code.stmts)
+    for idx in Iterators.eachindex(code.stmts)
+        if !isassigned(code.stmts, idx)
+            # This is invalid, but do something useful rather
+            # than erroring, to make debugging easier
+            printstyled(:red, "UNDEF\n")
+            continue
+        end
+        stmt = code.stmts[idx]
         bbrange = cfg.blocks[bb_idx].stmts
         bbrange = bbrange.first:bbrange.last
         bb_pad = max_bb_idx_size - length(string(bb_idx))
@@ -126,6 +134,12 @@ function Base.show(io::IO, code::IRCode)
         end
         if idx == last(bbrange)
             bb_idx += 1
+        end
+        if !isassigned(code.types, idx)
+            # Again, this is an error, but can happen if passes don't update their type information
+            printstyled(io, "::UNDEF", color=:red)
+            println(io)
+            continue
         end
         typ = code.types[idx]
         print_ssa_typ = !isa(stmt, PiNode) && idx in used

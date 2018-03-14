@@ -226,7 +226,7 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     return widenconst(frame.bestguess)
 end
 
-function typeinf_ext(linfo::MethodInstance, world::UInt)
+@timeit function typeinf_ext(linfo::MethodInstance, world::UInt)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
         return typeinf_code(linfo, true, true, Params(world))

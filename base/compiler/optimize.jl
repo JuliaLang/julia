@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("compiler/ssair/driver.jl")
-
 #####################
 # OptimizationState #
 #####################
@@ -70,6 +68,8 @@ function OptimizationState(linfo::MethodInstance, params::Params)
     src === nothing && return nothing
     return OptimizationState(linfo, src, params)
 end
+
+include("compiler/ssair/driver.jl")
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
@@ -284,8 +284,6 @@ function optimize(me::InferenceState)
         # This (and `reindex_labels!`) needs to be run for `!me.optimize`
         # if we start to create `SSAValue` in type inference when not
         # optimizing and use unoptimized IR in codegen.
-        gotoifnot_elim_pass!(opt)
-        inlining_pass!(opt, opt.src.propagate_inbounds)
         any_enter = any_phi = false
         if enable_new_optimizer[]
             any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
@@ -300,11 +298,13 @@ function optimize(me::InferenceState)
                 topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
             end
             linetable = [topline]
-            ir = run_passes(opt.src, nargs, linetable)
-            replace_code!(opt.src, ir, nargs, linetable)
+            @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
+            @timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
             push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
             any_phi = true
-        elseif !any_phi
+        elseif false # !any_phi
+            gotoifnot_elim_pass!(opt)
+            inlining_pass!(opt, opt.src.propagate_inbounds)
             # Clean up after inlining
             gotoifnot_elim_pass!(opt)
             basic_dce_pass!(opt)
@@ -1500,7 +1500,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     end
                 end
                 edges = Any[newlabels[edge::Int + 1] - 1 for edge in edges]
-                a.args[2] = PhiNode(edges, a.args[2].values)
+                a.args[2] = PhiNode(edges, copy_exprargs(a.args[2].values))
             elseif a.head === :meta && length(a.args) > 0
                 a1 = a.args[1]
                 if a1 === :push_loc
@@ -4222,6 +4222,7 @@ function reindex_labels!(body::Vector{Any})
             elseif el.head === :(=)
                 if isa(el.args[2], PhiNode)
                     edges = Any[mapping[edge::Int + 1] - 1 for edge in el.args[2].edges]
+                    @assert all(x->x >= 0, edges)
                     el.args[2] = PhiNode(convert(Vector{Any}, edges), el.args[2].values)
                 end
             end
