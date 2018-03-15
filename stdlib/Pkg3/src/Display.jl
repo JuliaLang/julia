@@ -63,8 +63,8 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             if !use_as_api
-                printpkgstyle(ctx, :Status, pathrepr(env, env.project_file); ignore_indent=true)
-                print_diff(c_diff)
+                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
+                print_diff(ctx, c_diff)
             end
             diff = Base.vcat(c_diff, diff)
         end
