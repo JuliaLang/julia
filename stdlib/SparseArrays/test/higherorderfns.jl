@@ -331,6 +331,11 @@ end
                 ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
             # test broadcast entry point
             @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+            if !isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+                @show map(typeof, sparseargs)
+                @show SparseMatrixCSC{elT}
+                @show typeof(broadcast(*, sparseargs...))
+            end
             @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
             # test broadcast! entry point
             fX = broadcast(*, sparseargs...); X = sparse(fX)
@@ -554,6 +559,30 @@ end
     @test spzeros(1,0) .* spzeros(2,1) == zeros(2,0)
     @test spzeros(1,2) .+ spzeros(0,1) == zeros(0,2)
     @test spzeros(1,2) .* spzeros(0,1) == zeros(0,2)
+end
+
+@testset "sparse vector broadcast of two arguments" begin
+    sv1, sv5 = sprand(1, 1.), sprand(5, 1.)
+    for (sa, sb) in ((sv1, sv1), (sv1, sv5), (sv5, sv1), (sv5, sv5))
+        fa, fb = Vector(sa), Vector(sb)
+        for f in (+, -, *, min, max)
+            @test @inferred(broadcast(f, sa, sb))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, Vector(sa), sb))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, sa, Vector(sb)))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, SparseMatrixCSC(sa), sb))::SparseMatrixCSC == broadcast(f, reshape(fa, Val(2)), fb)
+            @test @inferred(broadcast(f, sa, SparseMatrixCSC(sb)))::SparseMatrixCSC == broadcast(f, fa, reshape(fb, Val(2)))
+            if length(fa) == length(fb)
+                @test @inferred(map(f, sa, sb))::SparseVector == broadcast(f, fa, fb)
+            end
+        end
+        if length(fa) == length(fb)
+            for f in (+, -)
+                @test @inferred(f(sa, sb))::SparseVector == f(fa, fb)
+                @test @inferred(f(Vector(sa), sb))::SparseVector == f(fa, fb)
+                @test @inferred(f(sa, Vector(sb)))::SparseVector == f(fa, fb)
+            end
+        end
+    end
 end
 
 @testset "aliasing and indexed assignment or broadcast!" begin
