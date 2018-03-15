@@ -804,7 +804,7 @@ end
     @deprecate_stdlib svdvals!    LinearAlgebra true
     @deprecate_stdlib svdvals     LinearAlgebra true
     @deprecate_stdlib sylvester   LinearAlgebra true
-    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true tr
     @deprecate_stdlib transpose!  LinearAlgebra true
     # @deprecate_stdlib transpose   LinearAlgebra true
     @deprecate_stdlib tril!       LinearAlgebra true
