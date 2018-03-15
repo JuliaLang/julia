@@ -666,7 +666,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                 end
                 registry_resolve!(localctx.env, pkgs)
                 ensure_resolved(localctx.env, pkgs; registry=true)
-                add(localctx, pkgs)
+                add_or_develop(localctx, pkgs)
                 need_to_resolve = false # add resolves
             end
         end

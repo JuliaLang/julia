@@ -34,6 +34,8 @@ mktempdir() do project_path
                 @eval using HelloWorld
                 Base.invokelatest(HelloWorld.greet)
                 @test isfile("Project.toml")
+                Pkg3.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
+                Pkg3.test("PackageWithBuildSpecificTestDeps")
             end
         finally
             pop!(LOAD_PATH)
