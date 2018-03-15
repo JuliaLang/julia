@@ -924,17 +924,19 @@ function registries(depot::String)::Vector{String}
 end
 
 # Return paths of all registries in all depots
-function registries()::Vector{String}
+function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
-    if !ispath(user_regs)
-        mkpath(user_regs)
-        printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
-        for (reg, url) in DEFAULT_REGISTRIES
-            printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
-            path = joinpath(user_regs, reg)
-            repo = LibGit2.clone(url, path)
-            close(repo)
+    if clone_default
+        if !ispath(user_regs)
+            mkpath(user_regs)
+            printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
+            for (reg, url) in DEFAULT_REGISTRIES
+                printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
+                path = joinpath(user_regs, reg)
+                repo = LibGit2.clone(url, path)
+                close(repo)
+            end
         end
     end
     return [r for d in depots() for r in registries(d)]
