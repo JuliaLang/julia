@@ -7,22 +7,23 @@ The easiest way to learn and experiment with Julia is by starting an interactive
 known as a read-eval-print loop or "REPL") by double-clicking the Julia executable or running
 `julia` from the command line:
 
+```@eval
+io = IOBuffer()
+Base.banner(io)
+banner = String(take!(io))
+import Markdown
+Markdown.parse("""
 ```
-$ julia
-               _
-   _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "?help" for help.
-  | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version 0.7.0-DEV.4480 (2018-03-07 11:38 UTC)
- _/ |\__'_|_|_|\__'_|  |  Commit fa462ba112 (5 days old master)
-|__/                   |  x86_64-apple-darwin14.5.0
+\$ julia
 
+$(banner)
 julia> 1 + 2
 3
 
 julia> ans
 3
+```
+""")
 ```
 
 To exit the interactive session, type `CTRL-D` (press the Control/`^` key together with the `d` key), or type
@@ -66,7 +67,7 @@ foo
 bar
 ```
 
-The `--` delimiter can be used to separate command-line arguments for the script file from arguments for Julia:
+The `--` delimiter can be used to separate command-line arguments intended for the script file from arguments intended for Julia:
 
 ```
 $ julia --color=yes -O -- foo.jl arg1 arg2..
