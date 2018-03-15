@@ -41,7 +41,7 @@ end
 const node1_tests = String[]
 function move_to_node1(t)
     if t in tests
-        splice!(tests, findfirst(equalto(t), tests))
+        splice!(tests, findfirst(isequal(t), tests))
         push!(node1_tests, t)
     end
 end
@@ -287,7 +287,7 @@ cd(dirname(@__FILE__)) do
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
-        println("The global RNG seed was 0x$(hex(seed)).\n")
+        println("The global RNG seed was 0x$(string(seed, base = 16)).\n")
         Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end

@@ -72,7 +72,7 @@ end
 
 function plain(io::IO, md::Admonition)
     s = sprint(plain, md.content)
-    title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
+    title = md.title == uppercasefirst(md.category) ? "" : " \"$(md.title)\""
     println(io, "!!! ", md.category, title)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "    ", line)

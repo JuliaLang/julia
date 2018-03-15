@@ -179,7 +179,7 @@ srand(1)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @test_throws DimensionMismatch T\transpose(b)
             end
-            offsizemat = Matrix{elty}(uninitialized, n+1, 2)
+            offsizemat = Matrix{elty}(undef, n+1, 2)
             @test_throws DimensionMismatch T \ offsizemat
             @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
@@ -196,7 +196,7 @@ srand(1)
                 end
                 x = T \ b
                 tx = Tfull \ b
-                @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(uninitialized,n+1))
+                @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b

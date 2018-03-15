@@ -78,13 +78,13 @@ unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.i
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
 function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
-    dest = Array{T}(uninitialized, index_lengths(V.indices...))
+    dest = Array{T}(undef, index_lengths(V.indices...))
     copyto!(dest, V)
     SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
 end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = i
+_trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
 _trimmedindex(i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 ## SubArray creation
@@ -266,6 +266,8 @@ compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
+elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false
 iscontiguous(::Type{<:FastContiguousSubArray}) = true
@@ -350,7 +352,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Vector{Int}(uninitialized, nd)
+    dimindex = Vector{Int}(undef, nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1

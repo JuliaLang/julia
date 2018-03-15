@@ -12,8 +12,8 @@ using Base.Sort: Forward
 using LinearAlgebra
 
 import Base: +, -, *, \, /, &, |, xor, ==
-import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, diff, dot, eig,
-    issymmetric, istril, istriu, lu, trace, transpose!, tril!, triu!,
+import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, dot, eig,
+    issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
     vecnorm, cond, diagm, factorize, ishermitian, norm, lmul!, rmul!, tril, triu
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
@@ -28,12 +28,12 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     vcat, hcat, hvcat, cat, imag, argmax, kron, length, log, log1p, max, min,
     maximum, minimum, one, promote_eltype, real, reshape, rot180,
     rotl90, rotr90, round, setindex!, similar, size, transpose,
-    vec, permute!, map, map!, Array
+    vec, permute!, map, map!, Array, diff
 
 using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
-    SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
+    SparseMatrixCSC, SparseVector, blockdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
     sprand, sprandn, spzeros, nnz, permute, findnz
 

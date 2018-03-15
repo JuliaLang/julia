@@ -589,3 +589,9 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# issue #26310
+@test_warn "could not import" eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn eval(Main, :(import .Main))
+@test_nowarn eval(Main, :(import ....Main))

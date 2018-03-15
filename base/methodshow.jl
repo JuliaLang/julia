@@ -11,7 +11,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = findfirst(equalto('#'), s)
+    i = findfirst(isequal('#'), s)
     if i !== nothing
         s = s[1:i-1]
     end
@@ -46,7 +46,7 @@ function method_argnames(m::Method)
     if !isdefined(m, :source) && isdefined(m, :generator)
         return m.generator.argnames
     end
-    argnames = Vector{Any}(uninitialized, m.nargs)
+    argnames = Vector{Any}(undef, m.nargs)
     ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
     return argnames
 end

@@ -43,7 +43,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
+        p = run(detach(cmd), slave, slave, slave, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -153,8 +153,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_SSH), f) > 0
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_HTTPS), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) > 0
 end
 
 @testset "OID" begin
@@ -778,7 +778,7 @@ mktempdir() do dir
                     @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
-                    @test hex(commit_oid1) == hex(short_oid1)
+                    @test string(commit_oid1) == string(short_oid1)
                     @test cmp(commit_oid1, short_oid1) == 0
                     @test cmp(short_oid1, commit_oid1) == 0
                     @test !(short_oid1 < commit_oid1)
@@ -787,7 +787,7 @@ mktempdir() do dir
                     short_str = sprint(show, short_oid1)
                     @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
                     short_oid2 = LibGit2.GitShortHash(cmt)
-                    @test startswith(hex(commit_oid1), hex(short_oid2))
+                    @test startswith(string(commit_oid1), string(short_oid2))
 
                     LibGit2.with(LibGit2.GitCommit(repo, short_oid2)) do cmt2
                         @test commit_oid1 == LibGit2.GitHash(cmt2)
@@ -985,7 +985,7 @@ mktempdir() do dir
             LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
                 # this is slightly dubious, as it assumes the object has not been packed
                 # could be replaced by another binary format
-                hash_string = hex(commit_oid1)
+                hash_string = string(commit_oid1)
                 blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
 
                 id = LibGit2.addblob!(repo, blob_file)
@@ -2703,7 +2703,7 @@ mktempdir() do dir
                 # certificate. The minimal server can't actually serve a Git repository.
                 mkdir(joinpath(root, "Example.jl"))
                 pobj = cd(root) do
-                    spawn(`openssl s_server -key $key -cert $cert -WWW -accept $port`)
+                    run(`openssl s_server -key $key -cert $cert -WWW -accept $port`, wait=false)
                 end
 
                 errfile = joinpath(root, "error")

@@ -24,7 +24,7 @@ struct PhiNode
 end
 ```
 where we ensure that both vectors always have the same length. In the canonical representation (the one
-handles by codegen and the interpreter), the edge values indicate crom-from statement numbers (i.e.
+handles by codegen and the interpreter), the edge values indicate come-from statement numbers (i.e.
 if edge has an entry of `15`, there must be a `goto`, `gotoifnot` or implicit fall through from
 statement `15` that targets this phi node). Values are either SSA values or constants. It is also
 possible for a value to be unassigned if the variable was not defined on this path. However, undefinedness
@@ -38,7 +38,7 @@ phi node. They are conceptually equivalent to the technique introduced in the pa
 "ABCD: Eliminating Array Bounds Checks on Demand" or the predicate info nodes in LLVM. To see how they work, consider,
 e.g.
 
-```
+```julia
 %x::Union{Int, Float64} # %x is some Union{Int, Float64} typed ssa value
 if isa(x, Int)
     # use x
@@ -49,7 +49,7 @@ end
 
 we can perform predicate insertion and turn this into:
 
-```
+```julia
 %x::Union{Int, Float64} # %x is some Union{Int, Float64} typed ssa value
 if isa(x, Int)
     %x_int = PiNode(x, Int)
@@ -80,13 +80,16 @@ all its uses without explicitly computing this map - def lists however are trivi
 corresponding statement from the index), so the LLVM-style RAUW (replace-all-uses-with) operation is unavailable.
 
 Instead, we do the following:
-    - We keep a separate buffer of nodes to insert (including the position to insert them at, the type of the
-      corresponding value and the node itself). These nodes are numbered by their occurrence in the insertion
-      buffer, allowing their values to be immediately used elesewhere in the IR (i.e. if there is 12 statements in
-      the original statement list, the first new statement will be accessible as `SSAValue(13)`)
-    - RAUW style operations are performed by setting the corresponding statement index to the replacement
-      value.
-    - Statements are erased by setting the corresponding statement to `nothing` (this is essentially just a special-case      convention of the above - if there are any uses of the statement being erased they will be set to `nothing`)
+
+- We keep a separate buffer of nodes to insert (including the position to insert them at, the type of the
+  corresponding value and the node itself). These nodes are numbered by their occurrence in the insertion
+  buffer, allowing their values to be immediately used elesewhere in the IR (i.e. if there is 12 statements in
+  the original statement list, the first new statement will be accessible as `SSAValue(13)`)
+- RAUW style operations are performed by setting the corresponding statement index to the replacement
+  value.
+- Statements are erased by setting the corresponding statement to `nothing` (this is essentially just a special-case
+  convention of the above
+- if there are any uses of the statement being erased they will be set to `nothing`)
 
 There is a `compact!` function that compacts the above data structure by performing the insertion of nodes in the appropriate place, trivial copy propagation and renaming of uses to any changed SSA values. However, the clever part
 of this scheme is that this compaction can be done lazily as part of the subsequent pass. Most optimization passes

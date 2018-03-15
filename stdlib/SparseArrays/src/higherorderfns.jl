@@ -153,14 +153,14 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) 
 @inline _checked_maxnnzbcres(shape::NTuple{1}, As...) = shape[1] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline _checked_maxnnzbcres(shape::NTuple{2}, As...) = shape[1] != 0 && shape[2] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline function _allocres(shape::NTuple{1}, indextype, entrytype, maxnnz)
-    storedinds = Vector{indextype}(uninitialized, maxnnz)
-    storedvals = Vector{entrytype}(uninitialized, maxnnz)
+    storedinds = Vector{indextype}(undef, maxnnz)
+    storedvals = Vector{entrytype}(undef, maxnnz)
     return SparseVector(shape..., storedinds, storedvals)
 end
 @inline function _allocres(shape::NTuple{2}, indextype, entrytype, maxnnz)
-    pointers = Vector{indextype}(uninitialized, shape[2] + 1)
-    storedinds = Vector{indextype}(uninitialized, maxnnz)
-    storedvals = Vector{entrytype}(uninitialized, maxnnz)
+    pointers = Vector{indextype}(undef, shape[2] + 1)
+    storedinds = Vector{indextype}(undef, maxnnz)
+    storedvals = Vector{entrytype}(undef, maxnnz)
     return SparseMatrixCSC(shape..., pointers, storedinds, storedvals)
 end
 # Ambiguity killers, TODO: nix conflicting specializations
@@ -973,7 +973,7 @@ broadcast(f::Tf, A::SparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast(x -> f(
 # and rebroadcast. otherwise, divert to generic AbstractArray broadcast code.
 
 struct PromoteToSparse <: Broadcast.AbstractArrayStyle{2} end
-StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
+const StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
 Broadcast.BroadcastStyle(::Type{<:StructuredMatrix}) = PromoteToSparse()
 
 PromoteToSparse(::Val{0}) = PromoteToSparse()
@@ -988,8 +988,10 @@ Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcas
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{0}) = PromoteToSparse()
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
 # Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
-BroadcastStyle(::Type{<:Adjoint{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
-BroadcastStyle(::Type{<:Transpose{T,<:Vector}}) where T = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
+Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Vector} where T}) = Broadcast.MatrixStyle() # Adjoint not yet defined when broadcast.jl loaded
+Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Vector} where T}) = Broadcast.MatrixStyle() # Transpose not yet defined when broadcast.jl loaded
+Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
+Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.VectorStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.MatrixStyle) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.DefaultArrayStyle{N}) where N =

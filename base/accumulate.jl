@@ -21,7 +21,7 @@ struct Accumulate{O,V,I}
     v0::V
     iter::I
 end
-Accumulate(op, iter) = Accumulate(op, uninitialized, iter) # use `uninitialized` as a sentinel
+Accumulate(op, iter) = Accumulate(op, undef, iter) # use `undef` as a sentinel
 
 # the following is largely based on Generator objects
 Base.IteratorEltype(acc::Accumulate) = EltypeUnknown()
@@ -101,7 +101,7 @@ julia> accumulate(+, fill(1, 3, 3); dims=2)
  1  2  3
 ```
 """
-accumulate(op, itr; dims::Union{Nothing,Integer}=nothing) = accumulate(op, uninitialized, itr; dims=dims)
+accumulate(op, itr; dims::Union{Nothing,Integer}=nothing) = accumulate(op, undef, itr; dims=dims)
 accumulate(op, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate(op, v0, itr, IteratorSize(itr), dims)
 
 function _accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
@@ -154,8 +154,8 @@ julia> B
  3  -1
 ```
 """
-accumulate!(op, dest, itr; dims::Union{Nothing,Integer}=nothing) = accumulate!(op, dest, uninitialized, itr; dims=dims)
-accumulate!(op, dest, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate!(op, dest, uninitialized, itr, IteratorSize(itr), dims)
+accumulate!(op, dest, itr; dims::Union{Nothing,Integer}=nothing) = accumulate!(op, dest, undef, itr; dims=dims)
+accumulate!(op, dest, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate!(op, dest, undef, itr, IteratorSize(itr), dims)
 
 function _accumulate!(op, dest, v0, x, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
     src = Accumulate(op, v0, x)
@@ -309,7 +309,7 @@ approach, which can be more numerically accurate for certain operations, such as
 It involves roughly double the number of `op` calls, but for cheap operations like `+`
 this does not have much impact (approximately 20%).
 """
-accumulate_pairwise(op, itr) = accumulate_pairwise(op, uninitialized, itr)
+accumulate_pairwise(op, itr) = accumulate_pairwise(op, undef, itr)
 accumulate_pairwise(op, v0, itr) =  accumulate_pairwise(op, v0, itr, IteratorSize(itr))
 function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
     i = start(itr)
@@ -340,7 +340,7 @@ function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
     end
 end
 
-accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, uninitialized, itr)
+accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, undef, itr)
 function accumulate_pairwise!(op, Y, v0, itr)
     L = linearindices(Y)
     L == linearindices(itr) || throw(DimensionMismatch("indices of source and destination must match"))
@@ -513,9 +513,9 @@ julia> cumprod(fill(1//2, 3))
 
 julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
 3-element Array{Array{Rational{Int64},2},1}:
- Rational{Int64}[1//3 1//3; 1//3 1//3]
- Rational{Int64}[2//9 2//9; 2//9 2//9]
- Rational{Int64}[4//27 4//27; 4//27 4//27]
+ [1//3 1//3; 1//3 1//3]
+ [2//9 2//9; 2//9 2//9]
+ [4//27 4//27; 4//27 4//27]
 
 julia> a = [1 2 3; 4 5 6]
 2×3 Array{Int64,2}:

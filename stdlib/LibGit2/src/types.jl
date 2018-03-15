@@ -469,7 +469,7 @@ The fields represent:
      flags. The `i`th bit of this integer sets the `i`th flag.
   * `mode`: the [`stat`](@ref) mode for the item.
   * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
-     The length of the `id` field when converted using [`hex`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
+     The length of the `id` field when converted using [`string`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
 """
 struct DiffFile
     id::GitHash
@@ -895,8 +895,8 @@ function Base.split(ce::ConfigEntry)
     key = unsafe_string(ce.name)
 
     # Determine the positions of the delimiters
-    subsection_delim = coalesce(findfirst(equalto('.'), key), 0)
-    name_delim = coalesce(findlast(equalto('.'), key), 0)
+    subsection_delim = coalesce(findfirst(isequal('.'), key), 0)
+    name_delim = coalesce(findlast(isequal('.'), key), 0)
 
     section = SubString(key, 1, subsection_delim - 1)
     subsection = SubString(key, subsection_delim + 1, name_delim - 1)

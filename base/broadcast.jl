@@ -406,7 +406,7 @@ end
         @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        C = Vector{Bool}(uninitialized, bitcache_size)
+        C = Vector{Bool}(undef, bitcache_size)
         Bc = B.chunks
         ind = 1
         cind = 1
@@ -700,7 +700,7 @@ would be the broadcast `inds`). The shape of the output is equal to the shape of
 element of `indsb`.
 
 # Examples
-```jldoctest
+```jldoctest bc_getindex
 julia> A = [11 12; 21 22]
 2×2 Array{Int64,2}:
  11  12
@@ -729,7 +729,7 @@ julia> broadcast_getindex(A, 1:2, 2:-1:1)
 Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
 where `i` and `j` are the two index vectors.
 
-```jldoctest
+```jldoctest bc_getindex
 julia> broadcast_getindex(A, 1:2, (1:2)')
 2×2 Array{Int64,2}:
  11  12

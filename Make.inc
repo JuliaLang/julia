@@ -189,7 +189,6 @@ build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
-build_docdir := $(build_datarootdir)/doc/julia
 build_mandir := $(build_datarootdir)/man
 build_man1dir := $(build_mandir)/man1
 build_includedir := $(build_prefix)/include

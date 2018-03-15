@@ -72,7 +72,7 @@ mutable struct Messages
         initial_fld = [copy(f0) for f0 in fld]
 
         # allocate cavity messages
-        msg = [[Field(uninitialized, spp[p0]) for j1 = 1:length(gadj[p0])] for p0 = 1:np]
+        msg = [[Field(undef, spp[p0]) for j1 = 1:length(gadj[p0])] for p0 = 1:np]
 
         msgs = new(msg, fld, initial_fld)
 

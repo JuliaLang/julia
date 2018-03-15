@@ -147,18 +147,18 @@ argument is called slurping:
 
 ```jldoctest
 julia> function printargs(args...)
-           @printf("%s\n", typeof(args))
+           println(typeof(args))
            for (i, arg) in enumerate(args)
-               @printf("Arg %d = %s\n", i, arg)
+               println("Arg #$i = $arg")
            end
        end
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
 Tuple{Int64,Int64,Int64}
-Arg 1 = 1
-Arg 2 = 2
-Arg 3 = 3
+Arg #1 = 1
+Arg #2 = 2
+Arg #3 = 3
 ```
 
 If Julia were a language that made more liberal use of ASCII characters, the slurping operator
@@ -173,19 +173,19 @@ call. This use of `...` is called splatting:
 
 ```jldoctest
 julia> function threeargs(a, b, c)
-           @printf("a = %s::%s\n", a, typeof(a))
-           @printf("b = %s::%s\n", b, typeof(b))
-           @printf("c = %s::%s\n", c, typeof(c))
+           println("a = $a::$(typeof(a))")
+           println("b = $b::$(typeof(b))")
+           println("c = $c::$(typeof(c))")
        end
 threeargs (generic function with 1 method)
 
-julia> vec = [1, 2, 3]
+julia> x = [1, 2, 3]
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> threeargs(vec...)
+julia> threeargs(x...)
 a = 1::Int64
 b = 2::Int64
 c = 3::Int64

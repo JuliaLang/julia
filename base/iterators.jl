@@ -90,7 +90,7 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
-reverse(x::Union{Number,Char}) = x
+reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
 start(r::Reverse{<:Tuple}) = length(r.itr)
@@ -376,7 +376,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd),Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -976,7 +976,7 @@ function next(itr::PartitionIterator{<:Vector}, state)
 end
 
 function next(itr::PartitionIterator, state)
-    v = Vector{eltype(itr.c)}(uninitialized, itr.n)
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     while !done(itr.c, state) && i < itr.n
         i += 1

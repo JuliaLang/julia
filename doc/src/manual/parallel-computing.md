@@ -727,7 +727,8 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `examples/dictchannel.jl` which uses a dictionary as its
+A simple example of this is provided in `dictchannel.jl` in the
+[Examples repository](https://github.com/JuliaArchive/Examples), which uses a dictionary as its
 remote store.
 
 ## Channels and RemoteChannels
@@ -1246,7 +1247,8 @@ transport and Julia's in-built parallel infrastructure.
 A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
-Folder `examples/clustermanager/0mq` contains an example of using ZeroMQ to connect Julia workers
+The folder `clustermanager/0mq` in the [Examples repository](https://github.com/JuliaArchive/Examples)
+contains an example of using ZeroMQ to connect Julia workers
 in a star topology with a 0MQ broker in the middle. Note: The Julia processes are still all *logically*
 connected to each other--any worker can message any other worker directly without any awareness
 of 0MQ being used as the transport layer.
@@ -1268,7 +1270,7 @@ When using custom transports:
 the corresponding `IO` objects must be closed by the implementation to ensure proper cleanup.
 The default implementation simply executes an `exit()` call on the specified remote worker.
 
-`examples/clustermanager/simple` is an example that shows a simple implementation using UNIX domain
+The Examples folder `clustermanager/simple` is an example that shows a simple implementation using UNIX domain
 sockets for cluster setup.
 
 ## Network Requirements for LocalManager and SSHManager

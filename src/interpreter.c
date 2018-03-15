@@ -520,6 +520,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             // Most exprs are allowed to end a BB by fall through
             s->last_branch = s->ip;
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
+            assert(head != unreachable_sym);
             if (head == return_sym) {
                 return eval_value(jl_exprarg(stmt, 0), s);
             }

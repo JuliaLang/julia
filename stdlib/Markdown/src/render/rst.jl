@@ -76,7 +76,7 @@ end
 
 function rst(io::IO, md::Admonition)
     s = sprint(rst, md.content)
-    title = md.title == ucfirst(md.category) ? "" : md.title
+    title = md.title == uppercasefirst(md.category) ? "" : md.title
     println(io, ".. ", md.category, "::", isempty(title) ? "" : " $title")
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "   ", line)

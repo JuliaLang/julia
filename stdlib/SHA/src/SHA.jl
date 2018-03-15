@@ -64,7 +64,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         # done
         function $f(io::IO, chunk_size=4*1024)
             ctx = $ctx()
-            buff = Vector{UInt8}(uninitialized, chunk_size)
+            buff = Vector{UInt8}(undef, chunk_size)
             while !eof(io)
                 num_read = readbytes!(io, buff)
                 update!(ctx, buff[1:num_read])

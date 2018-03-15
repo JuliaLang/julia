@@ -1,13 +1,16 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractChar
+Core.Char
+Base.codepoint
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
+Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
-Base.repeat(::Char, ::Integer)
+Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
@@ -50,8 +53,8 @@ Base.last(::AbstractString, ::Integer)
 Base.uppercase
 Base.lowercase
 Base.titlecase
-Base.ucfirst
-Base.lcfirst
+Base.uppercasefirst
+Base.lowercasefirst
 Base.join
 Base.chop
 Base.chomp
@@ -63,12 +66,12 @@ Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
-Base.islower
+Base.islowercase
 Base.isnumeric
 Base.isprint
 Base.ispunct
 Base.isspace
-Base.isupper
+Base.isuppercase
 Base.isxdigit
 Core.Symbol
 Base.escape_string

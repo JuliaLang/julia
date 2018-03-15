@@ -112,10 +112,6 @@ module IteratorsMD
     @inline max(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
-    @inline (+)(i::Integer, index::CartesianIndex) = index+i
-    @inline (+)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x+i, index.I))
-    @inline (-)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x-i, index.I))
-    @inline (-)(i::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->i-x, index.I))
     @inline (*)(a::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->a*x, index.I))
     @inline (*)(index::CartesianIndex, a::Integer) = *(a,index)
 
@@ -195,8 +191,8 @@ module IteratorsMD
 
     julia> CartesianIndices(fill(1, (2,3)))
     2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
-      CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
-      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+     CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
+     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
     ```
 
     ## Conversion between linear and cartesian indices
@@ -224,12 +220,8 @@ module IteratorsMD
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
         CartesianIndices{N,typeof(inds)}(inds)
-    CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} =
-        CartesianIndices(inds)
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
         CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
-    CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} =
-        CartesianIndices(inds)
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
@@ -279,7 +271,7 @@ module IteratorsMD
     @inline function start(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
         if any(map(>, iterfirst.I, iterlast.I))
-            return iterlast+1
+            return iterlast+one(iterlast)
         end
         iterfirst
     end
@@ -395,9 +387,9 @@ module IteratorsMD
     ```jldoctest subarray
     julia> linear = LinearIndices(1:3,1:2)
     LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
-      1  4
-      2  5
-      3  6
+     1  4
+     2  5
+     3  6
 
     julia> linear[1,2]
     4
@@ -410,9 +402,7 @@ module IteratorsMD
     LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
     LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
     LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
     LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
@@ -688,6 +678,44 @@ _iterable(v) = Iterators.repeated(v)
     end
 end
 
+diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+
+"""
+    diff(A::AbstractVector)
+    diff(A::AbstractMatrix, dim::Integer)
+
+Finite difference operator of matrix or vector `A`. If `A` is a matrix,
+specify the dimension over which to operate with the `dim` argument.
+
+# Examples
+```jldoctest
+julia> a = [2 4; 6 16]
+2×2 Array{Int64,2}:
+ 2   4
+ 6  16
+
+julia> diff(a,2)
+2×1 Array{Int64,2}:
+  2
+ 10
+
+julia> diff(vec(a))
+3-element Array{Int64,1}:
+  4
+ -2
+ 12
+```
+"""
+function diff(A::AbstractMatrix, dim::Integer)
+    if dim == 1
+        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
+    elseif dim == 2
+        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    else
+        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
+    end
+end
+
 ### from abstractarray.jl
 
 # In the common case where we have two views into the same parent, aliasing checks
@@ -760,13 +788,13 @@ julia> fill!(A, 2.)
  2.0  2.0  2.0
  2.0  2.0  2.0
 
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(uninitialized, 3), a); a[1] = 2; A
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
  [2, 1, 1]
  [2, 1, 1]
  [2, 1, 1]
 
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(uninitialized, 3), f())
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
 3-element Array{Int64,1}:
  1
  1
@@ -926,7 +954,7 @@ julia> src = reshape(Vector(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(uninitialized, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
 
 julia> circcopy!(dest, src)
 OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
@@ -1433,7 +1461,7 @@ julia> extrema(A, (1,2))
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
     sz[[dims...]] = 1
-    B = Array{Tuple{eltype(A),eltype(A)}}(uninitialized, sz...)
+    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
     return extrema!(B, A)
 end
 

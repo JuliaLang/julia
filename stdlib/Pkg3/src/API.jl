@@ -6,27 +6,39 @@ import Random
 import Dates
 import LibGit2
 
-import Pkg3
-import Pkg3: depots, logdir, devdir, print_first_command_header
-using Pkg3.Types
-using Pkg3.TOML
+import ..depots, ..logdir, ..devdir, ..print_first_command_header
+import ..Operations, ..Display
+using ..Types, ..TOML
 
 
-preview_info() = @info("In preview mode")
+preview_info() = printstyled("───── Preview mode ─────\n"; color=Base.info_color(), bold=true)
 
-add(pkg::Union{String, PackageSpec}; kwargs...)               = add([pkg]; kwargs...)
-add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-add(pkgs::Vector{PackageSpec}; kwargs...) = add(Context(), pkgs; kwargs...)
+include("generate.jl")
 
-function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
+add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
+
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
+    if mode == :develop
+        handle_repos_develop!(ctx, pkgs)
+    else
+        handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+    end
     project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs, true)
-    Pkg3.Operations.add(ctx, pkgs)
+    stdlib_resolve!(ctx, pkgs)
+    ensure_resolved(ctx.env, pkgs, registry=true)
+    Operations.add_or_develop(ctx, pkgs)
+    ctx.preview && preview_info()
 end
+
+add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
+develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
+@deprecate checkout develop
 
 
 rm(pkg::Union{String, PackageSpec}; kwargs...)               = rm([pkg]; kwargs...)
@@ -39,7 +51,8 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
-    Pkg3.Operations.rm(ctx, pkgs)
+    Operations.rm(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -60,35 +73,35 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         info("Skipping updating registry in preview mode")
     else
         for reg in registries()
-            if !isdir(joinpath(reg, ".git"))
-                @info("Registry at $reg is not a git repo, skipping update")
-            end
-            @info("Updating registry at $reg")
-            LibGit2.with(LibGit2.GitRepo, reg) do repo
-                if LibGit2.isdirty(repo)
-                    push!(errors, (reg, "registry dirty"))
-                    return
-                end
-                if !LibGit2.isattached(repo)
-                    push!(errors, (reg, "registry detached"))
-                    return
-                end
-                branch = LibGit2.headname(repo)
-                LibGit2.fetch(repo)
-                ff_succeeded = try
-                    LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
-                catch e
-                    e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
-                    push!(errors, (reg, "branch origin/$branch not found"))
-                    return
-                end
-
-                if !ff_succeeded
-                    try LibGit2.rebase!(repo, "origin/$branch")
-                    catch e
-                        e isa LibGit2.GitError || rethrow(e)
-                        push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+            if isdir(joinpath(reg, ".git"))
+                regpath = pathrepr(reg)
+                printpkgstyle(ctx, :Updating, "registry at ", regpath)
+                LibGit2.with(LibGit2.GitRepo, reg) do repo
+                    if LibGit2.isdirty(repo)
+                        push!(errors, (regpath, "registry dirty"))
                         return
+                    end
+                    if !LibGit2.isattached(repo)
+                        push!(errors, (regpath, "registry detached"))
+                        return
+                    end
+                    branch = LibGit2.headname(repo)
+                    LibGit2.fetch(repo)
+                    ff_succeeded = try
+                        LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
+                    catch e
+                        e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
+                        push!(errors, (reg, "branch origin/$branch not found"))
+                        return
+                    end
+
+                    if !ff_succeeded
+                        try LibGit2.rebase!(repo, "origin/$branch")
+                        catch e
+                            e isa LibGit2.GitError || rethrow(e)
+                            push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+                            return
+                        end
                     end
                 end
             end
@@ -120,7 +133,8 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         manifest_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs)
     end
-    Pkg3.Operations.up(ctx, pkgs)
+    Operations.up(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -134,7 +148,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.pin(ctx, pkgs)
+    Operations.pin(ctx, pkgs)
 end
 
 
@@ -146,29 +160,11 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.free(ctx, pkgs)
-end
-
-
-checkout(pkg::Union{String, PackageSpec}; kwargs...)  = checkout([pkg]; kwargs...)
-checkout(pkg::String, branch::String; kwargs...)      = checkout([(PackageSpec(pkg), branch)]; kwargs...)
-checkout(pkg::PackageSpec, branch::String; kwargs...) = checkout([(pkg, branch)]; kwargs...)
-checkout(pkgs::Vector{String}; kwargs...)             = checkout([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs::Vector{PackageSpec}; kwargs...)        = checkout([(pkg, nothing) for pkg in pkgs]; kwargs...)
-checkout(pkgs_branches::Vector; kwargs...)            = checkout(Context(), pkgs_branches; kwargs...)
-
-function checkout(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
-    print_first_command_header()
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-    pkgs = [p[1] for p in pkgs_branches]
-    project_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.checkout(ctx, pkgs_branches; path = path)
+    ensure_resolved(ctx.env, pkgs; registry=true)
+    Operations.free(ctx, pkgs)
 end
+
 
 
 test(;kwargs...)                                  = test(PackageSpec[], kwargs...)
@@ -183,13 +179,13 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    Pkg3.Operations.test(ctx, pkgs; coverage=coverage)
+    Operations.test(ctx, pkgs; coverage=coverage)
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)::Dict{String, VersionNumber}
-    diffs = Pkg3.Display.status(Context(), mode, #=use_as_api=# true)
-    version_status = Dict{String, VersionNumber}()
+function installed(mode::PackageMode=PKGMODE_MANIFEST)
+    diffs = Display.status(Context(), mode, #=use_as_api=# true)
+    version_status = Dict{String, Union{VersionNumber,Nothing}}()
     diffs == nothing && return version_status
     for entry in diffs
         version_status[entry.name] = entry.new.ver
@@ -244,7 +240,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
             stanzas = _stanzas[1]
             if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
                 push!(paths_to_keep,
-                      Pkg3.Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
+                      Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
             end
         end
     end
@@ -294,8 +290,9 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
         end
     end
     bytes, mb = Base.prettyprint_getunits(sz, length(Base._mem_units), Int64(1024))
-    byte_save_str = length(paths_to_delete) == 0 ? "" : (" saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
+    byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
+    ctx.preview && preview_info()
 end
 
 
@@ -320,6 +317,7 @@ build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
     if isempty(pkgs)
         for (name, infos) in ctx.env.manifest, info in infos
             uuid = UUID(info["uuid"])
@@ -334,7 +332,8 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
-    Pkg3.Operations.build_versions(ctx, uuids; do_resolve=true)
+    Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
+    ctx.preview && preview_info()
 end
 
 init() = init(Context())
@@ -342,7 +341,7 @@ init(path::String) = init(Context(), path)
 function init(ctx::Context, path::String=pwd())
     print_first_command_header()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
-    Pkg3.Operations.init(ctx)
+    Operations.init(ctx)
 end
 
 end # module

@@ -129,9 +129,12 @@ A return type can also be specified in the function declaration using the `::` o
 the return value to the specified type.
 
 ```jldoctest
-function g(x,y)::Int8
-    return x * y
-end
+julia> function g(x, y)::Int8
+           return x * y
+       end;
+
+julia> typeof(g(1, 2))
+Int8
 ```
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.

@@ -11,8 +11,8 @@ const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 const INT_INF = typemax(Int) # integer infinity
 
 const N_IFUNC = reinterpret(Int32, arraylen) + 1
-const T_IFUNC = Vector{Tuple{Int, Int, Any}}(uninitialized, N_IFUNC)
-const T_IFUNC_COST = Vector{Int}(uninitialized, N_IFUNC)
+const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
+const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
 const T_FFUNC_VAL = Vector{Tuple{Int, Int, Any}}()
 const T_FFUNC_COST = Vector{Int}()
@@ -729,12 +729,15 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function invoke_tfunc(@nospecialize(f), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+    dt = ccall(:jl_argument_datatype, Any, (Any,), ft)
+    if dt === nothing || !isdefined(dt.name, :mt)
+        return Any
+    end
     argtype = typeintersect(types, limit_tuple_type(argtype, sv.params))
     if argtype === Bottom
         return Bottom
     end
-    ft = Core.Typeof(f)
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
     argtype = Tuple{ft, argtype.parameters...}
     entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), types, sv.params.world)
@@ -816,8 +819,12 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         end
         return Expr
     elseif f === invoke
-        if length(argtypes) > 1 && isa(argtypes[1], Const) && sv !== nothing
-            af = argtypes[1].val
+        if length(argtypes) > 1 && sv !== nothing && (isa(argtypes[1], Const) || isa(argtypes[1], Type))
+            if isa(argtypes[1], Const)
+                ft = Core.Typeof(argtypes[1].val)
+            else
+                ft = argtypes[1]
+            end
             sig = argtypes[2]
             if isa(sig, Const)
                 sigty = sig.val
@@ -827,7 +834,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                 sigty = nothing
             end
             if isa(sigty, Type) && !has_free_typevars(sigty) && sigty <: Tuple
-                return invoke_tfunc(af, sigty, argtypes_to_type(argtypes[3:end]), sv)
+                return invoke_tfunc(ft, sigty, argtypes_to_type(argtypes[3:end]), sv)
             end
         end
         return Any

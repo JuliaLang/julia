@@ -631,7 +631,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # First the current response buffer
     if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
-        if match != 0:-1
+        if match !== nothing
             seek(response_buffer, first(match) - 1)
             return true
         end
@@ -642,7 +642,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc1(searchdata, h)
-        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -886,7 +886,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(equalto(UInt8('\n')), sbuffer) === nothing)
+            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(isequal(UInt8('\n')), sbuffer) === nothing)
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace
@@ -1048,7 +1048,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = findlast(equalto(';'), line)
+    match = findlast(isequal(';'), line)
     if match !== nothing
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer

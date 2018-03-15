@@ -2,7 +2,7 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(uninitialized, 9)
+let fenv_consts = Vector{Cint}(undef, 9)
     ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]

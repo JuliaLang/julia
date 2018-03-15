@@ -197,7 +197,7 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         # that any (reasonable) shell will definitely never consider them to be special
         have_single = false
         have_double = false
-        function isword(c::Char)
+        function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
             elseif c == '_' || c == '/' || c == '+' || c == '-'

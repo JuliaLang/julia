@@ -648,7 +648,7 @@ median(v::AbstractArray; dims=:) = _median(v, dims)
 
 _median(v::AbstractArray, dims) = mapslices(median!, v, dims)
 
-_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(uninitialized, _length(v)), v))
+_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, _length(v)), v))
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7

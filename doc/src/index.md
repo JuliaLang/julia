@@ -12,7 +12,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
 ## Manual
 
   * [Introduction](@ref man-introduction)
-  * [Getting Started](@ref)
+  * [Getting Started](@ref man-getting-started)
   * [Variables](@ref)
   * [Integers and Floating-Point Numbers](@ref)
   * [Mathematical Operations and Elementary Functions](@ref)
@@ -79,7 +79,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
   * [Base64](@ref)
   * [CRC32c](@ref)
   * [SHA](@ref)
-  * [Dates](@ref stdlib-dates)
+  * [Dates](@ref)
   * [Delimited Files](@ref)
   * [Distributed Computing](@ref)
   * [File Events](@ref lib-filewatching)
@@ -114,7 +114,7 @@ Please read the [release notes](NEWS.md) to see what has changed since the last 
       * [printf() and stdio in the Julia runtime](@ref)
       * [Bounds checking](@ref)
       * [Proper maintenance and care of multi-threading locks](@ref)
-      * [Arrays with custom indices](@ref)
+      * [Arrays with custom indices](@ref man-custom-indices)
       * [Module loading](@ref)
       * [Inference](@ref)
   * Developing/debugging Julia's C code

@@ -12,6 +12,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :const => 1:1,
     :new => 1:typemax(Int),
     :return => 1:1,
+    :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,
@@ -209,7 +210,7 @@ is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
 function is_valid_argument(x)
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
-        isa(x, Number) || isa(x, AbstractString) || isa(x, Char) || isa(x, Tuple) ||
+        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
         isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
     end

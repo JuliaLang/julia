@@ -13,7 +13,7 @@ or the [documentation](https://docs.julialang.org/).
 ### Unicode font support
 
 The built-in Windows fonts have rather poor coverage of the Unicode character
-space.  The free [`DejaVu Sans Mono`](http://dejavu-fonts.org/) font can be used
+space.  The free [`DejaVu Sans Mono`](https://dejavu-fonts.github.io/) font can be used
 as a replacement font in the Windows console.  Since Windows 2000, simply
 downloading the font and installing it is insufficient, since Windows keeps a
 list of approved fonts in the registry.

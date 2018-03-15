@@ -136,14 +136,14 @@ export
     AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, Method,
-    Module, Symbol, Task, Array, Uninitialized, uninitialized, WeakRef, VecElement,
+    Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, AbstractString, String, IO,
+    AbstractChar, Char, AbstractString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
@@ -177,7 +177,8 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 #primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+abstract type AbstractChar end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 #primitive type UInt8   <: Unsigned 8 end
@@ -373,29 +374,29 @@ const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 ## primitive Array constructors
-struct Uninitialized end
-const uninitialized = Uninitialized()
+struct UndefInitializer end
+const undef = UndefInitializer()
 # type and dimensionality specified, accepting dims as series of Ints
-Array{T,1}(::Uninitialized, m::Int) where {T} =
+Array{T,1}(::UndefInitializer, m::Int) where {T} =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(::Uninitialized, m::Int, n::Int) where {T} =
+Array{T,2}(::UndefInitializer, m::Int, n::Int) where {T} =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(::Uninitialized, m::Int, n::Int, o::Int) where {T} =
+Array{T,3}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
-Array{T,N}(::Uninitialized, d::Vararg{Int,N}) where {T,N} =
+Array{T,N}(::UndefInitializer, d::Vararg{Int,N}) where {T,N} =
     ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type and dimensionality specified, accepting dims as tuples of Ints
-Array{T,1}(::Uninitialized, d::NTuple{1,Int}) where {T} = Array{T,1}(uninitialized, getfield(d,1))
-Array{T,2}(::Uninitialized, d::NTuple{2,Int}) where {T} = Array{T,2}(uninitialized, getfield(d,1), getfield(d,2))
-Array{T,3}(::Uninitialized, d::NTuple{3,Int}) where {T} = Array{T,3}(uninitialized, getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(::UndefInitializer, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
+Array{T,2}(::UndefInitializer, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
+Array{T,3}(::UndefInitializer, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 # type but not dimensionality specified
-Array{T}(::Uninitialized, m::Int) where {T} = Array{T,1}(uninitialized, m)
-Array{T}(::Uninitialized, m::Int, n::Int) where {T} = Array{T,2}(uninitialized, m, n)
-Array{T}(::Uninitialized, m::Int, n::Int, o::Int) where {T} = Array{T,3}(uninitialized, m, n, o)
-Array{T}(::Uninitialized, d::NTuple{N,Int}) where {T,N} = Array{T,N}(uninitialized, d)
+Array{T}(::UndefInitializer, m::Int) where {T} = Array{T,1}(undef, m)
+Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
+Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
+Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
 # empty vector constructor
-Array{T,1}() where {T} = Array{T,1}(uninitialized, 0)
+Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
 
 (::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
@@ -460,7 +461,7 @@ function write(io::IO, x::String)
 end
 
 show(io::IO, @nospecialize x) = ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), io_pointer(io), x)
-print(io::IO, x::Char) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
+print(io::IO, x::AbstractChar) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
 print(io::IO, x::String) = (write(io, x); nothing)
 print(io::IO, @nospecialize x) = show(io, x)
 print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
@@ -518,7 +519,7 @@ end
 function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
     if @generated
         N = nfields(names)
-        flds = Array{Any,1}(uninitialized, N)
+        flds = Array{Any,1}(undef, N)
         i = 1
         while sle_int(i, N)
             arrayset(false, flds, :(getfield(args, $i)), i)
@@ -528,7 +529,7 @@ function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
     else
         N = nfields(names)
         NT = NamedTuple{names,T}
-        flds = Array{Any,1}(uninitialized, N)
+        flds = Array{Any,1}(undef, N)
         i = 1
         while sle_int(i, N)
             arrayset(false, flds, getfield(args, i), i)
@@ -700,10 +701,6 @@ UInt16(x::BuiltinInts)  = toUInt16(x)::UInt16
 UInt32(x::BuiltinInts)  = toUInt32(x)::UInt32
 UInt64(x::BuiltinInts)  = toUInt64(x)::UInt64
 UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
-
-Char(x::Number) = Char(UInt32(x))
-Char(x::Char) = x
-(::Type{T})(x::Char) where {T<:Number} = T(UInt32(x))
 
 (::Type{T})(x::T) where {T<:Number} = x
 

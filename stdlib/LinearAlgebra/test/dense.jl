@@ -85,7 +85,7 @@ bimg  = randn(n,2)/2
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
-            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin
@@ -845,6 +845,21 @@ end
             @test _stride == stride(M, i)
         end
     end
+end
+
+@testset "inverse of Adjoint" begin
+    A = randn(n, n)
+
+    @test inv(A')*A'                     ≈ I
+    @test inv(transpose(A))*transpose(A) ≈ I
+
+    B = complex.(A, randn(n, n))
+    B = B + transpose(B)
+
+    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
+    # isn't implemented yet
+    @test_broken inv(B')*B'                     ≈ I
+    @test_broken inv(transpose(B))*transpose(B) ≈ I
 end
 
 end # module TestDense

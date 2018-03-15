@@ -834,7 +834,7 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
         where[i] += where[i-1]
     end
 
-    P = Vector{Int}(uninitialized, n)
+    P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
         label = x[i] + offs
         P[where[label]] = i

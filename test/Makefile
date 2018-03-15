@@ -14,7 +14,7 @@ TESTS = all stdlib $(TESTGROUPS) \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
 # run `make print-TESTS` to see a list of all tests that can be run
 
-EMBEDDING_ARGS := JULIA=$(JULIA_EXECUTABLE) BIN=$(SRCDIR)/embedding
+EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC)"
 
 default: all
 
@@ -25,11 +25,7 @@ $(TESTS):
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 
-perf:
-	@$(MAKE) -C $(SRCDIR)/perf all
-
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
-	@$(MAKE) -C perf $@
 
-.PHONY: $(TESTS) embedding perf clean
+.PHONY: $(TESTS) embedding clean

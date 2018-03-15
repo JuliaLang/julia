@@ -39,7 +39,7 @@ tests if there are any elements remaining, and `next(iter, state)`, which return
 the current element and an updated `state`. The `state` object can be anything, and is generally
 considered to be an implementation detail private to the iterable object.
 
-Any object defines these three methods is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
+Any object that defines these three methods is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
 It can also be used directly in a `for` loop since the syntax:
 
 ```julia
@@ -189,6 +189,7 @@ valid index. It is recommended to also define [`firstindex`](@ref) to specify th
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
+
 julia> Base.lastindex(S::Squares) = length(S)
 
 julia> Squares(23)[end]
@@ -234,7 +235,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
 | `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
-| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(uninitialized, dims)`        | Return a mutable array with the specified element type and size                       |
+| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(undef, dims)`               | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
 | `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
 | `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
@@ -400,7 +401,8 @@ julia> mean(A)
 If you are defining an array type that allows non-traditional indexing (indices that start at
 something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
-perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
+perhaps range-types `Ind` of your own design. For more information, see
+[Arrays with custom indices](@ref man-custom-indices).
 
 ## [Strided Arrays](@id man-interface-strided-arrays)
 
@@ -505,7 +507,7 @@ However, if needed you can specialize on any or all of these arguments.
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
 array and a single character:
 
-```jldoctest
+```jldoctest ArrayAndChar
 struct ArrayAndChar{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
     char::Char
@@ -514,16 +516,20 @@ Base.size(A::ArrayAndChar) = size(A.data)
 Base.getindex(A::ArrayAndChar{T,N}, inds::Vararg{Int,N}) where {T,N} = A.data[inds...]
 Base.setindex!(A::ArrayAndChar{T,N}, val, inds::Vararg{Int,N}) where {T,N} = A.data[inds...] = val
 Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with char '", A.char, "'")
+# output
+
 ```
 
 You might want broadcasting to preserve the `char` "metadata." First we define
 
-```jldoctest
+```jldoctest ArrayAndChar
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
+# output
+
 ```
 
 This forces us to also define a `broadcast_similar` method:
-```jldoctest
+```jldoctest ArrayAndChar; filter = r"(^find_aac \(generic function with 2 methods\)$|^$)"
 function Base.broadcast_similar(f, ::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, As...) where ElType
     # Scan the inputs for the ArrayAndChar:
     A = find_aac(As...)
@@ -533,11 +539,13 @@ end
 
 "`A = find_aac(As...)` returns the first ArrayAndChar among the arguments."
 find_aac(A::ArrayAndChar, B...) = A
-find_aac(A, B...) = find_aac(B...)
+find_aac(A, B...) = find_aac(B...);
+# output
+
 ```
 
 From these definitions, one obtains the following behavior:
-```jldoctest
+```jldoctest ArrayAndChar
 julia> a = ArrayAndChar([1 2; 3 4], 'x')
 2×2 ArrayAndChar{Int64,2} with char 'x':
  1  2

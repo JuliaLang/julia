@@ -7,7 +7,7 @@
 ;; the way the lexer works, every prefix of an operator must also
 ;; be an operator.
 (define prec-assignment
-  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
+  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            '(:= ~ $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair '(=>))
@@ -19,10 +19,10 @@
 (define prec-lazy-and    '(&&))
 (define prec-comparison
   (append! '(|<:| |>:| in isa)
-           (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≔ ≕ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣ ⟂))))
+           (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣ ⟂))))
 (define prec-pipe<       '(|.<\|| |<\||))
 (define prec-pipe>       '(|.\|>| |\|>|))
-(define prec-colon       '(: |..|))
+(define prec-colon       (append! '(: |..|) (add-dots '(… ⁝ ⋮ ⋱ ⋰ ⋯))))
 (define prec-plus        (append! '($)
                           (add-dots '(+ - |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≂ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
 (define prec-bitshift    (add-dots '(<< >> >>>)))
@@ -1039,11 +1039,13 @@
              (if (cdr parens) ;; found an argument list
                  (if opspc
                      (disallowed-space op #\( )
-                     (parse-factor-with-initial-ex
-                      s
-                      (fix-syntactic-unary (cons op (tuple-to-arglist (car parens))))))
+                     (parse-juxtapose
+                      (parse-factor-with-initial-ex
+                       s
+                       (fix-syntactic-unary (cons op (tuple-to-arglist (car parens)))))
+                      s))
                  (fix-syntactic-unary
-                  (list op (parse-factor-with-initial-ex s (car parens)))))))
+                  (list op (parse-juxtapose (parse-factor-with-initial-ex s (car parens)) s))))))
           ((not un)
            (error (string "\"" op "\" is not a unary operator")))
           (else
@@ -1098,10 +1100,10 @@
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-with-initial-ex s (parse-call s)))
+  (parse-factor-with-initial-ex s (parse-unary-prefix s)))
 
 (define (parse-factor-with-initial-ex s ex0)
-  (let* ((ex (parse-decl-with-initial-ex s ex0))
+  (let* ((ex (parse-decl-with-initial-ex s (parse-call-with-initial-ex s ex0)))
          (t  (peek-token s)))
     (if (is-prec-power? t)
         (begin (take-token s)
@@ -1130,10 +1132,12 @@
 ;; parse function call, indexing, dot, and transpose expressions
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (let ((ex (parse-unary-prefix s)))
-    (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
-        (parse-resword s ex)
-        (parse-call-chain s ex #f))))
+  (parse-call-with-initial-ex s (parse-unary-prefix s)))
+
+(define (parse-call-with-initial-ex s ex)
+  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+      (parse-resword s ex)
+      (parse-call-chain s ex #f)))
 
 (define (parse-unary-prefix s)
   (let ((op (peek-token s)))
@@ -1858,7 +1862,8 @@
              (if (and (not semicolon)
                       (length= outer 1)
                       (null? vec))
-                 (begin (expect-space-before s 'for)
+                 (begin ;; if we get here, there must have been some kind of space or separator
+                        ;;(expect-space-before s 'for)
                         (take-token s)
                         (parse-comprehension s (car outer) closer))
                  (error "invalid comprehension syntax")))
