@@ -194,7 +194,6 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
-Base.equalto
 ```
 
 ## Syntax

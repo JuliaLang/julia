@@ -895,8 +895,8 @@ function Base.split(ce::ConfigEntry)
     key = unsafe_string(ce.name)
 
     # Determine the positions of the delimiters
-    subsection_delim = coalesce(findfirst(equalto('.'), key), 0)
-    name_delim = coalesce(findlast(equalto('.'), key), 0)
+    subsection_delim = coalesce(findfirst(isequal('.'), key), 0)
+    name_delim = coalesce(findlast(isequal('.'), key), 0)
 
     section = SubString(key, 1, subsection_delim - 1)
     subsection = SubString(key, subsection_delim + 1, name_delim - 1)

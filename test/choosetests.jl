@@ -170,7 +170,7 @@ function choosetests(choices = [])
     end
 
     if !net_on
-        filter!(!occursin(net_required_for), tests)
+        filter!(!in(net_required_for), tests)
     end
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
@@ -181,7 +181,7 @@ function choosetests(choices = [])
     # The shift and invert solvers need SuiteSparse for sparse input
     Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
 
-    filter!(!occursin(skip_tests), tests)
+    filter!(!in(skip_tests), tests)
 
     tests, net_on, exit_on_error, seed
 end

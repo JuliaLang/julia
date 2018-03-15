@@ -11,7 +11,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = findfirst(equalto('#'), s)
+    i = findfirst(isequal('#'), s)
     if i !== nothing
         s = s[1:i-1]
     end

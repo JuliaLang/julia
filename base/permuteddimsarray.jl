@@ -212,7 +212,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         copyto!(parent(P), src) # it's not permuted
     else
         R1 = CartesianIndices(axes(src)[1:d])
-        d1 = findfirst(equalto(d+1), perm)::Int  # first permuted dim of dest
+        d1 = findfirst(isequal(d+1), perm)::Int  # first permuted dim of dest
         R2 = CartesianIndices(axes(src)[d+2:d1-1])
         R3 = CartesianIndices(axes(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)

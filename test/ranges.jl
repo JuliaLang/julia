@@ -250,13 +250,13 @@ end
         @test length(1:2:0) == 0
     end
     @testset "findall(::OccursIn, ::Array)" begin
-        @test findall(occursin(3:20), [5.2, 3.3]) == findall(occursin(Vector(3:20)), [5.2, 3.3])
+        @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
 
         let span = 5:20,
             r = -7:3:42
-            @test findall(occursin(span), r) == 5:10
+            @test findall(in(span), r) == 5:10
             r = 15:-2:-38
-            @test findall(occursin(span), r) == 1:6
+            @test findall(in(span), r) == 1:6
         end
     end
     @testset "reverse" begin
@@ -1109,16 +1109,16 @@ end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
-        @test findall(occursin(r), r) === findall(occursin(1:length(r)), r) ===
-              findall(occursin(r), 1:length(r)) === 1:length(r)
+        @test findall(in(r), r) === findall(in(1:length(r)), r) ===
+              findall(in(r), 1:length(r)) === 1:length(r)
         io = IOBuffer()
         show(io, r)
         str = String(take!(io))
         @test str == "Base.OneTo(3)"
     end
     let r = Base.OneTo(7)
-        @test findall(occursin(2:(length(r) - 1)), r) === 2:(length(r) - 1)
-        @test findall(occursin(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
+        @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
+        @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
 end
 

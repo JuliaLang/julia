@@ -119,7 +119,7 @@ end
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
     @test findlast("World", u) == nothing
-    @test findlast(equalto('z'), u) == nothing
+    @test findlast(isequal('z'), u) == nothing
     @test findlast("ll", u) == 3:4
 end
 
@@ -274,14 +274,14 @@ end
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
                 sb = SubString(s, nextind(pre, lastindex(pre)),
                                lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end

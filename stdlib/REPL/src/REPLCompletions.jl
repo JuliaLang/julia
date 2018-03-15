@@ -42,7 +42,7 @@ function complete_symbol(sym, ffunc)
     lookup_module = true
     t = Union{}
     val = nothing
-    if coalesce(findlast(occursin(non_identifier_chars), sym), 0) < coalesce(findlast(equalto('.'), sym), 0)
+    if coalesce(findlast(in(non_identifier_chars), sym), 0) < coalesce(findlast(isequal('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
@@ -201,7 +201,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     end
 
     matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
-    startpos = pos - lastindex(prefix) + 1 - count(equalto(' '), prefix)
+    startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
@@ -268,7 +268,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, coalesce(findprev(occursin(non_identifier_chars), s, method_name_end), 0))
+    startind = nextind(s, coalesce(findprev(in(non_identifier_chars), s, method_name_end), 0))
     return (startind:lastindex(s), method_name_end)
 end
 
@@ -423,8 +423,8 @@ function afterusing(string::String, startpos::Int)
 end
 
 function bslash_completions(string, pos)
-    slashpos = coalesce(findprev(equalto('\\'), string, pos), 0)
-    if (coalesce(findprev(occursin(bslash_separators), string, pos), 0) < slashpos &&
+    slashpos = coalesce(findprev(isequal('\\'), string, pos), 0)
+    if (coalesce(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -543,8 +543,8 @@ function completions(string, pos)
         return String[], 0:-1, false
     end
 
-    dotpos = coalesce(findprev(equalto('.'), string, pos), 0)
-    startpos = nextind(string, coalesce(findprev(occursin(non_identifier_chars), string, pos), 0))
+    dotpos = coalesce(findprev(isequal('.'), string, pos), 0)
+    startpos = nextind(string, coalesce(findprev(in(non_identifier_chars), string, pos), 0))
 
     ffunc = (mod,x)->true
     suggestions = String[]

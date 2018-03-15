@@ -487,7 +487,7 @@ function val_opts(opts)
     for (opt_name, opt_val) in opts
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
-        opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)::Int]
+        opt_typ = valid_opt_types[findfirst(isequal(opt_name), valid_opts)::Int]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val

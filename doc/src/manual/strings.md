@@ -515,26 +515,26 @@ true
 You can search for the index of a particular character using the [`findfirst`](@ref) function:
 
 ```jldoctest
-julia> findfirst(equalto('x'), "xylophone")
+julia> findfirst(isequal('x'), "xylophone")
 1
 
-julia> findfirst(equalto('p'), "xylophone")
+julia> findfirst(isequal('p'), "xylophone")
 5
 
-julia> findfirst(equalto('z'), "xylophone")
+julia> findfirst(isequal('z'), "xylophone")
 ```
 
 You can start the search for a character at a given offset by using [`findnext`](@ref)
 with a third argument:
 
 ```jldoctest
-julia> findnext(equalto('o'), "xylophone", 1)
+julia> findnext(isequal('o'), "xylophone", 1)
 4
 
-julia> findnext(equalto('o'), "xylophone", 5)
+julia> findnext(isequal('o'), "xylophone", 5)
 7
 
-julia> findnext(equalto('o'), "xylophone", 8)
+julia> findnext(isequal('o'), "xylophone", 8)
 ```
 
 You can use the [`contains`](@ref) function to check if a substring is contained in a string:
