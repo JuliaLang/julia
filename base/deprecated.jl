@@ -1510,6 +1510,12 @@ end
 # Issue #26248
 @deprecate conj(x) x
 
+# PR #26436
+@deprecate equalto(x) isequal(x)
+@deprecate(occursin(x), in(x))
+@deprecate_binding EqualTo Base.Fix2{typeof(isequal)} false
+@deprecate_binding OccursIn Base.Fix2{typeof(in)} false
+
 # Remove ambiguous CartesianIndices and LinearIndices constructors that are ambiguous between an axis and an array (#26448)
 @eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)
 @eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} CartesianIndices(inds)

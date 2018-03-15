@@ -837,8 +837,6 @@ used to implement specialized methods.
 """
 isequal(x) = Fix2(isequal, x)
 
-const EqualTo = Fix2{typeof(isequal)}
-
 """
     ==(x)
 
@@ -860,8 +858,6 @@ The returned function is of type `Base.Fix2{typeof(in)}`, which can be
 used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
-
-const OccursIn = Fix2{typeof(in)}
 
 """
     splat(f)
