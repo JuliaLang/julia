@@ -1306,13 +1306,15 @@ function findall(p::Function, S::SparseMatrixCSC)
     numnz = nnz(S)
     inds = Vector{CartesianIndex{2}}(undef, numnz)
 
-    count = 1
+    count = 0
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if p(S.nzval[k])
-            inds[count] = CartesianIndex(S.rowval[k], col)
             count += 1
+            inds[count] = CartesianIndex(S.rowval[k], col)
         end
     end
+
+    resize!(inds, count)
 
     return inds
 end
