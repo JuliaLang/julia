@@ -128,8 +128,8 @@ function eof end
 
 Read a single value of type `T` from `io`, in canonical binary representation.
 
-Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or 
-[`ltoh`](@ref) for this purpose. 
+Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
+[`ltoh`](@ref) for this purpose.
 
     read(io::IO, String)
 
@@ -158,9 +158,9 @@ Write the canonical binary representation of a value to the given I/O stream or 
 Return the number of bytes written into the stream. See also [`print`](@ref) to
 write a text representation (with an encoding that may depend upon `io`).
 
-The endianness of the written value depends on the endianness of the host system. Use 
-[`hton`](@ref) when writing and [`ntoh`](@ref) when reading to get results that are 
-consistent across plattforms. 
+The endianness of the written value depends on the endianness of the host system. Use
+[`hton`](@ref) when writing and [`ntoh`](@ref) when reading to get results that are
+consistent across plattforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -183,7 +183,7 @@ julia> open("/tmp/test.bin","r") do f
 42
 ```
 
-Merging write calls: 
+Merging write calls:
 ```jldoctest
 julia> io = IOBuffer();
 
