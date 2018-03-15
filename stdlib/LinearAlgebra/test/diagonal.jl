@@ -69,7 +69,7 @@ srand(1)
             @test op(D)==op(DM)
         end
 
-        for func in (det, trace)
+        for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat

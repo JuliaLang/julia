@@ -1452,8 +1452,8 @@ end
 end
 
 @testset "trace" begin
-    @test_throws DimensionMismatch trace(spzeros(5,6))
-    @test trace(sparse(1.0I, 5, 5)) == 5
+    @test_throws DimensionMismatch tr(spzeros(5,6))
+    @test tr(sparse(1.0I, 5, 5)) == 5
 end
 
 @testset "spdiagm" begin
