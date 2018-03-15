@@ -220,12 +220,8 @@ module IteratorsMD
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
         CartesianIndices{N,typeof(inds)}(inds)
-    CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} =
-        CartesianIndices(inds)
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
         CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
-    CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} =
-        CartesianIndices(inds)
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
@@ -406,9 +402,7 @@ module IteratorsMD
     LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
     LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
     LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
     LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
