@@ -128,7 +128,7 @@ function eof end
 
 Read a single value of type `T` from `io`, in canonical binary representation.
 
-Note that Julia does not convert the endianess for you. Use [`ntoh`](@ref) or 
+Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or 
 [`ltoh`](@ref) for this purpose. 
 
     read(io::IO, String)
