@@ -32,7 +32,7 @@ Block the current task until some event occurs, depending on the type of the arg
 * `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
-restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
+restarted by an explicit call to [`schedule`](@ref).
 
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
@@ -114,7 +114,7 @@ Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run const
 is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
 
 If a second argument `val` is provided, it will be passed to the task (via the return value of
-[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
+[`wait`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
 ```jldoctest
@@ -150,7 +150,7 @@ end
 function schedule_and_wait(t::Task, arg=nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     if isempty(Workqueue)
-        return yieldto(t, arg)
+        return _yieldto(t, arg)
     else
         t.result = arg
         push!(Workqueue, t)
@@ -181,15 +181,7 @@ function yield(t::Task, @nospecialize x = nothing)
     return try_yieldto(ensure_rescheduled, Ref(t))
 end
 
-"""
-    yieldto(t::Task, arg = nothing)
-
-Switch to the given task. The first time a task is switched to, the task's function is
-called with no arguments. On subsequent switches, `arg` is returned from the task's last
-call to `yieldto`. This is a low-level call that only switches tasks, not considering states
-or scheduling in any way. Its use is discouraged.
-"""
-function yieldto(t::Task, @nospecialize x = nothing)
+function _yieldto(t::Task, @nospecialize x = nothing)
     t.result = x
     return try_yieldto(identity, Ref(t))
 end
@@ -215,7 +207,7 @@ end
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
     t.exception = exc
-    return yieldto(t)
+    return _yieldto(t)
 end
 
 function ensure_rescheduled(othertask::Task)

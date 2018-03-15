@@ -6,7 +6,6 @@ Base.current_task
 Base.istaskdone
 Base.istaskstarted
 Base.yield
-Base.yieldto
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
