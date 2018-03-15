@@ -844,6 +844,10 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+# Allows an external package to add hooks into the code loading
+# to e.g. install packages on demand
+const identify_package_hooks = Any[]
+
 """
     require(module::Symbol)
 
@@ -866,8 +870,14 @@ Windows.
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
-    uuidkey === nothing &&
-        throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
+    if uuidkey === nothing
+        for f in identify_package_hooks
+            uuidkey = f(into, String(mod))
+            uuidkey !== nothing && break
+        end
+        uuidkey === nothing &&
+            throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
+    end
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
