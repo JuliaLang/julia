@@ -214,7 +214,7 @@ function admonition(stream::IO, block::MD)
                 if contains(line, untitled)
                     m = match(untitled, line)
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], ucfirst(m.captures[1])
+                    m.captures[1], uppercasefirst(m.captures[1])
                 elseif contains(line, titled)
                     m = match(titled, line)
                     # To have a blank TITLE provide an explicit empty string as TITLE.
