@@ -527,7 +527,25 @@ julia> for i = 1:2, j = 3:4
 (2, 4)
 ```
 
-A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+With this syntax, iterables may still refer to outer loop variables; e.g. `for i = 1:n, j = 1:i`
+is valid.
+However a `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+Both variables (`i` and `j`) are set to their current iteration values each time the inner loop runs.
+Therefore, assignments to `i` will not be visible to subsequent iterations:
+
+```jldoctest
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+           i = 0
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
+```
+
+If this example were rewritten to use a `for` keyword for each variable, then the output would
+be different: the second and fourth values would contain `0`.
 
 ## Exception Handling
 
