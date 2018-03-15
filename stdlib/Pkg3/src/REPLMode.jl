@@ -737,11 +737,101 @@ end
 
 pkgstr(str::String) = do_cmd(minirepl[], str)
 
+# handle completions
+commands_sorted = sort!(collect(keys(cmds)))
+options_sorted = sort!(collect(keys(opts)))
+
+mutable struct PkgCompletionProvider <: LineEdit.CompletionProvider end
+
+function LineEdit.complete_line(c::PkgCompletionProvider, s)
+    partial = REPL.beforecursor(s.input_buffer)
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = completions(full, lastindex(partial))
+    return ret, partial[range], should_complete
+end
+
+function complete_command(s, i1, i2)
+    cmp = filter(cmd -> startswith(cmd, s), commands_sorted)
+    return cmp, i1:i2, length(cmp) == 1
+end
+
+function complete_option(s, i1, i2)
+    dashes = 0
+    while !isempty(s) && first(s) == '-'
+        s = s[2:end]
+        dashes += 1
+    end
+
+    cmp = filter(cmd -> startswith(cmd, s), options_sorted)
+
+    isempty(cmp) && (return cmp, 0:-1, false)
+
+    cmp = string.('-'^(2-dashes), cmp)
+
+    if length(cmp) == 1
+        return cmp, i1+dashes:i2, true
+    else
+        return cmp, i1+dashes:i2, false
+    end
+end
+
+function complete_package(s, i1, i2, lastcommand)
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+        return complete_installed_package(s, i1, i2)
+    end
+    return [], 0:-1, false
+end
+
+import .API
+function complete_installed_package(s, i1, i2)
+    ips = collect(keys(filter((p) -> p[2] != nothing, API.installed())))
+    cmp = filter(cmd -> startswith(cmd, s), ips)
+    return cmp, i1:i2, length(cmp) == 1
+end
+
+function completions(full, index)
+    pre = full[1:index]
+
+    pre_words = split(pre, ' ')
+
+    # first word should always be a command
+    if isempty(pre_words)
+        return complete_command("", 1:1)
+    else
+        to_complete = pre_words[end]
+        offset = to_complete.offset+1
+        if length(pre_words) == 1
+            return complete_command(to_complete, offset, index)
+        end
+
+        twocommands = false
+        lastcommand = nothing
+        # this should consume any words up to the current one
+        while length(pre_words) > 1
+            twocommands = false
+            word = popfirst!(pre_words)
+            (word == "preview" || word == "help") && (twocommands = true)
+            if !isempty(word) && haskey(cmds, word)
+                lastcommand = cmds[word]
+            end
+        end
+
+        if twocommands
+            return complete_command(to_complete, offset, index)
+        elseif !isempty(to_complete) && first(to_complete) == '-'
+            return complete_option(to_complete, offset, index)
+        else
+            return complete_package(to_complete, offset, index, lastcommand)
+        end
+    end
+end
+
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)
     pkg_mode = LineEdit.Prompt("pkg> ";
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
+        complete = PkgCompletionProvider(),
         sticky = true)
 
     pkg_mode.repl = repl
