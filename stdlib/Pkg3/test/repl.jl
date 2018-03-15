@@ -29,6 +29,7 @@ mktempdir() do project_path
             withenv("USER" => "Test User") do
                 pkg"generate HelloWorld"
                 cd("HelloWorld")
+                LibGit2.init(".")
                 pkg"st"
                 @eval using HelloWorld
                 Base.invokelatest(HelloWorld.greet)
@@ -138,5 +139,6 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end # withenv
 end # mktempdir
 end # temp_pkg_dir
+
 
 end # module
