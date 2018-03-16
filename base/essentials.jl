@@ -210,7 +210,7 @@ end
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    isvarargtype(t2) ? rewrap_unionall(t2.parameters[1],t) : t
 end
 
 typename(a) = error("typename does not apply to this type")

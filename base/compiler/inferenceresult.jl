@@ -46,10 +46,10 @@ function get_argtypes(result::InferenceResult)
         for i = 1:laty
             atyp = atypes[i]
             if i == laty && isvarargtype(atyp)
-                atyp = unwrap_unionall(atyp).parameters[1]
+                atyp = unwrapva(atyp)
                 atail -= 1
             end
-            if isa(atyp, TypeVar)
+            while isa(atyp, TypeVar)
                 atyp = atyp.ub
             end
             if isa(atyp, DataType) && isdefined(atyp, :instance)

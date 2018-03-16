@@ -409,8 +409,6 @@ JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
-    if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
-    if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
     JL_TYPECHK(<:, type, a);
     JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
