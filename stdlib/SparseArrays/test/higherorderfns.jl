@@ -331,11 +331,6 @@ end
                 ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
             # test broadcast entry point
             @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-            if !isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
-                @show map(typeof, sparseargs)
-                @show SparseMatrixCSC{elT}
-                @show typeof(broadcast(*, sparseargs...))
-            end
             @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
             # test broadcast! entry point
             fX = broadcast(*, sparseargs...); X = sparse(fX)
