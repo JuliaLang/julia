@@ -1273,137 +1273,20 @@ function _binarymap_mode_2!(f::Function, mx::Int, my::Int,
     return ir
 end
 
-function _binarymap(f::Function,
-                    x::AbstractVector{Tx},
-                    y::AbstractSparseVector{Ty},
-                    mode::Int) where {Tx,Ty}
-    0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
-    R = typeof(f(zero(Tx), zero(Ty)))
-    n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+# definition of a few known broadcasted/mapped binary functions — all others defer to HigherOrderFunctions
 
-    ynzind = nonzeroinds(y)
-    ynzval = nonzeros(y)
-    m = length(ynzind)
-
-    dst = Vector{R}(undef, n)
-    if mode == 0
-        ii = 1
-        @inbounds for i = 1:m
-            j = ynzind[i]
-            while ii < j
-                dst[ii] = zero(R); ii += 1
-            end
-            dst[j] = f(x[j], ynzval[i]); ii += 1
-        end
-        @inbounds while ii <= n
-            dst[ii] = zero(R); ii += 1
-        end
-    else # mode >= 1
-        ii = 1
-        @inbounds for i = 1:m
-            j = ynzind[i]
-            while ii < j
-                dst[ii] = f(x[ii], zero(Ty)); ii += 1
-            end
-            dst[j] = f(x[j], ynzval[i]); ii += 1
-        end
-        @inbounds while ii <= n
-            dst[ii] = f(x[ii], zero(Ty)); ii += 1
-        end
-    end
-    return dst
-end
-
-function _binarymap(f::Function,
-                    x::AbstractSparseVector{Tx},
-                    y::AbstractVector{Ty},
-                    mode::Int) where {Tx,Ty}
-    0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
-    R = typeof(f(zero(Tx), zero(Ty)))
-    n = length(x)
-    length(y) == n || throw(DimensionMismatch())
-
-    xnzind = nonzeroinds(x)
-    xnzval = nonzeros(x)
-    m = length(xnzind)
-
-    dst = Vector{R}(undef, n)
-    if mode == 0
-        ii = 1
-        @inbounds for i = 1:m
-            j = xnzind[i]
-            while ii < j
-                dst[ii] = zero(R); ii += 1
-            end
-            dst[j] = f(xnzval[i], y[j]); ii += 1
-        end
-        @inbounds while ii <= n
-            dst[ii] = zero(R); ii += 1
-        end
-    else # mode >= 1
-        ii = 1
-        @inbounds for i = 1:m
-            j = xnzind[i]
-            while ii < j
-                dst[ii] = f(zero(Tx), y[ii]); ii += 1
-            end
-            dst[j] = f(xnzval[i], y[j]); ii += 1
-        end
-        @inbounds while ii <= n
-            dst[ii] = f(zero(Tx), y[ii]); ii += 1
-        end
-    end
-    return dst
-end
-
-
-### Binary arithmetics: +, -, *
-
-for (vop, fun, mode) in [(:_vadd, :+, 1),
-                         (:_vsub, :-, 1),
-                         (:_vmul, :*, 0)]
-    @eval begin
-        $(vop)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::AbstractVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
-        $(vop)(x::AbstractSparseVector, y::AbstractVector) = _binarymap($(fun), x, y, $mode)
-    end
-end
-
-# to workaround the ambiguities with BitVector
-broadcast(::typeof(*), x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
-broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
-
-# definition of operators
-
-for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
-    op != :* && @eval begin
-        $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
-        $(op)(x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
+_bcast_binary_map(f, x, y, mode) = length(x) == length(y) ? _binarymap(f, x, y, mode) : HigherOrderFns._diffshape_broadcast(f, x, y)
+for (fun, mode) in [(:+, 1), (:-, 1), (:*, 0), (:min, 2), (:max, 2)]
+    fun in (:+, :-) && @eval begin
+        # Addition and subtraction can be defined directly on the arrays (without map/broadcast)
+        $(fun)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
     end
     @eval begin
-        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::AbstractVector, y::AbstractSparseVector) = $(vop)(x, y)
-        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractVector) = $(vop)(x, y)
+        map(::typeof($fun), x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($fun, x, y, $mode)
+        broadcast(::typeof($fun), x::AbstractSparseVector, y::AbstractSparseVector) = _bcast_binary_map($fun, x, y, $mode)
+        broadcast(::typeof($fun), x::SparseVector, y::SparseVector) = _bcast_binary_map($fun, x, y, $mode)
     end
 end
-
-# definition of other binary functions
-
-broadcast(::typeof(min), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
-broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(min, x, y, 2)
-
-broadcast(::typeof(max), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
-broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(max, x, y, 2)
-
-complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
-complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) = _binarymap(complex, x, y, 1)
 
 ### Reduction
 

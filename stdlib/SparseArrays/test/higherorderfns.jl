@@ -556,6 +556,30 @@ end
     @test spzeros(1,2) .* spzeros(0,1) == zeros(0,2)
 end
 
+@testset "sparse vector broadcast of two arguments" begin
+    sv1, sv5 = sprand(1, 1.), sprand(5, 1.)
+    for (sa, sb) in ((sv1, sv1), (sv1, sv5), (sv5, sv1), (sv5, sv5))
+        fa, fb = Vector(sa), Vector(sb)
+        for f in (+, -, *, min, max)
+            @test @inferred(broadcast(f, sa, sb))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, Vector(sa), sb))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, sa, Vector(sb)))::SparseVector == broadcast(f, fa, fb)
+            @test @inferred(broadcast(f, SparseMatrixCSC(sa), sb))::SparseMatrixCSC == broadcast(f, reshape(fa, Val(2)), fb)
+            @test @inferred(broadcast(f, sa, SparseMatrixCSC(sb)))::SparseMatrixCSC == broadcast(f, fa, reshape(fb, Val(2)))
+            if length(fa) == length(fb)
+                @test @inferred(map(f, sa, sb))::SparseVector == broadcast(f, fa, fb)
+            end
+        end
+        if length(fa) == length(fb)
+            for f in (+, -)
+                @test @inferred(f(sa, sb))::SparseVector == f(fa, fb)
+                @test @inferred(f(Vector(sa), sb))::SparseVector == f(fa, fb)
+                @test @inferred(f(sa, Vector(sb)))::SparseVector == f(fa, fb)
+            end
+        end
+    end
+end
+
 @testset "aliasing and indexed assignment or broadcast!" begin
     A = sparsevec([0, 0, 1, 1])
     B = sparsevec([1, 1, 0, 0])
