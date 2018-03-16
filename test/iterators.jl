@@ -473,6 +473,13 @@ end
         @test valtype(d) == V
         @test eltype(d) == Pair{K, V}
     end
+
+    let io = IOBuffer()
+        Base.showarg(io, pairs([1,2,3]), true)
+        @test String(take!(io)) == "pairs(::Array{$Int,1})"
+        Base.showarg(io, pairs((a=1, b=2)), true)
+        @test String(take!(io)) == "pairs(::NamedTuple)"
+    end
 end
 
 @testset "reverse iterators" begin
