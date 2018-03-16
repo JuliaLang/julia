@@ -149,8 +149,8 @@
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
                          struct
-                         type immutable importall  ;; to be deprecated
-                         module baremodule using import export))
+                         type immutable importall baremodule  ;; to be deprecated
+                         module using import export))
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
