@@ -327,7 +327,7 @@ julia> 2*Float16(4.)
 Float16(8.0)
 ```
 
-The underscore `_` can be used to separate digits:
+The underscore `_` can be used as digit separator:
 
 ```jldoctest
 julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
