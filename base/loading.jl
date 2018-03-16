@@ -1200,7 +1200,7 @@ function compilecache(pkg::PkgId)
     if success(create_expr_cache(path, cachefile, concrete_deps, pkg.uuid))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(_crc32c(seekstart(f))))
+            write(f, _crc32c(seekstart(f)))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -1211,35 +1211,35 @@ end
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == ntoh(read(f, UInt32)))
+isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build UUID (mostly just a timestamp)
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
+    totbytes = read(f, Int64) # total bytes for file dependencies
     # read the list of requirements
     # and split the list into include and requires statements
     includes = Tuple{PkgId, String, Float64}[]
     requires = Pair{PkgId, PkgId}[]
     while true
-        n2 = ntoh(read(f, Int32))
+        n2 = read(f, Int32)
         n2 == 0 && break
         depname = String(read(f, n2))
-        mtime = ntoh(read(f, Float64))
-        n1 = ntoh(read(f, Int32))
+        mtime = read(f, Float64)
+        n1 = read(f, Int32)
         # map ids to keys
         modkey = (n1 == 0) ? PkgId("") : modules[n1].first
         if n1 != 0
             # consume (and ignore) the module path too
             while true
-                n1 = ntoh(read(f, Int32))
+                n1 = read(f, Int32)
                 totbytes -= 4
                 n1 == 0 && break
                 skip(f, n1) # String(read(f, n1))
@@ -1254,15 +1254,15 @@ function parse_cache_header(f::IO)
         totbytes -= 4 + 4 + n2 + 8
     end
     @assert totbytes == 12 "header of cache file appears to be corrupt"
-    srctextpos = ntoh(read(f, Int64))
+    srctextpos = read(f, Int64)
     # read the list of modules that are required to be present during loading
     required_modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build id
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
     return modules, (includes, requires), required_modules, srctextpos
@@ -1302,10 +1302,10 @@ end
 
 function _read_dependency_src(io::IO, filename::AbstractString)
     while !eof(io)
-        filenamelen = ntoh(read(io, Int32))
+        filenamelen = read(io, Int32)
         filenamelen == 0 && break
         fn = String(read(io, filenamelen))
-        len = ntoh(read(io, UInt64))
+        len = read(io, UInt64)
         if fn == filename
             return String(read(io, len))
         end

@@ -128,55 +128,47 @@ static arraylist_t builtin_typenames;
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
-/* read and write in network (bigendian) order: */
+/* read and write in host byte order */
 
 static void write_int32(ios_t *s, int32_t i)
 {
-    write_uint8(s, (i>>24) & 0xff);
-    write_uint8(s, (i>>16) & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, i       & 0xff);
+    ios_write(s, (char*)&i, 4);
 }
 
 static int32_t read_int32(ios_t *s)
 {
-    int b3 = read_uint8(s);
-    int b2 = read_uint8(s);
-    int b1 = read_uint8(s);
-    int b0 = read_uint8(s);
-    return b0 | (b1<<8) | (b2<<16) | (b3<<24);
+    int32_t x = 0;
+    ios_read(s, (char*)&x, 4);
+    return x;
 }
 
 static void write_uint64(ios_t *s, uint64_t i)
 {
-    write_int32(s, (i>>32) & 0xffffffff);
-    write_int32(s, i       & 0xffffffff);
+    ios_write(s, (char*)&i, 8);
 }
 
 static uint64_t read_uint64(ios_t *s)
 {
-    uint64_t b1 = (uint32_t)read_int32(s);
-    uint64_t b0 = (uint32_t)read_int32(s);
-    return b0 | (b1<<32);
+    uint64_t x = 0;
+    ios_read(s, (char*)&x, 8);
+    return x;
 }
 
 static void write_int64(ios_t *s, int64_t i)
 {
-    write_int32(s, (i>>32) & 0xffffffff);
-    write_int32(s, i       & 0xffffffff);
+    ios_write(s, (char*)&i, 8);
 }
 
 static void write_uint16(ios_t *s, uint16_t i)
 {
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, i       & 0xff);
+    ios_write(s, (char*)&i, 2);
 }
 
 static uint16_t read_uint16(ios_t *s)
 {
-    int b1 = read_uint8(s);
-    int b0 = read_uint8(s);
-    return b0 | (b1<<8);
+    int16_t x = 0;
+    ios_read(s, (char*)&x, 2);
+    return x;
 }
 
 static void writetag(ios_t *s, void *v)
@@ -1067,7 +1059,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 5;
+static const int JI_FORMAT_VERSION = 6;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
