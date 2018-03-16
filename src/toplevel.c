@@ -287,6 +287,24 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
+jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
+{
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 3);
+    args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
+    args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
+    if (jl_is_module(args[1])) {
+        JL_TYPECHK("getfield", symbol, args[2]);
+        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+    }
+    else {
+        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        args[0] = jl_apply(args, 3);
+    }
+    JL_GC_POP();
+    return args[0];
+}
+
 // module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -611,7 +629,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == module_sym) {
+    if (ex->head == dot_sym) {
+        if (jl_expr_nargs(ex) != 2)
+            jl_error("syntax: malformed \".\" expression");
+        return jl_eval_dot_expr(m, jl_exprarg(ex, 0), jl_exprarg(ex, 1), fast);
+    }
+    else if (ptls->in_pure_callback) {
+        jl_error("eval cannot be used in a generated function");
+    }
+    else if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
     }
     else if (ex->head == importall_sym) {
