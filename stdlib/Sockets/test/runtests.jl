@@ -186,6 +186,8 @@ end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
     @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
+    e = (try; getaddrinfo(".invalid"); catch ex; ex; end)
+    @test startswith(sprint(show, e), "DNSError:")
 end
 
 @testset "invalid port" begin
