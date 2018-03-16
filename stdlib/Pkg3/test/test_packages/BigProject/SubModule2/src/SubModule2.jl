@@ -1,7 +1,10 @@
 module SubModule2
 
-if !isfile(joinpath(@__DIR__, "..", "deps", "buildartifact"))
+buildfile = joinpath(@__DIR__, "..", "deps", "buildartifact")
+if !isfile(buildfile)
     error("Package built incorrectly")
+else
+    include(buildfile)
 end
 
 f() = 1

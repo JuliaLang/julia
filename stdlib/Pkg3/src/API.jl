@@ -176,6 +176,11 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
+    if isempty(pkgs)
+        # TODO: Allow this?
+        ctx.env.pkg == nothing && cmderror("trying to test unnamed project")
+        push!(pkgs, ctx.env.pkg)
+    end
     project_resolve!(ctx.env, pkgs)
     project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
@@ -324,9 +329,13 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if isempty(pkgs)
-        for (name, infos) in ctx.env.manifest, info in infos
-            uuid = UUID(info["uuid"])
-            push!(pkgs, PackageSpec(name, uuid))
+        if ctx.env.pkg !== nothing
+            push!(pkgs, ctx.env.pkg)
+        else
+            for (name, infos) in ctx.env.manifest, info in infos
+                uuid = UUID(info["uuid"])
+                push!(pkgs, PackageSpec(name, uuid))
+            end
         end
     end
     for pkg in pkgs

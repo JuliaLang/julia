@@ -241,6 +241,8 @@ mktempdir() do tmp
         try
             pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
             pkg"build"
+            @eval using BigProject
+            pkg"build BigProject"
             @test_throws CommandError pkg"add BigProject"
             pkg"test SubModule"
             pkg"test SubModule2"

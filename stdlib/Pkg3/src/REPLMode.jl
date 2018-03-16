@@ -670,11 +670,6 @@ function do_test!(ctx::Context, tokens::Vector{Token})
             cmderror("invalid usage for `test`")
         end
     end
-    if isempty(pkgs)
-        # TODO: Allow this?
-        ctx.env.pkg == nothing && cmderror("trying to test unnamed project")
-        push!(pkgs, ctx.env.pkg)
-    end
     API.test(ctx, pkgs; coverage = coverage)
 end
 
