@@ -18,7 +18,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
+    project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
@@ -450,6 +450,9 @@ mutable struct EnvCache
     project_file::String
     manifest_file::String
 
+    # name / uuid of the project
+    pkg::Union{PackageSpec, Nothing}
+
     # cache of metadata:
     project::Dict
     manifest::Dict
@@ -479,6 +482,15 @@ mutable struct EnvCache
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
+        if any(haskey.(project, ["name", "uuid", "version"]))
+            project_package = PackageSpec(
+                get(project, "name", ""),
+                UUID(get(project, "uuid", 0)),
+                VersionNumber(get(project, "version", "0.0")),
+            )
+        else
+            project_package = nothing
+        end
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
         else
@@ -496,12 +508,22 @@ mutable struct EnvCache
             git,
             project_file,
             manifest_file,
+            project_package,
             project,
             manifest,
             uuids,
             paths,)
     end
 end
+
+collides_with_project(env::EnvCache, pkg::PackageSpec) =
+    is_project_name(env, pkg.name) || is_project_uuid(env, pkg.uuid)
+is_project(env::EnvCache, pkg::PackageSpec) = is_project_uuid(env, pkg.uuid)
+is_project_name(env::EnvCache, name::String) =
+    env.pkg !== nothing && env.pkg.name == name
+is_project_uuid(env::EnvCache, uuid::UUID) =
+    env.pkg !== nothing && env.pkg.uuid == uuid
+
 
 
 ###########
@@ -800,12 +822,23 @@ end
 # Resolving packages from name or uuid #
 ########################################
 
-# Disambiguate name/uuid package specifications using project info.
 function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
+    for pkg in pkgs
+        if has_uuid(pkg) && !has_name(pkg) && Types.is_project_uuid(env, pkg.uuid)
+            pkg.name = env.pkg.name
+        end
+        if has_name(pkg) && !has_uuid(pkg) && Types.is_project_name(env, pkg.name)
+            pkg.uuid = env.pkg.uuid
+        end
+    end
+end
+
+# Disambiguate name/uuid package specifications using project info.
+function project_deps_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
     names = Dict(uuid => name for (uuid, name) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
-        @warn "duplicate UUID found in project file's [deps] section"
+        cmderror("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
         pkg.mode == PKGMODE_PROJECT || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)

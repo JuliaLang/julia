@@ -1,0 +1,6 @@
+name = "SubModule"
+uuid = "0d404dc8-25d6-11e8-300e-11c8e584fb95"
+version = "0.1.0"
+author = ["Some One"]
+
+[deps]

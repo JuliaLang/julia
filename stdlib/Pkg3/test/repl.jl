@@ -1,6 +1,7 @@
 module REPLTests
 
 using Pkg3
+import Pkg3.Types.CommandError
 using UUIDs
 using Test
 import LibGit2
@@ -21,9 +22,10 @@ function git_init_package(tmp, path)
     return pkgpath
 end
 
+
 mktempdir() do project_path
     cd(project_path) do
-        push!(LOAD_PATH, Base.parse_load_path("@"))
+        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
         try
             withenv("USER" => "Test User") do
                 pkg"generate HelloWorld"
@@ -37,7 +39,7 @@ mktempdir() do project_path
                 Pkg3.test("PackageWithBuildSpecificTestDeps")
             end
         finally
-            pop!(LOAD_PATH)
+            popfirst!(LOAD_PATH)
         end
     end
 end
@@ -137,8 +139,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
             Pkg3.test("UnregisteredWithoutProject")
             Pkg3.test("UnregisteredWithProject")
         end
-    end # withenv
-end # mktempdir
+    finally
+        popfirst!(LOAD_PATH)
+    end
+end # cd
 end # temp_pkg_dir
 
 test_complete(s) = Pkg3.REPLMode.completions(s,lastindex(s))
@@ -200,8 +204,25 @@ temp_pkg_dir() do project_path; cd(project_path) do
         @test apply_completion("rm E") == "rm Example"
         @test apply_completion("add Exampl") == "add Example"
     finally
-        pop!(LOAD_PATH)
+        popfirst!(LOAD_PATH)
     end
 end end
+
+mktempdir() do tmp
+    cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
+    cd(joinpath(tmp, "BigProject")) do
+        try
+            pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+            pkg"build"
+            @test_throws CommandError pkg"add BigProject"
+            pkg"test SubModule"
+            pkg"test SubModule2"
+            pkg"test BigProject"
+            pkg"test"
+        finally
+            popfirst!(LOAD_PATH)
+        end
+    end
+end
 
 end # module

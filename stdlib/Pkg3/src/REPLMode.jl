@@ -213,11 +213,14 @@ end
 # Execution #
 #############
 
-function do_cmd(repl::REPL.AbstractREPL, input::String)
+function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     try
         tokens = tokenize(input)
         do_cmd!(tokens, repl)
     catch err
+        if do_rethrow
+            rethrow(err)
+        end
         if err isa CommandError
             Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Nothing}[])
         else
@@ -667,7 +670,11 @@ function do_test!(ctx::Context, tokens::Vector{Token})
             cmderror("invalid usage for `test`")
         end
     end
-    isempty(pkgs) && cmderror("`test` takes a set of packages")
+    if isempty(pkgs)
+        # TODO: Allow this?
+        ctx.env.pkg == nothing && cmderror("trying to test unnamed project")
+        push!(pkgs, ctx.env.pkg)
+    end
     API.test(ctx, pkgs; coverage = coverage)
 end
 
@@ -732,10 +739,10 @@ __init__() = minirepl[] = MiniREPL()
 const minirepl = Ref{MiniREPL}()
 
 macro pkg_str(str::String)
-    :($(do_cmd)(minirepl[], $str))
+    :($(do_cmd)(minirepl[], $str; do_rethrow=true))
 end
 
-pkgstr(str::String) = do_cmd(minirepl[], str)
+pkgstr(str::String) = do_cmd(minirepl[], str; do_rethrow=true)
 
 # handle completions
 commands_sorted = sort!(collect(keys(cmds)))

@@ -28,7 +28,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     else
         handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
-    project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
@@ -49,7 +49,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     Operations.rm(ctx, pkgs)
     ctx.preview && preview_info()
@@ -129,7 +129,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
             end
         end
     else
-        project_resolve!(ctx.env, pkgs)
+        project_deps_resolve!(ctx.env, pkgs)
         manifest_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs)
     end
@@ -146,7 +146,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.pin(ctx, pkgs)
 end
@@ -177,6 +177,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.test(ctx, pkgs; coverage=coverage)
@@ -299,13 +300,17 @@ end
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
-        info = manifest_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
-        if haskey(info, "deps")
-            pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
-            _get_deps!(ctx, pkgs, uuids)
+        if Types.is_project(ctx.env, pkg)
+            pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in ctx.env.project["deps"]]
+        else
+            info = manifest_info(ctx.env, pkg.uuid)
+            if haskey(info, "deps")
+                pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
+            end
         end
+        _get_deps!(ctx, pkgs, uuids)
     end
 end
 
@@ -327,6 +332,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     for pkg in pkgs
         pkg.mode = PKGMODE_MANIFEST
     end
+    project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     uuids = UUID[]

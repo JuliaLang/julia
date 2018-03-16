@@ -32,7 +32,13 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest
     diff = nothing
-
+    if !use_as_api
+        pkg = ctx.env.pkg
+        if pkg !== nothing
+           printstyled("Project "; color=Base.info_color(), bold=true)
+           println(pkg.name, " v", pkg.version)
+        end
+    end
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
