@@ -194,9 +194,9 @@ end
 @inline function split_dimensions(X,dim::Integer)
     inds = axes(X)
     if dim > length(inds)
-        (CartesianIndices(inds), CartesianIndices(), CartesianIndices())
+        (CartesianIndices(inds), CartesianIndices(()), CartesianIndices(()))
     else
-        (CartesianIndices(inds[1:dim-1]), inds[dim], CartesianIndices(inds[dim+1:end]))
+        (CartesianIndices(inds[1:dim-1]), CartesianIndices((inds[dim],)), CartesianIndices(inds[dim+1:end]))
     end
 end
 
