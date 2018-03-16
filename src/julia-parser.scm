@@ -701,7 +701,7 @@
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
 (define non-standalone-symbol-token?
-  (Set (append operators reserved-words '(.... mutable primitive abstract))))
+  (Set (append operators reserved-words '(.... mutable primitive abstract bare))))
 
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)
@@ -1135,7 +1135,7 @@
   (parse-call-with-initial-ex s (parse-unary-prefix s)))
 
 (define (parse-call-with-initial-ex s ex)
-  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract))
+  (if (or (initial-reserved-word? ex) (eq? ex 'mutable) (eq? ex 'primitive) (eq? ex 'abstract) (eq? ex 'bare))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1329,6 +1329,16 @@
   (let ((sig (parse-subtype-spec s)))
     (begin0 (list 'struct (if mut? 'true 'false) sig (parse-block s))
             (expect-end s word))))
+
+(define (parse-module-def s word)
+  (if (reserved-word? (peek-token s))
+      (error (string "invalid module name \"" (take-token s) "\"")))
+  (let* ((name (parse-unary-prefix s))
+         (loc  (line-number-node s))
+         (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+    (expect-end s word)
+    (list 'module (if (eq? word 'module) 'true 'false) name
+          `(block ,loc ,@(cdr body)))))
 
 ;; consume any number of line endings from a token stream
 (define (take-lineendings s)
@@ -1558,14 +1568,12 @@
               (error (string "unexpected \"" t "\" after " word)))))
 
        ((module baremodule)
-        (let* ((name (parse-unary-prefix s))
-               (loc  (line-number-node s))
-               (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
-          (if (reserved-word? name)
-              (error (string "invalid module name \"" name "\"")))
-          (expect-end s word)
-          (list 'module (if (eq? word 'module) 'true 'false) name
-                `(block ,loc ,@(cdr body)))))
+        (parse-module-def s word))
+       ((bare)
+        (if (not (eq? (peek-token s) 'module))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (parse-module-def s word))))
        ((export)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
