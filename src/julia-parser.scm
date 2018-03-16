@@ -1567,7 +1567,11 @@
               (list word)
               (error (string "unexpected \"" t "\" after " word)))))
 
-       ((module baremodule)
+       ((module)
+        (parse-module-def s word))
+       ;; deprecated syntax
+       ((baremodule)
+        (parser-depwarn s "baremodule" "bare module")
         (parse-module-def s word))
        ((bare)
         (if (not (eq? (peek-token s) 'module))
