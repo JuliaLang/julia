@@ -50,7 +50,7 @@ function project(pkg::String, dir::String)
             name = "$pkg"
             uuid = "$(UUIDs.uuid1())"
             version = "0.1.0"
-            author = $authorstr
+            authors = $authorstr
 
             [deps]
             """
