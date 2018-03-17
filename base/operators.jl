@@ -73,6 +73,10 @@ Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 # Implementation
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
+
+[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
+[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
+should therefore also implement [`hash`](@ref).
 """
 ==(x, y) = x === y
 
