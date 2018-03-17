@@ -12,26 +12,26 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(@nospecialize(a), @nospecialize(b))
+function typejoin(@nospecialize(a), @nospecialize(b); recur = typejoin)
     @_pure_meta
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        return UnionAll(a.var, recur(a.body, b))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return UnionAll(b.var, recur(a, b.body))
     elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
+        return recur(a.ub, b)
     elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
+        return recur(a, b.ub)
     elseif isa(a,Union)
-        a′ = typejoin(a.a, a.b)
-        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
+        a′ = recur(a.a, a.b)
+        return a′ === a ? recur(a, b) : recur(a′, b)
     elseif isa(b,Union)
-        b′ = typejoin(b.a, b.b)
-        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
+        b′ = recur(b.a, b.b)
+        return b′ === b ? recur(a, b) : recur(a, b′)
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -49,7 +49,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(undef, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
+                c[laf] = Vararg{recur(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
                 c = Vector{Any}(undef, laf+1)
@@ -59,7 +59,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(undef, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
+                c[lbf] = Vararg{recur(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
                 c = Vector{Any}(undef, lbf+1)
@@ -72,7 +72,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai), unwrapva(bi))
+            ci = recur(unwrapva(ai), unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -113,7 +113,7 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b, recur = promote_typejoin)
 promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
 promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
