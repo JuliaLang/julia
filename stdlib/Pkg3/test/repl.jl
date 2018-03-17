@@ -145,19 +145,21 @@ temp_pkg_dir() do project_path; cd(project_path) do
         pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
         mktempdir() do other_dir
             mktempdir() do tmp; cd(tmp) do
-                pkg"generate HelloWorld"
-                cd("HelloWorld") do
-                    pkg"generate SubModule1"
-                    pkg"generate SubModule2"
-                    pkg"develop SubModule1"
-                    mkdir("tests")
-                    cd("tests") do
-                        pkg"develop ../SubModule2"
+                withenv("USER" => "Test User") do
+                    pkg"generate HelloWorld"
+                    cd("HelloWorld") do
+                        pkg"generate SubModule1"
+                        pkg"generate SubModule2"
+                        pkg"develop SubModule1"
+                        mkdir("tests")
+                        cd("tests") do
+                            pkg"develop ../SubModule2"
+                        end
+                        @test Pkg3.installed()["SubModule1"] == v"0.1.0"
+                        @test Pkg3.installed()["SubModule2"] == v"0.1.0"
                     end
-                    @test Pkg3.installed()["SubModule1"] == v"0.1.0"
-                    @test Pkg3.installed()["SubModule2"] == v"0.1.0"
+                    cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
                 end
-                cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
             end end
             # Check that these didnt generate absolute paths in the Manifest by copying
             # to another directory
