@@ -1,3 +1,110 @@
+function compact_exprtype(compact, value)
+    if isa(value, Union{SSAValue, OldSSAValue})
+        return types(compact)[value]
+    elseif isa(value, Argument)
+        return compact.ir.argtypes[value.n]
+    end
+    exprtype(value, compact.ir, compact.ir.mod)
+end
+
+function getfield_elim_pass!(ir::IRCode)
+    compact = IncrementalCompact(ir)
+    insertions = Vector{Any}()
+    for (idx, stmt) in compact
+        isa(stmt, Expr) || continue
+        is_known_call(stmt, getfield, ir, ir.mod) || continue
+        isa(stmt.args[2], SSAValue) || continue
+        field = stmt.args[3]
+        isa(field, QuoteNode) && (field = field.value)
+        isa(field, Union{Int, Symbol}) || continue
+        orig_defidx = defidx = stmt.args[2].id
+        def = compact[defidx]
+        typeconstraint = types(compact)[defidx]
+        phi_locs = Tuple{Int, Int}[]
+        while true
+            if isa(def, PiNode)
+                typeconstraint = typeintersect(typeconstraint, def.typ)
+                if isa(def.val, SSAValue)
+                    defidx = def.val.id
+                    def = compact[defidx]
+                else
+                    def = def.val
+                end
+                continue
+            elseif isa(def, PhiNode)
+                possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
+                    isassigned(def.values, n) || return false
+                    value = def.values[n]
+                    edge_typ = compact_exprtype(compact, value)
+                    return edge_typ ⊑ typeconstraint
+                end)
+                # For now, only look at unique predecessors
+                if length(possible_predecessors) == 1
+                    n = possible_predecessors[1]
+                    pred = def.edges[n]
+                    val = def.values[n]
+                    if isa(val, SSAValue)
+                        push!(phi_locs, (pred, defidx))
+                        defidx = val.id
+                        def = compact[defidx]
+                    elseif def == val
+                        # This shouldn't really ever happen, but
+                        # patterns like this can occur in dead code,
+                        # so bail out.
+                        break
+                    else
+                        def = val
+                    end
+                    continue
+                end
+            end
+            break
+        end
+        if isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod) && isa(field, Int) && 1 <= field < length(def.args)
+            forwarded = def.args[1+field]
+        elseif isexpr(def, :new)
+            typ = def.typ
+            if isa(typ, UnionAll)
+                typ = unwrap_unionall(typ)
+            end
+            isa(typ, DataType) || continue
+            !typ.mutable || continue
+            if isa(field, Symbol)
+                field = fieldindex(typ, field, false)
+                field == 0 && continue
+            elseif isa(field, Integer)
+                (1 <= field <= fieldcount(typ)) || continue
+            end
+            forwarded = def.args[1+field]
+        else
+            continue
+        end
+        if !isempty(phi_locs) && isa(forwarded, SSAValue)
+            # TODO: We have have to use BB ids for phi_locs
+            # to avoid index invalidation.
+            push!(insertions, (idx, phi_locs))
+        end
+        compact[idx] = forwarded
+    end
+    ir = finish(compact)
+    for (idx, phi_locs) in insertions
+        # For non-dominating load-store forward, we may have to insert extra phi nodes
+        # TODO: Can use the domtree to eliminate unnecessary phis, but ok for now
+        forwarded = ir.stmts[idx]
+        if isa(forwarded, SSAValue)
+            forwarded_typ = ir.types[forwarded.id]
+            for (pred, pos) in reverse!(phi_locs)
+                node = PhiNode()
+                push!(node.edges, pred)
+                push!(node.values, forwarded)
+                forwarded = insert_node!(ir, pos, forwarded_typ, node)
+            end
+        end
+        ir.stmts[idx] = forwarded
+    end
+    ir
+end
+
 function type_lift_pass!(ir::IRCode)
     type_ctx_uses = Vector{Vector{Int}}[]
     has_non_type_ctx_uses = IdSet{Int}()
