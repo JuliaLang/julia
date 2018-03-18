@@ -1321,7 +1321,7 @@ end
 #   test that the first argument to cglobal is recognized as a tuple literal even through
 #   macro expansion
 macro cglobal26297(sym)
-    :(cglobal(($(esc(sym)), "libccalltest"), Cint))
+    :(cglobal(($(esc(sym)), libccalltest), Cint))
 end
 cglobal26297() = @cglobal26297(:global_var)
 @test cglobal26297() != C_NULL
