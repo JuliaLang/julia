@@ -96,12 +96,12 @@ end
 kw"module"
 
 """
-    baremodule
+    bare module
 
-`baremodule` declares a module that does not contain `using Base`
+`bare module` declares a module that does not contain `using Base`
 or a definition of `eval`. It does still import `Core`.
 """
-kw"baremodule"
+kw"bare module"
 
 """
     primitive type

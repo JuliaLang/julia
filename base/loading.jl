@@ -911,7 +911,7 @@ register_root_module(Main)
 # This is used as the current module when loading top-level modules.
 # It has the special behavior that modules evaluated in it get added
 # to the loaded_modules table instead of getting bindings.
-baremodule __toplevel__
+bare module __toplevel__
 using Base
 end
 

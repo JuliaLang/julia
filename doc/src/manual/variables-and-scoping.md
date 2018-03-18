@@ -19,7 +19,7 @@ constructs introducing scope blocks are:
 
     - global scope
 
-      + module, baremodule
+      + module, bare module
 
       + at interactive prompt (REPL)
 

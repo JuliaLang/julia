@@ -188,7 +188,7 @@
            ((primitive)
             (string "primitive type " (deparse (cadr e)) " " (deparse (caddr e)) " end"))
            ((module)
-            (string (if (eq? (cadr e) 'true) "module " "baremodule ")
+            (string (if (eq? (cadr e) 'true) "module " "bare module ")
                     (caddr e) "\n"
                     (string.join (map deparse (cdr (cadddr e))) "\n") "\n"
                     "end"))

@@ -926,7 +926,7 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
         end
     end
 
-    ind = head === :module || head === :baremodule ? indent : indent + indent_width
+    ind = head === :module || head === Symbol("bare module") ? indent : indent + indent_width
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         print(io, '\n', " "^ind)
@@ -1319,7 +1319,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     elseif head === :module && nargs==3 && isa(args[1],Bool)
-        show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
+        show_block(io, args[1] ? :module : Symbol("bare module"), args[2], args[3], indent)
         print(io, "end")
 
     # type declaration

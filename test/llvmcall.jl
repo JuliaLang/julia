@@ -48,7 +48,7 @@ end
 #@test add1234(map(Int64,(2,3,4,5))) === map(Int64,(3,5,7,9))
 
 # Test whether llvmcall escapes the function name correctly
-baremodule PlusTest
+bare module PlusTest
     using Base: llvmcall
     using Test
     using Base

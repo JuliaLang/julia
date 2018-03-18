@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(bare module Compiler
 
 using Core.Intrinsics, Core.IR
 
@@ -123,5 +123,5 @@ include("compiler/optimize.jl") # TODO: break this up further + extract utilitie
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)
 
-end # baremodule Compiler
+end # bare module Compiler
 ))

@@ -379,7 +379,7 @@ function moduledoc(__source__, __module__, meta, def, def′)
         def = unblock(def)
         block = def.args[3].args
         if !def.args[1]
-            isempty(block) && error("empty baremodules are not documentable.")
+            isempty(block) && error("empty bare modules are not documentable.")
             insert!(block, 2, :(import Base: @doc))
         end
         push!(block, docex)
@@ -533,7 +533,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # Quoted macrocall syntax. `:@time` / `:(Base.@time)`.
     isquotedmacrocall(x) ? objectdoc(source, mod, meta, def, x) :
-    # Modules and baremodules.
+    # Modules and bare modules.
     isexpr(x, :module) ? moduledoc(source, mod, meta, def, x) :
     # Document several expressions with the same docstring. `a, b, c`.
     isexpr(x, :tuple) ? multidoc(source, mod, meta, x, define) :

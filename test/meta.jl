@@ -129,7 +129,7 @@ show_sexpr(ioB,:(1+1))
 show_sexpr(ioB,QuoteNode(1),1)
 
 # test base/expr.jl
-baremodule B
+bare module B
     eval = 0
     x = 1
     module M; x = 2; end

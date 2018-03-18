@@ -320,7 +320,7 @@ let a = @doc(DocsTest.multidoc),
 end
 
 "BareModule"
-baremodule BareModule
+bare module BareModule
 
 "f/1"
 f(x) = x

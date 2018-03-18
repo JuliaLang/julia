@@ -470,7 +470,7 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
+const builtins = ["abstract type", "bare module", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
                   "global", "if", "import", "let",
