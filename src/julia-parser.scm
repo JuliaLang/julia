@@ -1875,13 +1875,6 @@
                                 (deparse (car vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer))))))))
 
-(define (peek-non-newline-token s)
-  (let loop ((t (peek-token s)))
-    (if (newline? t)
-        (begin (take-token s)
-               (loop (peek-token s)))
-        t)))
-
 (define (expect-space-before s t)
   (if (not (ts:space? s))
       (error (string "expected space before \"" t "\""))))
