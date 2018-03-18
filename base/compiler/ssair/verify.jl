@@ -14,6 +14,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         else
             if !dominates(domtree, def_bb, use_bb)
                 #@Base.show ir
+                #@Base.show ir.cfg
                 #@Base.error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
             end
@@ -29,7 +30,7 @@ function verify_ir(ir::IRCode)
     # @assert isempty(ir.new_nodes)
     # Verify CFG
     last_end = 0
-    for block in ir.cfg.blocks
+    for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
             #@Base.show ranges
@@ -37,6 +38,12 @@ function verify_ir(ir::IRCode)
             error()
         end
         last_end = last(block.stmts)
+        for p in block.preds
+            idx in ir.cfg.blocks[p].succs || error()
+        end
+        for s in block.succs
+            idx in ir.cfg.blocks[s].preds || error()
+        end
     end
     # Verify statements
     domtree = construct_domtree(ir.cfg)
