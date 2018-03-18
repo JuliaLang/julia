@@ -1364,3 +1364,6 @@ end
 
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
+
+# Module name cannot be a reserved word.
+@test_throws ParseError Meta.parse("module module end")
