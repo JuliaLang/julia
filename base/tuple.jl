@@ -350,9 +350,18 @@ function isless(t1::Any16, t2::Any16)
     return n1 < n2
 end
 
-#in(x, t::Tuple{}) = false
-#in(x, t::Tuple  ) = x == t[1] || in(x, tail(t))
-#in(x, t::Any16  ) = any(y -> y == x, t)
+in(x, t::Any16) = any(y -> y == x, t)
+# specialized methods for short tuples
+in(x, t::Tuple{}) = false
+function in(x, t::Tuple)
+    found = x == t[1]
+    if ismissing(found)
+        # propagate missingness
+        return missing | in(x, tail(t))
+    else
+        return found || in(x, tail(t))
+    end
+end
 
 ## functions ##
 
