@@ -158,9 +158,9 @@ Write the canonical binary representation of a value to the given I/O stream or 
 Return the number of bytes written into the stream. See also [`print`](@ref) to
 write a text representation (with an encoding that may depend upon `io`).
 
-The endianness of the written value depends on the endianness of the host system. Use
-[`hton`](@ref) when writing and [`ntoh`](@ref) when reading to get results that are
-consistent across plattforms.
+The endianness of the written value depends on the endianness of the host system.
+Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
+[`ltoh`](@ref)) to get results that are consistent across plattforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
