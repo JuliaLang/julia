@@ -172,13 +172,13 @@ Consistent serialization:
 ```jldoctest
 julia> open("/tmp/test.bin","w") do f
            # Make sure we write 64bit integer in Network (big-endian) byte order
-           write(f,hton(Int64(42)))
+           write(f,htol(Int64(42)))
        end
 8
 
 julia> open("/tmp/test.bin","r") do f
            # Convert back to host byte order and host integer type
-           Int(ntoh(read(f,Int64)))
+           Int(ltoh(read(f,Int64)))
        end
 42
 ```
