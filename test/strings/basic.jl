@@ -271,9 +271,10 @@ end
 
     @test length(gstr, 1, 2) == 2
 
-    # tests promote_rule
+    # no string promotion
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
-        @test all(x -> x === "12", svec)
+        @test all(x -> x == "12", svec)
+        @test svec isa Vector{AbstractString}
     end
 end
 
