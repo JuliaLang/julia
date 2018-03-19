@@ -5980,6 +5980,9 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
 
 # issue 22098
 macro m22098 end

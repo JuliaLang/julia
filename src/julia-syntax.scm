@@ -1001,7 +1001,10 @@
              (newa  '())
              (stmts '()))
     (if (null? argl)
-        (cons (reverse newa) (reverse stmts))
+        (cons (reverse newa) (if (null? stmts)
+                                 stmts
+                                 ;; return `nothing` from the assignments (issue #26518)
+                                 (reverse (cons '(null) stmts))))
         (let ((a (transform-arg (car argl))))
           (loop (cdr argl) (cons (car a) newa)
                 (if (cdr a) (cons (cdr a) stmts) stmts))))))
