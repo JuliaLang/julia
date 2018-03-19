@@ -6098,7 +6098,11 @@ static std::unique_ptr<Module> emit_function(
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
                         RTindex = compute_tindex_unboxed(ctx, new_union, phiType);
-                        RTindex = ctx.builder.CreateOr(RTindex, ConstantInt::get(T_int8, 0x80));
+                        if (PhiAlloca) {
+                            // If PhiAlloca is not set, this is a ghost union, the recipient of which
+                            // is often not prepared to handle a boxed representation of the ghost.
+                            RTindex = ctx.builder.CreateOr(RTindex, ConstantInt::get(T_int8, 0x80));
+                        }
                         new_union.TIndex = RTindex;
                     }
                     V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));

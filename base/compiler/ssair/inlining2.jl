@@ -143,7 +143,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
         length(ir2.stmts) + length(ir2.new_nodes)
     end
     resize!(compact, nnewnodes)
-    (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+    (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
     for (idx, stmt) in compact
         if compact.idx-1 == inline_idx
             # Ok, do the inlining here
@@ -161,20 +161,17 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
                 refinish = true
             end
             argexprs = copy(stmt.args)
-            if isinvoke
-                argexpr0 = argexprs[2]
-                argexprs = argexprs[4:end]
-                pushfirst!(argexprs, argexpr0)
-            end
-            if isva
-                vararg = mk_tuplecall!(compact, argexprs[na:end], compact.result_lines[idx])
-                argexprs = Any[argexprs[1:(na - 1)]..., vararg]
-            end
             # At the moment we will allow globalrefs in argument position, turn those into ssa values
             for (aidx, aexpr) in pairs(argexprs)
                 if isa(aexpr, GlobalRef)
                     argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
                 end
+            end
+            argexprs = rewrite_exprargs((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
+                                        arg->compact_exprtype(compact, arg), isinvoke, isapply, argexprs)
+            if isva
+                vararg = mk_tuplecall!(compact, argexprs[na:end], compact.result_lines[idx])
+                argexprs = Any[argexprs[1:(na - 1)]..., vararg]
             end
             # Special case inlining that maintains the current basic block if there's only one BB in the target
             if lie
@@ -245,7 +242,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
                 refinish && finish_current_bb!(compact)
             end
             if !isempty(todo)
-                (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+                (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
             else
                 inline_idx = -1
             end
@@ -261,27 +258,86 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
     ir = finish(compact)
 end
 
+function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
+    if invoke_data === nothing
+        return ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype, sv.params.world)
+    else
+        invoke_data = invoke_data::InvokeData
+        atype <: invoke_data.types0 || return nothing
+        return ccall(:jl_get_invoke_lambda, Any, (Any, Any, Any, UInt),
+                     invoke_data.mt, invoke_data.entry, atype, sv.params.world)
+    end
+end
+
+function rewrite_exprargs(inserter, exprtype, isinvoke, isapply, argexprs)
+    if isapply
+        new_argexprs = Any[argexprs[2]]
+        # Flatten all tuples
+        for arg in argexprs[3:end]
+            tupT = exprtype(arg)
+            t = widenconst(tupT)
+            for i = 1:length(t.parameters)
+                # Insert a getfield call here
+                new_call = Expr(:call, Core.getfield, arg, i)
+                new_call.typ = getfield_tfunc(tupT, Const(i))
+                push!(new_argexprs, inserter(new_call, new_call.typ))
+            end
+        end
+        argexprs = new_argexprs
+    end
+    if isinvoke
+        argexpr0 = argexprs[2]
+        argexprs = argexprs[4:end]
+        pushfirst!(argexprs, argexpr0)
+    end
+    argexprs
+end
+
+function maybe_make_invoke!(ir, idx, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
+                    @nospecialize(atype_unlimited), isinvoke, isapply, @nospecialize(invoke_data))
+    nu = countunionsplit(atypes)
+    nu > 1 && return # TODO: The old optimizer did union splitting here. Is this the right place?
+    ex = Expr(:invoke)
+    linfo = spec_lambda(atype_unlimited, sv, invoke_data)
+    linfo === nothing && return
+    add_backedge!(linfo, sv)
+    argexprs = ir[SSAValue(idx)].args
+    argexprs = rewrite_exprargs((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod),
+        isinvoke, isapply, argexprs)
+    pushfirst!(argexprs, linfo)
+    ex.typ = etype
+    ex.args = argexprs
+    ir[SSAValue(idx)] = ex
+end
+
+function exprtype_func(@nospecialize(arg1), ir)
+    ft = exprtype(arg1, ir, ir.mod)
+    if isa(ft, Const)
+        f = ft.val
+    elseif isa(ft, Conditional)
+        f = nothing
+        ft = Bool
+    else
+        f = nothing
+        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
+            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+            return nothing
+        end
+    end
+    return (f, ft)
+end
+
 function assemble_inline_todo!(ir, domtree, linetable, sv)
-    todo = Tuple{Int, Tuple{Bool, Bool, Int}, Method, Vector{Any}, Vector{LineInfoNode}, IRCode, Bool}[]
+    todo = Tuple{Int, Tuple{Bool, Bool, Bool, Int}, Method, Vector{Any}, Vector{LineInfoNode}, IRCode, Bool}[]
     for (idx, stmt) in pairs(ir.stmts)
         isexpr(stmt, :call) || continue
         eargs = stmt.args
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        ft = exprtype(arg1, ir, ir.mod)
-        if isa(ft, Const)
-            f = ft.val
-        elseif isa(ft, Conditional)
-            f = nothing
-            ft = Bool
-        else
-            f = nothing
-            if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-                # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
-                continue
-            end
-        end
+        res = exprtype_func(arg1, ir)
+        res !== nothing || continue
+        (f, ft) = res
 
         atypes = Vector{Any}(undef, length(stmt.args))
         atypes[1] = ft
@@ -300,8 +356,57 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             continue
         end
 
-        if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
+        if f !== Core.invoke && f !== Core._apply && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
             # No inlining for builtins (other than what's handled in the early inliner)
+            continue
+        end
+
+        # Special handling for Core.invoke and Core._apply, which can follow the normal inliner
+        # logic with modified inlining target
+        isapply = isinvoke = false
+
+        # Handle _apply
+        isapply = false
+        if f === Core._apply
+            new_atypes = Any[]
+            res = exprtype_func(stmt.args[2], ir)
+            res !== nothing || continue
+            (f, ft) = res
+            # Push function type
+            push!(new_atypes, ft)
+            # Try to figure out the signature of the function being called
+            ok = true
+            for (typ, def) in zip(atypes[3:end], stmt.args[3:end])
+                typ = widenconst(typ)
+                # We don't know what'll be in a SimpleVector, bail out
+                isa(typ, SimpleVector) && (ok = false; break)
+                # TODO: We could basically run the iteration protocol here
+                if !isa(typ, DataType) || typ.name !== Tuple.name || isvatuple(typ)
+                    ok = false
+                    break
+                end
+                length(typ.parameters) <= sv.params.MAX_TUPLE_SPLAT || (ok = false; break)
+                # As a special case, if we can see the tuple() call, look at it's arguments to find
+                # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
+                # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
+                # get a good method match. This pattern is used in the array code a bunch.
+                if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
+                    for tuparg in ir[def].args[2:end]
+                        push!(new_atypes, exprtype(tuparg , ir, ir.mod))
+                    end
+                else
+                    append!(new_atypes, typ.parameters)
+                end
+            end
+            ok || continue
+            atypes = new_atypes
+            isapply = true
+        end
+
+        if isapply && f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
+            # Even though we don't do inlining or :invoke, for intrinsic functions, we do want to eliminate apply if possible.
+            stmt.args = rewrite_exprargs((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod),
+                false, isapply, stmt.args)
             continue
         end
 
@@ -340,7 +445,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             max_valid = UInt[typemax(UInt)]
             meth = _methods_by_ftype(atype, 1, sv.params.world, min_valid, max_valid)
             if meth === false || length(meth) != 1
-                # TODO: Turn into :invoke
+                maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, false, isapply, nothing)
                 continue
             end
             meth = meth[1]::SimpleVector
@@ -354,9 +459,10 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             methsp = methsp::SimpleVector
         end
 
+
         methsig = method.sig
         if !(atype <: metharg)
-            # TODO: Turn this call into :invoke
+            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
             continue
         end
 
@@ -369,8 +475,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
 
         # Check that we habe the correct number of arguments
         na = Int(method.nargs)
-        npassedargs = length(stmt.args)
-        isinvoke && (npassedargs -= 2)
+        npassedargs = length(atypes)
         if na != npassedargs && !(na > 0 && method.isva)
             # we have a method match only because an earlier
             # inference step shortened our call args list, even
@@ -389,7 +494,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         # Find the linfo for this methods (Generated functions are expanded here if necessary)
         linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
         if !isa(linfo, MethodInstance)
-            # TODO: Turn into invoke
+            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
             continue
         end
 
@@ -404,7 +509,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         isva = na > 0 && method.isva
         if isva
             @assert length(atypes) >= na - 1
-            va_type = tuple_tfunc(Tuple{Any[widenconst(exprtype(x, ir, ir.mod)) for x in stmt.args[na:end]]...})
+            va_type = tuple_tfunc(Tuple{Any[widenconst(typ) for typ in atypes]...})
             atypes = Any[atypes[1:(na - 1)]..., va_type]
         end
 
@@ -414,14 +519,18 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
 
         (rettype, inferred) = res
 
-        # TODO: Inline as :invoke
-        inferred !== nothing || continue
+        if inferred === nothing
+            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+            continue
+        end
 
         src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), inferred)
         src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), inferred)
 
-        # TODO: Inline as :invoke
-        (src_inferred && src_inlineable) || continue
+        if !(src_inferred && src_inlineable)
+            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+            continue
+        end
 
         # At this point we're committedd to performing the inlining, add the backedge
         add_backedge!(linfo, sv)
@@ -442,8 +551,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
         verify_ir(ir2)
 
-
-        push!(todo, (idx, (isva, isinvoke, na), method, Any[methsp...], inline_linetable, ir2, linear_inline_eligible(ir2)))
+        push!(todo, (idx, (isva, isinvoke, isapply, na), method, Any[methsp...], inline_linetable, ir2, linear_inline_eligible(ir2)))
     end
     todo
 end
