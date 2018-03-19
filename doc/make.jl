@@ -150,7 +150,7 @@ makedocs(
     build     = joinpath(@__DIR__, "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = "doctest" in ARGS,
+    doctest   = ("doctest-fix" in ARGS) ? (:fix) : ("doctest" in ARGS),
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = false,
