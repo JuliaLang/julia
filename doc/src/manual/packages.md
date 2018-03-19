@@ -875,40 +875,7 @@ index 0000000..30e525e
 +git://github.com/someone/FooBar.jl.git
 ```
 
-This commit is only locally visible, however. To make it visible to the Julia community, you
-need to merge your local `METADATA` upstream into the official repo. The `PkgDev.publish()` command
-will fork the `METADATA` repository on GitHub, push your changes to your fork, and open a pull
-request:
-
-```julia-repl
-julia> PkgDev.publish()
-INFO: Validating METADATA
-INFO: No new package versions to publish
-INFO: Submitting METADATA changes
-INFO: Forking JuliaLang/METADATA.jl to someone
-INFO: Pushing changes as branch pull-request/ef45f54b
-INFO: To create a pull-request open:
-
-  https://github.com/someone/METADATA.jl/compare/pull-request/ef45f54b
-```
-
-!!! tip
-    If `PkgDev.publish()` fails with error:
-
-    ```
-    ERROR: key not found: "token"
-    ```
-
-    then you may have encountered an issue from using the GitHub API on multiple systems. The solution
-    is to delete the "Julia Package Manager" personal access token [from your Github account](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens)
-    and try again.
-
-    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request/).
-    See: [Publishing METADATA manually](@ref) below.
-
-Once the package URL for `FooBar` is registered in the official `METADATA` repo, people know where
-to clone the package from, but there still aren't any registered versions available. You can tag
-and register it with the `PkgDev.tag()` command:
+You can now tag your package and register it with the `PkgDev.tag()` command:
 
 ```julia-repl
 julia> PkgDev.tag("FooBar")
@@ -941,6 +908,38 @@ index 0000000..c1cb1c1
 @@ -0,0 +1 @@
 +84b8e266dae6de30ab9703150b3bf771ec7b6285
 ```
+
+This commit is only locally visible, however. To make it visible to the Julia community, you
+need to merge your local `METADATA` upstream into the official repo. The `PkgDev.publish()` command
+will fork the `METADATA` repository on GitHub, push your changes to your fork, and open a pull
+request:
+
+```julia-repl
+julia> PkgDev.publish()
+INFO: Validating METADATA
+INFO: No new package versions to publish
+INFO: Submitting METADATA changes
+INFO: Forking JuliaLang/METADATA.jl to someone
+INFO: Pushing changes as branch pull-request/ef45f54b
+INFO: To create a pull-request open:
+
+  https://github.com/someone/METADATA.jl/compare/pull-request/ef45f54b
+```
+
+!!! tip
+    If `PkgDev.publish()` fails with error:
+
+    ```
+    ERROR: key not found: "token"
+    ```
+
+    then you may have encountered an issue from using the GitHub API on multiple systems. The solution
+    is to delete the "Julia Package Manager" personal access token [from your Github account](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens)
+    and try again.
+
+    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request/).
+    See: [Publishing METADATA manually](@ref) below.
+
 
 The `PkgDev.tag()` command takes an optional second argument that is either an explicit version
 number object like `v"0.0.1"` or one of the symbols `:patch`, `:minor` or `:major`. These increment
