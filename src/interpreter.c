@@ -335,7 +335,7 @@ SECT_INTERP static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interp
         argv[i - 1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
+    jl_value_t *result = meth->invoke(meth, argv, nargs - 1);
     JL_GC_POP();
     return result;
 }
@@ -671,17 +671,19 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
 {
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     JL_GC_PUSH1(&src);
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        if (lam->def.method->source) {
-            src = (jl_code_info_t*)lam->def.method->source;
+    if (jl_is_method(lam->def.method)) {
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            if (lam->def.method->source) {
+                src = (jl_code_info_t*)lam->def.method->source;
+            }
+            else {
+                assert(lam->def.method->generator);
+                src = jl_code_for_staged(lam);
+            }
         }
-        else {
-            assert(lam->def.method->generator);
-            src = jl_code_for_staged(lam);
+        if (src && (jl_value_t*)src != jl_nothing) {
+            src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
         }
-    }
-    if (src && (jl_value_t*)src != jl_nothing) {
-        src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
     }
     if (!src || !jl_is_code_info(src)) {
         jl_error("source missing for method called in interpreter");
@@ -730,10 +732,8 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     return (void*)r;
 }
 
-SECT_INTERP jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
+SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    if (lam->jlcall_api == JL_API_CONST)
-        return lam->inferred_const;
     struct jl_interpret_call_args callback_args = { lam, args, nargs };
     return (jl_value_t*)enter_interpreter_frame(jl_interpret_call_callback, (void *)&callback_args);
 }

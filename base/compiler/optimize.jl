@@ -367,7 +367,7 @@ function optimize(me::InferenceState)
 
         if proven_pure && !coverage_enabled()
             # use constant calling convention
-            # Do not emit `jlcall_api == 2` if coverage is enabled
+            # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
@@ -438,7 +438,7 @@ function finish(me::InferenceState)
         end
 
         # don't store inferred code if we've decided to interpret this function
-        if !already_inferred && me.linfo.jlcall_api != 4
+        if !already_inferred && invoke_api(me.linfo) != 4
             const_flags = (me.const_ret) << 1 | me.const_api
             if me.const_ret
                 if isa(me.bestguess, Const)
@@ -1320,7 +1320,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
-    if linfo.jlcall_api == 2
+    if invoke_api(linfo) == 2
         # in this case function can be inlined to a constant
         add_backedge!(linfo, sv)
         return inline_as_constant(linfo.inferred_const, argexprs, sv, invoke_data)

@@ -1179,13 +1179,13 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
+jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return jl_gf_mtable(b)->cache.leaf->func.linfo->fptr;
+    return jl_gf_mtable(b)->cache.leaf->func.linfo->specptr.fptr1;
 }
 
-static void add_builtin_func(const char *name, jl_fptr_t fptr)
+static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
 {
     jl_mk_builtin_func(NULL, name, fptr);
 }

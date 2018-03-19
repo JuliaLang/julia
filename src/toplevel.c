@@ -808,7 +808,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_type_infer(&li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
-        result = jl_call_method_internal(li, &dummy_f_arg, 1);
+        result = li->invoke(li, &dummy_f_arg, 1);
     }
     else {
         // use interpreter

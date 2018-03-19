@@ -88,6 +88,10 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
+function invoke_api(li::MethodInstance)
+    return ccall(:jl_invoke_api, Cint, (Any,), li)
+end
+
 function get_staged(li::MethodInstance)
     try
         # user code might throw errors – ignore them

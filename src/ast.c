@@ -993,7 +993,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = jl_call_method_internal(mfunc, margs, nargs);
+        result = mfunc->invoke(mfunc, margs, nargs);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {
