@@ -264,10 +264,6 @@
             `(,@head (curly Vararg ,(cadr las)))
             `(,@head ,las)))))
 
-(define (hidden-name? s)
-  (and (symbol? s)
-       (eqv? (string.char (string s) 0) #\#)))
-
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
@@ -760,17 +756,6 @@
                                             (call (core fieldtype) ,tn (quote ,fld))
                                             ,val))
                                    (list-head field-names (length args)) args)))))))))
-
-;; insert a statement after line number node
-(define (prepend-stmt stmt body)
-  (if (and (pair? body) (eq? (car body) 'block))
-      (cond ((atom? (cdr body))
-             `(block ,stmt (null)))
-            ((linenum? (cadr body))
-             `(block ,(cadr body) ,stmt ,@(cddr body)))
-            (else
-             `(block ,stmt ,@(cdr body))))
-      body))
 
 ;; insert item at start of arglist
 (define (arglist-unshift sig item)
