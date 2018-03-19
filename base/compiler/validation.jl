@@ -141,7 +141,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
             elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :const || head === :enter ||
                 head === :leave || head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not
+                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
                 push!(errors, InvalidCodeError("invalid statement", x))

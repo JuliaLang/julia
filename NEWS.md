@@ -563,7 +563,7 @@ Library improvements
   * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
   * `isequal`, `==`, and `in` have one argument "curried" forms. For example `isequal(x)`
-    returns a function that compares its argument to `x` using `isequal` ([#23812]).
+    returns a function that compares its argument to `x` using `isequal` ([#26436]).
 
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
@@ -1287,7 +1287,6 @@ Command-line option changes
 [#23750]: https://github.com/JuliaLang/julia/issues/23750
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23805]: https://github.com/JuliaLang/julia/issues/23805
-[#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23816]: https://github.com/JuliaLang/julia/issues/23816
 [#23885]: https://github.com/JuliaLang/julia/issues/23885
 [#23902]: https://github.com/JuliaLang/julia/issues/23902
@@ -1414,4 +1413,5 @@ Command-line option changes
 [#26262]: https://github.com/JuliaLang/julia/issues/26262
 [#26284]: https://github.com/JuliaLang/julia/issues/26284
 [#26286]: https://github.com/JuliaLang/julia/issues/26286
+[#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442

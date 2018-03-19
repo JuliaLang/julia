@@ -26,7 +26,7 @@ To generate files for a new project, use `pkg> generate`.
 pkg> generate HelloWorld
 ```
 
-This creates a new project `HelloWorld` with the following files
+This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
 
 ```jl
 julia> cd("HelloWorld")

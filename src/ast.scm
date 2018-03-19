@@ -313,13 +313,6 @@
                                               (eq? (car a) 'parameters))))
                         lst)))
 
-(define (llist-keywords lst)
-  (apply append
-         (map (lambda (a) (if (and (pair? a) (eq? (car a) 'parameters))
-                              (map arg-name (cdr a))
-                              '()))
-              lst)))
-
 ;; get just argument types
 (define (llist-types lst) (map arg-type lst))
 

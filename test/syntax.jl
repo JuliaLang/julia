@@ -685,7 +685,6 @@ function count_meta_loc(exprs)
         end
         @test push_count >= pop_count
     end
-    @test push_count == pop_count
     return push_count
 end
 
@@ -760,8 +759,7 @@ f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
 f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
-@test is_pop_loc(f2_exprs[end])
-@test Meta.isexpr(f2_exprs[end - 1], :return)
+@test Meta.isexpr(f2_exprs[end], :return) || Meta.isexpr(f2_exprs[end-1], :return)
 
 if Base.JLOptions().can_inline != 0
     @test count_meta_loc(f1_exprs) == 1

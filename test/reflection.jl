@@ -333,8 +333,8 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for var in must_used_vars
             @test contains(str, string(var))
         end
-        @test !contains(str, "Any")
-        @test !contains(str, "ANY")
+        @test !contains(str, "::Any")
+        @test !contains(str, "::ANY")
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
@@ -374,8 +374,10 @@ end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
                         [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
-@test used_dup_var_tested15714
+                        [:array_var15714])
+#This test doesn't work with the new optimizer because we drop slotnames
+#We may want to test it against debug info eventually
+#@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,

@@ -712,8 +712,8 @@ function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti
 
     return I
 end
-findall(p::Base.OccursIn, x::SparseVector{<:Any,Ti}) where {Ti} =
-    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
+    invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)

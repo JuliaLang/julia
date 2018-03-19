@@ -747,11 +747,18 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function setup_interface(
+setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
     extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+) = setup_interface(repl, hascolor, extra_repl_keymap)
+
+# This non keyword method can be precompiled which is important
+function setup_interface(
+    repl::LineEditREPL,
+    hascolor::Bool,
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
 )
     ###
     #

@@ -479,12 +479,14 @@ end
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
 # issue #19864 (PR #20497)
-@test readchomp(pipeline(ignorestatus(
+let c19864 = readchomp(pipeline(ignorestatus(
         `$exename --startup-file=no -e '
             struct Error19864 <: Exception; end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
-    stderr=catcmd)) == "ERROR: correct19864"
+    stderr=catcmd))
+    @test contains(c19864, "ERROR: correct19864")
+end
 
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`
