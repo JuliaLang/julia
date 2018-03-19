@@ -171,7 +171,7 @@ You can write multiple values with the same `write` call. i.e. the following are
 Consistent serialization:
 ```jldoctest
 julia> open("/tmp/test.bin","w") do f
-           # Make sure we write 64bit integer in Network (big-endian) byte order
+           # Make sure we write 64bit integer in little-endian byte order
            write(f,htol(Int64(42)))
        end
 8
