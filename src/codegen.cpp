@@ -2020,11 +2020,41 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 // ---- Get Element Pointer (GEP) instructions within the GC frame ----
 
-static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
+static jl_value_t *jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
 {
+    if (!jl_is_method(ctx.linfo->def.method)) // toplevel exprs are already rooted
+        return val;
     if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) || val == jl_nothing ||
             val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
-        return;
+        return val;
+    if (jl_is_int32(val)) {
+        int32_t n = jl_unbox_int32(val);
+        if ((uint32_t)(n+512) < 1024) {
+            // this can be gotten from the box cache
+            return jl_box_int32(n);
+        }
+    }
+    else if (jl_is_uint32(val)) {
+        uint32_t n = jl_unbox_uint32(val);
+        if (n < 1024)
+            return jl_box_uint32(n);
+    }
+    else if (jl_is_int64(val)) {
+        uint64_t n = jl_unbox_uint64(val);
+        if ((uint64_t)(n+512) < 1024)
+            return jl_box_int64(n);
+    }
+    else if (jl_is_uint64(val)) {
+        uint64_t n = jl_unbox_uint64(val);
+        if (n < 1024)
+            return jl_box_uint64(n);
+    }
+    else if (jl_is_int8(val)) {
+        return jl_box_int8(jl_unbox_int8(val));
+    }
+    else if (jl_is_uint8(val)) {
+        return jl_box_uint8(jl_unbox_uint8(val));
+    }
     JL_GC_PUSH1(&val);
     if (ctx.roots == NULL) {
         ctx.roots = jl_alloc_vec_any(1);
@@ -2033,14 +2063,22 @@ static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
     else {
         size_t rlen = jl_array_dim0(ctx.roots);
         for (size_t i = 0; i < rlen; i++) {
-            if (jl_array_ptr_ref(ctx.roots,i) == val) {
+            jl_value_t *rt = jl_array_ptr_ref(ctx.roots,i);
+            if (rt == val || jl_egal(rt, val)) {
                 JL_GC_POP();
-                return;
+                return rt;
             }
         }
+        jl_method_t *m = ctx.linfo->def.method;
+        int needlock = m->roots == ctx.roots;
+        if (needlock) JL_LOCK(&m->writelock);
+
         jl_array_ptr_1d_push(ctx.roots, val);
+
+        if (needlock) JL_UNLOCK(&m->writelock);
     }
     JL_GC_POP();
+    return val;
 }
 
 // --- generating function calls ---
@@ -2838,7 +2876,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // don't bother codegen constant-folding for toplevel.
             jl_value_t *ty = static_apply_type(ctx, argv, nargs + 1);
             if (ty != NULL) {
-                jl_add_method_root(ctx, ty);
+                ty = jl_add_method_root(ctx, ty);
                 *ret = mark_julia_const(ty);
                 return true;
             }
@@ -3821,30 +3859,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1));
     }
     if (!jl_is_expr(expr)) {
-        int needroot = true;
         if (jl_is_quotenode(expr)) {
             expr = jl_fieldref_noalloc(expr,0);
         }
-        // numeric literals
-        if (jl_is_int32(expr)) {
-            int32_t val = jl_unbox_int32(expr);
-            if ((uint32_t)(val+512) < 1024) {
-                // this can be gotten from the box cache
-                needroot = false;
-                expr = jl_box_int32(val);
-            }
-        }
-        else if (jl_is_int64(expr)) {
-            uint64_t val = jl_unbox_uint64(expr);
-            if ((uint64_t)(val+512) < 1024) {
-                // this can be gotten from the box cache
-                needroot = false;
-                expr = jl_box_int64(val);
-            }
-        }
-        if (needroot && jl_is_method(ctx.linfo->def.method)) { // toplevel exprs and some integers are already rooted
-            jl_add_method_root(ctx, expr);
-        }
+        expr = jl_add_method_root(ctx, expr);
         return mark_julia_const(expr);
     }
 
@@ -4967,6 +4985,8 @@ static std::unique_ptr<Module> emit_function(
     std::map<int, BasicBlock*> labels;
     ctx.arrayvars = &arrayvars;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
+    if (jl_is_method(lam->def.method))
+        ctx.roots = lam->def.method->roots;
     ctx.linfo = lam;
     ctx.source = src;
     ctx.world = world;
@@ -6196,28 +6216,13 @@ static std::unique_ptr<Module> emit_function(
         }
     }
 
-    // copy ctx.roots into m->roots
-    // if we created any new roots during codegen
+    // copy ctx.roots to m->roots if we created any new roots during codegen
     if (ctx.roots) {
         jl_method_t *m = lam->def.method;
         JL_LOCK(&m->writelock);
         if (m->roots == NULL) {
             m->roots = ctx.roots;
             jl_gc_wb(m, m->roots);
-        }
-        else {
-            size_t i, ilen = jl_array_dim0(ctx.roots);
-            size_t j, jlen = jl_array_dim0(m->roots);
-            for (i = 0; i < ilen; i++) {
-                jl_value_t *ival = jl_array_ptr_ref(ctx.roots, i);
-                for (j = 0; j < jlen; j++) {
-                    jl_value_t *jval = jl_array_ptr_ref(m->roots, j);
-                    if (ival == jval)
-                        break;
-                }
-                if (j == jlen) // not found - add to array
-                    jl_array_ptr_1d_push(m->roots, ival);
-            }
         }
         ctx.roots = NULL;
         JL_UNLOCK(&m->writelock);
