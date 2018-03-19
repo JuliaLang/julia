@@ -522,6 +522,7 @@ function finish_current_bb!(compact, old_result_idx=compact.result_idx)
     # If this was the last statement in the BB and we decided to skip it, insert a
     # dummy `nothing` node, to prevent changing the structure of the CFG
     if compact.result_idx == first(bb.stmts)
+        length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
         compact.result[old_result_idx] = nothing
         compact.result_types[old_result_idx] = Nothing
         compact.result_lines[old_result_idx] = 0
