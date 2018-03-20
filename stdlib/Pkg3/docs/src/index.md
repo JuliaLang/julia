@@ -12,7 +12,57 @@ Pages = [
 
 ## Introduction
 
-Pkg3 is the package manager for Julia.
+Pkg3 is the standard package manager for Julia 1.0 and newer. Unlike traditional
+package managers, which install and manage a single global set of packages, Pkg3
+is designed around “environments”: independent sets of packages that can be
+local to an individual project or shared and selected by name. The exact set of
+packages and versions in an environment is captured in a _manifest file_ which
+can be checked into a project repository and tracked in version control,
+significantly improving reproducibility of projects. If you've ever tried to run
+code you haven't used in a while only to find that you can’t get anything to
+work because you’ve updated or uninstalled some of the packages your project was
+using, you'll understand the motivation for this approach. In Pkg3, since each
+project maintains its own independent set of package versions, you'll never have
+this problem again. Moreover, if you check out a project on a new system, you
+can simply materialize the environment described by its manifest file and
+immediately be up and running with a known-good set of dependencies.
+
+Since environments are managed and updated independently from each other,
+“dependency hell” is significantly alleviated in Pkg3. If you want to use the
+latest and greatest `DataFrames` in a new project but you’re stuck on an older
+version in a different project, that's no problem – since they have separate
+environments they can just use different versions, which are both installed at
+the same time in different locations on your system. The location of each
+package version is canonical, so when environments use the same versions of
+packages, they can share installations, avoiding unnecessary file system bloat.
+Old package versions that are no longer used by any environments are
+periodically automatically “garbage collected” by the package manager.
+
+Pkg3's approach to local environments may be familiar to people who have used
+Python's `virtualenv` or Ruby's `bundler`. In Julia, however, instead of hacking
+the language's code loading mechanisms to support environments, Julia natively
+understands them. In addition, Julia environments are "stackable": you can
+overlay one environment with another and thereby have access to additional
+packages outside of those that are part of a project. The overlay of
+environments is controlled by the `LOAD_PATH` global, which specifies the stack
+of environments that are searched for dependencies. This makes it easy to work
+on a project – whose environment will typically come first in your load path –
+while still having access to all your usual dev tools like profilers, debuggers,
+and so on. This is accomplished simply by an environment containing your dev
+tools in the load path.
+
+Last but not least, Pkg3 is designed to support federated package registries.
+This means that it allows multiple registries managed by different parties to
+interact seamlessly. In particular, this includes private registries which can
+live behind a corporate firewall. You can install and update your own packages
+from a private registry with exactly the same tools and workflows that you use
+to install and manage official Julia packages. If you urgently need to apply a
+hotfix for a public package that’s critical to your company’s product, you can
+tag a `v1.2.3+hotfix` version in your internal private registry and get it to
+your developers and ops teams quicly and easily without having to wait for an
+upstream patch to be accepted and published. Once the upstream fix is accepted,
+just upgrade your dependency to the new official `v1.2.4` version which includes
+the fix and you're back on an official upstream version of the dependency.
 
 ## Getting Started
 
