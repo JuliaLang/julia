@@ -333,8 +333,8 @@ end
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
-@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(undef, tuple(d1,dims...)))
-@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(undef, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
+@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(undef, d1, dims...))
+@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(undef, d1, dims...))
 @deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(undef, dims))
 
 function CartesianIndices(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
