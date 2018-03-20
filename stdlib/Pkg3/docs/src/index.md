@@ -34,22 +34,21 @@ version in a different project, that's no problem – since they have separate
 environments they can just use different versions, which are both installed at
 the same time in different locations on your system. The location of each
 package version is canonical, so when environments use the same versions of
-packages, they can share installations, avoiding unnecessary file system bloat.
-Old package versions that are no longer used by any environments are
+packages, they can share installations, avoiding unnecessary duplication of the
+package. Old package versions that are no longer used by any environments are
 periodically automatically “garbage collected” by the package manager.
 
 Pkg3's approach to local environments may be familiar to people who have used
-Python's `virtualenv` or Ruby's `bundler`. In Julia, however, instead of hacking
-the language's code loading mechanisms to support environments, Julia natively
-understands them. In addition, Julia environments are "stackable": you can
-overlay one environment with another and thereby have access to additional
-packages outside of those that are part of a project. The overlay of
-environments is controlled by the `LOAD_PATH` global, which specifies the stack
-of environments that are searched for dependencies. This makes it easy to work
-on a project – whose environment will typically come first in your load path –
-while still having access to all your usual dev tools like profilers, debuggers,
-and so on. This is accomplished simply by an environment containing your dev
-tools in the load path.
+Python's `virtualenv` or Ruby's `bundler`. In Julia, instead of hacking the
+language's code loading mechanisms to support environments, we have the benefit
+that Julia natively understands Pkg3 environments. In addition, Julia
+environments are "stackable": you can overlay one environment with another and
+thereby have access to additional packages outside of the primary project
+environment. The overlay of environments is controlled by the `LOAD_PATH`
+global, which specifies the stack of environments that are searched for
+dependencies. This makes it easy to work on a project while still having access
+to all your usual dev tools like profilers, debuggers, and so on just by having
+an environment including these dev tools later in your load path.
 
 Last but not least, Pkg3 is designed to support federated package registries.
 This means that it allows multiple registries managed by different parties to
@@ -59,7 +58,7 @@ from a private registry with exactly the same tools and workflows that you use
 to install and manage official Julia packages. If you urgently need to apply a
 hotfix for a public package that’s critical to your company’s product, you can
 tag a `v1.2.3+hotfix` version in your internal private registry and get it to
-your developers and ops teams quicly and easily without having to wait for an
+your developers and ops teams quickly and easily without having to wait for an
 upstream patch to be accepted and published. Once the upstream fix is accepted,
 just upgrade your dependency to the new official `v1.2.4` version which includes
 the fix and you're back on an official upstream version of the dependency.
@@ -72,31 +71,31 @@ for the main body of Julia code, a `test` directory for testing the project,
 script and its outputs.
 
 - **Project file:** a file in the root directory of a project, named
-`Project.toml` (or `JuliaProject.toml`) describing metadata about the project,
-including its name, UUID (for packages), authors, license, and the names and
-UUIDs of packages and libraries that it depends on.
+  `Project.toml` (or `JuliaProject.toml`) describing metadata about the project,
+  including its name, UUID (for packages), authors, license, and the names and
+  UUIDs of packages and libraries that it depends on.
 
 - **Manifest file:** a file in the root directory of a project, named
-`Manifest.toml` (or `JuliaManifest.toml`) describing complete dependency graph
-and exact versions of each package and library used by a project.
+  `Manifest.toml` (or `JuliaManifest.toml`) describing a complete dependency graph
+  and exact versions of each package and library used by a project.
 
 **Environment:** the combination of the top-level name map provided by a project
 file combined with the dependency graph and package loction map provided by a
 manifest file. For more detail see the section on code loading.
 
 - **Explicit environment:** an environment in the form of an explicit project
-file and an optional corresponding manifest file together in a directory. If the
-manifest file is absent then the implied dependency graph and location maps are
-empty.
+  file and an optional corresponding manifest file together in a directory. If the
+  manifest file is absent then the implied dependency graph and location maps are
+  empty.
 
 - **Implicit environment:** an environment provided as a directory (without a
-project file or manifest file) containing packages with entry points of the form
-`X.jl`, `X.jl/src/X.jl` or `X/src/X.jl`. The top-level name map is implied by
-these entry points. The dependency graph is implied by the existence of project
-files inside of these package directories, e.g. `X.jl/Project.toml` or
-`X/Project.toml`. The dependencies of the `X` package are the dependencies in
-the corresponding project file if there is one. The location map is implied by
-the entry points themselves.
+  project file or manifest file) containing packages with entry points of the form
+  `X.jl`, `X.jl/src/X.jl` or `X/src/X.jl`. The top-level name map is implied by
+  these entry points. The dependency graph is implied by the existence of project
+  files inside of these package directories, e.g. `X.jl/Project.toml` or
+  `X/Project.toml`. The dependencies of the `X` package are the dependencies in
+  the corresponding project file if there is one. The location map is implied by
+  the entry points themselves.
 
 **Application:** a project which provides standalone functionality not intended
 to be reused by other Julia projects. For example a web application or a
