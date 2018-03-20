@@ -347,8 +347,11 @@ julia> fill(1.0, (5,5))
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
-fill(v, dims::Dims)       = fill!(Array{typeof(v)}(undef, dims), v)
-fill(v, dims::Integer...) = fill!(Array{typeof(v)}(undef, dims...), v)
+fill(v, dims::NTuple{N, Integer}) where {N} = fill!(Array{typeof(v), N}(undef, dims), v)
+fill(v, dims::NTuple{N, OneTo}) where {N} = fill!(Array{typeof(v), N}(undef, map(last, dims)), v)
+fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill!(Array{typeof(v), N}(undef, map(to_axis, dims)), v)
+fill(v, dims::Tuple{}) = fill!(Array{typeof(v), 0}(undef), v)
+fill(v, dims::DimOrInd...) = fill(v, dims)
 
 """
     zeros([T=Float64,] dims...)
@@ -392,10 +395,10 @@ function ones end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(undef, convert(Dims, dims)::Dims), $felt(T))
-        $fname(dims::Tuple) = ($fname)(Float64, dims)
-        $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
-        $fname(dims...) = $fname(dims)
+        $fname(::Type{T}, dims::NTuple{N,DimOrInd}) where {T,N} = fill!(AbstractArray{T,N}(undef, dims), $felt(T))
+        $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
+        $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
+        $fname(dims::DimOrInd...) = $fname(dims)
     end
 end
 

@@ -95,14 +95,19 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
-    OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
     OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
     OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
+
+Base.fill(v, inds::NTuple{N, AbstractUnitRange}) where{N} =
+    fill!(OffsetArray(Array{typeof(v), N}(undef, map(length, inds)), map(indsoffset, inds)), v)
+Base.AbstractArray{T}(::UndefInitializer, inds::NTuple{N,AbstractUnitRange}) where {T,N} =
+    OffsetArray(Array{T, N}(undef, map(length, inds)), map(indsoffset, inds))
+Base.AbstractArray{T,N}(::UndefInitializer, inds::NTuple{N,AbstractUnitRange}) where {T,N} =
+    OffsetArray(Array{T, N}(undef, map(length, inds)), map(indsoffset, inds))
 
 @inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)

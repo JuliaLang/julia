@@ -15,12 +15,35 @@ convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
 convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
-# catch undefined constructors before the deprecation kicks in
-# TODO: remove when deprecation is removed
-function (::Type{T})(arg) where {T<:AbstractArray}
-    throw(MethodError(T, (arg,)))
-end
+to_axis(d::Integer) = OneTo(d)
+to_axis(d::AbstractUnitRange) = d
+
+# AbstractArray constructors: Gather args into a `AbstractArray{T,N}(undef, ::Tuple)` method
+if nameof(@__MODULE__) === Core  # avoid method overwrite with Core
+    # These methods and the types in these methods are shared between Core and Base
+    AbstractArray{T}(::UndefInitializer, dims::Vararg{Integer,N}) where {T,N} = AbstractArray{T,N}(undef, dims)
+    AbstractArray{T}(::UndefInitializer, dims::NTuple{N,Integer}) where {T,N} = AbstractArray{T,N}(undef, dims)
+
+    AbstractArray{T,N}(::UndefInitializer, dims::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, dims)
+    AbstractArray{Bool,N}(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}(undef, dims...)
+elseif nameof(@__MODULE__) === :Base  # avoid method overwrite with Core
+    # Add definitions supporting axes in Base alone — Core.OneTo is not shared with Base.OneTo
+    AbstractArray{T}(::UndefInitializer, dims::Vararg{DimOrInd,N}) where {T,N} = AbstractArray{T,N}(undef, dims)
+    AbstractArray{T}(::UndefInitializer, dims::NTuple{N,DimOrInd}) where {T,N} = AbstractArray{T,N}(undef, dims)
+    AbstractArray{T,N}(::UndefInitializer, dims::Vararg{DimOrInd,N}) where {T,N} = AbstractArray{T,N}(undef, dims)
+
+    AbstractArray{T,N}(::UndefInitializer, dims::NTuple{N,Union{Integer, OneTo}}) where {T,N} = AbstractArray{T,N}(undef, map(to_axis, dims))
+
+    AbstractArray{T,N}(::UndefInitializer, dims::NTuple{N,OneTo}) where {T,N} = Array{T,N}(undef, map(last, dims))
+    AbstractArray{T,0}(::UndefInitializer, ::Tuple{}) where {T} = Array{T,0}(undef)
+    AbstractArray{Bool,N}(::UndefInitializer, dims::NTuple{N,OneTo}) where {N} = BitArray{N}(undef, map(last, dims)...)
+    AbstractArray{Bool,0}(::UndefInitializer, ::Tuple{}) where {} = BitArray{0}(undef)
+
+    # catch undefined constructors before the deprecation kicks in
+    # TODO: remove when deprecation is removed
+    function (::Type{T})(arg) where {T<:AbstractArray}
+        throw(MethodError(T, (arg,)))
+    end
 end
 
 """
@@ -590,14 +613,9 @@ indices of the result will match `A`.
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
-
-    similar(dims->zeros(Int, dims), axes(A))
-
-would create an array of `Int`, initialized to zero, matching the
-indices of `A`.
 """
-similar(f, shape::Tuple) = f(to_shape(shape))
-similar(f, dims::DimOrInd...) = similar(f, dims)
+similar(::Type{T}, shape::Tuple) where {T} = T(to_shape(shape))
+similar(::Type{T}, dims::DimOrInd...) where {T} = similar(T, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -885,14 +903,6 @@ isempty(a::AbstractArray) = (_length(a) == 0)
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
-
-"""
-   of_indices(x, y)
-
-Represents the array `y` as an array having the same indices type as `x`.
-"""
-of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
-
 
 ## range conversions ##
 

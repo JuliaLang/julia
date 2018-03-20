@@ -516,7 +516,7 @@ end
 
 # issue #5575
 f5575() = zeros(Type[Float64][1], 1)
-@test Base.return_types(f5575, ())[1] == Vector
+@test Base.return_types(f5575, ())[1] == Union{Vector, BitVector}
 
 # make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
 function maybe_vararg_tuple_1()

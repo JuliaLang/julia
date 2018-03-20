@@ -746,10 +746,10 @@ function _findmin(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri))
+        (similar(A, ri), zeros(eltype(keys(A)), ri))
     else
         findminmax!(isless, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    zeros(eltype(keys(A)), ri), A)
     end
 end
 
@@ -795,10 +795,10 @@ function _findmax(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri)
+        similar(A, ri), zeros(eltype(keys(A)), ri)
     else
         findminmax!(isgreater, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    zeros(eltype(keys(A)), ri), A)
     end
 end
 

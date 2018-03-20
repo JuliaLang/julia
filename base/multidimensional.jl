@@ -1763,10 +1763,9 @@ julia> unique(A, 3)
 ```
 """
 @generated function unique(A::AbstractArray{T,N}, dim::Int) where {T,N}
-    inds = inds -> zeros(UInt, inds)
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = similar($inds, axes(A, dim))
+        hashes = zeros(UInt, axes(A, dim))
 
         # Compute hash for each row
         k = 0
@@ -1783,7 +1782,7 @@ julia> unique(A, 3)
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = similar(falses, axes(A, dim))
+        collided = falses(axes(A, dim))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d

@@ -366,8 +366,8 @@ julia> falses(2,3)
  false  false  false
 ```
 """
-falses(dims::Dims) = fill!(BitArray(undef, dims), false)
-falses(dims::Integer...) = falses(map(Int,dims))
+falses(dims::Tuple{Vararg{DimOrInd}}) = fill!(AbstractArray{Bool}(undef, dims), false)
+falses(dims::DimOrInd...) = falses(dims)
 
 """
     trues(dims)
@@ -382,8 +382,8 @@ julia> trues(2,3)
  true  true  true
 ```
 """
-trues(dims::Dims) = fill!(BitArray(undef, dims), true)
-trues(dims::Integer...) = trues(map(Int,dims))
+trues(dims::Tuple{Vararg{DimOrInd}}) = fill!(AbstractArray{Bool}(undef, dims), true)
+trues(dims::DimOrInd...) = trues(dims)
 
 function one(x::BitMatrix)
     m, n = size(x)

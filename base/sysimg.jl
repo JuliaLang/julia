@@ -155,6 +155,7 @@ include("reinterpretarray.jl")
 # type and dimensionality specified, accepting dims as series of Integers
 Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
 Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
+Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
 Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
@@ -163,6 +164,9 @@ Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
 Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
+# Dimensions as a single tuple
+Array{T}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # empty vector constructor
 Vector() = Vector{Any}(undef, 0)
 
