@@ -299,8 +299,9 @@ function optimize(me::InferenceState)
             end
             linetable = [topline]
             @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
-            @timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
-            push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
+            force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+            #@timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
+            replace_code_newstyle!(opt.src, ir, nargs, linetable)
             any_phi = true
         elseif false # !any_phi
             gotoifnot_elim_pass!(opt)
@@ -321,13 +322,22 @@ function optimize(me::InferenceState)
                 basic_dce_pass!(opt)
                 void_use_elim_pass!(opt)
             end
-        end
-        # Pop metadata before label reindexing
-        let code = opt.src.code::Array{Any,1}
-            meta_elim_pass!(code, coverage_enabled())
-            filter!(x -> x !== nothing, code)
-            force_noinline = peekmeta(code, :noinline)[1]
-            reindex_labels!(opt)
+            # Pop metadata before label reindexing
+            let code = opt.src.code::Array{Any,1}
+                meta_elim_pass!(code, coverage_enabled())
+                filter!(x -> x !== nothing, code)
+                force_noinline = peekmeta(code, :noinline)[1]
+                reindex_labels!(opt)
+            end
+        elseif enable_new_optimizer[] && any_enter
+            gotoifnot_elim_pass!(opt)
+            # Pop metadata before label reindexing
+            let code = opt.src.code::Array{Any,1}
+                meta_elim_pass!(code, coverage_enabled())
+                filter!(x -> x !== nothing, code)
+                force_noinline = peekmeta(code, :noinline)[1]
+                reindex_labels!(opt)
+            end
         end
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid

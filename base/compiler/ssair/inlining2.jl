@@ -544,12 +544,15 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             ast = copy_exprargs(src.code)
         end
 
-        topline = LineInfoNode(method.module, method.name, method.file, method.line, 0)
-        inline_linetable = [topline]
-
-        push!(ast, LabelNode(length(ast) + 1))
-        ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
-        verify_ir(ir2)
+        if src.codelocs === nothing
+            topline = LineInfoNode(method.module, method.name, method.file, method.line, 0)
+            inline_linetable = [topline]
+            push!(ast, LabelNode(length(ast) + 1))
+            ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
+        else
+            ir2, inline_linetable = inflate_ir(src), src.linetable
+        end
+        #verify_ir(ir2)
 
         push!(todo, (idx, (isva, isinvoke, isapply, na), method, Any[methsp...], inline_linetable, ir2, linear_inline_eligible(ir2)))
     end
