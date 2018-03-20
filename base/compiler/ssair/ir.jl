@@ -136,8 +136,8 @@ struct IRCode
     mod::Module
     meta::Vector{Any}
 
-    function IRCode(stmts::Vector{Any}, lines::Vector{Int}, cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
-        return new(stmts, Any[], lines, argtypes, cfg, NewNode[], mod, meta)
+    function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
+        return new(stmts, types, lines, argtypes, cfg, NewNode[], mod, meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, cfg::CFG, new_nodes::Vector{NewNode})
         return new(stmts, types, lines, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)

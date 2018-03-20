@@ -176,6 +176,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.inferred = true
                     tree.pure = true
                     tree.inlineable = true
+                    tree.codelocs = nothing
+                    tree.linetable = nothing
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)

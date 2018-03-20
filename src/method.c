@@ -201,6 +201,9 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
     jl_gc_wb(li, li->ssavaluetypes);
+    li->linetable = jl_nothing;
+    li->codelocs = jl_nothing;
+
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 16 | 32 | 64;
     int i;
@@ -261,6 +264,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slottypes = NULL;
     src->ssavaluetypes = NULL;
+    src->codelocs = jl_nothing;
+    src->linetable = jl_nothing;
     src->inferred = 0;
     src->pure = 0;
     src->inlineable = 0;

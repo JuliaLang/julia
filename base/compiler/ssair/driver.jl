@@ -21,6 +21,18 @@ macro show(s)
     # return :(println($(QuoteNode(s)), " = ", $(esc(s))))
 end
 
+function normalize_expr(stmt::Expr)
+    if stmt.head === :gotoifnot
+        return GotoIfNot(stmt.args...)
+    elseif stmt.head === :return
+        return ReturnNode((length(stmt.args) == 0 ? (nothing,) : stmt.args)...)
+    elseif stmt.head === :unreachable
+        return ReturnNode()
+    else
+        return stmt
+    end
+end
+
 function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInfoNode}, loc::RefValue{Int})
     if isa(stmt, Expr)
         if stmt.head == :meta
@@ -64,12 +76,8 @@ function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInf
             return nothing
         elseif stmt.head === :line
             return nothing # deprecated - we shouldn't encounter this
-        elseif stmt.head === :gotoifnot
-            return GotoIfNot(stmt.args...)
-        elseif stmt.head === :return
-            return ReturnNode((length(stmt.args) == 0 ? (nothing,) : stmt.args)...)
-        elseif stmt.head === :unreachable
-            return ReturnNode()
+        else
+            return normalize_expr(stmt)
         end
     elseif isa(stmt, LabelNode)
         return nothing
@@ -127,7 +135,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, linetab
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, lines, cfg, argtypes, mod, meta)
+            IRCode(code, Any[], lines, cfg, argtypes, mod, meta)
         end
     @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
     return ir
@@ -137,14 +145,14 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, s
     ir = just_construct_ssa(ci, copy(ci.code), nargs, linetable)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
-    @timeit "verify 1" verify_ir(ir)
+    #@timeit "verify 1" verify_ir(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, nothing, linetable, sv)
-    @timeit "verify 2" verify_ir(ir)
+    #@timeit "verify 2" verify_ir(ir)
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
     @timeit "compact 2" ir = compact!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
-    @timeit "verify 3" verify_ir(ir)
+    #@timeit "verify 3" verify_ir(ir)
     return ir
 end

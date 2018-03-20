@@ -594,6 +594,8 @@ static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
     src->ssavaluetypes = jl_box_long(0);
     jl_gc_wb(src, src->ssavaluetypes);
     src->signature_for_inference_heuristics = jl_nothing;
+    src->codelocs = jl_nothing;
+    src->linetable = jl_nothing;
 
     JL_GC_POP();
     return src;
