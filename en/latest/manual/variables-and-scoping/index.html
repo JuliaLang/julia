@@ -151,7 +151,7 @@ ERROR: UndefVarError: z not defined</code></pre><p>The assignments are evaluated
 
 julia&gt; while i &lt;= 2
            Fs[i] = ()-&gt;i
-           i += 1
+           global i += 1
        end
 
 julia&gt; Fs[1]()
@@ -164,7 +164,7 @@ julia&gt; while i &lt;= 2
            let i = i
                Fs[i] = ()-&gt;i
            end
-           i += 1
+           global i += 1
        end
 
 julia&gt; Fs[1]()

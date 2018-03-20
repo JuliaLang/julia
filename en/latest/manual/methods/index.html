@@ -215,12 +215,12 @@ f (generic function with 3 methods)</code></pre><p>Compare how these results dif
 julia&gt; g(1)
 &quot;definition for Int&quot;
 
-julia&gt; wait(schedule(t, 1))
+julia&gt; fetch(schedule(t, 1))
 &quot;original definition&quot;
 
 julia&gt; t = @async f(wait()); yield();
 
-julia&gt; wait(schedule(t, 1))
+julia&gt; fetch(schedule(t, 1))
 &quot;definition for Int&quot;</code></pre><h2><a class="nav-anchor" id="Design-Patterns-with-Parametric-Methods-1" href="#Design-Patterns-with-Parametric-Methods-1">Design Patterns with Parametric Methods</a></h2><p>While complex dispatch logic is not required for performance or usability, sometimes it can be the best way to express some algorithm. Here are a few common design patterns that come up sometimes when using dispatch in this way.</p><h3><a class="nav-anchor" id="Extracting-the-type-parameter-from-a-super-type-1" href="#Extracting-the-type-parameter-from-a-super-type-1">Extracting the type parameter from a super-type</a></h3><p>Here is the correct code template for returning the element-type <code>T</code> of any arbitrary subtype of <code>AbstractArray</code>:</p><pre><code class="language-julia">abstract type AbstractArray{T, N} end
 eltype(::Type{&lt;:AbstractArray{T}}) where {T} = T</code></pre><p>using so-called triangular dispatch.  Note that if <code>T</code> is a <code>UnionAll</code> type, as e.g. <code>eltype(Array{T} where T &lt;: Integer)</code>, then <code>Any</code> is returned (as does the the version of <code>eltype</code> in <code>Base</code>).</p><p>Another way, which used to be the only correct way before the advent of triangular dispatch in Julia v0.6, is:</p><pre><code class="language-julia">abstract type AbstractArray{T, N} end
 eltype(::Type{AbstractArray}) = Any

@@ -185,7 +185,7 @@ false</code></pre><h2><a class="nav-anchor" id="man-loops-1" href="#man-loops-1"
 
 julia&gt; while i &lt;= 5
            println(i)
-           i += 1
+           global i += 1
        end
 1
 2
@@ -227,7 +227,7 @@ julia&gt; while true
            if i &gt;= 5
                break
            end
-           i += 1
+           global i += 1
        end
 1
 2
