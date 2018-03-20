@@ -338,6 +338,18 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
     @test_throws ArgumentError minimum(abs, Areduc, dims=region)
 end
 
+# issue #26488
+@testset "don't map over initial values not provided" begin
+    @test sum(x->x+1, [1], dims=1)[1] === sum(x->x+1, [1]) === 2
+    @test prod(x->x+1, [1], dims=1)[1] === prod(x->x+1, [1]) === 2
+    @test mapreduce(x->x+1, +, [1], dims=1)[1] === mapreduce(x->x+1, +, [1]) === 2
+    @test mapreduce(x->x+1, *, [1], dims=1)[1] === mapreduce(x->x+1, *, [1]) === 2
+    @test mapreduce(!, &, [false], dims=1)[1] === mapreduce(!, &, [false]) === true
+    @test mapreduce(!, |, [true], dims=1)[1] === mapreduce(!, |, [true]) === false
+    @test mapreduce(x->1/x, max, [1], dims=1)[1] === mapreduce(x->1/x, max, [1]) === 1.0
+    @test mapreduce(x->-1/x, min, [1], dims=1)[1] === mapreduce(x->-1/x, min, [1]) === -1.0
+end
+
 # check type of result
 @testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], dims=2)
