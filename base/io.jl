@@ -170,13 +170,15 @@ You can write multiple values with the same `write` call. i.e. the following are
 # Examples
 Consistent serialization:
 ```jldoctest
-julia> open("/tmp/test.bin","w") do f
+julia> fname = tempname(); # random temporary filename
+
+julia> open(fname,"w") do f
            # Make sure we write 64bit integer in little-endian byte order
            write(f,htol(Int64(42)))
        end
 8
 
-julia> open("/tmp/test.bin","r") do f
+julia> open(fname,"r") do f
            # Convert back to host byte order and host integer type
            Int(ltoh(read(f,Int64)))
        end
