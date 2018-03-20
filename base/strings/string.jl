@@ -136,7 +136,8 @@ function _nextind_str(s, i::Int)
         return i′ < i ? nextind(s, i′) : i+1
     end
     # first continuation byte
-    @inbounds b = codeunit(s, i += 1)
+    (i += 1) > n && return i
+    @inbounds b = codeunit(s, i)
     b & 0xc0 ≠ 0x80 && return i
     ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
