@@ -340,7 +340,7 @@
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
@@ -1022,7 +1022,7 @@
          (rett  (if dcl (caddr name) '(core Any)))
          (name  (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
-           (if (or (eq? name 'true) (eq? name 'false))
+           (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
            `(method ,name))
           ((not (pair? name))  e)
@@ -1996,7 +1996,7 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
-      ((symbol-like? lhs)
+      ((and (symbol-like? lhs) (valid-name? lhs))
        `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
@@ -2535,6 +2535,10 @@
                         (cdr e))
               tab)))
 
+(define (check-valid-name e)
+  (or (valid-name? e)
+      (error (string "invalid identifier name \"" e "\""))))
+
 ;; local variable identification and renaming, derived from:
 ;; 1. (local x) expressions inside this scope-block and lambda
 ;; 2. (const x) expressions in a scope-block where x is not declared global
@@ -2545,9 +2549,10 @@
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
-        ((eq? (car e) 'local) '(null)) ;; remove local decls
-        ((eq? (car e) 'local-def) '(null)) ;; remove local decls
-        ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
+        ((memq (car e) '(local local-def implicit-global))
+         (check-valid-name (cadr e))
+         ;; remove local and implicit-global decls
+         '(null))
         ((eq? (car e) 'require-existing-local)
          (if (not (memq (cadr e) env))
              (error "no outer variable declaration exists for \"for outer\""))
