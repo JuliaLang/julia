@@ -1240,7 +1240,7 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char) coalesce(findlast(isequal(c), s), 0)
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) coalesce(findprev(isequal(c), s, i), 0)
 
-@deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
+@deprecate ismatch(r::Regex, s::AbstractString) occursin(r, s)
 
 @deprecate findin(a, b) findall(in(b), a)
 
@@ -1465,6 +1465,14 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
         depwarn("`slicedim(A::AbstractArray, d::Integer, i)` is deprecated, use `copy(selectdim(A, d, i))` instead.", :slicedim)
         copy(selectdim(A, d, i))
     end
+end
+
+# PR #26283
+@deprecate contains(haystack, needle) occursin(needle, haystack)
+@deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
+function (r::Regex)(s)
+    depwarn("`(r::Regex)(s)` is deprecated, use `occursin(r, s)` instead.", :Regex)
+    occursin(r, s)
 end
 
 # Issue #25786

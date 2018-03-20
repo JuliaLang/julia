@@ -48,8 +48,8 @@ end
 @test length(run(pipeline(`$echocmd hello`, sortcmd), wait=false).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test contains(out,"world")
-@test contains(out,"hello")
+@test occursin("world", out)
+@test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -485,7 +485,7 @@ let c19864 = readchomp(pipeline(ignorestatus(
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
     stderr=catcmd))
-    @test contains(c19864, "ERROR: correct19864")
+    @test occursin("ERROR: correct19864", c19864)
 end
 
 # accessing the command elements as an array or iterator:

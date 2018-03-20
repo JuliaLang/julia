@@ -529,7 +529,7 @@ function find_stdlib_deps(ctx::Context, path::String)
             endswith(file, ".jl") || continue
             filecontent = read(joinpath(root, file), String)
             for ((uuid, stdlib), r) in zip(ctx.stdlibs, regexps)
-                if contains(filecontent, r)
+                if occursin(r, filecontent)
                     stdlib_deps[uuid] = stdlib
                 end
             end

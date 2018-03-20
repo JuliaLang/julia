@@ -81,7 +81,7 @@ function check_lines!(
     remove = []
     for i in 1:length(lines)
         line = lines[i]
-        if contains(line, checktxt)
+        if occursin(checktxt, line)
             if strip(line) == strip(prefix * checktxt) || strip(line) == strip(checktxt)
                 push!(remove, i)
             else

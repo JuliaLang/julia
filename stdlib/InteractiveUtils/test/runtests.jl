@@ -31,7 +31,7 @@ function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
     str = String(take!(iob))
-    return contains(str, tag)
+    return occursin(tag, str)
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
@@ -60,7 +60,7 @@ tag = "ANY"
 iob = IOBuffer()
 show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
-@test !contains(str, tag)
+@test !occursin(tag, str)
 
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))
@@ -73,7 +73,7 @@ has_unused() = (a = rand(5))
 iob = IOBuffer()
 code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
 str = String(take!(iob))
-@test contains(str, Base.text_colors[Base.warn_color()])
+@test occursin(Base.text_colors[Base.warn_color()], str)
 
 # Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
@@ -152,7 +152,7 @@ end
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test contains(v, "| x              |   8 bytes | Float64 |")
+    @test occursin("| x              |   8 bytes | Float64 |", v)
 end
 
 # Issue 14173
@@ -182,9 +182,9 @@ end
             versioninfo(buf, verbose=true)
             ver = read(buf, String)
             @test startswith(ver, "Julia Version $VERSION")
-            @test contains(ver, "Environment:")
-            @test contains(ver, "Package Status:")
-            @test contains(ver, "no packages installed")
+            @test occursin("Environment:", ver)
+            @test occursin("Package Status:", ver)
+            @test occursin("no packages installed", ver)
             @test isempty(readdir(dir))
         end
     end
@@ -298,7 +298,7 @@ end # module ReflectionTest
 
 ix86 = r"i[356]86"
 
-if Sys.ARCH === :x86_64 || contains(string(Sys.ARCH), ix86)
+if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     function linear_foo()
         x = 4
         y = 5
@@ -311,18 +311,18 @@ if Sys.ARCH === :x86_64 || contains(string(Sys.ARCH), ix86)
     code_native(buf,linear_foo,(), syntax = :att)
     output=String(take!(buf))
 
-    @test contains(output,rgx)
+    @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf,linear_foo,(), syntax = :intel)
     output=String(take!(buf))
 
-    @test !contains(output,rgx)
+    @test !occursin(rgx, output)
 
     code_native(buf,linear_foo,())
     output=String(take!(buf))
 
-    @test contains(output,rgx)
+    @test occursin(rgx, output)
 end
 
 using InteractiveUtils: editor

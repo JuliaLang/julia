@@ -27,7 +27,7 @@ struct Requirement <: Line
         end
         isempty(fields) && throw(PkgError("invalid requires entry: $content"))
         package = popfirst!(fields)
-        all(field->contains(field, Base.VERSION_REGEX), fields) ||
+        all(field->occursin(Base.VERSION_REGEX, field), fields) ||
             throw(PkgError("invalid requires entry for $package: $content"))
         versions = map(VersionNumber, fields)
         issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
@@ -59,7 +59,7 @@ function read(readable::Vector{<:AbstractString})
     lines = Line[]
     for line in readable
         line = chomp(line)
-        push!(lines, contains(line, r"^\s*(?:#|$)") ? Comment(line) : Requirement(line))
+        push!(lines, occursin(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
     return lines
 end
@@ -67,7 +67,7 @@ end
 function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
-        push!(lines, contains(line, r"^\s*(?:#|$)") ? Comment(line) : Requirement(line))
+        push!(lines, occursin(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
     return lines
 end

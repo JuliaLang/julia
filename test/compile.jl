@@ -273,7 +273,7 @@ try
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        contains(exc.msg, "__precompile__(false)") && rethrow(exc)
+        occursin("__precompile__(false)", exc.msg) && rethrow(exc)
     end
 
     # Issue #12720
@@ -340,7 +340,7 @@ try
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        contains(exc.msg, "ERROR: LoadError: break me") && rethrow(exc)
+        occursin("ERROR: LoadError: break me", exc.msg) && rethrow(exc)
     end
 
     # Test transitive dependency for #21266
@@ -458,7 +458,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test contains(read(fname, String), Regex("Replacing module `$Test_module`"))
+                @test occursin(Regex("Replacing module `$Test_module`"), read(fname, String))
             finally
                 rm(fname, force=true)
             end

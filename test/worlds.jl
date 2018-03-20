@@ -152,7 +152,7 @@ let ex = t265.exception
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
-    @test contains(str, cmps)
+    @test occursin(cmps, str)
 end
 
 # test for generated function correctness

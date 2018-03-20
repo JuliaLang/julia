@@ -141,11 +141,11 @@ function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(word)
         return pkg
-    elseif contains(word, uuid_re)
+    elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))
-    elseif contains(word, name_re)
+    elseif occursin(name_re, word)
         return PackageSpec(String(match(name_re, word).captures[1]))
-    elseif contains(word, name_uuid_re)
+    elseif occursin(name_uuid_re, word)
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
     else
