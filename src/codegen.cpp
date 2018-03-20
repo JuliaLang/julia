@@ -6064,7 +6064,7 @@ static std::unique_ptr<Module> emit_function(
                             VN->getType());
                 }
                 else {
-                    V = emit_unbox(ctx, VN->getType(), val, val.typ);
+                    V = emit_unbox(ctx, VN->getType(), val, phiType);
                 }
                 VN->addIncoming(V, ctx.builder.GetInsertBlock());
                 assert(!TindexN);

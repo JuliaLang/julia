@@ -18,7 +18,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
+    project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
@@ -450,6 +450,9 @@ mutable struct EnvCache
     project_file::String
     manifest_file::String
 
+    # name / uuid of the project
+    pkg::Union{PackageSpec, Nothing}
+
     # cache of metadata:
     project::Dict
     manifest::Dict
@@ -479,6 +482,15 @@ mutable struct EnvCache
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
+        if any(haskey.(project, ["name", "uuid", "version"]))
+            project_package = PackageSpec(
+                get(project, "name", ""),
+                UUID(get(project, "uuid", 0)),
+                VersionNumber(get(project, "version", "0.0")),
+            )
+        else
+            project_package = nothing
+        end
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
         else
@@ -496,12 +508,22 @@ mutable struct EnvCache
             git,
             project_file,
             manifest_file,
+            project_package,
             project,
             manifest,
             uuids,
             paths,)
     end
 end
+
+collides_with_project(env::EnvCache, pkg::PackageSpec) =
+    is_project_name(env, pkg.name) || is_project_uuid(env, pkg.uuid)
+is_project(env::EnvCache, pkg::PackageSpec) = is_project_uuid(env, pkg.uuid)
+is_project_name(env::EnvCache, name::String) =
+    env.pkg !== nothing && env.pkg.name == name
+is_project_uuid(env::EnvCache, uuid::UUID) =
+    env.pkg !== nothing && env.pkg.uuid == uuid
+
 
 
 ###########
@@ -609,7 +631,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
 
         if isdir_windows_workaround(pkg.repo.url)
             # Developing a local package, just point `pkg.path` to it
-            pkg.path = pkg.repo.url
+            pkg.path = abspath(pkg.repo.url)
             folder_already_downloaded = true
             project_path = pkg.repo.url
             parse_package!(env, pkg, project_path)
@@ -800,12 +822,23 @@ end
 # Resolving packages from name or uuid #
 ########################################
 
-# Disambiguate name/uuid package specifications using project info.
 function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
+    for pkg in pkgs
+        if has_uuid(pkg) && !has_name(pkg) && Types.is_project_uuid(env, pkg.uuid)
+            pkg.name = env.pkg.name
+        end
+        if has_name(pkg) && !has_uuid(pkg) && Types.is_project_name(env, pkg.name)
+            pkg.uuid = env.pkg.uuid
+        end
+    end
+end
+
+# Disambiguate name/uuid package specifications using project info.
+function project_deps_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
     names = Dict(uuid => name for (uuid, name) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
-        @warn "duplicate UUID found in project file's [deps] section"
+        cmderror("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
         pkg.mode == PKGMODE_PROJECT || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
@@ -924,17 +957,19 @@ function registries(depot::String)::Vector{String}
 end
 
 # Return paths of all registries in all depots
-function registries()::Vector{String}
+function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
-    if !ispath(user_regs)
-        mkpath(user_regs)
-        printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
-        for (reg, url) in DEFAULT_REGISTRIES
-            printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
-            path = joinpath(user_regs, reg)
-            repo = LibGit2.clone(url, path)
-            close(repo)
+    if clone_default
+        if !ispath(user_regs)
+            mkpath(user_regs)
+            printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
+            for (reg, url) in DEFAULT_REGISTRIES
+                printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
+                path = joinpath(user_regs, reg)
+                repo = LibGit2.clone(url, path)
+                close(repo)
+            end
         end
     end
     return [r for d in depots() for r in registries(d)]
@@ -1023,11 +1058,11 @@ function find_registered!(env::EnvCache,
         open(joinpath(registry, "Registry.toml")) do io
             # skip forward until [packages] section
             for line in eachline(io)
-            contains(line, r"^ \s* \[ \s* packages \s* \] \s* $"x) && break
+            occursin(r"^ \s* \[ \s* packages \s* \] \s* $"x, line) && break
         end
             # find lines with uuid or name we're looking for
             for line in eachline(io)
-            contains(line, regex) || continue
+            occursin(regex, line) || continue
             m = match(line_re, line)
             m == nothing &&
                     error("misformatted registry.toml package entry: $line")
@@ -1148,16 +1183,17 @@ end
 # Give a short path string representation
 pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
 
-function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd())
-    path = abspath(base, path)
-    if env isa EnvCache && env.git != nothing
-        LibGit2.with(LibGit2.GitRepo, LibGit2.path(env.git)) do repo
-            if startswith(base, repo)
-                # we're in the repo => path relative to pwd()
+function pathrepr(ctx::Union{Nothing, Context}, path::String, base::String=pwd())
+    if ctx isa Context
+        project_path = abspath(dirname(ctx.env.project_file))
+        path = joinpath(project_path, path)
+        if startswith(path, project_path)
+            # Path in project
+            if startswith(base, project_path)
+                # We are in project
                 path = relpath(path, base)
-            elseif startswith(path, repo)
-                # we're not in repo but path is => path relative to repo
-                path = relpath(path, repo)
+            else
+                path = relpath(path, project_path)
             end
         end
     end
@@ -1167,7 +1203,7 @@ function pathrepr(env::Union{Nothing, EnvCache}, path::String, base::String=pwd(
             path = joinpath("~", path[nextind(path, lastindex(home)):end])
         end
     end
-    return repr(path)
+    return "`" * path * "`"
 end
 
 function write_env(ctx::Context; display_diff=true)
@@ -1179,7 +1215,7 @@ function write_env(ctx::Context; display_diff=true)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
         if display_diff
-            printpkgstyle(ctx, :Updating, pathrepr(env, env.project_file))
+            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
             Pkg3.Display.print_project_diff(ctx, old_env, env)
         end
         if !ctx.preview
@@ -1192,7 +1228,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         if display_diff
-            printpkgstyle(ctx, :Updating, pathrepr(env, env.manifest_file))
+            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
             Pkg3.Display.print_manifest_diff(ctx, old_env, env)
         end
         manifest = deepcopy(env.manifest)

@@ -1318,8 +1318,8 @@ function findall(p::Function, S::SparseMatrixCSC)
 
     return inds
 end
-findall(p::Base.OccursIn, x::SparseMatrixCSC) =
-    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.Fix2{typeof(in)}, x::SparseMatrixCSC) =
+    invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)

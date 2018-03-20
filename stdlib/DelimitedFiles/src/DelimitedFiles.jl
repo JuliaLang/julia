@@ -732,7 +732,7 @@ end
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
-    if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: AbstractChar) ? (dlm in elt) : contains(elt, dlm)))
+    if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: AbstractChar) ? (dlm in elt) : occursin(dlm, elt)))
         print(io, '"', replace(elt, r"\"" => "\"\""), '"')
     else
         print(io, elt)

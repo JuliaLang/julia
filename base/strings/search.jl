@@ -2,7 +2,8 @@
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
-function findnext(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+                  s::String, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
@@ -13,14 +14,15 @@ function findnext(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
     while true
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
-        s[i] == c && return i
+        pred(s[i]) && return i
         i = nextind(s, i)
     end
 end
 
-findfirst(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_search(a, pred.x))
+findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+    nothing_sentinel(_search(a, pred.x))
 
-findnext(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
@@ -44,21 +46,23 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
     end
 end
 
-function findprev(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+                  s::String, i::Integer)
     c = pred.x
     c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
     b = first_utf8_byte(c)
     while true
         i = _rsearch(s, b, i)
         i == 0 && return nothing
-        s[i] == c && return i
+        pred(s[i]) && return i
         i = prevind(s, i)
     end
 end
 
-findlast(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_rsearch(a, pred.x))
+findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+    nothing_sentinel(_rsearch(a, pred.x))
 
-findprev(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
@@ -429,29 +433,27 @@ julia> findprev("Julia", "JuliaLang", 6)
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 
 """
-    contains(haystack::AbstractString, needle::Union{AbstractString,Regex,AbstractChar})
+    occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 
 Determine whether the second argument is a substring of the first. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
 
 # Examples
 ```jldoctest
-julia> contains("JuliaLang is pretty cool!", "Julia")
+julia> occursin("Julia", "JuliaLang is pretty cool!")
 true
 
-julia> contains("JuliaLang is pretty cool!", 'a')
+julia> occursin('a', "JuliaLang is pretty cool!")
 true
 
-julia> contains("aba", r"a.a")
+julia> occursin(r"a.a", "aba")
 true
 
-julia> contains("abba", r"a.a")
+julia> occursin(r"a.a", "abba")
 false
 ```
 """
-function contains end
-
-contains(haystack::AbstractString, needle::Union{AbstractString,AbstractChar}) =
+occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0
 
-in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
+in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")

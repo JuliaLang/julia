@@ -141,19 +141,17 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-function contains(s::AbstractString, r::Regex, offset::Integer=0)
+function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
-function contains(s::SubString, r::Regex, offset::Integer=0)
+function occursin(r::Regex, s::SubString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
                      r.match_data)
 end
-
-(r::Regex)(s) = contains(s, r)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])

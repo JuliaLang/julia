@@ -36,7 +36,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
                      (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
-             for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]
+             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
 
     pushfirst!(rows, Any["name", "size", "summary"])
 
@@ -106,13 +106,13 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
     println(io, "Environment:")
     for (k,v) in ENV
-        if contains(String(k), r"JULIA")
+        if occursin(r"JULIA", String(k))
             println(io, "  $(k) = $(v)")
         end
     end
     if verbose
         for (k,v) in ENV
-            if contains(String(k), r"PATH|FLAG|^TERM$|HOME")
+            if occursin(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
         end

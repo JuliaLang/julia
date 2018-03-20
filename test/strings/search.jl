@@ -313,9 +313,9 @@ end
 @test findfirst(r"az", "foo,bar,baz") == 10:11
 @test findnext(r"az", "foo,bar,baz", 12) == nothing
 
-# contains with a String and Char needle
-@test contains("foo", "o")
-@test contains("foo", 'o')
+# occursin with a String and Char needle
+@test occursin("o", "foo")
+@test occursin('o', "foo")
 
 @test_throws ErrorException "ab" ∈ "abc"
 

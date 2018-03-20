@@ -41,9 +41,9 @@ end
     end
 end
 @testset "show" begin
-    @test contains(string(spv_x1), "1.25")
-    @test contains(string(spv_x1), "-0.75")
-    @test contains(string(spv_x1), "3.5")
+    @test occursin("1.25", string(spv_x1))
+    @test occursin("-0.75", string(spv_x1))
+    @test occursin("3.5", string(spv_x1))
 end
 
 ### Comparison helper to ensure exact equality with internal structure

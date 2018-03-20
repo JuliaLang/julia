@@ -304,8 +304,8 @@ struct set_world {
 static int set_max_world2(jl_typemap_entry_t *entry, void *closure0)
 {
     struct set_world *closure = (struct set_world*)closure0;
-    // entry->max_world should be <= closure->replaced->max_world and >= closure->world
-    if (entry->func.linfo == closure->replaced) {
+    // entry->max_world should be <= closure->replaced->max_world
+    if (entry->func.linfo == closure->replaced && entry->max_world > closure->world) {
         entry->max_world = closure->world;
     }
     return 1;

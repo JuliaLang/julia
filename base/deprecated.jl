@@ -1240,7 +1240,7 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char) coalesce(findlast(isequal(c), s), 0)
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) coalesce(findprev(isequal(c), s, i), 0)
 
-@deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
+@deprecate ismatch(r::Regex, s::AbstractString) occursin(r, s)
 
 @deprecate findin(a, b) findall(in(b), a)
 
@@ -1467,6 +1467,14 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
+# PR #26283
+@deprecate contains(haystack, needle) occursin(needle, haystack)
+@deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
+function (r::Regex)(s)
+    depwarn("`(r::Regex)(s)` is deprecated, use `occursin(r, s)` instead.", :Regex)
+    occursin(r, s)
+end
+
 # Issue #25786
 @deprecate_binding DevNull devnull
 # TODO: When these are removed, also remove the uppercase variants in libuv.jl and stream.jl
@@ -1509,6 +1517,12 @@ end
 
 # Issue #26248
 @deprecate conj(x) x
+
+# PR #26436
+@deprecate equalto(x) isequal(x)
+@deprecate(occursin(x), in(x))
+@deprecate_binding EqualTo Base.Fix2{typeof(isequal)} false
+@deprecate_binding OccursIn Base.Fix2{typeof(in)} false
 
 # Remove ambiguous CartesianIndices and LinearIndices constructors that are ambiguous between an axis and an array (#26448)
 @eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)

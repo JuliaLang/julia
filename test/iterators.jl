@@ -84,7 +84,7 @@ end
 # take
 # ----
 let t = take(0:2:8, 10), i = 0
-    @test length(collect(t)) == 5
+    @test length(collect(t)) == 5 == length(t)
 
     for j = t
         @test j == i*2
@@ -101,6 +101,8 @@ let i = 0
     @test i == 10
 end
 
+@test isempty(take(0:2:8, 0))
+@test_throws ArgumentError take(0:2:8, -1)
 @test length(take(1:3,typemax(Int))) == 3
 @test length(take(countfrom(1),3)) == 3
 @test length(take(1:6,3)) == 3
@@ -115,6 +117,9 @@ let i = 0
     @test i == 4
 end
 
+@test isempty(drop(0:2:10, 100))
+@test isempty(collect(drop(0:2:10, 100)))
+@test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))

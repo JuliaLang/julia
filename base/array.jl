@@ -1984,7 +1984,7 @@ end
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
-findall(p::OccursIn, x::Number) = x in p.x ? [1] : Vector{Int}()
+findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
     findmax(itr) -> (x, index)
@@ -2208,7 +2208,7 @@ function _sortedfindin(v, w)
     return out
 end
 
-function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:Real})
     if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
         return _sortedfindin(x, pred.x)
     else
@@ -2217,7 +2217,7 @@ function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

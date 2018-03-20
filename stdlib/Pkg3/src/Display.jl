@@ -17,7 +17,7 @@ const colors = Dict(
 const color_dark = :light_black
 
 function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
-    blob = try LibGit2.GitBlob, repo, spec
+    blob = try LibGit2.GitBlob(repo, spec)
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         fakeit && return devnull
@@ -32,7 +32,13 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
     project₀ = project₁ = env.project
     manifest₀ = manifest₁ = env.manifest
     diff = nothing
-
+    if !use_as_api
+        pkg = ctx.env.pkg
+        if pkg !== nothing
+           printstyled("Project "; color=Base.info_color(), bold=true)
+           println(pkg.name, " v", pkg.version)
+        end
+    end
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
@@ -46,15 +52,15 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         diff = manifest_diff(ctx, m₀, m₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(env, env.project_file); ignore_indent=true)
-            print_diff(diff)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file); ignore_indent=true)
+            print_diff(ctx, diff)
         end
     end
     if mode == PKGMODE_MANIFEST
         diff = manifest_diff(ctx, manifest₀, manifest₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(env, env.manifest_file); ignore_indent=true)
-            print_diff(diff)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
+            print_diff(ctx, diff)
         end
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
@@ -63,8 +69,8 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             if !use_as_api
-                printpkgstyle(ctx, :Status, pathrepr(env, env.project_file); ignore_indent=true)
-                print_diff(c_diff)
+                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
+                print_diff(ctx, c_diff)
             end
             diff = Base.vcat(c_diff, diff)
         end
@@ -79,7 +85,7 @@ function print_project_diff(ctx::Context, env₀::EnvCache, env₁::EnvCache)
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
     else
-        print_diff(diff)
+        print_diff(ctx, diff)
     end
 end
 
@@ -89,7 +95,7 @@ function print_manifest_diff(ctx::Context, env₀::EnvCache, env₁::EnvCache)
     if isempty(diff)
         printstyled(color = color_dark, " [no changes]\n")
     else
-        print_diff(diff)
+        print_diff(ctx, diff)
     end
 end
 
@@ -101,12 +107,12 @@ struct VerInfo
     repo::Union{Types.GitRepo, Nothing}
 end
 
-revstring(str::String) = contains(str, r"\b([a-f0-9]{40})\b") ? str[1:7] : str
+revstring(str::String) = occursin(r"\b([a-f0-9]{40})\b", str) ? str[1:7] : str
 
-vstring(a::VerInfo) =
+vstring(ctx::Context, a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
-           a.path != nothing ? " [$(pathrepr(a.path))]" : "",
+           a.path != nothing ? " [$(pathrepr(ctx, a.path))]" : "",
            a.repo != nothing ? " #$(revstring(a.repo.rev))" : "",
            a.pinned == true ? " ⚲" : "",
            )
@@ -125,14 +131,14 @@ struct DiffEntry
     new::Union{VerInfo,Nothing}
 end
 
-function print_diff(io::IO, diff::Vector{DiffEntry})
+function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
     same = all(x.old == x.new for x in diff)
     for x in diff
         warnings = String[]
         if x.old != nothing && x.new != nothing
             if x.old ≈ x.new
                 verb = ' '
-                vstr = vstring(x.new)
+                vstr = vstring(ctx, x.new)
             else
                 if x.old.hash != x.new.hash && x.old.ver != x.new.ver
                     verb = x.old.ver == nothing || x.new.ver == nothing ||
@@ -149,15 +155,15 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
                     push!(warnings, msg)
                 end
                 vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned) ?
-                       vstring(x.new) :
-                       vstring(x.old) * " ⇒ " * vstring(x.new)
+                      vstring(ctx, x.new) :
+                      vstring(ctx, x.old) * " ⇒ " * vstring(ctx, x.new)
             end
         elseif x.new != nothing
             verb = '+'
-            vstr = vstring(x.new)
+            vstr = vstring(ctx, x.new)
         elseif x.old != nothing
             verb = '-'
-            vstr = vstring(x.old)
+            vstr = vstring(ctx, x.old)
         else
             verb = '?'
             vstr = "[unknown]"
@@ -167,7 +173,8 @@ function print_diff(io::IO, diff::Vector{DiffEntry})
         printstyled(io, "$v $(x.name) $vstr\n"; color = colors[verb])
     end
 end
-print_diff(diff::Vector{DiffEntry}) = print_diff(stdout, diff)
+# TODO: Use the Context stream
+print_diff(ctx::Context, diff::Vector{DiffEntry}) = print_diff(stdout, ctx, diff)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()

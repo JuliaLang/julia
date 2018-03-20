@@ -903,7 +903,7 @@ end
         @test x == parse(BigFloat, sx)
         @test ≈(x, parse(BigFloat, scx), rtol=1e-4)
         for s in (sx, scx)
-            @test contains(s, 'e') == contains_e
+            @test occursin('e', s) == contains_e
             @test startswith(s, starts)
             @test endswith(s, ends)
         end

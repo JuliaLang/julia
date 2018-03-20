@@ -151,6 +151,10 @@ Language changes
   * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
     Now it is evaluated in the scope outside the `for` loop.
 
+  * In `for i in x, j in y`, all variables now have fresh bindings on each iteration of the
+    innermost loop. For example, an assignment to `i` will not be visible on the next `j`
+    loop iteration ([#330]).
+
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
 
@@ -563,7 +567,7 @@ Library improvements
   * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
   * `isequal`, `==`, and `in` have one argument "curried" forms. For example `isequal(x)`
-    returns a function that compares its argument to `x` using `isequal` ([#23812]).
+    returns a function that compares its argument to `x` using `isequal` ([#26436]).
 
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
@@ -1078,6 +1082,11 @@ Deprecated or removed
   * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
     has been renamed to `force` ([#25979]).
 
+  * `contains` has been deprecated in favor of a more general `occursin` function, which
+    takes its arguments in reverse order from `contains` ([#26283]).
+
+  * `Regex` objects are no longer callable. Use `occursin` instead ([#26283]).
+
   * The methods of `range` based on positional arguments have been deprecated in favor of
     keyword arguments ([#25896]).
 
@@ -1290,7 +1299,6 @@ Command-line option changes
 [#23750]: https://github.com/JuliaLang/julia/issues/23750
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23805]: https://github.com/JuliaLang/julia/issues/23805
-[#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23816]: https://github.com/JuliaLang/julia/issues/23816
 [#23885]: https://github.com/JuliaLang/julia/issues/23885
 [#23902]: https://github.com/JuliaLang/julia/issues/23902
@@ -1418,4 +1426,5 @@ Command-line option changes
 [#26262]: https://github.com/JuliaLang/julia/issues/26262
 [#26284]: https://github.com/JuliaLang/julia/issues/26284
 [#26286]: https://github.com/JuliaLang/julia/issues/26286
+[#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
