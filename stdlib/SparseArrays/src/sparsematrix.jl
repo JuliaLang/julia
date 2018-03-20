@@ -51,6 +51,7 @@ getrowval(S::SparseMatrixCSC)     = S.rowval
 getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval
 getnzval( S::SparseMatrixCSCView) = S.parent.nzval
+nzvalview(S::SparseMatrixCSC)     = view(S.nzval, 1:nnz(S))
 
 """
     nnz(A)
@@ -71,7 +72,7 @@ julia> nnz(A)
 """
 nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
 nnz(S::ReshapedArray{T,1,<:SparseMatrixCSC}) where T = nnz(parent(S))
-count(pred, S::SparseMatrixCSC) = count(pred, view(S.nzval, 1:nnz(S))) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
+count(pred, S::SparseMatrixCSC) = count(pred, nzvalview(S)) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
     nonzeros(A)
@@ -1477,7 +1478,7 @@ julia> sprandn(2, 2, 0.75)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
 
-LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
+LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
 """
     spzeros([type,]m[,n])
@@ -1530,7 +1531,7 @@ function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
     SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
 
-Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
+Base.iszero(A::SparseMatrixCSC) = iszero(nzvalview(A))
 
 function Base.isone(A::SparseMatrixCSC)
     m, n = size(A)
@@ -1640,7 +1641,7 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
             _mapreducezeros(f, op, T, n-z-1, f(zero(T)))
         end
     else
-        _mapreducezeros(f, op, T, n-z, Base._mapreduce(f, op, A.nzval))
+        _mapreducezeros(f, op, T, n-z, Base._mapreduce(f, op, nzvalview(A)))
     end
 end
 
@@ -1654,11 +1655,11 @@ function Base._mapreduce(f, op::typeof(*), A::SparseMatrixCSC{T}) where T
     nzeros = length(A)-nnz(A)
     if nzeros == 0
         # No zeros, so don't compute f(0) since it might throw
-        Base._mapreduce(f, op, A.nzval)
+        Base._mapreduce(f, op, nzvalview(A))
     else
         v = f(zero(T))^(nzeros)
         # Bail out early if initial reduction value is zero
-        v == zero(T) ? v : v*Base._mapreduce(f, op, A.nzval)
+        v == zero(T) ? v : v*Base._mapreduce(f, op, nzvalview(A))
     end
 end
 
