@@ -86,7 +86,6 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
         Pkg3.REPLMode.pkgstr("add $p2#$c")
     end
 
-    # TODO cleanup
     mktempdir() do tmp_dev_dir
     withenv("JULIA_PKG_DEVDIR" => tmp_dev_dir) do
         pkg"develop Example"

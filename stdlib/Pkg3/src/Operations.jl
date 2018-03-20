@@ -377,6 +377,7 @@ end
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
 function install_git(
+    ctx::Context,
     uuid::UUID,
     name::String,
     hash::SHA1,
@@ -403,8 +404,7 @@ function install_git(
         LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
     end
     tree = try
-        with(LibGit2.GitObject, repo, git_hash) do g
-        end
+        LibGit2.GitObject(repo, git_hash)
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         error("$name: git object $(string(hash)) could not be found")
@@ -417,7 +417,7 @@ function install_git(
         target_directory = Base.unsafe_convert(Cstring, version_path)
     )
     LibGit2.checkout_tree(repo, tree, options=opts)
-    close(repo); close(tree); close(opts); close(git_hash)
+    close(repo); close(tree)
     return
 end
 
@@ -493,7 +493,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
     for (pkg, path) in missed_packages
         uuid = pkg.uuid
         if !ctx.preview
-            install_git(pkg.uuid, pkg.name, hashes[uuid], urls[uuid], pkg.version::VersionNumber, path)
+            install_git(ctx, pkg.uuid, pkg.name, hashes[uuid], urls[uuid], pkg.version::VersionNumber, path)
         end
         vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
         @info "Installed $(rpad(pkg.name * " ", max_name + 2, "─")) $vstr"
