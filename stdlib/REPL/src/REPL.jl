@@ -4,7 +4,7 @@ __precompile__(true)
 
 module REPL
 
-using Base.Meta
+using Base.Meta, Sockets
 import InteractiveUtils
 
 export
