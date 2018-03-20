@@ -190,17 +190,17 @@ julia&gt; findfirst(isequal(&#39;z&#39;), &quot;xylophone&quot;)</code></pre><p>
 julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 5)
 7
 
-julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 8)</code></pre><p>You can use the <a href="../../base/strings/#Base.contains"><code>contains</code></a> function to check if a substring is contained in a string:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;Hello, world.&quot;, &quot;world&quot;)
+julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 8)</code></pre><p>You can use the <a href="../../base/strings/#Base.occursin"><code>occursin</code></a> function to check if a substring is found within a string:</p><pre><code class="language-julia-repl">julia&gt; occursin(&quot;world&quot;, &quot;Hello, world.&quot;)
 true
 
-julia&gt; contains(&quot;Xylophon&quot;, &quot;o&quot;)
+julia&gt; occursin(&quot;o&quot;, &quot;Xylophon&quot;)
 true
 
-julia&gt; contains(&quot;Xylophon&quot;, &quot;a&quot;)
+julia&gt; occursin(&quot;a&quot;, &quot;Xylophon&quot;)
 false
 
-julia&gt; contains(&quot;Xylophon&quot;, &#39;o&#39;)
-true</code></pre><p>The last example shows that <a href="../../base/strings/#Base.contains"><code>contains</code></a> can also look for a character literal.</p><p>Two other handy string functions are <a href="../../base/arrays/#Base.repeat"><code>repeat</code></a> and <a href="../../base/strings/#Base.join"><code>join</code></a>:</p><pre><code class="language-julia-repl">julia&gt; repeat(&quot;.:Z:.&quot;, 10)
+julia&gt; occursin(&#39;o&#39;, &quot;Xylophon&quot;)
+true</code></pre><p>The last example shows that <a href="../../base/strings/#Base.occursin"><code>occursin</code></a> can also look for a character literal.</p><p>Two other handy string functions are <a href="../../base/arrays/#Base.repeat"><code>repeat</code></a> and <a href="../../base/strings/#Base.join"><code>join</code></a>:</p><pre><code class="language-julia-repl">julia&gt; repeat(&quot;.:Z:.&quot;, 10)
 &quot;.:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.&quot;
 
 julia&gt; join([&quot;apples&quot;, &quot;bananas&quot;, &quot;pineapples&quot;], &quot;, &quot;, &quot; and &quot;)
@@ -208,11 +208,11 @@ julia&gt; join([&quot;apples&quot;, &quot;bananas&quot;, &quot;pineapples&quot;]
 r&quot;^\s*(?:#|$)&quot;
 
 julia&gt; typeof(ans)
-Regex</code></pre><p>To check if a regex matches a string, use <a href="../../base/strings/#Base.contains"><code>contains</code></a>:</p><pre><code class="language-julia-repl">julia&gt; contains(&quot;not a comment&quot;, r&quot;^\s*(?:#|$)&quot;)
+Regex</code></pre><p>To check if a regex matches a string, use <a href="../../base/strings/#Base.occursin"><code>occursin</code></a>:</p><pre><code class="language-julia-repl">julia&gt; occursin(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
 false
 
-julia&gt; contains(&quot;# a comment&quot;, r&quot;^\s*(?:#|$)&quot;)
-true</code></pre><p>As one can see here, <a href="../../base/strings/#Base.contains"><code>contains</code></a> simply returns true or false, indicating whether the given regex matches the string or not. Commonly, however, one wants to know not just whether a string matched, but also <em>how</em> it matched. To capture this information about a match, use the <a href="../../base/strings/#Base.match"><code>match</code></a> function instead:</p><pre><code class="language-julia-repl">julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
+julia&gt; occursin(r&quot;^\s*(?:#|$)&quot;, &quot;# a comment&quot;)
+true</code></pre><p>As one can see here, <a href="../../base/strings/#Base.occursin"><code>occursin</code></a> simply returns true or false, indicating whether a match for the given regex occurs in the string. Commonly, however, one wants to know not just whether a string matched, but also <em>how</em> it matched. To capture this information about a match, use the <a href="../../base/strings/#Base.match"><code>match</code></a> function instead:</p><pre><code class="language-julia-repl">julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;not a comment&quot;)
 
 julia&gt; match(r&quot;^\s*(?:#|$)&quot;, &quot;# a comment&quot;)
 RegexMatch(&quot;#&quot;)</code></pre><p>If the regular expression does not match the given string, <a href="../../base/strings/#Base.match"><code>match</code></a> returns <code>nothing</code> – a special value that does not print anything at the interactive prompt. Other than not printing, it is a completely normal value and you can test for it programmatically:</p><pre><code class="language-julia">m = match(r&quot;^\s*(?:#|$)&quot;, line)
