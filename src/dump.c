@@ -84,6 +84,7 @@ static const intptr_t NearbyGlobal_tag = 33;  // a GlobalRef pointing to tree_en
 static const intptr_t CoreMod_tag      = 34;
 static const intptr_t BaseMod_tag      = 35;
 static const intptr_t BITypeName_tag   = 36;  // builtin TypeName
+static const intptr_t ShortString_tag  = 37;
 static const intptr_t Null_tag         = 253;
 static const intptr_t ShortBackRef_tag = 254;
 static const intptr_t BackRef_tag      = 255;
@@ -440,7 +441,7 @@ static int is_ast_node(jl_value_t *v)
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
         jl_is_uniontype(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
         jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
-        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) ||
+        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) || jl_is_uint8(v) ||
         jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
@@ -740,9 +741,16 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_error("Task cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
-        writetag(s->s, jl_string_type);
-        write_int32(s->s, jl_string_len(v));
-        ios_write(s->s, jl_string_data(v), jl_string_len(v));
+        size_t n = jl_string_len(v);
+        if (n <= 255) {
+            writetag(s->s, (void*)ShortString_tag);
+            write_uint8(s->s, (uint8_t)n);
+        }
+        else {
+            writetag(s->s, jl_string_type);
+            write_int32(s->s, n);
+        }
+        ios_write(s->s, jl_string_data(v), n);
     }
     else if (jl_typeis(v, jl_typemap_entry_type)) {
         writetag(s->s, jl_typemap_entry_type);
@@ -1872,8 +1880,12 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
         return (jl_value_t*)dt->name;
     }
-    else if (vtag == (jl_value_t*)jl_string_type) {
-        size_t n = read_int32(s->s);
+    else if (vtag == (jl_value_t*)jl_string_type || vtag == (jl_value_t*)ShortString_tag) {
+        size_t n;
+        if (vtag == (jl_value_t*)jl_string_type)
+            n = read_int32(s->s);
+        else
+            n = read_uint8(s->s);
         jl_value_t *str = jl_alloc_string(n);
         if (usetable)
             arraylist_push(&backref_list, str);
@@ -2849,6 +2861,7 @@ void jl_init_serializer(void)
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
                      (void*)CoreMod_tag, (void*)BaseMod_tag, (void*)BITypeName_tag,
+                     (void*)ShortString_tag,
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
@@ -2881,7 +2894,7 @@ void jl_init_serializer(void)
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
 
-                     jl_bool_type, jl_int32_type, jl_int64_type,
+                     jl_bool_type, jl_int32_type, jl_int64_type, jl_uint8_type,
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
                      jl_quotenode_type, jl_pinode_type, jl_phinode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type,

@@ -371,7 +371,7 @@ function append_any(xs...)
                 ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
                 l += 16
             end
-            Core.arrayset(true, out, y, i)
+            arrayset(true, out, y, i)
             i += 1
         end
     end
@@ -380,7 +380,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})

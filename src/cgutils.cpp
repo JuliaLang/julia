@@ -1978,7 +1978,7 @@ static Value *call_with_unsigned(jl_codectx_t &ctx, Function *ufunc, Value *v)
     return Call;
 }
 
-static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val);
+static jl_value_t *jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val);
 
 static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 {
@@ -1999,7 +1999,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(c, jt);
             if (s) {
-                jl_add_method_root(ctx, s);
+                s = jl_add_method_root(ctx, s);
                 return literal_pointer_val(ctx, s);
             }
         }
