@@ -122,6 +122,12 @@ function verify_ir(ir::IRCode)
                     end
                 end
             end
+            if isa(stmt, Expr) && stmt.head === :(=)
+                if stmt.args[1] isa SSAValue
+                    @verify_error "SSAValue as assignment LHS"
+                    error()
+                end
+            end
             for op in userefs(stmt)
                 op = op[]
                 check_op(ir, domtree, op, bb, idx)

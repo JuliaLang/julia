@@ -30,7 +30,8 @@ catch err
     @test length(lkup) == 2
     @test endswith(string(lkup[2].file), "backtrace.jl")
     @test lkup[2].line == 42
-    @test lkup[1].func == :inlfunc
+    # TODO: we don't support surface AST locations with inlined function names
+    @test_broken lkup[1].func == :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
     @test lkup[1].line == 37
 end

@@ -58,7 +58,7 @@ function scan_slot_def_use(nargs, ci::CodeInfo, code)
 end
 
 function renumber_ssa(stmt::SSAValue, ssanums::Vector{Any}, new_ssa::Bool=false, used_ssa::Union{Nothing, Vector{Int}}=nothing)
-    id = stmt.id + (new_ssa ? 0 : 1)
+    id = stmt.id
     if id > length(ssanums)
         return stmt
     end
@@ -78,10 +78,9 @@ function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ
     (idx == 0) && return Argument(slot)
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
-    push!(ci.ssavaluetypes, typ)
-    ssa = length(ci.ssavaluetypes)-1
-    stmt.args[1] = SSAValue(ssa)
-    ssa
+    code[idx] = stmt.args[2]
+    ci.ssavaluetypes[idx] = typ
+    idx
 end
 
 struct UndefToken
@@ -183,13 +182,14 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, flags::Vector{UInt8})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
-            resize!(lines, i)
+            resize!(ci.ssavaluetypes, i)
+            resize!(ci.codelocs, i)
             resize!(flags, i)
             break
         end
@@ -199,10 +199,11 @@ function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int}, flags::Vect
     term = code[end]
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
-        push!(lines, 0)
+        push!(ci.ssavaluetypes, Union{})
+        push!(ci.codelocs, 0)
         push!(flags, 0x00)
     end
-    return code
+    nothing
 end
 
 struct DelayedTyp
@@ -213,7 +214,7 @@ end
 function typ_for_val(@nospecialize(val), ci::CodeInfo)
     isa(val, Expr) && return val.typ
     isa(val, GlobalRef) && return abstract_eval_global(val.mod, val.name)
-    isa(val, SSAValue) && return ci.ssavaluetypes[val.id+1]
+    isa(val, SSAValue) && return ci.ssavaluetypes[val.id]
     isa(val, Argument) && return ci.slottypes[val.n]
     isa(val, NewSSAValue) && return DelayedTyp(val)
     isa(val, QuoteNode) && return Const(val.value)
@@ -774,25 +775,25 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     result_types = Any[Any for _ in 1:length(new_code)]
     # Detect statement positions for assignments and construct array
     for (idx, stmt) in Iterators.enumerate(code)
-        if isexpr(stmt, :(=)) && isa(stmt.args[1], SSAValue)
-            ssavalmap[stmt.args[1].id + 1] = SSAValue(idx)
-            result_types[idx] = ci.ssavaluetypes[stmt.args[1].id + 1]
-            stmt = stmt.args[2]
+        # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
+        if isa(stmt, GotoNode)
+            new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, GotoIfNot)
+            new_code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        elseif isexpr(stmt, :enter)
+            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
+        elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isexpr(stmt, :return) ||
+            isexpr(stmt, :meta) || isa(stmt, NewvarNode)
+            new_code[idx] = stmt
+        else
+            ssavalmap[idx] = SSAValue(idx)
+            result_types[idx] = ci.ssavaluetypes[idx]
             if isa(stmt, PhiNode)
                 edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
             else
                 new_code[idx] = stmt
             end
-        # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
-        elseif isa(stmt, GotoNode)
-            new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
-        elseif isa(stmt, GotoIfNot)
-            new_code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
-        elseif isexpr(stmt, :enter)
-            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
-        else
-            new_code[idx] = stmt
         end
     end
     for (_, nodes) in phicnodes

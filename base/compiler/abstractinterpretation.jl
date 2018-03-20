@@ -313,9 +313,7 @@ end
 # In general, usage of this is wrong.
 function ssa_def_expr(@nospecialize(arg), sv::InferenceState)
     while isa(arg, SSAValue)
-        def = sv.ssavalue_defs[arg.id + 1]
-        stmt = sv.src.code[def]::Expr
-        arg = stmt.args[2]
+        arg = sv.src.code[arg.id]
     end
     return arg
 end
@@ -909,8 +907,7 @@ function abstract_eval_global(M::Module, s::Symbol)
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
-    new_style_ir = src.codelocs !== nothing
-    typ = src.ssavaluetypes[new_style_ir ? s.id : (s.id + 1)]
+    typ = src.ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom
     end
@@ -921,31 +918,4 @@ end
 function abstract_evals_to_constant(@nospecialize(ex), @nospecialize(c), vtypes::VarTable, sv::InferenceState)
     av = abstract_eval(ex, vtypes, sv)
     return isa(av,Const) && av.val === c
-end
-
-# handling for statement-position expressions
-function abstract_interpret(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
-    !isa(e, Expr) && return vtypes
-    # handle assignment
-    if e.head === :(=)
-        t = abstract_eval(e.args[2], vtypes, sv)
-        t === Bottom && return ()
-        lhs = e.args[1]
-        if isa(lhs, Slot) || isa(lhs, SSAValue)
-            # don't bother for GlobalRef
-            return StateUpdate(lhs, VarState(t, false), vtypes)
-        end
-    elseif e.head === :call || e.head === :foreigncall
-        t = abstract_eval(e, vtypes, sv)
-        t === Bottom && return ()
-    elseif e.head === :gotoifnot
-        t = abstract_eval(e.args[1], vtypes, sv)
-        t === Bottom && return ()
-    elseif e.head === :method
-        fname = e.args[1]
-        if isa(fname, Slot)
-            return StateUpdate(fname, VarState(Any, false), vtypes)
-        end
-    end
-    return vtypes
 end

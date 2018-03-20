@@ -930,11 +930,12 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 2
+    m.source.ssavaluetypes = 3
+    m.source.codelocs = [1, 1, 1]
     m.source.code = Any[
-        Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
-        Expr(:return, SSAValue(1))
+        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
+        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
+        Expr(:return, SSAValue(2))
     ]
     @test @inferred(f()) == 6
 end
@@ -1117,7 +1118,6 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
 end
 
 function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
-    new_style_ir = code.codelocs !== nothing
     for ex in code.code
         Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
@@ -1128,7 +1128,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + (new_style_ir ? 0 : 1)]
+                farg = code.ssavaluetypes[farg.id]
             else
                 farg = typeof(farg)
             end
@@ -1482,13 +1482,11 @@ i = 1
 while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
-    Meta.isexpr(expr25261, :(=)) || continue
-    isa(expr25261.args[2], Union{GlobalRef, Expr}) && continue
-    # This should be the assignment to the SSAValue into the getfield
-    # call - make sure it's a TypedSlot
-    @test isa(expr25261.args[2], TypedSlot)
-    @test expr25261.args[2].typ === Tuple{Int, Int}
-    global foundslot = true
+    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+        # This should be the assignment to the SSAValue into the getfield
+        # call - make sure it's a TypedSlot
+        global foundslot = true
+    end
 end
 @test foundslot
 

@@ -204,11 +204,19 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
 {
     assert(jl_is_expr(ast));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
+    jl_value_t *codelocs = jl_exprarg(ast, 3);
+    li->linetable = jl_exprarg(ast, 4);
+    size_t nlocs = jl_array_len(codelocs);
+    li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int_type, nlocs);
+    size_t j;
+    for (j = 0; j < nlocs; j++) {
+        jl_arrayset((jl_array_t*)li->codelocs, jl_arrayref((jl_array_t*)codelocs, j), j);
+    }
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
     li->code = body;
     jl_gc_wb(li, li->code);
-    size_t j, n = jl_array_len(body);
+    size_t n = jl_array_len(body);
     jl_value_t **bd = (jl_value_t**)jl_array_data((jl_array_t*)li->code);
     for (j = 0; j < n; j++) {
         jl_value_t *st = bd[j];
@@ -246,8 +254,6 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
     jl_gc_wb(li, li->ssavaluetypes);
-    li->linetable = jl_nothing;
-    li->codelocs = jl_nothing;
     li->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
 
     // Flags that need to be copied to slotflags
@@ -329,6 +335,28 @@ jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
     return src;
 }
 
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name)
+{
+    jl_array_t *li = (jl_array_t*)ci->linetable;
+    size_t i, n = jl_array_len(li);
+    jl_value_t *rt = NULL;
+    JL_GC_PUSH1(&rt);
+    for (i=0; i < n; i++) {
+        jl_value_t *ln = jl_array_ptr_ref(li, i);
+        if (jl_is_linenode(ln)) {
+            rt = jl_box_long(jl_linenode_line(ln));
+            rt = jl_new_struct(jl_lineinfonode_type, mod, name, jl_linenode_file(ln), rt, jl_box_long(0));
+            jl_array_ptr_set(li, i, rt);
+        }
+        else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
+            rt = jl_new_struct(jl_lineinfonode_type, mod, jl_symbol("macro expansion"),
+                               jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
+            jl_array_ptr_set(li, i, rt);
+        }
+    }
+    JL_GC_POP();
+}
+
 // invoke (compiling if necessary) the jlcall function pointer for a method template
 STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator, jl_svec_t *sparam_vals,
                                          jl_value_t **args, uint32_t nargs)
@@ -399,6 +427,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->current_module = last_m;
         ptls->current_task->current_module = task_last_m;
         ptls->world_age = last_age;
+        jl_linenumber_to_lineinfo(func, def->module, def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
@@ -448,6 +477,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
+    jl_linenumber_to_lineinfo(src, m->module, m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -456,20 +486,15 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);
-    int set_lineno = 0;
+    // set location from first LineInfoNode
+    if (jl_array_len(src->linetable) > 0) {
+        jl_value_t *ln = jl_array_ptr_ref(src->linetable, 0);
+        m->file = (jl_sym_t*)jl_fieldref(ln, 2);
+        m->line = jl_unbox_long(jl_fieldref(ln, 3));
+    }
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
-        if (jl_is_linenode(st)) {
-            if (!set_lineno) {
-                m->line = jl_linenode_line(st);
-                jl_value_t *file = jl_linenode_file(st);
-                if (jl_is_symbol(file))
-                    m->file = (jl_sym_t*)file;
-                st = jl_nothing;
-                set_lineno = 1;
-            }
-        }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
+        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
             if (jl_expr_nargs(st) > 1 && jl_exprarg(st, 0) == (jl_value_t*)nospecialize_sym) {
                 for (size_t j=1; j < jl_expr_nargs(st); j++) {
                     jl_value_t *aj = jl_exprarg(st, j);

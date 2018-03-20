@@ -141,7 +141,7 @@ end
 function first_insert_for_bb(code, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
-        if !isa(stmt, LabelNode) && !isa(stmt, PhiNode)
+        if !isa(stmt, PhiNode)
             return idx
         end
     end
@@ -282,7 +282,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
-                      :cfunction)
+                      :cfunction, :method)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))

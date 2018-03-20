@@ -96,7 +96,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 end
             end
         elseif isa(x, SSAValue)
-            id = x.id + 1 # ensures that id > 0 for use with BitSet
+            id = x.id
             !in(id, ssavals) && push!(ssavals, id)
         end
     end
@@ -104,8 +104,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     ssavals = BitSet()
     lhs_slotnums = BitSet()
     for x in c.code
-        if c.codelocs !== nothing && is_valid_rvalue(x)
-        elseif isa(x, Expr)
+        if isa(x, Expr)
             head = x.head
             if !is_top_level
                 head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
@@ -148,10 +147,10 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
-                push!(errors, InvalidCodeError("invalid statement", x))
+                # TODO: nothing is actually in statement position anymore
+                #push!(errors, InvalidCodeError("invalid statement", x))
             end
         elseif isa(x, NewvarNode)
-        elseif isa(x, LabelNode)
         elseif isa(x, GotoNode)
         elseif x === nothing
         elseif isa(x, SlotNumber)
@@ -162,12 +161,12 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         elseif isa(x, PhiNode)
         elseif isa(x, UpsilonNode)
         else
-            push!(errors, InvalidCodeError("invalid statement", x))
+            #push!(errors, InvalidCodeError("invalid statement", x))
         end
     end
     nslotnames = length(c.slotnames)
     nslotflags = length(c.slotflags)
-    nssavals = length(ssavals)
+    nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames != nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
@@ -213,7 +212,7 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
@@ -223,7 +222,7 @@ function is_valid_argument(@nospecialize(x))
         return true
     end
     # TODO: consider being stricter about what needs to be wrapped with QuoteNode
-    return !(isa(x,Expr) || isa(x,Symbol) || isa(x,GotoNode) || isa(x,LabelNode) ||
+    return !(isa(x,Expr) || isa(x,Symbol) || isa(x,GotoNode) ||
              isa(x,LineNumberNode) || isa(x,NewvarNode))
 end
 
