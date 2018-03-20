@@ -62,7 +62,7 @@ julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
  2.0
  9.0
 
-julia> clamp.([11,8,5],10,6) # an example were lo > hi
+julia> clamp.([11,8,5],10,6) # an example where lo > hi
 3-element Array{Int64,1}:
   6
   6
