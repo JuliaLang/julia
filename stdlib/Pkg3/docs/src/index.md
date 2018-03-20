@@ -18,11 +18,11 @@ is designed around “environments”: independent sets of packages that can be
 local to an individual project or shared and selected by name. The exact set of
 packages and versions in an environment is captured in a _manifest file_ which
 can be checked into a project repository and tracked in version control,
-significantly improving reproducibility of projects. If you've ever tried to run
-code you haven't used in a while only to find that you can’t get anything to
+significantly improving reproducibility of projects. If you’ve ever tried to run
+code you haven’t used in a while only to find that you can’t get anything to
 work because you’ve updated or uninstalled some of the packages your project was
-using, you'll understand the motivation for this approach. In Pkg3, since each
-project maintains its own independent set of package versions, you'll never have
+using, you’ll understand the motivation for this approach. In Pkg3, since each
+project maintains its own independent set of package versions, you’ll never have
 this problem again. Moreover, if you check out a project on a new system, you
 can simply materialize the environment described by its manifest file and
 immediately be up and running with a known-good set of dependencies.
@@ -30,7 +30,7 @@ immediately be up and running with a known-good set of dependencies.
 Since environments are managed and updated independently from each other,
 “dependency hell” is significantly alleviated in Pkg3. If you want to use the
 latest and greatest `DataFrames` in a new project but you’re stuck on an older
-version in a different project, that's no problem – since they have separate
+version in a different project, that’s no problem – since they have separate
 environments they can just use different versions, which are both installed at
 the same time in different locations on your system. The location of each
 package version is canonical, so when environments use the same versions of
@@ -38,11 +38,11 @@ packages, they can share installations, avoiding unnecessary duplication of the
 package. Old package versions that are no longer used by any environments are
 periodically automatically “garbage collected” by the package manager.
 
-Pkg3's approach to local environments may be familiar to people who have used
-Python's `virtualenv` or Ruby's `bundler`. In Julia, instead of hacking the
-language's code loading mechanisms to support environments, we have the benefit
+Pkg3’s approach to local environments may be familiar to people who have used
+Python’s `virtualenv` or Ruby’s `bundler`. In Julia, instead of hacking the
+language’s code loading mechanisms to support environments, we have the benefit
 that Julia natively understands Pkg3 environments. In addition, Julia
-environments are "stackable": you can overlay one environment with another and
+environments are “stackable”: you can overlay one environment with another and
 thereby have access to additional packages outside of the primary project
 environment. The overlay of environments is controlled by the `LOAD_PATH`
 global, which specifies the stack of environments that are searched for
@@ -61,7 +61,7 @@ tag a `v1.2.3+hotfix` version in your internal private registry and get it to
 your developers and ops teams quickly and easily without having to wait for an
 upstream patch to be accepted and published. Once the upstream fix is accepted,
 just upgrade your dependency to the new official `v1.2.4` version which includes
-the fix and you're back on an official upstream version of the dependency.
+the fix and you’re back on an official upstream version of the dependency.
 
 ## Glossary
 
@@ -225,7 +225,7 @@ Hello World!
 
 ### Adding packages to the project
 
-Let's say we want to use the standard library package `Random` and the registered package `JSON` in our project.
+Let’s say we want to use the standard library package `Random` and the registered package `JSON` in our project.
 We simply `add` these packages:
 
 ```
@@ -241,7 +241,7 @@ pkg> add Random JSON
  ...
 ```
 
-Both `Random` and `JSON` got added to the project's `Project.toml` file, and the resulting dependencies got added to the `Manifest.toml` file.
+Both `Random` and `JSON` got added to the project’s `Project.toml` file, and the resulting dependencies got added to the `Manifest.toml` file.
 The resolver has installed each package with the highest possible version, while still respecting the compatibility that each package enforce on its dependencies.
 
 We can now use both `Random` and `JSON` in our project. Changing `src/HelloWorld.jl` to
@@ -297,7 +297,7 @@ For unregistered packages we could have given a branch (or commit SHA) to track 
 
 ## Developing packages
 
-Let's say we found a bug in `JSON` that we want to fix. We can get the full git-repo using the `develop` command
+Let’s say we found a bug in `JSON` that we want to fix. We can get the full git-repo using the `develop` command
 
 ```
 pkg> develop JSON
