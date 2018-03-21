@@ -113,59 +113,62 @@ we plan to make libraries first-class entities directly installed and upgraded
 by the package manager.
 
 **Registry:** a source tree with a standard layout recording metadata about a
-registered set of packages, tagged verions of them which are available, and
-which versions of different packages are compatible or incompatible with each
-other. A registry is indexed by package name and UUID, including, providing the
-following information:
+registered set of packages, the tagged versions of them which are available, and
+which versions of packages are compatible or incompatible with each other. A
+registry is indexed by package name and UUID, and has a directory for each
+registered package providing the following metadata about it:
 
-- a set of packages and metadata about each:
   - name – e.g. `DataFrames`
   - UUID – e.g. `a93c6f00-e57d-5684-b7b6-d8193f3e46c0`
   - authors – e.g. `Jane Q. Developer <jane@example.com>`
   - license – e.g. MIT, BSD3, or GPLv2
-  - repository location – e.g. `https://github.com/JuliaData/DataFrames.jl.git`
+  - repository – e.g. `https://github.com/JuliaData/DataFrames.jl.git`
   - description – a block of text summarizing the functionality of a package
   - keywords – e.g. `data`, `tabular`, `analysis`, `statistics`
-- a set of registered versions for each package with:
-  - semantic version number – e.g. `v1.2.3`
-  - git tree SHA-1 hash – e.g. `7ffb18ea3245ef98e368b02b81e8a86543a11103`
-  - a map from names to UUIDs of dependencies
-  - versions of other packages which each version is compatible with
+  - versions – a list of all registered version tags
 
-Each registered package has its own directory and per-version metadata like
-dependencies and compatiblity is stored in a compressed but human-readable
+For each registered version of a package, the following information is provided:
+
+  - its semantic version number – e.g. `v1.2.3`
+  - its git tree SHA-1 hash – e.g. `7ffb18ea3245ef98e368b02b81e8a86543a11103`
+  - a map from names to UUIDs of dependencies
+  - which versions of other packages it is compatible/incompatible with
+
+Dependencies and compatiblity are stored in a compressed but human-readable
 format using ranges of package verions.
 
-**Depot:** directory where various package-related resources live, including:
+**Depot:** a directory on a system where various package-related resources live,
+including:
 
-  - `registries`: clones of registries
-  - `packages`: installed package versions
-  - `environments`: shared named environments
+  - `environments`: shared named environments (e.g. `v0.7`, `devtools`)
   - `clones`: bare clones of package repositories
-  - `compiled`: cached compiled package code
-  - `logs`: logs of REPL history and manifest usage
+  - `compiled`: cached compiled package images (`.ji` files)
+  - `config`: global configuration files (e.g. `startup.jl`)
   - `dev`: default directory for package development
-  - `config`: global configuration files
+  - `logs`: log files (e.g. `manifest_usage.toml`, `repl_history.jl`)
+  - `packages`: installed package versions
+  - `registries`: clones of registries (e.g. `Uncurated`)
 
-**Load path:** a stack of environments, which are where package identities,
+**Load path:** a stack of environments where package identities, their
 dependencies, and entry-points are searched for. The load path is controlled in
-Julia by the `LOAD_PATH` global variable, which is populated at startup based on
+Julia by the `LOAD_PATH` global variable which is populated at startup based on
 the value of the `JULIA_LOAD_PATH` environment variable. The first entry is your
 primary environment, often the current project, while later entries provide
-additional packages one may want to use from the REPL or the top-level of a
-script.
+additional packages one may want to use from the REPL or top-level scripts.
 
-**Depot path:** a stack of depot locations, where code loading and the package
-manager looks for registries, installed packages, named environments, repo
-clones, chached compiled packages, and configuration files. The depot path is
-controlled by the Julia `DEPOT_PATH` global variable, which is populated at
-startup based on the value of the `JULIA_DEPOT_PATH` global variable. The first
-entry is the user depot and should be user-writable. The user depot is where
-registries are cloned, where new package versions are installed, where named
-environments are created and updated, where package repos are cloned, where new
-compiled package cache files are saved, where log files are written, where
-development packages are checked out by default, and where global configuration
-data is saved.
+**Depot path:** a stack of depot locations where the package manager, as well as
+Julia's code loading mechanisms, look for registries, installed packages, named
+environments, repo clones, cached compiled package images, and configuration
+files. The depot path is controlled by the Julia `DEPOT_PATH` global variable
+which is populated at startup based on the value of the `JULIA_DEPOT_PATH`
+environment variable. The first entry is the “user depot” and should be writable
+by and owned by the current user. The user depot is where: registries are
+cloned, new package versions are installed, named environments are created and
+updated, package repos are cloned, new compiled package image files are saved,
+log files are written, development packages are checked out by default, and
+global configuration data is saved. Later entries in the depot path are treated
+as read-only and are appropriate for registries, packages, etc. installed and
+managed by system administrators.
 
 
 ## Getting Started
