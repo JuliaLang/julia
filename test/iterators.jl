@@ -272,7 +272,7 @@ let iters = (1:2,
              )
     for method in [size, length, ndims, eltype]
         for i = 1:length(iters)
-            args = iters[i]
+            args = (iters[i],)
             @test method(product(args...)) == method(collect(product(args...)))
             for j = 1:length(iters)
                 args = iters[i], iters[j]
