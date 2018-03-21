@@ -321,7 +321,7 @@ Let’s say we found a bug in `JSON` that we want to fix. We can get the full gi
 pkg> develop JSON
     Cloning package from https://github.com/JuliaIO/JSON.jl.git
   Resolving package versions...
-   Updating "~/.julia/environments/v0.7/Project.toml"
+   Updating "~/Documents/HelloWorld/Project.toml"
  [682c06a0] + JSON v0.17.1+ [~/.julia/dev/JSON]
 ...
 ```
