@@ -26,7 +26,7 @@ include(joinpath("grisu", "bignum.jl"))
 
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
-function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.threadid()],bignums=BIGNUMS)
+function grisu(v::AbstractFloat,mode,requested_digits,buffer=@inbounds(DIGITSs[Threads.threadid()]),bignums=BIGNUMS)
     if signbit(v)
         neg = true
         v = -v
@@ -71,7 +71,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
         return
     end
     typed && isa(x,Float16) && print(io, "Float16(")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
+    (len,pt,neg),buffer = grisu(x,mode,n),@inbounds(DIGITSs[Threads.threadid()])
     pdigits = pointer(buffer)
     if mode == PRECISION
         while len > 1 && buffer[len] == 0x30
@@ -159,7 +159,7 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return print(io, "NaN")
     x < 0 && print(io,'-')
     isinf(x) && return print(io, "Inf")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
+    (len,pt,neg),buffer = grisu(x,mode,n),@inbounds(DIGITSs[Threads.threadid()])
     pdigits = pointer(buffer)
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
