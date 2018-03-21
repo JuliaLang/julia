@@ -14,11 +14,7 @@ const DIGITS = Vector{UInt8}(undef, 309+17)
 # thread-safe code should use a per-thread DIGITS buffer DIGITSs[Threads.threadid()]
 const DIGITSs = [DIGITS]
 function __init__()
-    nthr = Threads.nthreads()
-    resize!(DIGITSs, nthr)
-    for i = 2:nthr
-        DIGITSs[i] = copy(DIGITS)
-    end
+    Threads.resize_nthreads!(DIGITSs)
 end
 
 include(joinpath("grisu", "float.jl"))

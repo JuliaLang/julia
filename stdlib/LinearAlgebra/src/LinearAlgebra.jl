@@ -350,17 +350,9 @@ function __init__()
         if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
-        nthr = Threads.nthreads()
-        if nthr > 1 # per-thread buffers for generic matmul
-            sizehint!(Abuf, nthr)
-            sizehint!(Bbuf, nthr)
-            sizehint!(Cbuf, nthr)
-            for i = 2:nthr
-                push!(Abuf, copy(Abuf[1]))
-                push!(Bbuf, copy(Bbuf[1]))
-                push!(Cbuf, copy(Cbuf[1]))
-            end
-        end
+        Threads.resize_nthreads!(Abuf)
+        Threads.resize_nthreads!(Bbuf)
+        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
