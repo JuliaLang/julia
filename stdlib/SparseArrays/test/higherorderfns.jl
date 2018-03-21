@@ -222,6 +222,11 @@ end
     @test sparse([1  0]) ./ [1] == sparse([1.0 0.0])
     @test isequal(sparse([1 2; 1 0]) ./ [1 0], sparse([1.0 Inf; 1 NaN]))
 
+    @test sparse([1]) .\ sparse([1; 0]) == sparse([1.0; 0.0])
+    @test isequal(sparse([1; 0]) .\ sparse([1 2; 1 0]), sparse([1.0 2; Inf NaN]))
+    @test sparse([1]) .\ sparse([1  0]) == sparse([1.0 0.0])
+    @test isequal(sparse([1 0]) .\ sparse([1 2; 1 0]), sparse([1.0 Inf; 1 NaN]))
+
 end
 
 

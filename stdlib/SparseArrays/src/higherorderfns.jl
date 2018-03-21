@@ -444,7 +444,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
     # Build dense matrix structure in C, expanding storage if necessary
     _densestructure!(C)
     # Populate values
-    fill!(storedvals(C), fillvalue) # value need replaced if A[i,j] != 0 or B[i,j) != 0
+    fill!(storedvals(C), fillvalue)
     # Cases without vertical expansion
     if numrows(A) == numrows(C)
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
@@ -688,7 +688,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
             Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
             fvAzB = f(Ax, zero(eltype(B)))
-            if _iszero(fvAzB)
+            if fvAzB == fillvalue
                 while Bk < stopBk
                     Cx = f(Ax, storedvals(B)[Bk])
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(B)[Bk]] = Cx)
@@ -713,15 +713,23 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
             Bx = Bk < stopBk ? storedvals(B)[Bk] : zero(eltype(B))
             fzAvB = f(zero(eltype(A)), Bx)
-            Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-            for Ci::indtype(C) in 1:numrows(C)
-                if Ai == Ci
+            if fzAvB == fillvalue
+                while Ak < stopAk
                     Cx = f(storedvals(A)[Ak], Bx)
-                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                else
-                    Cx = fzAvB
+                    Cx != fillvalue && (storedvals(C)[jo + storedinds(A)[Ak]] = Cx)
+                    Ak += oneunit(Ak)
                 end
-                Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
+            else
+                Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                for Ci::indtype(C) in 1:numrows(C)
+                    if Ai == Ci
+                        Cx = f(storedvals(A)[Ak], Bx)
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    else
+                        Cx = fzAvB
+                    end
+                    Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
+                end
             end
         end
     end
