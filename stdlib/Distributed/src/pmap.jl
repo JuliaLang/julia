@@ -255,7 +255,7 @@ julia> collect(c)
 ```
 """
 function head_and_tail(c, n)
-    head = Vector{eltype(c)}(uninitialized, n)
+    head = Vector{eltype(c)}(undef, n)
     s = start(c)
     i = 0
     while i < n && !done(c, s)

@@ -14,13 +14,13 @@ using Base: uv_error
 n = 20
 intvls = [2, .2, .1, .005]
 
-pipe_fds = Vector{Any}(uninitialized, n)
+pipe_fds = Vector{Any}(undef, n)
 for i in 1:n
     @static if Sys.iswindows()
-        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(uninitialized, 2)
+        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(undef, 2)
         uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{Libc.WindowsRawSocket}, Cint, Cint), 1, 6, pipe_fds[i], 0, 0))
     else
-        pipe_fds[i] = Vector{RawFD}(uninitialized, 2)
+        pipe_fds[i] = Vector{RawFD}(undef, 2)
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{RawFD}, Cint, Cint), pipe_fds[i], 0, 0))
     end
 end
@@ -43,7 +43,7 @@ function pfd_tst_reads(idx, intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
     # @test t_elapsed <= (intvl + 1)
 
-    dout = Vector{UInt8}(uninitialized, 1)
+    dout = Vector{UInt8}(undef, 1)
     @static if Sys.iswindows()
         1 == ccall(:recv, stdcall, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else
@@ -78,7 +78,7 @@ for (i, intvl) in enumerate(intvls)
     @sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(uninitialized, n)
+        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
                 t[idx] = @async pfd_tst_reads(idx, intvl)

@@ -97,14 +97,16 @@ julia> struct OrderedPair
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
 
-```jldoctest pairtype
+```jldoctest pairtype; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> OrderedPair(1, 2)
 OrderedPair(1, 2)
 
 julia> OrderedPair(2,1)
 ERROR: out of order
 Stacktrace:
- [1] OrderedPair(::Int64, ::Int64) at ./none:4
+ [1] error at ./error.jl:33 [inlined]
+ [2] OrderedPair(::Int64, ::Int64) at ./none:4
+ [3] top-level scope
 ```
 
 If the type were declared `mutable`, you could reach in and directly change the field values to
@@ -277,7 +279,7 @@ that, by default, instances of parametric composite types can be constructed eit
 given type parameters or with type parameters implied by the types of the arguments given to the
 constructor. Here are some examples:
 
-```jldoctest parametric
+```jldoctest parametric; filter = r"Closest candidates.*\n  .*"
 julia> struct Point{T<:Real}
            x::T
            y::T
@@ -292,16 +294,15 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:2
+  Point(::T<:Real, ::T<:Real) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
-ERROR: InexactError: convert(Int64, 2.5)
+ERROR: InexactError: Int64(Int64, 2.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Point{Int64}(::Float64, ::Float64) at ./none:2
+[...]
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
 Point{Float64}(1.0, 2.5)
@@ -502,7 +503,7 @@ julia> typeof(z) <: Complex{OurRational}
 false
 ```
 
-Thus, although the [`⊘`](@ref) operator usually returns an instance of `OurRational`, if either
+Thus, although the `⊘` operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.

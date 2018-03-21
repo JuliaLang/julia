@@ -77,7 +77,7 @@ B = view(A, 1:3, 2, 1:3)
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Vector{Expr}(uninitialized, NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
@@ -274,10 +274,10 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
-    @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), generated=false)), "2 * x")
-    @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
+    @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(Base.add_int)(x, x)", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747

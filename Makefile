@@ -16,7 +16,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/site $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/embedding test/perf examples)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/embedding)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -56,20 +56,6 @@ julia_flisp.boot.inc.phony: julia-deps
 $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
 	@$(MAKE) docs
 
-# doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
-CLEAN_TARGETS += clean-docdir
-clean-docdir:
-	@-rm -fr $(abspath $(build_docdir))
-
-$(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) \
-                           $(shell find $(JULIAHOME)/examples/clustermanager)
-	@echo Copying in usr/share/doc/julia/examples
-	@-rm -fr $(build_docdir)/examples
-	@mkdir -p $(build_docdir)/examples
-	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
-	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
-	@echo 1 > $@
-
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
@@ -92,7 +78,7 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/ui julia-$*
 
-julia-base-compiler : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
+julia-base-compiler : julia-base julia-ui-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/basecompiler.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 julia-sysimg-release : julia-base-compiler julia-ui-release
@@ -129,8 +115,6 @@ release-candidate: release testall
 		exit 1; \
 	fi
 
-	@#Check that benchmarks work
-	@$(MAKE) -C $(BUILDROOT)/test/perf
 	@#Check that netload tests work
 	@#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
 	@echo
@@ -164,8 +148,9 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
 
-$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
-	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
+	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ \
+		$(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
@@ -214,15 +199,13 @@ $(build_private_libdir)/basecompiler.ji: $(CORE_SRCS) $(COMPILER_SRCS) | $(build
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/basecompiler.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sys$1-o.a: $$(build_private_libdir)/basecompiler.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+	if ! $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
-		mv $$@.tmp $$@; \
-	else \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; \
 	fi )
-.SECONDARY: $(build_private_libdir)/sys$1.o
+.SECONDARY: $(build_private_libdir)/sys$1-o.a
 endef
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
@@ -354,10 +337,7 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
-	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
-	# Remove perf suite
-	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
@@ -505,7 +485,6 @@ clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/src clean
 	@-$(MAKE) -C $(BUILDROOT)/ui clean
 	@-$(MAKE) -C $(BUILDROOT)/test clean
-	@-$(MAKE) -C $(BUILDROOT)/examples clean
 	-rm -f $(BUILDROOT)/julia
 	-rm -f $(BUILDROOT)/*.tar.gz
 	-rm -f $(build_depsbindir)/stringreplace \
@@ -514,7 +493,6 @@ clean: | $(CLEAN_TARGETS)
 	-rm -fr $(build_private_libdir)
 # Teporarily add this line to the Makefile to remove extras
 	-rm -fr $(build_datarootdir)/julia/extras
-	-rm -f $(build_prefix)/.examples
 
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
@@ -532,7 +510,7 @@ distcleanall: cleanall
 	test testall testall1 test clean distcleanall cleanall clean-* \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist examples
+	dist full-source-dist source-dist
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
@@ -551,12 +529,6 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
-
-perf: release
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test/perf JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
-
-perf-%: release
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test/perf $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras wine_path

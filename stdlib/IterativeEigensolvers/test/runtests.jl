@@ -162,7 +162,7 @@ let
 
     @test d[1] ≈ 1. # largest eigenvalue should be 1.
     v = reshape(v,(50,50)) # reshape to matrix
-    v /= trace(v) # factor out arbitrary phase
+    v /= tr(v) # factor out arbitrary phase
     @test vecnorm(imag(v)) ≈ 0. # it should be real
     v = real(v)
     # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
@@ -173,7 +173,7 @@ let
     # Repeat with starting vector
     (d2,v2,nconv2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which=:LM,v0=reshape(v,(2500,)))
     v2 = reshape(v2,(50,50))
-    v2 /= trace(v2)
+    v2 /= tr(v2)
     @test numiter2 < numiter
     @test v ≈ v2
 

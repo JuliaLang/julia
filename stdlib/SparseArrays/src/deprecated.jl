@@ -227,6 +227,13 @@ import Base: asyncmap
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
 @deprecate droptol!(A, tol, trim) droptol!(A, tol, trim = trim)
 
+Base.@deprecate_binding blkdiag blockdiag
+
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
+
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

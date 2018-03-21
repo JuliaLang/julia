@@ -171,6 +171,44 @@ typedef struct _modstack_t {
     struct _modstack_t *prev;
 } modstack_t;
 
+static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st);
+
+// find a binding from a module's `usings` list
+static jl_binding_t *using_resolve_binding(jl_module_t *m, jl_sym_t *var, modstack_t *st, int warn)
+{
+    jl_binding_t *b = NULL;
+    jl_module_t *owner = NULL;
+    for(int i=(int)m->usings.len-1; i >= 0; --i) {
+        jl_module_t *imp = (jl_module_t*)m->usings.items[i];
+        jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+        if (tempb != HT_NOTFOUND && tempb->exportp) {
+            tempb = jl_get_binding_(imp, var, st);
+            if (tempb == NULL || tempb->owner == NULL)
+                // couldn't resolve; try next using (see issue #6105)
+                continue;
+            if (owner != NULL && tempb->owner != b->owner &&
+                !tempb->deprecated && !b->deprecated &&
+                !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
+                if (warn) {
+                    jl_printf(JL_STDERR,
+                              "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
+                              jl_symbol_name(owner->name),
+                              jl_symbol_name(imp->name), jl_symbol_name(var),
+                              jl_symbol_name(m->name));
+                    // mark this binding resolved, to avoid repeating the warning
+                    (void)jl_get_binding_wr(m, var, 0);
+                }
+                return NULL;
+            }
+            if (owner == NULL || !tempb->deprecated) {
+                owner = imp;
+                b = tempb;
+            }
+        }
+    }
+    return b;
+}
+
 // get binding for reading. might return NULL for unbound.
 static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st)
 {
@@ -185,34 +223,8 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
     }
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND || b->owner == NULL) {
-        jl_module_t *owner = NULL;
-        for(int i=(int)m->usings.len-1; i >= 0; --i) {
-            jl_module_t *imp = (jl_module_t*)m->usings.items[i];
-            jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
-            if (tempb != HT_NOTFOUND && tempb->exportp) {
-                tempb = jl_get_binding_(imp, var, &top);
-                if (tempb == NULL || tempb->owner == NULL)
-                    // couldn't resolve; try next using (see issue #6105)
-                    continue;
-                if (owner != NULL && tempb->owner != b->owner &&
-                    !tempb->deprecated && !b->deprecated &&
-                    !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
-                    jl_printf(JL_STDERR,
-                              "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
-                              jl_symbol_name(owner->name),
-                              jl_symbol_name(imp->name), jl_symbol_name(var),
-                              jl_symbol_name(m->name));
-                    // mark this binding resolved, to avoid repeating the warning
-                    (void)jl_get_binding_wr(m, var, 0);
-                    return NULL;
-                }
-                if (owner == NULL || !tempb->deprecated) {
-                    owner = imp;
-                    b = tempb;
-                }
-            }
-        }
-        if (owner != NULL) {
+        b = using_resolve_binding(m, var, &top, 1);
+        if (b != NULL) {
             // do a full import to prevent the result of this lookup
             // from changing, for example if this var is assigned to
             // later.
@@ -224,6 +236,18 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
     if (b->owner != m)
         return jl_get_binding_(b->owner, var, &top);
     return b;
+}
+
+// get owner of binding when accessing m.var, without resolving the binding
+JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND || b->owner == NULL) {
+        b = using_resolve_binding(m, var, NULL, 0);
+        if (b == NULL || b->owner == NULL)
+            return jl_nothing;
+    }
+    return (jl_value_t*)b->owner;
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -275,8 +299,6 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                            int explici)
 {
-    if (to == from)
-        return;
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
         jl_printf(JL_STDERR,
@@ -648,7 +670,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
             int hidden = jl_symbol_name(b->name)[0]=='#';
             if ((b->exportp ||
                  (imported && b->imported) ||
-                 ((b->owner == m) && (all || m == jl_main_module))) &&
+                 (b->owner == m && !b->imported && (all || m == jl_main_module))) &&
                 (all || (!b->deprecated && !hidden))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:

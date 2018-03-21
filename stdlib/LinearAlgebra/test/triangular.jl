@@ -245,7 +245,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test sqrt(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
-        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(uninitialized,n+1))
+        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
 
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
@@ -359,7 +359,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test mul!(similar(B1), transpose(A1), B1) ≈ transpose(A1)*B1
             end
             #error handling
-            Ann, Bmm, bm = A1, Matrix{eltyB}(uninitialized, n+1, n+1), Vector{eltyB}(uninitialized, n+1)
+            Ann, Bmm, bm = A1, Matrix{eltyB}(undef, n+1, n+1), Vector{eltyB}(undef, n+1)
             @test_throws DimensionMismatch lmul!(Ann, bm)
             @test_throws DimensionMismatch rmul!(Bmm, Ann)
             @test_throws DimensionMismatch lmul!(transpose(Ann), bm)
@@ -378,7 +378,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test A1\B' ≈ Matrix(A1)\B'
             @test transpose(A1)\transpose(B) ≈ transpose(Matrix(A1))\transpose(B)
             @test A1'\B' ≈ Matrix(A1)'\B'
-            Ann, bm = A1, Vector{elty1}(uninitialized,n+1)
+            Ann, bm = A1, Vector{elty1}(undef,n+1)
             @test_throws DimensionMismatch Ann\bm
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
@@ -539,14 +539,39 @@ end
 end
 
 @testset "special printing of Lower/UpperTriangular" begin
-    @test contains(sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))),
-        r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2")
-    @test contains(sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))),
-        r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1")
-    @test contains(sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))),
-        r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2")
-    @test contains(sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))),
-        r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1")
+    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
+                   sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
+                   sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))))
+    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
+                   sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
+                   sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
+end
+
+@testset "adjoint/transpose triangular/vector multiplication" begin
+    for elty in (Float64, ComplexF64), trity in (UpperTriangular, LowerTriangular)
+        A1 = trity(rand(elty, 1, 1))
+        b1 = rand(elty, 1)
+        A4 = trity(rand(elty, 4, 4))
+        b4 = rand(elty, 4)
+        @test A1 * b1' ≈ Matrix(A1) * b1'
+        @test_throws DimensionMismatch A4 * b4'
+        @test A1 * transpose(b1) ≈ Matrix(A1) * transpose(b1)
+        @test_throws DimensionMismatch A4 * transpose(b4)
+        @test A1' * b1' ≈ Matrix(A1') * b1'
+        @test_throws DimensionMismatch A4' * b4'
+        @test A1' * transpose(b1) ≈  Matrix(A1') * transpose(b1)
+        @test_throws DimensionMismatch A4' * transpose(b4)
+        @test transpose(A1) * transpose(b1) ≈  Matrix(transpose(A1)) * transpose(b1)
+        @test_throws DimensionMismatch transpose(A4) * transpose(b4)
+        @test transpose(A1) * b1' ≈ Matrix(transpose(A1)) * b1'
+        @test_throws DimensionMismatch transpose(A4) * b4'
+        @test b1' * transpose(A1) ≈ b1' * Matrix(transpose(A1))
+        @test b4' * transpose(A4) ≈ b4' * Matrix(transpose(A4))
+        @test transpose(b1) * A1' ≈ transpose(b1) * Matrix(A1')
+        @test transpose(b4) * A4' ≈ transpose(b4) * Matrix(A4')
+    end
 end
 
 end # module TestTriangular

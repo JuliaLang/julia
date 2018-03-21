@@ -531,7 +531,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
                                              int isunboxed, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
-extern union jl_typemap_t jl_cfunction_list;
+extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;
@@ -1007,6 +1007,7 @@ extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
+extern jl_sym_t *unreachable_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;

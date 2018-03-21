@@ -393,7 +393,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Matrix{Int}(uninitialized, m+1, n+1)
+    d = Matrix{Int}(undef, m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
@@ -479,7 +479,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
+filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
@@ -493,7 +493,7 @@ doc_completions(name::Symbol) = doc_completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
+docsearch(haystack::AbstractString, needle) = findfirst(needle, haystack) !== nothing
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

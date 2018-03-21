@@ -42,7 +42,7 @@ let t0 = time()
 end
 
 @testset "empty bitvector" begin
-    @test BitVector() == BitVector(uninitialized, 0)
+    @test BitVector() == BitVector(undef, 0)
 end
 
 # vectors size
@@ -161,8 +161,8 @@ timesofar("conversions")
     end
 
     @testset "sizeof (issue #7515)" begin
-        @test sizeof(BitVector(uninitialized, 64)) == 8
-        @test sizeof(BitVector(uninitialized, 65)) == 16
+        @test sizeof(BitVector(undef, 64)) == 8
+        @test sizeof(BitVector(undef, 65)) == 16
     end
 end
 
@@ -170,8 +170,8 @@ timesofar("utils")
 
 @testset "Constructors" begin
     @testset "non-Int dims constructors" begin
-        b1 = BitVector(uninitialized, Int32(v1))
-        b2 = BitVector(uninitialized, Int64(v1))
+        b1 = BitVector(undef, Int32(v1))
+        b2 = BitVector(undef, Int64(v1))
         @test size(b1) == size(b2)
 
         for c in [trues, falses]
@@ -192,8 +192,8 @@ timesofar("utils")
     end
 
     @testset "one" begin
-        @test Array(one(BitMatrix(uninitialized, 2,2))) == Matrix(I, 2, 2)
-        @test_throws DimensionMismatch one(BitMatrix(uninitialized, 2,3))
+        @test Array(one(BitMatrix(undef, 2,2))) == Matrix(I, 2, 2)
+        @test_throws DimensionMismatch one(BitMatrix(undef, 2,3))
     end
 
     # constructors should copy
@@ -1036,9 +1036,9 @@ timesofar("binary comparison")
         #for j = 1 : size(b1, d)
             @check_bit_operation selectdim(b1, d, j) SubArray{Bool, 3, BitArray{4}}
         #end
-        @check_bit_operation flipdim(b1, d) BitArray{4}
+        @check_bit_operation reverse(b1, dims=d) BitArray{4}
     end
-    @test_throws ArgumentError flipdim(b1, 5)
+    @test_throws ArgumentError reverse(b1, dims=5)
 
     b1 = bitrand(n1, n2)
     for k = 1:4
@@ -1087,7 +1087,7 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(!iszero, b1)    Union{Int,Nothing}
         @check_bit_operation findfirst(iszero, b1)     Union{Int,Nothing}
-        @check_bit_operation findfirst(equalto(3), b1) Union{Int,Nothing}
+        @check_bit_operation findfirst(isequal(3), b1) Union{Int,Nothing}
 
         @check_bit_operation findfirst(x->x, b1)     Union{Int,Nothing}
         @check_bit_operation findfirst(x->!x, b1)    Union{Int,Nothing}
@@ -1120,7 +1120,7 @@ timesofar("find")
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
-        @test findprev(b1, i) == findprev(equalto(true), b1, i) == findprev(identity, b1, i)
+        @test findprev(b1, i) == findprev(isequal(true), b1, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
     end
 
@@ -1273,7 +1273,7 @@ timesofar("reductions")
         @test map(!=, b1, b2) == map((x,y)->x!=y, b1, b2) == (b1 .!= b2)
 
         @testset "map! for length $l" begin
-            b = BitVector(uninitialized, l)
+            b = BitVector(undef, l)
             @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
             @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b

@@ -27,14 +27,13 @@ export BINDIR,
 
 import ..Base: show
 
+global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
 """
     Sys.BINDIR
 
 A string containing the full path to the directory containing the `julia` executable.
 """
-BINDIR = ccall(:jl_get_julia_bindir, Any, ())
-
-_early_init() = global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+:BINDIR
 
 # helper to avoid triggering precompile warnings
 
@@ -78,12 +77,21 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    global CPU_CORES =
-        haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
-                                        Int(ccall(:jl_cpu_cores, Int32, ()))
+    env_cores = get(ENV, "JULIA_CPU_CORES", "")
+    global CPU_CORES = if !isempty(env_cores)
+        env_cores = tryparse(Int, env_cores)
+        if !(env_cores isa Int && env_cores > 0)
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
+            env_cores = 1
+        end
+        env_cores
+    else
+        Int(ccall(:jl_cpu_cores, Int32, ()))
+    end
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
 end
 
 mutable struct UV_cpu_info_t
@@ -173,7 +181,7 @@ function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
     Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Vector{CPUinfo}(uninitialized, count[])
+    cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
@@ -198,7 +206,7 @@ end
 Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
 function loadavg()
-    loadavg_ = Vector{Float64}(uninitialized, 3)
+    loadavg_ = Vector{Float64}(undef, 3)
     ccall(:uv_loadavg, Cvoid, (Ptr{Float64},), loadavg_)
     return loadavg_
 end
@@ -212,7 +220,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
-    buf = Vector{UInt8}(uninitialized, 512)
+    buf = Vector{UInt8}(undef, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))

@@ -464,6 +464,9 @@ $(eval $(call LLVM_PATCH,llvm-D37939-Mem2Reg-Also-handle-memcpy))
 $(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
 $(eval $(call LLVM_PATCH,llvm-3.9-c_api_nullptr))
+$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
+$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
 endif
@@ -492,6 +495,9 @@ $(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
 $(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
+$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
+$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
 endif
@@ -506,6 +512,8 @@ $(eval $(call LLVM_PATCH,llvm-5.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-D38765-gvn_5.0)) # Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
+$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
+$(eval $(call LLVM_PATCH,llvm-PR36292-5.0)) # PPC fixes #26249, remove for 6.0
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build

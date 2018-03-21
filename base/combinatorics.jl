@@ -2,13 +2,13 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(uninitialized, 20)
+const _fact_table64 = Vector{Int64}(undef, 20)
 _fact_table64[1] = 1
 for n in 2:20
     _fact_table64[n] = _fact_table64[n-1] * n
 end
 
-const _fact_table128 = Vector{UInt128}(uninitialized, 34)
+const _fact_table128 = Vector{UInt128}(undef, 34)
 _fact_table128[1] = 1
 for n in 2:34
     _fact_table128[n] = _fact_table128[n-1] * n

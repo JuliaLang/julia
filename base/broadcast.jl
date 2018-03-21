@@ -160,32 +160,6 @@ BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
     typeof(a)(_max(Val(M),Val(N)))
 
-# FIXME
-# The following definitions are necessary to limit SparseArray broadcasting to "plain Arrays"
-# (see https://github.com/JuliaLang/julia/pull/23939#pullrequestreview-72075382).
-# They should be deleted once the sparse broadcast infrastucture is capable of handling
-# arbitrary AbstractArrays.
-struct VectorStyle <: AbstractArrayStyle{1} end
-struct MatrixStyle <: AbstractArrayStyle{2} end
-const VMStyle = Union{VectorStyle,MatrixStyle}
-# These lose to DefaultArrayStyle
-VectorStyle(::Val{N}) where N = DefaultArrayStyle{N}()
-MatrixStyle(::Val{N}) where N = DefaultArrayStyle{N}()
-
-BroadcastStyle(::Type{<:Vector}) = VectorStyle()
-BroadcastStyle(::Type{<:Matrix}) = MatrixStyle()
-
-BroadcastStyle(::MatrixStyle, ::VectorStyle) = MatrixStyle()
-BroadcastStyle(a::AbstractArrayStyle{Any}, ::VectorStyle) = a
-BroadcastStyle(a::AbstractArrayStyle{Any}, ::MatrixStyle) = a
-BroadcastStyle(a::AbstractArrayStyle{N}, ::VectorStyle) where N = typeof(a)(_max(Val(N), Val(1)))
-BroadcastStyle(a::AbstractArrayStyle{N}, ::MatrixStyle) where N = typeof(a)(_max(Val(N), Val(2)))
-BroadcastStyle(::VectorStyle, ::DefaultArrayStyle{N}) where N = DefaultArrayStyle(_max(Val(N), Val(1)))
-BroadcastStyle(::MatrixStyle, ::DefaultArrayStyle{N}) where N = DefaultArrayStyle(_max(Val(N), Val(2)))
-# to avoid the VectorStyle(::Val) constructor we also need the following
-BroadcastStyle(::VectorStyle, ::MatrixStyle) = MatrixStyle()
-# end FIXME
-
 ## Allocating the output container
 """
     broadcast_similar(f, ::BroadcastStyle, ::Type{ElType}, inds, As...)
@@ -204,17 +178,6 @@ broadcast_similar(f, ::ArrayConflict, ::Type{ElType}, inds::Indices, As...) wher
     similar(Array{ElType}, inds)
 broadcast_similar(f, ::ArrayConflict, ::Type{Bool}, inds::Indices, As...) =
     similar(BitArray, inds)
-
-# FIXME: delete when we get rid of VectorStyle and MatrixStyle
-broadcast_similar(f, ::VectorStyle, ::Type{ElType}, inds::Indices{1}, As...) where ElType =
-    similar(Vector{ElType}, inds)
-broadcast_similar(f, ::MatrixStyle, ::Type{ElType}, inds::Indices{2}, As...) where ElType =
-    similar(Matrix{ElType}, inds)
-broadcast_similar(f, ::VectorStyle, ::Type{Bool}, inds::Indices{1}, As...) =
-    similar(BitArray, inds)
-broadcast_similar(f, ::MatrixStyle, ::Type{Bool}, inds::Indices{2}, As...) =
-    similar(BitArray, inds)
-# end FIXME
 
 ## Computing the result's indices. Most types probably won't need to specialize this.
 broadcast_indices() = ()
@@ -406,7 +369,7 @@ end
         @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        C = Vector{Bool}(uninitialized, bitcache_size)
+        C = Vector{Bool}(undef, bitcache_size)
         Bc = B.chunks
         ind = 1
         cind = 1
@@ -628,7 +591,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
     broadcast(f, s, combine_eltypes(f, A, Bs...), combine_indices(A, Bs...),
               A, Bs...)
 
-const NonleafHandlingTypes = Union{DefaultArrayStyle,ArrayConflict,VectorStyle,MatrixStyle}
+const NonleafHandlingTypes = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function broadcast(f, s::NonleafHandlingTypes, ::Type{ElType}, inds::Indices, As...) where ElType
     if !Base.isconcretetype(ElType)
@@ -700,7 +663,7 @@ would be the broadcast `inds`). The shape of the output is equal to the shape of
 element of `indsb`.
 
 # Examples
-```jldoctest
+```jldoctest bc_getindex
 julia> A = [11 12; 21 22]
 2×2 Array{Int64,2}:
  11  12
@@ -729,7 +692,7 @@ julia> broadcast_getindex(A, 1:2, 2:-1:1)
 Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
 where `i` and `j` are the two index vectors.
 
-```jldoctest
+```jldoctest bc_getindex
 julia> broadcast_getindex(A, 1:2, (1:2)')
 2×2 Array{Int64,2}:
  11  12

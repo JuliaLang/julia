@@ -221,7 +221,7 @@ end
                 @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
             end
             @testset "mul! errors" begin
-                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized, ((n,n), (n,n+1), (n+1,n)))
+                Cnn, Cnm, Cmn = Matrix{elty}.(undef, ((n,n), (n,n+1), (n+1,n)))
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cnm)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cmn)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,B,Cmn)

@@ -218,7 +218,7 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
         ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
               s, sizeof(s), filename, sizeof(filename))
     end
-    if ex isa Symbol && all(equalto('_'), string(ex))
+    if ex isa Symbol && all(isequal('_'), string(ex))
         # remove with 0.7 deprecation
         Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
     end
@@ -244,11 +244,11 @@ incomplete_tag(ex) = :none
 function incomplete_tag(ex::Expr)
     Meta.isexpr(ex, :incomplete) || return :none
     msg = ex.args[1]
-    contains(msg, "string") && return :string
-    contains(msg, "comment") && return :comment
-    contains(msg, "requires end") && return :block
-    contains(msg, "\"`\"") && return :cmd
-    contains(msg, "character") && return :char
+    occursin("string", msg) && return :string
+    occursin("comment", msg) && return :comment
+    occursin("requires end", msg) && return :block
+    occursin("\"`\"", msg) && return :cmd
+    occursin("character", msg) && return :char
     return :other
 end
 
@@ -297,11 +297,6 @@ function exec_options(opts)
 
     # load ~/.julia/config/startup.jl file
     startup && load_julia_startup()
-
-    if repl || is_interactive
-        # load interactive-only libraries
-        eval(Main, :(using InteractiveUtils))
-    end
 
     # process cmds list
     for (cmd, arg) in cmds
@@ -387,6 +382,18 @@ const REPL_MODULE_REF = Ref{Module}()
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
     global active_repl
+    # load interactive-only libraries
+    if !isdefined(Main, :InteractiveUtils)
+        try
+            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+                eval(Main, :(const InteractiveUtils = $InteractiveUtils))
+                eval(Main, :(using .InteractiveUtils))
+            end
+        catch ex
+            @warn "Failed to insert InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+        end
+    end
+
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")

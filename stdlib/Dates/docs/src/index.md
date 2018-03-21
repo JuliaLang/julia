@@ -144,14 +144,14 @@ julia> dt2 = Date(2000,2,1)
 
 julia> dump(dt)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 734562
 
 julia> dump(dt2)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 730151
 
 julia> dt > dt2
@@ -170,7 +170,6 @@ ERROR: MethodError: no method matching *(::Date, ::Date)
 
 julia> dt / dt2
 ERROR: MethodError: no method matching /(::Date, ::Date)
-[...]
 
 julia> dt - dt2
 4411 days
@@ -240,12 +239,12 @@ One may also access the underlying `UTInstant` or integer value:
 ```jldoctest tdate
 julia> dump(t)
 Date
-  instant: Dates.UTInstant{Dates.Day}
-    periods: Dates.Day
+  instant: Dates.UTInstant{Day}
+    periods: Day
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Dates.Day}(735264 days)
+Dates.UTInstant{Day}(735264 days)
 
 julia> Dates.value(t)
 735264
@@ -400,7 +399,7 @@ of dealing with daylight savings, leap seconds, etc.).
 As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
-julia> dr = Date(2014,1,29):Date(2014,2,3)
+julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
 2014-01-29:1 day:2014-02-03
 
 julia> collect(dr)
@@ -485,7 +484,7 @@ range:
 ```jldoctest
 # Pittsburgh street cleaning; Every 2nd Tuesday from April to November
 # Date range from January 1st, 2014 to January 1st, 2015
-julia> dr = Dates.Date(2014):Dates.Date(2015);
+julia> dr = Dates.Date(2014):Day(1):Dates.Date(2015);
 
 julia> filter(dr) do x
            Dates.dayofweek(x) == Dates.Tue &&
@@ -559,7 +558,7 @@ julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
 Unlike the numeric [`round`](@ref) method, which breaks ties toward the even number by default,
 the [`TimeType`](@ref)[`round`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
 difficult to guess what breaking ties to nearest "even" [`TimeType`](@ref) would entail.) Further
-details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates).
+details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates-api).
 
 Rounding should generally behave as expected, but there are a few cases in which the expected
 behaviour is not obvious.

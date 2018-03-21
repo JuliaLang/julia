@@ -84,9 +84,9 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: convert(Int64, 3.5)
+ERROR: InexactError: Int64(Int64, 3.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:703
+[...]
 ```
 
 If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
@@ -120,7 +120,7 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
 
 """
     @eval [mod,] ex
@@ -362,7 +362,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Vector{Any}(uninitialized, 4)
+    out = Vector{Any}(undef, 4)
     l = 4
     i = 1
     for x in xs
@@ -414,22 +414,24 @@ Annotates the expression `blk` as a bounds checking block, allowing it to be eli
     its caller in order for `@inbounds` to have effect.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
            return "accessing (\$A)[\$i]"
-       end
-       f1() = return g(1:2, -1)
-       f2() = @inbounds return g(1:2, -1)
-f2 (generic function with 1 method)
+       end;
+
+julia> f1() = return g(1:2, -1);
+
+julia> f2() = @inbounds return g(1:2, -1);
 
 julia> f1()
 ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
 Stacktrace:
- [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:435
- [2] checkbounds at ./abstractarray.jl:399 [inlined]
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:455
+ [2] checkbounds at ./abstractarray.jl:420 [inlined]
  [3] g at ./none:2 [inlined]
  [4] f1() at ./none:1
+ [5] top-level scope
 
 julia> f2()
 "accessing (1:2)[-1]"

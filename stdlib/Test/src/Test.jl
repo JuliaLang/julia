@@ -132,6 +132,18 @@ mutable struct Error <: Result
     value
     backtrace
     source::LineNumberNode
+
+    function Error(test_type, orig_expr, value, bt, source)
+        if test_type === :test_error
+            bt = scrub_backtrace(bt)
+        end
+        if test_type === :test_error || test_type === :nontest_error
+            bt_str = sprint(showerror, value, bt)
+        else
+            bt_str = ""
+        end
+        new(test_type, orig_expr, repr(value), bt_str, source)
+    end
 end
 function Base.show(io::IO, t::Error)
     if t.test_type == :test_interrupted
@@ -146,12 +158,11 @@ function Base.show(io::IO, t::Error)
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw an exception of type ", typeof(t.value))
+        println(io, "  Test threw exception ", t.value)
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -159,11 +170,10 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
+        println(io, "  Got exception $(t.value) outside of a @test")
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     end
 end
 
@@ -523,8 +533,8 @@ end
 
 # Test for warning messages (deprecated)
 
-contains_warn(output, s::AbstractString) = contains(output, s)
-contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::AbstractString) = occursin(s, output)
+contains_warn(output, s::Regex) = occursin(s, output)
 contains_warn(output, s::Function) = s(output)
 contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 
@@ -1199,7 +1209,7 @@ inferred by the compiler. It is useful to check for type stability.
 Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
-```jldoctest
+```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
 julia> f(a,b,c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1214,14 +1224,19 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
+      # meta: location operators.jl > 279
+      # meta: location int.jl < 49
+      Core.SSAValue(2) = (Base.slt_int)(1, b::Int64)::Bool
+      # meta: pop locations (2)
+      unless Core.SSAValue(2) goto 7
       return 1
-      3:
+      7:
       return 1.0
   end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
+Stacktrace:
 [...]
 
 julia> @inferred max(1,2)

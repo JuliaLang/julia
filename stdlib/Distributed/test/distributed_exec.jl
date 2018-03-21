@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Serialization
+using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -196,7 +196,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
+@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
 
 
 # Distributed GC tests for RemoteChannels
@@ -948,7 +948,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
 
         # OSX BLAS looks at an environment variable
         if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
+            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
     end
 
@@ -969,11 +969,12 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
+    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1035,7 +1036,7 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(occursin(procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
 end
@@ -1300,7 +1301,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
 end
@@ -1374,7 +1375,7 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
@@ -1402,7 +1403,7 @@ let
         rm(tmp_file, force=true)
         rm(tmp_file2, force=true)
         rm(tmp_dir2, force=true)
-        rm(tmp_dir, force=true)
+        #rm(tmp_dir, force=true)
     end
 end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
@@ -1460,7 +1461,7 @@ function reuseport_tests()
             ports_higher = []       # ports of pids higher than myid()
             for w in Distributed.PGRP.workers
                 w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
+                port = Sockets._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
                     # master connects to workers
                     push!(ports_higher, port)
@@ -1482,7 +1483,7 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(occursin(results), procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on

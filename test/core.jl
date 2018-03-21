@@ -488,7 +488,7 @@ function const_implies_local()
 end
 @test const_implies_local() === (1, 0)
 
-a_global_closure_vector = Vector{Any}(uninitialized, 3)
+a_global_closure_vector = Vector{Any}(undef, 3)
 for i = 1:3
     let ii = i
         a_global_closure_vector[i] = x -> x + ii
@@ -606,11 +606,11 @@ end
 
 let
     local a
-    a = Vector{Any}(uninitialized, 2)
+    a = Vector{Any}(undef, 2)
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Vector{Float64}(uninitialized,1)
+    a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
@@ -1205,9 +1205,9 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
     # Misaligned pointer
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
 end
 
 struct FooBar2515
@@ -1306,7 +1306,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Vector{UnitRange{Int}}(uninitialized, 1)
+    r = Vector{UnitRange{Int}}(undef, 1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1371,7 +1371,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1500,13 +1500,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Vector{typeof(x[1])}(uninitialized, length(x))
+        ret=Vector{typeof(x[1])}(undef, length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(uninitialized, 3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(undef, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1754,7 +1754,7 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Vector{Rational{T}}(uninitialized, 1)
+f5150(T) = Vector{Rational{T}}(undef, 1)
 @test typeof(f5150(Int)) === Vector{Rational{Int}}
 
 
@@ -1904,7 +1904,7 @@ mutable struct Polygon5884{T<:Real}
 end
 
 function test5884()
-    star = Vector{Polygon5884}(uninitialized, (3,))
+    star = Vector{Polygon5884}(undef, (3,))
     star[1] = Polygon5884([Complex(1.0,1.0)])
     p1 = star[1].points[1]
     @test p1 == Complex(1.0,1.0)
@@ -2097,7 +2097,7 @@ end
 obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387(r::AbstractRange{T}) where T
-    a = Vector{T}(uninitialized, 1)
+    a = Vector{T}(undef, 1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
 end
@@ -2110,8 +2110,8 @@ end
 day_in(obj6387)
 
 # issue #6784
-@test ndims(Array{Array{Float64}}(uninitialized, 3,5)) == 2
-@test ndims(Array{Array}(uninitialized, 3,5)) == 2
+@test ndims(Array{Array{Float64}}(undef, 3,5)) == 2
+@test ndims(Array{Array}(undef, 3,5)) == 2
 
 # issue #6793
 function segfault6793(;gamma=1)
@@ -2345,7 +2345,7 @@ end
 
 # issue #9475
 module I9475
-    arr = Vector{Any}(uninitialized, 1)
+    arr = Vector{Any}(undef, 1)
     @eval @eval $arr[1] = 1
 end
 
@@ -3267,7 +3267,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(uninitialized, 5)...,)
+@test_throws UndefRefError (Vector{Any}(undef, 5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3494,7 +3494,7 @@ end
 
 # issue #12394
 mutable struct Empty12394 end
-let x = Vector{Empty12394}(uninitialized, 1), y = [Empty12394()]
+let x = Vector{Empty12394}(undef, 1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
@@ -3633,7 +3633,7 @@ end
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
-@test read!(IO13433(), Array{UInt8}(uninitialized, 4)) == [0x01, 0x01, 0x01, 0x01]
+@test read!(IO13433(), Array{UInt8}(undef, 4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
 struct X13647
@@ -3670,7 +3670,7 @@ f11327(::Type{T},x::T) where {T} = x
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
-let A = Matrix{Int}(uninitialized, 4,3)
+let A = Matrix{Int}(undef, 4,3)
     for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
         A[i,j] = 17*i + 51*j
     end
@@ -3969,7 +3969,7 @@ end
 
 # issue #15180
 function f15180(x::T) where T
-    X = Vector{T}(uninitialized, 1)
+    X = Vector{T}(undef, 1)
     X[1] = x
     @noinline ef(::J) where {J} = (J,X[1]) # Use T
     ef(::J, ::Int) where {J} = (T,J)
@@ -3977,7 +3977,7 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
-let ary = Vector{Any}(uninitialized, 10)
+let ary = Vector{Any}(undef, 10)
     check_undef_and_fill(ary, rng) = for i in rng
         @test !isassigned(ary, i)
         ary[i] = (Float64(i), i) # some non-cached content
@@ -3995,20 +3995,20 @@ let ary = Vector{Any}(uninitialized, 10)
     check_undef_and_fill(ary, 16:20)
 
     # Now check grow/del_end
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should move the buffer
     ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
     ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
     check_undef_and_fill(ary, 1:1000)
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should not move the buffer
     ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
     ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
     ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1011:1020)
@@ -4021,7 +4021,7 @@ let ary = Vector{Any}(uninitialized, 10)
     # we are malloc'ing the buffer after the grow_end and malloc is not using
     # mmap directly (which may return a zero'd new page).
     for n in [50, 51, 100, 101, 200, 201, 300, 301]
-        ary = Vector{Any}(uninitialized, n)
+        ary = Vector{Any}(undef, n)
         # Try to free the previous buffer that was filled with random content
         # and to increase the chance of getting a non-zero'd buffer next time
         GC.gc()
@@ -4034,7 +4034,7 @@ let ary = Vector{Any}(uninitialized, 10)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 
-    ary = Vector{Any}(uninitialized, 100)
+    ary = Vector{Any}(undef, 100)
     ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
     ary[:] = 1:length(ary)
     ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
@@ -4048,7 +4048,7 @@ let ary = Vector{Any}(uninitialized, 10)
         end
     end
 
-    ary = Vector{Any}(uninitialized, 100)
+    ary = Vector{Any}(undef, 100)
     ary[:] = 1:length(ary)
     ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
@@ -4105,14 +4105,14 @@ end
 @test M15455.partialsort(1,2)==0
 
 # check that medium-sized array is 64-byte aligned (#15139)
-@test Int(pointer(Vector{Float64}(uninitialized, 1024))) % 64 == 0
+@test Int(pointer(Vector{Float64}(undef, 1024))) % 64 == 0
 
 # PR #15413
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), fill(1, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(undef, 1), fill(1, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4128,7 +4128,7 @@ using Test
 # not modify the original data
 function test_shared_array_resize(::Type{T}) where T
     len = 100
-    a = Vector{T}(uninitialized, len)
+    a = Vector{T}(undef, len)
     function test_unshare(f)
         a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
         a[:] = 1:length(a)
@@ -4205,7 +4205,7 @@ f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = tru
 end
 
 # Copy of `#undef`
-copyto!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
+copyto!(Vector{Any}(undef, 10), Vector{Any}(undef, 10))
 function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
     unsafe_copyto!(ary, 1, ary, 11, 90)
@@ -4760,7 +4760,7 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
+@test !occursin("double undef", sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}))
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4851,6 +4851,23 @@ f18095(::Number, ::Int) = 0x12
 @test_throws MethodError invoke(f18095, Tuple{Int, Int}, 1, 2)
 @test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
 @test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
+
+# `invoke` with non-constant function
+struct CassetteLikeWrapper{F}
+    x
+    f::F
+end
+(foo::CassetteLikeWrapper)(args...) = foo.f(args...)
+(foo::CassetteLikeWrapper)(x) = invoke(foo, Tuple{Vararg{Any}}, x)
+@test CassetteLikeWrapper(1,-)(2) == -2
+
+f26301(x) = 1
+f26301(x::Int) = 2
+function g26301()
+    f = Any[f26301][1]
+    invoke(f, Tuple{Any}, 0)
+end
+@test g26301() == 1
 
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
@@ -5156,7 +5173,7 @@ end
     x::Array{T} where T<:Integer
 end
 
-let a = Vector{Core.TypeofBottom}(uninitialized, 2)
+let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
 end
@@ -5197,7 +5214,7 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = Vector{FP128align}(uninitialized, 2),
+    arr = Vector{FP128align}(undef, 2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
     expected,
@@ -5729,11 +5746,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(uninitialized, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(x->10, N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -5749,7 +5766,7 @@ let
 end
 
 # copyto!
-A23567 = Vector{Union{Float64, Nothing}}(uninitialized, 5)
+A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
 B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
 copyto!(A23567, 2, B23567)
 @test A23567[1] === nothing
@@ -5770,13 +5787,13 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
         len = ntuple(x->10, N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
-        A = Array{U}(uninitialized, len)
+        A = Array{U}(undef, len)
         @test length(A) == prod(len)
         @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
@@ -5963,6 +5980,9 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
 
 # issue 22098
 macro m22098 end
@@ -5993,3 +6013,6 @@ g25907a(x) = x[1]::Integer
 @test g25907a(Union{Int, UInt, Nothing}[1]) === 1
 g25907b(x) = x[1]::Complex
 @test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
+
+#issue #26363
+@test eltype(Ref(Float64(1))) === Float64

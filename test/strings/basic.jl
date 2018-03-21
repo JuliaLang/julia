@@ -3,8 +3,21 @@
 using Random
 
 @testset "constructors" begin
-    @test String([0x61,0x62,0x63,0x21]) == "abc!"
+    v = [0x61,0x62,0x63,0x21]
+    @test String(v) == "abc!" && isempty(v)
     @test String("abc!") == "abc!"
+    @test String(0x61:0x63) == "abc"
+
+    # Check that resizing empty source vector does not corrupt string
+    b = IOBuffer()
+    write(b, "ab")
+    x = take!(b)
+    s = String(x)
+    resize!(x, 0)
+    empty!(x) # Another method which must be tested
+    @test s == "ab"
+    resize!(x, 1)
+    @test s == "ab"
 
     @test isempty(string())
     @test eltype(GenericString) == Char
@@ -66,7 +79,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n),  base = b) == n
+        @test parse(T, string(n, base = b),  base = b) == n
     end
     end
 end
@@ -258,9 +271,10 @@ end
 
     @test length(gstr, 1, 2) == 2
 
-    # tests promote_rule
+    # no string promotion
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
-        @test all(x -> x === "12", svec)
+        @test all(x -> x == "12", svec)
+        @test svec isa Vector{AbstractString}
     end
 end
 

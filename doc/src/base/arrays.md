@@ -7,24 +7,24 @@ Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
-Core.Array(::Uninitialized, ::Any)
+Core.Array(::UndefInitializer, ::Any)
 Core.Array(::Nothing, ::Any)
 Core.Array(::Missing, ::Any)
-Core.Uninitialized
-Core.uninitialized
+Core.UndefInitializer
+Core.undef
 Base.Vector
-Base.Vector(::Uninitialized, ::Any)
+Base.Vector(::UndefInitializer, ::Any)
 Base.Vector(::Nothing, ::Any)
 Base.Vector(::Missing, ::Any)
 Base.Matrix
-Base.Matrix(::Uninitialized, ::Any, ::Any)
+Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
-Base.BitArray(::Uninitialized, ::Integer...)
+Base.BitArray(::UndefInitializer, ::Integer...)
 Base.BitArray(::Any)
 Base.trues
 Base.falses
@@ -115,7 +115,6 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.vect
-Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
@@ -138,19 +137,17 @@ Base.promote_shape
 ## Array functions
 
 ```@docs
-Base.accumulate(::Any, ::Any, ::Integer)
+Base.accumulate
 Base.accumulate!
 Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-LinearAlgebra.diff
+Base.diff
 Base.repeat
 Base.rot180
 Base.rotl90
 Base.rotr90
-Base.reducedim
-Base.mapreducedim
 Base.mapslices
 ```
 

@@ -90,7 +90,7 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
-reverse(x::Union{Number,Char}) = x
+reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
 start(r::Reverse{<:Tuple}) = length(r.itr)
@@ -376,7 +376,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd),Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -518,6 +518,10 @@ IteratorSize(::Type{<:Count}) = IsInfinite()
 struct Take{I}
     xs::I
     n::Int
+    function Take(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -574,6 +578,10 @@ end
 struct Drop{I}
     xs::I
     n::Int
+    function Drop(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -976,7 +984,7 @@ function next(itr::PartitionIterator{<:Vector}, state)
 end
 
 function next(itr::PartitionIterator, state)
-    v = Vector{eltype(itr.c)}(uninitialized, itr.n)
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     while !done(itr.c, state) && i < itr.n
         i += 1
@@ -1045,11 +1053,7 @@ mutable struct Stateful{T, VS}
     @inline function Stateful(itr::T) where {T}
         state = start(itr)
         VS = fixpoint_iter_type(T, Union{}, typeof(state))
-        if done(itr, state)
-            new{T, VS}(itr, nothing, 0)
-        else
-            new{T, VS}(itr, next(itr, state)::VS, 0)
-        end
+        new{T, VS}(itr, done(itr, state) ? nothing : next(itr, state)::VS, 0)
     end
 end
 
@@ -1094,11 +1098,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        if done(s.itr, state)
-            s.nextvalstate = nothing
-        else
-            s.nextvalstate = next(s.itr, state)
-        end
+        # Until the optimizer can handle setproperty! better here, use explicit setfield!
+        setfield!(s, :nextvalstate, done(s.itr, state) ? nothing : next(s.itr, state))
         s.taken += 1
         return val
     end

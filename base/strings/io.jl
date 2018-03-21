@@ -73,6 +73,9 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
+`context` can be either an [`IOContext`](@ref) whose properties will be used,
+or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
+of the buffer (in bytes).
 
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
@@ -81,8 +84,11 @@ to allocate for the buffer used to write the string.
 
 # Examples
 ```jldoctest
-julia> sprint(showcompact, 66.66666)
+julia> sprint(show, 66.66666; context=:compact => true)
 "66.6667"
+
+julia> sprint(showerror, BoundsError([1], 100))
+"BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
@@ -134,12 +140,16 @@ julia> string("a", 1, true)
 """
 string(xs...) = print_to_string(xs...)
 
-print(io::IO, s::AbstractString) = (write(io, s); nothing)
+# note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
+#       write uses an encoding determined by `s` (UTF-8 for `String`)
+print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
-write(to::GenericIOBuffer, s::SubString{String}) =
-    s.ncodeunits ≤ 0 ? 0 : unsafe_write(to, pointer(s.string, s.offset+1), UInt(s.ncodeunits))
+# optimized methods to avoid iterating over chars
+write(io::IO, s::Union{String,SubString{String}}) =
+    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
 
@@ -240,8 +250,8 @@ join(strings, delim, last) = sprint(join, strings, delim, last)
 
 ## string escaping & unescaping ##
 
-need_full_hex(c::Union{Nothing, Char}) = c !== nothing && isxdigit(c)
-escape_nul(c::Union{Nothing, Char}) =
+need_full_hex(c::Union{Nothing, AbstractChar}) = c !== nothing && isxdigit(c)
+escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
@@ -271,16 +281,16 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
             c in esc           ? print(io, '\\', c) :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)         ? print(io, c) :
-                                 print(io, "\\x", hex(c, 2))
+                                 print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
-            c <= '\x7f'        ? print(io, "\\x", hex(c, 2)) :
-            c <= '\uffff'      ? print(io, "\\u", hex(c, need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", hex(c, need_full_hex(peek(a)) ? 8 : 4))
+            c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
+            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
+                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c))
             while true
-                print(io, "\\x", hex(u % UInt8, 2))
+                print(io, "\\x", string(u % UInt8, base = 16, pad = 2))
                 (u >>= 8) == 0 && break
             end
         end
@@ -445,51 +455,51 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             elseif ch == '\n'
                 # Now we need to output enough indentation
                 for i = 1:col-indent
-                    write(buf, ' ')
+                    print(buf, ' ')
                 end
                 col = 0
-                write(buf, '\n')
+                print(buf, '\n')
             else
                 cutting = false
                 # Now we need to output enough indentation to get to
                 # correct place
                 for i = 1:col-indent
-                    write(buf, ' ')
+                    print(buf, ' ')
                 end
                 col += 1
-                write(buf, ch)
+                print(buf, ch)
             end
         elseif ch == '\t'       # Handle internal tabs
             upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
             for i = 1:(upd-col)
-                write(buf, ' ')
+                print(buf, ' ')
             end
             col = upd
         elseif ch == '\n'
             cutting = true
             col = 0
-            write(buf, '\n')
+            print(buf, '\n')
         else
             col += 1
-            write(buf, ch)
+            print(buf, ch)
         end
     end
     # If we were still "cutting" when we hit the end of the string,
     # we need to output the right number of spaces for the indentation
     if cutting
         for i = 1:col-indent
-            write(buf, ' ')
+            print(buf, ' ')
         end
     end
     String(take!(buf))
 end
 
-function String(chars::AbstractVector{Char})
+function String(chars::AbstractVector{<:AbstractChar})
     sprint(sizehint=length(chars)) do io
         for c in chars
-            write(io, c)
+            print(io, c)
         end
     end
 end

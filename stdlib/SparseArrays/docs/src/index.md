@@ -1,7 +1,7 @@
 # Sparse Arrays
 
 ```@meta
-DocTestSetup = :(using SparseArrays)
+DocTestSetup = :(using SparseArrays, LinearAlgebra)
 ```
 
 Julia has support for sparse vectors and [sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix)
@@ -211,7 +211,7 @@ SparseArrays.nnz
 SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
-SparseArrays.blkdiag
+SparseArrays.blockdiag
 SparseArrays.sprand
 SparseArrays.sprandn
 SparseArrays.nonzeros

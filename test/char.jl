@@ -232,7 +232,7 @@ end
         end
         @test sprint(show, c) == rep
         if Base.isoverlong(c)
-            @test contains(sprint(show, "text/plain", c), rep*": [overlong]")
+            @test occursin(rep*": [overlong]", sprint(show, "text/plain", c))
         end
     end
 
@@ -249,4 +249,23 @@ end
 
     test_overlong('\u8430', 0x8430, "'萰'")
     test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")
+end
+
+# create a new AbstractChar type to test the fallbacks
+primitive type ASCIIChar <: AbstractChar 8 end
+ASCIIChar(c::UInt8) = reinterpret(ASCIIChar, c)
+ASCIIChar(c::UInt32) = ASCIIChar(UInt8(c))
+Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
+
+@testset "abstractchar" begin
+    @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+
+    @test isascii(ASCIIChar('x'))
+    @test ASCIIChar('x') < 'y'
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) === convert(Char, ASCIIChar('x'))
+    @test ASCIIChar('x')^3 == "xxx"
+    @test repr(ASCIIChar('x')) == "'x'"
+    @test string(ASCIIChar('x')) == "x"
+    @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
+    @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end

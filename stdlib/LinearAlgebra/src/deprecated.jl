@@ -49,7 +49,7 @@ end
 
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
-@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::AbstractChar) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
 @deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
 
 # PR #22925
@@ -333,8 +333,6 @@ end
 
 @deprecate chol!(x::Number, uplo) chol(x) false
 
-@deprecate diff(A::AbstractMatrix) diff(A, 1)
-
 ### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
 
 # deprecate ConjArray
@@ -420,22 +418,22 @@ function RowVector{T}(vec::AbstractVector{T}) where {T}
 end
 
 # Constructors that take a size and default to Array
-function RowVector{T}(::Uninitialized, n::Int) where {T}
+function RowVector{T}(::UndefInitializer, n::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return RowVector{T}(Vector{transpose_type(T)}(uninitialized, n))
+    return RowVector{T}(Vector{transpose_type(T)}(undef, n))
 end
-function RowVector{T}(::Uninitialized, n1::Int, n2::Int) where {T}
+function RowVector{T}(::UndefInitializer, n1::Int, n2::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(uninitialized, n2)) :
+    return n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n2)) :
         error("RowVector expects 1×N size, got ($n1,$n2)")
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[1]))
+    return RowVector{T}(Vector{transpose_type(T)}(undef, n[1]))
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int,Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int,Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[2])) :
+    return n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n[2])) :
         error("RowVector expects 1×N size, got $n")
 end
 
@@ -638,11 +636,11 @@ pinv(v::RowVector, tol::Real=0) = rvadjoint(pinv(rvadjoint(v), tol))
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(B.parent)
 
-# deprecate RowVector{T}(shape...) constructors to RowVector{T}(uninitialized, shape...) equivalents
-@deprecate RowVector{T}(n::Int) where {T}               RowVector{T}(uninitialized, n)
-@deprecate RowVector{T}(n1::Int, n2::Int) where {T}     RowVector{T}(uninitialized, n1, n2)
-@deprecate RowVector{T}(n::Tuple{Int}) where {T}        RowVector{T}(uninitialized, n)
-@deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(uninitialized, n)
+# deprecate RowVector{T}(shape...) constructors to RowVector{T}(undef, shape...) equivalents
+@deprecate RowVector{T}(n::Int) where {T}               RowVector{T}(undef, n)
+@deprecate RowVector{T}(n1::Int, n2::Int) where {T}     RowVector{T}(undef, n1, n2)
+@deprecate RowVector{T}(n::Tuple{Int}) where {T}        RowVector{T}(undef, n)
+@deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(undef, n)
 
 # operations formerly exported from and imported/extended by LinearAlgebra
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
@@ -1260,3 +1258,5 @@ end
 @deprecate scale!(a::AbstractVector, B::AbstractMatrix)                    lmul!(Diagonal(a), B)
 @deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(C, A, Diagonal(b))
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
+
+Base.@deprecate_binding trace tr

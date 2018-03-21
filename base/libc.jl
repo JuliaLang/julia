@@ -203,7 +203,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !contains(fmt, r"([^%]|^)%(a|A|j|w|Ow)")
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -243,7 +243,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Vector{UInt8}(uninitialized, 256)
+    hn = Vector{UInt8}(undef, 256)
     err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
@@ -305,7 +305,7 @@ if Sys.iswindows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Vector{UInt16}(uninitialized, len)
+        buf = Vector{UInt16}(undef, len)
         GC.@preserve buf unsafe_copyto!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), p)
         return transcode(String, buf)

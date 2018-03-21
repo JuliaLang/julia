@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
 import Libdl
 
 # these could fail on an embedded installation
@@ -15,7 +16,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return contains(basename(dl), Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"))
+        return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL
@@ -164,9 +165,9 @@ end
 
 # opening a versioned library that does not exist does not result in adding extension twice
 err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0")
-@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.$(Libdl.dlext)")
+@test !occursin("foo.$(Libdl.dlext).0.$(Libdl.dlext)", err.value.msg)
 err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0.22.1")
-@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.22.1.$(Libdl.dlext)")
+@test !occursin("foo.$(Libdl.dlext).0.22.1.$(Libdl.dlext)", err.value.msg)
 
 # test dlsym
 let dl = C_NULL

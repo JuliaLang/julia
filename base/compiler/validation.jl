@@ -12,6 +12,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :const => 1:1,
     :new => 1:typemax(Int),
     :return => 1:1,
+    :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,
@@ -140,7 +141,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
             elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :const || head === :enter ||
                 head === :leave || head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not
+                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
                 push!(errors, InvalidCodeError("invalid statement", x))
@@ -209,7 +210,7 @@ is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
 function is_valid_argument(x)
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
-        isa(x, Number) || isa(x, AbstractString) || isa(x, Char) || isa(x, Tuple) ||
+        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
         isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
     end

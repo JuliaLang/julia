@@ -218,11 +218,11 @@ function probe_platform_engines!(;verbose::Bool = false)
         prepend!(compression_engines, [(`7z --help`, gen_7z("7z")...)])
 
         # On windows, we bundle 7z with Julia, so try invoking that directly
-        exe7z = joinpath(JULIA_HOME, "7z.exe")
+        exe7z = joinpath(Sys.BINDIR, "7z.exe")
         prepend!(compression_engines, [(`$exe7z --help`, gen_7z(exe7z)...)])
 
         # And finally, we want to look for sh as busybox as well:
-        busybox = joinpath(JULIA_HOME, "busybox.exe")
+        busybox = joinpath(Sys.BINDIR, "busybox.exe")
         prepend!(sh_engines, [(`$busybox sh`)])
     end
 
@@ -363,7 +363,7 @@ function parse_7z_list(output::AbstractString)
 
     # Find index of " Name". (can't use `findfirst(generator)` until this is
     # closed: https://github.com/JuliaLang/julia/issues/16884
-    header_row = find(contains(l, " Name") && contains(l, " Attr") for l in lines)[1]
+    header_row = find(occursin(" Name", l) && occursin(" Attr", l) for l in lines)[1]
     name_idx = search(lines[header_row], "Name")[1]
     attr_idx = search(lines[header_row], "Attr")[1] - 1
 

@@ -25,7 +25,7 @@ for f in (:-, :+)
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Vector{T}(uninitialized, l1)
+        rv = Vector{T}(undef, l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])

@@ -6,18 +6,15 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import Pkg3
-import Pkg3: devdir, print_first_command_header
-using Pkg3.Types
-using Pkg3.Display
-using Pkg3.Operations
+import ..devdir, ..print_first_command_header, ..API
+using ..Types, ..Display, ..Operations
 
 ############
 # Commands #
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE)
 
 struct Command
     kind::CommandKind
@@ -51,15 +48,24 @@ const cmds = Dict(
     "build"     => CMD_BUILD,
     "pin"       => CMD_PIN,
     "free"      => CMD_FREE,
-    "checkout"  => CMD_CHECKOUT,
+    "checkout"  => CMD_CHECKOUT, # deprecated
+    "develop"   => CMD_DEVELOP,
+    "dev"       => CMD_DEVELOP,
+    "generate"  => CMD_GENERATE,
 )
+
+#################
+# Git revisions #
+#################
+struct Rev
+    rev::String
+end
 
 ###########
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH,
-                  OPT_BRANCH,)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -85,7 +91,7 @@ struct Option
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
-        elseif kind in (OPT_ENV, OPT_PATH, OPT_BRANCH) && argument == nothing
+        elseif kind in (OPT_ENV, OPT_PATH) && argument == nothing
             cmderror("the `$val` option requires an argument")
         end
         if kind == OPT_PATH
@@ -109,7 +115,6 @@ const opts = Dict(
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
     "path"     => OPT_PATH,
-    "branch"   => OPT_BRANCH,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -130,25 +135,37 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString)::PackageSpec
-    if contains(word, uuid_re)
+function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
+    word = replace(word, "~" => homedir())
+    if context in (CMD_ADD, CMD_DEVELOP) && isdir(word)
+        pkg = PackageSpec()
+        pkg.repo = Types.GitRepo(word)
+        return pkg
+    elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))
-    elseif contains(word, name_re)
+    elseif occursin(name_re, word)
         return PackageSpec(String(match(name_re, word).captures[1]))
-    elseif contains(word, name_uuid_re)
+    elseif occursin(name_uuid_re, word)
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
     else
-        cmderror("`$word` cannot be parsed as a package")
+        if context in (CMD_ADD, CMD_DEVELOP)
+            # Guess it is a url then
+            pkg = PackageSpec()
+            pkg.repo = Types.GitRepo(word)
+            return pkg
+        else
+            cmderror("`$word` cannot be parsed as a package")
+        end
     end
 end
 
 ################
 # REPL parsing #
 ################
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s]+\s*=\s*[^@\#\s]+ | \#\s*[^@\#\s]* | @\s*[^@\#\s]* | [^@\#\s]+"x
 
-const Token = Union{Command, Option, VersionRange, String}
+const Token = Union{Command, Option, VersionRange, String, Rev}
 
 function tokenize(cmd::String)::Vector{Token}
     print_first_command_header()
@@ -179,10 +196,12 @@ function tokenize(cmd::String)::Vector{Token}
     # Now parse the arguments / options to the command
     while !isempty(words)
         word = popfirst!(words)
-        if word[1] == '-'
+        if first(word) == '-'
             push!(tokens, parse_option(word))
-        elseif word[1] == '@'
+        elseif first(word) == '@'
             push!(tokens, VersionRange(strip(word[2:end])))
+        elseif first(word) == '#'
+            push!(tokens, Rev(word[2:end]))
         else
             push!(tokens, String(word))
         end
@@ -194,11 +213,14 @@ end
 # Execution #
 #############
 
-function do_cmd(repl::REPL.AbstractREPL, input::String)
+function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     try
         tokens = tokenize(input)
         do_cmd!(tokens, repl)
     catch err
+        if do_rethrow
+            rethrow(err)
+        end
         if err isa CommandError
             Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Nothing}[])
         else
@@ -229,27 +251,34 @@ function do_cmd!(tokens::Vector{Token}, repl)
     if cmd.kind == CMD_PREVIEW
         ctx.preview = true
         isempty(tokens) && cmderror("expected a command to preview")
-        return do_cmd!(tokens, repl)
+        cmd = popfirst!(tokens)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT     ? Base.invokelatest(    do_init!, ctx, tokens) :
-    cmd.kind == CMD_HELP     ? Base.invokelatest(    do_help!, ctx, tokens, repl) :
-    cmd.kind == CMD_RM       ? Base.invokelatest(      do_rm!, ctx, tokens) :
-    cmd.kind == CMD_ADD      ? Base.invokelatest(     do_add!, ctx, tokens) :
-    cmd.kind == CMD_UP       ? Base.invokelatest(      do_up!, ctx, tokens) :
-    cmd.kind == CMD_STATUS   ? Base.invokelatest(  do_status!, ctx, tokens) :
-    cmd.kind == CMD_TEST     ? Base.invokelatest(    do_test!, ctx, tokens) :
-    cmd.kind == CMD_GC       ? Base.invokelatest(      do_gc!, ctx, tokens) :
-    cmd.kind == CMD_BUILD    ? Base.invokelatest(   do_build!, ctx, tokens) :
-    cmd.kind == CMD_PIN      ? Base.invokelatest(     do_pin!, ctx, tokens) :
-    cmd.kind == CMD_FREE     ? Base.invokelatest(    do_free!, ctx, tokens) :
-    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_checkout!, ctx, tokens) :
+    cmd.kind == CMD_INIT     ? Base.invokelatest(          do_init!, ctx, tokens) :
+    cmd.kind == CMD_HELP     ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM       ? Base.invokelatest(            do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD      ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
+    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_UP       ? Base.invokelatest(            do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS   ? Base.invokelatest(        do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST     ? Base.invokelatest(          do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC       ? Base.invokelatest(            do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD    ? Base.invokelatest(         do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
+    cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
 
 const help = md"""
+
+**Welcome to the Pkg3 REPL-mode**. To return to the `julia>` prompt, either press
+backspace when the input line is empty or press Ctrl+C.
+
+
 **Synopsis**
 
     pkg> [--env=...] cmd [opts] [args]
@@ -271,6 +300,8 @@ What action you want the package manager to take:
 
 `status`: summarize contents of and changes to environment
 
+`generate`: generate files for a new project
+
 `add`: add packages to project
 
 `rm`: remove packages from project or manifest
@@ -289,9 +320,9 @@ What action you want the package manager to take:
 
 `pin`: pins the version of packages
 
-`checkout`: clone the full package repo locally for development
+`develop`: clone the full package repo locally for development
 
-`free`: undos a `pin` or `checkout`
+`free`: undos a `pin` or `develop`
 """
 
 const helps = Dict(
@@ -305,7 +336,7 @@ const helps = Dict(
 
     Display usage information for commands listed.
 
-    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `checkout`.
+    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `develop`.
     """, CMD_STATUS => md"""
 
         status
@@ -318,15 +349,32 @@ const helps = Dict(
     any changes to manifest packages not already listed. In `--project` mode, the
     status of the project file is summarized. In `--project` mode, the status of
     the project file is summarized.
-    """, CMD_ADD => md"""
+    """, CMD_GENERATE => md"""
 
-        add pkg[=uuid] [@version] ...
+        create name
+
+    Create a project called `name` in the current folder.
+    """,
+    CMD_ADD => md"""
+
+        add pkg[=uuid] [@version] [#rev] ...
 
     Add package `pkg` to the current project file. If `pkg` could refer to
     multiple different packages, specifying `uuid` allows you to disambiguate.
     `@version` optionally allows specifying which versions of packages. Versions
     may be specified by `@1`, `@1.2`, `@1.2.3`, allowing any version with a prefix
-    that matches, or ranges thereof, such as `@1.2-3.4.5`.
+    that matches, or ranges thereof, such as `@1.2-3.4.5`. A git-revision can be
+    specified by `#branch` or `#commit`.
+
+    **Examples**
+    ```
+    pkg> add Example
+    pkg> add Example@0.5
+    pkg> add Example#master
+    pkg> add Example#c37b675
+    pkg> add https://github.com/JuliaLang/Example.jl#master
+    pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
+    ```
     """, CMD_RM => md"""
 
         rm [-p|--project] pkg[=uuid] ...
@@ -401,21 +449,22 @@ const helps = Dict(
     """, CMD_FREE => md"""
         free pkg[=uuid] ...
 
-    Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help checkout`) then this command
+    Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
     makes the package no longer being checked out.
-    """, CMD_CHECKOUT => md"""
-        checkout pkg[=uuid] ...
+    """, CMD_DEVELOP => md"""
+        develop pkg[=uuid] [#rev] ...
 
-        opts: --path | --branch
-
-    Check out a package by cloning the registered repo at `branch` to `path`. By default, `path` is `~/.julia/dev/` and the `branch`
-    is the default for the repo. Each package can be given a different branch.
-    A checked out package is considered having a higher version than all the registered versions of the package.
+    Make a package available for development. If `pkg` is an existing local path that path will be recorded in
+    the manifest and used. Otherwise, a full git clone of `pkg` at rev `rev` is made. The clone is stored in `devdir`,
+    which defaults to `~/.julia/dev` and is set by the environment variable `JULIA_PKG_DEVDIR`.
     This operation is undone by `free`.
 
     *Example*
     ```jl
-    pkg> checkout --path=~/mydevpackages Example --branch=devel ACME --branch=feature/branch
+    pkg> develop Example
+    pkg> develop Example#master
+    pkg> develop Example#c37b675
+    pkg> develop https://github.com/JuliaLang/Example.jl#master
     ```
     """
 )
@@ -468,10 +517,11 @@ function do_rm!(ctx::Context, tokens::Vector{Token})
     end
     isempty(pkgs) &&
         cmderror("`rm` – list packages to remove")
-    Pkg3.API.rm(ctx, pkgs)
+    API.rm(ctx, pkgs)
 end
 
-function do_add!(ctx::Context, tokens::Vector{Token})
+function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKind)
+    @assert cmd in (CMD_ADD, CMD_DEVELOP)
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
         cmderror("`add` – list packages to add")
@@ -481,18 +531,29 @@ function do_add!(ctx::Context, tokens::Vector{Token})
         parsed_package = false
         token = popfirst!(tokens)
         if token isa String
-            push!(pkgs, parse_package(token))
+            push!(pkgs, parse_package(token; context=CMD_ADD))
+            cmd == CMD_DEVELOP && pkgs[end].repo == nothing && (pkgs[end].repo = Types.GitRepo("", ""))
             parsed_package = true
         elseif token isa VersionRange
             prev_token_was_package ||
                 cmderror("package name/uuid must precede version spec `@$token`")
             pkgs[end].version = VersionSpec(token)
+        elseif token isa Rev
+            prev_token_was_package ||
+                cmderror("package name/uuid must precede rev spec `#$(token.rev)`")
+            # WE did not get the repo from the
+            pkg = pkgs[end]
+            if pkg.repo == nothing
+                pkg.repo = Types.GitRepo("", token.rev)
+            else
+                pkgs[end].repo.rev = token.rev
+            end
         elseif token isa Option
             cmderror("`add` doesn't take options: $token")
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.add(ctx, pkgs)
+    return API.add_or_develop(ctx, pkgs, mode=(cmd == CMD_ADD ? :add : :develop))
 end
 
 function do_up!(ctx::Context, tokens::Vector{Token})
@@ -526,7 +587,7 @@ function do_up!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.up(ctx, pkgs; level=level, mode=mode)
+    API.up(ctx, pkgs; level=level, mode=mode)
 end
 
 function do_pin!(ctx::Context, tokens::Vector{Token})
@@ -550,7 +611,7 @@ function do_pin!(ctx::Context, tokens::Vector{Token})
         end
         prev_token_was_package = parsed_package
     end
-    Pkg3.API.pin(ctx, pkgs)
+    API.pin(ctx, pkgs)
 end
 
 function do_free!(ctx::Context, tokens::Vector{Token})
@@ -563,33 +624,12 @@ function do_free!(ctx::Context, tokens::Vector{Token})
             cmderror("free only takes a list of packages")
         end
     end
-    Pkg3.API.free(ctx, pkgs)
+    API.free(ctx, pkgs)
 end
 
 function do_checkout!(ctx::Context, tokens::Vector{Token})
-    pkgs_branches = Tuple{PackageSpec, Union{String, Nothing}}[] # (package, branch?)
-    path = devdir()
-    prev_token_was_package = false
-    while !isempty(tokens)
-        token = popfirst!(tokens)
-        parsed_package = false
-        if token isa String
-            push!(pkgs_branches, (parse_package(token), nothing))
-            parsed_package = true
-        elseif token isa Option
-            if token.kind == OPT_PATH
-                path = token.argument
-            elseif token.kind == OPT_BRANCH
-                pkgs_branches[end] = (pkgs_branches[end][1], token.argument)
-            else
-                cmderror("invalid option for `checkout`: $token")
-            end
-        else
-            cmderror("unexpected token $token")
-        end
-        prev_token_was_package = parsed_package
-    end
-    Pkg3.API.checkout(ctx, pkgs_branches; path = path)
+    Base.depwarn("`checkout`` is deprecated, use `develop`", :checkout)
+    do_develop!(ctx, tokens)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})
@@ -606,7 +646,7 @@ function do_status!(ctx::Context, tokens::Vector{Token})
             cmderror("`status` does not take arguments")
         end
     end
-    Pkg3.Display.status(ctx, mode)
+    Display.status(ctx, mode)
 end
 
 # TODO , test recursive dependencies as on option.
@@ -630,13 +670,12 @@ function do_test!(ctx::Context, tokens::Vector{Token})
             cmderror("invalid usage for `test`")
         end
     end
-    isempty(pkgs) && cmderror("`test` takes a set of packages")
-    Pkg3.API.test(ctx, pkgs; coverage = coverage)
+    API.test(ctx, pkgs; coverage = coverage)
 end
 
 function do_gc!(ctx::Context, tokens::Vector{Token})
     !isempty(tokens) && cmderror("`gc` does not take any arguments")
-    Pkg3.API.gc(ctx)
+    API.gc(ctx)
 end
 
 function do_build!(ctx::Context, tokens::Vector{Token})
@@ -649,24 +688,174 @@ function do_build!(ctx::Context, tokens::Vector{Token})
             cmderror("`build` only takes a list of packages")
         end
     end
-    Pkg3.API.build(ctx, pkgs)
+    API.build(ctx, pkgs)
 end
 
 function do_init!(ctx::Context, tokens::Vector{Token})
     if !isempty(tokens)
         cmderror("`init` does currently not take any arguments")
     end
-    Pkg3.API.init(ctx)
+    API.init(ctx)
+end
+
+function do_generate!(ctx::Context, tokens::Vector{Token})
+    local pkg
+    while !isempty(tokens)
+        token = popfirst!(tokens)
+        if token isa String
+            pkg = token
+            break # TODO: error message?
+        else
+            cmderror("`generate` takes a name of the project to create")
+        end
+    end
+    API.generate(pkg)
 end
 
 
 ######################
 # REPL mode creation #
 ######################
+
+# Provide a string macro pkg"cmd" that can be used in the same way
+# as the REPLMode `pkg> cmd`. Useful for testing and in environments
+# where we do not have a REPL, e.g. IJulia.
+struct MiniREPL <: REPL.AbstractREPL
+    display::TextDisplay
+    t::REPL.Terminals.TTYTerminal
+end
+function MiniREPL()
+    MiniREPL(TextDisplay(stdout), REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr))
+end
+REPL.REPLDisplay(repl::MiniREPL) = repl.display
+
+__init__() = minirepl[] = MiniREPL()
+
+const minirepl = Ref{MiniREPL}()
+
+macro pkg_str(str::String)
+    :($(do_cmd)(minirepl[], $str; do_rethrow=true))
+end
+
+pkgstr(str::String) = do_cmd(minirepl[], str; do_rethrow=true)
+
+# handle completions
+commands_sorted = sort!(collect(keys(cmds)))
+options_sorted = sort!(collect(keys(opts)))
+
+struct PkgCompletionProvider <: LineEdit.CompletionProvider end
+
+function LineEdit.complete_line(c::PkgCompletionProvider, s)
+    partial = REPL.beforecursor(s.input_buffer)
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = completions(full, lastindex(partial))
+    return ret, partial[range], should_complete
+end
+
+function complete_command(s, i1, i2)
+    cmp = filter(cmd -> startswith(cmd, s), commands_sorted)
+    return cmp, i1:i2, length(cmp) == 1
+end
+
+function complete_option(s, i1, i2)
+    dashes = 0
+    while !isempty(s) && first(s) == '-'
+        s = s[2:end]
+        dashes += 1
+    end
+
+    cmp = filter(cmd -> startswith(cmd, s), options_sorted)
+
+    isempty(cmp) && (return cmp, 0:-1, false)
+
+    cmp = string.('-'^(2-dashes), cmp)
+
+    if length(cmp) == 1
+        return cmp, i1+dashes:i2, true
+    else
+        return cmp, i1+dashes:i2, false
+    end
+end
+
+function complete_package(s, i1, i2, lastcommand, project_opt)
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+        return complete_installed_package(s, i1, i2, project_opt)
+    elseif lastcommand in [CMD_ADD]
+        return complete_remote_package(s, i1, i2)
+    end
+    return [], 0:-1, false
+end
+
+function complete_installed_package(s, i1, i2, project_opt)
+    pkgs = project_opt ? API.installed(PKGMODE_PROJECT) : API.installed()
+    pkgs = sort!(collect(keys(filter((p) -> p[2] != nothing, pkgs))))
+    cmp = filter(cmd -> startswith(cmd, s), pkgs)
+    return cmp, i1:i2, length(cmp) == 1
+end
+
+function complete_remote_package(s, i1, i2)
+    cmp = filter(cmd -> startswith(cmd, s), collect_package_names())
+    return cmp, i1:i2, length(cmp) == 1
+end
+
+function collect_package_names()
+    r = r"name = \"(.*?)\""
+    names = String[]
+    for reg in Types.registries(;clone_default=false)
+        regcontent = read(joinpath(reg, "Registry.toml"), String)
+        append!(names, collect(match.captures[1] for match in eachmatch(r, regcontent)))
+    end
+    return sort!(names)
+end
+
+function completions(full, index)
+    pre = full[1:index]
+
+    pre_words = split(pre, ' ', keep=true)
+
+    # first word should always be a command
+    if isempty(pre_words)
+        return complete_command("", 1:1)
+    else
+        to_complete = pre_words[end]
+        offset = isempty(to_complete) ? index+1 : to_complete.offset+1
+        if length(pre_words) == 1
+            return complete_command(to_complete, offset, index)
+        end
+
+        twocommands = false
+        lastcommand = nothing
+        project_opt = true
+        # this should consume any words up to the current one
+        while length(pre_words) > 1
+            twocommands = false
+            word = popfirst!(pre_words)
+            (word == "preview" || word == "help") && (twocommands = true)
+            if !isempty(word) && haskey(cmds, word)
+                lastcommand = cmds[word]
+            end
+            if !isempty(word) && first(word) == '-' && haskey(opts, strip(word, '-'))
+                opts[strip(word, '-')] == OPT_PROJECT && (project_opt = true)
+                opts[strip(word, '-')] == OPT_MANIFEST && (project_opt = false)
+            end
+        end
+
+        if twocommands
+            return complete_command(to_complete, offset, index)
+        elseif !isempty(to_complete) && first(to_complete) == '-'
+            return complete_option(to_complete, offset, index)
+        else
+            return complete_package(to_complete, offset, index, lastcommand, project_opt)
+        end
+    end
+end
+
+# Set up the repl Pkg REPLMode
 function create_mode(repl, main)
     pkg_mode = LineEdit.Prompt("pkg> ";
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
+        complete = PkgCompletionProvider(),
         sticky = true)
 
     pkg_mode.repl = repl

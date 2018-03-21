@@ -11,10 +11,11 @@ struct GotoIfNot
     GotoIfNot(@nospecialize(cond), dest::Int) = new(cond, dest)
 end
 
-struct ReturnNode{T}
-    val::T
-    ReturnNode{T}(@nospecialize(val)) where {T} = new{T}(val::T)
-    ReturnNode{T}() where {T} = new{T}()
+struct ReturnNode
+    val
+    ReturnNode(@nospecialize(val)) = new(val)
+    # unassigned val indicates unreachable
+    ReturnNode() = new()
 end
 
 """
@@ -30,6 +31,8 @@ last(r::StmtRange) = r.last
 start(r::StmtRange) = 0
 done(r::StmtRange, state) = r.last - r.first < state
 next(r::StmtRange, state) = (r.first + state, state + 1)
+
+StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
 struct BasicBlock
     stmts::StmtRange
@@ -148,6 +151,13 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
+function setindex!(x::IRCode, repl, s::SSAValue)
+    @assert s.id <= length(x.stmts)
+    x.stmts[s.id] = repl
+    nothing
+end
+
+
 struct OldSSAValue
     id::Int
 end
@@ -264,7 +274,7 @@ function done(it::UseRefIterator, use)
     false
 end
 
-function scan_ssa_use!(used::IdSet{Int64}, @nospecialize(stmt))
+function scan_ssa_use!(used, @nospecialize(stmt))
     if isa(stmt, SSAValue)
         push!(used, stmt.id)
     end
@@ -305,7 +315,7 @@ end
 
 # For bootstrapping
 function my_sortperm(v)
-    p = Vector{Int}(uninitialized, length(v))
+    p = Vector{Int}(undef, length(v))
     for i = 1:length(v)
         p[i] = i
     end
@@ -329,9 +339,9 @@ mutable struct IncrementalCompact
     function IncrementalCompact(code::IRCode)
         perm = my_sortperm(Int[code.new_nodes[i][1] for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
-        result = Array{Any}(uninitialized, new_len)
-        result_types = Array{Any}(uninitialized, new_len)
-        result_lines = Array{Int}(uninitialized, new_len)
+        result = Array{Any}(undef, new_len)
+        result_types = Array{Any}(undef, new_len)
+        result_lines = Array{Int}(undef, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         used_ssas = fill(0, new_len)
         late_fixup = Vector{Int}()
@@ -340,9 +350,9 @@ mutable struct IncrementalCompact
 end
 
 struct TypesView
-    compact::IncrementalCompact
+    ir::Union{IRCode, IncrementalCompact}
 end
-types(compact::IncrementalCompact) = TypesView(compact)
+types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, idx)
     if idx < compact.result_idx
@@ -352,6 +362,10 @@ function getindex(compact::IncrementalCompact, idx)
     end
 end
 
+function getindex(view::TypesView, v::OldSSAValue)
+    return view.ir.ir.types[v.id]
+end
+
 function setindex!(compact::IncrementalCompact, v, idx)
     if idx < compact.result_idx
         # Kill count for current uses
@@ -359,19 +373,33 @@ function setindex!(compact::IncrementalCompact, v, idx)
             val = ops[]
             isa(val, SSAValue) && (compact.used_ssas[val.id] -= 1)
         end
+        compact.result[idx] = v
         # Add count for new use
-        isa(v, SSAValue) && (compact.used_ssas[v.id] += 1)
-        return compact.result[idx] = v
+        if isa(v, SSAValue)
+            compact.used_ssas[v.id] += 1
+        else
+            for ops in userefs(compact.result[idx])
+                val = ops[]
+                isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
+            end
+        end
     else
-        return compact.ir.stmts[idx] = v
+        compact.ir.stmts[idx] = v
     end
+    return nothing
 end
 
 function getindex(view::TypesView, idx)
-    if idx < view.compact.result_idx
-        return view.compact.result_types[idx]
+    isa(idx, SSAValue) && (idx = idx.id)
+    if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
+        return view.ir.result_types[idx]
     else
-        return view.compact.ir.types[idx]
+        ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
+        if idx <= length(ir.types)
+            return ir.types[idx]
+        else
+            return ir.new_nodes[idx - length(ir.types)][2]
+        end
     end
 end
 
@@ -411,7 +439,7 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
         result[result_idx] = renumber_ssa!(stmt, ssa_rename, true, used_ssas)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        values = Vector{Any}(uninitialized, length(stmt.values))
+        values = Vector{Any}(undef, length(stmt.values))
         for i = 1:length(stmt.values)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]
@@ -457,7 +485,7 @@ function next(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tup
         compact.result_types[old_result_idx] = typ
         compact.result_lines[old_result_idx] = new_line
         result_idx = process_node!(compact, old_result_idx, new_node, new_idx, idx)
-        (old_result_idx == result_idx) && return next(compact, (idx, result_idx))
+        (old_result_idx == result_idx) && return next(compact, (idx, active_bb, result_idx))
         compact.result_idx = result_idx
         return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb, compact.result_idx)
     end
@@ -491,7 +519,8 @@ function next(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tup
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx)
-   if stmt_effect_free(compact.result[idx], compact.ir, compact.ir.mod)
+    effect_free = stmt_effect_free(compact.result[idx], compact, compact.ir.mod)
+    if effect_free
         for ops in userefs(compact.result[idx])
             val = ops[]
             if isa(val, SSAValue)
@@ -510,7 +539,7 @@ end
 function finish(compact::IncrementalCompact)
     for idx in compact.late_fixup
         stmt = compact.result[idx]::PhiNode
-        values = Vector{Any}(uninitialized, length(stmt.values))
+        values = Vector{Any}(undef, length(stmt.values))
         for i = 1:length(stmt.values)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]

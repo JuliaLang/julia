@@ -2,9 +2,8 @@
 
 module GraphType
 
-import ..Pkg3
-using Pkg3.Types
-import Pkg3: equalto, Nothing, Types.uuid_julia
+using ..Types
+import ..Types.uuid_julia
 
 export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, simplify_graph_soft!,
        get_resolve_log, showlog, push_snapshot!, pop_snapshot!, wipe_snapshots!
@@ -260,7 +259,7 @@ mutable struct Graph
         local extended_deps
         let spp = spp # Due to https://github.com/JuliaLang/julia/issues/15276
             # Type assert below to help inference
-            extended_deps = [Vector{Dict{Int,BitVector}}(uninitialized, spp[p0]-1) for p0 = 1:np]::Vector{Vector{Dict{Int,BitVector}}}
+            extended_deps = [Vector{Dict{Int,BitVector}}(undef, spp[p0]-1) for p0 = 1:np]::Vector{Vector{Dict{Int,BitVector}}}
         end
         for p0 = 1:np, v0 = 1:(spp[p0]-1)
             n2u = Dict{String,UUID}()
@@ -295,7 +294,7 @@ mutable struct Graph
             req_msk = Dict{Int,BitVector}()
             for (p1, vs) in req
                 pv = pvers[p1]
-                req_msk_p1 = BitArray(uninitialized, spp[p1] - 1)
+                req_msk_p1 = BitArray(undef, spp[p1] - 1)
                 @inbounds for i in 1:spp[p1] - 1
                     req_msk_p1[i] = pv[i] ∈ vs
                 end
@@ -984,7 +983,7 @@ function propagate_constraints!(graph::Graph, sources::Set{Int} = Set{Int}(); lo
                 # if an entire row of the sub-mask is false, that version of p1
                 # is effectively forbidden
                 # (this is just like calling `any` row-wise)
-                added_constr1 = any!(BitVector(uninitialized, spp[p1]), sub_msk)
+                added_constr1 = any!(BitVector(undef, spp[p1]), sub_msk)
                 # apply the new constraints, checking for contradictions
                 # (keep the old ones for comparison)
                 gconstr1 = gconstr[p1]
@@ -1256,7 +1255,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
 
     # group versions into sets that behave identically
     # each set is represented by its highest-valued member
-    repr_vers = sort!(Int[findlast(equalto(repr_vecs[w0]), cvecs) for w0 = 1:neq])
+    repr_vers = sort!(Int[findlast(isequal(repr_vecs[w0]), cvecs) for w0 = 1:neq])
     @assert all(repr_vers .> 0)
     @assert repr_vers[end] == eff_spp0
 

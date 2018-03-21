@@ -382,7 +382,7 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-trace(D::Diagonal) = sum(D.diag)
+tr(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
