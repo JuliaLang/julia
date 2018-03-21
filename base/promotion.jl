@@ -102,7 +102,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             vars = []
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
                     pushfirst!(vars, aprimary.var)
