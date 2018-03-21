@@ -29,46 +29,45 @@ immediately be up and running with a known-good set of dependencies.
 
 Since environments are managed and updated independently from each other,
 “dependency hell” is significantly alleviated in Pkg3. If you want to use the
-latest and greatest `DataFrames` in a new project but you’re stuck on an older
-version in a different project, that’s no problem – since they have separate
-environments they can just use different versions, which are both installed at
-the same time in different locations on your system. The location of each
-package version is canonical, so when environments use the same versions of
-packages, they can share installations, avoiding unnecessary duplication of the
-package. Old package versions that are no longer used by any environments are
-periodically automatically “garbage collected” by the package manager.
+latest and greatest version of some package in a new project but you’re stuck on
+an older version in a different project, that’s no problem – since they have
+separate environments they can just use different versions, which are both
+installed at the same time in different locations on your system. The location
+of each package version is canonical, so when environments use the same versions
+of packages, they can share installations, avoiding unnecessary duplication of
+the package. Old package versions that are no longer used by any environments
+are periodically “garbage collected” by the package manager.
 
 Pkg3’s approach to local environments may be familiar to people who have used
 Python’s `virtualenv` or Ruby’s `bundler`. In Julia, instead of hacking the
 language’s code loading mechanisms to support environments, we have the benefit
-that Julia natively understands Pkg3 environments. In addition, Julia
-environments are “stackable”: you can overlay one environment with another and
-thereby have access to additional packages outside of the primary project
-environment. The overlay of environments is controlled by the `LOAD_PATH`
-global, which specifies the stack of environments that are searched for
-dependencies. This makes it easy to work on a project while still having access
-to all your usual dev tools like profilers, debuggers, and so on just by having
-an environment including these dev tools later in your load path.
+that Julia natively understands them. In addition, Julia environments are
+“stackable”: you can overlay one environment with another and thereby have
+access to additional packages outside of the primary environment. This makes it
+easy to work on a project, which provides the primary environment, while still
+having access to all your usual dev tools like profilers, debuggers, and so on,
+just by having an environment including these dev tools later in the load path.
 
 Last but not least, Pkg3 is designed to support federated package registries.
 This means that it allows multiple registries managed by different parties to
 interact seamlessly. In particular, this includes private registries which can
-live behind a corporate firewall. You can install and update your own packages
+live behind corporate firewalls. You can install and update your own packages
 from a private registry with exactly the same tools and workflows that you use
 to install and manage official Julia packages. If you urgently need to apply a
 hotfix for a public package that’s critical to your company’s product, you can
-tag a `v1.2.3+hotfix` version in your internal private registry and get it to
+tag a private version of it in your company’s internal registry and get a fix to
 your developers and ops teams quickly and easily without having to wait for an
-upstream patch to be accepted and published. Once the upstream fix is accepted,
-just upgrade your dependency to the new official `v1.2.4` version which includes
-the fix and you’re back on an official upstream version of the dependency.
+upstream patch to be accepted and published. Once an official fix is published,
+however, you can just upgrade your dependencies and you'll be back on an
+official release again.
 
 ## Glossary
 
 **Project:** a source tree with a standard layout, including a `src` directory
 for the main body of Julia code, a `test` directory for testing the project,
 `docs` for documentation files, and optionally a `build` directory for a build
-script and its outputs.
+script and its outputs. A project will typically also have a project file and
+may optionally have a manifest file:
 
 - **Project file:** a file in the root directory of a project, named
   `Project.toml` (or `JuliaProject.toml`) describing metadata about the project,
@@ -79,9 +78,40 @@ script and its outputs.
   `Manifest.toml` (or `JuliaManifest.toml`) describing a complete dependency graph
   and exact versions of each package and library used by a project.
 
+**Package:** a project which provides reusable functionality that can be used by
+other Julia projects via `import X` or `using X`. A package should have a
+project file with a `uuid` entry giving its package UUID. This UUID is used to
+identify the package in projects that depend on it.
+
+!!! note
+    For legacy reasons it is possible to load a package without a project file or
+    UUID from the REPL or the top-level of a script. It is not possible, however,
+    to load a package with a project file or UUID from a project with them. Once
+    you've loaded from a project file, everything needs a project file and UUID.
+
+**Application:** a project which provides standalone functionality not intended
+to be reused by other Julia projects. For example a web application or a
+commmand-line utility. An application may have a UUID but does not need one. An
+application may also provide global configuration options for packages it
+depends on. Packages, on the other hand, may not provide global configuration
+since that could conflict with the configuration of the main application.
+
+!!! note
+    **Projects _vs._ Packages _vs._ Applications:**
+
+    1. Project is an umbrella term: packages and applications are kinds of projects.
+    2. Packages should have UUIDs, applications can have a UUIDs but don't need them.
+    3. Applications can provide global configuration, whereas packages cannot.
+
+**Library (future work):** a compiled binary dependency (not written in Julia)
+packaged to be used by a Julia project. These are currently typically built in-
+place by a `deps/build.jl` script in a project’s source tree, but in the future
+we plan to make libraries first-class entities directly installed and upgraded
+by the package manager.
+
 **Environment:** the combination of the top-level name map provided by a project
-file combined with the dependency graph and package loction map provided by a
-manifest file. For more detail see the section on code loading.
+file combined with the dependency graph and map from packages to their entry points
+provided by a manifest file. For more detail see the manual section on code loading.
 
 - **Explicit environment:** an environment in the form of an explicit project
   file and an optional corresponding manifest file together in a directory. If the
@@ -96,21 +126,6 @@ manifest file. For more detail see the section on code loading.
   `X/Project.toml`. The dependencies of the `X` package are the dependencies in
   the corresponding project file if there is one. The location map is implied by
   the entry points themselves.
-
-**Application:** a project which provides standalone functionality not intended
-to be reused by other Julia projects. For example a web application or a
-commmand-line utility.
-
-**Package:** a project which provides reusable functionality that can be used by
-other projects via `import X` or `using X`. A package will typically have a
-project file with a `uuid` entry giving its package UUID. This UUID is used to
-identify the package when other projects depend on it.
-
-**Library (future work):** a compiled binary dependency (not written in Julia)
-packaged to be used by a Julia project. These are currently typically built in-
-place by a `deps/build.jl` script in a project’s source tree, but in the future
-we plan to make libraries first-class entities directly installed and upgraded
-by the package manager.
 
 **Registry:** a source tree with a standard layout recording metadata about a
 registered set of packages, the tagged versions of them which are available, and
