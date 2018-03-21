@@ -1232,3 +1232,9 @@ end
         @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
     end
 end
+
+@testset "Issue #26532" begin
+    x = range(3, stop=3, length=5)
+    @test step(x) == 0.0
+    @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
