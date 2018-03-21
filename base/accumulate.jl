@@ -101,10 +101,10 @@ julia> accumulate(+, fill(1, 3, 3); dims=2)
  1  2  3
 ```
 """
-accumulate(op, itr; dims::Union{Nothing,Integer}=nothing) = accumulate(op, undef, itr; dims=dims)
-accumulate(op, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate(op, v0, itr, IteratorSize(itr), dims)
+@inline accumulate(op, itr; dims::Union{Nothing,Integer}=nothing) = accumulate(op, undef, itr; dims=dims)
+@inline accumulate(op, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate(op, v0, itr, IteratorSize(itr), dims)
 
-function _accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
+@inline function _accumulate(op, v0, itr, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
     collect(Accumulate(op, v0, itr))
 end
 
@@ -154,10 +154,10 @@ julia> B
  3  -1
 ```
 """
-accumulate!(op, dest, itr; dims::Union{Nothing,Integer}=nothing) = accumulate!(op, dest, undef, itr; dims=dims)
-accumulate!(op, dest, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate!(op, dest, undef, itr, IteratorSize(itr), dims)
+@inline accumulate!(op, dest, itr; dims::Union{Nothing,Integer}=nothing) = accumulate!(op, dest, undef, itr; dims=dims)
+@inline accumulate!(op, dest, v0, itr; dims::Union{Nothing,Integer}=nothing) = _accumulate!(op, dest, undef, itr, IteratorSize(itr), dims)
 
-function _accumulate!(op, dest, v0, x, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing)
+function _accumulate!(op::F, dest, v0, x, ::Union{SizeUnknown,HasLength,IsInfinite,HasShape{1}}, ::Nothing) where F
     src = Accumulate(op, v0, x)
 
     # this is essentially `copyto!`, but unrolled to deal with potential type instability in first state
@@ -200,7 +200,7 @@ end
     end
 end
 
-function _accumulate(op, v0, X, ::IteratorSize, dim::Integer)
+function _accumulate(op::F, v0, X, ::IteratorSize, dim::Integer) where F
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     if isempty(X)
         # fallback on collect machinery
@@ -232,7 +232,7 @@ function _accumulate(op, v0, X, ::IteratorSize, dim::Integer)
     return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
 end
 
-function _accumulate!(op, dest, v0, X, ::IteratorSize, dim::Integer)
+function _accumulate!(op::F, dest, v0, X, ::IteratorSize, dim::Integer) where F
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     axes(dest) == axes(X) || throw(DimensionMismatch("shape of source and destination must match"))
     indH, indD, indT = split_dimensions(X,dim)
@@ -257,7 +257,7 @@ function _accumulate!(op, dest, v0, X, ::IteratorSize, dim::Integer)
     return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
 end
 
-function _accumulate!(op, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {T}
+function _accumulate!(op::F, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {F,T}
     while true
         if done(indH,sH)
             if done(indD, sD)
@@ -309,9 +309,9 @@ approach, which can be more numerically accurate for certain operations, such as
 It involves roughly double the number of `op` calls, but for cheap operations like `+`
 this does not have much impact (approximately 20%).
 """
-accumulate_pairwise(op, itr) = accumulate_pairwise(op, undef, itr)
-accumulate_pairwise(op, v0, itr) =  accumulate_pairwise(op, v0, itr, IteratorSize(itr))
-function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
+@inline accumulate_pairwise(op, itr) = accumulate_pairwise(op, undef, itr)
+@inline accumulate_pairwise(op, v0, itr) =  accumulate_pairwise(op, v0, itr, IteratorSize(itr))
+function accumulate_pairwise(op::F, v0, itr, ::Union{HasLength,HasShape{1}}) where F
     i = start(itr)
     if done(itr,i)
         return collect(Accumulate(op, v0, itr))
@@ -340,8 +340,8 @@ function accumulate_pairwise(op, v0, itr, ::Union{HasLength,HasShape{1}})
     end
 end
 
-accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, undef, itr)
-function accumulate_pairwise!(op, Y, v0, itr)
+@inline accumulate_pairwise!(op, dest, itr) = accumulate_pairwise!(op, dest, undef, itr)
+function accumulate_pairwise!(op::F, Y, v0, itr) where F
     L = linearindices(Y)
     L == linearindices(itr) || throw(DimensionMismatch("indices of source and destination must match"))
 
@@ -356,7 +356,7 @@ function accumulate_pairwise!(op, Y, v0, itr)
     return Y
 end
 
-function _accumulate_pairwise!(op,Y,X,y0,j,i,m,widen)
+function _accumulate_pairwise!(op::F,Y,X,y0,j,i,m,widen) where F
     if m < 128 # m >= 1
         @inbounds begin
             x,i = next(X,i)
