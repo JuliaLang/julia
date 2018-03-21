@@ -1362,6 +1362,10 @@ end
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
 
+@test_throws ParseError Meta.parse("a.: b")
+@test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
+@test Meta.parse("a.:catch") == Expr(:., :a, QuoteNode(:catch))
+
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
 
