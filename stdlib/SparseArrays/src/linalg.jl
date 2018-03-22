@@ -39,9 +39,9 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Nu
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        for col = 1:A.n
+        @inbounds for col = 1:A.n
             αxj = α*B[col,k]
-            @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 C[rv[j], k] += nzv[j]*αxj
             end
         end
@@ -64,9 +64,9 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::Str
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        for col = 1:A.n
+        @inbounds for col = 1:A.n
             tmp = zero(eltype(C))
-            @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += adjoint(nzv[j])*B[rv[j],k]
             end
             C[col,k] += α*tmp
@@ -90,9 +90,9 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        for col = 1:A.n
+        @inbounds for col = 1:A.n
             tmp = zero(eltype(C))
-            @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
                 tmp += transpose(nzv[j])*B[rv[j],k]
             end
             C[col,k] += α*tmp
