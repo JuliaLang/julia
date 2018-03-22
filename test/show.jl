@@ -372,7 +372,7 @@ end
 
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
 
-@test_repr "baremodule X
+@test_repr "bare module X
 # line meta
 # line meta
 import ...B.c
@@ -381,7 +381,7 @@ import D
 # line meta
 import B.C.D.E.F.g
 end"
-@test_repr "baremodule Y
+@test_repr "bare module Y
 # line meta
 # line meta
 export A, B, C

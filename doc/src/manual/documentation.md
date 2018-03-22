@@ -435,11 +435,11 @@ syntax, however both are equivalent.
 
 ```julia
 "..."
-baremodule M
+bare module M
 # ...
 end
 
-baremodule M
+bare module M
 
 import Base: @doc
 
@@ -449,9 +449,9 @@ f(x) = x
 end
 ```
 
-Documenting a `baremodule` by placing a docstring above the expression automatically imports
+Documenting a `bare module` by placing a docstring above the expression automatically imports
 `@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
+documented. Empty `bare module`s cannot be documented.
 
 ### Global Variables
 

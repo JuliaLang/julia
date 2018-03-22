@@ -136,7 +136,7 @@ end
     eval([m::Module], expr::Expr)
 
 Evaluate an expression in the given module and return the result. Every `Module` (except
-those defined with `baremodule`) has its own 1-argument definition of `eval`, which
+those defined with `bare module`) has its own 1-argument definition of `eval`, which
 evaluates expressions in that module.
 """
 Core.eval

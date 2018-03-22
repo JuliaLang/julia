@@ -107,7 +107,7 @@ function complete_symbol(sym, ffunc)
 end
 
 const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "abstract type", "bare module", "begin", "break", "catch", "ccall",
     "const", "continue", "do", "else", "elseif", "end", "export", "false",
     "finally", "for", "function", "global", "if", "import",
     "let", "local", "macro", "module", "mutable struct",

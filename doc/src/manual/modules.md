@@ -134,12 +134,12 @@ since this is needed in the vast majority of cases.
 In addition to `using Base`, modules also automatically contain a definition of the `eval` function,
 which evaluates expressions within the context of that module.
 
-If these default definitions are not wanted, modules can be defined using the keyword `baremodule`
-instead (note: `Core` is still imported, as per above). In terms of `baremodule`, a standard
+If these default definitions are not wanted, modules can be defined using the keyword `bare module`
+instead (note: `Core` is still imported, as per above). In terms of `bare module`, a standard
 `module` looks like this:
 
 ```
-baremodule Mod
+bare module Mod
 
 using Base
 

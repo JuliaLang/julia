@@ -43,7 +43,7 @@ module
 export
 import
 using
-baremodule
+bare module
 function
 macro
 return

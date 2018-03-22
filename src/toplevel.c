@@ -199,7 +199,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         jl_base_module = newm;
     }
 
-    // add standard imports unless baremodule
+    // add standard imports unless bare module
     if (std_imports) {
         if (jl_base_module != NULL) {
             jl_add_standard_imports(newm);

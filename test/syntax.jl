@@ -208,12 +208,12 @@ macro test999_str(args...); args; end
 
 # issue #12501 and pr #12502
 Meta.parse("""
-      baremodule A
+      bare module A
       "a" in b
       end
       """)
 Meta.parse("""
-      baremodule A
+      bare module A
       "a"
       end
       """)

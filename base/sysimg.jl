@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+bare module Base
 
 using Core.Intrinsics, Core.IR
 
@@ -63,7 +63,7 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
-baremodule MainInclude
+bare module MainInclude
 export include
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 end
@@ -492,7 +492,7 @@ end
 
 const tot_time_stdlib = RefValue(0.0)
 
-end # baremodule Base
+end # bare module Base
 
 using .Base
 
