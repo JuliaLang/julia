@@ -1553,6 +1553,9 @@ end
 @eval Broadcast Base.@deprecate_binding MatrixStyle DefaultArrayStyle{2} false
 @eval Broadcast Base.@deprecate_binding VectorStyle DefaultArrayStyle{1} false
 
+@deprecate Crand Libc.rand false
+@deprecate Csrand Libc.srand false
+
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
