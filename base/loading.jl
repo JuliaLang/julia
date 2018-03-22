@@ -490,12 +490,14 @@ end
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
         root_name = nothing
-        root_uuid = dummy_uuid(project_file)
+        original_root_uuid = dummy_uuid(project_file)
+        root_uuid = original_root_uuid
         state = :top
         for line in eachline(io)
             if state == :top
+                # Found a UUID top entry, early exit
+                root_name == name && root_uuid != original_root_uuid && return root_uuid
                 if occursin(re_section, line)
-                    root_name == name && return root_uuid
                     state = occursin(re_section_deps, line) ? :deps : :other
                 elseif (m = match(re_name_to_string, line)) != nothing
                     root_name = String(m.captures[1])
@@ -510,7 +512,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 state = :deps
             end
         end
-        return false
+        root_name == name ? (return root_uuid) : (return false)
     end
 end
 
