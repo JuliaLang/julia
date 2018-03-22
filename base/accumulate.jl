@@ -202,6 +202,9 @@ function _accumulate(op::F, v0, X, ::HasShape{N}, dim::Integer) where {F,N}
     v = reduce_first(op, v0, X[i])
     dest = similar(X, typeof(v))
     dest[i] = v
+    if dim > N
+        return _accum_only_v0!(op, dest, v0, X, inds, st, true)
+    end
     return _accumulate!(op, dest, v0, X, dim, inds, st, first_in_dim, dim_delta, true)
 end
 
@@ -212,13 +215,16 @@ function _accumulate!(op::F, dest, v0, X, ::HasShape{N}, dim::Integer) where {F,
     first_in_dim = first(axes(X, dim))
     dim_delta = CartesianIndex(ntuple(d -> d==dim ? 1 : 0, Val{N}()))
     st = start(inds)
+    if dim > N
+        return _accum_only_v0!(op, dest, v0, X, inds, st, false)
+    end
     return _accumulate!(op, dest, v0, X, dim, inds, st, first_in_dim, dim_delta, false)
 end
 
 function _accumulate!(op::F, dest::AbstractArray{T}, v0, X, dim, inds, st, first_in_dim, dim_delta, widen) where {F,T}
     while !done(inds, st)
         i, st = next(inds, st)
-        if dim > length(i) || i[dim] == first_in_dim
+        if @inbounds i[dim] == first_in_dim
             v = reduce_first(op, v0, @inbounds X[i])
         else
             v = op(@inbounds(dest[i - dim_delta]), @inbounds(X[i]))
@@ -236,6 +242,22 @@ function _accumulate!(op::F, dest::AbstractArray{T}, v0, X, dim, inds, st, first
     return dest
 end
 
+function _accum_only_v0!(op::F, dest::AbstractArray{T}, v0, X, inds, st, widen) where {F,T}
+    while !done(inds, st)
+        i, st = next(inds, st)
+        v = reduce_first(op, v0, @inbounds X[i])
+        if !widen || v isa T
+            @inbounds dest[i] = v
+        else
+            R = promote_typejoin(T, typeof(v))
+            dest´ = similar(dest, R)
+            copyto!(dest´, 1, dest, 1, linearindices(dest)[i]-1)
+            @inbounds dest´[i] = v
+            return _accum_only_v0!(op, dest´, v0, X, inds, st, widen)
+        end
+    end
+    return dest
+end
 
 
 """
