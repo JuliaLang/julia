@@ -688,7 +688,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
             Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
             fvAzB = f(Ax, zero(eltype(B)))
-            if _iszero(fvAzB)
+            if fvAzB == fillvalue
                 while Bk < stopBk
                     Cx = f(Ax, storedvals(B)[Bk])
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(B)[Bk]] = Cx)
@@ -713,7 +713,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
             Bx = Bk < stopBk ? storedvals(B)[Bk] : zero(eltype(B))
             fzAvB = f(zero(eltype(A)), Bx)
-            if _iszero(fzAvB)
+            if fzAvB == fillvalue
                 while Ak < stopAk
                     Cx = f(storedvals(A)[Ak], Bx)
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(A)[Ak]] = Cx)
