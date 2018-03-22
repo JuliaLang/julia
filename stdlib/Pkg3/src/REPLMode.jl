@@ -877,8 +877,29 @@ function create_mode(repl, main)
 
     mk = REPL.mode_keymap(main)
 
+    shell_mode = nothing
+    for mode in Base.active_repl.interface.modes
+        if mode isa LineEdit.Prompt
+            mode.prompt == "shell> " && (shell_mode = mode)
+        end
+    end
+
+    repl_keymap = Dict()
+    if shell_mode != nothing
+        repl_keymap[';'] = function (s,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
+                LineEdit.transition(s, shell_mode) do
+                    LineEdit.state(s, shell_mode).input_buffer = buf
+                end
+            else
+                LineEdit.edit_insert(s, ';')
+            end
+        end
+    end
+
     b = Dict{Any,Any}[
-        skeymap, mk, prefix_keymap, LineEdit.history_keymap,
+        skeymap, repl_keymap, mk, prefix_keymap, LineEdit.history_keymap,
         LineEdit.default_keymap, LineEdit.escape_defaults
     ]
     pkg_mode.keymap_dict = LineEdit.keymap(b)
