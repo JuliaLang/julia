@@ -188,113 +188,52 @@ function _accumulate!(op::F, dest, v0, x, ::Union{SizeUnknown,HasLength,IsInfini
     end
 end
 
-
-# by dimension accumulate/accumulate!
-# split into (head, slice, tail) dimension iterators
-@inline function split_dimensions(X,dim::Integer)
-    inds = axes(X)
-    if dim > length(inds)
-        (CartesianIndices(inds), CartesianIndices(()), CartesianIndices(()))
-    else
-        (CartesianIndices(inds[1:dim-1]), CartesianIndices((inds[dim],)), CartesianIndices(inds[dim+1:end]))
-    end
-end
-
-function _accumulate(op::F, v0, X, ::IteratorSize, dim::Integer) where F
+function _accumulate(op::F, v0, X, ::HasShape{N}, dim::Integer) where {F,N}
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     if isempty(X)
         # fallback on collect machinery
         return collect(Accumulate(op, v0, X))
     end
-    indH, indD, indT = split_dimensions(X,dim)
-
-    # TODO: this could be much nicer with the new iteration protocol
-    # unroll loops to get first element
-    sH = start(indH)
-    @assert !done(indH, sH)
-    iH,sH = next(indH, sH)
-
-    sD = start(indD)
-    @assert !done(indD, sD)
-    iD,sD = next(indD, sD)
-    pD = iD
-
-    sT = start(indT)
-    @assert !done(indT, sT)
-    iT,sT = next(indT, sT)
-
-    # first element
-    accv = reduce_first(op, v0, X[iH, iD, iT])
-    dest = similar(X, typeof(accv))
-    i = first(linearindices(dest))
-    dest[i] = accv
-
-    return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+    inds = CartesianIndices(axes(X))
+    first_in_dim = first(axes(X, dim))
+    dim_delta = CartesianIndex(ntuple(d -> d==dim ? 1 : 0, Val{N}()))
+    st = start(inds)
+    i, st = next(inds, st)
+    v = reduce_first(op, v0, X[i])
+    dest = similar(X, typeof(v))
+    dest[i] = v
+    return _accumulate!(op, dest, v0, X, dim, inds, st, first_in_dim, dim_delta, true)
 end
 
-function _accumulate!(op::F, dest, v0, X, ::IteratorSize, dim::Integer) where F
+function _accumulate!(op::F, dest, v0, X, ::HasShape{N}, dim::Integer) where {F,N}
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     axes(dest) == axes(X) || throw(DimensionMismatch("shape of source and destination must match"))
-    indH, indD, indT = split_dimensions(X,dim)
-
-    sH = start(indH)
-    @assert !done(indH, sH)
-    iH,sH = next(indH, sH)
-
-    sD = start(indD)
-    @assert !done(indD, sD)
-    iD,sD = next(indD, sD)
-    pD = iD
-
-    sT = start(indT)
-    @assert !done(indT, sT)
-    iT,sT = next(indT, sT)
-
-    accv = reduce_first(op, v0, X[iH, iD, iT])
-    i = first(linearindices(dest))
-    dest[i] = accv
-
-    return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, false)
+    inds = CartesianIndices(axes(X))
+    first_in_dim = first(axes(X, dim))
+    dim_delta = CartesianIndex(ntuple(d -> d==dim ? 1 : 0, Val{N}()))
+    st = start(inds)
+    return _accumulate!(op, dest, v0, X, dim, inds, st, first_in_dim, dim_delta, false)
 end
 
-function _accumulate!(op::F, dest::AbstractArray{T}, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD, widen=true) where {F,T}
-    while true
-        if done(indH,sH)
-            if done(indD, sD)
-                if done(indT,sT)
-                    return dest
-                else
-                    iT, sT = next(indT, sT)
-                end
-                iD, sD = next(indD, start(indD))
-                pD = iD
-            else
-                pD = iD
-                iD, sD = next(indD, sD)
-            end
-            iH, sH = next(indH, start(indH))
+function _accumulate!(op::F, dest::AbstractArray{T}, v0, X, dim, inds, st, first_in_dim, dim_delta, widen) where {F,T}
+    while !done(inds, st)
+        i, st = next(inds, st)
+        if dim > length(i) || i[dim] == first_in_dim
+            v = reduce_first(op, v0, @inbounds X[i])
         else
-            iH, sH = next(indH, sH)
+            v = op(@inbounds(dest[i - dim_delta]), @inbounds(X[i]))
         end
-
-        if iD == pD
-            accv = reduce_first(op, v0, X[iH, iD, iT])
+        if !widen || v isa T
+            @inbounds dest[i] = v
         else
-            paccv = isempty(indH) ? accv : @inbounds dest[iH,pD,iT]
-            accv = op(paccv, X[iH,iD,iT])
-        end
-
-        S = typeof(accv)
-        if !widen || S === T || S <: T
-            @inbounds dest[i+=1] = accv
-        else
-            R = promote_typejoin(T, S)
-            new = similar(dest, R)
-            copyto!(new,1,dest,1,i)
-            @inbounds new[i+=1] = accv
-            return _accumulate!(op, dest, i, v0, X, indH, indD, indT, sH, sD, sT, iH, iD, iT, pD)
+            R = promote_typejoin(T, typeof(v))
+            dest´ = similar(dest, R)
+            copyto!(dest´, 1, dest, 1, linearindices(dest)[i]-1)
+            @inbounds dest´[i] = v
+            return _accumulate!(op, dest´, v0, X, dim, inds, st, first_in_dim, dim_delta, widen)
         end
     end
+    return dest
 end
 
 
