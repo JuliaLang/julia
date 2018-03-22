@@ -452,9 +452,9 @@ start(r::StepRangeLen) = 1
 next(r::StepRangeLen{T}, i) where {T} = unsafe_getindex(r, i), i+1
 done(r::StepRangeLen, i) = i > length(r)
 
-start(r::UnitRange{T}) where {T} = oftype(r.start + oneunit(T), r.start)
-next(r::AbstractUnitRange{T}, i) where {T} = (convert(T, i), i + oneunit(T))
-done(r::AbstractUnitRange{T}, i) where {T} = i == oftype(i, r.stop) + oneunit(T)
+start(r::UnitRange{T}) where {T} = r.start
+next(r::AbstractUnitRange{T}, i) where {T} = (i, i + oneunit(T))
+done(r::AbstractUnitRange{T}, i) where {T} = i == r.stop + oneunit(T)
 
 start(r::OneTo{T}) where {T} = oneunit(T)
 
