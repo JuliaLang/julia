@@ -657,7 +657,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     need_to_resolve = false
 
     if Types.is_project(localctx.env, pkg)
-        delete!.(localctx.env.project, ["name", "uuid", "version"])
+        foreach(k->delete!(localctx.env.project, k), ("name", "uuid", "version"))
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
         localctx.env.manifest[pkg.name] = [Dict(
             "deps" => mainctx.env.project["deps"],

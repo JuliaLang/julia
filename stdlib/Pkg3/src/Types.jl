@@ -482,7 +482,7 @@ mutable struct EnvCache
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
-        if any(haskey.(project, ["name", "uuid", "version"]))
+        if any(k->haskey(project, k), ("name", "uuid", "version"))
             project_package = PackageSpec(
                 get(project, "name", ""),
                 UUID(get(project, "uuid", 0)),
