@@ -371,12 +371,13 @@ end
 function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
     hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
     sock = @handle_as hand LibuvStream
-    @assert sock.status == StatusConnecting
     if status >= 0
-        sock.status = StatusOpen
+        if !(sock.status == StatusClosed || sock.status == StatusClosing)
+            sock.status = StatusOpen
+        end
         notify(sock.connectnotify)
     else
-        sock.status = StatusInit
+        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), hand)
         err = UVError("connect", status)
         notify_error(sock.connectnotify, err)
     end
