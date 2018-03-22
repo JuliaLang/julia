@@ -653,468 +653,315 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
-  * The `JULIA_HOME` environment variable has been renamed to `JULIA_BINDIR` and
-    `Base.JULIA_HOME` has been moved to `Sys.BINDIR` ([#20899]).
+### General ###
 
-  * The keyword `immutable` is fully deprecated to `struct`, and
-    `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
+  * The `JULIA_HOME` environment variable has been renamed to `JULIA_BINDIR` and `Base.JULIA_HOME` has been moved to `Sys.BINDIR` ([#20899]). 
 
-  * Indexing into multidimensional arrays with more than one index but fewer indices than there are
-    dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
-    Instead, reshape the array or add trailing indices so the dimensionality and number of indices
-    match ([#14770], [#23628]).
+  * `EnvHash` has been renamed to `EnvDict` ([#24167]). 
 
-  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
-    `axes(a, d)` ([#25057]).
+  * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing output ([#12131]). 
 
-  * `EnvHash` has been renamed to `EnvDict` ([#24167]).
+  * The operating system identification functions: `is_linux`, `is_bsd`, `is_apple`, `is_unix`, and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`, `Sys.isunix`, and `Sys.iswindows`, respectively ([#22182]). 
 
-  * Uninitialized `Array` constructors of the form
-    `Array[{T,N}](shape...)` have been deprecated in favor of equivalents
-    accepting `undef` (an alias for `UndefInitializer()`) as their first argument,
-    as in `Array[{T,N}](undef, shape...)`. For example,
-    `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
-    `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
-    `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
+  * The default `startup.jl` file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the `Sys.BINDIR` directory, e.g. `joinpath(Sys.BINDIR, "7z.exe")` for `7z.exe` ([#21540]). 
 
-  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
+  * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]). 
 
-  * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
-    in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]).
+  * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed` ([#17046]). 
 
-  * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the
-    deprecation warnings for replacement details ([#24438]).
+  * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl) for an alternative workflow ([#25046]). 
 
-  * `zeros(D::Diagonal[, opts...])` has been deprecated ([#24654]).
+### Arrays ###
 
-  * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
-    them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+  * Indexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match ([#14770], [#23628]). 
 
-  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
-    `selectdim` function now always returns a view into `A`; in many cases the `copy` is
-    not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
-	index `i` would return the just selected element (unless `V` was a `BitVector`). This
-	has now been made consistent: `selectdim` now always returns a view into the original
-	array, with a zero-dimensional view in this specific case ([#26009]).
+  * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and `axes(a, d)` ([#25057]). 
 
-  * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
-    output ([#12131]).
+  * Uninitialized `Array` constructors of the form `Array[{T,N}](shape...)` have been deprecated in favor of equivalents accepting `undef` (an alias for `UndefInitializer()`) as their first argument, as in `Array[{T,N}](undef, shape...)`. For example, `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now, `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]). 
 
-  * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been
-    deprecated in favor of equivalents accepting `undef` (an alias for
-    `UndefInitializer()`) as their first argument, as in
-    `RowVector{T}(undef, shape...)`. For example, `RowVector{Int}(3)` is now
-    `RowVector{Int}(undef, 3)`, and `RowVector{Float32}((1, 4))` is now
-    `RowVector{Float32}(undef, (1, 4))` ([#24786]).
+  * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`. 
 
-  * `writecsv(io, a; opts...)` has been deprecated in favor of
-    `writedlm(io, a, ','; opts...)` ([#23529]).
+  * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new `selectdim` function now always returns a view into `A`; in many cases the `copy` is not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar index `i` would return the just selected element (unless `V` was a `BitVector`). This has now been made consistent: `selectdim` now always returns a view into the original array, with a zero-dimensional view in this specific case ([#26009]). 
 
-  * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
+  * Uninitialized `RowVector` constructors of the form `RowVector{T}(shape...)` have been deprecated in favor of equivalents accepting `undef` (an alias for `UndefInitializer()`) as their first argument, as in `RowVector{T}(undef, shape...)`. For example, `RowVector{Int}(3)` is now `RowVector{Int}(undef, 3)`, and `RowVector{Float32}((1, 4))` is now `RowVector{Float32}(undef, (1, 4))` ([#24786]). 
 
-  * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of
-    `readdlm(io, ','[, T]; opts...)` ([#23530]).
+  * `ones(A::AbstractArray[, opts...])` and `zeros(A::AbstractArray[, opts...])` methods have been deprecated. For `zeros(A)`, consider `zero(A)`. For `ones(A)` or `zeros(A)`, consider `ones(size(A))`, `zeros(size(A))`, `fill(v, size(A))` for `v` an appropriate one or zero, `fill!(copy(A), {1|0})`, `fill!(similar(A), {1|0})`, or any of the preceding with different element type and/or shape depending on `opts...`. Where strictly necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`. For an algebraic multiplicative identity, consider `one(A)` ([#24656]). 
 
-  * `sparse(s::UniformScaling, m::Integer)` has been deprecated in favor of the
-    three-argument equivalent `sparse(s::UniformScaling, m, n)` ([#24472]).
+  * `rol`, `rol!`, `ror`, and `ror!` have been deprecated in favor of specialized methods for `circshift`/`circshift!` ([#23404]). 
 
-  * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
-    in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
+  * The ability of `reinterpret` to yield `Array`s of different type than the underlying storage has been removed. The `reinterpret` function is still available, but now returns a `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes has been deprecated ([#23750]). 
 
-  * The `thin` keyword argument for orthogonal decomposition methods has
-    been deprecated in favor of `full`, which has the opposite meaning:
-    `thin == true` if and only if `full == false` ([#24279]).
+  * `Base.parentindexes` and `SharedArrays.localindexes` have been renamed to `parentindices` and `localindices`, respectively. Similarly, the `indexes` field in the `SubArray` type has been renamed to `indices` without deprecation ([#25088]). 
 
-  * `isposdef(A::AbstractMatrix, UL::Symbol)` and `isposdef!(A::AbstractMatrix, UL::Symbol)`
-    have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))`
-    respectively ([#22245]).
+  * `CartesianRange` has been renamed `CartesianIndices` ([#24715]). 
 
-  * The `bkfact`/`bkfact!` methods that accepted `uplo` and `issymmetric` symbols have been deprecated
-    in favor of using `Hermitian` (or `Symmetric`) views ([#22605]).
+  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]). 
 
-  * The function `current_module` is deprecated and replaced with `@__MODULE__`.
-    This caused the deprecation of some reflection methods (such as `macroexpand` and
-    `isconst`), which now require a module argument. And it caused the bugfix of other
-    default arguments to use the Main module (including `whos`, `which`)  ([#22064]).
+  * `getindex(F::Factorization, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g. `F.Q` instead of `F[:Q]` ([#25184]). 
 
-  * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of
-    `Meta.lower(module, ex)` ([#22064], [#24278]).
+  * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)` have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided array interface should define their own `strides` method ([#25321]). 
 
-  * `ones(A::AbstractArray[, opts...])` and `zeros(A::AbstractArray[, opts...])` methods
-    have been deprecated. For `zeros(A)`, consider `zero(A)`. For `ones(A)` or `zeros(A)`,
-    consider `ones(size(A))`, `zeros(size(A))`, `fill(v, size(A))` for `v` an appropriate
-    one or zero, `fill!(copy(A), {1|0})`, `fill!(similar(A), {1|0})`, or any of the preceding
-    with different element type and/or shape depending on `opts...`. Where strictly
-    necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`.
-    For an algebraic multiplicative identity, consider `one(A)` ([#24656]).
+  * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]). 
 
-  * The `Operators` module is deprecated. Instead, import required operators explicitly
-    from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
+### Dates and times ###
 
-  * Bindings to the FFTW library have been removed from Base. The DFT framework for building FFT
-    implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl,
-    and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
+  * Vectorized `DateTime`, `Date`, and `format` methods have been deprecated in favor of dot-syntax ([#23207]). 
 
-  * The `corrected` positional argument to `cov` has been deprecated in favor of
-    a keyword argument with the same name ([#21709]).
+  * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`. 
 
-  * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated.
-    Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
-    `x?a:b` ([#22523] and [#22712]).
+  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)` and `Time(0)` respectively ([#23724]). 
 
-  * `?` can no longer be used as an identifier name ([#22712])
+### IO ###
 
-  * The method `replace(s::AbstractString, pat, r, [count])` is deprecated
-    in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
-    Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
+  * `writecsv(io, a; opts...)` has been deprecated in favor of `writedlm(io, a, ','; opts...)` ([#23529]). 
 
-  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(undef, dims))` ([#21450]).
+  * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of `readdlm(io, ','[, T]; opts...)` ([#23530]). 
 
-  * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(undef, dims))` ([#21450]). 
 
-  * `nb_available` is now `bytesavailable` ([#25634]).
+  * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]). 
 
-  * `skipchars(io::IO, predicate; linecomment=nothing)` is deprecated in favor of
-    `skipchars(predicate, io::IO; linecomment=nothing)` ([#25667]).
+  * `nb_available` is now `bytesavailable` ([#25634]). 
 
-  * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
-    argument, instead of a `Bool` or a `Char` ([#22703]).
+  * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]). 
 
-  * `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` constructors that automatically
-    converted the input vectors to the same type are deprecated in favor of explicit
-    conversion ([#22925], [#23035], [#23154].
+  * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]). 
 
-  * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
-    Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
+  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`, `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are deprecated in favor of constructors taking keyword arguments ([#25872]). 
 
-  * `fieldnames` now operates only on types. To get the names of fields in an object, use
-    `fieldnames(typeof(x))` ([#22350]).
+  * `Display` has been renamed to `AbstractDisplay` ([#24831]). 
 
-  * `InexactError`, `DomainError`, and `OverflowError` now take
-    arguments. `InexactError(func::Symbol, type, -3)` now prints as
-    "ERROR: InexactError: func(type, -3)", `DomainError(val,
-    [msg])` prints as "ERROR: DomainError with val:\nmsg",
-    and `OverflowError(msg)` prints as "ERROR: OverflowError: msg".
-    ([#20005], [#22751], [#22761])
+  * The function `showall` is deprecated. Showing entire values is the default, unless an `IOContext` specifying `:limit=>true` is in use ([#22847]). 
 
-  * The operating system identification functions: `is_linux`, `is_bsd`, `is_apple`, `is_unix`,
-    and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`,
-    `Sys.isunix`, and `Sys.iswindows`, respectively ([#22182]).
+  * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or `serialize` ([#6466]). 
 
-  * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an
-    input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
+  * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]). 
 
-  * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu` submodule ([#25745]). 
 
-  * `IOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer)`,
-    `IOBuffer(read::Bool, write::Bool)`, and `IOBuffer(maxsize::Integer)` are
-    deprecated in favor of constructors taking keyword arguments ([#25872]).
+  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree` has been renamed to `force` ([#25979]). 
 
-  * `Display` has been renamed to `AbstractDisplay` ([#24831]).
+  * `DevNull`, `STDIN`, `STDOUT`, and `STDERR` have been renamed to `devnull`, `stdin`, `stdout`, and `stderr`, respectively ([#25786]). 
 
-  * Remaining vectorized methods over `SparseVector`s, particularly `floor`, `ceil`,
-    `trunc`, `round`, and most common transcendental functions such as `exp`, `log`, and
-    `sin` variants, have been deprecated in favor of dot-syntax ([#22961]).
+  * `showcompact(io, x...)` has been deprecated in favor of `show(IOContext(io, :compact => true), x...)` ([#26080]). Use `sprint(show, x..., context=:compact => true)` instead of `sprint(showcompact, x...)`. 
 
-  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
+### Language ###
 
-  * The function `readstring` is deprecated in favor of `read(io, String)` ([#22793])
+  * The function `current_module` is deprecated and replaced with `@__MODULE__`. This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including `whos`, `which`) ([#22064]). 
 
-  * The function `showall` is deprecated. Showing entire values is the default, unless an
-    `IOContext` specifying `:limit=>true` is in use ([#22847]).
+  * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of `Meta.lower(module, ex)` ([#22064], [#24278]). 
 
-  * `issubtype` has been deprecated in favor of `<:` (which used to be an alias for `issubtype`).
+  * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than `x?a:b` ([#22523] and [#22712]). 
 
-  * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
-    `serialize` ([#6466]).
+  * `?` can no longer be used as an identifier name ([#22712]) 
 
-  * The default `startup.jl` file on Windows has been removed. Now must explicitly include the
-    full path if you need access to executables or libraries in the `Sys.BINDIR` directory, e.g.
-    `joinpath(Sys.BINDIR, "7z.exe")` for `7z.exe` ([#21540]).
+  * Calling `nfields` on a type to find out how many fields its instances have is deprecated. Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]). 
 
-  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
+  * `fieldnames` now operates only on types. To get the names of fields in an object, use `fieldnames(typeof(x))` ([#22350]). 
 
-  * `expm` has been deprecated in favor of `exp` ([#23233]).
+  * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate element type using `Set{T}()` instead ([#23144]). 
 
-  * `logm` has been deprecated in favor of `log` ([#23505]).
+  * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the argument function, instead of two arguments ([#17886]). 
 
-  * `full` has been deprecated in favor of more specific, better defined alternatives.
-    On structured matrices `A`, consider instead `Matrix(A)`, `Array(A)`,
-    `SparseMatrixCSC(A)`, or `sparse(A)`. On sparse arrays `S`, consider instead
-    `Vector(S)`, `Matrix(S)`, or `Array(S)` as appropriate. On factorizations `F`,
-    consider instead `Matrix(F)`, `Array(F)`, `AbstractMatrix(F)`, or `AbstractArray(F)`.
-    On implicit orthogonal factors `Q`, consider instead `Matrix(Q)` or `Array(Q)`; for
-    implicit orthogonal factors that can be recovered in square or truncated form,
-    see the deprecation message for square recovery instructions. On `Symmetric`,
-    `Hermitian`, or `AbstractTriangular` matrices `A`, consider instead `Matrix(S)`,
-    `Array(S)`, `SparseMatrixCSC(S)`, or `sparse(S)`. On `Symmetric` matrices `A`
-    particularly, consider instead `LinAlg.copytri!(copy(parent(A)), A.uplo)`. On
-    `Hermitian` matrices `A` particularly, consider instead
-    `LinAlg.copytri!(copy(parent(A)), A.uplo, true)`. On `UpperTriangular` matrices `A`
-    particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices
-    `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]).
+  * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]). 
 
-  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC`
-    constructor methods ([#24356]).
+  * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]). 
 
-  * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
-    element type using `Set{T}()` instead ([#23144]).
+  * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated, and in the future `map` will operate only on values ([#5794]). 
 
-  * Vectorized `DateTime`, `Date`, and `format` methods have been deprecated in favor of
-    dot-syntax ([#23207]).
+  * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations instead ([#22880], [#22932]). 
 
-  * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
-    instead ([#23187]).
+  * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]). 
 
-  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
-    respectively ([#23235]).
+  * Methods of `findfirst`, `findnext`, `findlast`, and `findprev` that accept a value to search for are deprecated in favor of passing a predicate ([#19186], [#10593]). 
 
-  * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
-    argument function, instead of two arguments ([#17886]).
+  * `find` functions now operate only on booleans by default. To look for non-zeros, use `x->x!=0` or `!iszero` ([#23120]). 
 
-  * `rol`, `rol!`, `ror`, and `ror!` have been deprecated in favor of specialized methods for
-    `circshift`/`circshift!` ([#23404]).
+  * `bits` has been deprecated in favor of `bitstring` ([#24281], [#24263]). 
 
-  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable it with a cleaner meaning in a future version ([#24844]). 
 
-  * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
-    in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
+  * `copy!` (resp. `unsafe_copy!`) is deprecated for `AbstractArray` and is renamed `copyto!` (resp. `unsafe_copyto!`); it will be re-introduced with a different meaning in a future version ([#24808]). 
 
-  * `diagm(v::AbstractVector, k::Integer=0)` has been deprecated in favor of
-    `diagm(k => v)` ([#24047]).
+  * `trues(A::AbstractArray)` and `falses(A::AbstractArray)` are deprecated in favor of `trues(size(A))` and `falses(size(A))` respectively ([#24595]). 
 
-  * `diagm(x::Number)` has been deprecated in favor of `fill(x, 1, 1)` ([#24047]).
+  * The `Libdl` module has moved to the `Libdl` standard library module ([#25459]). 
 
-  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
-    `spdiagm(sparsevec(A))` ([#23341]).
+  * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]). 
 
-  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(0 => vec(A))` or
-    `BitMatrix(Diagonal(vec(A)))` instead ([#23373], [#24047]).
+  * `Void` has been renamed back to `Nothing` with an alias `Cvoid` for use when calling C with a return type of `Cvoid` or a return or argument type of `Ptr{Cvoid}` ([#25162]). 
 
-  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
-    name for Euler's number, and the type has changed from `Irrational{:e}` to
-    `Irrational{:ℯ}` ([#23427]).
+  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]). Use `Union{T, Nothing}` instead, or `Union{Some{T}, Nothing}` if `nothing` is a possible value (i.e. `Nothing <: T`). `isnull(x)` can be replaced with `x === nothing` and `unsafe_get`/`get` can be dropped or replaced with `coalesce`. `NullException` has been removed. 
 
-  * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
-    `golden` have been moved from `Base` to a new module; `Base.MathConstants`.
-    Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
+  * `unshift!` and `shift!` have been renamed to `pushfirst!` and `popfirst!` ([#23902]) 
 
-  * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
+  * `ipermute!` has been deprecated in favor of `invpermute!` ([#25168]). 
 
-  * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
-    have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
-    respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also,
-    `LinAlg.LAPACK.laver()` has been renamed to `LinAlg.LAPACK.version()` and now returns a `VersionNumber`.
+  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and `findlast`/`findprev` respectively, in combination with curried `isequal` and `in` predicates for some methods ([#24673] 
 
-  * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
-    `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
+  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of `empty(::Associative, K, V)` ([#24390]). 
 
-  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
+  * `findin(a, b)` has been deprecated in favor of `findall(in(b), a)` ([#24673]). 
 
-  * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
-    and in the future `map` will operate only on values ([#5794]).
+  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly, the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor of `nameof` methods ([#25622]). 
 
-  * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
-    been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
-    instead ([#22880], [#22932]).
+  * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated in favor of `parentmodule` ([#TODO]). 
 
-  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
-    Concrete types are those that might equal `typeof(x)` for some `x`;
-    `isleaftype` included some types for which this is not true. Those are now categorized more precisely
-    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
+  * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords. 
 
-  * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
+  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]). 
 
-  * `spdiagm(x::AbstractVector)` has been deprecated in favor of `sparse(Diagonal(x))`
-    alternatively `spdiagm(0 => x)` ([#23757]).
+  * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]). 
 
-  * `spdiagm(x::AbstractVector, d::Integer)` and `spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer})`
-    have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)`
-    respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]).
+  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]). 
 
-  * `spones(A::AbstractSparseArray)` has been deprecated in favor of
-    `LinAlg.fillstored!(copy(A), 1)` ([#25037]).
+  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]). 
 
-  * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
-    `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
-    the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
+  * The methods of `range` based on positional arguments have been deprecated in favor of keyword arguments ([#25896]). 
 
-  * `gradient` is deprecated and will be removed in the next release ([#23816]).
+  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword arguments ([#25896]). 
 
-  * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
-    ([#17046]).
+  * `wait` and `fetch` on `Task` now resemble the interface of `Future`. 
 
-  * Methods of `findfirst`, `findnext`, `findlast`, and `findprev` that accept a value to
-    search for are deprecated in favor of passing a predicate ([#19186], [#10593]).
+### Linear algebra ###
 
-  * `find` functions now operate only on booleans by default. To look for non-zeros, use
-    `x->x!=0` or `!iszero` ([#23120]).
+  * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]). 
 
-  * The ability of `reinterpret` to yield `Array`s of different type than the underlying storage
-    has been removed. The `reinterpret` function is still available, but now returns a
-    `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes
-    has been deprecated ([#23750]).
+  * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated in favor of `Base.LinAlg.fillstored!(A, x)` ([#24413]). 
 
-  * `bits` has been deprecated in favor of `bitstring` ([#24281], [#24263]).
+  * `eye` has been deprecated in favor of `I` and `Matrix` constructors. Please see the deprecation warnings for replacement details ([#24438]). 
 
-  * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
+  * `zeros(D::Diagonal[, opts...])` has been deprecated ([#24654]). 
 
-  * `copy!` is deprecated for `AbstractSet` and `AbstractDict`, with the intention to re-enable
-    it with a cleaner meaning in a future version ([#24844]).
+  * `sparse(s::UniformScaling, m::Integer)` has been deprecated in favor of the three-argument equivalent `sparse(s::UniformScaling, m, n)` ([#24472]). 
 
-  * `copy!` (resp. `unsafe_copy!`) is deprecated for `AbstractArray` and is renamed `copyto!`
-    (resp. `unsafe_copyto!`); it will be re-introduced with a different meaning in a future
-    version ([#24808]).
+  * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]). 
 
-  * `a:b` is deprecated for constructing a `StepRange` when `a` and `b` have physical units
-    (Dates and Times). Use `a:s:b`, where `s = Dates.Day(1)` or `s = Dates.Second(1)`.
+  * The `thin` keyword argument for orthogonal decomposition methods has been deprecated in favor of `full`, which has the opposite meaning: `thin == true` if and only if `full == false` ([#24279]). 
 
-  * `trues(A::AbstractArray)` and `falses(A::AbstractArray)` are deprecated in favor of
-    `trues(size(A))` and `falses(size(A))` respectively ([#24595]).
+  * `isposdef(A::AbstractMatrix, UL::Symbol)` and `isposdef!(A::AbstractMatrix, UL::Symbol)` have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))` respectively ([#22245]). 
 
-  * `workspace` is discontinued, check out [Revise.jl](https://github.com/timholy/Revise.jl)
-    for an alternative workflow ([#25046]).
+  * The `bkfact`/`bkfact!` methods that accepted `uplo` and `issymmetric` symbols have been deprecated in favor of using `Hermitian` (or `Symmetric`) views ([#22605]). 
 
-  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim`
-    argument instead of defaulting to using the first dimension unless there is only
-    one dimension ([#24684], [#25457]).
+  * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower argument, instead of a `Bool` or a `Char` ([#22703]). 
 
-  * The `sum_kbn` and `cumsum_kbn` functions have been moved to the
-    [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
+  * `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion ([#22925], [#23035], [#23154]. 
 
-  * `isnumber` has been renamed to `isnumeric` ([#25021]).
+  * Remaining vectorized methods over `SparseVector`s, particularly `floor`, `ceil`, `trunc`, `round`, and most common transcendental functions such as `exp`, `log`, and `sin` variants, have been deprecated in favor of dot-syntax ([#22961]). 
 
-  * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
-    `normalize`, and moved to the new `Unicode` standard library module.
-    `graphemes` has also been moved to that module ([#25021]).
+  * `full` has been deprecated in favor of more specific, better defined alternatives. On structured matrices `A`, consider instead `Matrix(A)`, `Array(A)`, `SparseMatrixCSC(A)`, or `sparse(A)`. On sparse arrays `S`, consider instead `Vector(S)`, `Matrix(S)`, or `Array(S)` as appropriate. On factorizations `F`, consider instead `Matrix(F)`, `Array(F)`, `AbstractMatrix(F)`, or `AbstractArray(F)`. On implicit orthogonal factors `Q`, consider instead `Matrix(Q)` or `Array(Q)`; for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On `Symmetric`, `Hermitian`, or `AbstractTriangular` matrices `A`, consider instead `Matrix(S)`, `Array(S)`, `SparseMatrixCSC(S)`, or `sparse(S)`. On `Symmetric` matrices `A` particularly, consider instead `LinAlg.copytri!(copy(parent(A)), A.uplo)`. On `Hermitian` matrices `A` particularly, consider instead `LinAlg.copytri!(copy(parent(A)), A.uplo, true)`. On `UpperTriangular` matrices `A` particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]). 
 
-  * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
-    library module ([#24714]).
+  * `speye` has been deprecated in favor of `I`, `sparse`, and `SparseMatrixCSC` constructor methods ([#24356]). 
 
-  * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
+  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`, respectively ([#23235]). 
 
-  * Linear algebra functionality, and specifically the `LinAlg` module has moved to the
-    `LinearAlgebra` standard library module ([#25571]).
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]). 
 
-  * `@printf` and `@sprintf` have been moved to the `Printf` standard library ([#23929],[#25056]).
+  * `diagm(v::AbstractVector, k::Integer=0)` has been deprecated in favor of `diagm(k => v)` ([#24047]). 
 
-  * The `Libdl` module has moved to the `Libdl` standard library module ([#25459]).
+  * `diagm(x::Number)` has been deprecated in favor of `fill(x, 1, 1)` ([#24047]). 
 
-  * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`,
-    `ComplexF32` and `ComplexF64` respectively ([#24647]).
+  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of `spdiagm(sparsevec(A))` ([#23341]). 
 
-  * `Base.parentindexes` and `SharedArrays.localindexes` have been renamed to `parentindices`
-    and `localindices`, respectively. Similarly, the `indexes` field in the `SubArray` type
-    has been renamed to `indices` without deprecation ([#25088]).
+  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(0 => vec(A))` or `BitMatrix(Diagonal(vec(A)))` instead ([#23373], [#24047]). 
 
-  * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
+  * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM` have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`, respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also, `LinAlg.LAPACK.laver()` has been renamed to `LinAlg.LAPACK.version()` and now returns a `VersionNumber`. 
 
-  * `Void` has been renamed back to `Nothing` with an alias `Cvoid` for use when calling C
-    with a return type of `Cvoid` or a return or argument type of `Ptr{Cvoid}` ([#25162]).
+  * `spdiagm(x::AbstractVector)` has been deprecated in favor of `sparse(Diagonal(x))` alternatively `spdiagm(0 => x)` ([#23757]). 
 
-  * `Nullable{T}` has been deprecated and moved to the Nullables package ([#23642]). Use
-    `Union{T, Nothing}` instead, or `Union{Some{T}, Nothing}` if `nothing` is a possible
-    value (i.e. `Nothing <: T`). `isnull(x)` can be replaced with `x === nothing` and
-    `unsafe_get`/`get` can be dropped or replaced with `coalesce`.
-    `NullException` has been removed.
+  * `spdiagm(x::AbstractVector, d::Integer)` and `spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer})` have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)` respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]). 
 
-  * `unshift!` and `shift!` have been renamed to `pushfirst!` and `popfirst!` ([#23902])
+  * `spones(A::AbstractSparseArray)` has been deprecated in favor of `LinAlg.fillstored!(copy(A), 1)` ([#25037]). 
 
-  * `ipermute!` has been deprecated in favor of `invpermute!` ([#25168]).
+  * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard library module ([#24714]). 
 
-  * `CartesianRange` has been renamed `CartesianIndices` ([#24715]).
+  * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]). 
 
-  * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
+  * Linear algebra functionality, and specifically the `LinAlg` module has moved to the `LinearAlgebra` standard library module ([#25571]). 
 
-  * `getindex(F::Factorization, s::Symbol)` (usually seen as e.g. `F[:Q]`) is deprecated
-    in favor of dot overloading (`getproperty`) so factors should now be accessed as e.g.
-    `F.Q` instead of `F[:Q]` ([#25184]).
+### Mathematics ###
 
-  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
-    `findlast`/`findprev` respectively, in combination with curried `isequal` and `in`
-    predicates for some methods ([#24673]
+  * The `Operators` module is deprecated. Instead, import required operators explicitly from `Base`, e.g. `import Base: +, -, *, /` ([#22251]). 
 
-  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+  * Bindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]). 
 
-  * `matchall` has been deprecated in favor of `collect(m.match for m in eachmatch(r, s))` ([#26071]).
+  * The `corrected` positional argument to `cov` has been deprecated in favor of a keyword argument with the same name ([#21709]). 
 
-  * `similar(::Associative)` has been deprecated in favor of `empty(::Associative)`, and
-    `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
-    `empty(::Associative, K, V)` ([#24390]).
+  * `InexactError`, `DomainError`, and `OverflowError` now take arguments. `InexactError(func::Symbol, type, -3)` now prints as "ERROR: InexactError: func(type, -3)", `DomainError(val, [msg])` prints as "ERROR: DomainError with val:\nmsg", and `OverflowError(msg)` prints as "ERROR: OverflowError: msg". ([#20005], [#22751], [#22761]) 
 
-  * `findin(a, b)` has been deprecated in favor of `findall(in(b), a)` ([#24673]).
+  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]). 
 
-  * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
-    the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor
-    of `nameof` methods ([#25622]).
+  * `expm` has been deprecated in favor of `exp` ([#23233]). 
 
-  * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]).
+  * `logm` has been deprecated in favor of `log` ([#23505]). 
 
-  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of
-    `Random.RandomDevice(; unlimited=unlimited)` ([#25668]).
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported name for Euler's number, and the type has changed from `Irrational{:e}` to `Irrational{:ℯ}` ([#23427]). 
 
-  * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
-     have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
-     array interface should define their own `strides` method ([#25321]).
+  * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and `golden` have been moved from `Base` to a new module; `Base.MathConstants`. Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]). 
 
-  * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
-    in favor of `parentmodule` ([#TODO]).
+  * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]). 
 
-  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
-    `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+  * `gradient` is deprecated and will be removed in the next release ([#23816]). 
 
-  * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
+  * `cumsum`, `cumprod`, `accumulate`, their mutating versions, and `diff` all now require a `dim` argument instead of defaulting to using the first dimension unless there is only one dimension ([#24684], [#25457]). 
 
-  * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
+  * The `sum_kbn` and `cumsum_kbn` functions have been moved to the [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]). 
 
-  * `gc` and `gc_enable` have been deprecated in favor of `GC.gc` and `GC.enable` ([#25616]).
+  * `isnumber` has been renamed to `isnumeric` ([#25021]). 
 
-  * `Base.@gc_preserve` has been deprecated in favor of `GC.@preserve` ([#25616]).
+  * The aliases `Complex32`, `Complex64` and `Complex128` have been deprecated in favor of `ComplexF16`, `ComplexF32` and `ComplexF64` respectively ([#24647]). 
 
-  * `print_shortest` has been discontinued, but is still available in the `Base.Grisu`
-    submodule ([#25745]).
+  * `LinSpace` has been renamed to `LinRange` ([#25896]). 
 
-  * `scale!` has been deprecated in favor of `mul!`, `lmul!`, and `rmul!` ([#25701], [#25812]).
+  * `logspace` has been deprecated to its definition ([#25896]). 
 
-  * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
-    has been renamed to `force` ([#25979]).
+  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition, add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]). 
 
-  * `contains` has been deprecated in favor of a more general `occursin` function, which
-    takes its arguments in reverse order from `contains` ([#26283]).
+### Random numbers ###
 
-  * `Regex` objects are no longer callable. Use `occursin` instead ([#26283]).
+  * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]). 
 
-  * The methods of `range` based on positional arguments have been deprecated in favor of
-    keyword arguments ([#25896]).
+  * The module `Random.dSFMT` is renamed `Random.DSFMT` ([#25567]). 
 
-  * `linspace` has been deprecated in favor of `range` with `stop` and `length` keyword
-    arguments ([#25896]).
+  * `Random.RandomDevice(unlimited::Bool)` (on non-Windows systems) is deprecated in favor of `Random.RandomDevice(; unlimited=unlimited)` ([#25668]). 
 
-  * `LinSpace` has been renamed to `LinRange` ([#25896]).
+  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`; `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]). 
 
-  * `logspace` has been deprecated to its definition ([#25896]).
+### Strings ###
 
-  * `endof(a)` has been renamed to `lastindex(a)`, and the `end` keyword in indexing expressions now
-    lowers to either `lastindex(a)` (in the case with only one index) or `lastindex(a, d)` (in cases
-    where there is more than one index and `end` appears at dimension `d`) ([#23554], [#25763]).
+  * The method `replace(s::AbstractString, pat, r, [count])` is deprecated in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]). Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]). 
 
-  * `DateTime()`, `Date()`, and `Time()` have been deprecated, instead use `DateTime(1)`, `Date(1)`
-    and `Time(0)` respectively ([#23724]).
+  * `skipchars(io::IO, predicate; linecomment=nothing)` is deprecated in favor of `skipchars(predicate, io::IO; linecomment=nothing)` ([#25667]). 
 
-  * The fallback method `^(x, p::Integer)` is deprecated. If your type relied on this definition,
-    add a method such as `^(x::MyType, p::Integer) = Base.power_by_squaring(x, p)` ([#23332]).
+  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]). 
 
-  * `DevNull`, `STDIN`, `STDOUT`, and `STDERR` have been renamed to `devnull`, `stdin`, `stdout`,
-    and `stderr`, respectively ([#25786]).
+  * The function `readstring` is deprecated in favor of `read(io, String)` ([#22793]) 
 
-  * `wait` and `fetch` on `Task` now resemble the interface of `Future`.
+  * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad` instead ([#23187]). 
 
-  * `showcompact(io, x...)` has been deprecated in favor of
-    `show(IOContext(io, :compact => true), x...)` ([#26080]).
-    Use `sprint(show, x..., context=:compact => true)` instead of `sprint(showcompact, x...)`.
+  * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]). 
 
-  * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
-    `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
+  * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and `normalize`, and moved to the new `Unicode` standard library module. `graphemes` has also been moved to that module ([#25021]). 
+
+  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]). 
+
+  * `matchall` has been deprecated in favor of `collect(m.match for m in eachmatch(r, s))` ([#26071]). 
+
+  * `contains` has been deprecated in favor of a more general `occursin` function, which takes its arguments in reverse order from `contains` ([#26283]). 
+
+  * `Regex` objects are no longer callable. Use `occursin` instead ([#26283]). 
+
+  * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`, `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).  
+
+### Type system ###
+
+  * The keyword `immutable` is fully deprecated to `struct`, and `type` is fully deprecated to `mutable struct` ([#19157], [#20418]). 
+
+  * `issubtype` has been deprecated in favor of `<:` (which used to be an alias for `issubtype`). 
+
+  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]). 
+
+  * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`. Concrete types are those that might equal `typeof(x)` for some `x`; `isleaftype` included some types for which this is not true. Those are now categorized more precisely as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496]) 
 
 Command-line option changes
 ---------------------------
