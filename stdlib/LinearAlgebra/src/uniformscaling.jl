@@ -102,7 +102,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
 
             function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, Broadcast.combine_eltypes($op, UL, J))
+                ULnew = copy_oftype(UL.data, Base._return_type($op, Tuple{eltype(UL), typeof(J.λ)}))
                 for i = 1:size(ULnew, 1)
                     ULnew[i,i] = ($op)(1, J.λ)
                 end
@@ -113,7 +113,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
+    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -129,7 +129,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
+    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -147,7 +147,7 @@ end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Broadcast.combine_eltypes(+, A, J))
+    B = similar(A, Base._return_type(+, Tuple{eltype(A), typeof(J.λ)}))
     copyto!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
@@ -157,7 +157,7 @@ end
 
 function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Broadcast.combine_eltypes(-, A, J))
+    B = similar(A, Base._return_type(-, Tuple{eltype(A), typeof(J.λ)}))
     copyto!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
@@ -166,7 +166,7 @@ function (-)(A::AbstractMatrix, J::UniformScaling)
 end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     n = checksquare(A)
-    B = convert(AbstractMatrix{Broadcast.combine_eltypes(-, J, A)}, -A)
+    B = convert(AbstractMatrix{Base._return_type(-, Tuple{typeof(J.λ), eltype(A)})}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
     end
