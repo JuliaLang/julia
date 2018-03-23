@@ -1111,8 +1111,22 @@ let
         - 2
 
         bar
+
+        - 1
+
+          2
+        - 4
+
+        buz
+
+        - 1
+        - 2
+          3
+        - 4
         """
 
     @test v.content[2].loose
     @test !v.content[3].loose
+    @test v.content[5].loose
+    @test !v.content[7].loose
 end

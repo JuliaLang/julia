@@ -304,6 +304,7 @@ function list(stream::IO, block::MD)
                 end
             else
                 if startswith(stream, " "^indent)
+                    newline && (list.loose = true)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
