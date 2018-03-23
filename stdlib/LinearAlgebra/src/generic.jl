@@ -726,7 +726,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 """
 function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     s = svdvals(A)
-    sum(x -> x > tol*s[1], s)
+    count(x -> x > tol*s[1], s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 

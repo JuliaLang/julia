@@ -514,7 +514,7 @@ function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
 end
 
 function unsafe_getindex(r::LinRange, i::Integer)
-    lerpi.(i-1, r.lendiv, r.start, r.stop)
+    lerpi(i-1, r.lendiv, r.start, r.stop)
 end
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T

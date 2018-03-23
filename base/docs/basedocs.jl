@@ -507,7 +507,7 @@ julia> i = 0
 0
 
 julia> while true
-           i += 1
+           global i += 1
            i > 5 && break
            println(i)
        end

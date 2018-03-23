@@ -2227,4 +2227,13 @@ end
     @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
 end
 
+@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
+    B = SparseMatrixCSC{Int,Int}(2, 3,
+        [1, 3, 4, 5],
+        [1, 2, 1, 2, 999, 999, 999, 999],
+        [1, 2, 3, 6, 999, 999, 999, 999]
+    )
+    @test maximum(B) == 6
+end
+
 end # module

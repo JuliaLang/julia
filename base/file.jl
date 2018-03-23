@@ -312,7 +312,7 @@ function mktemp(parent=tempdir())
 end
 
 function mktempdir(parent=tempdir())
-    seed::UInt32 = Base.Crand(UInt32)
+    seed::UInt32 = Libc.rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1

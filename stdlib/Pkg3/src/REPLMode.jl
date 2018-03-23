@@ -740,8 +740,10 @@ end
 pkgstr(str::String) = do_cmd(minirepl[], str; do_rethrow=true)
 
 # handle completions
-commands_sorted = sort!(collect(keys(cmds)))
-options_sorted = sort!(collect(keys(opts)))
+all_commands_sorted = sort!(collect(keys(cmds)))
+long_commands = filter(c -> length(c) > 2, all_commands_sorted)
+all_options_sorted = [length(opt) > 1 ? "--$opt" : "-$opt" for opt in sort!(collect(keys(opts)))]
+long_options = filter(c -> length(c) > 2, all_options_sorted)
 
 struct PkgCompletionProvider <: LineEdit.CompletionProvider end
 
@@ -753,28 +755,17 @@ function LineEdit.complete_line(c::PkgCompletionProvider, s)
 end
 
 function complete_command(s, i1, i2)
-    cmp = filter(cmd -> startswith(cmd, s), commands_sorted)
-    return cmp, i1:i2, length(cmp) == 1
+    # only show short form commands when no input is given at all
+    cmp = filter(cmd -> startswith(cmd, s), isempty(s) ? all_commands_sorted : long_commands)
+    return cmp, i1:i2, !isempty(cmp)
 end
 
 function complete_option(s, i1, i2)
-    dashes = 0
-    while !isempty(s) && first(s) == '-'
-        s = s[2:end]
-        dashes += 1
-    end
-
-    cmp = filter(cmd -> startswith(cmd, s), options_sorted)
-
-    isempty(cmp) && (return cmp, 0:-1, false)
-
-    cmp = string.('-'^(2-dashes), cmp)
-
-    if length(cmp) == 1
-        return cmp, i1+dashes:i2, true
-    else
-        return cmp, i1+dashes:i2, false
-    end
+    # only show short form options if only a dash is given
+    cmp = filter(cmd -> startswith(cmd, s), length(s) == 1 && first(s) == '-' ?
+                                                all_options_sorted :
+                                                long_options)
+    return cmp, i1:i2, !isempty(cmp)
 end
 
 function complete_package(s, i1, i2, lastcommand, project_opt)
@@ -783,19 +774,19 @@ function complete_package(s, i1, i2, lastcommand, project_opt)
     elseif lastcommand in [CMD_ADD]
         return complete_remote_package(s, i1, i2)
     end
-    return [], 0:-1, false
+    return String[], 0:-1, false
 end
 
 function complete_installed_package(s, i1, i2, project_opt)
     pkgs = project_opt ? API.installed(PKGMODE_PROJECT) : API.installed()
     pkgs = sort!(collect(keys(filter((p) -> p[2] != nothing, pkgs))))
     cmp = filter(cmd -> startswith(cmd, s), pkgs)
-    return cmp, i1:i2, length(cmp) == 1
+    return cmp, i1:i2, !isempty(cmp)
 end
 
 function complete_remote_package(s, i1, i2)
     cmp = filter(cmd -> startswith(cmd, s), collect_package_names())
-    return cmp, i1:i2, length(cmp) == 1
+    return cmp, i1:i2, !isempty(cmp)
 end
 
 function collect_package_names()
@@ -819,28 +810,36 @@ function completions(full, index)
     else
         to_complete = pre_words[end]
         offset = isempty(to_complete) ? index+1 : to_complete.offset+1
+
         if length(pre_words) == 1
             return complete_command(to_complete, offset, index)
         end
 
-        twocommands = false
+        # tokenize input, don't offer any completions for invalid commands
+        tokens = try
+            tokenize(join(pre_words[1:end-1], ' '))
+        catch
+            return String[], 0:-1, false
+        end
+
+        tokens = reverse!(tokens)
+
         lastcommand = nothing
         project_opt = true
-        # this should consume any words up to the current one
-        while length(pre_words) > 1
-            twocommands = false
-            word = popfirst!(pre_words)
-            (word == "preview" || word == "help") && (twocommands = true)
-            if !isempty(word) && haskey(cmds, word)
-                lastcommand = cmds[word]
+        for t in tokens
+            if t isa Command
+                lastcommand = t.kind
+                break
             end
-            if !isempty(word) && first(word) == '-' && haskey(opts, strip(word, '-'))
-                opts[strip(word, '-')] == OPT_PROJECT && (project_opt = true)
-                opts[strip(word, '-')] == OPT_MANIFEST && (project_opt = false)
+        end
+        for t in tokens
+            if t isa Option && t.kind in [OPT_PROJECT, OPT_MANIFEST]
+                project_opt = t.kind == OPT_PROJECT
+                break
             end
         end
 
-        if twocommands
+        if lastcommand in [CMD_HELP, CMD_PREVIEW]
             return complete_command(to_complete, offset, index)
         elseif !isempty(to_complete) && first(to_complete) == '-'
             return complete_option(to_complete, offset, index)
@@ -878,8 +877,29 @@ function create_mode(repl, main)
 
     mk = REPL.mode_keymap(main)
 
+    shell_mode = nothing
+    for mode in Base.active_repl.interface.modes
+        if mode isa LineEdit.Prompt
+            mode.prompt == "shell> " && (shell_mode = mode)
+        end
+    end
+
+    repl_keymap = Dict()
+    if shell_mode != nothing
+        repl_keymap[';'] = function (s,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
+                LineEdit.transition(s, shell_mode) do
+                    LineEdit.state(s, shell_mode).input_buffer = buf
+                end
+            else
+                LineEdit.edit_insert(s, ';')
+            end
+        end
+    end
+
     b = Dict{Any,Any}[
-        skeymap, mk, prefix_keymap, LineEdit.history_keymap,
+        skeymap, repl_keymap, mk, prefix_keymap, LineEdit.history_keymap,
         LineEdit.default_keymap, LineEdit.escape_defaults
     ]
     pkg_mode.keymap_dict = LineEdit.keymap(b)

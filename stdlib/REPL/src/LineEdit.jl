@@ -1520,16 +1520,6 @@ const escape_defaults = merge!(
     AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
-function write_response_buffer(s::PromptState, data)
-    offset = s.input_buffer.ptr
-    ptr = data.response_buffer.ptr
-    seek(data.response_buffer, 0)
-    write(s.input_buffer, read(data.response_buffer, String))
-    s.input_buffer.ptr = offset + ptr - 2
-    data.response_buffer.ptr = ptr
-    refresh_line(s)
-end
-
 mutable struct SearchState <: ModeState
     terminal::AbstractTerminal
     histprompt # ::HistoryPrompt

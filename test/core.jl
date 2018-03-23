@@ -127,6 +127,20 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real

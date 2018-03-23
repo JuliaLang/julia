@@ -826,6 +826,9 @@ end
 @test repr(:(f.(X, Y))) == ":(f.(X, Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
+# broadcasted operators (#26517)
+@test_repr ":(y .= (+).(x, (*).(3, sin.(x))))"
+@test repr(:(y .= (+).(x, (*).(3, (sin).(x))))) == ":(y .= (+).(x, (*).(3, sin.(x))))"
 
 # pretty-printing of other `.` exprs
 test_repr("a.b")

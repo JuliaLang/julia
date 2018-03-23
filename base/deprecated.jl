@@ -333,8 +333,8 @@ end
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
-@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(undef, tuple(d1,dims...)))
-@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(undef, convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
+@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(undef, d1, dims...))
+@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(undef, d1, dims...))
 @deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(undef, dims))
 
 function CartesianIndices(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
@@ -686,6 +686,21 @@ function to_index(i::Bool)
 end
 # After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
 # Also un-comment the new definition in base/indices.jl
+
+# Broadcast no longer defaults to treating its arguments as scalar (#)
+@noinline function Broadcast.broadcastable(x)
+    if Base.Broadcast.BroadcastStyle(typeof(x)) isa Broadcast.Unknown
+        depwarn("""
+            broadcast will default to iterating over its arguments in the future. Wrap arguments of
+            type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+            """, (:broadcast, :broadcast!))
+        return Ref{typeof(x)}(x)
+    else
+        return x
+    end
+end
+@eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
+# After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
 
 # deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
 @deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
@@ -1537,6 +1552,9 @@ end
 # remove broadcast MatrixStyle and VectorStyle (Issue #26430)
 @eval Broadcast Base.@deprecate_binding MatrixStyle DefaultArrayStyle{2} false
 @eval Broadcast Base.@deprecate_binding VectorStyle DefaultArrayStyle{1} false
+
+@deprecate Crand Libc.rand false
+@deprecate Csrand Libc.srand false
 
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)

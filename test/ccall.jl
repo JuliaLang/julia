@@ -1316,3 +1316,12 @@ function caller22734(ptr)
     ccall(ptr, Float64, (Ref{Abstract22734},), obj)
 end
 @test caller22734(ptr22734) === 32.0
+
+# 26297#issuecomment-371165725
+#   test that the first argument to cglobal is recognized as a tuple literal even through
+#   macro expansion
+macro cglobal26297(sym)
+    :(cglobal(($(esc(sym)), libccalltest), Cint))
+end
+cglobal26297() = @cglobal26297(:global_var)
+@test cglobal26297() != C_NULL
