@@ -849,9 +849,23 @@ function completions(full, index)
     end
 end
 
+function promptf()
+    env = EnvCache()
+    proj_dir = dirname(env.project_file)
+    if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
+        name = env.pkg.name
+    else
+        name = basename(proj_dir)
+    end
+    prefix = string("(", name, ") ")
+    return prefix * "pkg> "
+end
+
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)
-    pkg_mode = LineEdit.Prompt("pkg> ";
+
+
+    pkg_mode = LineEdit.Prompt(promptf;
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
         complete = PkgCompletionProvider(),
