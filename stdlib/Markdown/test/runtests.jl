@@ -1096,3 +1096,23 @@ let
     md.meta[:foo] = 42
     @test !haskey(md′.meta, :foo)
 end
+
+let
+    v = Markdown.md"""
+        foo
+
+        - 1
+        - 2
+
+        - 3
+
+
+        - 1
+        - 2
+
+        bar
+        """
+
+    @test v.content[2].loose
+    @test !v.content[3].loose
+end

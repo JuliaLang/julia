@@ -250,8 +250,9 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
+    loose::Bool # TODO: Renderer's should use this field
 
-    List(x::AbstractVector, b::Integer) = new(x, b)
+    List(x::AbstractVector, b::Integer) = new(x, b, false)
     List(x::AbstractVector) = new(x, -1)
     List(b::Integer) = new(Any[], b)
 end
@@ -302,7 +303,6 @@ function list(stream::IO, block::MD)
                     println(buffer)
                 end
             else
-                newline = false
                 if startswith(stream, " "^indent)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
@@ -314,11 +314,13 @@ function list(stream::IO, block::MD)
                         break
                     else
                         # Start of a new list item.
+                        newline && (list.loose = true)
                         count += 1
                         count > 1 && pushitem!(list, buffer)
                         print(buffer, readline(stream, keep=true))
                     end
                 end
+                newline = false
             end
         end
         count == length(list.items) || pushitem!(list, buffer)
