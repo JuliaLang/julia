@@ -1227,9 +1227,6 @@ end
 @deprecate search(s::AbstractString, t::AbstractString, i::Integer) coalesce(findnext(t, s, i), 0:-1)
 @deprecate search(s::AbstractString, t::AbstractString) coalesce(findfirst(t, s), 0:-1)
 
-@deprecate search(buf::IOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-@deprecate search(buf::Base.GenericIOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findprev(in(c), s, i), 0)
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(in(c), s), 0)
 @deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) coalesce(findprev(t, s, i), 0:-1)
@@ -1564,6 +1561,14 @@ end
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+function search(buf::IOBuffer, delim::UInt8)
+    Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)
+    p = pointer(buf.data, buf.ptr)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    q == C_NULL && return nothing
+    return Int(q-p+1)
+end
 
 # END 0.7 deprecations
 

@@ -1038,7 +1038,10 @@ Deprecated or removed
 
   * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
     `findlast`/`findprev` respectively, in combination with curried `isequal` and `in`
-    predicates for some methods ([#24673]
+    predicates for some methods ([#24673]).
+
+  * `search(buf::IOBuffer, delim::UInt8)` has been deprecated in favor of either `occursin(delim, buf)`
+    (to test containment) or `readuntil(buf, delim)` (to read data up to `delim`) ([#26600]).
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
@@ -1430,3 +1433,4 @@ Command-line option changes
 [#26286]: https://github.com/JuliaLang/julia/issues/26286
 [#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
+[#26600]: https://github.com/JuliaLang/julia/issues/26600
