@@ -6956,6 +6956,7 @@ extern "C" void *jl_init_llvm(void)
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_generating_output();
     jl_init_debuginfo();
+    jl_init_runtime_ccall();
 
 #ifdef USE_POLLY
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
