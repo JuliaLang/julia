@@ -404,7 +404,7 @@ function get_test_result(ex, source)
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
 
             if isa(a, Expr) && a.head == :...
-                push!(escaped_args, Expr(:..., esc(a)))
+                push!(escaped_args, Expr(:..., esc(a.args[1])))
             else
                 push!(escaped_args, esc(a))
             end
