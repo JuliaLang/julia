@@ -781,7 +781,6 @@ precompile(Tuple{typeof(REPL.LineEdit.fixup_keymaps!), Base.Dict{Char, Any}, Int
 precompile(Tuple{typeof(REPL.LineEdit.region_active), REPL.LineEdit.PromptState})
 precompile(Tuple{typeof(REPL.LineEdit.setup_prefix_keymap), REPL.REPLHistoryProvider, REPL.LineEdit.Prompt})
 precompile(Tuple{typeof(REPL.LineEdit.setup_search_keymap), REPL.REPLHistoryProvider})
-precompile(Tuple{getfield(Pkg3.Types, Symbol("##printpkgstyle#56")), Bool, typeof(Pkg3.Types.printpkgstyle), Base.TTY, Symbol, String})
 
 precompile(Tuple{typeof(REPL.LineEdit.complete_line), Pkg3.REPLMode.PkgCompletionProvider, REPL.LineEdit.PromptState})
 

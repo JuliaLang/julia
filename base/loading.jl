@@ -479,13 +479,8 @@ end
 
 # find project file root or deps `name => uuid` mapping
 #  - `false` means: did not find `name`
-#  - `true` means: found `name` without UUID
+#  - `true` means: found `name` without UUID (can't happen in explicit projects)
 #  - `uuid` means: found `name` with `uuid` in project file
-#
-# `true` can only be returned in the case that `name` is the project's name
-# and the project file does not have a top-level `uuid` mapping
-# it is not currently supported to have a name in `deps` mapped to anything
-# besides a UUID, so otherwise the answer is `false` or a UUID value
 
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
@@ -507,10 +502,10 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
             elseif occursin(re_section, line)
-                state = :deps
+                state = occursin(re_section_deps, line) ? :deps : :other
             end
         end
-        return false
+        return root_name == name && root_uuid
     end
 end
 
