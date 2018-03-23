@@ -689,15 +689,11 @@ end
 
 # Broadcast no longer defaults to treating its arguments as scalar (#)
 @noinline function Broadcast.broadcastable(x)
-    if Base.Broadcast.BroadcastStyle(typeof(x)) isa Broadcast.Unknown
-        depwarn("""
-            broadcast will default to iterating over its arguments in the future. Wrap arguments of
-            type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
-            """, (:broadcast, :broadcast!))
-        return Ref{typeof(x)}(x)
-    else
-        return x
-    end
+    depwarn("""
+        broadcast will default to iterating over its arguments in the future. Wrap arguments of
+        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+        """, (:broadcast, :broadcast!))
+    return Ref{typeof(x)}(x)
 end
 @eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
 # After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
