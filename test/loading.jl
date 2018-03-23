@@ -138,6 +138,7 @@ end
             @test that == false
         end
     end
+    rm(project_file)
 end
 
 ## functional testing of package identification, location & loading ##
