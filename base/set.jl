@@ -606,17 +606,17 @@ julia> replace!(Set([1, 2, 3]), 1=>0)
 Set([0, 2, 3])
 ```
 """
-replace!(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing) =
-    replace!(A, A, count, old_new)
+replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
+    _replace!(A, A, count, old_new)
 
-function replace!(res, A, count::Union{Integer,Nothing}, old_new::Tuple{Vararg{Pair}})
+function _replace!(res, A, count::Integer, old_new::Tuple{Vararg{Pair}})
     @inline function new(x)
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end
         return x # no replace
     end
-    replace!(new, res, A, count)
+    replaceimpl!(new, res, A, count=count)
 end
 
 """
@@ -637,7 +637,7 @@ julia> replace!(isodd, A, 0, count=2)
  1
 ```
 """
-replace!(pred::Callable, A, new; count::Union{Integer,Nothing}=nothing) =
+replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
     replace!(x -> ifelse(pred(x), new, x), A, count=count)
 
 """
@@ -667,17 +667,22 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-function replace!(new::Callable, A::Union{AbstractArray,AbstractDict,AbstractSet};
-                  count::Union{Integer,Nothing}=nothing)
-    if count === nothing
-        replace!(new, A, A, nothing)
-    elseif count < 0
+function replaceimpl!(new::Callable, res::Union{AbstractArray,AbstractDict,AbstractSet},
+                      A::Union{AbstractArray,AbstractDict,AbstractSet};
+                      count::Integer=typemax(Int))
+    if count < 0
         throw(DomainError(count, "`count` must not be negative"))
     elseif count != 0
-        replace!(new, A, A, min(count, typemax(Int)) % Int)
+        if count >= length(A)
+            _replace!(new, res, A, nothing)
+        else
+            _replace!(new, res, A, min(count, typemax(Int)) % Int)
+        end
     end
     A
 end
+
+replace!(new::Callable, A, count::Integer=typemax(Int)) = replaceimpl!(new, A, A, count=count)
 
 """
     replace(A, old_new::Pair...; [count::Integer])
@@ -702,10 +707,10 @@ function replace(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing)
     V = promote_valuetype(old_new...)
     if count isa Nothing
         T = promote_type(subtract_singletontype(eltype(A), old_new...), V)
-        replace!(_similar_or_copy(A, T), A, nothing, old_new)
+        _replace!(_similar_or_copy(A, T), A, typemax(Int), old_new)
     else
         U = promote_type(eltype(A), V)
-        replace!(_similar_or_copy(A, U), A, min(count, typemax(Int)) % Int, old_new)
+        _replace!(_similar_or_copy(A, U), A, count, old_new)
     end
 end
 
@@ -742,10 +747,9 @@ julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
  1
 ```
 """
-function replace(pred::Callable, A, new; count::Union{Integer,Nothing}=nothing)
+function replace(pred::Callable, A, new; count::Integer=typemax(Int))
     T = promote_type(eltype(A), typeof(new))
-    replace!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A,
-             count === nothing ? nothing : min(count, typemax(Int)) % Int)
+    replaceimpl!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, count=count)
 end
 
 """
@@ -772,9 +776,8 @@ Dict{Int64,Int64} with 2 entries:
   1 => 3
 ```
 """
-replace(new::Callable, A; count::Union{Integer,Nothing}=nothing) =
-    replace!(new, _similar_or_copy(A), A,
-             count === nothing ? nothing : min(count, typemax(Int)) % Int)
+replace(new::Callable, A; count::Integer=typemax(Int)) =
+    replaceimpl!(new, _similar_or_copy(A), A, count=count)
 
 # Handle ambiguities
 replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
@@ -789,8 +792,8 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function replace!(new::Callable, res::T, A::T,
-                  count::Union{Int,Nothing}) where T<:Union{AbstractDict,AbstractSet}
+function _replace!(new::Callable, res::T, A::T,
+                   count::Union{Int,Nothing}) where T<:Union{AbstractDict,AbstractSet}
     c = 0
     if res === A
         repl = Pair{eltype(A),eltype(A)}[]
@@ -824,12 +827,12 @@ end
 
 ### replace! for AbstractArray
 
-function replace!(new::Callable, res::AbstractArray, A::AbstractArray,
+function _replace!(new::Callable, res::AbstractArray, A::AbstractArray,
                   count::Union{Int,Nothing})
     c = 0
     for i in eachindex(A)
         @inbounds Ai = A[i]
-        if count === nothing || c < count
+        if count === nothing c < count
             y = new(Ai)
             @inbounds res[i] = y
             c += (Ai !== y)
