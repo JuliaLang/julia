@@ -99,46 +99,48 @@ function perm(p::Vector, i::Int)
 end
 
 @testset "explicit_project_deps_get" begin
-    project_file = "$(tempname()).toml"
-    touch(project_file) # dummy_uuid calls realpath
-    proj_uuid = dummy_uuid(project_file)
-    root_uuid = UUID("43306aae-ef21-43f3-9517-81724f2885ac")
-    this_uuid = UUID("b36283d3-af40-4a18-9ee0-d12ee9c142ac")
-    lines = split("""
-    name = "Root"
-    uuid = "$root_uuid"
-    [deps]
-    This = "$this_uuid"
-    """, '\n')
-    N = length(lines)
-    for m = 0:2^N-1
-        # for every subset of lines
-        s = subset(lines, m)
-        for i = 1:factorial(count_ones(m))
-            # for every permutation of that subset
-            p = perm(s, i)
-            open(project_file, write=true) do io
-                for line in p
-                    println(io, line)
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+        # project file to subset/permute
+        lines = split("""
+        name = "Root"
+        uuid = "$root_uuid"
+        [deps]
+        This = "$this_uuid"
+        """, '\n')
+        N = length(lines)
+        # test every permutation of every subset of lines
+        for m = 0:2^N-1
+            s = subset(lines, m) # each subset of lines
+            for i = 1:factorial(count_ones(m))
+                p = perm(s, i) # each permutation of the subset
+                open(project_file, write=true) do io
+                    for line in p
+                        println(io, line)
+                    end
                 end
+                # look at lines and their order
+                n = findfirst(line -> startswith(line, "name"), p)
+                u = findfirst(line -> startswith(line, "uuid"), p)
+                d = findfirst(line -> line == "[deps]", p)
+                t = findfirst(line -> startswith(line, "This"), p)
+                # look up various packages by name
+                root = Base.explicit_project_deps_get(project_file, "Root")
+                this = Base.explicit_project_deps_get(project_file, "This")
+                that = Base.explicit_project_deps_get(project_file, "That")
+                # test that the correct answers are given
+                @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
+                               coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
+                @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
+                @test that == false
             end
-            # look at lines and their order
-            n = findfirst(line -> startswith(line, "name"), p)
-            u = findfirst(line -> startswith(line, "uuid"), p)
-            d = findfirst(line -> line == "[deps]", p)
-            t = findfirst(line -> startswith(line, "This"), p)
-            # look up various packages by name
-            root = Base.explicit_project_deps_get(project_file, "Root")
-            this = Base.explicit_project_deps_get(project_file, "This")
-            that = Base.explicit_project_deps_get(project_file, "That")
-            # test that the correct answers are given
-            @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
-                           coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
-            @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
-            @test that == false
         end
     end
-    rm(project_file)
 end
 
 ## functional testing of package identification, location & loading ##
