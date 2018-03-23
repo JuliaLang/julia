@@ -148,9 +148,10 @@ function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) whe
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
+    R_ = SparseMatrixCSC(Sparse(R[]))
     return QRSparse(SparseMatrixCSC(Sparse(H[])),
                     vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(Sparse(R[])),
+                    SparseMatrixCSC(min(size(A)...), R_.n, R_.colptr, R_.rowval, R_.nzval),
                     p, hpinv)
 end
 
@@ -335,6 +336,8 @@ end
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
+LinearAlgebra.rank(F::QRSparse) = maximum(F.R.rowval)
+
 function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
@@ -355,8 +358,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         throw(DimensionMismatch("size(F) = $(size(F)) but size(B) = $(size(B))"))
     end
 
-    # The rank of F equal to the number of rows in R
-    rnk = size(F.R, 1)
+    # The rank of F equal might be reduced
+    rnk = rank(F)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
@@ -381,7 +384,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] = 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+                        view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
