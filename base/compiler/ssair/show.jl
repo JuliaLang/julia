@@ -23,6 +23,8 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
             "$e => $v"
         end
         print(io, "φ ", '(', join(args, ", "), ')')
+    elseif isa(stmt, PhiCNode)
+        print(io, "φᶜ ", '(', join(map(x->sprint(print_ssa, x), stmt.values), ", "), ')')
     elseif isa(stmt, PiNode)
         print(io, "π (")
         print_ssa(io, stmt.val)
@@ -32,6 +34,12 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
         else
             print(io, stmt.typ)
         end
+        print(io, ")")
+    elseif isa(stmt, UpsilonNode)
+        print(io, "ϒ (")
+        isdefined(stmt, :val) ?
+            print_ssa(io, stmt.val) :
+            print(io, "#undef")
         print(io, ")")
     elseif isa(stmt, ReturnNode)
         if !isdefined(stmt, :val)

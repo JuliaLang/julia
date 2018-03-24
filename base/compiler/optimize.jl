@@ -279,21 +279,11 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        # This pass is required for the AST to be valid in codegen
-        # if any `SSAValue` is created by type inference. Ref issue #6068
-        # This (and `reindex_labels!`) needs to be run for `!me.optimize`
-        # if we start to create `SSAValue` in type inference when not
-        # optimizing and use unoptimized IR in codegen.
-        any_enter = any_phi = false
-        if enable_new_optimizer[]
-            any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
-            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
-        end
-        if enable_new_optimizer[] && !any_enter && isa(def, Method)
+        if enable_new_optimizer[] && isa(def, Method)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
+                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), Int(0))
             else
                 topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
             end
@@ -329,7 +319,12 @@ function optimize(me::InferenceState)
                 force_noinline = peekmeta(code, :noinline)[1]
                 reindex_labels!(opt)
             end
-        elseif enable_new_optimizer[] && any_enter
+        elseif enable_new_optimizer[]
+            # This pass is required for the AST to be valid in codegen
+            # if any `SSAValue` is created by type inference. Ref issue #6068
+            # This (and `reindex_labels!`) needs to be run for `!me.optimize`
+            # if we start to create `SSAValue` in type inference when not
+            # optimizing and use unoptimized IR in codegen.
             gotoifnot_elim_pass!(opt)
             # Pop metadata before label reindexing
             let code = opt.src.code::Array{Any,1}

@@ -530,6 +530,7 @@ public:
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
+    std::map<int, jl_varinfo_t> phic_slots;
     std::vector<jl_cgval_t> SAvalues;
     std::vector<std::tuple<jl_cgval_t, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
@@ -2008,6 +2009,19 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
     else if (jl_is_pinode(expr)) {
         simple_use_analysis(ctx, jl_fieldref_noalloc(expr, 0));
     }
+    else if (jl_is_upsilonnode(expr)) {
+        jl_value_t *val = jl_fieldref_noalloc(expr, 0);
+        if (val)
+            simple_use_analysis(ctx, val);
+    }
+    else if (jl_is_phicnode(expr)) {
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
+        size_t i, elen = jl_array_len(values);
+        for (i = 0; i < elen; i++) {
+            jl_value_t *v = jl_array_ptr_ref(values, i);
+            simple_use_analysis(ctx, v);
+        }
+    }
     else if (jl_is_phinode(expr)) {
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 1);
         size_t i, elen = jl_array_len(values);
@@ -3322,23 +3336,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
     return mark_julia_type(ctx, isnull, false, jl_bool_type);
 }
 
-static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
-{
-    size_t sl = jl_slot_number(slotload) - 1;
-    jl_varinfo_t &vi = ctx.slots[sl];
-    jl_sym_t *sym = slot_symbol(ctx, sl);
-    jl_value_t *typ;
-    if (jl_typeis(slotload, jl_typedslot_type)) {
-        // use the better type from inference for this load
-        typ = jl_typedslot_get_type(slotload);
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-    }
-    else {
-        // use the static type of the slot
-        typ = vi.value.typ;
-    }
-
+static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *varname, jl_value_t *better_typ=NULL) {
+    jl_value_t *typ = better_typ ? better_typ : vi.value.typ;
     jl_cgval_t v;
     Value *isnull = NULL;
     if (vi.boxroot == NULL || vi.pTIndex != NULL) {
@@ -3397,8 +3396,23 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
         }
     }
     if (isnull)
-        undef_var_error_ifnot(ctx, isnull, sym);
+        undef_var_error_ifnot(ctx, isnull, varname);
     return v;
+}
+
+static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
+{
+    size_t sl = jl_slot_number(slotload) - 1;
+    jl_varinfo_t &vi = ctx.slots[sl];
+    jl_sym_t *sym = slot_symbol(ctx, sl);
+    jl_value_t *typ = NULL;
+    if (jl_typeis(slotload, jl_typedslot_type)) {
+        // use the better type from inference for this load
+        typ = jl_typedslot_get_type(slotload);
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+    }
+    return emit_varinfo(ctx, vi, sym, typ);
 }
 
 static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Value *isboxed, jl_cgval_t rval_info)
@@ -3551,7 +3565,14 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     if (jl_is_phinode(r)) {
         return emit_phinode_assign(ctx, idx, r);
     }
-    jl_cgval_t slot = emit_expr(ctx, r); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
+
+    jl_cgval_t slot;
+    if (jl_is_phicnode(r)) {
+        jl_varinfo_t &vi = ctx.phic_slots[idx];
+        slot = emit_varinfo(ctx, vi, jl_symbol("phic"));
+    } else {
+        slot = emit_expr(ctx, r); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
+    }
     if (slot.isboxed || slot.TIndex) {
         // see if inference suggested a different type for the ssavalue than the expression
         // e.g. sometimes the information is inconsistent after inlining getfield on a Tuple
@@ -3609,43 +3630,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     ctx.ssavalue_assigned.at(idx) = true;
 }
 
-static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
-{
-    if (jl_is_ssavalue(l)) {
-        ssize_t idx = ((jl_ssavalue_t*)l)->id;
-        if (ctx.new_style_ir)
-            idx -= 1;
-        assert(idx >= 0);
-        emit_ssaval_assign(ctx, idx, r);
-        return;
-    }
-
-    jl_sym_t *s = NULL;
-    jl_binding_t *bnd = NULL;
-    Value *bp = NULL;
-    if (jl_is_symbol(l))
-        s = (jl_sym_t*)l;
-    else if (jl_is_globalref(l))
-        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true); // now bp != NULL
-    else
-        assert(jl_is_slot(l));
-    if (bp == NULL && s != NULL)
-        bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
-    if (bp != NULL) { // it's a global
-        assert(bnd);
-        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
-        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
-                           { literal_pointer_val(ctx, bnd),
-                             rval });
-        // Global variable. Does not need debug info because the debugger knows about
-        // its memory location.
-        return;
-    }
-
-    int sl = jl_slot_number(l) - 1;
-    // it's a local variable
-    jl_varinfo_t &vi = ctx.slots[sl];
-    jl_cgval_t rval_info = emit_expr(ctx, r);
+static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL) {
     if (!vi.used)
         return;
 
@@ -3656,7 +3641,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
         return;
 
     // add info to arrayvar list
-    if (rval_info.isboxed) {
+    if (l && rval_info.isboxed) {
         // check isboxed in case rval isn't the right type (for example, on a dead branch),
         // so we don't try to assign it to the arrayvar info
         jl_arrayvar_t *av = arrayvar_for(ctx, l);
@@ -3706,6 +3691,46 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     if (!vi.boxroot || (vi.pTIndex && rval_info.TIndex)) {
         emit_vi_assignment_unboxed(ctx, vi, isboxed, rval_info);
     }
+}
+
+static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
+{
+    if (jl_is_ssavalue(l)) {
+        ssize_t idx = ((jl_ssavalue_t*)l)->id;
+        if (ctx.new_style_ir)
+            idx -= 1;
+        assert(idx >= 0);
+        emit_ssaval_assign(ctx, idx, r);
+        return;
+    }
+
+    jl_sym_t *s = NULL;
+    jl_binding_t *bnd = NULL;
+    Value *bp = NULL;
+    if (jl_is_symbol(l))
+        s = (jl_sym_t*)l;
+    else if (jl_is_globalref(l))
+        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true); // now bp != NULL
+    else
+        assert(jl_is_slot(l));
+    if (bp == NULL && s != NULL)
+        bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
+    if (bp != NULL) { // it's a global
+        assert(bnd);
+        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
+        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+                           { literal_pointer_val(ctx, bnd),
+                             rval });
+        // Global variable. Does not need debug info because the debugger knows about
+        // its memory location.
+        return;
+    }
+
+    int sl = jl_slot_number(l) - 1;
+    // it's a local variable
+    jl_varinfo_t &vi = ctx.slots[sl];
+    jl_cgval_t rval_info = emit_expr(ctx, r);
+    emit_varinfo_assign(ctx, vi, rval_info, l);
 }
 
 // --- convert expression to code ---
@@ -5324,28 +5349,18 @@ static std::unique_ptr<Module> emit_function(
 
     // step 8. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
-
-    // get pointers for locals stored in the gc frame array (argTemp)
-    for (i = 0; i < vinfoslen; i++) {
-        jl_sym_t *s = slot_symbol(ctx, i);
-        if (s == unused_sym)
-            continue;
-        jl_varinfo_t &varinfo = ctx.slots[i];
-        if (!varinfo.used) {
-            varinfo.usedUndef = false;
-            continue;
-        }
+    auto allocate_local = [&](jl_varinfo_t &varinfo, jl_sym_t *s) {
         jl_value_t *jt = varinfo.value.typ;
         assert(!varinfo.boxroot); // variables shouldn't have memory locs already
         if (varinfo.value.constant) {
             // no need to explicitly load/store a constant/ghost value
             alloc_def_flag(ctx, varinfo);
-            continue;
+            return;
         }
         else if (varinfo.isArgument && !(specsig && i == (size_t)ctx.vaSlot)) {
             // if we can unbox it, just use the input pointer
             if (i != (size_t)ctx.vaSlot && jl_justbits(jt))
-                continue;
+                return;
         }
         else if (jl_is_uniontype(jt)) {
             bool allunbox;
@@ -5370,7 +5385,7 @@ static std::unique_ptr<Module> emit_function(
             if (lv || allunbox)
                 alloc_def_flag(ctx, varinfo);
             if (allunbox)
-                continue;
+                return;
         }
         else if (jl_justbits(jt)) {
             bool isboxed;
@@ -5389,7 +5404,7 @@ static std::unique_ptr<Module> emit_function(
                                        topdebugloc,
                                        ctx.builder.GetInsertBlock());
             }
-            continue;
+            return;
         }
         if (!varinfo.isArgument || // always need a slot if the variable is assigned
             specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
@@ -5421,7 +5436,45 @@ static std::unique_ptr<Module> emit_function(
                                 ctx.builder.GetInsertBlock());
             }
         }
+    };
+
+    // get pointers for locals stored in the gc frame array (argTemp)
+    for (i = 0; i < vinfoslen; i++) {
+        jl_sym_t *s = slot_symbol(ctx, i);
+        if (s == unused_sym)
+            continue;
+        jl_varinfo_t &varinfo = ctx.slots[i];
+        if (!varinfo.used) {
+            varinfo.usedUndef = false;
+            continue;
+        }
+        allocate_local(varinfo, s);
         maybe_alloc_arrayvar(ctx, i);
+    }
+
+    std::map<int, int> upsilon_to_phic;
+
+    // Scan for PhiC nodes, emit their slots and record which upsilon nodes
+    // yield to them.
+    if (ctx.new_style_ir) {
+        for (size_t i = 0; i < jl_array_len(stmts); ++i) {
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            if (jl_is_phicnode(stmt)) {
+                jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
+                for (size_t j = 0; j < jl_array_len(values); ++j) {
+                    jl_value_t *val = jl_array_ptr_ref(values, j);
+                    assert(jl_is_ssavalue(val));
+                    upsilon_to_phic[((jl_ssavalue_t*)val)->id] = i;
+                }
+                ctx.phic_slots[i] = jl_varinfo_t{};
+                jl_varinfo_t &vi = ctx.phic_slots[i];
+                jl_value_t *typ = jl_array_ptr_ref(src->ssavaluetypes, i);
+                vi.used = true;
+                vi.isVolatile = true;
+                vi.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
+                allocate_local(vi, jl_symbol("phic"));
+            }
+        }
     }
 
     // step 9. move args into local variables
@@ -5966,6 +6019,18 @@ static std::unique_ptr<Module> emit_function(
             } else {
                 handle_label(lname, true);
             }
+            continue;
+        } else if (jl_is_upsilonnode(stmt)) {
+            jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
+            // If the val is null, we can ignore the store.
+            // The middle end guarantees that the value from this
+            // upsilon node is not dynamically observed.
+            if (val) {
+                jl_cgval_t rval_info = emit_expr(ctx, val);
+                jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
+                emit_varinfo_assign(ctx, vi, rval_info);
+            }
+            find_next_stmt(-1);
             continue;
         }
         if (expr && expr->head == goto_ifnot_sym) {

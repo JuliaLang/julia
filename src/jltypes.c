@@ -92,6 +92,8 @@ jl_datatype_t *jl_labelnode_type;
 jl_datatype_t *jl_gotonode_type;
 jl_datatype_t *jl_pinode_type;
 jl_datatype_t *jl_phinode_type;
+jl_datatype_t *jl_phicnode_type;
+jl_datatype_t *jl_upsilonnode_type;
 jl_datatype_t *jl_quotenode_type;
 jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_intrinsic_type;
@@ -1986,6 +1988,16 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("PhiNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "edges", "values"),
                         jl_svec(2, jl_array_any_type, jl_array_any_type), 0, 0, 2);
+
+    jl_phicnode_type =
+        jl_new_datatype(jl_symbol("PhiCNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "values"),
+                        jl_svec(1, jl_array_any_type), 0, 0, 1);
+
+    jl_upsilonnode_type =
+        jl_new_datatype(jl_symbol("UpsilonNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "val"),
+                        jl_svec(1, jl_any_type), 0, 0, 0);
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), core, jl_any_type, jl_emptysvec,
