@@ -592,6 +592,8 @@ Base.Broadcast.broadcastable(f::Foo26601) = f
         @test f .* 2 == d .* 2
         @test f .* (1:5) == d .* (1:5)
         @test f .* reshape(1:25,5,5) == d .* reshape(1:25,5,5)
+        @test sqrt.(f) == sqrt.(d)
+        @test f .* (1,2,3,4,5) == d .* (1,2,3,4,5)
     end
 end
 

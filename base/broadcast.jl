@@ -7,7 +7,7 @@ using .Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             isoperator, promote_typejoin, unalias
 import .Base: broadcast, broadcast!
-export BroadcastStyle, broadcast_indices, broadcast_similar, broadcastable
+export BroadcastStyle, broadcast_indices, broadcast_similar, broadcastable,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle

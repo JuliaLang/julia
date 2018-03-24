@@ -443,8 +443,8 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
-| `Base.broadcastable(x)` | Convert `x` to an object that has [`axes`] and supports indexing |
+| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (defaults to [`axes(A)`](@ref)) |
+| `Base.broadcastable(x)` | Convert `x` to an object that has `axes` and supports indexing |
 | **Bypassing default machinery** | |
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
 | `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
@@ -479,7 +479,7 @@ determining a single answer for a given set of arguments. Broadcast must take al
 types of its arguments and collapse them down to just one output array and one
 implementation. Broadcast calls this single answer a "style." Every broadcastable object
 each has its own preferred style, and a promotion-like system is used to combine these
-styles into a single answer — the "desination style".
+styles into a single answer — the "destination style".
 
 ### Broadcast Styles
 
@@ -488,7 +488,7 @@ derived. When used as a function it has two possible forms,
 unary (single-argument) and binary.
 The unary variant states that you intend to
 implement specific broadcasting behavior and/or output type,
-and do not wish to rely on the default fallback ([`Broadcast.DefaultArrayStyle`](@ref))).
+and do not wish to rely on the default fallback ([`Broadcast.DefaultArrayStyle`](@ref)).
 To override these defaults, you can define a custom `BroadcastStyle` for your object:
 
 ```julia
