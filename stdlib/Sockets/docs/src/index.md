@@ -26,6 +26,10 @@ Sockets.send
 Sockets.recv
 Sockets.recvfrom
 Sockets.setopt
+Sockets.ntoh
+Sockets.hton
+Sockets.ltoh
+Sockets.htol
 ```
 
 ```@meta
