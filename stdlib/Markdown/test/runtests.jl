@@ -1098,33 +1098,7 @@ let
 end
 
 let
-    v = Markdown.md"""
-        foo
-
-        - 1
-        - 2
-
-        - 3
-
-
-        - 1
-        - 2
-
-        bar
-
-        - 1
-
-          2
-        - 4
-
-        buz
-
-        - 1
-        - 2
-          3
-        - 4
-        """
-
+    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
     @test v.content[2].loose
     @test !v.content[3].loose
     @test v.content[5].loose
