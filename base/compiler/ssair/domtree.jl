@@ -66,7 +66,7 @@ function construct_domtree(cfg)
         changed = false
         for n = 2:length(cfg.blocks)
             isempty(cfg.blocks[n].preds) && continue
-            firstp, rest = Iterators.peel(cfg.blocks[n].preds)
+            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, cfg.blocks[n].preds))
             new_doms = copy(dominators[firstp])
             for p in rest
                 intersect!(new_doms, dominators[p])

@@ -238,6 +238,9 @@ function inflate_ir(ci::CodeInfo)
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Any[block_for_inst(cfg, edge) for edge in stmt.edges], stmt.values)
+        elseif isa(stmt, Expr) && stmt.head == :enter
+            stmt.args[1] = block_for_inst(cfg, stmt.args[1])
+            code[i] = stmt
         else
             code[i] = stmt
         end
@@ -281,6 +284,9 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
             else
                 ci.code[i] = Expr(:unreachable)
             end
+        elseif isa(stmt, Expr) && stmt.head == :enter
+            stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]].stmts)
+            ci.code[i] = stmt
         else
             ci.code[i] = stmt
         end

@@ -1,5 +1,6 @@
-Core.PhiNode() = PhiNode(Any[], Any[])
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
+@eval Core.UpsilonNode() = $(Expr(:new, Core.UpsilonNode))
+Core.PhiNode() = Core.PhiNode(Any[], Any[])
 
 struct Argument
     n::Int
@@ -36,6 +37,7 @@ StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
 struct BasicBlock
     stmts::StmtRange
+    #error_handler::Bool
     preds::Vector{Int}
     succs::Vector{Int}
 end
@@ -43,9 +45,9 @@ function BasicBlock(stmts::StmtRange)
     BasicBlock(stmts, Int[], Int[])
 end
 function BasicBlock(old_bb, stmts)
-    BasicBlock(stmts, old_bb.preds, old_bb.succs)
+    BasicBlock(stmts, #= old_bb.error_handler, =# old_bb.preds, old_bb.succs)
 end
-copy(bb::BasicBlock) = BasicBlock(bb.stmts, copy(bb.preds), copy(bb.succs))
+copy(bb::BasicBlock) = BasicBlock(bb.stmts, #= bb.error_handler, =# copy(bb.preds), copy(bb.succs))
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -73,6 +75,13 @@ function compute_basic_blocks(stmts::Vector{Any})
                     push!(jump_dests, stmt.label)
                 end
             end
+        elseif isa(stmt, Expr) && stmt.head === :leave
+            # :leave terminates a BB
+            push!(jump_dests, idx+1)
+        elseif isa(stmt, Expr) && stmt.head == :enter
+            # :enter starts/ends a BB
+            push!(jump_dests, idx)
+            push!(jump_dests, idx+1)
         end
     end
     bb_starts = sort(collect(jump_dests))
@@ -105,6 +114,18 @@ function compute_basic_blocks(stmts::Vector{Any})
             push!(blocks[block′].preds, num)
             push!(b.succs, block′)
         elseif !isa(terminator, ReturnNode)
+            if isa(terminator, Expr) && terminator.head == :enter
+                # :enter gets a virtual edge to the exception handler and
+                # the exception handler gets a virtual edge from outside
+                # the function.
+                # See the devdocs on exception handling in SSA form (or
+                # bug Keno to write them, if you're reading this and they
+                # don't exist)
+                block′ = block_for_inst(basic_block_index, terminator.args[1])
+                push!(blocks[block′].preds, num)
+                push!(blocks[block′].preds, 0)
+                push!(b.succs, block′)
+            end
             if num + 1 <= length(blocks)
                 push!(blocks[num+1].preds, num)
                 push!(b.succs, num+1)
@@ -199,11 +220,11 @@ function getindex(x::UseRef)
     elseif isa(stmt, GotoIfNot)
         x.use == 1 || return OOBToken()
         return stmt.cond
-    elseif isa(stmt, ReturnNode) || isa(stmt, PiNode)
+    elseif isa(stmt, ReturnNode) || isa(stmt, PiNode) || isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOBToken()
         x.use == 1 || return OOBToken()
         return stmt.val
-    elseif isa(stmt, PhiNode)
+    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
         x.use > length(stmt.values) && return OOBToken()
         isassigned(stmt.values, x.use) || return UndefToken()
         return stmt.values[x.use]
@@ -236,13 +257,13 @@ function setindex!(x::UseRef, @nospecialize(v))
     elseif isa(stmt, GotoIfNot)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = GotoIfNot(v, stmt.dest)
-    elseif isa(stmt, ReturnNode)
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = typeof(stmt)(v)
     elseif isa(stmt, PiNode)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = typeof(stmt)(v, stmt.typ)
-    elseif isa(stmt, PhiNode)
+    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
         x.use > length(stmt.values) && throw(BoundsError())
         isassigned(stmt.values, x.use) || throw(BoundsError())
         stmt.values[x.use] = v
@@ -254,7 +275,7 @@ end
 
 function userefs(@nospecialize(x))
     if (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, Union{GotoIfNot, ReturnNode, PiNode, PhiNode})
+        isa(x, Union{GotoIfNot, ReturnNode, PiNode, PhiNode, PhiCNode, UpsilonNode})
         UseRefIterator(x)
     else
         ()
@@ -464,6 +485,24 @@ function done(compact::IncrementalCompact, (idx, _a)::Tuple{Int, Int})
     return idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
 end
 
+function process_phinode_values(old_values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas)
+    values = Vector{Any}(undef, length(old_values))
+    for i = 1:length(old_values)
+        isassigned(old_values, i) || continue
+        val = old_values[i]
+        if isa(val, SSAValue)
+            if val.id > processed_idx
+                push!(late_fixup, result_idx)
+                val = OldSSAValue(val.id)
+            else
+                val = renumber_ssa!(val, ssa_rename, true, used_ssas)
+            end
+        end
+        values[i] = val
+    end
+    values
+end
+
 function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{Any},
         late_fixup::Vector{Int}, used_ssas::Vector{Int}, @nospecialize(stmt),
         idx::Int, processed_idx::Int)
@@ -473,25 +512,14 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
     elseif isa(stmt, GotoNode) || isa(stmt, GlobalRef)
         result[result_idx] = stmt
         result_idx += 1
-    elseif isa(stmt, Expr) || isa(stmt, PiNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+    elseif isa(stmt, Expr) || isa(stmt, PiNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
         result[result_idx] = renumber_ssa!(stmt, ssa_rename, true, used_ssas)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        values = Vector{Any}(undef, length(stmt.values))
-        for i = 1:length(stmt.values)
-            isassigned(stmt.values, i) || continue
-            val = stmt.values[i]
-            if isa(val, SSAValue)
-                if val.id > processed_idx
-                    push!(late_fixup, result_idx)
-                    val = OldSSAValue(val.id)
-                else
-                    val = renumber_ssa!(val, ssa_rename, true, used_ssas)
-                end
-            end
-            values[i] = val
-        end
-        result[result_idx] = PhiNode(stmt.edges, values)
+        result[result_idx] = PhiNode(stmt.edges, process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
+        result_idx += 1
+    elseif isa(stmt, PhiCNode)
+        result[result_idx] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
         result_idx += 1
     elseif isa(stmt, SSAValue)
         # identity assign, replace uses of this ssa value with its result
@@ -592,22 +620,30 @@ function maybe_erase_unused!(extra_worklist, compact, idx)
     end
 end
 
+function fixup_phinode_values!(compact, old_values)
+    values = Vector{Any}(undef, length(old_values))
+    for i = 1:length(old_values)
+        isassigned(old_values, i) || continue
+        val = old_values[i]
+        if isa(val, OldSSAValue)
+            val = compact.ssa_rename[val.id]
+            if isa(val, SSAValue)
+                compact.used_ssas[val.id] += 1
+            end
+        end
+        values[i] = val
+    end
+    values
+end
+
 function just_fixup!(compact)
     for idx in compact.late_fixup
-        stmt = compact.result[idx]::PhiNode
-        values = Vector{Any}(undef, length(stmt.values))
-        for i = 1:length(stmt.values)
-            isassigned(stmt.values, i) || continue
-            val = stmt.values[i]
-            if isa(val, OldSSAValue)
-                val = compact.ssa_rename[val.id]
-                if isa(val, SSAValue)
-                    compact.used_ssas[val.id] += 1
-                end
-            end
-            values[i] = val
+        stmt = compact.result[idx]::Union{PhiNode, PhiCNode}
+        if isa(stmt, PhiNode)
+            compact.result[idx] = PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
+        else
+            compact.result[idx] = PhiCNode(fixup_phinode_values!(compact, stmt.values))
         end
-        compact.result[idx] = PhiNode(stmt.edges, values)
     end
 end
 

@@ -404,6 +404,9 @@ function domsort_ssa!(ir, domtree)
             end
             result_stmts[inst_range[end]] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
+            if isa(terminator, Expr) && terminator.head == :enter
+                terminator.args[1] = bb_rename[terminator.args[1]]
+            end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 result_stmts[inst_range[end]+1] = GotoNode(bb_rename[bb+1])
@@ -451,13 +454,13 @@ function compute_live_ins(cfg, defuse)
     extra_liveins = IdSet{Int}()
     worklist = Int[]
     for bb in bb_uses
-        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[bb].preds))
+        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[bb].preds))
     end
     while !isempty(worklist)
         elem = pop!(worklist)
         (elem in bb_uses || elem in extra_liveins) && continue
         push!(extra_liveins, elem)
-        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[elem].preds))
+        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[elem].preds))
     end
     append!(bb_uses, extra_liveins)
     BlockLiveness(bb_defs, bb_uses)
@@ -466,10 +469,30 @@ end
 function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int)
     cfg = ir.cfg
     left = Int[]
-    livenesses = map(du->compute_live_ins(cfg, du), defuse)
+    catch_entry_blocks = Tuple{Int, Int}[]
+    for (idx, stmt) in pairs(code)
+        if isexpr(stmt, :enter)
+            push!(catch_entry_blocks, (block_for_inst(cfg, idx), block_for_inst(cfg, stmt.args[1])))
+        end
+    end
+
+    exc_handlers = IdDict{Int, Int}()
+    # Record the correct exception handler for all cricitcal sections
+    for (enter_block, exc) in catch_entry_blocks
+        exc_handlers[enter_block+1] = exc
+        # TODO: Cut off here if the terminator is a leave corresponding to this enter
+        for block in dominated(domtree, enter_block+1)
+            exc_handlers[block] = exc
+        end
+    end
+
     phi_slots = Vector{Int}[Vector{Int}() for _ = 1:length(ir.cfg.blocks)]
     phi_nodes = Vector{Pair{Int,PhiNode}}[Vector{Pair{Int,PhiNode}}() for _ = 1:length(cfg.blocks)]
     phi_ssas = SSAValue[]
+    phicnodes = IdDict{Int, Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}}()
+    for (_, exc) in catch_entry_blocks
+        phicnodes[exc] = Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}()
+    end
     @timeit "idf" for (idx, slot) in Iterators.enumerate(defuse)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
@@ -494,8 +517,23 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             end
             continue
         end
-        # TODO: Perform liveness here to eliminate dead phi nodes
-        phiblocks = idf(cfg, livenesses[idx], domtree)
+        @timeit "liveness" (live = compute_live_ins(cfg, slot))
+        for li in live.live_in_bbs
+            cidx = findfirst(x->x[2] == li, catch_entry_blocks)
+            if cidx !== nothing
+                # The slot is live-in into this block. We need to
+                # Create a PhiC node in the catch entry block and
+                # an upsilon node in the corresponding enter block
+                node = PhiCNode(Any[])
+                phic_ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, li), Union{}, node).id)
+                push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
+                # Inform IDF that we now have a def in the catch block
+                if !(li in live.def_bbs)
+                    push!(live.def_bbs, li)
+                end
+            end
+        end
+        phiblocks = idf(cfg, live, domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
@@ -566,6 +604,24 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             incoming_vals[slot] = NewSSAValue(ssaval)
         end
         (item in visited) && continue
+        # Record phi_C nodes if necessary
+        if haskey(phicnodes, item)
+            for (slot, ssa, _) in phicnodes[item]
+                incoming_vals[slot_id(slot)] = ssa
+            end
+        end
+        # Record initial upsilon nodes if necessary
+        eidx = findfirst(x->x[1] == item, catch_entry_blocks)
+        if eidx !== nothing
+            for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
+                ivalundef = incoming_vals[slot_id(slot)] === undef_token
+                unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
+                typ = ivalundef ? MaybeUndef(Union{}) : ci.slottypes[slot_id(slot)]
+                push!(node.values,
+                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item)+1,
+                                 typ, unode).id))
+            end
+        end
         push!(visited, item)
         for idx in cfg.blocks[item].stmts
             stmt = code[idx]
@@ -586,6 +642,19 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                     val = stmt.args[2]
                     typ = typ_for_val(val, ci)
                     incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ))
+                    if haskey(exc_handlers, item)
+                        exc = exc_handlers[item]
+                        cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
+                        if cidx !== nothing
+                            node = UpsilonNode(incoming_vals[id])
+                            if incoming_vals[id] === undef_token
+                                node = UpsilonNode()
+                                typ = MaybeUndef(Union{})
+                            end
+                            push!(phicnodes[exc][cidx][3].values,
+                                NewSSAValue(insert_node!(ir, idx+1, typ, node).id))
+                        end
+                    end
                 end
             end
         end
@@ -624,8 +693,26 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             new_code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        elseif isexpr(stmt, :enter)
+            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
         else
             new_code[idx] = stmt
+        end
+    end
+    for (_, nodes) in phicnodes
+        for (_, ssa, node) in nodes
+            new_typ = Union{}
+            new_idx = ssa.id - length(ir.stmts)
+            old_insert, old_typ, _, old_line = ir.new_nodes[new_idx]
+            for i = 1:length(node.values)
+                orig_typ = typ = typ_for_val(node.values[i], ci)
+                @assert !isa(typ, MaybeUndef)
+                while isa(typ, DelayedTyp)
+                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)][2]
+                end
+                new_typ = tmerge(new_typ, typ)
+            end
+            ir.new_nodes[new_idx] = (old_insert, new_typ, node, old_line)
         end
     end
     # This is a bit awkward, because it basically duplicates what type
@@ -646,10 +733,16 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                     continue
                 end
                 typ = typ_for_val(node.values[i], ci)
-                if isa(typ, DelayedTyp)
+                was_maybe_undef = false
+                if isa(typ, MaybeUndef)
+                    typ = typ.typ
+                    was_maybe_undef = true
+                end
+                @assert !isa(typ, MaybeUndef)
+                while isa(typ, DelayedTyp)
                     typ = ir.new_nodes[typ.phi.id - length(ir.stmts)][2]
                 end
-                new_typ = tmerge(new_typ, typ)
+                new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
             end
             if !(old_typ ⊑ new_typ) || !(new_typ ⊑ old_typ)
                 ir.new_nodes[new_idx] = (old_insert, new_typ, node, old_line)
