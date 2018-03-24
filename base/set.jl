@@ -564,6 +564,11 @@ convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
 ## replace/replace! ##
 
+function check_count(count::Integer)
+    count < 0 && throw(DomainError(count, "`count` must not be negative (got $count)"))
+    return min(count, typemax(Int)) % Int
+end
+
 # TODO: use copy!, which is currently unavailable from here since it is defined in Future
 _copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
 # TODO: use similar() once deprecation is removed and it preserves keys
@@ -581,7 +586,7 @@ _similar_or_copy(x::Union{AbstractDict,AbstractSet}) = copy(x)
 _similar_or_copy(x::Union{AbstractDict,AbstractSet}, ::Type{T}) where {T} = _copy_oftype(x, T)
 
 # to make replace/replace! work for a new container type Cont, only
-# replace!(new::Callable, res::Cont, A::Cont; count::Integer=typemax(Int))
+# _replace!(new::Callable, res::Cont, A::Cont, count::Int)
 # has to be implemented
 
 """
@@ -607,16 +612,16 @@ Set([0, 2, 3])
 ```
 """
 replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
-    _replace!(A, A, count, old_new)
+    replace_pairs!(A, A, check_count(count), old_new)
 
-function _replace!(res, A, count::Integer, old_new::Tuple{Vararg{Pair}})
+function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
     @inline function new(x)
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end
         return x # no replace
     end
-    replaceimpl!(new, res, A, count=count)
+    _replace!(new, res, A, count)
 end
 
 """
@@ -638,7 +643,7 @@ julia> replace!(isodd, A, 0, count=2)
 ```
 """
 replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> ifelse(pred(x), new, x), A, count=count)
+    replace!(x -> ifelse(pred(x), new, x), A, count=check_count(count))
 
 """
     replace!(new::Function, A; [count::Integer])
@@ -667,22 +672,8 @@ julia> replace!(x->2x, Set([3, 6]))
 Set([6, 12])
 ```
 """
-function replaceimpl!(new::Callable, res::Union{AbstractArray,AbstractDict,AbstractSet},
-                      A::Union{AbstractArray,AbstractDict,AbstractSet};
-                      count::Integer=typemax(Int))
-    if count < 0
-        throw(DomainError(count, "`count` must not be negative"))
-    elseif count != 0
-        if count >= length(A)
-            _replace!(new, res, A, nothing)
-        else
-            _replace!(new, res, A, min(count, typemax(Int)) % Int)
-        end
-    end
-    A
-end
-
-replace!(new::Callable, A, count::Integer=typemax(Int)) = replaceimpl!(new, A, A, count=count)
+replace!(new::Callable, A; count::Integer=typemax(Int)) =
+    _replace!(new, A, A, check_count(count))
 
 """
     replace(A, old_new::Pair...; [count::Integer])
@@ -707,10 +698,10 @@ function replace(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing)
     V = promote_valuetype(old_new...)
     if count isa Nothing
         T = promote_type(subtract_singletontype(eltype(A), old_new...), V)
-        _replace!(_similar_or_copy(A, T), A, typemax(Int), old_new)
+        replace_pairs!(_similar_or_copy(A, T), A, typemax(Int), old_new)
     else
         U = promote_type(eltype(A), V)
-        _replace!(_similar_or_copy(A, U), A, count, old_new)
+        replace_pairs!(_similar_or_copy(A, U), A, check_count(count), old_new)
     end
 end
 
@@ -719,9 +710,10 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-@pure issingletontype(::Type{T}) where {T} = isdefined(T, :instance)
+@pure issingletontype(T::DataType) = isdefined(T, :instance)
+issingletontype(::Type) = false
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
-    if issingletontype(K) # singleton type
+    if issingletontype(K)
         Core.Compiler.typesubtract(T, K)
     else
         T
@@ -749,7 +741,7 @@ julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
 """
 function replace(pred::Callable, A, new; count::Integer=typemax(Int))
     T = promote_type(eltype(A), typeof(new))
-    replaceimpl!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, count=count)
+    _replace!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, check_count(count))
 end
 
 """
@@ -777,7 +769,7 @@ Dict{Int64,Int64} with 2 entries:
 ```
 """
 replace(new::Callable, A; count::Integer=typemax(Int)) =
-    replaceimpl!(new, _similar_or_copy(A), A, count=count)
+    _replace!(new, _similar_or_copy(A), A, check_count(count))
 
 # Handle ambiguities
 replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
@@ -786,16 +778,15 @@ replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a
 replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
 replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
 
-
 ### replace! for AbstractDict/AbstractSet
 
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::T, A::T,
-                   count::Union{Int,Nothing}) where T<:Union{AbstractDict,AbstractSet}
+                   count::Int) where T<:Union{AbstractDict,AbstractSet}
     c = 0
-    if res === A
+    if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]
         for x in A
             y = new(x)
@@ -827,17 +818,24 @@ end
 
 ### replace! for AbstractArray
 
-function _replace!(new::Callable, res::AbstractArray, A::AbstractArray,
-                  count::Union{Int,Nothing})
+function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
     c = 0
-    for i in eachindex(A)
-        @inbounds Ai = A[i]
-        if count === nothing c < count
+    if count >= length(A) # simpler loop allows for SIMD
+        for i in eachindex(A)
+            @inbounds Ai = A[i]
             y = new(Ai)
             @inbounds res[i] = y
-            c += (Ai !== y)
-        else
-            @inbounds res[i] = Ai
+        end
+    else
+        for i in eachindex(A)
+            @inbounds Ai = A[i]
+            if c < count
+                y = new(Ai)
+                @inbounds res[i] = y
+                c += (Ai !== y)
+            else
+                @inbounds res[i] = Ai
+            end
         end
     end
     res
