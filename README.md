@@ -112,7 +112,7 @@ Once it is built, you can run the `julia` executable using its full path in the 
 
 Now you should be able to run Julia like this:
 
-    julia
+    ./julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In this case, try moving the `julia` directory earlier in the PATH).
 
