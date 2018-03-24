@@ -160,7 +160,7 @@ write a text representation (with an encoding that may depend upon `io`).
 
 The endianness of the written value depends on the endianness of the host system.
 Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
-[`ltoh`](@ref)) to get results that are consistent across plattforms.
+[`ltoh`](@ref)) to get results that are consistent across platforms.
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
