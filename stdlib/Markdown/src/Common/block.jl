@@ -250,13 +250,11 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
-    loose::Bool # TODO: Renderer's should use this field
-
-    List(x::AbstractVector, b::Integer) = new(x, b, false)
-    List(x::AbstractVector) = new(x, -1)
-    List(b::Integer) = new(Any[], b)
+    loose::Bool # TODO: Renderers should use this field
 end
-
+List(x::AbstractVector, b::Integer) = List(x, b, false)
+List(x::AbstractVector) = List(x, -1)
+List(b::Integer) = List(Any[], b)
 List(xs...) = List(vcat(xs...))
 
 isordered(list::List) = list.ordered >= 0
