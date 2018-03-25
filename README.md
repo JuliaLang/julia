@@ -99,7 +99,10 @@ If you need to build Julia on a machine without internet access, use `make -C de
 
 **Note:** The build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory). To run julia from anywhere you can:
+Once it is built, you can run the `julia` executable after you enter your julia directory and run
+    ./julia
+**Note:** `./julia` works only in Unix.
+i.e. you can run it using its full path in the directory created above (the `julia` directory). To run julia from anywhere you can:
 - add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
