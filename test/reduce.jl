@@ -323,10 +323,10 @@ struct SomeFunctor end
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
 
-# contains
+# occursin
 
-@test contains("quick fox", "fox") == true
-@test contains("quick fox", "lazy dog") == false
+@test occursin("fox", "quick fox") == true
+@test occursin("lazy dog", "quick fox") == false
 
 # count
 
@@ -375,7 +375,7 @@ A = reshape(map(UInt8, 1:100), (10,10))
 @test sum([-0.0, -0.0]) === -0.0
 @test prod([-0.0, -0.0]) === 0.0
 
-#contains
+# containment
 let A = Vector(1:10)
     @test A ∋ 5
     @test A ∌ 11

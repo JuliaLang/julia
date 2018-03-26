@@ -518,6 +518,10 @@ IteratorSize(::Type{<:Count}) = IsInfinite()
 struct Take{I}
     xs::I
     n::Int
+    function Take(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -574,6 +578,10 @@ end
 struct Drop{I}
     xs::I
     n::Int
+    function Drop(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -1045,11 +1053,7 @@ mutable struct Stateful{T, VS}
     @inline function Stateful(itr::T) where {T}
         state = start(itr)
         VS = fixpoint_iter_type(T, Union{}, typeof(state))
-        if done(itr, state)
-            new{T, VS}(itr, nothing, 0)
-        else
-            new{T, VS}(itr, next(itr, state)::VS, 0)
-        end
+        new{T, VS}(itr, done(itr, state) ? nothing : next(itr, state)::VS, 0)
     end
 end
 
@@ -1094,11 +1098,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        if done(s.itr, state)
-            s.nextvalstate = nothing
-        else
-            s.nextvalstate = next(s.itr, state)
-        end
+        # Until the optimizer can handle setproperty! better here, use explicit setfield!
+        setfield!(s, :nextvalstate, done(s.itr, state) ? nothing : next(s.itr, state))
         s.taken += 1
         return val
     end

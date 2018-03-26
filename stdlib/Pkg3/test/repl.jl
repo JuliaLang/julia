@@ -1,6 +1,7 @@
 module REPLTests
 
 using Pkg3
+import Pkg3.Types.CommandError
 using UUIDs
 using Test
 import LibGit2
@@ -24,18 +25,21 @@ end
 
 mktempdir() do project_path
     cd(project_path) do
-        push!(LOAD_PATH, Base.parse_load_path("@"))
+        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
         try
             withenv("USER" => "Test User") do
                 pkg"generate HelloWorld"
                 cd("HelloWorld")
+                LibGit2.init(".")
                 pkg"st"
                 @eval using HelloWorld
                 Base.invokelatest(HelloWorld.greet)
                 @test isfile("Project.toml")
+                Pkg3.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
+                Pkg3.test("PackageWithBuildSpecificTestDeps")
             end
         finally
-            pop!(LOAD_PATH)
+            popfirst!(LOAD_PATH)
         end
     end
 end
@@ -82,7 +86,6 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
         Pkg3.REPLMode.pkgstr("add $p2#$c")
     end
 
-    # TODO cleanup
     mktempdir() do tmp_dev_dir
     withenv("JULIA_PKG_DEVDIR" => tmp_dev_dir) do
         pkg"develop Example"
@@ -134,9 +137,129 @@ temp_pkg_dir() do project_path; cd(project_path) do
             @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
             Pkg3.test("UnregisteredWithoutProject")
             Pkg3.test("UnregisteredWithProject")
+        end # withenv
+    end # mktempdir
+    # nested
+    try
+        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        mktempdir() do other_dir
+            mktempdir() do tmp; cd(tmp) do
+                withenv("USER" => "Test User") do
+                    pkg"generate HelloWorld"
+                    cd("HelloWorld") do
+                        pkg"generate SubModule1"
+                        pkg"generate SubModule2"
+                        pkg"develop SubModule1"
+                        mkdir("tests")
+                        cd("tests") do
+                            pkg"develop ../SubModule2"
+                        end
+                        @test Pkg3.installed()["SubModule1"] == v"0.1.0"
+                        @test Pkg3.installed()["SubModule2"] == v"0.1.0"
+                    end
+                    cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
+                end
+            end end
+            # Check that these didnt generate absolute paths in the Manifest by copying
+            # to another directory
+            cd(joinpath(other_dir, "HelloWorld")) do
+                @test locate_name("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
+                @test locate_name("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+            end
         end
-    end # withenv
-end # mktempdir
+    finally
+        popfirst!(LOAD_PATH)
+    end
+end # cd
 end # temp_pkg_dir
+
+test_complete(s) = Pkg3.REPLMode.completions(s,lastindex(s))
+apply_completion(str) = begin
+    c, r, s = test_complete(str)
+    @test s == true
+    str[1:prevind(str, first(r))]*first(c)
+end
+
+# Autocompletions
+temp_pkg_dir() do project_path; cd(project_path) do
+    try
+        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        Pkg3.Types.registries()
+        pkg"init"
+        c, r = test_complete("add Exam")
+        @test "Example" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        Pkg3.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "RequireDependency"))")
+
+        c, r = test_complete("rm RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm -p RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm --project RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        c, r = test_complete("rm -p Exam")
+        @test isempty(c)
+        c, r = test_complete("rm --project Exam")
+        @test isempty(c)
+
+        c, r = test_complete("rm -m RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm --manifest RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm -m Exam")
+        @test "Example" in c
+        c, r = test_complete("rm --manifest Exam")
+        @test "Example" in c
+
+        c, r = test_complete("rm RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        c, r = test_complete("rm -m Exam")
+        c, r = test_complete("rm -m Exam")
+        @test "Example" in c
+
+        pkg"add Example"
+        c, r = test_complete("rm Exam")
+        @test "Example" in c
+        c, r = test_complete("add --man")
+        @test "--manifest" in c
+        c, r = test_complete("rem")
+        @test "remove" in c
+        @test apply_completion("rm E") == "rm Example"
+        @test apply_completion("add Exampl") == "add Example"
+
+        c, r = test_complete("preview r")
+        @test "remove" in c
+        c, r = test_complete("help r")
+        @test "remove" in c
+        @test !("rm" in c)
+
+    finally
+        popfirst!(LOAD_PATH)
+    end
+end end
+
+mktempdir() do tmp
+    cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
+    cd(joinpath(tmp, "BigProject")) do
+        try
+            pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+            pkg"build"
+            @eval using BigProject
+            pkg"build BigProject"
+            @test_throws CommandError pkg"add BigProject"
+            pkg"test SubModule"
+            pkg"test SubModule2"
+            pkg"test BigProject"
+            pkg"test"
+        finally
+            popfirst!(LOAD_PATH)
+        end
+    end
+end
 
 end # module

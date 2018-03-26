@@ -194,8 +194,6 @@ Symbol(s::AbstractString) = Symbol(String(s))
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
-promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
-
 ## string & character concatenation ##
 
 """

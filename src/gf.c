@@ -246,6 +246,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     static int in_inference;
     if (in_inference > 2)
         return NULL;
+
+    jl_code_info_t *src = NULL;
 #ifdef ENABLE_INFERENCE
     jl_method_instance_t *li = *pli;
     if (li->inInference && !force)
@@ -273,7 +275,6 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     in_inference--;
     li->inInference = 0;
 
-    jl_code_info_t *src = NULL;
     if (linfo_src_rettype &&
             jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
             jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
@@ -303,8 +304,8 @@ struct set_world {
 static int set_max_world2(jl_typemap_entry_t *entry, void *closure0)
 {
     struct set_world *closure = (struct set_world*)closure0;
-    // entry->max_world should be <= closure->replaced->max_world and >= closure->world
-    if (entry->func.linfo == closure->replaced) {
+    // entry->max_world should be <= closure->replaced->max_world
+    if (entry->func.linfo == closure->replaced && entry->max_world > closure->world) {
         entry->max_world = closure->world;
     }
     return 1;

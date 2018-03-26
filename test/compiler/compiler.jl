@@ -890,7 +890,7 @@ end
 f22290() = return 3
 for i in 1:3
     ir = sprint(io -> code_llvm(io, f22290, Tuple{}))
-    @test contains(ir, "julia_f22290")
+    @test occursin("julia_f22290", ir)
 end
 
 # constant inference of isdefined

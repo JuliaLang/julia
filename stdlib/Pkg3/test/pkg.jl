@@ -16,7 +16,6 @@ include("utils.jl")
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
 temp_pkg_dir() do project_path
-
     @testset "simple add and remove with preview" begin
         Pkg3.init(project_path)
         Pkg3.add(TEST_PKG.name; preview = true)
@@ -128,7 +127,7 @@ temp_pkg_dir() do project_path
         try
             Pkg3.add([PackageSpec(TEST_PKG.name, VersionSpec(v"55"))])
         catch e
-            @test contains(sprint(showerror, e), TEST_PKG.name)
+            @test occursin(TEST_PKG.name, sprint(showerror, e))
         end
     end
 
@@ -144,6 +143,14 @@ temp_pkg_dir() do project_path
     end
 
     Pkg3.rm(TEST_PKG.name)
+end
+
+temp_pkg_dir() do project_path
+    @testset "libgit2 downloads" begin
+        Pkg3.add(TEST_PKG.name; use_libgit2_for_all_downloads=true)
+        @test haskey(Pkg3.installed(), TEST_PKG.name)
+        Pkg3.rm(TEST_PKG.name)
+    end
 end
 
 include("repl.jl")

@@ -683,7 +683,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
-        versioninfo(buf)
+        Base.require(Base, :InteractiveUtils).versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

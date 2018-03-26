@@ -413,7 +413,7 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
     push!(blk.args, :(exp = pt-1))
-    expmark = isupper(c) ? "E" : "e"
+    expmark = isuppercase(c) ? "E" : "e"
     if precision==0 && '#' in flags
         expmark = string(".",expmark)
     end

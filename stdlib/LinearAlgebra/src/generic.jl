@@ -734,12 +734,12 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 """
 function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     s = svdvals(A)
-    sum(x -> x > tol*s[1], s)
+    count(x -> x > tol*s[1], s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
-    trace(M)
+    tr(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
 
@@ -750,15 +750,15 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> trace(A)
+julia> tr(A)
 5
 ```
 """
-function trace(A::AbstractMatrix)
+function tr(A::AbstractMatrix)
     checksquare(A)
     sum(diag(A))
 end
-trace(x::Number) = x
+tr(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}

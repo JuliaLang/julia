@@ -669,10 +669,10 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+@test occursin("cor", sprint(apropos, "pearson"))
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 

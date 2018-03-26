@@ -376,6 +376,7 @@ function Base.show(io::IO, df::DateFormat)
     end
     print(io, '"')
 end
+Base.Broadcast.broadcastable(x::DateFormat) = Ref(x)
 
 """
     dateformat"Y-m-d H:M:S"

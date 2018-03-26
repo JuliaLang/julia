@@ -151,6 +151,13 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
+function setindex!(x::IRCode, repl, s::SSAValue)
+    @assert s.id <= length(x.stmts)
+    x.stmts[s.id] = repl
+    nothing
+end
+
+
 struct OldSSAValue
     id::Int
 end
@@ -355,6 +362,10 @@ function getindex(compact::IncrementalCompact, idx)
     end
 end
 
+function getindex(view::TypesView, v::OldSSAValue)
+    return view.ir.ir.types[v.id]
+end
+
 function setindex!(compact::IncrementalCompact, v, idx)
     if idx < compact.result_idx
         # Kill count for current uses
@@ -362,18 +373,26 @@ function setindex!(compact::IncrementalCompact, v, idx)
             val = ops[]
             isa(val, SSAValue) && (compact.used_ssas[val.id] -= 1)
         end
+        compact.result[idx] = v
         # Add count for new use
-        isa(v, SSAValue) && (compact.used_ssas[v.id] += 1)
-        return compact.result[idx] = v
+        if isa(v, SSAValue)
+            compact.used_ssas[v.id] += 1
+        else
+            for ops in userefs(compact.result[idx])
+                val = ops[]
+                isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
+            end
+        end
     else
-        return compact.ir.stmts[idx] = v
+        compact.ir.stmts[idx] = v
     end
+    return nothing
 end
 
 function getindex(view::TypesView, idx)
     isa(idx, SSAValue) && (idx = idx.id)
-    if isa(view.ir, IncrementalCompact) && idx < view.compact.result_idx
-        return view.compact.result_types[idx]
+    if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
+        return view.ir.result_types[idx]
     else
         ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
         if idx <= length(ir.types)
@@ -500,7 +519,8 @@ function next(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::Tup
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx)
-   if stmt_effect_free(compact.result[idx], compact.ir, compact.ir.mod)
+    effect_free = stmt_effect_free(compact.result[idx], compact, compact.ir.mod)
+    if effect_free
         for ops in userefs(compact.result[idx])
             val = ops[]
             if isa(val, SSAValue)

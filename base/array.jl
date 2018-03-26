@@ -217,6 +217,7 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
+    @_noinline_meta
     xT = convert(T, x)
     for i in 1:length(dest)
         @inbounds dest[i] = xT
@@ -318,6 +319,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
 end
 
 function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
+    @_noinline_meta
     xT = convert(T, x)
     for i in eachindex(a)
         @inbounds a[i] = xT
@@ -940,7 +942,7 @@ function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
         ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, nl-l)
-    else
+    elseif nl != l
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
         end
@@ -1664,7 +1666,7 @@ julia> findfirst(iseven, A)
 
 julia> findfirst(x -> x>10, A) # returns nothing, but not printed in the REPL
 
-julia> findfirst(equalto(4), A)
+julia> findfirst(isequal(4), A)
 2
 
 julia> A = [1 4; 2 2]
@@ -1982,7 +1984,7 @@ end
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
-findall(p::OccursIn, x::Number) = x in p.x ? [1] : Vector{Int}()
+findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
     findmax(itr) -> (x, index)
@@ -2206,7 +2208,7 @@ function _sortedfindin(v, w)
     return out
 end
 
-function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:Real})
     if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
         return _sortedfindin(x, pred.x)
     else
@@ -2215,7 +2217,7 @@ function findall(pred::OccursIn{<:Union{Array{<:Real},Real}}, x::Array{<:Real})
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::OccursIn, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

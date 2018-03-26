@@ -268,8 +268,11 @@
 (define (bad-formal-argument v)
   (error (string #\" (deparse v) #\" " is not a valid function argument name")))
 
+(define (valid-name? s)
+  (not (memq s '(true false ccall cglobal))))
+
 (define (arg-name v)
-  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
+  (cond ((and (symbol? v) (valid-name? v))
          v)
         ((not (pair? v))
          (bad-formal-argument v))
@@ -312,13 +315,6 @@
   (map arg-name (filter (lambda (a) (not (and (pair? a)
                                               (eq? (car a) 'parameters))))
                         lst)))
-
-(define (llist-keywords lst)
-  (apply append
-         (map (lambda (a) (if (and (pair? a) (eq? (car a) 'parameters))
-                              (map arg-name (cdr a))
-                              '()))
-              lst)))
 
 ;; get just argument types
 (define (llist-types lst) (map arg-type lst))

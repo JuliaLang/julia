@@ -142,7 +142,7 @@ export
     svdvals!,
     svdvals,
     sylvester,
-    trace,
+    tr,
     transpose,
     transpose!,
     transpose_type,

@@ -161,5 +161,5 @@ end
 let st = stacktrace(bt23971)
     @test StackTraces.is_top_level_frame(st[1])
     @test string(st[1].file) == @__FILE__
-    @test !contains(string(st[2].file), "missing")
+    @test !occursin("missing", string(st[2].file))
 end

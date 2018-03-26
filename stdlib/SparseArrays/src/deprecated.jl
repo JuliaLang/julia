@@ -229,6 +229,11 @@ import Base: asyncmap
 
 Base.@deprecate_binding blkdiag blockdiag
 
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
+
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

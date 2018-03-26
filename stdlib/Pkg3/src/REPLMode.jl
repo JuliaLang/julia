@@ -141,11 +141,11 @@ function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(word)
         return pkg
-    elseif contains(word, uuid_re)
+    elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))
-    elseif contains(word, name_re)
+    elseif occursin(name_re, word)
         return PackageSpec(String(match(name_re, word).captures[1]))
-    elseif contains(word, name_uuid_re)
+    elseif occursin(name_uuid_re, word)
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
     else
@@ -213,11 +213,14 @@ end
 # Execution #
 #############
 
-function do_cmd(repl::REPL.AbstractREPL, input::String)
+function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     try
         tokens = tokenize(input)
         do_cmd!(tokens, repl)
     catch err
+        if do_rethrow
+            rethrow(err)
+        end
         if err isa CommandError
             Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Nothing}[])
         else
@@ -667,7 +670,6 @@ function do_test!(ctx::Context, tokens::Vector{Token})
             cmderror("invalid usage for `test`")
         end
     end
-    isempty(pkgs) && cmderror("`test` takes a set of packages")
     API.test(ctx, pkgs; coverage = coverage)
 end
 
@@ -732,16 +734,127 @@ __init__() = minirepl[] = MiniREPL()
 const minirepl = Ref{MiniREPL}()
 
 macro pkg_str(str::String)
-    :($(do_cmd)(minirepl[], $str))
+    :($(do_cmd)(minirepl[], $str; do_rethrow=true))
 end
 
-pkgstr(str::String) = do_cmd(minirepl[], str)
+pkgstr(str::String) = do_cmd(minirepl[], str; do_rethrow=true)
+
+# handle completions
+all_commands_sorted = sort!(collect(keys(cmds)))
+long_commands = filter(c -> length(c) > 2, all_commands_sorted)
+all_options_sorted = [length(opt) > 1 ? "--$opt" : "-$opt" for opt in sort!(collect(keys(opts)))]
+long_options = filter(c -> length(c) > 2, all_options_sorted)
+
+struct PkgCompletionProvider <: LineEdit.CompletionProvider end
+
+function LineEdit.complete_line(c::PkgCompletionProvider, s)
+    partial = REPL.beforecursor(s.input_buffer)
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = completions(full, lastindex(partial))
+    return ret, partial[range], should_complete
+end
+
+function complete_command(s, i1, i2)
+    # only show short form commands when no input is given at all
+    cmp = filter(cmd -> startswith(cmd, s), isempty(s) ? all_commands_sorted : long_commands)
+    return cmp, i1:i2, !isempty(cmp)
+end
+
+function complete_option(s, i1, i2)
+    # only show short form options if only a dash is given
+    cmp = filter(cmd -> startswith(cmd, s), length(s) == 1 && first(s) == '-' ?
+                                                all_options_sorted :
+                                                long_options)
+    return cmp, i1:i2, !isempty(cmp)
+end
+
+function complete_package(s, i1, i2, lastcommand, project_opt)
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+        return complete_installed_package(s, i1, i2, project_opt)
+    elseif lastcommand in [CMD_ADD]
+        return complete_remote_package(s, i1, i2)
+    end
+    return String[], 0:-1, false
+end
+
+function complete_installed_package(s, i1, i2, project_opt)
+    pkgs = project_opt ? API.installed(PKGMODE_PROJECT) : API.installed()
+    pkgs = sort!(collect(keys(filter((p) -> p[2] != nothing, pkgs))))
+    cmp = filter(cmd -> startswith(cmd, s), pkgs)
+    return cmp, i1:i2, !isempty(cmp)
+end
+
+function complete_remote_package(s, i1, i2)
+    cmp = filter(cmd -> startswith(cmd, s), collect_package_names())
+    return cmp, i1:i2, !isempty(cmp)
+end
+
+function collect_package_names()
+    r = r"name = \"(.*?)\""
+    names = String[]
+    for reg in Types.registries(;clone_default=false)
+        regcontent = read(joinpath(reg, "Registry.toml"), String)
+        append!(names, collect(match.captures[1] for match in eachmatch(r, regcontent)))
+    end
+    return sort!(names)
+end
+
+function completions(full, index)
+    pre = full[1:index]
+
+    pre_words = split(pre, ' ', keep=true)
+
+    # first word should always be a command
+    if isempty(pre_words)
+        return complete_command("", 1:1)
+    else
+        to_complete = pre_words[end]
+        offset = isempty(to_complete) ? index+1 : to_complete.offset+1
+
+        if length(pre_words) == 1
+            return complete_command(to_complete, offset, index)
+        end
+
+        # tokenize input, don't offer any completions for invalid commands
+        tokens = try
+            tokenize(join(pre_words[1:end-1], ' '))
+        catch
+            return String[], 0:-1, false
+        end
+
+        tokens = reverse!(tokens)
+
+        lastcommand = nothing
+        project_opt = true
+        for t in tokens
+            if t isa Command
+                lastcommand = t.kind
+                break
+            end
+        end
+        for t in tokens
+            if t isa Option && t.kind in [OPT_PROJECT, OPT_MANIFEST]
+                project_opt = t.kind == OPT_PROJECT
+                break
+            end
+        end
+
+        if lastcommand in [CMD_HELP, CMD_PREVIEW]
+            return complete_command(to_complete, offset, index)
+        elseif !isempty(to_complete) && first(to_complete) == '-'
+            return complete_option(to_complete, offset, index)
+        else
+            return complete_package(to_complete, offset, index, lastcommand, project_opt)
+        end
+    end
+end
 
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)
     pkg_mode = LineEdit.Prompt("pkg> ";
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
+        complete = PkgCompletionProvider(),
         sticky = true)
 
     pkg_mode.repl = repl
@@ -764,8 +877,29 @@ function create_mode(repl, main)
 
     mk = REPL.mode_keymap(main)
 
+    shell_mode = nothing
+    for mode in Base.active_repl.interface.modes
+        if mode isa LineEdit.Prompt
+            mode.prompt == "shell> " && (shell_mode = mode)
+        end
+    end
+
+    repl_keymap = Dict()
+    if shell_mode != nothing
+        repl_keymap[';'] = function (s,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
+                LineEdit.transition(s, shell_mode) do
+                    LineEdit.state(s, shell_mode).input_buffer = buf
+                end
+            else
+                LineEdit.edit_insert(s, ';')
+            end
+        end
+    end
+
     b = Dict{Any,Any}[
-        skeymap, mk, prefix_keymap, LineEdit.history_keymap,
+        skeymap, repl_keymap, mk, prefix_keymap, LineEdit.history_keymap,
         LineEdit.default_keymap, LineEdit.escape_defaults
     ]
     pkg_mode.keymap_dict = LineEdit.keymap(b)

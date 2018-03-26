@@ -222,26 +222,26 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test !contains(code, "llvm.dbg.cu")
-        @test !contains(code, "int.jl")
-        @test !contains(code, "Int64")
+        @test occursin("llvm.module.flags", code)
+        @test !occursin("llvm.dbg.cu", code)
+        @test !occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test !contains(code, "Int64")
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test contains(code, "\"Int64\"")
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test occursin("\"Int64\"", code)
     end
 
     # --check-bounds
@@ -445,9 +445,9 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             p = run(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err), wait=false)
             close(err.in)
             let s = read(err, String)
-                @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
-                @test !contains(s, "Segmentation fault")
-                @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
+                @test occursin("ERROR: could not load library \"$nonexist_image\"\n", s)
+                @test !occursin("Segmentation fault", s)
+                @test !occursin("EXCEPTION_ACCESS_VIOLATION", s)
             end
             @test !success(p)
             @test !Base.process_signaled(p)
@@ -503,7 +503,7 @@ for precomp in ("yes", "no")
         -E 'include("____nonexistent_file")'`)
     @test !success
     @test out == ""
-    @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
+    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0

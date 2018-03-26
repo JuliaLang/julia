@@ -186,6 +186,8 @@ end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
     @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
+    e = (try; getaddrinfo(".invalid"); catch ex; ex; end)
+    @test startswith(sprint(show, e), "DNSError:")
 end
 
 @testset "invalid port" begin
@@ -395,30 +397,32 @@ end
 @testset "connect!" begin
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-
-        function test_connect(addr::Sockets.InetAddr)
-            srv = listen(addr)
-
-            @async try c = accept(srv); close(c) catch end
-            yield()
-
-            t0 = TCPSocket()
-            t = t0
-            @assert t === t0
-
-            try
-                t = connect(addr)
-            finally
-                close(srv)
-            end
-
-            test = t !== t0
-            close(t)
-
-            return test
+        srv = listen(addr)
+        c = Condition()
+        r = @schedule try; close(accept(srv)); finally; notify(c); end
+        try
+            close(connect(addr))
+            fetch(c)
+        finally
+            close(srv)
         end
+        fetch(r)
+    end
 
-        @test test_connect(addr)
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
+        srv = listen(addr)
+        r = @schedule close(srv)
+        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(srv)
+        fetch(r)
+    end
+
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        r = @schedule close(s)
+        @test_throws Base.UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+        fetch(r)
     end
 end
 

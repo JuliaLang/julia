@@ -218,7 +218,7 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
         ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
               s, sizeof(s), filename, sizeof(filename))
     end
-    if ex isa Symbol && all(equalto('_'), string(ex))
+    if ex isa Symbol && all(isequal('_'), string(ex))
         # remove with 0.7 deprecation
         Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
     end
@@ -244,11 +244,11 @@ incomplete_tag(ex) = :none
 function incomplete_tag(ex::Expr)
     Meta.isexpr(ex, :incomplete) || return :none
     msg = ex.args[1]
-    contains(msg, "string") && return :string
-    contains(msg, "comment") && return :comment
-    contains(msg, "requires end") && return :block
-    contains(msg, "\"`\"") && return :cmd
-    contains(msg, "character") && return :char
+    occursin("string", msg) && return :string
+    occursin("comment", msg) && return :comment
+    occursin("requires end", msg) && return :block
+    occursin("\"`\"", msg) && return :cmd
+    occursin("character", msg) && return :char
     return :other
 end
 

@@ -388,7 +388,7 @@ function project_file_name_uuid_path(project_file::String,
         uuid = dummy_uuid(project_file)
         path = joinpath("src", "$name.jl")
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_name_to_string, line)) != nothing
                 name = String(m.captures[1])
             elseif (m = match(re_uuid_to_string, line)) != nothing
@@ -407,7 +407,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     open(project_file) do io
         dir = abspath(dirname(project_file))
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_manifest_to_string, line)) != nothing
                 return normpath(joinpath(dir, m.captures[1]))
             end
@@ -479,13 +479,8 @@ end
 
 # find project file root or deps `name => uuid` mapping
 #  - `false` means: did not find `name`
-#  - `true` means: found `name` without UUID
+#  - `true` means: found `name` without UUID (can't happen in explicit projects)
 #  - `uuid` means: found `name` with `uuid` in project file
-#
-# `true` can only be returned in the case that `name` is the project's name
-# and the project file does not have a top-level `uuid` mapping
-# it is not currently supported to have a name in `deps` mapped to anything
-# besides a UUID, so otherwise the answer is `false` or a UUID value
 
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
@@ -494,9 +489,9 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
         state = :top
         for line in eachline(io)
             if state == :top
-                if contains(line, re_section)
+                if occursin(re_section, line)
                     root_name == name && return root_uuid
-                    state = contains(line, re_section_deps) ? :deps : :other
+                    state = occursin(re_section_deps, line) ? :deps : :other
                 elseif (m = match(re_name_to_string, line)) != nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) != nothing
@@ -506,11 +501,11 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 if (m = match(re_key_to_string, line)) != nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
-            elseif contains(line, re_section)
-                state = :deps
+            elseif occursin(re_section, line)
+                state = occursin(re_section_deps, line) ? :deps : :other
             end
         end
-        return false
+        return root_name == name && root_uuid
     end
 end
 
@@ -524,7 +519,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         uuid = deps = nothing
         state = :other
         for line in eachline(io)
-            if contains(line, re_array_of_tables)
+            if occursin(re_array_of_tables, line)
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
@@ -533,9 +528,9 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) != nothing
                     deps = String(m.captures[1])
-                elseif contains(line, re_subsection_deps)
+                elseif occursin(re_subsection_deps, line)
                     state = :deps
-                elseif contains(line, re_section)
+                elseif occursin(re_section, line)
                     state = :other
                 end
             elseif state == :deps && uuid == where
@@ -551,7 +546,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             @warn "Unexpected TOML deps format:\n$deps"
             return nothing
         end
-        contains(deps, repr(name)) || return true
+        occursin(repr(name), deps) || return true
         seekstart(io) # rewind IO handle
         manifest_file_name_uuid(manifest_file, name, io)
     end
@@ -1200,7 +1195,7 @@ function compilecache(pkg::PkgId)
     if success(create_expr_cache(path, cachefile, concrete_deps, pkg.uuid))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(_crc32c(seekstart(f))))
+            write(f, _crc32c(seekstart(f)))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -1211,35 +1206,35 @@ end
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == ntoh(read(f, UInt32)))
+isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build UUID (mostly just a timestamp)
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
+    totbytes = read(f, Int64) # total bytes for file dependencies
     # read the list of requirements
     # and split the list into include and requires statements
     includes = Tuple{PkgId, String, Float64}[]
     requires = Pair{PkgId, PkgId}[]
     while true
-        n2 = ntoh(read(f, Int32))
+        n2 = read(f, Int32)
         n2 == 0 && break
         depname = String(read(f, n2))
-        mtime = ntoh(read(f, Float64))
-        n1 = ntoh(read(f, Int32))
+        mtime = read(f, Float64)
+        n1 = read(f, Int32)
         # map ids to keys
         modkey = (n1 == 0) ? PkgId("") : modules[n1].first
         if n1 != 0
             # consume (and ignore) the module path too
             while true
-                n1 = ntoh(read(f, Int32))
+                n1 = read(f, Int32)
                 totbytes -= 4
                 n1 == 0 && break
                 skip(f, n1) # String(read(f, n1))
@@ -1254,15 +1249,15 @@ function parse_cache_header(f::IO)
         totbytes -= 4 + 4 + n2 + 8
     end
     @assert totbytes == 12 "header of cache file appears to be corrupt"
-    srctextpos = ntoh(read(f, Int64))
+    srctextpos = read(f, Int64)
     # read the list of modules that are required to be present during loading
     required_modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build id
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
     return modules, (includes, requires), required_modules, srctextpos
@@ -1302,10 +1297,10 @@ end
 
 function _read_dependency_src(io::IO, filename::AbstractString)
     while !eof(io)
-        filenamelen = ntoh(read(io, Int32))
+        filenamelen = read(io, Int32)
         filenamelen == 0 && break
         fn = String(read(io, filenamelen))
-        len = ntoh(read(io, UInt64))
+        len = read(io, UInt64)
         if fn == filename
             return String(read(io, len))
         end

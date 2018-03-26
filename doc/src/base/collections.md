@@ -203,8 +203,8 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::Associative, ::Associative...)
-Base.merge!(::Function, ::Associative, ::Associative...)
+Base.merge!(::AbstractDict, ::AbstractDict...)
+Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
 Base.sizehint!
 Base.keytype
 Base.valtype
