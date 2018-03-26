@@ -562,8 +562,9 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     if done(itr,st)
         return _similar_for(c, @default_eltype(itr), itr, isz)
     end
-    v1, st = next(itr, st)
-    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
+    v1, st2 = next(itr, st)
+    # change name of state variable so that Accumulate is type stable
+    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st2)
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
