@@ -911,3 +911,10 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
     end
     return NOT_FOUND
 end
+
+# N.B.: typename maps type equivalence classes to a single value
+function typename_static(@nospecialize(t))
+    t = unwrap_unionall(t)
+    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
+end
+typename_static(t::Const) = _typename(t.val)

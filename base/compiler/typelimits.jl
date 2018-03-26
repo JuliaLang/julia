@@ -6,7 +6,6 @@
 
 const MAX_TYPEUNION_LEN = 3
 const MAX_INLINE_CONST_SIZE = 256
-const TUPLE_COMPLEXITY_LIMIT_DEPTH = 3
 
 #########################
 # limitation heuristics #
@@ -30,10 +29,10 @@ end
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
-function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tuplelen::Int)
+function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, 1, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
+    type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     @assert t <: r
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
@@ -301,4 +300,48 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         end
     end
     return true
+end
+
+function tmerge(@nospecialize(typea), @nospecialize(typeb))
+    typea ⊑ typeb && return typeb
+    typeb ⊑ typea && return typea
+    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
+        return MaybeUndef(tmerge(
+            isa(typea, MaybeUndef) ? typea.typ : typea,
+            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
+    end
+    if isa(typea, Conditional) && isa(typeb, Conditional)
+        if typea.var === typeb.var
+            vtype = tmerge(typea.vtype, typeb.vtype)
+            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            if vtype != elsetype
+                return Conditional(typea.var, vtype, elsetype)
+            end
+        end
+        return Bool
+    end
+    typea, typeb = widenconst(typea), widenconst(typeb)
+    typea === typeb && return typea
+    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
+       !(isa(typeb, Type) || isa(typeb, TypeVar))
+        # XXX: this should never happen
+        return Any
+    end
+    if unionlen(typea) + unionlen(typeb) > MAX_TYPEUNION_LEN
+        # don't let type unions get too big
+        # this sets our convergence rate (e.g. worst-case compiler performance)
+        namea, nameb = _typename(typea), _typename(typeb)
+        if namea isa Const && nameb isa Const && namea.val === nameb.val
+            # If they have the same type name, widen to that instead
+            # of widening fully (or using a slower convergence like typejoin)
+            wrapper = (namea.val::Core.TypeName).wrapper
+            if typea <: wrapper && typeb <: wrapper
+                # This can happen when a typevar has bounds too wide for its context
+                return wrapper
+            end
+        end
+        # TODO: something smarter, like a common supertype?
+        return Any
+    end
+    return Union{typea, typeb}
 end

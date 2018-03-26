@@ -1,7 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const _TYPE_NAME = Type.body.name
+#####################
+# lattice utilities #
+#####################
 
+function rewrap(@nospecialize(t), @nospecialize(u))
+    isa(t, Const) && return t
+    isa(t, Conditional) && return t
+    return rewrap_unionall(t, u)
+end
+
+const _TYPE_NAME = Type.body.name
 isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
@@ -72,6 +81,19 @@ function tvar_extent(@nospecialize t)
     end
     return t
 end
+
+_typename(@nospecialize a) = Union{}
+_typename(a::TypeVar) = Core.TypeName
+function _typename(a::Union)
+    ta = _typename(a.a)
+    tb = _typename(a.b)
+    ta === tb && return ta # same type-name
+    (ta === Union{} || tb === Union{}) && return Union{} # threw an error
+    (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
+    return Core.TypeName # uncertain result
+end
+_typename(union::UnionAll) = _typename(union.body)
+_typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(@nospecialize(init), ct)
     return Vararg{widenconst(foldl((a, b) -> tmerge(a, tvar_extent(unwrapva(b))), init, ct))}
