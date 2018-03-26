@@ -523,7 +523,7 @@ kw"break"
 """
     continue
 
-Skip the rest of the current loop, then carries on looping.
+Skip the rest of the current loop iteration.
 
 # Examples
 ```jldoctest
