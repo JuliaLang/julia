@@ -267,13 +267,13 @@ end
 
 function wait_readbyte(x::LibuvStream, c::UInt8)
     if isopen(x) # fast path
-        findfirst(isequal(c), x.buffer) !== nothing && return
+        occursin(c, x.buffer) && return
     else
         return
     end
     preserve_handle(x)
     try
-        while isopen(x) && coalesce(findfirst(isequal(c), x.buffer), 0) <= 0
+        while isopen(x) && !occursin(c, x.buffer)
             start_reading(x) # ensure we are reading
             wait(x.readnotify)
         end
@@ -1074,7 +1074,7 @@ end
 show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",bytesavailable(s.buffer),", isopen:", s.is_open)
 
 function wait_readbyte(s::BufferStream, c::UInt8)
-    while isopen(s) && findfirst(isequal(c), s.buffer) === nothing
+    while isopen(s) && !occursin(c, s.buffer)
         wait(s.r_c)
     end
 end
