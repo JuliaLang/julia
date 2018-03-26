@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -15593,11 +15593,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/FileWatching/#FileWatching.watch_folder",
+    "page": "File Events",
+    "title": "FileWatching.watch_folder",
+    "category": "function",
+    "text": "watch_folder(path::AbstractString, timeout_s::Real=-1)\n\nWatches a file or directory path for changes until a change has occurred or timeout_s seconds have elapsed.\n\nThis will continuing tracking changes for path in the background until unwatch_folder is called on the same path.\n\nThe returned value is an pair where the first field is the name of the changed file (if available) and the second field is an object with boolean fields changed, renamed, and timedout, giving the event.\n\nThis behavior of this function varies slightly across platforms. See https://nodejs.org/api/fs.html#fs_caveats for more detailed information.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/FileWatching/#FileWatching.unwatch_folder",
+    "page": "File Events",
+    "title": "FileWatching.unwatch_folder",
+    "category": "function",
+    "text": "unwatch_folder(path::AbstractString)\n\nStop background tracking of changes for path. It is not recommended to do this while another task is waiting for watch_folder to return on the same path, as the result may be unpredictable.\n\n\n\n\n\n"
+},
+
+{
     "location": "stdlib/FileWatching/#lib-filewatching-1",
     "page": "File Events",
     "title": "File Events",
     "category": "section",
-    "text": "FileWatching.poll_fd\nFileWatching.poll_file\nFileWatching.watch_file"
+    "text": "FileWatching.poll_fd\nFileWatching.poll_file\nFileWatching.watch_file\nFileWatching.watch_folder\nFileWatching.unwatch_folder"
 },
 
 {
