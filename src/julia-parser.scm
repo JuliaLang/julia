@@ -146,11 +146,15 @@
                            (cons `|..| (filter dotop? operators))))))
 (define operator? (SuffSet operators))
 
-(define initial-reserved-words '(begin while if for try return break continue
-                         function macro quote let local global const do
-                         struct
-                         type immutable importall  ;; to be deprecated
-                         module baremodule using import export))
+(define deprecated-reserved-words '(type immutable importall))
+
+(define deprecated-reserved-word? (Set deprecated-reserved-words))
+
+(define initial-reserved-words
+  (append deprecated-reserved-words
+          '(begin while if for try return break continue
+            function macro quote let local global const do
+            struct module baremodule using import export)))
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
@@ -1250,6 +1254,9 @@
                        `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
                      (let ((name (parse-atom s)))
+                       ;; Using reserved words as a field is deprecated.
+                       (if (and (reserved-word? name) (not (deprecated-reserved-word? name)))
+                           (parser-depwarn s (string (deparse ex) "." name) (string (deparse ex) ".:" name)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
                            `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
                                        ,@(cddr name))
