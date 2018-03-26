@@ -23,8 +23,12 @@
 @test parse(Int,"-10") == -10
 @test parse(Int64,"3830974272") == 3830974272
 @test parse(Int64,"-3830974272") == -3830974272
+
 @test parse(Int,'3') == 3
 @test parse(Int,'3', base = 8) == 3
+@test parse(Int, 'a', base=16) == 10
+@test_throws ArgumentError parse(Int, 'a')
+@test_throws ArgumentError parse(Int,typemax(Char))
 
 # Issue 20587
 for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
@@ -172,9 +176,6 @@ parsehex(s) = parse(Int,s, base = 16)
 # multibyte spaces
 @test parse(Int, "3\u2003\u202F") == 3
 @test_throws ArgumentError parse(Int, "3\u2003\u202F,")
-
-@test parse(Int,'a') == 10
-@test_throws ArgumentError parse(Int,typemax(Char))
 
 @test parse(Int,"1234") == 1234
 @test parse(Int,"0x1234") == 0x1234

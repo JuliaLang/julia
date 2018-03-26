@@ -456,6 +456,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `indexin` now returns the first rather than the last matching index ([#25998]).
 
+  * `parse(::Type, ::Char)` now uses a default base of 10, like other number parsing
+    methods, instead of 36 ([#26576]).
+
 Library improvements
 --------------------
 
