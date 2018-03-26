@@ -634,6 +634,11 @@ Library improvements
   * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
     keyword argument. ([#26156])
 
+    * `Base.MemoryLayout(A::AbstractArray)` introduced to specify the layout in
+      memory for an array `A`, by returning `DenseColumnMajor()`, `ColumnMajor()`,
+      `DenseRowMajor()`, `RowMajor()` or other specialized memory layouts. The return
+      value is used in `mul!` to dispatch to the correct BLAS or LAPACK routines. ([#25558])
+
 Compiler/Runtime improvements
 -----------------------------
 
