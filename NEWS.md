@@ -214,6 +214,9 @@ Language changes
 
   * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
 
+  * Using reserved names as a field (e.g. `foo.function`) is deprecated; quote
+    the field name if needed (e.g. `foo.:function`) ([#?????]).
+
 Breaking changes
 ----------------
 
