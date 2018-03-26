@@ -5,7 +5,6 @@
 #########################
 
 const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 8
 const MAX_INLINE_CONST_SIZE = 256
 const TUPLE_COMPLEXITY_LIMIT_DEPTH = 3
 
@@ -302,23 +301,4 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         end
     end
     return true
-end
-
-function type_too_complex(@nospecialize(t), d::Int)
-    if d < 0
-        return true
-    elseif isa(t, Union)
-        return type_too_complex(t.a, d - 1) || type_too_complex(t.b, d - 1)
-    elseif isa(t, TypeVar)
-        return type_too_complex(t.lb, d - 1) || type_too_complex(t.ub, d - 1)
-    elseif isa(t, UnionAll)
-        return type_too_complex(t.var, d) || type_too_complex(t.body, d)
-    elseif isa(t, DataType)
-        for x in (t.parameters)::SimpleVector
-            if type_too_complex(x, d - 1)
-                return true
-            end
-        end
-    end
-    return false
 end

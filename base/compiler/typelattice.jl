@@ -49,11 +49,14 @@ struct PartialTypeVar
 end
 
 # Wraps a type and represents that the value may also be undef at this point.
+# (only used in optimize, not abstractinterpret)
 struct MaybeUndef
     typ
+    MaybeUndef(@nospecialize(typ)) = new(typ)
 end
 
 # The type of a variable load is either a value or an UndefVarError
+# (only used in abstractinterpret, doesn't appear in optimize)
 struct VarState
     typ
     undef::Bool
@@ -83,19 +86,23 @@ function rewrap(@nospecialize(t), @nospecialize(u))
 end
 
 _typename(a) = Union{}
-_typename(a::Vararg) = Any
-_typename(a::TypeVar) = Any
+_typename(a::TypeVar) = Core.TypeName
 function _typename(a::Union)
     ta = _typename(a.a)
     tb = _typename(a.b)
-    ta === tb ? tb : (ta === Any || tb === Any) ? Any : Union{}
+    ta === tb && return ta # same type-name
+    (ta === Union{} || tb === Union{}) && return Union{} # threw an error
+    (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
+    return Core.TypeName # uncertain result
 end
 _typename(union::UnionAll) = _typename(union.body)
-
 _typename(a::DataType) = Const(a.name)
 
 # N.B.: typename maps type equivalence classes to a single value
-typename_static(@nospecialize(t)) = isType(t) ? _typename(t.parameters[1]) : Any
+function typename_static(@nospecialize(t))
+    t = unwrap_unionall(t)
+    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
+end
 typename_static(t::Const) = _typename(t.val)
 
 #################
@@ -196,27 +203,28 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
-    if !(isa(typea,Type) || isa(typea,TypeVar)) || !(isa(typeb,Type) || isa(typeb,TypeVar))
+    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
+       !(isa(typeb, Type) || isa(typeb, TypeVar))
+        # XXX: this should never happen
         return Any
     end
-    if (typea <: Tuple) && (typeb <: Tuple)
-        if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
-            return typejoin(typea, typeb)
-        end
-        if isa(typea, Union) || isa(typeb, Union) || (isa(typea,DataType) && length(typea.parameters)>3) ||
-            (isa(typeb,DataType) && length(typeb.parameters)>3)
-            # widen tuples faster (see #6704), but not too much, to make sure we can infer
-            # e.g. (t::Union{Tuple{Bool},Tuple{Bool,Int}})[1]
-            return Tuple
-        end
-    end
-    u = Union{typea, typeb}
-    if unionlen(u) > MAX_TYPEUNION_LEN || type_too_complex(u, MAX_TYPE_DEPTH)
+    if unionlen(typea) + unionlen(typeb) > MAX_TYPEUNION_LEN
         # don't let type unions get too big
-        # TODO: something smarter, like a common supertype
+        # this sets our convergence rate (e.g. worst-case compiler performance)
+        namea, nameb = _typename(typea), _typename(typeb)
+        if namea isa Const && nameb isa Const && namea.val === nameb.val
+            # If they have the same type name, widen to that instead
+            # of widening fully (or using a slower convergence like typejoin)
+            wrapper = (namea.val::Core.TypeName).wrapper
+            if typea <: wrapper && typeb <: wrapper
+                # This can happen when a typevar has bounds too wide for its context
+                return wrapper
+            end
+        end
+        # TODO: something smarter, like a common supertype?
         return Any
     end
-    return u
+    return Union{typea, typeb}
 end
 
 function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})

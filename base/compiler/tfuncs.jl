@@ -712,9 +712,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     if isvarargtype(headtype)
         return Type
     end
-    if uncertain && type_too_complex(appl, MAX_TYPE_DEPTH)
-        return Type{<:headtype}
-    end
     if istuple
         return Type{<:appl}
     end
