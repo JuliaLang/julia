@@ -41,10 +41,10 @@ function printvalue(io::IO, value; sorted=false)
     end
 end
 
-function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false)
+function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false, by=identity)
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys))
+        akeys = sort!(collect(akeys), by=by)
     end
     first_block = true
 
@@ -95,5 +95,5 @@ function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false)
     end
 end
 
-print(io::IO, a::AbstractDict; sorted=false) = _print(io, a, sorted=sorted)
-print(a::AbstractDict; sorted=false) = print(stdout, a, sorted=sorted)
+print(io::IO, a::AbstractDict; kwargs...) = _print(io, a; kwargs...)
+print(a::AbstractDict; kwargs...) = print(stdout, a; kwargs...)

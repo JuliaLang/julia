@@ -279,6 +279,21 @@ mktempdir() do tmp
             pkg"test SubModule2"
             pkg"test BigProject"
             pkg"test"
+            current_example = Pkg.API.installed()["Example"]
+            old_project = read("Project.toml", String)
+            open("Project.toml"; append=true) do io
+                print(io, """
+
+                [compatibility]
+                Example = "0.4.0"
+                """
+                )
+            end
+            pkg"up"
+            @test Pkg.API.installed()["Example"].minor == 4
+            write("Project.toml", old_project)
+            pkg"up"
+            @test Pkg.API.installed()["Example"] == current_example
         finally
             popfirst!(LOAD_PATH)
         end

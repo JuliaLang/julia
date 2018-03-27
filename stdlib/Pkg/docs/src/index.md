@@ -329,9 +329,9 @@ Let’s say we found a bug in one of our dependencies, e.g. `JSON` that we want 
 ...
 ```
 
-By default, the package get cloned to the `~/.julia/dev` folder but can also be set by the `JULIA_PKG_DEVDIR` environment variable.
+By default, the package gets cloned to the `~/.julia/dev` folder but can also be set by the `JULIA_PKG_DEVDIR` environment variable.
 When we have fixed the bug and checked that `JSON` now works correctly with our project, we can make a PR to the `JSON` repository.
-When the PR has been merged we can go over to track the master branch and finally, when a new release of `JSON` is made, we can go back to using the versioned `JSON` using the command `free` and `update` (see next section):
+When the PR has been merged we can go over to track the master branch and finally when a new release of `JSON` is made, we can go back to using the versioned `JSON` using the command `free` and `update` (see next section):
 
 ```
 (HelloWorld) pkg> free JSON
@@ -344,11 +344,11 @@ When the PR has been merged we can go over to track the master branch and finall
 
 It is also possible to give a local path as the argument to `develop` which will not clone anything but simply use that directory for the package.
 
-Overriding the dependency path for a non registered package is done by giving the git-repo url as an argument to `develop`.
+Overriding the dependency path for a non-registered package is done by giving the git-repo url as an argument to `develop`.
 
 ## Updating dependencies
 
-When new versions of packages the project is using  are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
+When new versions of packages the project is using are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
 
 ```
 (HelloWorld) pkg> up JSON
@@ -363,7 +363,7 @@ The version of all other direct dependencies will stay the same. If you only wan
 Packages that track a branch are not updated when a minor upgrade is done.
 Developed packages are never touched by the package manager.
 
-If you just want install the packages that are given by the current `Manifest.toml` use
+If you just want to install the packages that are given by the current `Manifest.toml` use
 
 ```
 (HelloWorld) pkg> instantiate
@@ -394,10 +394,10 @@ or
 (HelloWorld) pkg> preview up
 ```
 
-will show you the effects adding `Plots`, or doing a full upgrade, respectively, would have on your project.
+will show you the effects of adding `Plots`, or doing a full upgrade, respectively, would have on your project.
 However, nothing would be installed and your `Project.toml` and `Manfiest.toml` are untouched.
 
-## Using someone elses project
+## Using someone else's project
 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
@@ -405,7 +405,62 @@ Simple clone their project using e.g. `git clone`, `cd` to the project directory
 (SomeProject) pkg> instantiate
 ```
 
-If the project contains a manifest, this will install the packages at the same state that is given by that manifest.
-Otherwise it will resolve the latest versions of the dependencies compatible with the project.
+If the project contains a manifest, this will install the packages in the same state that is given by that manifest.
+Otherwise, it will resolve the latest versions of the dependencies compatible with the project.
 
+## Compatibility
 
+Compatibility refers to the ability to restrict what version of the dependencies that your project is compatible with.
+If the compatibility for a dependency is not given, the project is assumed to be compatible with all versions of that dependency.
+
+Compatibility for a dependency is entered in the `Project.toml` file as for example:
+
+```toml
+[compatibility]
+Example = "0.4.3"
+```
+
+After a compatibility entry is put into the project file, `up` can be used to apply it.
+
+The format of the version specifier is described in detail below.
+
+!!! info
+  There is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file.
+
+### Version specifier format
+
+Similar to other package managers, the Julia package manager respects [semantic versioning](https://semver.org/) (semver).
+As an example, a version specifier is given as e.g. `1.2.3` is therefore assumed to be compatible with the versions `[1.2.3 - 2.0.0)` where `)` is a non-inclusive upper bound.
+More specifically, a version specifier is either given as a **caret specifier**, e.g. `~1.2.3`  or a **tilde specifier** `^1.2.3`.
+Caret specifiers are the default and hence `1.2.3 == ~1.2.3`. The difference between a caret and tilde is described in the next section.
+
+#### Caret specifiers
+
+A caret specifier allows upgrade that would be compatible according to semver.
+An updated dependency is considered compatible if the new version does not modify the left-most non zero digit in the version specifier.
+
+Some examples are shown below.
+
+```
+^1.2.3 = [1.2.3, 2.0.0)
+^1.2 = [1.2.0, 2.0.0)
+^1 =  [1.0.0, 2.0.0)
+^0.2.3 = [0.2.3, 0.3.0)
+^0.0.3 = [0.0.3, 0.0.4)
+^0.0 = [0.0.0, 0.1.0)
+^0 = [0.0.0, 1.0.0)
+```
+
+While the semver specification says that all versions with a major version of 0 are incompatible with each other, we have made that choice that
+a version given as `0.a.b` is considered compatible with `0.a.c` if `a != 0` and  `c >= b`.
+
+#### Tilde specifiers
+
+A tilde specifier provides more limited upgrade possibilities. With a caret, only the last specified digit is allowed to increment by one.
+This gives the following example.
+
+```
+~1.2.3 = [1.2.3, 1.3.0)
+~1.2 = [1.2.0, 1.3.0)
+~1 = [1.0.0, 2.0.0)
+```
