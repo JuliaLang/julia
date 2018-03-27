@@ -190,11 +190,63 @@ end
     for f in rounding_functions
         @test ismissing(f(missing))
         @test ismissing(f(missing, 1))
-        @test ismissing(f(missing, 1, 1))
+        @test ismissing(f(missing, 1, base=10))
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
     end
+end
+
+@testset "string functions" begin
+    @test repeat("a", missing) === missing
+    @test repeat(missing, 2) === missing
+    @test repeat(missing, missing) === missing
+    @test "a"^missing === missing
+    @test missing^2 === missing
+    @test missing^missing === missing
+
+    @test occursin(missing, "a") === missing
+    @test occursin("a", missing) === missing
+    @test occursin('a', missing) === missing
+    @test occursin(r"a", missing) === missing
+    @test occursin(missing, missing) === missing
+
+    @test replace(missing, 'a'=>'b') === missing
+    @test replace(missing, "a"=>"b") === missing
+    @test replace(missing, ['a','c']=>'b') === missing
+    @test replace(missing, 'a'=>uppercase) === missing
+    @test replace(missing, r"a"=>"b") === missing
+    @test replace(missing, 'a'=>'b', count=5) === missing
+
+    @test chop(missing) === missing
+    @test chop(missing, head=1, tail=1) === missing
+
+    @test escape_string(missing) === missing
+    @test unescape_string(missing) === missing
+    @test escape_string(missing, "a") === missing
+
+    for f in (strip, lstrip, rstrip)
+        @test f(missing) === missing
+    end
+
+    for f in (startswith, endswith)
+        @test f(missing, "a") === missing
+        @test f(missing, 'a') === missing
+        @test f(missing, ['a', 'b']) === missing
+        @test f("a", missing) === missing
+        @test f(missing, missing) === missing
+    end
+
+    for f in (uppercase, lowercase, titlecase, uppercasefirst, lowercasefirst,
+              isuppercase, islowercase, chomp, textwidth)
+      @test f(missing) === missing
+    end
+
+    @test parse(Union{Int, Missing}, missing) === missing
+    @test parse(Union{Int, Missing}, "1") === 1
+    @test parse(Union{Int, Missing}, missing, base=10) === missing
+    @test parse(Union{Int, Missing}, "1", base=10) === 1
+    @test_throws MissingException parse(Int, missing)
 end
 
 @testset "printing" begin

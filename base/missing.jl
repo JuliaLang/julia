@@ -102,7 +102,7 @@ max(::Any,     ::Missing) = missing
 # Rounding and related functions
 for f in (:(ceil), :(floor), :(round), :(trunc))
     @eval begin
-        ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
+        ($f)(::Missing, digits::Integer=0; base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
             throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
@@ -112,6 +112,52 @@ for f in (:(ceil), :(floor), :(round), :(trunc))
         ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
+
+# String functions
+repeat(::Missing, ::Integer) = missing
+repeat(::AbstractString, ::Missing) = missing
+repeat(::Missing, ::Missing) = missing
+^(::AbstractString, ::Missing) = missing
+
+occursin(::Missing, ::AbstractString; offset::Integer=0) = missing
+occursin(::Union{AbstractChar,AbstractString,Regex}, ::Missing; offset::Integer=0) = missing
+occursin(::Missing, ::Missing; offset::Integer=0) = missing
+
+replace(::Missing, ::Pair; count::Integer=0) = missing
+
+chop(::Missing; head::Integer = 0, tail::Integer = 1) = missing
+
+escape_string(::Missing) = missing
+unescape_string(::Missing) = missing
+escape_string(::Missing, ::AbstractString) = missing
+
+for f in (:strip, :lstrip, :rstrip)
+    @eval begin
+        $f(::Missing) = missing
+        $f(::Missing, ::Chars) = missing
+    end
+end
+
+for f in (:startswith, :endswith)
+    @eval begin
+        $f(::Missing, ::Union{AbstractString,Chars}) = missing
+        $f(::AbstractString, ::Missing) = missing
+        $f(::Missing, ::Missing) = missing
+    end
+end
+
+for f in (:uppercase, :lowercase, :titlecase, :uppercasefirst, :lowercasefirst,
+          :isuppercase, :islowercase, :chomp, :textwidth)
+    @eval begin
+        $f(::Missing) = missing
+    end
+end
+
+parse(::Missing; base::Integer=0) = missing
+parse(::Type{>:Missing}, ::Missing; base::Integer=0) = missing
+parse(::Type{T}, ::Missing) where {T} =
+    throw(MissingException("cannot parse a missing value to type $T: use Union{$T, Missing} instead"))
+parse(::Type{T}, x::Any; kwargs...) where {T>:Missing} = parse(nonmissingtype(T), x; kwargs...)
 
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing
