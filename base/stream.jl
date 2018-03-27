@@ -372,7 +372,7 @@ julia> withenv("LINES" => 30, "COLUMNS" => 100) do
 To get your TTY size,
 
 ```julia
-julia> displaysize(stdout)
+julia> displaysize(STDOUT)
 (34, 147)
 ```
 """
@@ -906,22 +906,21 @@ function _fd(x::Union{LibuvStream, LibuvServer})
 end
 
 for (x, writable, unix_fd, c_symbol) in
-        ((:stdin, false, 0, :jl_uv_stdin),
-         (:stdout, true, 1, :jl_uv_stdout),
-         (:stderr, true, 2, :jl_uv_stderr))
+        ((:STDIN, false, 0, :jl_uv_stdin),
+         (:STDOUT, true, 1, :jl_uv_stdout),
+         (:STDERR, true, 2, :jl_uv_stderr))
     f = Symbol("redirect_", lowercase(string(x)))
     _f = Symbol("_", f)
-    Ux = Symbol(uppercase(string(x)))
     @eval begin
         function ($_f)(stream)
-            global $x, $Ux
+            global $x
             posix_fd = _fd(stream)
             @static if Sys.iswindows()
                 ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
                     $(-10 - unix_fd), Libc._get_osfhandle(posix_fd))
             end
             dup(posix_fd, RawFD($unix_fd))
-            $Ux = $x = stream
+            $x = stream
             nothing
         end
         function ($f)(handle::Union{LibuvStream, IOStream})
@@ -942,12 +941,12 @@ end
 """
     redirect_stdout([stream]) -> (rd, wr)
 
-Create a pipe to which all C and Julia level [`stdout`](@ref) output
+Create a pipe to which all C and Julia level [`STDOUT`](@ref) output
 will be redirected.
 Returns a tuple `(rd, wr)` representing the pipe ends.
-Data written to [`stdout`](@ref) may now be read from the `rd` end of
+Data written to [`STDOUT`](@ref) may now be read from the `rd` end of
 the pipe. The `wr` end is given for convenience in case the old
-[`stdout`](@ref) object was cached by the user and needs to be replaced
+[`STDOUT`](@ref) object was cached by the user and needs to be replaced
 elsewhere.
 
 !!! note
@@ -958,7 +957,7 @@ redirect_stdout
 """
     redirect_stderr([stream]) -> (rd, wr)
 
-Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
+Like [`redirect_stdout`](@ref), but for [`STDERR`](@ref).
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
@@ -968,16 +967,16 @@ redirect_stderr
 """
     redirect_stdin([stream]) -> (rd, wr)
 
-Like [`redirect_stdout`](@ref), but for [`stdin`](@ref).
+Like [`redirect_stdout`](@ref), but for [`STDIN`](@ref).
 Note that the order of the return tuple is still `(rd, wr)`,
-i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
+i.e. data to be read from [`STDIN`](@ref) may be written to `wr`.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stdin
 
-for (F,S) in ((:redirect_stdin, :stdin), (:redirect_stdout, :stdout), (:redirect_stderr, :stderr))
+for (F,S) in ((:redirect_stdin, :STDIN), (:redirect_stdout, :STDOUT), (:redirect_stderr, :STDERR))
     @eval function $F(f::Function, stream)
         STDOLD = $S
         local ret
@@ -994,8 +993,8 @@ end
 """
     redirect_stdout(f::Function, stream)
 
-Run the function `f` while redirecting [`stdout`](@ref) to `stream`.
-Upon completion, [`stdout`](@ref) is restored to its prior setting.
+Run the function `f` while redirecting [`STDOUT`](@ref) to `stream`.
+Upon completion, [`STDOUT`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
@@ -1005,8 +1004,8 @@ redirect_stdout(f::Function, stream)
 """
     redirect_stderr(f::Function, stream)
 
-Run the function `f` while redirecting [`stderr`](@ref) to `stream`.
-Upon completion, [`stderr`](@ref) is restored to its prior setting.
+Run the function `f` while redirecting [`STDERR`](@ref) to `stream`.
+Upon completion, [`STDERR`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
@@ -1016,8 +1015,8 @@ redirect_stderr(f::Function, stream)
 """
     redirect_stdin(f::Function, stream)
 
-Run the function `f` while redirecting [`stdin`](@ref) to `stream`.
-Upon completion, [`stdin`](@ref) is restored to its prior setting.
+Run the function `f` while redirecting [`STDIN`](@ref) to `stream`.
+Upon completion, [`STDIN`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.

@@ -278,17 +278,17 @@ end
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(devnull, LogTest, :bar;  kind=:info)
+logging(DevNull, LogTest, :bar;  kind=:info)
 @test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull, LogTest;  kind=:info)
+logging(DevNull, LogTest;  kind=:info)
 @test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull;  kind=:info)
+logging(DevNull;  kind=:info)
 @test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
@@ -299,17 +299,17 @@ logging(kind=:info)
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(devnull, LogTest, :bar;  kind=:warn)
+logging(DevNull, LogTest, :bar;  kind=:warn)
 @test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull, LogTest;  kind=:warn)
+logging(DevNull, LogTest;  kind=:warn)
 @test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull;  kind=:warn)
+logging(DevNull;  kind=:warn)
 @test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "ERROR: \"fooerror\""], sprint(foo)))
@@ -320,17 +320,17 @@ logging(kind=:warn)
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(devnull, LogTest, :bar;  kind=:error)
+logging(DevNull, LogTest, :bar;  kind=:error)
 @test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull, LogTest;  kind=:error)
+logging(DevNull, LogTest;  kind=:error)
 @test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn"], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull;  kind=:error)
+logging(DevNull;  kind=:error)
 @test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn"], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn"], sprint(foo)))
@@ -341,17 +341,17 @@ logging(kind=:error)
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(devnull, LogTest, :bar)
+logging(DevNull, LogTest, :bar)
 @test sprint(LogTest.bar) == ""
 @test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull, LogTest)
+logging(DevNull, LogTest)
 @test sprint(LogTest.bar) == ""
 @test sprint(LogTest.pooh) == ""
 @test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(devnull)
+logging(DevNull)
 @test sprint(LogTest.bar) == ""
 @test sprint(LogTest.pooh) == ""
 @test sprint(foo) == ""

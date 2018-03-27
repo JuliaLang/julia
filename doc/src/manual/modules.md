@@ -343,11 +343,11 @@ Other known potential failure scenarios include:
    of via its lookup path. For example, (in global scope):
 
    ```julia
-   #mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module =#
+   #mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#
    # instead use accessor functions:
-   getstdout() = Base.stdout #= best option =#
+   getstdout() = Base.STDOUT #= best option =#
    # or move the assignment into the runtime:
-   __init__() = global mystdout = Base.stdout #= also works =#
+   __init__() = global mystdout = Base.STDOUT #= also works =#
    ```
 
 Several additional restrictions are placed on the operations that can be done while precompiling

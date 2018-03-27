@@ -121,7 +121,7 @@ precompile(Tuple{getfield(Base, Symbol("#@show")), LineNumberNode, Module, Expr}
 precompile(Tuple{getfield(Base, Symbol("#@time")), LineNumberNode, Module, Expr})
 precompile(Tuple{getfield(Base, Symbol("#kw##_spawn")), NamedTuple{(:chain,), Tuple{Nothing}}, typeof(Base._spawn), Base.Cmd, Tuple{Base.DevNullStream, Base.IOStream, Base.IOStream}})
 precompile(Tuple{getfield(Base, Symbol("#kw##_spawn")), NamedTuple{(:chain,), Tuple{Nothing}}, typeof(Base._spawn), Base.CmdRedirect, Tuple{Base.DevNullStream, Base.DevNullStream, Base.IOStream}})
-precompile(Tuple{getfield(Base, Symbol("#kw##pipeline")), NamedTuple{(:stdout, :stderr), Tuple{Base.IOStream, Base.IOStream}}, typeof(Base.pipeline), Base.Cmd})
+precompile(Tuple{getfield(Base, Symbol("#kw##pipeline")), NamedTuple{(:STDOUT, :STDERR), Tuple{Base.IOStream, Base.IOStream}}, typeof(Base.pipeline), Base.Cmd})
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, :color), Tuple{Bool, Symbol}}, typeof(Base.printstyled), Base.TTY, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, :color), Tuple{Bool, Symbol}}, typeof(Base.printstyled), String, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, :color), Tuple{Bool, Symbol}}, typeof(Base.printstyled), String})

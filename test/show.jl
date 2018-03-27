@@ -480,15 +480,15 @@ end
 @test_repr "Array{<:Real}"
 @test_repr "Array{>:Real}"
 
-let oldout = stdout, olderr = stderr
+let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
-        @test wrout === stdout
+        @test wrout === STDOUT
         out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
-        @test wrerr === stderr
+        @test wrerr === STDERR
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
@@ -496,7 +496,7 @@ let oldout = stdout, olderr = stderr
             close(wrerr)
         end
 
-        for io in (Core.stdout, Core.stderr)
+        for io in (Core.STDOUT, Core.STDERR)
             Core.println(io, "TESTA")
             println(io, "TESTB")
             print(io, 'Α', 1)
@@ -531,7 +531,7 @@ let filename = tempname()
     @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            println(stderr, "WARNING: hello")
+            println(STDERR, "WARNING: hello")
             [2]
         end
     end

@@ -81,7 +81,7 @@ function __init__()
     global CPU_CORES = if !isempty(env_cores)
         env_cores = tryparse(Int, env_cores)
         if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
+            Core.print(Core.STDERR, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
             env_cores = 1
         end
         env_cores
@@ -165,7 +165,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
-function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
+function cpu_summary(io::IO=STDOUT, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)

@@ -414,13 +414,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.build("BuildFail")'`, String)
         @test occursin("Building BuildFail", msg)
         @test !occursin("Build failed for BuildFail", msg)
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build("BuildFail")'`, String)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.build("BuildFail")'`, String)
         @test occursin("Building BuildFail", msg)
         @test occursin("Build failed for BuildFail", msg)
         @test occursin("Pkg.build(\"BuildFail\")", msg)
@@ -431,7 +431,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build(\"$package\")"`), String)
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.build(\"$package\")"`), String)
         @test occursin("$package is not an installed package", msg)
         @test !occursin("signal (15)", msg)
     end
@@ -546,7 +546,7 @@ temp_pkg_dir() do
 
         Pkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); using Example; import Pkg; Pkg.update(\"$package\")"`), String)
+            "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); using Example; import Pkg; Pkg.update(\"$package\")"`), String)
         @test occursin(Regex("- $package.*Restart Julia to use the updated versions","s"), msg)
     end
 
@@ -570,7 +570,7 @@ temp_pkg_dir() do
             "const JULIA_RC_LOADED = true")
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
-            code = "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build(\"$package\")"
+            code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.build(\"$package\")"
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test occursin("JULIA_RC_LOADED defined false", msg)
             @test occursin("Main.JULIA_RC_LOADED defined false", msg)
@@ -579,7 +579,7 @@ temp_pkg_dir() do
             @test occursin("JULIA_RC_LOADED defined false", msg)
             @test occursin("Main.JULIA_RC_LOADED defined true", msg)
 
-            code = "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.test(\"$package\")"
+            code = "redirect_stderr(STDOUT); using Logging; global_logger(SimpleLogger(STDOUT)); import Pkg; Pkg.test(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test occursin("JULIA_RC_LOADED defined false", msg)
@@ -597,8 +597,8 @@ temp_pkg_dir() do
         stdout_file = Pkg.dir(package, "stdout.txt")
         stderr_file = Pkg.dir(package, "stderr.txt")
         content = """
-            println(stdout, "stdout")
-            println(stderr, "stderr")
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
             """
         write_build(package, content)
 

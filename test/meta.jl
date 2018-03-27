@@ -159,7 +159,7 @@ end
 @test _nospec_with_default(10) == 20
 
 
-let oldout = stdout
+let oldout = STDOUT
     local rdout, wrout, out
     try
         rdout, wrout = redirect_stdout()

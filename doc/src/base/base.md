@@ -228,7 +228,7 @@ Base.skipmissing
 
 ```@docs
 Base.run
-Base.devnull
+Base.DevNull
 Base.success
 Base.process_running
 Base.process_exited

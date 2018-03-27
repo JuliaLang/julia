@@ -1106,8 +1106,8 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
-        while !eof(stdin)
-            code = readuntil(stdin, '\\0')
+        while !eof(STDIN)
+            code = readuntil(STDIN, '\\0')
             eval(Main, Meta.parse(code))
         end
         """
@@ -1115,8 +1115,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                               --output-ji $output --output-incremental=yes
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color ? "yes" : "no")
-                              --eval $code_object`), stderr=stderr),
-              "w", stdout)
+                              --eval $code_object`), stderr=STDERR),
+              "w", STDOUT)
     in = io.in
     try
         write(in, """

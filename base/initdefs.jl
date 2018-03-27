@@ -140,8 +140,8 @@ function _atexit()
         try
             f()
         catch err
-            show(stderr, err)
-            println(stderr)
+            show(STDERR, err)
+            println(STDERR)
         end
     end
 end

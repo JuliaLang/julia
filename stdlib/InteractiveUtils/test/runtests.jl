@@ -136,7 +136,7 @@ end
 
 # Issue #16326
 mktemp() do f, io
-    OLDSTDOUT = stdout
+    OLDSTDOUT = STDOUT
     redirect_stdout(io)
     @test try @code_native map(abs, rand(3)); true; catch; false; end
     redirect_stdout(OLDSTDOUT)

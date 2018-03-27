@@ -725,7 +725,7 @@ struct MiniREPL <: REPL.AbstractREPL
     t::REPL.Terminals.TTYTerminal
 end
 function MiniREPL()
-    MiniREPL(TextDisplay(stdout), REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr))
+    MiniREPL(TextDisplay(STDOUT), REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR))
 end
 REPL.REPLDisplay(repl::MiniREPL) = repl.display
 

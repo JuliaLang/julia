@@ -824,9 +824,9 @@ get_resolve_log(graph::Graph) = deepcopy(graph.data.rlog)
 
 const _logindent = " "
 
-showlog(graph::Graph, args...; kw...) = showlog(stdout, graph, args...; kw...)
+showlog(graph::Graph, args...; kw...) = showlog(STDOUT, graph, args...; kw...)
 showlog(io::IO, graph::Graph, args...; kw...) = showlog(io, graph.data.rlog, args...; kw...)
-showlog(rlog::ResolveLog, args...; kw...) = showlog(stdout, rlog, args...; kw...)
+showlog(rlog::ResolveLog, args...; kw...) = showlog(STDOUT, rlog, args...; kw...)
 
 """
 Show the full resolution log. The `view` keyword controls how the events are displayed/grouped:

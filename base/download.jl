@@ -19,7 +19,7 @@ else
         global downloadcmd
         if downloadcmd === nothing
             for checkcmd in (:curl, :wget, :fetch)
-                if success(pipeline(`which $checkcmd`, devnull))
+                if success(pipeline(`which $checkcmd`, DevNull))
                     downloadcmd = checkcmd
                     break
                 end

@@ -139,7 +139,7 @@ struct FileRedirect
     append::Bool
     function FileRedirect(filename, append)
         if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            @warn "For portability use devnull instead of a file redirect" maxlog=1
+            @warn "For portability use DevNull instead of a file redirect" maxlog=1
         end
         return new(filename, append)
     end
@@ -312,13 +312,13 @@ mutable struct Process <: AbstractPipe
                      out::Union{Redirectable, Ptr{Cvoid}},
                      err::Union{Redirectable, Ptr{Cvoid}})
         if !isa(in, IO)
-            in = devnull
+            in = DevNull
         end
         if !isa(out, IO)
-            out = devnull
+            out = DevNull
         end
         if !isa(err, IO)
-            err = devnull
+            err = DevNull
         end
         this = new(cmd, handle, in, out, err,
                    typemin(fieldtype(Process, :exitcode)),
@@ -534,12 +534,12 @@ end
 # returns stdios:
 # A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An IO to be passed to the child
-#   | - devnull to pass /dev/null
+#   | - DevNull to pass /dev/null
 #   | - An Filesystem.File object to redirect the output to
 #   \ - A string specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet) = (stdios,)
-spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull, args...) =
+spawn_opts_swallow(in::Redirectable=DevNull, out::Redirectable=DevNull, err::Redirectable=DevNull, args...) =
     ((in, out, err), args...)
 spawn_opts_inherit(stdios::StdIOSet) = (stdios,)
 # pass original descriptors to child processes by default, because we might
@@ -556,16 +556,16 @@ function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
     end
-    _stdout = Pipe()
-    processes = _spawn(cmd, (devnull, _stdout, stderr))
-    close(_stdout.in)
-    out = _stdout.out
+    stdout = Pipe()
+    processes = spawn(cmd, (DevNull,stdout,STDERR))
+    close(stdout.in)
+    out = stdout.out
     # implicitly close after reading lines, since we opened
     return EachLine(out, keep=keep,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 
-function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=devnull)
+function open(cmds::AbstractCmd, mode::AbstractString, other::Redirectable=DevNull)
     if mode == "r+" || mode == "w+"
         return open(cmds, other, read = true, write = true)
     elseif mode == "r"
@@ -579,7 +579,7 @@ end
 
 # return a Process object to read-to/write-from the pipeline
 """
-    open(command, stdio=devnull; write::Bool = false, read::Bool = !write)
+    open(command, stdio=DevNull; write::Bool = false, read::Bool = !write)
 
 Start running `command` asynchronously, and return a tuple `(stream,process)`.  If `read` is
 true, then `stream` reads from the process's standard output and `stdio` optionally
@@ -587,18 +587,18 @@ specifies the process's standard input stream.  If `write` is true, then `stream
 the process's standard input and `stdio` optionally specifies the process's standard output
 stream.
 """
-function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = false, read::Bool = !write)
+function open(cmds::AbstractCmd, other::Redirectable=DevNull; write::Bool = false, read::Bool = !write)
     if read && write
-        other === devnull || throw(ArgumentError("no other stream can be specified in read-write mode"))
+        other === DevNull || throw(ArgumentError("no other stream can be specified in read-write mode"))
         in = Pipe()
         out = Pipe()
-        processes = _spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,STDERR))
         close(in.out)
         close(out.in)
     elseif read
         in = other
         out = Pipe()
-        processes = _spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,STDERR))
         close(out.in)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :out)
@@ -608,7 +608,7 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = fals
     elseif write
         in = Pipe()
         out = other
-        processes = _spawn(cmds, (in,out,stderr))
+        processes = _spawn(cmds, (in,out,STDERR))
         close(in.out)
         if isa(processes, ProcessChain) # for open(cmd) deprecation
             processes = ProcessChain(processes, :in)
@@ -622,7 +622,7 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = fals
 end
 
 """
-    open(f::Function, command, mode::AbstractString="r", stdio=devnull)
+    open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
 Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting process
 stream, then closes the input stream and waits for the process to complete.
@@ -643,7 +643,7 @@ function open(f::Function, cmds::AbstractCmd, args...)
 end
 
 function read(cmd::AbstractCmd)
-    procs = open(cmd, "r", devnull)
+    procs = open(cmd, "r", DevNull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
     return bytes
@@ -660,7 +660,7 @@ including the process exiting with a non-zero status (when `wait` is true).
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
 
-When `wait` is false, the process' I/O streams are directed to `devnull`.
+When `wait` is false, the process' I/O streams are directed to `DevNull`.
 When `wait` is true, I/O streams are shared with the parent process.
 Use [`pipeline`](@ref) to control I/O redirection.
 """

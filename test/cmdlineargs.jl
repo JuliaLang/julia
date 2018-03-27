@@ -18,7 +18,7 @@ end
 function readchomperrors(exename::Cmd)
     out = Base.PipeEndpoint()
     err = Base.PipeEndpoint()
-    p = run(exename, devnull, out, err, wait=false)
+    p = run(exename, DevNull, out, err, wait=false)
     o = @async(readchomp(out))
     e = @async(readchomp(err))
     return (success(p), fetch(o), fetch(e))
@@ -219,7 +219,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
+    let code = writereadpipeline("code_llvm(STDOUT, +, (Int64, Int64), false, true)", `$exename -g0`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -227,7 +227,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test !occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
+    let code = writereadpipeline("code_llvm(STDOUT, +, (Int64, Int64), false, true)", `$exename -g1`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -235,7 +235,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
+    let code = writereadpipeline("code_llvm(STDOUT, +, (Int64, Int64), false, true)", `$exename -g2`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -327,7 +327,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # test passing arguments
     mktempdir() do dir
         testfile = joinpath(dir, tempname())
-        # write a julia source file that just prints ARGS to stdout
+        # write a julia source file that just prints ARGS to STDOUT
         write(testfile, """
             println(ARGS)
             """)
@@ -483,7 +483,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
+run(pipeline(DevNull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, DevNull))
 
 # Test that `julia [some other option] --lisp` is disallowed
 @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==

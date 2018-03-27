@@ -20,7 +20,7 @@ function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false
     blob = try LibGit2.GitBlob(repo, spec)
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        fakeit && return devnull
+        fakeit && return DevNull
     end
     iob = IOBuffer(LibGit2.content(blob))
     close(blob)
@@ -174,7 +174,7 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
     end
 end
 # TODO: Use the Context stream
-print_diff(ctx::Context, diff::Vector{DiffEntry}) = print_diff(stdout, ctx, diff)
+print_diff(ctx::Context, diff::Vector{DiffEntry}) = print_diff(STDOUT, ctx, diff)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()

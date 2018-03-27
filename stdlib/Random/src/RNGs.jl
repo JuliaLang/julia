@@ -239,7 +239,7 @@ function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
     catch
-        println(stderr,
+        println(STDERR,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))

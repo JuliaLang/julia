@@ -1802,7 +1802,7 @@ mktempdir() do dir
 
                 @test LibGit2.credential_helpers(cfg, GitCredential("https", "github.com")) == expected
 
-                println(stderr, "The following 'Resetting the helper list...' warning is expected:")
+                println(STDERR, "The following 'Resetting the helper list...' warning is expected:")
                 @test_broken LibGit2.credential_helpers(cfg, GitCredential("https", "mygithost")) == expected[2]
             end
         end
@@ -2692,7 +2692,7 @@ mktempdir() do dir
                 pem = joinpath(root, common_name * ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 # Find an available port by listening
