@@ -3,8 +3,8 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION < 40000
-// trick pre-llvm39 into skipping the generation of _chkstk calls
+#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION < 70000
+// trick llvm into skipping the generation of _chkstk calls
 //   since it has some codegen issues associated with them:
 //   (a) assumed to be within 32-bit offset
 //   (b) bad asm is generated for certain code patterns:
