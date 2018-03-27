@@ -139,3 +139,23 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     end
     return tunion
 end
+
+tuplelen(@nospecialize tpl) = nothing
+function tuplelen(tpl::DataType)
+    l = length(tpl.parameters)::Int
+    if l > 0
+        last = unwrap_unionall(tpl.parameters[l])
+        if isvarargtype(last)
+            N = last.parameters[2]
+            N isa Int || return nothing
+            l += N - 1
+        end
+    end
+    return l
+end
+tuplelen(tpl::UnionAll) = tuplelen(tpl.body)
+function tuplelen(tpl::Union)
+    la, lb = tuplelen(tpl.a), tuplelen(tpl.b)
+    la == lb && return la
+    return nothing
+end

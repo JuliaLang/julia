@@ -18,26 +18,25 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return b
     elseif b <: a
         return a
-    elseif isa(a,UnionAll)
+    elseif isa(a, UnionAll)
         return UnionAll(a.var, typejoin(a.body, b))
-    elseif isa(b,UnionAll)
+    elseif isa(b, UnionAll)
         return UnionAll(b.var, typejoin(a, b.body))
-    elseif isa(a,TypeVar)
+    elseif isa(a, TypeVar)
         return typejoin(a.ub, b)
-    elseif isa(b,TypeVar)
+    elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
-    elseif isa(a,Union)
-        a′ = typejoin(a.a, a.b)
-        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
-    elseif isa(b,Union)
-        b′ = typejoin(b.a, b.b)
-        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
+    elseif isa(a, Union)
+        return typejoin(typejoin(a.a, a.b), b)
+    elseif isa(b, Union)
+        return typejoin(a, typejoin(b.a, b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
         ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int; lbr = length(bp)::Int
+        lar = length(ap)::Int
+        lbr = length(bp)::Int
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
