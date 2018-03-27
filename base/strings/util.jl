@@ -58,9 +58,6 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
-startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
-
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
     cub = ncodeunits(b)
