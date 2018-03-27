@@ -372,7 +372,7 @@ function typeinf_work(frame::InferenceState)
                     typeassert(s[l], VarTable)
                     frame.handler_at[l] = frame.cur_hand
                 elseif hd === :leave
-                    for i = 1:((stmt.args[1])::Int)
+                    for i = 1:length(stmt.args)
                         frame.cur_hand = frame.cur_hand[2]
                     end
                 end

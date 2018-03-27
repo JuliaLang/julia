@@ -3773,7 +3773,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr)
     else if (head == leave_sym) {
         assert(jl_is_long(args[0]));
         ctx.builder.CreateCall(prepare_call(jlleave_func),
-                           ConstantInt::get(T_int32, jl_unbox_long(args[0])));
+                           ConstantInt::get(T_int32, jl_expr_nargs(ex)));
     }
     else {
         if (!jl_is_method(ctx.linfo->def.method)) {

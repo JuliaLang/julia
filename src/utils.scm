@@ -85,3 +85,12 @@
                                           (without (cdr alst) remove)))))
 
 (define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
+
+;; take values from the front of `l` until it is the same length as `target`
+;; E.g. (list-upto '(a b c d e) '(y x)) => '(a b c)
+(define (list-upto l target)
+  (define (rm-prefix l r)
+    (if (or (null? r) (null? l))
+        l
+        (rm-prefix (cdr l) (cdr r))))
+  (reverse (rm-prefix (reverse l) target)))
