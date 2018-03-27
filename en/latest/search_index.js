@@ -4637,7 +4637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "continue",
     "category": "keyword",
-    "text": "continue\n\nSkip the rest of the current loop, then carries on looping.\n\nExamples\n\njulia> for i = 1:6\n           iseven(i) && continue\n           println(i)\n       end\n1\n3\n5\n\n\n\n\n\n"
+    "text": "continue\n\nSkip the rest of the current loop iteration.\n\nExamples\n\njulia> for i = 1:6\n           iseven(i) && continue\n           println(i)\n       end\n1\n3\n5\n\n\n\n\n\n"
 },
 
 {
@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -7525,7 +7525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.muladd",
     "category": "function",
-    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z allowing the add and multiply to be contracted with each other or ones from other muladd and @fastmath to form fma if the transformation can improve performance. The result can be different on different machines and can also be different on the same machine due to constant propagation or other optimizations. See fma.\n\nExamples\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n\n\n"
+    "text": "muladd(x, y, z)\n\nCombined multiply-add: computes x*y+z, but allowing the add and multiply to be merged with each other or with surrounding operations for performance. For example, this may be implemented as an fma if the hardware supports it efficiently. The result can be different on different machines and can also be different on the same machine due to constant propagation or other optimizations. See fma.\n\nExamples\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n\n\n"
 },
 
 {
@@ -9333,7 +9333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bswap",
     "category": "function",
-    "text": "bswap(n)\n\nByte-swap an integer. Flip the bits of its binary representation.\n\nExamples\n\njulia> a = bswap(4)\n288230376151711744\n\njulia> bswap(a)\n4\n\njulia> string(1, base = 2)\n\"1\"\n\njulia> string(bswap(1), base = 2)\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n\n\n"
+    "text": "bswap(n)\n\nReverse the byte order of n.\n\nExamples\n\njulia> a = bswap(0x10203040)\n0x40302010\n\njulia> bswap(a)\n0x10203040\n\njulia> string(1, base = 2)\n\"1\"\n\njulia> string(bswap(1), base = 2)\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n\n\n"
 },
 
 {
