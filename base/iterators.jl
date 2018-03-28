@@ -735,7 +735,7 @@ changes the fastest.
 
 # Examples
 ```jldoctest
-julia> collect(Iterators.product(1:2,3:5))
+julia> collect(Iterators.product(1:2, 3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
@@ -795,30 +795,42 @@ iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 isdone(P::ProductIterator) = any(isdone, P.iterators)
-function iterate(P::ProductIterator)
-    svs = map(iterate, P.iterators)
-    any(x->x==nothing, svs) && return nothing
-    map(x->x[1], svs), svs
+# XXX: this should be lfold not all, since it might not be possible to determine if it `isdone`
+isdone(P::ProductIterator, states) = all(((i, s),) -> isdone(i, s[2]), zip(P.iterators, states))
+
+@inline _piterate() = ()
+@inline function _piterate(iter1, rest...)
+    next = iterate(iter1)
+    next === nothing && return nothing
+    restnext = _piterate(rest...)
+    restnext === nothing && return nothing
+    return (next, restnext...)
+end
+@inline function iterate(P::ProductIterator)
+    coalesce(isdone(P), false) && return nothing
+    next = _piterate(P.iterators...)
+    next === nothing && return nothing
+    return (map(x -> x[1], next), next)
 end
 
-update_svs(::Tuple{}, ::Tuple{}) = nothing
-function update_svs(its, svs)
-    x = iterate(first(its), first(svs)[2])
-    x != nothing && return (x, tail(svs)...)
-    svs′ = update_svs(tail(its), tail(svs))
-    svs′ == nothing && return nothing
-    x = iterate(first(its))
-    x == nothing && return nothing
-    (x, svs′...)
+@inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
+@inline function _piterate1(iters, states)
+    iter1 = first(iters)
+    next = iterate(iter1, first(states)[2])
+    restnext = tail(states)
+    if next === nothing
+        restnext = _piterate1(tail(iters), restnext)
+        restnext === nothing && return nothing
+        next = iterate(iter1)
+        next === nothing && return nothing
+    end
+    return (next, restnext...)
 end
-
-isdone(P::ProductIterator, svs) = all(splat(isdone), svs)
-function iterate(P::ProductIterator, svs)
-    coalesce(isdone(P, svs), false) && return nothing
-    iterators = P.iterators
-    svs′ = update_svs(P.iterators, svs)
-    svs′ == nothing && return svs′
-    map(x->x[1], svs′), svs′
+@inline function iterate(P::ProductIterator, states)
+    coalesce(isdone(P, states), false) && return nothing
+    next = _piterate1(P.iterators, states)
+    next === nothing && return nothing
+    return (map(x -> x[1], next), next)
 end
 
 reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
