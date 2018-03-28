@@ -343,10 +343,12 @@ end
 function load_julia_startup()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
-        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
+    BINDIR = Sys.BINDIR::String
+    SYSCONFDIR = Base.SYSCONFDIR::String
+    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
+        include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
     else
-        include_ifexists(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "startup.jl"))
+        include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
     end
     include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
     return nothing
