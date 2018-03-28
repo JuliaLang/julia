@@ -119,7 +119,7 @@ end
 
     @test rsplit("a b c") == ["a","b","c"]
     @test rsplit("a  b \t c\n") == ["a","b","c"]
-    
+
     @test rsplit("a b c"; limit=2) == ["a b", "c"]
     @test rsplit("a  b \t c\n"; limit=3) == ["a ","b","c"]
     @test rsplit("a b c"; keepempty=true) == ["a","b","c"]
