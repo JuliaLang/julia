@@ -482,7 +482,7 @@ mutable struct EnvCache
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
-        if any(haskey.(project, ["name", "uuid", "version"]))
+        if any(k->haskey(project, k), ("name", "uuid", "version"))
             project_package = PackageSpec(
                 get(project, "name", ""),
                 UUID(get(project, "uuid", 0)),
@@ -1180,22 +1180,13 @@ function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
     printpkgstyle(stdout, cmd, text...; kwargs...)
 end
 
-# Give a short path string representation
-pathrepr(path::String, base::String=pwd()) = pathrepr(nothing, path, base)
 
 function pathrepr(ctx::Union{Nothing, Context}, path::String, base::String=pwd())
-    if ctx isa Context
-        project_path = abspath(dirname(ctx.env.project_file))
-        path = joinpath(project_path, path)
-        if startswith(path, project_path)
-            # Path in project
-            if startswith(base, project_path)
-                # We are in project
-                path = relpath(path, base)
-            else
-                path = relpath(path, project_path)
-            end
-        end
+    project_path = dirname(ctx.env.project_file)
+    path = joinpath(project_path, path)
+    if startswith(path, project_path) && startswith(base, project_path)
+        # We are in project and path is in project
+        path = relpath(path, base)
     end
     if !Sys.iswindows() && isabspath(path)
         home = joinpath(homedir(), "")

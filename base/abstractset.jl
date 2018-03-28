@@ -109,7 +109,8 @@ Maintain order with arrays.
 """
 intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
 intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
-intersect!(s::AbstractSet, itr) = intersect!(s, union!(emptymutable(s), itr))
+intersect!(s::AbstractSet, itr) =
+    intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
 
 """
     setdiff(s, itrs...)

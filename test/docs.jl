@@ -1003,6 +1003,9 @@ end
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
 
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
+
 # issue 21016
 module I21016
 

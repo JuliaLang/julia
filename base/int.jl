@@ -320,15 +320,15 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 """
     bswap(n)
 
-Byte-swap an integer. Flip the bits of its binary representation.
+Reverse the byte order of `n`.
 
 # Examples
 ```jldoctest
-julia> a = bswap(4)
-288230376151711744
+julia> a = bswap(0x10203040)
+0x40302010
 
 julia> bswap(a)
-4
+0x10203040
 
 julia> string(1, base = 2)
 "1"

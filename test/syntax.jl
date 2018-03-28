@@ -1362,8 +1362,16 @@ end
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
 
+@test_throws ParseError Meta.parse("a.: b")
+@test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
+@test Meta.parse("a.:catch") == Expr(:., :a, QuoteNode(:catch))
+
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
 
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
+
+@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
+@test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
+@test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")

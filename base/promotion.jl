@@ -84,22 +84,35 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             while a.name !== b.name
                 a = supertype(a)
             end
-            aprimary = unwrap_unionall(a.name.wrapper)
+            if a.name === Type.body.name
+                ap = a.parameters[1]
+                bp = b.parameters[1]
+                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
+                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
+                    # handle special Type{T} supertype
+                    return Type
+                end
+            end
+            aprimary = a.name.wrapper
             # join on parameters
             n = length(a.parameters)
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(undef, n)
+            vars = []
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
-                    p[i] = ai
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
+                    aprimary = aprimary{ai}
                 else
-                    p[i] = aprimary.parameters[i]
+                    pushfirst!(vars, aprimary.var)
+                    aprimary = aprimary.body
                 end
             end
-            return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
+            for v in vars
+                aprimary = UnionAll(v, aprimary)
+            end
+            return aprimary
         end
         b = supertype(b)
     end

@@ -692,6 +692,44 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     return abstract_call(f, e.args, argtypes, vtypes, sv)
 end
 
+function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
+    isref = false
+    if T === Bottom
+        return Bottom
+    elseif isa(T, Type)
+        if isa(T, DataType) && (T::DataType).name === _REF_NAME
+            isref = true
+            T = T.parameters[1]
+            if isreturn && T === Any
+                return Bottom # a return type of Ref{Any} is invalid
+            end
+        end
+    else
+        return Any
+    end
+    if isa(linfo.def, Method)
+        spsig = linfo.def.sig
+        if isa(spsig, UnionAll)
+            if !isempty(linfo.sparam_vals)
+                env = pointer_from_objref(linfo.sparam_vals) + sizeof(Ptr{Cvoid})
+                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, env)
+                isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
+                for v in linfo.sparam_vals
+                    if isa(v, TypeVar)
+                        T = UnionAll(v, T)
+                    end
+                end
+            else
+                T = rewrap_unionall(T, spsig)
+            end
+        end
+    end
+    while isa(T, TypeVar)
+        T = T.ub
+    end
+    return T
+end
+
 function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
         return AbstractEvalConstant((e::QuoteNode).value)
@@ -722,41 +760,12 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         abstract_eval(e.args[1], vtypes, sv)
         t = Any
     elseif e.head === :foreigncall
-        rt = e.args[2]
-        if isa(sv.linfo.def, Method)
-            spsig = sv.linfo.def.sig
-            if isa(spsig, UnionAll)
-                if !isempty(sv.linfo.sparam_vals)
-                    env = pointer_from_objref(sv.linfo.sparam_vals) + sizeof(Ptr{Cvoid})
-                    rt = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, env)
-                else
-                    rt = rewrap_unionall(e.args[2], spsig)
-                end
-            end
-        end
         abstract_eval(e.args[1], vtypes, sv)
+        t = sp_type_rewrap(e.args[2], sv.linfo, true)
         for i = 3:length(e.args)
             if abstract_eval(e.args[i], vtypes, sv) === Bottom
                 t = Bottom
             end
-        end
-        if rt === Bottom
-            t = Bottom
-        elseif isa(rt, Type)
-            t = rt
-            if isa(t, DataType) && (t::DataType).name === _REF_NAME
-                t = t.parameters[1]
-                if t === Any
-                    t = Bottom # a return type of Box{Any} is invalid
-                end
-            end
-            for v in sv.linfo.sparam_vals
-                if isa(v,TypeVar)
-                    t = UnionAll(v, t)
-                end
-            end
-        else
-            t = Any
         end
     elseif e.head === :static_parameter
         n = e.args[1]
@@ -817,10 +826,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     else
         t = Any
     end
-    if isa(t, TypeVar)
-        # no need to use a typevar as the type of an expression
-        t = t.ub
-    end
+    @assert !isa(t, TypeVar)
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)

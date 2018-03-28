@@ -86,7 +86,6 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
         Pkg3.REPLMode.pkgstr("add $p2#$c")
     end
 
-    # TODO cleanup
     mktempdir() do tmp_dev_dir
     withenv("JULIA_PKG_DEVDIR" => tmp_dev_dir) do
         pkg"develop Example"
@@ -227,11 +226,18 @@ temp_pkg_dir() do project_path; cd(project_path) do
         c, r = test_complete("rm Exam")
         @test "Example" in c
         c, r = test_complete("add --man")
-        @test "manifest" in c
+        @test "--manifest" in c
         c, r = test_complete("rem")
         @test "remove" in c
         @test apply_completion("rm E") == "rm Example"
         @test apply_completion("add Exampl") == "add Example"
+
+        c, r = test_complete("preview r")
+        @test "remove" in c
+        c, r = test_complete("help r")
+        @test "remove" in c
+        @test !("rm" in c)
+
     finally
         popfirst!(LOAD_PATH)
     end

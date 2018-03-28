@@ -210,7 +210,7 @@ end
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    isvarargtype(t2) ? rewrap_unionall(t2.parameters[1],t) : t
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -223,6 +223,7 @@ end
 typename(union::UnionAll) = typename(union.body)
 
 convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
 convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 

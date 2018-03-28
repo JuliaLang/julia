@@ -4,7 +4,7 @@ __precompile__(true)
 
 module REPL
 
-using Base.Meta
+using Base.Meta, Sockets
 import InteractiveUtils
 
 export
@@ -893,7 +893,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(isequal(UInt8('\n')), sbuffer) === nothing)
+            shouldeval = (bytesavailable(sbuffer) == curspos && !occursin(UInt8('\n'), sbuffer))
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace

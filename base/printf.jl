@@ -180,6 +180,38 @@ function dynamic_pad(m, val, c::Char)
     end
 end
 
+# returns the number of (ASCII) chars output by print_fixed
+function print_fixed_width(precision, pt, ndigits, trailingzeros=true)
+    count = 0
+    if pt <= 0
+        # 0.0dddd0
+        count += 2
+        precision += pt
+        if pt < 0
+            count -= pt
+        end
+        count += ndigits
+        precision -= ndigits
+    elseif ndigits <= pt
+        # dddd000.000000
+        count += ndigits
+        if ndigits < pt
+            count += pt - ndigits
+        end
+        count += trailingzeros
+    else # 0 < pt < ndigits
+        # dd.dd0000
+        ndigits -= pt
+        count += pt + 1 + ndigits
+        precision -= ndigits
+    end
+    if trailingzeros && precision > 0
+        count += precision
+    end
+    return count
+end
+
+# note: if print_fixed is changed, print_fixed_width should be changed accordingly
 function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
     pdigits = pointer(DIGITSs[Threads.threadid()])
     if pt <= 0
@@ -741,13 +773,10 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     push!(fblk.args, fifblk)
     blk = fifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
-    push!(blk.args, :(padding = nothing))
+    push!(blk.args, :(padding = 0))
     push!(blk.args, :(width = $width))
     # need to compute value before left-padding since trailing zeros are elided
-    push!(blk.args, :(tmpout = IOBuffer()))
-    push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
-    push!(blk.args, :(tmpstr = String(take!(tmpout))))
-    push!(blk.args, :(width -= length(tmpstr)))
+    push!(blk.args, :(width -= print_fixed_width(fprec,pt,len,$('#' in flags))))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
     else
@@ -757,7 +786,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print space padding
     if !('-' in flags) && !('0' in flags)
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
     # print sign
@@ -767,15 +796,15 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print zero padding
     if !('-' in flags) && '0' in flags
         padexpr = dynamic_pad(:width, :padding, '0')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
     # finally print value
-    push!(blk.args, :(print(out,tmpstr)))
+    push!(blk.args, :(print_fixed(out,fprec,pt,len,$('#' in flags))))
     # print space padding
     if '-' in flags
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
 

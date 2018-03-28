@@ -687,6 +687,21 @@ end
 # After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
 # Also un-comment the new definition in base/indices.jl
 
+# Broadcast no longer defaults to treating its arguments as scalar (#)
+@noinline function Broadcast.broadcastable(x)
+    if Base.Broadcast.BroadcastStyle(typeof(x)) isa Broadcast.Unknown
+        depwarn("""
+            broadcast will default to iterating over its arguments in the future. Wrap arguments of
+            type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+            """, (:broadcast, :broadcast!))
+        return Ref{typeof(x)}(x)
+    else
+        return x
+    end
+end
+@eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
+# After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
+
 # deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
 @deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
 @deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(undef, dims...)
@@ -1212,9 +1227,6 @@ end
 @deprecate search(s::AbstractString, t::AbstractString, i::Integer) coalesce(findnext(t, s, i), 0:-1)
 @deprecate search(s::AbstractString, t::AbstractString) coalesce(findfirst(t, s), 0:-1)
 
-@deprecate search(buf::IOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-@deprecate search(buf::Base.GenericIOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findprev(in(c), s, i), 0)
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(in(c), s), 0)
 @deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) coalesce(findprev(t, s, i), 0:-1)
@@ -1538,6 +1550,9 @@ end
 @eval Broadcast Base.@deprecate_binding MatrixStyle DefaultArrayStyle{2} false
 @eval Broadcast Base.@deprecate_binding VectorStyle DefaultArrayStyle{1} false
 
+@deprecate Crand Libc.rand false
+@deprecate Csrand Libc.srand false
+
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
@@ -1546,6 +1561,14 @@ end
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+function search(buf::IOBuffer, delim::UInt8)
+    Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)
+    p = pointer(buf.data, buf.ptr)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    q == C_NULL && return nothing
+    return Int(q-p+1)
+end
 
 # END 0.7 deprecations
 

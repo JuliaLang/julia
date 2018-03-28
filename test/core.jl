@@ -24,6 +24,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError (Array{T} where T<:Vararg{Int})
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
+@test_throws TypeError TypeVar(:T) <: Any
+@test_throws TypeError TypeVar(:T) >: Any
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -99,17 +102,17 @@ Type{Integer}  # cache this
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{String,String},Tuple{GenericString,String},
-                            Tuple{String,GenericString},Tuple{Int,String,Int}),
-                   Tuple{Any,AbstractString,Vararg{Int}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Integer}})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{String,String}, Tuple{GenericString,String},
+               Tuple{String,GenericString}, Tuple{Int,String,Int}) ==
+    Tuple{Any,AbstractString,Vararg{Int}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Int8}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Integer}}
+@test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
+@test typejoin(Union{Int,AbstractString}, Int8) == Any
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
@@ -126,6 +129,20 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)

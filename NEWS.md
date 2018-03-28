@@ -456,6 +456,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `indexin` now returns the first rather than the last matching index ([#25998]).
 
+  * `parse(::Type, ::Char)` now uses a default base of 10, like other number parsing
+    methods, instead of 36 ([#26576]).
+
 Library improvements
 --------------------
 
@@ -914,6 +917,12 @@ Deprecated or removed
   * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
     and in the future `map` will operate only on values ([#5794]).
 
+  * Previously, broadcast defaulted to treating its arguments as scalars if they were not
+    arrays. This behavior is deprecated, and in the future `broadcast` will default to
+    iterating over all its arguments. Wrap arguments you wish to be treated as scalars with
+    `Ref()` or a 1-tuple. Package developers can choose to allow a non-iterable type `T` to
+    always behave as a scalar by implementing `broadcastable(x::T) = Ref(x)` ([#26212]).
+
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
@@ -1032,7 +1041,10 @@ Deprecated or removed
 
   * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
     `findlast`/`findprev` respectively, in combination with curried `isequal` and `in`
-    predicates for some methods ([#24673]
+    predicates for some methods ([#24673]).
+
+  * `search(buf::IOBuffer, delim::UInt8)` has been deprecated in favor of either `occursin(delim, buf)`
+    (to test containment) or `readuntil(buf, delim)` (to read data up to `delim`) ([#26600]).
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
@@ -1424,3 +1436,4 @@ Command-line option changes
 [#26286]: https://github.com/JuliaLang/julia/issues/26286
 [#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
+[#26600]: https://github.com/JuliaLang/julia/issues/26600

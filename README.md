@@ -99,8 +99,13 @@ If you need to build Julia on a machine without internet access, use `make -C de
 
 **Note:** The build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory). To run julia from anywhere you can:
+Once it is built, you can run the `julia` executable after you enter your julia directory and run
+
+    ./julia
+
+To run julia from anywhere you can:
 - add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
+
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
@@ -114,7 +119,7 @@ Now you should be able to run Julia like this:
 
     julia
 
-If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In this case, try moving the `julia` directory earlier in the PATH).
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In this case, try moving the `julia` directory earlier in the PATH). Note that most of the instructions above apply to unix systems.
 
 Your first test of Julia determines whether your build is working properly. From the UNIX/Windows command prompt inside
 the `julia` source directory, type `make testall`. You should see output that lists a series of running tests;

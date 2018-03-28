@@ -476,7 +476,10 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
-    @assert X isa typeinfo "$(typeof(X)) is not a subtype of $typeinfo"
+    if !(X isa typeinfo)
+        @assert typeinfo.name.module ∉ (Base, Core) "$(typeof(X)) is not a subtype of $typeinfo"
+        typeinfo = Any # no error for user-defined types
+    end
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)
