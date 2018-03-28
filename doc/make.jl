@@ -79,6 +79,7 @@ const PAGES = [
         "manual/environment-variables.md",
         "manual/embedding.md",
         "manual/packages.md",
+        "manual/code-loading.md",
         "manual/profile.md",
         "manual/stacktraces.md",
         "manual/performance-tips.md",
