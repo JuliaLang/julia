@@ -150,7 +150,7 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    typeseq(T, S)
+    T<:S && S<:T
 end
 function !=(T::Type, S::Type)
     @_pure_meta
