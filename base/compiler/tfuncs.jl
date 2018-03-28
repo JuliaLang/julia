@@ -436,13 +436,10 @@ end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
     getfield_tfunc(s00, name)
 function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
-    if isa(s00, TypeVar)
-        s00 = s00.ub
-    end
     s = unwrap_unionall(s00)
     if isa(s, Union)
-        return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
-                      rewrap(getfield_tfunc(s.b, name),s00))
+        return tmerge(getfield_tfunc(rewrap(s.a,s00), name),
+                      getfield_tfunc(rewrap(s.b,s00), name))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
     elseif isa(s, Const) || isconstType(s)

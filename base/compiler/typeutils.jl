@@ -66,8 +66,15 @@ function typesubtract(@nospecialize(a), @nospecialize(b))
     return a # TODO: improve this bound?
 end
 
+function tvar_extent(@nospecialize t)
+    while t isa TypeVar
+        t = t.ub
+    end
+    return t
+end
+
 function tuple_tail_elem(@nospecialize(init), ct)
-    return Vararg{widenconst(foldl((a, b) -> tmerge(a, unwrapva(b)), init, ct))}
+    return Vararg{widenconst(foldl((a, b) -> tmerge(a, tvar_extent(unwrapva(b))), init, ct))}
 end
 
 # t[n:end]
