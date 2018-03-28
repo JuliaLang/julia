@@ -239,17 +239,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+    split(s::AbstractString; limit::Integer=0, keep::Bool=false)
+    split(s::AbstractString, chars; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
 character delimiters, which may be specified in any of the formats allowed by
 [`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
 or as a single character or collection of characters.
 
-If `chars` is omitted, it defaults to the set of all space characters, and
-`keep` is taken to be `false`. The two keyword arguments are optional: they are a
-maximum size for the result and a flag determining whether empty fields should be kept in
-the result.
+If `chars` is omitted, it defaults to the set of all space characters.
+
+The optional keyword arguments are:
+ - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
+ - `keep`: whether empty fields should be kept in the result. Default is `false` without
+   a `chars` argument, `true` with a `chars` argument.
 
 # Examples
 ```jldoctest
