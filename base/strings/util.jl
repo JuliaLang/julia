@@ -240,7 +240,7 @@ end
 
 """
     split(s::AbstractString; limit::Integer=0, keep::Bool=false)
-    split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+    split(s::AbstractString, chars; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
 character delimiters, which may be specified in any of the formats allowed by
@@ -252,7 +252,7 @@ If `chars` is omitted, it defaults to the set of all space characters.
 The optional keyword arguments are:
  - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
  - `keep`: whether empty fields should be kept in the result. Default is `false` without
-   `chars` argument, `true` with `chars.
+   a `chars` argument, `true` with a `chars` argument.
 
 # Examples
 ```jldoctest
