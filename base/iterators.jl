@@ -293,33 +293,39 @@ axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
 eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 @inline isdone(z::Zip2) = isdone(z.a) | isdone(z.b)
 @inline isdone(z::Zip2, (sa, sb)::Tuple{Any, Any}) = isdone(z.a, sa) | isdone(z.b, sb)
-function zip_iterate(a, b, sta, stb)
-   da, db = isdone(a), isdone(b)
-   coalesce(da | db, false) && return nothing
-   ya, yb = nothing, nothing
-   if ismissing(da)
-      ya = iterate(a, sta...)
-      ya === nothing && return nothing
-   end
-   if ismissing(db)
-      yb = iterate(b, stb...)
-      yb === nothing && return nothing
-   end
-   coalesce(da, true) || (ya = iterate(a, sta...))
-   coalesce(db, true) || (yb = iterate(b, stb...))
-   (ya, yb)
+function zip_iterate(a, b, sta, stb) # the states are either Tuple{} or Tuple{Any}
+    da, db = isdone(a), isdone(b)
+    da === true && return nothing
+    db === true && return nothing
+    if da === missing
+       ya = iterate(a, sta...)
+       ya === nothing && return nothing
+    end
+    if db === missing
+       yb = iterate(b, stb...)
+       yb === nothing && return nothing
+    end
+    if da === false
+         ya = iterate(a, sta...)
+         ya === nothing && return nothing
+    end
+    if db === false
+         yb = iterate(b, stb...)
+         yb === nothing && return nothing
+    end
+    return (ya, yb)
 end
-let interleave = (a, b)->((a == nothing || b == nothing) ? nothing : ((a[1],b[1]), (a[2], b[2])))
+let interleave(a, b) = ((a[1], b[1]), (a[2], b[2]))
     global iterate
     @propagate_inbounds function iterate(z::Zip2)
-	ys = zip_iterate(z.a, z.b, (), ())
-	ys === nothing && return nothing
-	interleave(ys...)
+        ys = zip_iterate(z.a, z.b, (), ())
+        ys === nothing && return nothing
+        return interleave(ys...)
     end
     @propagate_inbounds function iterate(z::Zip2, st::Tuple{Any, Any})
         ys = zip_iterate(z.a, z.b, (st[1],), (st[2],))
         ys === nothing && return nothing
-        interleave(ys...)
+        return interleave(ys...)
     end
 end
 
@@ -367,17 +373,17 @@ axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
 eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 @inline isdone(z::Zip) = isdone(z.a) | isdone(z.z)
 @inline isdone(z::Zip, (sa, sz)) = isdone(z.a, sa) | isdone(z.a, sz)
-let interleave = (a, b)->((a == nothing || b == nothing) ? nothing : ((a[1],b[1]...), (a[2], b[2])))
+let interleave(a, b) = ((a[1], b[1]...), (a[2], b[2]))
     global iterate
     @propagate_inbounds function iterate(z::Zip)
         ys = zip_iterate(z.a, z.z, (), ())
         ys === nothing && return nothing
-        interleave(ys...)
+        return interleave(ys...)
     end
     @propagate_inbounds function iterate(z::Zip, st::Tuple{Any, Any})
         ys = zip_iterate(z.a, z.z, (st[1],), (st[2],))
         ys === nothing && return nothing
-        interleave(ys...)
+        return interleave(ys...)
     end
 end
 
