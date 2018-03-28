@@ -111,7 +111,7 @@ function Base.show(io::IO, code::IRCode)
         floop = true
         while !isempty(new_nodes_perm) && code.new_nodes[Base.peek(new_nodes_perm)][1] == idx
             node_idx = popfirst!(new_nodes_perm)
-            _, typ, node, line = code.new_nodes[node_idx]
+            _, reverse_affinity, typ, node, line = code.new_nodes[node_idx]
             node_idx += length(code.stmts)
             if print_sep
                 if floop
