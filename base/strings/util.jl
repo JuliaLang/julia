@@ -254,6 +254,8 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `chars` argument, `true` with a `chars` argument.
 
+See also [`rsplit`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = "Ma.rch"
