@@ -1293,6 +1293,9 @@ function CredentialPayload(cache::CachedCredentials; kwargs...)
     CredentialPayload(nothing, cache; kwargs...)
 end
 
+CredentialPayload(p::CredentialPayload) = p
+
+
 """
     reset!(payload, [config]) -> CredentialPayload
 
@@ -1364,3 +1367,6 @@ function reject(p::CredentialPayload; shred::Bool=true)
     shred && securezero!(cred)
     nothing
 end
+
+# Useful for functions which can handle various kinds of credentials
+const Creds = Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}
