@@ -794,9 +794,16 @@ _prod_eltype(::Type{I}) where {I<:Tuple} =
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
 
-isdone(P::ProductIterator) = any(isdone, P.iterators)
-# XXX: this should be lfold not all, since it might not be possible to determine if it `isdone`
-isdone(P::ProductIterator, states) = all(((i, s),) -> isdone(i, s[2]), zip(P.iterators, states))
+@inline isdone(P::ProductIterator) = any(isdone, P.iterators)
+@inline function _pisdone(iters, states)
+    iter1 = first(iters)
+    done1 = isdone(iter1, first(states)) # check step
+    done1 === true || return done1 # false or missing
+    done1 = isdone(iter1) # check restart
+    done1 === true || return done1 # false or missing
+    return _pisdone(tail(iters), tail(states)) # check tail
+end
+@inline isdone(P::ProductIterator, states) = _pisdone(P.iterators, states)
 
 @inline _piterate() = ()
 @inline function _piterate(iter1, rest...)
@@ -807,7 +814,7 @@ isdone(P::ProductIterator, states) = all(((i, s),) -> isdone(i, s[2]), zip(P.ite
     return (next, restnext...)
 end
 @inline function iterate(P::ProductIterator)
-    coalesce(isdone(P), false) && return nothing
+    isdone(P) === true && return nothing
     next = _piterate(P.iterators...)
     next === nothing && return nothing
     return (map(x -> x[1], next), next)
@@ -819,6 +826,7 @@ end
     next = iterate(iter1, first(states)[2])
     restnext = tail(states)
     if next === nothing
+        isdone(iter1) === true && return nothing
         restnext = _piterate1(tail(iters), restnext)
         restnext === nothing && return nothing
         next = iterate(iter1)
@@ -827,7 +835,7 @@ end
     return (next, restnext...)
 end
 @inline function iterate(P::ProductIterator, states)
-    coalesce(isdone(P, states), false) && return nothing
+    isdone(P, states) === true && return nothing
     next = _piterate1(P.iterators, states)
     next === nothing && return nothing
     return (map(x -> x[1], next), next)
