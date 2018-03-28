@@ -1156,8 +1156,9 @@
 (define (parse-def s is-func anon)
   (let* ((ex  (with-bindings ((accept-dots-without-comma anon))
                              (parse-unary-prefix s)))
-         (sig (if (or (and is-func (reserved-word? ex)) (initial-reserved-word? ex))
-                  (error (string "invalid name \"" ex "\""))
+         (sig (if (reserved-word? ex)
+                  (error (string "invalid " (if is-func "function" "macro")
+                                 " name \"" ex "\""))
                   (parse-call-chain s ex #f)))
          (decl-sig
           (if (and is-func (eq? (peek-token s) '|::|))
@@ -2382,7 +2383,9 @@
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
-                            (parse-unary-prefix s))))
+                            (parse-atom s))))
+              (if (reserved-word? head)
+                  (error (string "invalid macro usage \"@" head "\"")))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring
