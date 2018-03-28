@@ -213,7 +213,7 @@ end
 
 # note: if print_fixed is changed, print_fixed_width should be changed accordingly
 function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
-    pdigits = pointer(DIGITS)
+    pdigits = pointer(DIGITSs[Threads.threadid()])
     if pt <= 0
         # 0.0dddd0
         print(out, '0')
@@ -346,7 +346,7 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, zeros, '0'))
     end
     # print integer
-    push!(blk.args, :(unsafe_write(out, pointer(DIGITS), pt)))
+    push!(blk.args, :(unsafe_write(out, pointer(DIGITSs[Threads.threadid()]), pt)))
     # print padding
     if padding !== nothing && '-' in flags
         push!(blk.args, pad(width-precision, padding, ' '))
@@ -405,7 +405,7 @@ function gen_f(flags::String, width::Int, precision::Int, c::Char)
     if precision > 0
         push!(blk.args, :(print_fixed(out,$precision,pt,len)))
     else
-        push!(blk.args, :(unsafe_write(out, pointer(DIGITS), len)))
+        push!(blk.args, :(unsafe_write(out, pointer(DIGITSs[Threads.threadid()]), len)))
         push!(blk.args, :(while pt >= (len+=1) print(out,'0') end))
         '#' in flags && push!(blk.args, :(print(out, '.')))
     end
@@ -438,8 +438,9 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
     end
     # interpret the number
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(DIGITS)-1)
+    ndigits = min(precision+1,length(DIGITSs[Threads.threadid()])-1)
     push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
+    push!(blk.args, :(digits = DIGITSs[Threads.threadid()]))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -496,21 +497,21 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
         push!(blk.args, pad(width, padding, '0'))
     end
     # print digits
-    push!(blk.args, :(write(out, DIGITS[1])))
+    push!(blk.args, :(write(out, digits[1])))
     if precision > 0
         if inside_g && !('#' in flags)
             push!(blk.args, :(endidx = $ndigits;
-                              while endidx > 1 && DIGITS[endidx] == UInt8('0')
+                              while endidx > 1 && digits[endidx] == UInt8('0')
                                   endidx -= 1
                               end;
                               if endidx > 1
                                   print(out, '.')
-                                  unsafe_write(out, pointer(DIGITS)+1, endidx-1)
+                                  unsafe_write(out, pointer(digits)+1, endidx-1)
                               end
                               ))
         else
             push!(blk.args, :(print(out, '.')))
-            push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
+            push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
             if ndigits < precision+1
                 n = precision+1-ndigits
                 push!(blk.args, pad(n, n, '0'))
@@ -553,9 +554,10 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
     if precision < 0
         push!(blk.args, :((do_out, args) = $fn(out,$x, $flags, $width, $precision, $c)))
     else
-        ndigits = min(precision+1,length(DIGITS)-1)
+        ndigits = min(precision+1,length(DIGITSs[Threads.threadid()])-1)
         push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c)))
     end
+    push!(blk.args, :(digits = DIGITSs[Threads.threadid()]))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -606,10 +608,10 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width, padding, '0'))
     end
     # print digits: assumes ASCII/UTF8 encoding of digits is okay for `out`
-    push!(blk.args, :(write(out, DIGITS[1])))
+    push!(blk.args, :(write(out, digits[1])))
     if precision > 0
         push!(blk.args, :(print(out, '.')))
-        push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
+        push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
             push!(blk.args, pad(n, n, '0'))
@@ -622,7 +624,7 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         else
             push!(vpblk.args, :(print(out, '.')))
         end
-        push!(vpblk.args, :(unsafe_write(out, pointer(DIGITS)+1, len-1)))
+        push!(vpblk.args, :(unsafe_write(out, pointer(digits)+1, len-1)))
         push!(blk.args, ifvpblk)
     end
     for ch in expmark
@@ -748,7 +750,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     #
     x, ex, blk = special_handler(flags,width)
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(DIGITS)-1)
+    ndigits = min(precision+1,length(DIGITSs[Threads.threadid()])-1)
     # See if anyone else wants to handle it
     push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
     ifblk = Expr(:if, :do_out, Expr(:block))
@@ -817,10 +819,10 @@ end
 
 ### core unsigned integer decoding functions ###
 
-macro handle_zero(ex)
+macro handle_zero(ex, digits)
     quote
         if $(esc(ex)) == 0
-            DIGITS[1] = '0'
+            $(esc(digits))[1] = '0'
             return Int32(1), Int32(1), $(esc(:neg))
         end
     end
@@ -857,10 +859,11 @@ end
 
 function decode_oct(d::Integer)
     neg, x = handlenegative(d)
-    @handle_zero x
+    digits = DIGITSs[Threads.threadid()]
+    @handle_zero x digits
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
-        DIGITS[i] = '0'+(x&0x7)
+        digits[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
@@ -871,8 +874,9 @@ function decode_0ct(d::Integer)
     neg, x = handlenegative(d)
     # doesn't need special handling for zero
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
+    digits = DIGITSs[Threads.threadid()]
     while i > 0
-        DIGITS[i] = '0'+(x&0x7)
+        digits[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
@@ -881,10 +885,11 @@ end
 
 function decode_dec(d::Integer)
     neg, x = handlenegative(d)
-    @handle_zero x
+    digits = DIGITSs[Threads.threadid()]
+    @handle_zero x digits
     pt = i = Base.ndigits0z(x)
     while i > 0
-        DIGITS[i] = '0'+rem(x,10)
+        digits[i] = '0'+rem(x,10)
         x = div(x,10)
         i -= 1
     end
@@ -893,10 +898,11 @@ end
 
 function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1})
     neg, x = handlenegative(d)
-    @handle_zero x
+    digits = DIGITSs[Threads.threadid()]
+    @handle_zero x digits
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
-        DIGITS[i] = symbols[(x&0xf)+1]
+        digits[i] = symbols[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -912,9 +918,10 @@ decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
 function decode(b::Int, x::BigInt)
     neg = x.size < 0
     pt = Base.ndigits(x, abs(b))
-    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    digits = DIGITSs[Threads.threadid()]
+    length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    GMP.MPZ.get_str!(DIGITS, b, x)
+    GMP.MPZ.get_str!(digits, b, x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
 end
@@ -925,14 +932,15 @@ decode_HEX(x::BigInt) = decode(-16, x)
 
 function decode_0ct(x::BigInt)
     neg = x.size < 0
-    DIGITS[1] = '0'
+    digits = DIGITSs[Threads.threadid()]
+    digits[1] = '0'
     if x.size == 0
         return Int32(1), Int32(1), neg
     end
     pt = Base.ndigits0z(x, 8) + 1
-    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    p = convert(Ptr{UInt8}, DIGITS) + 1
+    p = convert(Ptr{UInt8}, digits) + 1
     GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
@@ -953,17 +961,18 @@ end
 #
 
 function decode_dec(x::SmallFloatingPoint)
+    digits = DIGITSs[Threads.threadid()]
     if x == 0.0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), false)
     end
     len,pt,neg = grisu(x,Grisu.FIXED,0)
     if len == 0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), false)
     else
         for i = len+1:pt
-            DIGITS[i] = '0'
+            digits[i] = '0'
         end
     end
     return Int32(len), Int32(pt), neg
@@ -982,10 +991,11 @@ fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
 fix_dec(x::Integer, n::Int) = decode_dec(x)
 
 function fix_dec(x::SmallFloatingPoint, n::Int)
-    if n > length(DIGITS)-1; n = length(DIGITS)-1; end
+    digits = DIGITSs[Threads.threadid()]
+    if n > length(digits)-1; n = length(digits)-1; end
     len,pt,neg = grisu(x,Grisu.FIXED,n)
     if len == 0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), neg)
     end
     return Int32(len), Int32(pt), neg
@@ -1003,14 +1013,15 @@ ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
 function ini_dec(d::Integer, n::Int)
     neg, x = handlenegative(d)
     k = ndigits(x)
+    digits = DIGITSs[Threads.threadid()]
     if k <= n
         pt = k
         for i = k:-1:1
-            DIGITS[i] = '0'+rem(x,10)
+            digits[i] = '0'+rem(x,10)
             x = div(x,10)
         end
         for i = k+1:n
-            DIGITS[i] = '0'
+            digits[i] = '0'
         end
     else
         p = Base.powers_of_ten[k-n+1]
@@ -1025,7 +1036,7 @@ function ini_dec(d::Integer, n::Int)
         pt = k
         x = div(x,p)
         for i = n:-1:1
-            DIGITS[i] = '0'+rem(x,10)
+            digits[i] = '0'+rem(x,10)
             x = div(x,10)
         end
     end
@@ -1034,7 +1045,7 @@ end
 
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITSs[Threads.threadid()], '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
         len,pt,neg = grisu(x,Grisu.PRECISION,n)
@@ -1044,14 +1055,14 @@ end
 
 function ini_dec(x::BigInt, n::Int)
     if x.size == 0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITSs[Threads.threadid()], '0', n)
         return Int32(1), Int32(1), false
     end
     d = Base.ndigits0z(x)
     if d <= n
         info = decode_dec(x)
         d == n && return info
-        p = convert(Ptr{Cvoid}, DIGITS) + info[2]
+        p = convert(Ptr{Cvoid}, DIGITSs[Threads.threadid()]) + info[2]
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
@@ -1070,8 +1081,9 @@ ini_hex(x::Real, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), symbols)
 
 function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
+    digits = DIGITSs[Threads.threadid()]
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1080,11 +1092,11 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
         # ensure last 2 exponent bits either 01 or 10
         u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         end
         i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
         while i > 0
-            DIGITS[i] = symbols[(u&0xf)+1]
+            digits[i] = symbols[(u&0xf)+1]
             u >>= 4
             i -= 1
         end
@@ -1095,8 +1107,9 @@ end
 
 function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
     x = Float64(x)
+    digits = DIGITSs[Threads.threadid()]
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', 1)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1106,7 +1119,7 @@ function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
         u >>= (t<<2)
         n = 14-t
         for i = n:-1:1
-            DIGITS[i] = symbols[(u&0xf)+1]
+            digits[i] = symbols[(u&0xf)+1]
             u >>= 4
         end
         # pt is the binary exponent
@@ -1161,12 +1174,13 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     write(fmt, UInt8(0))
     printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
-    bufsiz = length(DIGITS)
+    digits = DIGITSs[Threads.threadid()]
+    bufsiz = length(digits)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
                 (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-                DIGITS, bufsiz, printf_fmt, d)
+                digits, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
+    unsafe_write(out, pointer(digits), min(lng, bufsiz-1))
     return (false, ())
 end
 

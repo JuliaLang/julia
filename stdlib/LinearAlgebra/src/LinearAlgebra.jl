@@ -350,6 +350,9 @@ function __init__()
         if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
+        Threads.resize_nthreads!(Abuf)
+        Threads.resize_nthreads!(Bbuf)
+        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
