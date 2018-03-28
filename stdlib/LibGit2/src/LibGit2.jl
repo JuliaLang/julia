@@ -261,6 +261,7 @@ The keyword arguments are:
   * `refspecs=AbstractString[]`: determines properties of the fetch.
   * `credentials=nothing`: provides credentials and/or settings when authenticating against
     a private `remote`.
+  * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
@@ -315,6 +316,7 @@ The keyword arguments are:
      overwriting the remote branch.
   * `credentials=nothing`: provides credentials and/or settings when authenticating against
      a private `remote`.
+  * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
@@ -535,6 +537,7 @@ The keyword arguments are:
     the remote - it will be assumed to already exist.
   * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
     against a private repository.
+  * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 
