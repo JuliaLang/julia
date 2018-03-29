@@ -707,8 +707,7 @@ function ssa_substitute!(val, arg_replacements, spsig, spvals)
         end
     end
     urs = userefs(val)
-    emptytuple = ()
-    urs === emptytuple && return val
+    urs === () && return val
     for op in urs
         op[] = ssa_substitute!(op[], arg_replacements, spsig, spvals)
     end
