@@ -240,7 +240,7 @@ end
     @test @inferred(squeeze(a, dims=1)) == @inferred(squeeze(a, dims=(1,))) == reshape(a, (1, 8, 8, 1))
     @test @inferred(squeeze(a, dims=(1, 5))) == squeeze(a, dims=(5, 1)) == reshape(a, (1, 8, 8))
     @test @inferred(squeeze(a, dims=(1, 2, 5))) == squeeze(a, dims=(5, 2, 1)) == reshape(a, (8, 8))
-    @test_throws ArgumentError squeeze(a)
+    @test_throws UndefKeywordError squeeze(a)
     @test_throws ArgumentError squeeze(a, dims=0)
     @test_throws ArgumentError squeeze(a, dims=(1, 1))
     @test_throws ArgumentError squeeze(a, dims=(1, 2, 1))

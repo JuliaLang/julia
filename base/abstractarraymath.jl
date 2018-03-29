@@ -64,7 +64,7 @@ julia> squeeze(a; dims=3)
  2  4
 ```
 """
-squeeze(A; dims=throw(ArgumentError("the dimensions to squeeze must be specified with a `dims` keyword argument"))) = _squeeze(A, dims)
+squeeze(A; dims) = _squeeze(A, dims)
 function _squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
