@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    linearindices, (:), |, +, -, !==, !, splat
+    linearindices, (:), |, +, -, !==, !, <, splat, missing
 
 import .Base:
     first, last,
@@ -88,7 +88,7 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
     y = iterate(state...)
-    y == nothing && return y
+    y === nothing && return y
     idx, itrs = y
     (A.itr[idx], (state[1], itrs))
 end
@@ -137,7 +137,7 @@ size(e::Enumerate) = size(e.itr)
 @propagate_inbounds function iterate(e::Enumerate, state=(1,))
     i, rest = state[1], tail(state)
     n = iterate(e.itr, rest...)
-    n == nothing && return n
+    n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
 
@@ -153,7 +153,7 @@ end
 @inline function iterate(r::Reverse{<:Enumerate}, state)
     i, ri, rest = state[1], state[2], tail(tail(state))
     n = iterate(ri, rest...)
-    n == nothing && return n
+    n === nothing && return n
     (i, n[1]), (i-1, ri, n[2])
 end
 
@@ -274,7 +274,7 @@ axes(z::Zip1) = axes(z.a)
 eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 @propagate_inbounds function iterate(z::Zip1, state...)
     n = iterate(z.a, state...)
-    n == nothing && return n
+    n === nothing && return n
     return ((n[1],), n[2])
 end
 @inline isdone(z::Zip1, state...) = isdone(z.a, state...)
@@ -590,7 +590,7 @@ isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state))
     n, rest = state[1], tail(state)
     n <= 0 && return nothing
     y = iterate(it.xs, rest...)
-    y == nothing && return nothing
+    y === nothing && return nothing
     return y[1], (n - 1, y[2])
 end
 
@@ -645,7 +645,7 @@ length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 function iterate(it::Drop)
     y = iterate(it.xs)
     for i in 1:it.n
-        y == nothing && return y
+        y === nothing && return y
         y = iterate(it.xs, y[2])
     end
     y
@@ -685,7 +685,7 @@ isdone(it::Cycle) = isdone(it.xs)
 isdone(it::Cycle, state) = false
 function iterate(it::Cycle, state)
     y = iterate(it.xs, state)
-    y == nothing && return iterate(it)
+    y === nothing && return iterate(it)
     y
 end
 
@@ -899,8 +899,8 @@ length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
         y = iterate(tail(state)...)
         y !== nothing && return (y[1], (state[1], state[2], y[2]))
     end
-    x = (state == () ? iterate(f.it) : iterate(f.it, state[1]))
-    x == nothing && return nothing
+    x = (state === () ? iterate(f.it) : iterate(f.it, state[1]))
+    x === nothing && return nothing
     iterate(f, (x[2], x[1]))
 end
 
@@ -941,7 +941,7 @@ function length(itr::PartitionIterator)
 end
 
 function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) == nothing && return nothing
+    iterate(itr.c, state) === nothing && return nothing
     l = state
     r = min(state + itr.n-1, length(itr.c))
     return view(itr.c, l:r), r + 1
@@ -954,7 +954,7 @@ function iterate(itr::PartitionIterator, state...)
     # This is necessary to remember whether we cut the
     # last element short. In such cases, we do return that
     # element, but not the next one
-    state == (IterationCutShort(),) && return nothing
+    state === (IterationCutShort(),) && return nothing
     i = 0
     y = iterate(itr.c, state...)
     while y !== nothing
@@ -965,8 +965,8 @@ function iterate(itr::PartitionIterator, state...)
         end
         y = iterate(itr.c, y[2])
     end
-    i == 0 && return nothing
-    return resize!(v, i), y == nothing ? IterationCutShort() : y[2]
+    i === 0 && return nothing
+    return resize!(v, i), y === nothing ? IterationCutShort() : y[2]
 end
 
 """
@@ -1040,19 +1040,19 @@ function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
 end
 
 if Base === Core.Compiler
-    approx_iter_type(a, b, c) = Any
+    approx_iter_type(a::Type) = Any
 else
     # Try to find an appropriate type for the (value, state tuple),
     # by doing a recursive unrolling of the iteration protocol up to
     # fixpoint.
-    approx_iter_type(itrT::Type) = approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
+    approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
     # Not actually called, just passed to return type to avoid
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
         iterate(itr, tail(valstate))
     end
-    function approx_iter_type(itrT::Type, vstate::Type)
+    function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
         vstate <: Union{} && return Union{}
         nextvstate = Base._return_type(doiterate, Tuple{itrT, vstate})

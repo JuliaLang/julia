@@ -28,7 +28,7 @@ struct StmtRange <: AbstractUnitRange{Int}
 end
 first(r::StmtRange) = r.first
 last(r::StmtRange) = r.last
-next(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
+iterate(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
@@ -474,7 +474,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::
         compact.result_types[old_result_idx] = typ
         compact.result_lines[old_result_idx] = new_line
         result_idx = process_node!(compact, old_result_idx, new_node, new_idx, idx)
-        (old_result_idx == result_idx) && return next(compact, (idx, active_bb, result_idx))
+        (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb, result_idx))
         compact.result_idx = result_idx
         return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb, compact.result_idx)
     end
@@ -498,7 +498,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb, old_result_idx)::
                 StmtRange(result_idx, last(new_bb.stmts)))
         end
     end
-    (old_result_idx == result_idx) && return next(compact, (idx + 1, active_bb, result_idx))
+    (old_result_idx == result_idx) && return iterate(compact, (idx + 1, active_bb, result_idx))
     compact.idx = idx + 1
     compact.result_idx = result_idx
     if !isassigned(compact.result, old_result_idx)

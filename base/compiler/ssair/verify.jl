@@ -13,6 +13,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         else
             if !dominates(domtree, def_bb, use_bb)
+                enable_new_optimizer[] = false
                 #@Base.show ir
                 #@Base.show ir.cfg
                 #@Base.error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
@@ -20,6 +21,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, Union{SlotNumber, TypedSlot})
+        enable_new_optimizer[] = false
         #@error "Left over slot detected in converted IR"
         error()
     end
@@ -32,6 +34,7 @@ function verify_ir(ir::IRCode)
     last_end = 0
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
+            enable_new_optimizer[] = false
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
             #@Base.show ranges
             #@Base.show (first(block.stmts), last_end)
@@ -53,6 +56,7 @@ function verify_ir(ir::IRCode)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
                 if !(edge in ir.cfg.blocks[bb].preds)
+                    enable_new_optimizer[] = false
                     #@Base.show ir
                     #@Base.show (idx, edge, bb, ir.cfg.blocks[bb].preds)
                     error()

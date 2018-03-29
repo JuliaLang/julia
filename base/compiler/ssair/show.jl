@@ -1,16 +1,21 @@
+import Base: Base, IOContext, string, join, sprint
+IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
+length(s::String) = Base.length(s)
+^(s::String, i::Int) = Base.:^(s, i)
+
 function Base.show(io::IO, cfg::CFG)
     foreach(pairs(cfg.blocks)) do (idx, block)
-        println("$idx\t=>\t", join(block.succs, ", "))
+        Base.println("$idx\t=>\t", join(block.succs, ", "))
     end
 end
 
-print_ssa(io::IO, val) = isa(val, SSAValue) ? print(io, "%$(val.id)") : print(io, val)
+print_ssa(io::IO, val) = isa(val, SSAValue) ? Base.print(io, "%$(val.id)") : Base.print(io, val)
 function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
-        print(io, "%$idx $pad= ")
+        Base.print(io, "%$idx $pad= ")
     else
-        print(io, " "^(maxsize+4))
+        Base.print(io, " "^(maxsize+4))
     end
     if isa(stmt, PhiNode)
         args = map(1:length(stmt.edges)) do i
@@ -21,48 +26,48 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
                 end
             "$e => $v"
         end
-        print(io, "φ ", '(', join(args, ", "), ')')
+        Base.print(io, "φ ", '(', join(args, ", "), ')')
     elseif isa(stmt, PiNode)
-        print(io, "π (")
+        Base.print(io, "π (")
         print_ssa(io, stmt.val)
-        print(io, ", ")
+        Base.print(io, ", ")
         if color
-            printstyled(io, stmt.typ, color=:red)
+            Base.printstyled(io, stmt.typ, color=:red)
         else
-            print(io, stmt.typ)
+            Base.print(io, stmt.typ)
         end
-        print(io, ")")
+        Base.print(io, ")")
     elseif isa(stmt, ReturnNode)
         if !isdefined(stmt, :val)
-            print(io, "unreachable")
+            Base.print(io, "unreachable")
         else
-            print(io, "return ")
+            Base.print(io, "return ")
             print_ssa(io, stmt.val)
         end
     elseif isa(stmt, GotoIfNot)
-        print(io, "goto ", stmt.dest, " if not ")
+        Base.print(io, "goto ", stmt.dest, " if not ")
         print_ssa(io, stmt.cond)
     elseif isexpr(stmt, :call)
         print_ssa(io, stmt.args[1])
-        print(io, "(")
-        print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args[2:end]), ", "))
-        print(io, ")")
+        Base.print(io, "(")
+        Base.print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args[2:end]), ", "))
+        Base.print(io, ")")
         if print_typ && stmt.typ !== Any
-            print(io, "::$(stmt.typ)")
+            Base.print(io, "::$(stmt.typ)")
         end
     elseif isexpr(stmt, :new)
-        print(io, "new(")
-        print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args), ", "))
-        print(io, ")")
+        Base.print(io, "new(")
+        Base.print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args), ", "))
+        Base.print(io, ")")
     else
-        print(io, stmt)
+        Base.print(io, stmt)
     end
 end
 
 function Base.show(io::IO, code::IRCode)
     io = IOContext(io, :color=>true)
-    used = Set{Int}()
-    println(io, "Code")
+    used = IdSet{Int}()
+    Base.println(io, "Code")
     foreach(stmt->scan_ssa_use!(used, stmt), code.stmts)
     foreach(((_a, _b, node, _d),) -> scan_ssa_use!(used, node), code.new_nodes)
     if isempty(used)
@@ -83,9 +88,9 @@ function Base.show(io::IO, code::IRCode)
         bb_start_str = string("$(bb_idx) ",length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄",  "─"^(bb_pad)," ")
         if idx != last(bbrange)
             if idx == first(bbrange)
-                print(io, bb_start_str)
+                Base.print(io, bb_start_str)
             else
-                print(io, "│  "," "^max_bb_idx_size)
+                Base.print(io, "│  "," "^max_bb_idx_size)
             end
         end
         print_sep = false
@@ -99,9 +104,9 @@ function Base.show(io::IO, code::IRCode)
             node_idx += length(code.stmts)
             if print_sep
                 if floop
-                    print(io, bb_start_str)
+                    Base.print(io, bb_start_str)
                 else
-                    print(io, "│  "," "^max_bb_idx_size)
+                    Base.print(io, "│  "," "^max_bb_idx_size)
                 end
             end
             print_sep = true
@@ -112,15 +117,15 @@ function Base.show(io::IO, code::IRCode)
                     print_typ=!print_ssa_typ || (isa(node, Expr) && typ != node.typ))
             end
             if print_ssa_typ
-                printstyled(io, "::$(typ)", color=:red)
+                Base.printstyled(io, "::$(typ)", color=:red)
             end
-            println(io)
+            Base.println(io)
         end
         if print_sep
             if idx == first(bbrange) && floop
-                print(io, bb_start_str)
+                Base.print(io, bb_start_str)
             else
-                print(io, idx == last(bbrange) ? string("└", "─"^(1+max_bb_idx_size), " ") :
+                Base.print(io, idx == last(bbrange) ? string("└", "─"^(1+max_bb_idx_size), " ") :
                     string("│  ", " "^max_bb_idx_size))
             end
         end
@@ -132,8 +137,8 @@ function Base.show(io::IO, code::IRCode)
         print_node(io, idx, stmt, used, maxsize,
             print_typ=!print_ssa_typ || (isa(stmt, Expr) && typ != stmt.typ))
         if print_ssa_typ
-            printstyled(io, "::$(typ)", color=:red)
+            Base.printstyled(io, "::$(typ)", color=:red)
         end
-        println(io)
+        Base.println(io)
     end
 end
