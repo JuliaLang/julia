@@ -290,13 +290,13 @@ max(x, y) in Base at operators.jl:215
 max(a, b, c, xs...) in Base at operators.jl:281
 ```
 
-Keywords are also displayed in the suggested methods, see second line after `;` where `limit`
-and `keep` are keyword arguments:
+Keywords are also displayed in the suggested methods after `;`, see below line where `limit`
+and `keepempty` are keyword arguments:
 
 ```julia-repl
 julia> split("1 1 1", [TAB]
-split(str::AbstractString) in Base at strings/util.jl:302
-split(str::T, splitter; limit, keep) where T<:AbstractString in Base at strings/util.jl:277
+split(str::AbstractString; limit, keepempty) in Base at strings/util.jl:302
+split(str::T, splitter; limit, keepempty) where T<:AbstractString in Base at strings/util.jl:277
 ```
 
 The completion of the methods uses type inference and can therefore see if the arguments match

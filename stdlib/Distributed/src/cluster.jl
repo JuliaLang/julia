@@ -1153,8 +1153,8 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
+    for line in split(read(path, String),'\n'; keepempty=false)
+        s = split(line, '*'; keepempty=false)
         map!(strip, s, s)
         if length(s) > 1
             cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])
