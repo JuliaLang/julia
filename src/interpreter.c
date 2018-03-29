@@ -581,6 +581,29 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
+                // This is a bit tricky, but supports the implementation of PhiC nodes.
+                // They are conceptually slots, but the slot to store to doesn't get explicitly
+                // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
+                // nicely with the rest of the SSA representation). In a compiler, we would figure
+                // out which slot to store to at compile time when we encounter the statement. We
+                // can't quite do that here, but we do something similar: We scan the catch entry
+                // block (the only place where PhiC nodes may occur) to find all the Upsilons we
+                // can possibly encounter. Then, we remember which slot they store to (we abuse the
+                // SSA value result array for this purpose). TODO: We could do this only the first
+                // time we encounter a given enter.
+                size_t catch_ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
+                while (catch_ip < ns) {
+                    jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
+                    if (!jl_is_phicnode(phicnode))
+                        break;
+                    jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
+                    for (size_t i = 0; i < jl_array_len(values); ++i) {
+                        jl_value_t *val = jl_array_ptr_ref(values, i);
+                        assert(jl_is_ssavalue(val));
+                        s->locals[jl_source_nslots(s->src) + ((jl_ssavalue_t*)val)->id - 1] = jl_box_ssavalue(catch_ip);
+                    }
+                    catch_ip += 1;
+                }
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, s, s->ip + 1, toplevel);
                 }

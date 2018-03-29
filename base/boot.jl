@@ -108,6 +108,14 @@
 #    values::Vector{Any}
 #end
 
+#struct PhiCNode
+#    values::Vector{Any}
+#end
+
+#struct UpsilonNode
+#    val
+#end
+
 #struct QuoteNode
 #    value
 #end
@@ -152,6 +160,7 @@ export
     UndefKeywordError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef, PiNode, PhiNode,
+    PhiCNode, UpsilonNode, LineInfoNode,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -357,6 +366,9 @@ eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
+eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
+eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
+eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -419,13 +431,24 @@ function Symbol(a::Array{UInt8,1})
 end
 Symbol(s::Symbol) = s
 
+struct LineInfoNode
+    mod::Module
+    method::Symbol
+    file::Symbol
+    line::Int
+    inlined_at::Int
+    LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
+        new(mod, method, file, line, inlined_at)
+end
+
 # module providing the IR object model
 module IR
 export CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, LineInfoNode
 
 import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, LineInfoNode
+
 end
 
 # docsystem basics

@@ -1,13 +1,7 @@
-struct LineInfoNode
-    mod::Module
-    method::Symbol
-    file::Symbol
-    line::Int
-    inlined_at::Int
-end
+using Core: LineInfoNode
 const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
-if true
+if false
     import Base: Base, @show
 else
     macro show(s)

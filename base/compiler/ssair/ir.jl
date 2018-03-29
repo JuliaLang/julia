@@ -1,5 +1,6 @@
-Core.PhiNode() = PhiNode(Any[], Any[])
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
+@eval Core.UpsilonNode() = $(Expr(:new, Core.UpsilonNode))
+Core.PhiNode() = Core.PhiNode(Any[], Any[])
 
 struct Argument
     n::Int
@@ -34,6 +35,7 @@ StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
 struct BasicBlock
     stmts::StmtRange
+    #error_handler::Bool
     preds::Vector{Int}
     succs::Vector{Int}
 end
@@ -41,9 +43,9 @@ function BasicBlock(stmts::StmtRange)
     BasicBlock(stmts, Int[], Int[])
 end
 function BasicBlock(old_bb, stmts)
-    BasicBlock(stmts, old_bb.preds, old_bb.succs)
+    BasicBlock(stmts, #= old_bb.error_handler, =# old_bb.preds, old_bb.succs)
 end
-copy(bb::BasicBlock) = BasicBlock(bb.stmts, copy(bb.preds), copy(bb.succs))
+copy(bb::BasicBlock) = BasicBlock(bb.stmts, #= bb.error_handler, =# copy(bb.preds), copy(bb.succs))
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -71,6 +73,13 @@ function compute_basic_blocks(stmts::Vector{Any})
                     push!(jump_dests, stmt.label)
                 end
             end
+        elseif isa(stmt, Expr) && stmt.head === :leave
+            # :leave terminates a BB
+            push!(jump_dests, idx+1)
+        elseif isa(stmt, Expr) && stmt.head == :enter
+            # :enter starts/ends a BB
+            push!(jump_dests, idx)
+            push!(jump_dests, idx+1)
         end
     end
     bb_starts = sort(collect(jump_dests))
@@ -103,6 +112,18 @@ function compute_basic_blocks(stmts::Vector{Any})
             push!(blocks[block′].preds, num)
             push!(b.succs, block′)
         elseif !isa(terminator, ReturnNode)
+            if isa(terminator, Expr) && terminator.head == :enter
+                # :enter gets a virtual edge to the exception handler and
+                # the exception handler gets a virtual edge from outside
+                # the function.
+                # See the devdocs on exception handling in SSA form (or
+                # bug Keno to write them, if you're reading this and they
+                # don't exist)
+                block′ = block_for_inst(basic_block_index, terminator.args[1])
+                push!(blocks[block′].preds, num)
+                push!(blocks[block′].preds, 0)
+                push!(b.succs, block′)
+            end
             if num + 1 <= length(blocks)
                 push!(blocks[num+1].preds, num)
                 push!(b.succs, num+1)
@@ -122,7 +143,7 @@ function first_insert_for_bb(code, cfg, block)
 end
 
 
-const NewNode = Tuple{Int, Any, Any, #=LineNumber=#Int}
+const NewNode = Tuple{Int, #= reverse affinity =#Bool, Any, Any, #=LineNumber=#Int}
 
 struct IRCode
     stmts::Vector{Any}
@@ -146,7 +167,7 @@ function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
         return x.stmts[s.id]
     else
-        return x.new_nodes[s.id - length(x.stmts)][3]
+        return x.new_nodes[s.id - length(x.stmts)][4]
     end
 end
 
@@ -197,11 +218,11 @@ function getindex(x::UseRef)
     elseif isa(stmt, GotoIfNot)
         x.use == 1 || return OOBToken()
         return stmt.cond
-    elseif isa(stmt, ReturnNode) || isa(stmt, PiNode)
+    elseif isa(stmt, ReturnNode) || isa(stmt, PiNode) || isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOBToken()
         x.use == 1 || return OOBToken()
         return stmt.val
-    elseif isa(stmt, PhiNode)
+    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
         x.use > length(stmt.values) && return OOBToken()
         isassigned(stmt.values, x.use) || return UndefToken()
         return stmt.values[x.use]
@@ -234,13 +255,13 @@ function setindex!(x::UseRef, @nospecialize(v))
     elseif isa(stmt, GotoIfNot)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = GotoIfNot(v, stmt.dest)
-    elseif isa(stmt, ReturnNode)
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = typeof(stmt)(v)
     elseif isa(stmt, PiNode)
         x.use == 1 || throw(BoundsError())
         x.urs.stmt = typeof(stmt)(v, stmt.typ)
-    elseif isa(stmt, PhiNode)
+    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
         x.use > length(stmt.values) && throw(BoundsError())
         isassigned(stmt.values, x.use) || throw(BoundsError())
         stmt.values[x.use] = v
@@ -252,7 +273,7 @@ end
 
 function userefs(@nospecialize(x))
     if (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, Union{GotoIfNot, ReturnNode, PiNode, PhiNode})
+        isa(x, Union{GotoIfNot, ReturnNode, PiNode, PhiNode, PhiCNode, UpsilonNode})
         UseRefIterator(x)
     else
         ()
@@ -300,9 +321,9 @@ function foreachssa(f, @nospecialize(stmt))
     end
 end
 
-function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val))
+function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val), reverse_affinity::Bool=false)
     line = ir.lines[pos]
-    push!(ir.new_nodes, (pos, typ, val, line))
+    push!(ir.new_nodes, (pos, reverse_affinity, typ, val, line))
     return SSAValue(length(ir.stmts) + length(ir.new_nodes))
 end
 
@@ -332,7 +353,8 @@ mutable struct IncrementalCompact
     result_idx::Int
     active_result_bb::Int
     function IncrementalCompact(code::IRCode)
-        perm = my_sortperm(Int[code.new_nodes[i][1] for i in 1:length(code.new_nodes)])
+        # Sort by position with reverse affinity nodes before regular ones
+        perm = my_sortperm(Int[(code.new_nodes[i][1]*2 + Int(!code.new_nodes[i][2])) for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
         result = Array{Any}(undef, new_len)
         result_types = Array{Any}(undef, new_len)
@@ -428,7 +450,7 @@ function getindex(view::TypesView, idx)
         if idx <= length(ir.types)
             return ir.types[idx]
         else
-            return ir.new_nodes[idx - length(ir.types)][2]
+            return ir.new_nodes[idx - length(ir.types)][3]
         end
     end
 end
@@ -450,6 +472,24 @@ function value_typ(ir::IncrementalCompact, value)
     return typeof(value)
 end
 
+function process_phinode_values(old_values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas)
+    values = Vector{Any}(undef, length(old_values))
+    for i = 1:length(old_values)
+        isassigned(old_values, i) || continue
+        val = old_values[i]
+        if isa(val, SSAValue)
+            if val.id > processed_idx
+                push!(late_fixup, result_idx)
+                val = OldSSAValue(val.id)
+            else
+                val = renumber_ssa!(val, ssa_rename, true, used_ssas)
+            end
+        end
+        values[i] = val
+    end
+    values
+end
+
 function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{Any},
         late_fixup::Vector{Int}, used_ssas::Vector{Int}, @nospecialize(stmt),
         idx::Int, processed_idx::Int)
@@ -459,25 +499,14 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
     elseif isa(stmt, GotoNode) || isa(stmt, GlobalRef)
         result[result_idx] = stmt
         result_idx += 1
-    elseif isa(stmt, Expr) || isa(stmt, PiNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+    elseif isa(stmt, Expr) || isa(stmt, PiNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
         result[result_idx] = renumber_ssa!(stmt, ssa_rename, true, used_ssas)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        values = Vector{Any}(undef, length(stmt.values))
-        for i = 1:length(stmt.values)
-            isassigned(stmt.values, i) || continue
-            val = stmt.values[i]
-            if isa(val, SSAValue)
-                if val.id > processed_idx
-                    push!(late_fixup, result_idx)
-                    val = OldSSAValue(val.id)
-                else
-                    val = renumber_ssa!(val, ssa_rename, true, used_ssas)
-                end
-            end
-            values[i] = val
-        end
-        result[result_idx] = PhiNode(stmt.edges, values)
+        result[result_idx] = PhiNode(stmt.edges, process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
+        result_idx += 1
+    elseif isa(stmt, PhiCNode)
+        result[result_idx] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
         result_idx += 1
     elseif isa(stmt, SSAValue)
         # identity assign, replace uses of this ssa value with its result
@@ -525,6 +554,12 @@ function finish_current_bb!(compact, old_result_idx=compact.result_idx)
     nothing
 end
 
+function reverse_affinity_stmt_after(compact::IncrementalCompact, idx::Int)
+    compact.new_nodes_idx > length(compact.perm) && return false
+    entry = compact.ir.new_nodes[compact.perm[compact.new_nodes_idx]]
+    entry[1] == idx + 1 && entry[2]
+end
+
 function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
         return nothing
@@ -537,13 +572,19 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
     if compact.new_nodes_idx <= length(compact.perm) && compact.ir.new_nodes[compact.perm[compact.new_nodes_idx]][1] == idx
         new_idx = compact.perm[compact.new_nodes_idx]
         compact.new_nodes_idx += 1
-        _, typ, new_node, new_line = compact.ir.new_nodes[new_idx]
+        _, reverse_affinity, typ, new_node, new_line = compact.ir.new_nodes[new_idx]
         new_idx += length(compact.ir.stmts)
         compact.result_types[old_result_idx] = typ
         compact.result_lines[old_result_idx] = new_line
         result_idx = process_node!(compact, old_result_idx, new_node, new_idx, idx)
-        (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
         compact.result_idx = result_idx
+        # If this instruction has reverse affinity and we were at the end of a basic block,
+        # finish it now.
+        if reverse_affinity && idx == last(bb.stmts)+1 && !reverse_affinity_stmt_after(compact, idx-1)
+            active_bb += 1
+            finish_current_bb!(compact, old_result_idx)
+        end
+        (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
         return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
     end
     # This will get overwritten in future iterations if
@@ -553,7 +594,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx)
     stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx]
     compact.result_idx = result_idx
-    if idx == last(bb.stmts)
+    if idx == last(bb.stmts) && !reverse_affinity_stmt_after(compact, idx)
         active_bb += 1
         finish_current_bb!(compact, old_result_idx)
     end
@@ -583,22 +624,30 @@ function maybe_erase_unused!(extra_worklist, compact, idx)
     end
 end
 
+function fixup_phinode_values!(compact, old_values)
+    values = Vector{Any}(undef, length(old_values))
+    for i = 1:length(old_values)
+        isassigned(old_values, i) || continue
+        val = old_values[i]
+        if isa(val, OldSSAValue)
+            val = compact.ssa_rename[val.id]
+            if isa(val, SSAValue)
+                compact.used_ssas[val.id] += 1
+            end
+        end
+        values[i] = val
+    end
+    values
+end
+
 function just_fixup!(compact)
     for idx in compact.late_fixup
-        stmt = compact.result[idx]::PhiNode
-        values = Vector{Any}(undef, length(stmt.values))
-        for i = 1:length(stmt.values)
-            isassigned(stmt.values, i) || continue
-            val = stmt.values[i]
-            if isa(val, OldSSAValue)
-                val = compact.ssa_rename[val.id]
-                if isa(val, SSAValue)
-                    compact.used_ssas[val.id] += 1
-                end
-            end
-            values[i] = val
+        stmt = compact.result[idx]::Union{PhiNode, PhiCNode}
+        if isa(stmt, PhiNode)
+            compact.result[idx] = PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
+        else
+            compact.result[idx] = PhiCNode(fixup_phinode_values!(compact, stmt.values))
         end
-        compact.result[idx] = PhiNode(stmt.edges, values)
     end
 end
 

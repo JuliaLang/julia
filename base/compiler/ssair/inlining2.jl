@@ -1,10 +1,11 @@
 function ssa_inlining_pass!(ir::IRCode, domtree, linetable, sv::OptimizationState)
     # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    todo = assemble_inline_todo!(ir, domtree, linetable, sv)
+    @timeit "analysis" todo = assemble_inline_todo!(ir, domtree, linetable, sv)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    return batch_inline!(todo, ir, domtree, linetable, sv)
+    @timeit "execution" ir = batch_inline!(todo, ir, domtree, linetable, sv)
+    return ir
 end
 
 function batch_inline!(todo, ir, domtree, linetable, sv)
@@ -217,6 +218,8 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
                         end
                     elseif isa(stmt′, GotoNode)
                         stmt′ = GotoNode(stmt′.label + bb_offset)
+                    elseif isa(stmt′, Expr) && stmt′.head == :enter
+                        stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
                     elseif isa(stmt′, GotoIfNot)
                         stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
                     elseif isa(stmt′, PhiNode)
@@ -248,6 +251,8 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
             end
         elseif isa(stmt, GotoNode)
             compact[idx] = GotoNode(bb_rename[stmt.label])
+        elseif isa(stmt, Expr) && stmt.head == :enter
+            compact[idx] = Expr(:enter, bb_rename[stmt.args[1]])
         elseif isa(stmt, GotoIfNot)
             compact[idx] = GotoIfNot(stmt.cond, bb_rename[stmt.dest])
         elseif isa(stmt, PhiNode)
@@ -440,7 +445,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         end
 
         # Ok, now figure out what method to call
-        if invoke_data === nothing
+        @timeit "method matching" if invoke_data === nothing
             min_valid = UInt[typemin(UInt)]
             max_valid = UInt[typemax(UInt)]
             meth = _methods_by_ftype(atype, 1, sv.params.world, min_valid, max_valid)
@@ -544,7 +549,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             ast = copy_exprargs(src.code)
         end
 
-        if src.codelocs === nothing
+        @timeit "inline IR inflation" if src.codelocs === nothing
             topline = LineInfoNode(method.module, method.name, method.file, method.line, 0)
             inline_linetable = [topline]
             push!(ast, LabelNode(length(ast) + 1))

@@ -279,16 +279,12 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        any_enter = any_phi = false
-        if enable_new_optimizer[]
-            any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
-            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
-        end
-        if enable_new_optimizer[] && !any_enter && isa(def, Method)
+        any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
+        if enable_new_optimizer[] && isa(def, Method)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
+                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), Int(0))
             else
                 topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
             end
@@ -297,7 +293,6 @@ function optimize(me::InferenceState)
             force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
             #@timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
             replace_code_newstyle!(opt.src, ir, nargs, linetable)
-            any_phi = true
         else
             # This pass is required for the AST to be valid in codegen
             # if any `SSAValue` is created by type inference. Ref issue #6068

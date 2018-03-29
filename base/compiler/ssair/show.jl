@@ -28,6 +28,8 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
             "$e => $v"
         end
         Base.print(io, "φ ", '(', join(args, ", "), ')')
+    elseif isa(stmt, PhiCNode)
+        Base.print(io, "φᶜ ", '(', join(map(x->sprint(print_ssa, x), stmt.values), ", "), ')')
     elseif isa(stmt, PiNode)
         Base.print(io, "π (")
         print_ssa(io, stmt.val)
@@ -37,6 +39,12 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
         else
             Base.print(io, stmt.typ)
         end
+        Base.print(io, ")")
+    elseif isa(stmt, UpsilonNode)
+        Base.print(io, "ϒ (")
+        isdefined(stmt, :val) ?
+            print_ssa(io, stmt.val) :
+            Base.print(io, "#undef")
         Base.print(io, ")")
     elseif isa(stmt, ReturnNode)
         if !isdefined(stmt, :val)
@@ -108,7 +116,7 @@ function Base.show(io::IO, code::IRCode)
         floop = true
         while !isempty(new_nodes_perm) && code.new_nodes[peek(new_nodes_perm)][1] == idx
             node_idx = popfirst!(new_nodes_perm)
-            _, typ, node, line = code.new_nodes[node_idx]
+            _, reverse_affinity, typ, node, line = code.new_nodes[node_idx]
             node_idx += length(code.stmts)
             if print_sep
                 if floop
