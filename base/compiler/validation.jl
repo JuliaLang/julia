@@ -55,7 +55,7 @@ end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
 function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    if JLOptions().debug_level == 2
+    #=if JLOptions().debug_level == 2
         # this is a debug build of julia, so let's validate linfo
         errors = validate_code(linfo, src)
         if !isempty(errors)
@@ -69,7 +69,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                 end
             end
         end
-    end
+    end=#
 end
 
 """
