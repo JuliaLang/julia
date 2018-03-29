@@ -667,6 +667,12 @@ Deprecated or removed
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
 
+  * The use of a positional dimension argument has largely been deprecated in favor of a
+    `dims` keyword argument. This includes the functions `sum`, `prod`, `maximum`,
+    `minimum`, `all`, `any`, `findmax`, `findmin`, `mean`, `varm`, `std`, `var`, `cov`,
+    `cor`, `median`, `mapreducedim`, `reducedim`, `sort`, `accumulate`, `accumulate!`,
+    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, and `squeeze` ([#25501]).
+
   * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
     `axes(a, d)` ([#25057]).
 

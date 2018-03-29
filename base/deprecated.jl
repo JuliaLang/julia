@@ -1364,6 +1364,8 @@ export readandwrite
 
 @deprecate flipdim(A, d) reverse(A, dims=d)
 
+@deprecate squeeze(A, dims) squeeze(A, dims=dims)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
