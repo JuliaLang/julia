@@ -29,7 +29,7 @@ struct StmtRange <: AbstractUnitRange{Int}
 end
 first(r::StmtRange) = r.first
 last(r::StmtRange) = r.last
-next(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
+iterate(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
@@ -598,7 +598,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int, 
         active_bb += 1
         finish_current_bb!(compact, old_result_idx)
     end
-    (old_result_idx == compact.result_idx) && return next(compact, (idx + 1, active_bb))
+    (old_result_idx == compact.result_idx) && return iterate(compact, (idx + 1, active_bb))
     compact.idx = idx + 1
     if !isassigned(compact.result, old_result_idx)
         @assert false
