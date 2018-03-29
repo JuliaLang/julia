@@ -2306,7 +2306,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
             end
         end
     end
-    colptrB = cumsum(colptrB)
+    cumsum!(colptrB,colptrB)
     if n > (idxB-1)
         deleteat!(nzvalB, idxB:n)
         deleteat!(rowvalB, idxB:n)
