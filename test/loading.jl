@@ -507,6 +507,9 @@ end
     end
 end
 
+# normalization of paths by include (#26424)
+@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+
 ## cleanup after tests ##
 
 for env in keys(envs)
