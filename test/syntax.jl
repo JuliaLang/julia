@@ -1378,3 +1378,11 @@ end
 @test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
 @test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
 @test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
+
+# issue #26507
+@test_throws ParseError Meta.parse("@try")
+@test_throws ParseError Meta.parse("@catch")
+@test_throws ParseError Meta.parse("macro try() end")
+@test_throws ParseError Meta.parse("macro catch() end")
+@test_throws ParseError Meta.parse("function try() end")
+@test_throws ParseError Meta.parse("function catch() end")
