@@ -39,11 +39,11 @@ element type of `A`, e.g. for integer types.
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
 2×2 Array{Float64,2}:
- 6.0  3.0
  4.0  3.0
+ 6.0  3.0
 
 julia> F = lufact!(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
  1.0       0.0
@@ -59,7 +59,7 @@ julia> iA = [4 3; 6 3]
  6  3
 
 julia> lufact!(iA)
-ERROR: InexactError: convert(Int64, 0.6666666666666666)
+ERROR: InexactError: Int64(Int64, 0.6666666666666666)
 Stacktrace:
 [...]
 ```
@@ -69,7 +69,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true)) where {T
     m, n = size(A)
     minmn = min(m,n)
     info = 0
-    ipiv = Vector{BlasInt}(uninitialized, minmn)
+    ipiv = Vector{BlasInt}(undef, minmn)
     @inbounds begin
         for k = 1:minmn
             # find index max
@@ -162,7 +162,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
  1.0  0.0
@@ -268,7 +268,8 @@ function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     end
 end
 
-Base.propertynames(F::LU, private::Bool=false) = append!([:L,:U,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::LU, private::Bool=false) =
+    (:L, :U, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 issuccess(F::LU) = F.info == 0
 
@@ -395,7 +396,7 @@ end
 function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}
     n = size(A, 1)
     info = 0
-    ipiv = Vector{BlasInt}(uninitialized, n)
+    ipiv = Vector{BlasInt}(undef, n)
     dl = A.dl
     d = A.d
     du = A.du

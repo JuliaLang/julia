@@ -41,9 +41,9 @@ end
     end
 end
 @testset "show" begin
-    @test contains(string(spv_x1), "1.25")
-    @test contains(string(spv_x1), "-0.75")
-    @test contains(string(spv_x1), "3.5")
+    @test occursin("1.25", string(spv_x1))
+    @test occursin("-0.75", string(spv_x1))
+    @test occursin("3.5", string(spv_x1))
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -432,7 +432,7 @@ end
 
 @testset "Concatenation" begin
     let m = 80, n = 100
-        A = Vector{SparseVector{Float64,Int}}(uninitialized, n)
+        A = Vector{SparseVector{Float64,Int}}(undef, n)
         tnnz = 0
         for i = 1:length(A)
             A[i] = sprand(m, 0.3)
@@ -822,7 +822,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = A*x
@@ -835,7 +835,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = *(transpose(A), x)
@@ -850,7 +850,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x)
@@ -864,7 +864,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')

@@ -81,6 +81,9 @@ static const intptr_t Array1d_tag      = 30;
 static const intptr_t Singleton_tag    = 31;
 static const intptr_t CommonSym_tag    = 32;
 static const intptr_t NearbyGlobal_tag = 33;  // a GlobalRef pointing to tree_enclosing_module
+static const intptr_t CoreMod_tag      = 34;
+static const intptr_t BaseMod_tag      = 35;
+static const intptr_t BITypeName_tag   = 36;  // builtin TypeName
 static const intptr_t Null_tag         = 253;
 static const intptr_t ShortBackRef_tag = 254;
 static const intptr_t BackRef_tag      = 255;
@@ -125,55 +128,47 @@ static arraylist_t builtin_typenames;
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
-/* read and write in network (bigendian) order: */
+/* read and write in host byte order */
 
 static void write_int32(ios_t *s, int32_t i)
 {
-    write_uint8(s, (i>>24) & 0xff);
-    write_uint8(s, (i>>16) & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, i       & 0xff);
+    ios_write(s, (char*)&i, 4);
 }
 
 static int32_t read_int32(ios_t *s)
 {
-    int b3 = read_uint8(s);
-    int b2 = read_uint8(s);
-    int b1 = read_uint8(s);
-    int b0 = read_uint8(s);
-    return b0 | (b1<<8) | (b2<<16) | (b3<<24);
+    int32_t x = 0;
+    ios_read(s, (char*)&x, 4);
+    return x;
 }
 
 static void write_uint64(ios_t *s, uint64_t i)
 {
-    write_int32(s, (i>>32) & 0xffffffff);
-    write_int32(s, i       & 0xffffffff);
+    ios_write(s, (char*)&i, 8);
 }
 
 static uint64_t read_uint64(ios_t *s)
 {
-    uint64_t b1 = (uint32_t)read_int32(s);
-    uint64_t b0 = (uint32_t)read_int32(s);
-    return b0 | (b1<<32);
+    uint64_t x = 0;
+    ios_read(s, (char*)&x, 8);
+    return x;
 }
 
 static void write_int64(ios_t *s, int64_t i)
 {
-    write_int32(s, (i>>32) & 0xffffffff);
-    write_int32(s, i       & 0xffffffff);
+    ios_write(s, (char*)&i, 8);
 }
 
 static void write_uint16(ios_t *s, uint16_t i)
 {
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, i       & 0xff);
+    ios_write(s, (char*)&i, 2);
 }
 
 static uint16_t read_uint16(ios_t *s)
 {
-    int b1 = read_uint8(s);
-    int b0 = read_uint8(s);
-    return b0 | (b1<<8);
+    int16_t x = 0;
+    ios_read(s, (char*)&x, 2);
+    return x;
 }
 
 static void writetag(ios_t *s, void *v)
@@ -484,7 +479,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
 
     if (s->mode == MODE_AST) {
         // compressing tree
-        if (!as_literal && !is_ast_node(v)) {
+        if (v == (jl_value_t*)jl_core_module) {
+            writetag(s->s, (jl_value_t*)CoreMod_tag);
+            return;
+        }
+        else if (v == (jl_value_t*)jl_base_module) {
+            writetag(s->s, (jl_value_t*)BaseMod_tag);
+            return;
+        }
+        else if (!as_literal && !is_ast_node(v)) {
             writetag(s->s, (jl_value_t*)LiteralVal_tag);
             int id = literal_val_id(s, v);
             assert(id >= 0 && id < UINT16_MAX);
@@ -788,6 +791,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 return;
             }
             assert(!t->instance && "detected singleton construction corruption");
+
+            if (t == jl_typename_type) {
+                void **bp = ptrhash_bp(&ser_tag, ((jl_typename_t*)t)->wrapper);
+                if (*bp != HT_NOTFOUND) {
+                    writetag(s->s, (jl_value_t*)BITypeName_tag);
+                    write_uint8(s->s, (uint8_t)(intptr_t)*bp);
+                    return;
+                }
+            }
             if (t->size <= 255) {
                 writetag(s->s, (jl_value_t*)SmallDataType_tag);
                 write_uint8(s->s, t->size);
@@ -1047,7 +1059,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 5;
+static const int JI_FORMAT_VERSION = 6;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -1849,6 +1861,17 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     else if (vtag == (jl_value_t*)Singleton_tag) {
         return jl_deserialize_value_singleton(s, loc);
     }
+    else if (vtag == (jl_value_t*)CoreMod_tag) {
+        return (jl_value_t*)jl_core_module;
+    }
+    else if (vtag == (jl_value_t*)BaseMod_tag) {
+        return (jl_value_t*)jl_base_module;
+    }
+    else if (vtag == (jl_value_t*)BITypeName_tag) {
+        jl_value_t *ty = deser_tag[read_uint8(s->s)];
+        jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
+        return (jl_value_t*)dt->name;
+    }
     else if (vtag == (jl_value_t*)jl_string_type) {
         size_t n = read_int32(s->s);
         jl_value_t *str = jl_alloc_string(n);
@@ -2315,7 +2338,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
-    jl_array_t *mod_array, *udeps = NULL;
+    jl_array_t *mod_array = NULL, *udeps = NULL;
     if (ios_mkstemp(&f, tmpfname) == NULL) {
         jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", tmpfname);
         return 1;
@@ -2825,11 +2848,13 @@ void jl_init_serializer(void)
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
+                     (void*)CoreMod_tag, (void*)BaseMod_tag, (void*)BITypeName_tag,
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
                      lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym, boundscheck_sym,
+                     unreachable_sym,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
@@ -2844,10 +2869,7 @@ void jl_init_serializer(void)
                      jl_box_int32(21), jl_box_int32(22), jl_box_int32(23),
                      jl_box_int32(24), jl_box_int32(25), jl_box_int32(26),
                      jl_box_int32(27), jl_box_int32(28), jl_box_int32(29),
-                     jl_box_int32(30), jl_box_int32(31), jl_box_int32(32),
-#ifndef _P64
-                     jl_box_int32(33), jl_box_int32(34), jl_box_int32(35),
-#endif
+
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
                      jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
@@ -2858,12 +2880,11 @@ void jl_init_serializer(void)
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
-                     jl_box_int64(30), jl_box_int64(31), jl_box_int64(32),
-#ifdef _P64
-                     jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
-#endif
+
+                     jl_bool_type, jl_int32_type, jl_int64_type,
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
-                     jl_quotenode_type, jl_type_type, jl_bottom_type, jl_ref_type,
+                     jl_quotenode_type, jl_pinode_type, jl_phinode_type,
+                     jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
                      jl_densearray_type, jl_function_type, jl_unionall_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,
@@ -2871,23 +2892,8 @@ void jl_init_serializer(void)
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
-                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_typeofbottom_type,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
-                     jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
-                     jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
-                     jl_typename_type->name, jl_type_typename, jl_methtable_type->name,
-                     jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name,
-                     jl_vararg_typename, jl_void_type->name, jl_method_instance_type->name, jl_method_type->name,
-                     jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
-                     jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
-                     jl_intrinsic_type->name, jl_task_type->name, jl_labelnode_type->name,
-                     jl_linenumbernode_type->name, jl_builtin_type->name, jl_gotonode_type->name,
-                     jl_quotenode_type->name, jl_globalref_type->name, jl_typeofbottom_type->name,
-                     jl_string_type->name, jl_abstractstring_type->name, jl_namedtuple_type,
-                     jl_namedtuple_typename,
+                     jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
+                     jl_typeofbottom_type, jl_namedtuple_type,
 
                      ptls->root_task,
 

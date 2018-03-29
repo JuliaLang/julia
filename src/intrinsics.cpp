@@ -356,6 +356,9 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     if (unboxed) {
         if (!dest)
             return unboxed;
+        Type *dest_ty = unboxed->getType()->getPointerTo();
+        if (dest->getType() != dest_ty)
+            dest = emit_bitcast(ctx, dest, dest_ty);
         ctx.builder.CreateStore(unboxed, dest);
         return NULL;
     }
@@ -753,7 +756,11 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
+#if JL_LLVM_VERSION >= 60000
+            fmf.setFast();
+#else
             fmf.setUnsafeAlgebra();
+#endif
         }
 #if JL_LLVM_VERSION >= 50000
         if (contract)

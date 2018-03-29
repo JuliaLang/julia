@@ -124,7 +124,7 @@ The variable `relation` is declared inside the `if` block, but used outside. How
 on this behavior, make sure all possible code paths define a value for the variable. The following
 change to the above function results in a runtime error
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function test(x,y)
            if x < y
                relation = "less than"
@@ -315,7 +315,7 @@ one can write `<cond> || <statement>` (which could be read as: <cond> *or else* 
 
 For example, a recursive factorial routine could be defined like this:
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function fact(n::Int)
            n >= 0 || error("n must be non-negative")
            n == 0 && return 1
@@ -332,7 +332,9 @@ julia> fact(0)
 julia> fact(-1)
 ERROR: n must be non-negative
 Stacktrace:
- [1] fact(::Int64) at ./none:2
+ [1] error at ./error.jl:33 [inlined]
+ [2] fact(::Int64) at ./none:2
+ [3] top-level scope
 ```
 
 Boolean operations *without* short-circuit evaluation can be done with the bitwise boolean operators
@@ -381,7 +383,7 @@ julia> i = 1;
 
 julia> while i <= 5
            println(i)
-           i += 1
+           global i += 1
        end
 1
 2
@@ -469,7 +471,7 @@ julia> while true
            if i >= 5
                break
            end
-           i += 1
+           global i += 1
        end
 1
 2
@@ -525,7 +527,25 @@ julia> for i = 1:2, j = 3:4
 (2, 4)
 ```
 
-A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+With this syntax, iterables may still refer to outer loop variables; e.g. `for i = 1:n, j = 1:i`
+is valid.
+However a `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+Both variables (`i` and `j`) are set to their current iteration values each time the inner loop runs.
+Therefore, assignments to `i` will not be visible to subsequent iterations:
+
+```jldoctest
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+           i = 0
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
+```
+
+If this example were rewritten to use a `for` keyword for each variable, then the output would
+be different: the second and fourth values would contain `0`.
 
 ## Exception Handling
 
@@ -559,7 +579,7 @@ below all interrupt the normal flow of control.
 | [`RemoteException`](@ref)     |
 | [`MethodError`](@ref)         |
 | [`OverflowError`](@ref)       |
-| [`ParseError`](@ref)          |
+| [`Meta.ParseError`](@ref)     |
 | [`SystemError`](@ref)         |
 | [`TypeError`](@ref)           |
 | [`UndefRefError`](@ref)       |
@@ -589,7 +609,7 @@ Exceptions can be created explicitly with [`throw`](@ref). For example, a functi
 for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
 f (generic function with 1 method)
 
@@ -652,7 +672,7 @@ Suppose we want to stop execution immediately if the square root of a negative n
 To do this, we can define a fussy version of the [`sqrt`](@ref) function that raises an error
 if its argument is negative:
 
-```jldoctest fussy_sqrt
+```jldoctest fussy_sqrt; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> fussy_sqrt(x) = x >= 0 ? sqrt(x) : error("negative x not allowed")
 fussy_sqrt (generic function with 1 method)
 
@@ -662,14 +682,16 @@ julia> fussy_sqrt(2)
 julia> fussy_sqrt(-1)
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt(::Int64) at ./none:1
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt(::Int64) at ./none:1
+ [3] top-level scope
 ```
 
 If `fussy_sqrt` is called with a negative value from another function, instead of trying to continue
 execution of the calling function, it returns immediately, displaying the error message in the
 interactive session:
 
-```jldoctest fussy_sqrt
+```jldoctest fussy_sqrt; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function verbose_fussy_sqrt(x)
            println("before fussy_sqrt")
            r = fussy_sqrt(x)
@@ -687,8 +709,10 @@ julia> verbose_fussy_sqrt(-1)
 before fussy_sqrt
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt at ./none:1 [inlined]
- [2] verbose_fussy_sqrt(::Int64) at ./none:3
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt at ./none:1 [inlined]
+ [3] verbose_fussy_sqrt(::Int64) at ./none:3
+ [4] top-level scope
 ```
 
 ### The `try/catch` statement

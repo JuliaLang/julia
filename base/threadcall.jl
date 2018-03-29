@@ -10,10 +10,6 @@ function notify_fun(idx)
     return
 end
 
-function init_threadcall()
-    global c_notify_fun = cfunction(notify_fun, Cvoid, Tuple{Cint})
-end
-
 """
     @threadcall((cfunc, clib), rettype, (argtypes...), argvals...)
 
@@ -65,11 +61,12 @@ end
 function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
     fun_ptr = cfunction(wrapper, Int, Tuple{Ptr{Cvoid}, Ptr{Cvoid}})
+    c_notify_fun = cfunction(notify_fun, Cvoid, Tuple{Cint})
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]
     args_size = isempty(argtypes) ? 0 : sum(sizeof, argtypes)
-    args_arr = Vector{UInt8}(uninitialized, args_size)
+    args_arr = Vector{UInt8}(undef, args_size)
     ptr = pointer(args_arr)
     for (T, x) in zip(argtypes, argvals)
         y = cconvert(T, x)
@@ -79,11 +76,11 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
     end
 
     # create return buffer
-    ret_arr = Vector{UInt8}(uninitialized, sizeof(rettype))
+    ret_arr = Vector{UInt8}(undef, sizeof(rettype))
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = findfirst(equalto(nothing), thread_notifiers)::Int
+    idx = findfirst(isequal(nothing), thread_notifiers)::Int
     thread_notifiers[idx] = Condition()
 
     # queue up the work to be done

@@ -36,6 +36,7 @@ jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *unreachable_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -63,6 +64,7 @@ jl_sym_t *macrocall_sym; jl_sym_t *colon_sym;
 jl_sym_t *hygienicscope_sym;
 jl_sym_t *escape_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
+jl_sym_t *throw_undef_if_not_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -331,6 +333,7 @@ void jl_init_frontend(void)
     goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
+    unreachable_sym = jl_symbol("unreachable");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
@@ -383,6 +386,7 @@ void jl_init_frontend(void)
     gc_preserve_end_sym = jl_symbol("gc_preserve_end");
     generated_sym = jl_symbol("generated");
     generated_only_sym = jl_symbol("generated_only");
+    throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -827,7 +831,11 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                     form = jl_expand_macros(form, inmodule, NULL, 0);
                     expression = julia_to_scm(fl_ctx, form);
                 }
-                expression = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), expression);
+                // expand non-final expressions in statement position (value unused)
+                expression =
+                    fl_applyn(fl_ctx, 1,
+                              symbol_value(symbol(fl_ctx, iscons(cdr_(ast)) ? "jl-expand-to-thunk-stmt" : "jl-expand-to-thunk")),
+                              expression);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
@@ -1109,6 +1117,18 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
     expr = jl_call_scm_on_ast("jl-expand-to-thunk", expr, inmodule);
+    JL_GC_POP();
+    return expr;
+}
+
+// expand in a context where the expression value is unused
+JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_call_scm_on_ast("jl-expand-to-thunk-stmt", expr, inmodule);
     JL_GC_POP();
     return expr;
 }

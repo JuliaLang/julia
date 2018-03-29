@@ -109,8 +109,14 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+function cross(a::AbstractVector, b::AbstractVector)
+    if !(length(a) == length(b) == 3)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+end
 
 """
     triu(M)
@@ -237,44 +243,6 @@ Lower triangle of a matrix, overwriting `M` in the process.
 See also [`tril`](@ref).
 """
 tril!(M::AbstractMatrix) = tril!(M,0)
-
-diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
-
-"""
-    diff(A::AbstractVector)
-    diff(A::AbstractMatrix, dim::Integer)
-
-Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dim` argument.
-
-# Examples
-```jldoctest
-julia> a = [2 4; 6 16]
-2×2 Array{Int64,2}:
- 2   4
- 6  16
-
-julia> diff(a,2)
-2×1 Array{Int64,2}:
-  2
- 10
-
-julia> diff(vec(a))
-3-element Array{Int64,1}:
-  4
- -2
- 12
-```
-"""
-function diff(A::AbstractMatrix, dim::Integer)
-    if dim == 1
-        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dim == 2
-        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
-    else
-        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
-    end
-end
 
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
@@ -758,12 +726,12 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 """
 function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     s = svdvals(A)
-    sum(x -> x > tol*s[1], s)
+    count(x -> x > tol*s[1], s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
-    trace(M)
+    tr(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
 
@@ -774,15 +742,15 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> trace(A)
+julia> tr(A)
 5
 ```
 """
-function trace(A::AbstractMatrix)
+function tr(A::AbstractMatrix)
     checksquare(A)
     sum(diag(A))
 end
-trace(x::Number) = x
+tr(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
@@ -1181,29 +1149,6 @@ function linreg(x::AbstractVector, y::AbstractVector)
     b = Base.covm(x, mx, y, my)/Base.varm(x, mx)
     a = my - b*mx
     return (a, b)
-end
-
-"""
-    peakflops(n::Integer=2000; parallel::Bool=false)
-
-`peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
-multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](@ref).
-
-If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
-the worker processors. The flop rate of the entire parallel computer is returned. When
-running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
-of the problem that is solved on each processor.
-"""
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)
 end
 
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl

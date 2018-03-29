@@ -51,7 +51,7 @@ function showerror(io::IO, ex::CompositeException)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), Sys.WORD_SIZE>>2))")
+    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 """
@@ -171,7 +171,8 @@ function task_local_storage(body::Function, key, val)
 end
 
 # NOTE: you can only wait for scheduled tasks
-function wait(t::Task)
+# TODO: rename to wait for 1.0
+function _wait(t::Task)
     if !istaskdone(t)
         if t.donenotify === nothing
             t.donenotify = Condition()
@@ -183,7 +184,19 @@ function wait(t::Task)
     if istaskfailed(t)
         throw(t.exception)
     end
-    return task_result(t)
+end
+
+_wait(not_a_task) = wait(not_a_task)
+
+"""
+    fetch(t::Task)
+
+Wait for a Task to finish, then return its result value. If the task fails with an
+exception, the exception is propagated (re-thrown in the task that called fetch).
+"""
+function fetch(t::Task)
+    _wait(t)
+    task_result(t)
 end
 
 suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
@@ -225,7 +238,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(Base.error_color(), STDERR) do io
+                @schedule with_output_color(Base.error_color(), stderr) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)
@@ -266,7 +279,7 @@ function sync_end()
     c_ex = CompositeException()
     for r in refs
         try
-            wait(r)
+            _wait(r)
         catch ex
             if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
                 rethrow(ex)

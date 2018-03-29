@@ -40,6 +40,7 @@ It may take optional keyword arguments:
 - `read`, `write`, `append`: restricts operations to the buffer; see `open` for details.
 - `truncate`: truncates the buffer size to zero length.
 - `maxsize`: specifies a size beyond which the buffer may not be grown.
+- `sizehint`: suggests a capacity of the buffer (`data` must implement `sizehint!(data, size)`).
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
@@ -53,7 +54,7 @@ julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 julia> String(take!(io))
 "JuliaLang is a GitHub organization. It has many members."
 
-julia> io = IOBuffer("JuliaLang is a GitHub organization.")
+julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=35, maxsize=Inf, ptr=1, mark=-1)
 
 julia> read(io, String)
@@ -70,6 +71,12 @@ julia> write(io, "JuliaLang is a GitHub organization.")
 
 julia> String(take!(io))
 "JuliaLang is a GitHub organization"
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
+4
+
+julia> length(read(IOBuffer(b"data", read=true, truncate=true)))
+0
 ```
 """
 function IOBuffer(
@@ -78,9 +85,13 @@ function IOBuffer(
         write::Union{Bool,Nothing}=nothing,
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=nothing,
-        maxsize::Integer=typemax(Int))
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
         throw(ArgumentError("negative maxsize: $(maxsize)"))
+    end
+    if sizehint !== nothing
+        sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize))
@@ -95,8 +106,9 @@ function IOBuffer(;
         write::Union{Bool,Nothing}=true,
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=true,
-        maxsize::Integer=typemax(Int))
-    size = maxsize == typemax(Int) ? 32 : Int(maxsize)
+        maxsize::Integer=typemax(Int),
+        sizehint::Union{Integer,Nothing}=nothing)
+    size = sizehint !== nothing ? Int(sizehint) : maxsize != typemax(Int) ? Int(maxsize) : 32
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = IOBuffer(
         StringVector(size),
@@ -106,9 +118,6 @@ function IOBuffer(;
         truncate=flags.truncate,
         maxsize=maxsize)
     buf.data[:] = 0
-    if flags.truncate
-        buf.size = 0
-    end
     return buf
 end
 
@@ -317,11 +326,11 @@ Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, t
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> write(io, "JuliaLang is a GitHub organization.", "It has many members.")
-55
+julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
+56
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.It has many members."
+"JuliaLang is a GitHub organization. It has many members."
 ```
 """
 function take!(io::GenericIOBuffer)
@@ -426,22 +435,19 @@ read(io::GenericIOBuffer) = read!(io,StringVector(bytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
 
-function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
+function occursin(delim::UInt8, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,bytesavailable(buf))
-    q == C_NULL && return nothing
-    return Int(q-p+1)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    return q != C_NULL
 end
 
-function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
+function occursin(delim::UInt8, buf::GenericIOBuffer)
     data = buf.data
-    for i = buf.ptr : buf.size
+    for i = buf.ptr:buf.size
         @inbounds b = data[i]
-        if b == delim.x
-            return i - buf.ptr + 1
-        end
+        b == delim && return true
     end
-    return nothing
+    return false
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)

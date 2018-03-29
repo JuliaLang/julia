@@ -3,7 +3,7 @@
 using Logging
 import Logging: Info,
     shouldlog, handle_message, min_enabled_level, catch_exceptions
-import Base: contains
+import Base: occursin
 
 #-------------------------------------------------------------------------------
 # Log records
@@ -86,7 +86,7 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
     if myid() == 1
         printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
@@ -113,7 +113,7 @@ corresponding to the arguments to passed to `AbstractLogger` via the
 Elements which are present will be matched pairwise with the log record fields
 using `==` by default, with the special cases that `Symbol`s may be used for
 the standard log levels, and `Regex`s in the pattern will match string or
-Symbol fields using `contains`.
+Symbol fields using `occursin`.
 
 # Examples
 
@@ -181,9 +181,9 @@ function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
     logs,value = collect_test_logs(f; kwargs...)
     if match_mode == :all
         didmatch = length(logs) == length(patterns) &&
-            all(contains(l,p) for (p,l) in zip(patterns, logs))
+            all(occursin(p, l) for (p,l) in zip(patterns, logs))
     elseif match_mode == :any
-        didmatch = all(any(contains(l,p) for l in logs) for p in patterns)
+        didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
     didmatch,logs,value
 end
@@ -202,12 +202,12 @@ function parse_level(level::Symbol)
 end
 
 logfield_contains(a, b) = a == b
-logfield_contains(a, r::Regex) = contains(a, r)
-logfield_contains(a::Symbol, r::Regex) = contains(String(a), r)
+logfield_contains(a, r::Regex) = occursin(r, a)
+logfield_contains(a::Symbol, r::Regex) = occursin(r, String(a))
 logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
 logfield_contains(a, b::Ignored) = true
 
-function contains(r::LogRecord, pattern::Tuple)
+function occursin(pattern::Tuple, r::LogRecord)
     stdfields = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)
     all(logfield_contains(f, p) for (f, p) in zip(stdfields[1:length(pattern)], pattern))
 end

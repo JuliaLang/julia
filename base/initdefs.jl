@@ -46,7 +46,7 @@ const DEPOT_PATH = String[]
 function init_depot_path(BINDIR = Sys.BINDIR)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
-        push!(empty!(DEPOT_PATH), map(expanduser, depots))
+        append!(empty!(DEPOT_PATH), map(expanduser, depots))
     else
         push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
     end
@@ -80,6 +80,7 @@ function show(io::IO, env::NamedEnv)
 end
 
 function parse_env(env::Union{String,SubString{String}})
+    isempty(env) && return Any[]
     env == "@" && return CurrentEnv()
     env == "@!" && return CurrentEnv(create=true)
     if env[1] == '@'
@@ -101,13 +102,12 @@ function and `using` and `import` statements to consider when loading
 code.
 """
 const LOAD_PATH = Any[]
-const LOAD_CACHE_PATH = String[]
 
 function parse_load_path(str::String)
     envs = Any[split(str, Sys.iswindows() ? ';' : ':');]
     for (i, env) in enumerate(envs)
         if '|' in env
-            envs[i] = [parse_env(e) for e in split(env, '|')]
+            envs[i] = Any[parse_env(e) for e in split(env, '|')]
         else
             envs[i] = parse_env(env)
         end
@@ -116,22 +116,13 @@ function parse_load_path(str::String)
 end
 
 function init_load_path(BINDIR = Sys.BINDIR)
-    load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
-    append!(empty!(LOAD_PATH), parse_load_path(load_path))
+    if !Base.creating_sysimg
+        load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
+        append!(empty!(LOAD_PATH), parse_load_path(load_path))
+    end
     vers = "v$(VERSION.major).$(VERSION.minor)"
     push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
-end
-
-function early_init()
-    Sys._early_init()
-    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
-                                get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
-    if Sys.CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
-        # Prevent openblas from starting too many threads, unless/until specifically requested
-        ENV["OPENBLAS_NUM_THREADS"] = 8
-    end
 end
 
 const atexit_hooks = []
@@ -149,8 +140,8 @@ function _atexit()
         try
             f()
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            show(stderr, err)
+            println(stderr)
         end
     end
 end

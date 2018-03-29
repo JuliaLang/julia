@@ -199,7 +199,7 @@ end
 end
 
 @testset "Issue 16520" begin
-    @test_throws DimensionMismatch Matrix{Float64}(uninitialized,3,2)\(1:5)
+    @test_throws DimensionMismatch Matrix{Float64}(undef,3,2)\(1:5)
 end
 
 @testset "Issue 22810" begin
@@ -211,7 +211,7 @@ end
 
 @testset "Issue 24107" begin
     A = rand(200,2)
-    @test A \ linspace(0,1,200) == A \ Vector(linspace(0,1,200))
+    @test A \ range(0, stop=1, length=200) == A \ Vector(range(0, stop=1, length=200))
 end
 
 @testset "Issue 24589. Promotion of rational matrices" begin

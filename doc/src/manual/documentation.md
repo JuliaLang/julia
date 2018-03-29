@@ -3,9 +3,10 @@
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system since Julia 0.4.
 
-The basic syntax is very simple: any string appearing at the top-level right before an object
+The basic syntax is simple: any string appearing at the top-level right before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
-Here is a very simple example:
+Note that no blank lines or comments may intervene between a docstring and the documented object.
+Here is a basic example:
 
 ```julia
 "Tell whether there are too foo items in the array."
@@ -181,6 +182,11 @@ As in the example above, we recommend following some simple conventions when wri
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It it advised to add line breaks after 92 characters.
+6. Provide information allowing custom types to implement the function in an
+   `# Implementation` section. These implementation details intended for developers
+   rather than users, explaining e.g. which functions should be overridden and which functions
+   automatically use appropriate fallbacks, are better kept separate from the main description of
+   the function's behavior.
 
 ## Accessing Documentation
 
@@ -248,6 +254,20 @@ The `@doc` macro associates its first argument with its second in a per-module d
 macro simply creates an object representing the Markdown content. In the future it is likely to
 do more advanced things such as allowing for relative image or link paths.
 
+To make it easier to write documentation, the parser treats the macro name `@doc` specially:
+if a call to `@doc` has one argument, but another expression appears after a single line
+break, then that additional expression is added as an argument to the macro.
+Therefore the following syntax is parsed as a 2-argument call to `@doc`:
+
+```julia
+@doc raw"""
+...
+"""
+f(x) = x
+```
+
+This makes it easy to use an arbitrary object (here a `raw` string) as a docstring.
+
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
 object (some Markdown content, for example) will by default display itself intelligently. This
@@ -308,24 +328,9 @@ y = MyType("y")
 
 A comprehensive overview of all documentable Julia syntax.
 
-In the following examples `"..."` is used to illustrate an arbitrary docstring which may be one
-of the follow four variants and contain arbitrary text:
+In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
-```julia
-"..."
-
-doc"..."
-
-"""
-...
-"""
-
-doc"""
-...
-"""
-```
-
-`@doc_str` should only be used when the docstring contains `$` or `\` characters that should not
+`doc""` should only be used when the docstring contains `$` or `\` characters that should not
 be parsed by Julia such as LaTeX syntax or Julia source code examples containing interpolation.
 
 ### Functions and Methods
@@ -338,7 +343,7 @@ function f end
 f
 ```
 
-Adds docstring `"..."` to function `f`. The first version is the preferred syntax, however both
+Adds docstring `"..."` to the function `f`. The first version is the preferred syntax, however both
 are equivalent.
 
 ```julia
@@ -354,7 +359,7 @@ end
 f(x)
 ```
 
-Adds docstring `"..."` to the `Method` `f(::Any)`.
+Adds docstring `"..."` to the method `f(::Any)`.
 
 ```julia
 "..."

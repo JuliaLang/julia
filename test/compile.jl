@@ -16,7 +16,7 @@ using .ConflictingBindings
 dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
-insert!(Base.LOAD_CACHE_PATH, 1, dir)
+insert!(DEPOT_PATH, 1, dir)
 try
     Foo_file = joinpath(dir, "$Foo_module.jl")
     Foo2_file = joinpath(dir, "$Foo2_module.jl")
@@ -166,7 +166,9 @@ try
         @test Foo.override(UInt(1)) == 2
     end
 
-    cachefile = joinpath(dir, "$Foo_module.ji")
+    cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+    cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+    cachefile = joinpath(cachedir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_logs (:warn, "Replacing module `$Foo_module`") begin
@@ -195,7 +197,7 @@ try
         @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
-                            Base.PkgId(Foo) => Base.PkgId("Test"),
+                            Base.PkgId(Foo) => Base.PkgId(Test),
                             Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)) ]
         srctxt = Base.read_dependency_src(cachefile, Foo_file)
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
@@ -217,7 +219,7 @@ try
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2]))
+                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :Pkg3, :LibGit2, :SHA, :UUIDs, :Sockets]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -271,7 +273,7 @@ try
         error("__precompile__ disabled test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        contains(exc.msg, "__precompile__(false)") && rethrow(exc)
+        occursin("__precompile__(false)", exc.msg) && rethrow(exc)
     end
 
     # Issue #12720
@@ -293,36 +295,36 @@ try
           """)
 
     Base.compilecache(Base.PkgId("FooBar"))
-    @test isfile(joinpath(dir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test isfile(joinpath(cachedir, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
 
     @eval using FooBar
     fb_uuid = Base.module_build_id(FooBar)
     sleep(2); touch(FooBar_file)
-    insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
+    insert!(DEPOT_PATH, 1, dir2)
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
     @eval using FooBar1
-    @test !isfile(joinpath(dir2, "FooBar.ji"))
-    @test !isfile(joinpath(dir, "FooBar1.ji"))
-    @test isfile(joinpath(dir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) isa Vector
+    @test !isfile(joinpath(cachedir2, "FooBar.ji"))
+    @test !isfile(joinpath(cachedir, "FooBar1.ji"))
+    @test isfile(joinpath(cachedir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Vector
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
     @test fb_uuid != fb_uuid1
 
     # test checksum
-    open(joinpath(dir2, "FooBar1.ji"), "a") do f
+    open(joinpath(cachedir2, "FooBar1.ji"), "a") do f
         write(f, 0x076cac96) # append 4 random bytes
     end
-    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji")) === true
+    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) === true
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -338,7 +340,7 @@ try
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
-        contains(exc.msg, "ERROR: LoadError: break me") && rethrow(exc)
+        occursin("ERROR: LoadError: break me", exc.msg) && rethrow(exc)
     end
 
     # Test transitive dependency for #21266
@@ -373,10 +375,10 @@ try
           end
           """)
     rm(FooBarT_file)
-    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
+    @test Base.stale_cachefile(FooBarT2_file, joinpath(cachedir2, "FooBarT2.ji")) === true
     @test Base.require(Main, :FooBarT2) isa Module
 finally
-    splice!(Base.LOAD_CACHE_PATH, 1:2)
+    splice!(DEPOT_PATH, 1:2)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
     rm(dir2, recursive=true)
@@ -398,7 +400,7 @@ let dir = mktempdir(),
 
         eval(quote
             insert!(LOAD_PATH, 1, $(dir))
-            insert!(Base.LOAD_CACHE_PATH, 1, $(dir))
+            insert!(DEPOT_PATH, 1, $(dir))
             Base.compilecache(Base.PkgId("Time4b3a94a1a081a8cb"))
         end)
 
@@ -406,7 +408,7 @@ let dir = mktempdir(),
 
         testcode = """
             insert!(LOAD_PATH, 1, $(repr(dir)))
-            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            insert!(DEPOT_PATH, 1, $(repr(dir)))
             using $Time_module
             getfield($Time_module, :time)
         """
@@ -421,7 +423,7 @@ let dir = mktempdir(),
         @test parse(Float64, t1_no) < parse(Float64, t2_no)
 
     finally
-        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(DEPOT_PATH, 1)
         splice!(LOAD_PATH, 1)
         rm(dir, recursive=true)
     end
@@ -448,7 +450,7 @@ let dir = mktempdir()
 
         testcode = """
             insert!(LOAD_PATH, 1, $(repr(dir)))
-            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            insert!(DEPOT_PATH, 1, $(repr(dir)))
             using $Test_module
         """
 
@@ -456,7 +458,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test contains(read(fname, String), Regex("Replacing module `$Test_module`"))
+                @test occursin(Regex("Replacing module `$Test_module`"), read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -481,7 +483,7 @@ end
 let dir = mktempdir()
     try
         insert!(LOAD_PATH, 1, dir)
-        insert!(Base.LOAD_CACHE_PATH, 1, dir)
+        insert!(DEPOT_PATH, 1, dir)
 
         loaded_modules = Channel{Symbol}(32)
         callback = (mod::Base.PkgId) -> put!(loaded_modules, Symbol(mod.name))
@@ -521,7 +523,7 @@ let dir = mktempdir()
         @test take!(loaded_modules) == Test3_module
     finally
         pop!(Base.package_callbacks)
-        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(DEPOT_PATH, 1)
         splice!(LOAD_PATH, 1)
         rm(dir, recursive=true)
     end
@@ -563,7 +565,7 @@ end
 
         @everywhere test_workers begin
             pushfirst!(LOAD_PATH, $load_path)
-            pushfirst!(Base.LOAD_CACHE_PATH, $load_cache_path)
+            pushfirst!(DEPOT_PATH, $load_cache_path)
         end
         try
             @eval using $ModuleB
@@ -579,7 +581,7 @@ end
         finally
             @everywhere test_workers begin
                 popfirst!(LOAD_PATH)
-                popfirst!(Base.LOAD_CACHE_PATH)
+                popfirst!(DEPOT_PATH)
             end
         end
     finally
@@ -594,7 +596,7 @@ end
 (f -> f())() do # wrap in function scope, so we can test world errors
 dir = mktempdir()
 insert!(LOAD_PATH, 1, dir)
-insert!(Base.LOAD_CACHE_PATH, 1, dir)
+insert!(DEPOT_PATH, 1, dir)
 try
     A_module = :Aedb164bd3a126418
     B_module = :Bedb164bd3a126418
@@ -642,7 +644,7 @@ try
     @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
 finally
     popfirst!(LOAD_PATH)
-    popfirst!(Base.LOAD_CACHE_PATH)
+    popfirst!(DEPOT_PATH)
     rm(dir, recursive=true)
 end
 
@@ -662,7 +664,7 @@ let
             """)
 
         pushfirst!(LOAD_PATH, load_path)
-        pushfirst!(Base.LOAD_CACHE_PATH, load_cache_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
 
         l0 = length(Base.package_callbacks)
         @eval using $ModuleA
@@ -700,7 +702,7 @@ let
             """)
 
         pushfirst!(LOAD_PATH, load_path)
-        pushfirst!(Base.LOAD_CACHE_PATH, load_cache_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
 
         Base.compilecache(Base.PkgId("A25604"))
         @test_nowarn @eval using A25604

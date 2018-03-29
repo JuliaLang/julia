@@ -67,7 +67,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
-search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
+search: string String Cstring Cwstring RevString randstring bytestring SubString
 
   string(xs...)
 
@@ -191,7 +191,7 @@ Meta plus `x` can be written `"\\Mx"`. The values of the custom keymap must be `
 that the input should be ignored) or functions that accept the signature `(PromptState, AbstractREPL, Char)`.
 The `REPL.setup_interface` function must be called before the REPL is initialized, by registering
 the operation with [`atreplinit`](@ref) . For example, to bind the up and down arrow keys to move through
-history without prefix search, one could put the following code in `.juliarc.jl`:
+history without prefix search, one could put the following code in `~/.julia/config/startup.jl`:
 
 ```julia
 import REPL
@@ -220,7 +220,7 @@ or type and then press the tab key to get a list all matches:
 
 ```julia-repl
 julia> stri[TAB]
-stride     strides     string      stringmime  strip
+stride     strides     string      strip
 
 julia> Stri[TAB]
 StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
@@ -324,7 +324,7 @@ fields if the function is type stable.
 
 The colors used by Julia and the REPL can be customized, as well. To change the
 color of the Julia prompt you can add something like the following to your
-`.juliarc.jl` file, which is to be placed inside your home directory:
+`~/.julia/config/startup.jl` file, which is to be placed inside your home directory:
 
 ```julia
 function customize_colors(repl)
@@ -345,7 +345,7 @@ latter two, be sure that the `envcolors` field is also set to false.
 
 It is also possible to apply boldface formatting by using
 `Base.text_colors[:bold]` as a color. For instance, to print answers in
-boldface font, one can use the following as a `.juliarc.jl`:
+boldface font, one can use the following as a `~/.julia/config/startup.jl`:
 
 ```julia
 function customize_colors(repl)
@@ -358,7 +358,8 @@ atreplinit(customize_colors)
 
 You can also customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
-messages respectively in magenta, yellow, and cyan you can add the following to your `.juliarc.jl` file:
+messages respectively in magenta, yellow, and cyan you can add the following to your
+`~/.julia/config/startup.jl` file:
 
 ```julia
 ENV["JULIA_ERROR_COLOR"] = :magenta
@@ -366,7 +367,154 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
-## References
+# TerminalMenus
+
+TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
+
+## Examples
+
+```julia
+import REPL
+using REPL.TerminalMenus
+
+options = ["apple", "orange", "grape", "strawberry",
+            "blueberry", "peach", "lemon", "lime"]
+
+```
+
+### RadioMenu
+
+The RadioMenu allows the user to select one option from the list. The `request`
+function displays the interactive menu and returns the index of the selected
+choice. If a user presses 'q' or `ctrl-c`, `request` will return a `-1`.
+
+
+```julia
+# `pagesize` is the number of items to be displayed at a time.
+#  The UI will scroll if the number of options is greater
+#   than the `pagesize`
+menu = RadioMenu(options, pagesize=4)
+
+# `request` displays the menu and returns the index after the
+#   user has selected a choice
+choice = request("Choose your favorite fruit:", menu)
+
+if choice != -1
+    println("Your favorite fruit is ", options[choice], "!")
+else
+    println("Menu canceled.")
+end
+
+```
+
+Output:
+
+```
+Choose your favorite fruit:
+^  grape
+   strawberry
+ > blueberry
+v  peach
+Your favorite fruit is blueberry!
+```
+
+### MultiSelectMenu
+
+The MultiSelectMenu allows users to select many choices from a list.
+
+```julia
+# here we use the default `pagesize` 10
+menu = MultiSelectMenu(options)
+
+# `request` returns a `Set` of selected indices
+# if the menu us canceled (ctrl-c or q), return an empty set
+choices = request("Select the fruits you like:", menu)
+
+if length(choices) > 0
+    println("You like the following fruits:")
+    for i in choices
+        println("  - ", options[i])
+    end
+else
+    println("Menu canceled.")
+end
+```
+
+Output:
+
+```
+Select the fruits you like:
+[press: d=done, a=all, n=none]
+   [ ] apple
+ > [X] orange
+   [X] grape
+   [ ] strawberry
+   [ ] blueberry
+   [X] peach
+   [ ] lemon
+   [ ] lime
+You like the following fruits:
+  - orange
+  - grape
+  - peach
+```
+
+## Customization / Configuation
+
+All interface customization is done through the keyword only
+`TerminalMenus.config()` function.
+
+### Arguments
+
+ - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+ - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
+ - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
+ - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+### Examples
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5);
+
+julia> request(menu) # ASCII is used by default
+[press: d=done, a=all, n=none]
+   [ ] apple
+   [X] orange
+   [ ] grape
+ > [X] strawberry
+v  [ ] blueberry
+Set([4, 2])
+
+julia> TerminalMenus.config(charset=:unicode)
+
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   ⬚ apple
+   ✓ orange
+   ⬚ grape
+ → ✓ strawberry
+↓  ⬚ blueberry
+Set([4, 2])
+
+julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
+
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   NOPE apple
+   YEP! orange
+   NOPE grape
+ ⧐ YEP! strawberry
+↓  NOPE blueberry
+Set([4, 2])
+
+```
+
+# References
 
 ```@docs
 Base.atreplinit

@@ -28,9 +28,10 @@ There are a few noteworthy high-level features about Julia's strings:
     additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
-  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type representing
-    a single character, called `Char`. This is just a special kind of 32-bit primitive type whose numeric
-    value represents a Unicode code point.
+  * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
+    a single character, called `AbstractChar`. The built-in `Char` subtype of `AbstractChar`
+    is a 32-bit primitive type that can represent any Unicode character (and which is based
+    on the UTF-8 encoding).
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
     To construct a different string value, you construct a new string from parts of other strings.
   * Conceptually, a string is a *partial function* from indices to characters: for some index values,
@@ -41,9 +42,11 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
-representation and appropriate arithmetic behaviors, whose numeric value is interpreted as a
-[Unicode code point](https://en.wikipedia.org/wiki/Code_point). Here is how `Char` values are
+An `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
+representation and appropriate arithmetic behaviors, and which can be converted
+to a numeric value representing a
+[Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
+  other subtypes of `AbstractChar`, e.g. to optimize operations for other [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
 input and shown:
 
 ```jldoctest
@@ -78,7 +81,7 @@ is a valid code point, use the [`isvalid`](@ref) function:
 
 ```jldoctest
 julia> Char(0x110000)
-'\U110000': Unicode U+110000 (category Cn: Other, not assigned)
+'\U110000': Unicode U+110000 (category In: Invalid, too high)
 
 julia> isvalid(Char, 0x110000)
 false
@@ -129,9 +132,6 @@ julia> Int('\x7f')
 
 julia> Int('\177')
 127
-
-julia> Int('\xff')
-255
 ```
 
 You can do comparisons and a limited amount of arithmetic with `Char` values:
@@ -180,7 +180,7 @@ julia> str[end]
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
 element is returned by [`firstindex(str)`](@ref), and the index of the last element
-with [`lastindex(str)`](@ref). The keyword`end` can be used inside an indexing
+with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
 operation as shorthand for the last index along the given dimension.
 Most indexing in Julia is 1-based: the first element of many integer-indexed objects is found at
 index 1. (As we will see below, this does not necessarily mean that the last element is found
@@ -275,11 +275,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 2)
 [...]
 
 julia> s[3]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 3)
+Stacktrace:
 [...]
 
 julia> s[4]
@@ -297,7 +298,8 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: UnicodeError: invalid character index
+ERROR: StringIndexError("∀ x ∃ y", 2)
+Stacktrace:
 [...]
 
 julia> s[1:4]
@@ -312,7 +314,7 @@ since each character in a string must have its own index. The following is an in
 verbose way to iterate through the characters of `s`:
 
 ```jldoctest unicodestring
-julia> for i = begindex(s):lastindex(s)
+julia> for i = firstindex(s):lastindex(s)
            try
                println(s[i])
            catch
@@ -429,7 +431,7 @@ julia> "v: $v"
 "v: [1, 2, 3]"
 ```
 
-[`string`](@ref) is the identity for `AbstractString` and `Char` values, so these are interpolated
+[`string`](@ref) is the identity for `AbstractString` and `AbstractChar` values, so these are interpolated
 into strings as themselves, unquoted and unescaped:
 
 ```jldoctest
@@ -513,45 +515,45 @@ true
 You can search for the index of a particular character using the [`findfirst`](@ref) function:
 
 ```jldoctest
-julia> findfirst(equalto('x'), "xylophone")
+julia> findfirst(isequal('x'), "xylophone")
 1
 
-julia> findfirst(equalto('p'), "xylophone")
+julia> findfirst(isequal('p'), "xylophone")
 5
 
-julia> findfirst(equalto('z'), "xylophone")
+julia> findfirst(isequal('z'), "xylophone")
 ```
 
 You can start the search for a character at a given offset by using [`findnext`](@ref)
 with a third argument:
 
 ```jldoctest
-julia> findnext(equalto('o'), "xylophone", 1)
+julia> findnext(isequal('o'), "xylophone", 1)
 4
 
-julia> findnext(equalto('o'), "xylophone", 5)
+julia> findnext(isequal('o'), "xylophone", 5)
 7
 
-julia> findnext(equalto('o'), "xylophone", 8)
+julia> findnext(isequal('o'), "xylophone", 8)
 ```
 
-You can use the [`contains`](@ref) function to check if a substring is contained in a string:
+You can use the [`occursin`](@ref) function to check if a substring is found within a string:
 
 ```jldoctest
-julia> contains("Hello, world.", "world")
+julia> occursin("world", "Hello, world.")
 true
 
-julia> contains("Xylophon", "o")
+julia> occursin("o", "Xylophon")
 true
 
-julia> contains("Xylophon", "a")
+julia> occursin("a", "Xylophon")
 false
 
-julia> contains("Xylophon", 'o')
+julia> occursin('o', "Xylophon")
 true
 ```
 
-The last example shows that [`contains`](@ref) can also look for a character literal.
+The last example shows that [`occursin`](@ref) can also look for a character literal.
 
 Two other handy string functions are [`repeat`](@ref) and [`join`](@ref):
 
@@ -606,20 +608,20 @@ julia> typeof(ans)
 Regex
 ```
 
-To check if a regex matches a string, use [`contains`](@ref):
+To check if a regex matches a string, use [`occursin`](@ref):
 
 ```jldoctest
-julia> contains("not a comment", r"^\s*(?:#|$)")
+julia> occursin(r"^\s*(?:#|$)", "not a comment")
 false
 
-julia> contains("# a comment", r"^\s*(?:#|$)")
+julia> occursin(r"^\s*(?:#|$)", "# a comment")
 true
 ```
 
-As one can see here, [`contains`](@ref) simply returns true or false, indicating whether the
-given regex matches the string or not. Commonly, however, one wants to know not just whether a
-string matched, but also *how* it matched. To capture this information about a match, use the
-[`match`](@ref) function instead:
+As one can see here, [`occursin`](@ref) simply returns true or false, indicating whether a
+match for the given regex occurs in the string. Commonly, however, one wants to know not
+just whether a string matched, but also *how* it matched. To capture this information about
+a match, use the [`match`](@ref) function instead:
 
 ```jldoctest
 julia> match(r"^\s*(?:#|$)", "not a comment")
@@ -824,7 +826,7 @@ produce arrays of bytes. Here is an example using all three:
 
 ```jldoctest
 julia> b"DATA\xff\u2200"
-8-element Array{UInt8,1}:
+8-element Base.CodeUnits{UInt8,String}:
  0x44
  0x41
  0x54
@@ -851,11 +853,11 @@ is encoded as two bytes in UTF-8:
 
 ```jldoctest
 julia> b"\xff"
-1-element Array{UInt8,1}:
+1-element Base.CodeUnits{UInt8,String}:
  0xff
 
 julia> b"\uff"
-2-element Array{UInt8,1}:
+2-element Base.CodeUnits{UInt8,String}:
  0xc3
  0xbf
 ```

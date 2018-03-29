@@ -6,7 +6,6 @@ export completions, shell_completions, bslash_completions
 
 using Base.Meta
 using Base: propertynames, coalesce
-import Pkg
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -43,7 +42,7 @@ function complete_symbol(sym, ffunc)
     lookup_module = true
     t = Union{}
     val = nothing
-    if coalesce(findlast(occursin(non_identifier_chars), sym), 0) < coalesce(findlast(equalto('.'), sym), 0)
+    if coalesce(findlast(in(non_identifier_chars), sym), 0) < coalesce(findlast(isequal('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
@@ -127,7 +126,7 @@ function complete_keyword(s::Union{String,SubString{String}})
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.Sys.isunix() && contains(path, r"^~(?:/|$)")
+    if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -202,7 +201,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     end
 
     matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
-    startpos = pos - lastindex(prefix) + 1 - length(matchall(r" ", prefix))
+    startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `lastindex` a larger string which `endswith(path)==true`.
@@ -269,7 +268,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, coalesce(findprev(occursin(non_identifier_chars), s, method_name_end), 0))
+    startind = nextind(s, coalesce(findprev(in(non_identifier_chars), s, method_name_end), 0))
     return (startind:lastindex(s), method_name_end)
 end
 
@@ -418,14 +417,14 @@ function afterusing(string::String, startpos::Int)
     isempty(str) && return false
     rstr = reverse(str)
     r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
-    isempty(r) && return false
+    r === nothing && return false
     fr = reverseind(str, last(r))
-    return contains(str[fr:end], r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$")
+    return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
 function bslash_completions(string, pos)
-    slashpos = coalesce(findprev(equalto('\\'), string, pos), 0)
-    if (coalesce(findprev(occursin(bslash_separators), string, pos), 0) < slashpos &&
+    slashpos = coalesce(findprev(isequal('\\'), string, pos), 0)
+    if (coalesce(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -544,8 +543,8 @@ function completions(string, pos)
         return String[], 0:-1, false
     end
 
-    dotpos = coalesce(findprev(equalto('.'), string, pos), 0)
-    startpos = nextind(string, coalesce(findprev(occursin(non_identifier_chars), string, pos), 0))
+    dotpos = coalesce(findprev(isequal('.'), string, pos), 0)
+    startpos = nextind(string, coalesce(findprev(in(non_identifier_chars), string, pos), 0))
 
     ffunc = (mod,x)->true
     suggestions = String[]
@@ -647,10 +646,9 @@ function shell_completions(string, pos)
 
         return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
-        r = first(last_parse):prevind(last_parse, last(last_parse))
-        partial = scs[r]
+        partial = scs[last_parse]
         ret, range = completions(partial, lastindex(partial))
-        range = range .+ (first(r) - 1)
+        range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

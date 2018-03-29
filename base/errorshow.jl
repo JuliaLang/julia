@@ -290,7 +290,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
 end
 
 #Show an error by directly calling jl_printf.
-#Useful in Base submodule __init__ functions where STDERR isn't defined yet.
+#Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)

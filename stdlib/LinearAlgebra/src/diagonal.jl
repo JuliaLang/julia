@@ -242,8 +242,8 @@ end
 *(D::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) =
     Diagonal(transpose.(D.parent.diag) .* transpose.(B.parent.diag))
 
-rmul!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
-lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
+rmul!(A::Diagonal, B::Diagonal) = Diagonal((A.diag .*= B.diag; A.diag))
+lmul!(A::Diagonal, B::Diagonal) = Diagonal((B.diag .= A.diag .* B.diag; B.diag))
 
 function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
     A = adjA.parent
@@ -264,13 +264,13 @@ function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
-mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
-mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = out .= transpose.(A.parent.diag) .* in
+mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = (out .= A.diag .* in; out)
+mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector) = (out .= adjoint.(A.parent.diag) .* in; out)
+mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = (out .= transpose.(A.parent.diag) .* in; out)
 
-mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
-mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = (out .= A.diag .* in; out)
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = (out .= adjoint.(A.parent.diag) .* in; out)
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = (out .= transpose.(A.parent.diag) .* in; out)
 
 mul!(C::AbstractMatrix, A::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
 mul!(C::AbstractMatrix, A::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
@@ -292,8 +292,10 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Abs
 *(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = mul!(C, A, B.parent)
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) =
+    (C .= adjoint.(A.parent.diag) .* B; C)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) =
+    (C .= transpose.(A.parent.diag) .* B; C)
 
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
@@ -380,7 +382,7 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-trace(D::Diagonal) = sum(D.diag)
+tr(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct

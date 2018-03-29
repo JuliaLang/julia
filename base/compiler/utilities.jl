@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ###########
 # generic #
 ###########
@@ -170,7 +172,7 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return method
 end
 
-function exprtype(@nospecialize(x), src::CodeInfo, mod::Module)
+function exprtype(@nospecialize(x), src, mod::Module)
     if isa(x, Expr)
         return (x::Expr).typ
     elseif isa(x, SlotNumber)
@@ -179,12 +181,18 @@ function exprtype(@nospecialize(x), src::CodeInfo, mod::Module)
         return (x::TypedSlot).typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
+    elseif isa(x, Argument)
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
     elseif isa(x, Symbol)
         return abstract_eval_global(mod, x::Symbol)
     elseif isa(x, QuoteNode)
         return AbstractEvalConstant((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, (x::GlobalRef).name)
+    elseif isa(x, PhiNode)
+        return Any
+    elseif isa(x, PiNode)
+        return x.typ
     else
         return AbstractEvalConstant(x)
     end
@@ -240,18 +248,31 @@ end
 ##############
 
 # scan body for the value of the largest referenced label
-function label_counter(body::Vector{Any})
+# so that we won't accidentally re-use it
+function label_counter(body::Vector{Any}, comefrom=true)
     l = 0
     for b in body
         label = 0
-        if isa(b, GotoNode)
+        if isa(b, LabelNode) && comefrom
             label = b.label::Int
-        elseif isa(b, LabelNode)
-            label = b.label
-        elseif isa(b, Expr) && b.head == :gotoifnot
-            label = b.args[2]::Int
-        elseif isa(b, Expr) && b.head == :enter
-            label = b.args[1]::Int
+        elseif isa(b, GotoNode)
+            label = b.label::Int
+        elseif isa(b, Expr)
+            if b.head == :gotoifnot
+                label = b.args[2]::Int
+            elseif b.head == :enter
+                label = b.args[1]::Int
+            elseif b.head === :(=) && comefrom
+                rhs = b.args[2]
+                if isa(rhs, PhiNode)
+                    for edge in rhs.edges
+                        edge = edge::Int + 1
+                        if edge > l
+                            l = edge
+                        end
+                    end
+                end
+            end
         end
         if label > l
             l = label
@@ -266,6 +287,7 @@ function get_label_map(body::Vector{Any})
     for i = 1:length(body)
         el = body[i]
         if isa(el, LabelNode)
+            # @assert labelmap[el.label] == 0
             labelmap[el.label] = i
         end
     end

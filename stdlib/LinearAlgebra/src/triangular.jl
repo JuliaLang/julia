@@ -104,13 +104,13 @@ parent(A::AbstractTriangular) = A.data
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function Matrix{T}(A::LowerTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     tril!(B)
     B
 end
 function Matrix{T}(A::UnitLowerTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     tril!(B)
     for i = 1:size(B,1)
@@ -119,13 +119,13 @@ function Matrix{T}(A::UnitLowerTriangular) where T
     B
 end
 function Matrix{T}(A::UpperTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     triu!(B)
     B
 end
 function Matrix{T}(A::UnitUpperTriangular) where T
-    B = Matrix{T}(uninitialized, size(A, 1), size(A, 1))
+    B = Matrix{T}(undef, size(A, 1), size(A, 1))
     copyto!(B, A.data)
     triu!(B)
     for i = 1:size(B,1)
@@ -2160,7 +2160,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i+1,i] = R[i,i+1]
     end
     x,V = eig(R)
-    w = Vector{Float64}(uninitialized, m)
+    w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
         w[i] = V[1,i]^2
@@ -2447,22 +2447,22 @@ end
 factorize(A::AbstractTriangular) = A
 
 # dismabiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
-*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = A * copy(B)
+*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
+*(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 # dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
 # dismabiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = A * copy(B)
+*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = A * copy(B)
+*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
+*(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
+*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
 # dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
+*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
+*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
 
 # disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)

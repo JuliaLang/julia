@@ -1,17 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# timing
-
-# time() in libc.jl
-
-# high-resolution relative time, in nanoseconds
-
-"""
-    time_ns()
-
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-"""
-time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
@@ -105,7 +93,7 @@ function format_bytes(bytes)
     end
 end
 
-function time_print(elapsedtime, bytes, gctime, allocs)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
     Printf.@printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -122,13 +110,12 @@ function time_print(elapsedtime, bytes, gctime, allocs)
     elseif gctime > 0
         Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
-    println()
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("elapsed time (ns): $elapsedtime\n")
+    print("\nelapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -171,6 +158,7 @@ macro time(ex)
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff))
+        println()
         val
     end
 end
@@ -288,16 +276,7 @@ julia> gctime
 0.0055765
 
 julia> fieldnames(typeof(memallocs))
-9-element Array{Symbol,1}:
- :allocd
- :malloc
- :realloc
- :poolalloc
- :bigalloc
- :freecall
- :total_time
- :pause
- :full_sweep
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
 julia> memallocs.total_time
 5576500
@@ -355,7 +334,7 @@ If the keyword `bold` is given as `true`, the result will be printed in bold.
 printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(STDOUT, msg...; bold=bold, color=color)
+    printstyled(stdout, msg...; bold=bold, color=color)
 
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -406,8 +385,8 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
-    flush(STDOUT)
-    p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
+    flush(stdout)
+    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -483,7 +462,7 @@ if Sys.iswindows()
     function winprompt(message, caption, default_username; prompt_username = true)
         # Step 1: Create an encrypted username/password bundle that will be used to set
         #         the default username (in theory could also provide a default password)
-        credbuf = Vector{UInt8}(uninitialized, 1024)
+        credbuf = Vector{UInt8}(undef, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
@@ -519,12 +498,12 @@ if Sys.iswindows()
         end
 
         # Step 3: Convert encrypted credentials back to plain text
-        passbuf = Vector{UInt16}(uninitialized, 1024)
+        passbuf = Vector{UInt16}(undef, 1024)
         passlen = Ref{UInt32}(length(passbuf))
-        usernamebuf = Vector{UInt16}(uninitialized, 1024)
+        usernamebuf = Vector{UInt16}(undef, 1024)
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
-        dummybuf = Vector{UInt16}(uninitialized, 1024)
+        dummybuf = Vector{UInt16}(undef, 1024)
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
@@ -560,7 +539,7 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
-    buf = Vector{UInt8}(uninitialized, min(nb, 24576))
+    buf = Vector{UInt8}(undef, min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c(buf, n, crc)
@@ -570,7 +549,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef
@@ -695,7 +675,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
+    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$ncores"
     try
@@ -703,7 +683,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
-        versioninfo(buf)
+        Base.require(Base, :InteractiveUtils).versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

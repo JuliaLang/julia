@@ -3,7 +3,7 @@
 """
 The `AbstractString` type is the supertype of all string implementations in
 Julia. Strings are encodings of sequences of [Unicode](https://unicode.org/)
-code points as represented by the `Char` type. Julia makes a few assumptions
+code points as represented by the `AbstractChar` type. Julia makes a few assumptions
 about strings:
 
 * Strings are encoded in terms of fixed-size "code units"
@@ -13,9 +13,9 @@ about strings:
   * Any index `i` such that `1 ≤ i ≤ ncodeunits(s)` is in bounds
 * String indexing is done in terms of these code units:
   * Characters are extracted by `s[i]` with a valid string index `i`
-  * Each `Char` in a string is encoded by one or more code units
-  * Only the index of the first code unit of a `Char` is a valid index
-  * The encoding of a `Char` is independent of what precedes or follows it
+  * Each `AbstractChar` in a string is encoded by one or more code units
+  * Only the index of the first code unit of an `AbstractChar` is a valid index
+  * The encoding of an `AbstractChar` is independent of what precedes or follows it
   * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
 
 [self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
@@ -113,7 +113,7 @@ julia> isvalid(str, 2)
 false
 
 julia> str[2]
-ERROR: StringIndexError: invalid character index
+ERROR: StringIndexError("αβγdef", 2)
 Stacktrace:
 [...]
 ```
@@ -122,7 +122,7 @@ Stacktrace:
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
-    next(s::AbstractString, i::Integer) -> Tuple{Char, Int}
+    next(s::AbstractString, i::Integer) -> Tuple{<:AbstractChar, Int}
 
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
@@ -140,7 +140,7 @@ See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 
 start(s::AbstractString) = 1
 done(s::AbstractString, i::Integer) = i > ncodeunits(s)
-eltype(::Type{<:AbstractString}) = Char
+eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
@@ -187,19 +187,17 @@ string(s::AbstractString) = s
 
 (::Type{Vector{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 (::Type{Array{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
-(::Type{Vector{Char}})(s::AbstractString) = collect(s)
+(::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
-promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
-
 ## string & character concatenation ##
 
 """
-    *(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...) -> AbstractString
+    *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
 
 Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
 to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
@@ -215,7 +213,7 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
+(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -410,7 +408,10 @@ julia> prevind("αβγdef", 1)
 0
 
 julia> prevind("αβγdef", 0)
--1
+ERROR: BoundsError: attempt to access "αβγdef"
+  at index [0]
+Stacktrace:
+[...]
 
 julia> prevind("αβγdef", 3, 2)
 0
@@ -483,10 +484,10 @@ last(e::EachStringIndex) = lastindex(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
-eltype(::Type{EachStringIndex}) = Int
+eltype(::Type{<:EachStringIndex}) = Int
 
 """
-    isascii(c::Union{Char,AbstractString}) -> Bool
+    isascii(c::Union{AbstractChar,AbstractString}) -> Bool
 
 Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
@@ -508,25 +509,24 @@ false
 """
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
+isascii(c::AbstractChar) = UInt32(c) < 0x80
 
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), read=true, write=true)
-    truncate(out, 0)
+    out = IOBuffer(sizehint=sizeof(s))
     for c in s
         c′ = f(c)
-        isa(c′, Char) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return Char; " *
+        isa(c′, AbstractChar) || throw(ArgumentError(
+            "map(f, s::AbstractString) requires f to return AbstractChar; " *
             "try map(f, collect(s)) or a comprehension instead"))
-        write(out, c′::Char)
+        write(out, c′::AbstractChar)
     end
     String(take!(out))
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(sizeof(s)), read=true, write=true)
-    truncate(out, 0)
+    out = IOBuffer(sizehint=sizeof(s))
     for c in s
         f(c) && write(out, c)
     end
@@ -607,7 +607,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,Char}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
@@ -619,7 +619,7 @@ julia> "Test "^3
 "Test Test Test "
 ```
 """
-(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)
+(^)(s::Union{AbstractString,AbstractChar}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
 start(r::Iterators.Reverse{<:AbstractString}) = lastindex(r.itr)
@@ -646,6 +646,7 @@ length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
 strides(s::CodeUnits) = (1,)
+elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 start(s::CodeUnits) = 1

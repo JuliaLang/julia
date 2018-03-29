@@ -11,7 +11,8 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange
+    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
+    linearindices, (:), |, +, -, !==, !
 
 import .Base:
     start, done, next, first, last,
@@ -89,7 +90,7 @@ first(r::Reverse) = last(r.itr) # and the last shall be first
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr
-reverse(x::Union{Number,Char}) = x
+reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
 start(r::Reverse{<:Tuple}) = length(r.itr)
@@ -375,7 +376,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd),Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -517,6 +518,10 @@ IteratorSize(::Type{<:Count}) = IsInfinite()
 struct Take{I}
     xs::I
     n::Int
+    function Take(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -573,6 +578,10 @@ end
 struct Drop{I}
     xs::I
     n::Int
+    function Drop(xs::I, n::Integer) where {I}
+        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        return new{I}(xs, n)
+    end
 end
 
 """
@@ -947,7 +956,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
 
 
-mutable struct PartitionIterator{T}
+struct PartitionIterator{T}
     c::T
     n::Int
 end
@@ -975,7 +984,7 @@ function next(itr::PartitionIterator{<:Vector}, state)
 end
 
 function next(itr::PartitionIterator, state)
-    v = Vector{eltype(itr.c)}(uninitialized, itr.n)
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     while !done(itr.c, state) && i < itr.n
         i += 1
@@ -1044,27 +1053,39 @@ mutable struct Stateful{T, VS}
     @inline function Stateful(itr::T) where {T}
         state = start(itr)
         VS = fixpoint_iter_type(T, Union{}, typeof(state))
-        if done(itr, state)
-            new{T, VS}(itr, nothing, 0)
-        else
-            new{T, VS}(itr, next(itr, state)::VS, 0)
-        end
+        new{T, VS}(itr, done(itr, state) ? nothing : next(itr, state)::VS, 0)
     end
 end
 
-# Try to find an appropriate type for the (value, state tuple),
-# by doing a recursive unrolling of the iteration protocol up to
-# fixpoint.
-function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
-    nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
-    nextvalstate <: Tuple{Any, Any} || return Any
-    nextvalstate = Tuple{
-        typejoin(valT, fieldtype(nextvalstate, 1)),
-        typejoin(stateT, fieldtype(nextvalstate, 2))}
-    return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
-        fixpoint_iter_type(itrT,
-            fieldtype(nextvalstate, 1),
-            fieldtype(nextvalstate, 2)))
+function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
+    s.itr = itr
+    state = start(itr)
+    if done(itr, state)
+        s.nextvalstate = nothing
+    else
+        s.nextvalstate = next(itr, state)::VS
+    end
+    s.taken = 0
+    s
+end
+
+if Base === Core.Compiler
+    fixpoint_iter_type(a, b, c) = Any
+else
+    # Try to find an appropriate type for the (value, state tuple),
+    # by doing a recursive unrolling of the iteration protocol up to
+    # fixpoint.
+    function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
+        nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
+        nextvalstate <: Tuple{Any, Any} || return Any
+        nextvalstate = Tuple{
+            typejoin(valT, fieldtype(nextvalstate, 1)),
+            typejoin(stateT, fieldtype(nextvalstate, 2))}
+        return (Tuple{valT, stateT} == nextvalstate ? nextvalstate :
+            fixpoint_iter_type(itrT,
+                fieldtype(nextvalstate, 1),
+                fieldtype(nextvalstate, 2)))
+    end
 end
 
 convert(::Type{Stateful}, itr) = Stateful(itr)
@@ -1077,11 +1098,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        if done(s.itr, state)
-            s.nextvalstate = nothing
-        else
-            s.nextvalstate = next(s.itr, state)
-        end
+        # Until the optimizer can handle setproperty! better here, use explicit setfield!
+        setfield!(s, :nextvalstate, done(s.itr, state) ? nothing : next(s.itr, state))
         s.taken += 1
         return val
     end

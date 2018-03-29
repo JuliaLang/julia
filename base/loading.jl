@@ -47,7 +47,7 @@ elseif Sys.isapple()
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
-        buf = Vector{UInt8}(uninitialized, length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(undef, length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t, Culong),
@@ -91,12 +91,9 @@ struct SHA1
     end
 end
 SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
+string(hash::SHA1) = bytes2hex(hash.bytes)
 
-convert(::Type{String}, hash::SHA1) = bytes2hex(convert(Vector{UInt8}, hash))
-convert(::Type{Vector{UInt8}}, hash::SHA1) = hash.bytes
-
-string(hash::SHA1) = String(hash)
-show(io::IO, hash::SHA1) = print(io, "SHA1(", convert(String, hash), ")")
+show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -118,40 +115,33 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, project_file)
+dummy_uuid(project_file::String) = isfile_casesensitive(project_file) ?
+    uuid5(ns_dummy_uuid, realpath(project_file)) : nothing
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
-const SlugInt = UInt32 # max p = 4
-const chars = String(['A':'Z'; 'a':'z'; '0':'9'])
-const nchars = SlugInt(length(chars))
-const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
+const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
-function slug(x::SlugInt, p::Int)
-    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
-        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
-    return sprint() do io
+function slug(x::UInt32, p::Int)
+    sprint(sizehint=p) do io
+        n = length(slug_chars)
         for i = 1:p
-            x, d = divrem(x, nchars)
-            write(io, chars[1+d])
+            x, d = divrem(x, n)
+            write(io, slug_chars[1+d])
         end
     end
 end
-slug(x::Integer, p::Int) = slug(SlugInt(x), p)
 
-function slug(bytes::Vector{UInt8}, p::Int)
-    n = nchars^p
-    x = zero(SlugInt)
-    for (i, b) in enumerate(bytes)
-        x = (x + b*powermod(2, 8(i-1), n)) % n
-    end
-    slug(x, p)
+function package_slug(uuid::UUID, p::Int=4)
+    crc = _crc32c(uuid)
+    return slug(crc, p)
 end
 
-slug(uuid::UUID, p::Int=4) = slug(uuid.value % nchars^p, p)
-slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
-
-version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
+function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
+    crc = _crc32c(uuid)
+    crc = _crc32c(sha1.bytes, crc)
+    return slug(crc, p)
+end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 
@@ -201,6 +191,7 @@ function find_env(env::CurrentEnv, dir::AbstractString = pwd())
         old, dir = dir, dirname(dir)
         dir == old && break
     end
+    env.create ? joinpath(pwd(), project_names[end]) : nothing
 end
 
 find_env(env::Function) = find_env(env())
@@ -220,11 +211,9 @@ struct PkgId
 end
 PkgId(name::AbstractString) = PkgId(nothing, name)
 
-function PkgId(m::Module)
+function PkgId(m::Module, name::String = String(nameof(moduleroot(m))))
     uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
-    name = String(nameof(m))
-    UInt128(uuid) == 0 && return PkgId(name)
-    return PkgId(uuid, name)
+    UInt128(uuid) == 0 ? PkgId(name) : PkgId(uuid, name)
 end
 
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
@@ -347,7 +336,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Bool,
     @assert where.uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
-        proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+        proj_name, proj_uuid = project_file_name_uuid_path(project_file, where.name)
         if proj_name == where.name && proj_uuid == where.uuid
             # `where` matches the project, use deps as manifest
             found_or_uuid = explicit_project_deps_get(project_file, name)
@@ -366,6 +355,8 @@ end
 function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
     project_file = env_project_file(env)
     if project_file isa String
+        proj_name, proj_uuid, path = project_file_name_uuid_path(project_file, pkg.name)
+        proj_name == pkg.name && proj_uuid == pkg.uuid && return path
         manifest_file = project_file_manifest_path(project_file)
         if isfile_casesensitive(manifest_file)
             return explicit_manifest_uuid_path(manifest_file, pkg)
@@ -391,19 +382,23 @@ const re_manifest_to_string = r"^\s*manifest\s*=\s*\"(.*)\"\s*(?:#|$)"
 const re_deps_to_any        = r"^\s*deps\s*=\s*(.*?)\s*(?:#|$)"
 
 # find project file's top-level UUID entry (or nothing)
-function project_file_name_and_uuid(project_file::String,
-    name::Union{Nothing,String}=nothing)::Tuple{Union{Nothing,String},UUID}
+function project_file_name_uuid_path(project_file::String,
+    name::String)::Tuple{String,UUID,String}
     open(project_file) do io
         uuid = dummy_uuid(project_file)
+        path = joinpath("src", "$name.jl")
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_name_to_string, line)) != nothing
                 name = String(m.captures[1])
             elseif (m = match(re_uuid_to_string, line)) != nothing
                 uuid = UUID(m.captures[1])
+            elseif (m = match(re_path_to_string, line)) != nothing
+                path = String(m.captures[1])
             end
         end
-        return name, uuid
+        path = joinpath(dirname(project_file), path)
+        return name, uuid, path
     end
 end
 
@@ -412,7 +407,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     open(project_file) do io
         dir = abspath(dirname(project_file))
         for line in eachline(io)
-            contains(line, re_section) && break
+            occursin(re_section, line) && break
             if (m = match(re_manifest_to_string, line)) != nothing
                 return normpath(joinpath(dir, m.captures[1]))
             end
@@ -444,11 +439,11 @@ end
 # and project file if one exists (or nothing if not)
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
     for entry in ("", joinpath(name, "src"), joinpath("$name.jl", "src"))
-        path = joinpath(dir, entry, "$name.jl")
+        path = normpath(joinpath(dir, entry, "$name.jl"))
         isfile_casesensitive(path) || continue
         if !isempty(entry)
             for proj in project_names
-                project_file = joinpath(dir, dirname(entry), proj)
+                project_file = normpath(joinpath(dir, dirname(entry), proj))
                 isfile_casesensitive(project_file) || continue
                 return path, project_file
             end
@@ -460,8 +455,8 @@ end
 
 # given a path and a name, return the entry point
 function entry_path(path::String, name::String)::Union{Nothing,String}
-    isfile_casesensitive(path) && return path
-    path = joinpath(path, "src", "$name.jl")
+    isfile_casesensitive(path) && return normpath(path)
+    path = normpath(joinpath(path, "src", "$name.jl"))
     isfile_casesensitive(path) ? path : nothing
 end
 entry_path(::Nothing, name::String) = nothing
@@ -484,13 +479,8 @@ end
 
 # find project file root or deps `name => uuid` mapping
 #  - `false` means: did not find `name`
-#  - `true` means: found `name` without UUID
+#  - `true` means: found `name` without UUID (can't happen in explicit projects)
 #  - `uuid` means: found `name` with `uuid` in project file
-#
-# `true` can only be returned in the case that `name` is the project's name
-# and the project file does not have a top-level `uuid` mapping
-# it is not currently supported to have a name in `deps` mapped to anything
-# besides a UUID, so otherwise the answer is `false` or a UUID value
 
 function explicit_project_deps_get(project_file::String, name::String)::Union{Bool,UUID}
     open(project_file) do io
@@ -499,9 +489,9 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
         state = :top
         for line in eachline(io)
             if state == :top
-                if contains(line, re_section)
+                if occursin(re_section, line)
                     root_name == name && return root_uuid
-                    state = contains(line, re_section_deps) ? :deps : :other
+                    state = occursin(re_section_deps, line) ? :deps : :other
                 elseif (m = match(re_name_to_string, line)) != nothing
                     root_name = String(m.captures[1])
                 elseif (m = match(re_uuid_to_string, line)) != nothing
@@ -511,11 +501,11 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 if (m = match(re_key_to_string, line)) != nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
-            elseif contains(line, re_section)
-                state = :deps
+            elseif occursin(re_section, line)
+                state = occursin(re_section_deps, line) ? :deps : :other
             end
         end
-        return false
+        return root_name == name && root_uuid
     end
 end
 
@@ -529,7 +519,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         uuid = deps = nothing
         state = :other
         for line in eachline(io)
-            if contains(line, re_array_of_tables)
+            if occursin(re_array_of_tables, line)
                 uuid == where && break
                 uuid = deps = nothing
                 state = :stanza
@@ -538,9 +528,9 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
                     uuid = UUID(m.captures[1])
                 elseif (m = match(re_deps_to_any, line)) != nothing
                     deps = String(m.captures[1])
-                elseif contains(line, re_subsection_deps)
+                elseif occursin(re_subsection_deps, line)
                     state = :deps
-                elseif contains(line, re_section)
+                elseif occursin(re_section, line)
                     state = :other
                 end
             elseif state == :deps && uuid == where
@@ -556,7 +546,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             @warn "Unexpected TOML deps format:\n$deps"
             return nothing
         end
-        contains(deps, repr(name)) || return true
+        occursin(repr(name), deps) || return true
         seekstart(io) # rewind IO handle
         manifest_file_name_uuid(manifest_file, name, io)
     end
@@ -586,10 +576,10 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
             return entry_path(path, name)
         end
         hash == nothing && return nothing
-        slug = version_slug(uuid, hash)
+        slug = joinpath(name, version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", slug)
-            ispath(path) && return path
+            ispath(path) && return entry_path(path, name)
         end
     end
 end
@@ -603,7 +593,7 @@ end
 function implicit_project_deps_get(dir::String, name::String)::Union{Bool,UUID}
     path, project_file = entry_point_and_project_file(dir, name)
     project_file == nothing && return path != nothing
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, name)
     proj_name == name && proj_uuid
 end
 
@@ -616,7 +606,7 @@ function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Un
     @assert where.uuid !== nothing
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return false
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, where.name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, where.name)
     proj_name == where.name && proj_uuid == where.uuid || return false
     found_or_uuid = explicit_project_deps_get(project_file, name)
     found_or_uuid isa UUID ? found_or_uuid : true
@@ -627,7 +617,7 @@ function implicit_manifest_uuid_path(dir::String, pkg::PkgId)::Union{Nothing,Str
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     pkg.uuid === nothing && project_file === nothing && return path
     pkg.uuid === nothing || project_file === nothing && return nothing
-    proj_name, proj_uuid = project_file_name_and_uuid(project_file, pkg.name)
+    proj_name, proj_uuid = project_file_name_uuid_path(project_file, pkg.name)
     proj_name == pkg.name && proj_uuid == pkg.uuid ? path : nothing
 end
 
@@ -639,12 +629,17 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? base_path : nothing
 end
 
+cache_file_entry(pkg::PkgId) = joinpath(
+    "compiled",
+    "v$(VERSION.major).$(VERSION.minor)",
+    pkg.uuid === nothing ? "$(pkg.name).ji" : joinpath(pkg.name, "$(package_slug(pkg.uuid)).ji")
+)
+
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
-    suffix = "$(pkg.name).ji"
-    pkg.uuid !== nothing && (suffix = joinpath(slug(pkg.uuid), suffix))
-    for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, suffix)
+    entry = cache_file_entry(pkg)
+    for depot in DEPOT_PATH
+        path = joinpath(depot, entry)
         isfile_casesensitive(path) && push!(paths, path)
     end
     return paths
@@ -708,7 +703,7 @@ function _require_from_serialized(path::String)
         close(io)
     end
     ndeps = length(depmodnames)
-    depmods = Vector{Any}(uninitialized, ndeps)
+    depmods = Vector{Any}(undef, ndeps)
     for i in 1:ndeps
         modkey, build_id = depmodnames[i]
         dep = _tryrequire_from_serialized(modkey, build_id, nothing)
@@ -865,11 +860,16 @@ Windows.
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
+    # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
     uuidkey === nothing &&
         throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
+    return require(uuidkey)
+end
+
+function require(uuidkey::PkgId)
     if !root_module_exists(uuidkey)
         _require(uuidkey)
         # After successfully loading, notify downstream consumers
@@ -883,8 +883,11 @@ end
 const loaded_modules = Dict{PkgId,Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
+is_root_module(m::Module) = haskey(module_keys, m)
+root_module_key(m::Module) = module_keys[m]
+
 function register_root_module(m::Module)
-    key = PkgId(m)
+    key = PkgId(m, String(nameof(m)))
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
@@ -899,9 +902,6 @@ end
 register_root_module(Core)
 register_root_module(Base)
 register_root_module(Main)
-
-is_root_module(m::Module) = haskey(module_keys, m)
-root_module_key(m::Module) = module_keys[m]
 
 # This is used as the current module when loading top-level modules.
 # It has the special behavior that modules evaluated in it get added
@@ -1008,9 +1008,10 @@ function _require(pkg::PkgId)
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $name declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
-        end
-        if uuid !== old_uuid
-            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+        finally
+            if uuid !== old_uuid
+                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+            end
         end
     finally
         toplevel_load[] = last
@@ -1105,8 +1106,8 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
-        while !eof(STDIN)
-            code = readuntil(STDIN, '\\0')
+        while !eof(stdin)
+            code = readuntil(stdin, '\\0')
             eval(Main, Meta.parse(code))
         end
         """
@@ -1114,19 +1115,17 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                               --output-ji $output --output-incremental=yes
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color ? "yes" : "no")
-                              --eval $code_object`), stderr=STDERR),
-              "w", STDOUT)
+                              --eval $code_object`), stderr=stderr),
+              "w", stdout)
     in = io.in
     try
         write(in, """
         begin
         import Pkg
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, :module => nothing)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $(repr(LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
         Base._track_dependencies[] = true
@@ -1141,10 +1140,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             write(in, "push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
         end
         write(io, "end\0")
-        if uuid !== nothing
-            uuid_tuple = convert(NTuple{2, UInt64}, uuid)
-            write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
-        end
+        uuid_tuple = uuid === nothing ? (0, 0) : convert(NTuple{2, UInt64}, uuid)
+        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
         source = source_path(nothing)
         if source !== nothing
             write(in, "task_local_storage()[:SOURCE_PATH] = $(repr(source))\0")
@@ -1154,9 +1151,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         if source !== nothing
             write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
         end
-        if uuid !== nothing
-            write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
-        end
+        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
     catch ex
         close(in)
@@ -1169,11 +1164,9 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for
-a module and all of its dependencies.
+Creates a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
-`LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
-[Module initialization and precompilation](@ref)
+`DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
 function compilecache(pkg::PkgId)
@@ -1182,12 +1175,9 @@ function compilecache(pkg::PkgId)
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$name not found in path"))
     # decide where to put the resulting cache file
-    cachepath = abspath(LOAD_CACHE_PATH[1])
-    pkg.uuid !== nothing && (cachepath = joinpath(cachepath, slug(pkg.uuid)))
-    if !isdir(cachepath)
-        mkpath(cachepath)
-    end
-    cachefile::String = joinpath(cachepath, "$(pkg.name).ji")
+    cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
+    cachepath = dirname(cachefile)
+    isdir(cachepath) || mkpath(cachepath)
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
@@ -1205,7 +1195,7 @@ function compilecache(pkg::PkgId)
     if success(create_expr_cache(path, cachefile, concrete_deps, pkg.uuid))
         # append checksum to the end of the .ji file:
         open(cachefile, "a+") do f
-            write(f, hton(_crc32c(seekstart(f))))
+            write(f, _crc32c(seekstart(f)))
         end
     else
         error("Failed to precompile $name to $cachefile.")
@@ -1216,35 +1206,35 @@ end
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == ntoh(read(f, UInt32)))
+isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build UUID (mostly just a timestamp)
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
+    totbytes = read(f, Int64) # total bytes for file dependencies
     # read the list of requirements
     # and split the list into include and requires statements
     includes = Tuple{PkgId, String, Float64}[]
     requires = Pair{PkgId, PkgId}[]
     while true
-        n2 = ntoh(read(f, Int32))
+        n2 = read(f, Int32)
         n2 == 0 && break
         depname = String(read(f, n2))
-        mtime = ntoh(read(f, Float64))
-        n1 = ntoh(read(f, Int32))
+        mtime = read(f, Float64)
+        n1 = read(f, Int32)
         # map ids to keys
         modkey = (n1 == 0) ? PkgId("") : modules[n1].first
         if n1 != 0
             # consume (and ignore) the module path too
             while true
-                n1 = ntoh(read(f, Int32))
+                n1 = read(f, Int32)
                 totbytes -= 4
                 n1 == 0 && break
                 skip(f, n1) # String(read(f, n1))
@@ -1259,15 +1249,15 @@ function parse_cache_header(f::IO)
         totbytes -= 4 + 4 + n2 + 8
     end
     @assert totbytes == 12 "header of cache file appears to be corrupt"
-    srctextpos = ntoh(read(f, Int64))
+    srctextpos = read(f, Int64)
     # read the list of modules that are required to be present during loading
     required_modules = Vector{Pair{PkgId, UInt64}}()
     while true
-        n = ntoh(read(f, Int32))
+        n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
-        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
-        build_id = ntoh(read(f, UInt64)) # build id
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
     return modules, (includes, requires), required_modules, srctextpos
@@ -1307,10 +1297,10 @@ end
 
 function _read_dependency_src(io::IO, filename::AbstractString)
     while !eof(io)
-        filenamelen = ntoh(read(io, Int32))
+        filenamelen = read(io, Int32)
         filenamelen == 0 && break
         fn = String(read(io, filenamelen))
-        len = ntoh(read(io, UInt64))
+        len = read(io, UInt64)
         if fn == filename
             return String(read(io, len))
         end
@@ -1343,7 +1333,7 @@ function stale_cachefile(modpath::String, cachefile::String)
 
         # Check if transitive dependencies can be fullfilled
         ndeps = length(required_modules)
-        depmods = Vector{Any}(uninitialized, ndeps)
+        depmods = Vector{Any}(undef, ndeps)
         for i in 1:ndeps
             req_key, req_build_id = required_modules[i]
             # Module is already loaded

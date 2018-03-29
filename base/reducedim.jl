@@ -82,7 +82,7 @@ reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_inita
 function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
     ri = reduced_indices0(A, region)
     if isempty(A)
-        if prod(map(length, reduced_indices(A, region))) != 0
+        if prod(length, reduced_indices(A, region)) != 0
             reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
         else
             R = f == identity ? T : Core.Compiler.return_type(f, (T,))
@@ -140,10 +140,14 @@ let
         [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
-    global reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region) =
-        reducedim_initarray(A, region, mapreduce_first(f, op, zero(eltype(A))))
-    global reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region) =
-        reducedim_initarray(A, region, mapreduce_first(f, op, one(eltype(A))))
+    global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
+        z = zero(f(zero(eltype(A))))
+        reducedim_initarray(A, region, op(z, z))
+    end
+    global function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region)
+        u = one(f(one(eltype(A))))
+        reducedim_initarray(A, region, op(u, u))
+    end
 end
 
 ## generic (map)reduction
@@ -155,10 +159,10 @@ function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
     #
     # It returns an integer value (useful for choosing implementation)
-    # - If it reduces only along leading dimensions, e.g. sum(A, 1) or sum(A, (1, 2)),
+    # - If it reduces only along leading dimensions, e.g. sum(A, dims=1) or sum(A, dims=(1,2)),
     #   it returns the length of the leading slice. For the two examples above,
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
-    # - Otherwise, e.g. sum(A, 2) or sum(A, (1, 3)), it returns 0.
+    # - Otherwise, e.g. sum(A, dims=2) or sum(A, dims=(1,3)), it returns 0.
     #
     ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
     lsiz = 1
@@ -244,9 +248,9 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
-    mapreducedim(f, op, A, region[, v0])
+    mapreduce(f, op[, v0], A::AbstractArray; dims)
 
-Evaluates to the same as `reducedim(op, map(f, A), region, f(v0))`, but is generally
+Evaluates to the same as `reduce(op, f(v0), map(f, A); dims)`, but is generally
 faster because the intermediate array is avoided.
 
 # Examples
@@ -258,24 +262,33 @@ julia> a = reshape(Vector(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> mapreducedim(isodd, *, a, 1)
+julia> mapreduce(isodd, *, a, dims=1)
 1×4 Array{Bool,2}:
  false  false  false  false
 
-julia> mapreducedim(isodd, |, a, 1, true)
+julia> mapreduce(isodd, |, true, a, dims=1)
 1×4 Array{Bool,2}:
  true  true  true  true
 ```
 """
-mapreducedim(f, op, A::AbstractArray, region, v0) =
-    mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
-mapreducedim(f, op, A::AbstractArray, region) =
-    mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
+mapreduce(f, op, v0, A::AbstractArray; dims=:) = _mapreduce_dim(f, op, v0, A, dims)
+
+mapreduce(f, op, A::AbstractArray; dims=:) = _mapreduce_dim(f, op, A, dims)
+
+_mapreduce_dim(f, op, v0, A::AbstractArray, ::Colon) = mapfoldl(f, op, v0, A)
+
+_mapreduce_dim(f, op, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
+
+_mapreduce_dim(f, op, v0, A::AbstractArray, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, v0), A)
+
+_mapreduce_dim(f, op, A::AbstractArray, dims) =
+    mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
-    reducedim(f, A, region[, v0])
+    reduce(f[, v0], A; dims)
 
-Reduce 2-argument function `f` along dimensions of `A`. `region` is a vector specifying the
+Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
 dimensions to reduce, and `v0` is the initial value to use in the reductions. For `+`, `*`,
 `max` and `min` the `v0` argument is optional.
 
@@ -292,24 +305,31 @@ julia> a = reshape(Vector(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> reducedim(max, a, 2)
+julia> reduce(max, a, dims=2)
 4×1 Array{Int64,2}:
  13
  14
  15
  16
 
-julia> reducedim(max, a, 1)
+julia> reduce(max, a, dims=1)
 1×4 Array{Int64,2}:
  4  8  12  16
 ```
 """
-reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)
-reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
+reduce(op, v0, A::AbstractArray; dims=:) = _reduce_dim(op, v0, A, dims)
+
+_reduce_dim(op, v0, A, dims) = mapreduce(identity, op, v0, A, dims=dims)
+_reduce_dim(op, v0, A, ::Colon) = mapreduce(identity, op, v0, A)
+
+reduce(op, A::AbstractArray; dims=:) = _reduce_dim(op, A, dims)
+
+_reduce_dim(op, A, dims) = mapreduce(identity, op, A, dims=dims)
+_reduce_dim(op, A, ::Colon) = mapreduce(identity, op, A)
 
 ##### Specific reduction functions #####
 """
-    sum(A::AbstractArray, dims)
+    sum(A::AbstractArray; dims)
 
 Sum elements of an array over the given dimensions.
 
@@ -320,17 +340,17 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> sum(A, 1)
+julia> sum(A, dims=1)
 1×2 Array{Int64,2}:
  4  6
 
-julia> sum(A, 2)
+julia> sum(A, dims=2)
 2×1 Array{Int64,2}:
  3
  7
 ```
 """
-sum(A::AbstractArray, dims)
+sum(A::AbstractArray; dims)
 
 """
     sum!(r, A)
@@ -357,7 +377,7 @@ julia> sum!([1 1], A)
 sum!(r, A)
 
 """
-    prod(A::AbstractArray, dims)
+    prod(A::AbstractArray; dims)
 
 Multiply elements of an array over the given dimensions.
 
@@ -368,17 +388,17 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> prod(A, 1)
+julia> prod(A, dims=1)
 1×2 Array{Int64,2}:
  3  8
 
-julia> prod(A, 2)
+julia> prod(A, dims=2)
 2×1 Array{Int64,2}:
   2
  12
 ```
 """
-prod(A::AbstractArray, dims)
+prod(A::AbstractArray; dims)
 
 """
     prod!(r, A)
@@ -405,7 +425,7 @@ julia> prod!([1 1], A)
 prod!(r, A)
 
 """
-    maximum(A, dims)
+    maximum(A::AbstractArray; dims)
 
 Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
@@ -417,17 +437,17 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> maximum(A, 1)
+julia> maximum(A, dims=1)
 1×2 Array{Int64,2}:
  3  4
 
-julia> maximum(A, 2)
+julia> maximum(A, dims=2)
 2×1 Array{Int64,2}:
  2
  4
 ```
 """
-maximum(A, dims)
+maximum(A::AbstractArray; dims)
 
 """
     maximum!(r, A)
@@ -454,7 +474,7 @@ julia> maximum!([1 1], A)
 maximum!(r, A)
 
 """
-    minimum(A, dims)
+    minimum(A::AbstractArray; dims)
 
 Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
@@ -467,17 +487,17 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> minimum(A, 1)
+julia> minimum(A, dims=1)
 1×2 Array{Int64,2}:
  1  2
 
-julia> minimum(A, 2)
+julia> minimum(A, dims=2)
 2×1 Array{Int64,2}:
  1
  3
 ```
 """
-minimum(A, dims)
+minimum(A::AbstractArray; dims)
 
 """
     minimum!(r, A)
@@ -504,7 +524,7 @@ julia> minimum!([1 1], A)
 minimum!(r, A)
 
 """
-    all(A, dims)
+    all(A; dims)
 
 Test whether all values along the given dimensions of an array are `true`.
 
@@ -515,17 +535,17 @@ julia> A = [true false; true true]
  true  false
  true   true
 
-julia> all(A, 1)
+julia> all(A, dims=1)
 1×2 Array{Bool,2}:
  true  false
 
-julia> all(A, 2)
+julia> all(A, dims=2)
 2×1 Array{Bool,2}:
  false
   true
 ```
 """
-all(A::AbstractArray, dims)
+all(A::AbstractArray; dims)
 
 """
     all!(r, A)
@@ -552,7 +572,7 @@ julia> all!([1 1], A)
 all!(r, A)
 
 """
-    any(A, dims)
+    any(A; dims)
 
 Test whether any values along the given dimensions of an array are `true`.
 
@@ -563,17 +583,17 @@ julia> A = [true false; true false]
  true  false
  true  false
 
-julia> any(A, 1)
+julia> any(A, dims=1)
 1×2 Array{Bool,2}:
  true  false
 
-julia> any(A, 2)
+julia> any(A, dims=2)
 2×1 Array{Bool,2}:
  true
  true
 ```
 """
-any(::AbstractArray,dims)
+any(::AbstractArray; dims)
 
 """
     any!(r, A)
@@ -600,18 +620,38 @@ julia> any!([1 1], A)
 """
 any!(r, A)
 
+for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod,    :mul_prod),
+                            (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
+    @eval begin
+        # User-facing methods with keyword arguments
+        @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
+        @inline ($fname)(f::Callable, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
+
+        # Underlying implementations using dispatch
+        ($_fname)(a, ::Colon) = ($_fname)(identity, a, :)
+        ($_fname)(f, a, ::Colon) = mapreduce(f, $op, a)
+    end
+end
+
+any(a::AbstractArray; dims=:)              = _any(a, dims)
+any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
+_any(a, ::Colon)                           = _any(identity, a, :)
+all(a::AbstractArray; dims=:)              = _all(a, dims)
+all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
+_all(a, ::Colon)                           = _all(identity, a, :)
+
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
-                    (:all, :&), (:any, :|)]
+                    (:all, :&),       (:any, :|)]
     fname! = Symbol(fname, '!')
+    _fname = Symbol('_', fname)
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim(f, $(op), A, region)
-        $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
+        $(_fname)(A, dims)    = $(_fname)(identity, A, dims)
+        $(_fname)(f, A, dims) = mapreduce(f, $(op), A, dims=dims)
     end
 end
 
@@ -679,9 +719,9 @@ function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
 end
 
 """
-    findmin(A, region) -> (minval, index)
+    findmin(A; dims) -> (minval, index)
 
-For an array input, returns the value and index of the minimum over the given region.
+For an array input, returns the value and index of the minimum over the given dimensions.
 `NaN` is treated as less than all other values.
 
 # Examples
@@ -691,14 +731,16 @@ julia> A = [1.0 2; 3 4]
  1.0  2.0
  3.0  4.0
 
-julia> findmin(A, 1)
+julia> findmin(A, dims=1)
 ([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
 
-julia> findmin(A, 2)
+julia> findmin(A, dims=2)
 ([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
 ```
 """
-function findmin(A::AbstractArray{T}, region) where T
+findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
+
+function _findmin(A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
@@ -726,9 +768,9 @@ function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
 end
 
 """
-    findmax(A, region) -> (maxval, index)
+    findmax(A; dims) -> (maxval, index)
 
-For an array input, returns the value and index of the maximum over the given region.
+For an array input, returns the value and index of the maximum over the given dimensions.
 `NaN` is treated as greater than all other values.
 
 # Examples
@@ -738,14 +780,16 @@ julia> A = [1.0 2; 3 4]
  1.0  2.0
  3.0  4.0
 
-julia> findmax(A,1)
+julia> findmax(A, dims=1)
 ([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
-julia> findmax(A,2)
+julia> findmax(A, dims=2)
 ([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
 ```
 """
-function findmax(A::AbstractArray{T}, region) where T
+findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
+
+function _findmax(A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0

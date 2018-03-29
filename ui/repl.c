@@ -44,28 +44,30 @@ static int exec_program(char *program)
         // (including the ones that would have been caught) to abort.
         uintptr_t *volatile bt_data = NULL;
         size_t bt_size = ptls->bt_size;
+        volatile int shown_err = 0;
+        jl_printf(JL_STDERR, "error during bootstrap:\n");
         JL_TRY {
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
                 jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
                 jl_printf(JL_STDERR, "\n");
-                free(bt_data);
+                shown_err = 1;
             }
         }
         JL_CATCH {
+        }
+        if (bt_data) {
             ptls->bt_size = bt_size;
             memcpy(ptls->bt_data, bt_data, bt_size * sizeof(void*));
             free(bt_data);
-            errs = NULL;
         }
-        if (!errs) {
-            jl_printf(JL_STDERR, "error during bootstrap:\n");
+        if (!shown_err) {
             jl_static_show(JL_STDERR, e);
             jl_printf(JL_STDERR, "\n");
-            jlbacktrace();
-            jl_printf(JL_STDERR, "\n");
         }
+        jlbacktrace();
+        jl_printf(JL_STDERR, "\n");
         return 1;
     }
     return 0;

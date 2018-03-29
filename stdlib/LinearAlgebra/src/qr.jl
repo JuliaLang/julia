@@ -81,9 +81,9 @@ The object has two fields:
     [^Bischof1987].
 
 
-[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
+[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](https://doi.org/10.1137/0908009)
 
-[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
+[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](https://doi.org/10.1137/0910005)
 """
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
@@ -162,7 +162,7 @@ end
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
-    τ = Vector{eltype(A)}(uninitialized, min(m,n))
+    τ = Vector{eltype(A)}(undef, min(m,n))
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix
@@ -216,9 +216,15 @@ julia> a = [1. 2.; 3. 4.]
  3.0  4.0
 
 julia> qrfact!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.316228 -0.948683; -0.948683 0.316228]
-[-3.16228 -4.42719; 0.0 -0.632456]
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.316228  -0.948683
+ -0.948683   0.316228
+R factor:
+2×2 Array{Float64,2}:
+ -3.16228  -4.42719
+  0.0      -0.632456
 
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -226,7 +232,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qrfact!(a)
-ERROR: InexactError: convert(Int64, -3.1622776601683795)
+ERROR: InexactError: Int64(Int64, -3.1622776601683795)
 Stacktrace:
 [...]
 ```
@@ -280,9 +286,16 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  0.0   1.0
 
 julia> F = qrfact(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
-[-5.0 10.0; 0.0 -1.0]
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.6   0.0   0.8
+ -0.8   0.0  -0.6
+  0.0  -1.0   0.0
+R factor:
+2×2 Array{Float64,2}:
+ -5.0  10.0
+  0.0  -1.0
 
 julia> F.Q * F.R == A
 true
@@ -454,7 +467,9 @@ function getproperty(F::QRCompactWY, d::Symbol)
         getfield(F, d)
     end
 end
-Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) = append!([:R,:Q], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) =
+    (:R, :Q, (private ? fieldnames(typeof(F)) : ())...)
+
 function getproperty(F::QRPivoted{T}, d::Symbol) where T
     m, n = size(F)
     if d == :R
@@ -475,7 +490,8 @@ function getproperty(F::QRPivoted{T}, d::Symbol) where T
         getfield(F, d)
     end
 end
-Base.propertynames(F::QRPivoted, private::Bool=false) = append!([:R,:Q,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::QRPivoted, private::Bool=false) =
+    (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 

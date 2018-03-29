@@ -12,27 +12,26 @@ they both inherit.
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-typejoin(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; join_types(a, b, typejoin))
-
-function join_types(@nospecialize(a), @nospecialize(b), f::Function)
+function typejoin(@nospecialize(a), @nospecialize(b))
+    @_pure_meta
     if a <: b
         return b
     elseif b <: a
         return a
     elseif isa(a,UnionAll)
-        return UnionAll(a.var, join_types(a.body, b, f))
+        return UnionAll(a.var, typejoin(a.body, b))
     elseif isa(b,UnionAll)
-        return UnionAll(b.var, join_types(a, b.body, f))
+        return UnionAll(b.var, typejoin(a, b.body))
     elseif isa(a,TypeVar)
-        return f(a.ub, b)
+        return typejoin(a.ub, b)
     elseif isa(b,TypeVar)
-        return f(a, b.ub)
+        return typejoin(a, b.ub)
     elseif isa(a,Union)
-        a′ = f(a.a,a.b)
-        return a′ === a ? typejoin(a, b) : f(a′, b)
+        a′ = typejoin(a.a, a.b)
+        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
     elseif isa(b,Union)
-        b′ = f(b.a,b.b)
-        return b′ === b ? typejoin(a, b) : f(a, b′)
+        b′ = typejoin(b.a, b.b)
+        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
@@ -40,40 +39,40 @@ function join_types(@nospecialize(a), @nospecialize(b), f::Function)
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
         if lar == 0
-            return Tuple{Vararg{tailjoin(bp,1,f)}}
+            return Tuple{Vararg{tailjoin(bp, 1)}}
         end
         if lbr == 0
-            return Tuple{Vararg{tailjoin(ap,1,f)}}
+            return Tuple{Vararg{tailjoin(ap, 1)}}
         end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = Vector{Any}(uninitialized, laf)
-                c[laf] = Vararg{f(unwrapva(ap[lar]), tailjoin(bp,laf,f))}
+                c = Vector{Any}(undef, laf)
+                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
-                c = Vector{Any}(uninitialized, laf+1)
-                c[laf+1] = Vararg{tailjoin(bp,laf+1,f)}
+                c = Vector{Any}(undef, laf+1)
+                c[laf+1] = Vararg{tailjoin(bp, laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = Vector{Any}(uninitialized, lbf)
-                c[lbf] = Vararg{f(unwrapva(bp[lbr]), tailjoin(ap,lbf,f))}
+                c = Vector{Any}(undef, lbf)
+                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
-                c = Vector{Any}(uninitialized, lbf+1)
-                c[lbf+1] = Vararg{tailjoin(ap,lbf+1,f)}
+                c = Vector{Any}(undef, lbf+1)
+                c[lbf+1] = Vararg{tailjoin(ap, lbf+1)}
                 n = lbf
             end
         else
-            c = Vector{Any}(uninitialized, laf)
+            c = Vector{Any}(undef, laf)
             n = laf
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = f(unwrapva(ai),unwrapva(bi))
+            ci = typejoin(unwrapva(ai), unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -85,22 +84,35 @@ function join_types(@nospecialize(a), @nospecialize(b), f::Function)
             while a.name !== b.name
                 a = supertype(a)
             end
-            aprimary = unwrap_unionall(a.name.wrapper)
+            if a.name === Type.body.name
+                ap = a.parameters[1]
+                bp = b.parameters[1]
+                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
+                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
+                    # handle special Type{T} supertype
+                    return Type
+                end
+            end
+            aprimary = a.name.wrapper
             # join on parameters
             n = length(a.parameters)
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(uninitialized, n)
+            vars = []
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
-                    p[i] = ai
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
+                    aprimary = aprimary{ai}
                 else
-                    p[i] = aprimary.parameters[i]
+                    pushfirst!(vars, aprimary.var)
+                    aprimary = aprimary.body
                 end
             end
-            return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
+            for v in vars
+                aprimary = UnionAll(v, aprimary)
+            end
+            return aprimary
         end
         b = supertype(b)
     end
@@ -114,16 +126,15 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) =
-    (@_pure_meta; join_types(a, b, promote_typejoin))
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
 promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
-    isconcretetype(T) ? Union{T, Nothing} : Any
+    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
 promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
-    isconcretetype(T) ? Union{T, Nothing} : Any
+    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
 promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
-    isconcretetype(T) ? Union{T, Missing} : Any
+    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
 promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
-    isconcretetype(T) ? Union{T, Missing} : Any
+    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
 promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
 promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
 promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
@@ -143,14 +154,14 @@ function full_va_len(p)
     return length(p)::Int, true
 end
 
-# reduce join_types over A[i:end]
-function tailjoin(A, i, f::Function)
+# reduce typejoin over A[i:end]
+function tailjoin(A, i)
     if i > length(A)
         return unwrapva(A[end])
     end
     t = Bottom
     for j = i:length(A)
-        t = f(t, unwrapva(A[j]))
+        t = typejoin(t, unwrapva(A[j]))
     end
     return t
 end

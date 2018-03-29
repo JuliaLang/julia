@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module REPL
 
-using Base.Meta
+using Base.Meta, Sockets
+import InteractiveUtils
 
 export
     AbstractREPL,
@@ -42,6 +45,7 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
+include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 function __init__()
@@ -627,7 +631,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # First the current response buffer
     if 1 <= searchstart <= lastindex(response_str)
         match = searchfunc2(searchdata, response_str, searchstart)
-        if match != 0:-1
+        if match !== nothing
             seek(response_buffer, first(match) - 1)
             return true
         end
@@ -638,7 +642,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc1(searchdata, h)
-        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -667,16 +671,8 @@ function return_callback(s)
     end
 end
 
-function find_hist_file()
-    filename = ".julia_history"
-    if isfile(filename)
-        return filename
-    elseif haskey(ENV, "JULIA_HISTORY")
-        return ENV["JULIA_HISTORY"]
-    else
-        return joinpath(homedir(), filename)
-    end
-end
+find_hist_file() = get(ENV, "JULIA_HISTORY",
+    joinpath(homedir(), ".julia", "logs", "repl_history.jl"))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -751,11 +747,18 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function setup_interface(
+setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
     extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+) = setup_interface(repl, hascolor, extra_repl_keymap)
+
+# This non keyword method can be precompiled which is important
+function setup_interface(
+    repl::LineEditREPL,
+    hascolor::Bool,
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
 )
     ###
     #
@@ -833,6 +836,7 @@ function setup_interface(
     if repl.history_file
         try
             hist_path = find_hist_file()
+            mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
             finalizer(replc) do replc
                 close(f)
@@ -889,7 +893,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(equalto(UInt8('\n')), sbuffer) === nothing)
+            shouldeval = (bytesavailable(sbuffer) == curspos && !occursin(UInt8('\n'), sbuffer))
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace
@@ -980,7 +984,7 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
                 @goto writeback
             end
-            Base.edit(linfos[n][1], linfos[n][2])
+            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1051,7 +1055,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = findlast(equalto(';'), line)
+    match = findlast(isequal(';'), line)
     if match !== nothing
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
@@ -1138,8 +1142,5 @@ function start_repl_server(port::Int)
         run_repl(client)
     end
 end
-
-include("precompile.jl")
-_precompile_()
 
 end # module

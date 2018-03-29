@@ -61,7 +61,7 @@ S4 = OffsetArray(view(reshape(Vector(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1)
 @test A[1, [4,3]] == S[1, [4,3]] == [4,2]
 @test A[:, :] == S[:, :] == A
 
-A_3_3 = OffsetArray(Matrix{Int}(uninitialized, 3,3), (-2,-1))
+A_3_3 = OffsetArray(Matrix{Int}(undef, 3,3), (-2,-1))
 A_3_3[:, :] = reshape(1:9, 3, 3)
 for i = 1:9 @test A_3_3[i] == i end
 A_3_3[-1:1, 0:2] = reshape(1:9, 3, 3)
@@ -164,8 +164,8 @@ str = String(take!(io))
 show(io, parent(v))
 @test str == String(take!(io))
 smry = summary(v)
-@test contains(smry, "OffsetArray{Float64,1")
-@test contains(smry, "with indices -1:1")
+@test occursin("OffsetArray{Float64,1", smry)
+@test occursin("with indices -1:1", smry)
 function cmp_showf(printfunc, io, A)
     ioc = IOContext(io, :limit => true, :compact => true)
     printfunc(ioc, A)
@@ -232,7 +232,7 @@ v = view(A0, 1:1, i1)
 @test axes(v) === (Base.OneTo(1), -4:-3)
 
 # copyto! and fill!
-a = OffsetArray{Int}(uninitialized, (-3:-1,))
+a = OffsetArray{Int}(undef, (-3:-1,))
 fill!(a, -1)
 copyto!(a, (1,2))   # non-array iterables
 @test a[-3] == 1
@@ -276,7 +276,7 @@ copyto!(a, -3, b, 2)
 @test a[-3] == 2
 @test a[-2] == a[-1] == -1
 @test_throws BoundsError copyto!(a, -3, b, 1, 4)
-am = OffsetArray{Int}(uninitialized, (1:1, 7:9))  # for testing linear indexing
+am = OffsetArray{Int}(undef, (1:1, 7:9))  # for testing linear indexing
 fill!(am, -1)
 copyto!(am, b)
 @test am[1] == 1
@@ -338,21 +338,21 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
-@test maximum(A, 1) == OffsetArray(maximum(parent(A), 1), (0,A.offsets[2]))
-@test maximum(A, 2) == OffsetArray(maximum(parent(A), 2), (A.offsets[1],0))
-@test maximum(A, 1:2) == maximum(parent(A), 1:2)
+@test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), (0,A.offsets[2]))
+@test maximum(A, dims=2) == OffsetArray(maximum(parent(A), dims=2), (A.offsets[1],0))
+@test maximum(A, dims=1:2) == maximum(parent(A), dims=1:2)
 C = similar(A)
-cumsum!(C, A, 1)
-@test parent(C) == cumsum(parent(A), 1)
-@test parent(cumsum(A, 1)) == cumsum(parent(A), 1)
-cumsum!(C, A, 2)
-@test parent(C) == cumsum(parent(A), 2)
+cumsum!(C, A, dims=1)
+@test parent(C) == cumsum(parent(A), dims=1)
+@test parent(cumsum(A, dims=1)) == cumsum(parent(A), dims=1)
+cumsum!(C, A, dims=2)
+@test parent(C) == cumsum(parent(A), dims=2)
 R = similar(A, (1:1, 6:9))
 maximum!(R, A)
-@test parent(R) == maximum(parent(A), 1)
+@test parent(R) == maximum(parent(A), dims=1)
 R = similar(A, (-2:1, 1:1))
 maximum!(R, A)
-@test parent(R) == maximum(parent(A), 2)
+@test parent(R) == maximum(parent(A), dims=2)
 amin, iamin = findmin(A)
 pmin, ipmin = findmin(parent(A))
 @test amin == pmin
@@ -372,11 +372,11 @@ I = findall(!iszero, z)
 @test findall(x->x==0, h) == [2]
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
-@test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
-@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
+@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
+@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
 @test var(A_3_3) == 7.5
-@test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
+@test std(A_3_3, dims=1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
+@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))
@@ -412,16 +412,16 @@ v = OffsetArray(rand(8), (-2,))
 @test sort(v) == OffsetArray(sort(parent(v)), v.offsets)
 @test sortrows(A) == OffsetArray(sortrows(parent(A)), A.offsets)
 @test sortcols(A) == OffsetArray(sortcols(parent(A)), A.offsets)
-@test sort(A, 1) == OffsetArray(sort(parent(A), 1), A.offsets)
-@test sort(A, 2) == OffsetArray(sort(parent(A), 2), A.offsets)
+@test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
+@test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 
 @test mapslices(sort, A, 1) == OffsetArray(mapslices(sort, parent(A), 1), A.offsets)
 @test mapslices(sort, A, 2) == OffsetArray(mapslices(sort, parent(A), 2), A.offsets)
 
 @test rotl90(A) == OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
-@test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
-@test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
+@test reverse(A, dims=1) == OffsetArray(reverse(parent(A), dims=1), A.offsets)
+@test reverse(A, dims=2) == OffsetArray(reverse(parent(A), dims=2), A.offsets)
 
 @test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
@@ -431,7 +431,7 @@ v = OffsetArray(rand(8), (-2,))
 @test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 src = reshape(Vector(1:16), (4,4))
-dest = OffsetArray(Matrix{Int}(uninitialized, 4,4), (-1,1))
+dest = OffsetArray(Matrix{Int}(undef, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
@@ -448,7 +448,7 @@ module SimilarUR
         stop::Int
     end
     ur = MyURange(1,3)
-    a = Vector{Int}(uninitialized, 2)
+    a = Vector{Int}(undef, 2)
     @test_throws MethodError similar(a, ur)
     @test_throws MethodError similar(a, Float64, ur)
     @test_throws MethodError similar(a, Float64, (ur,))

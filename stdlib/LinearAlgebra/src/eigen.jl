@@ -75,7 +75,17 @@ make rows and columns more equal in norm. The default is `true` for both options
 # Examples
 ```jldoctest
 julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-LinearAlgebra.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
+eigenvalues:
+3-element Array{Float64,1}:
+  1.0
+  3.0
+ 18.0
+eigenvectors:
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
 
 julia> F.values
 3-element Array{Float64,1}:

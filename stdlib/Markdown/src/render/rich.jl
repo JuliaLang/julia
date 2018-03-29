@@ -14,7 +14,7 @@ function tohtml(io::IO, m::MIME"image/png", img)
     print(io, "\" />")
 end
 
-function tohtml(m::MIME"image/svg+xml", img)
+function tohtml(io::IO, m::MIME"image/svg+xml", img)
     show(io, m, img)
 end
 
@@ -22,7 +22,7 @@ end
 
 function bestmime(val)
     for mime in ("text/html", "image/svg+xml", "image/png", "text/plain")
-        mimewritable(mime, val) && return MIME(Symbol(mime))
+        showable(mime, val) && return MIME(Symbol(mime))
     end
     error("Cannot render $val to Markdown.")
 end

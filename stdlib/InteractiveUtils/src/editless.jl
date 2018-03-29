@@ -16,7 +16,7 @@ function editor()
     if Sys.iswindows() || Sys.isapple()
         default_editor = "open"
     elseif isfile("/etc/alternatives/editor")
-        default_editor = "/etc/alternatives/editor"
+        default_editor = realpath("/etc/alternatives/editor")
     else
         default_editor = "emacs"
     end
@@ -73,7 +73,7 @@ function edit(path::AbstractString, line::Integer=0)
                                      (Ptr{Cvoid}, Cwstring, Cwstring, Ptr{Cvoid}, Ptr{Cvoid}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
-        spawn(pipeline(cmd, stderr=STDERR))
+        run(pipeline(cmd, stderr=stderr), wait=false)
     else
         run(cmd)
     end
@@ -100,11 +100,13 @@ if Sys.iswindows()
         pager = shell_split(get(ENV, "PAGER", "more"))
         g = pager[1] == "more" ? "" : "g"
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
+        nothing
     end
 else
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
+        nothing
     end
 end
 

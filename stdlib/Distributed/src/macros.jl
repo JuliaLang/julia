@@ -221,7 +221,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Vector{UnitRange{Int}}(uninitialized, nchunks)
+    chunks = Vector{UnitRange{Int}}(undef, nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -246,7 +246,7 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [wait(t) for t in w_exec])
+    reduce(reducer, [fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)

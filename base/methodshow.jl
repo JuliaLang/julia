@@ -11,7 +11,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = findfirst(equalto('#'), s)
+    i = findfirst(isequal('#'), s)
     if i !== nothing
         s = s[1:i-1]
     end
@@ -46,7 +46,7 @@ function method_argnames(m::Method)
     if !isdefined(m, :source) && isdefined(m, :generator)
         return m.generator.argnames
     end
-    argnames = Vector{Any}(uninitialized, m.nargs)
+    argnames = Vector{Any}(undef, m.nargs)
     ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
     return argnames
 end
@@ -202,8 +202,9 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -211,8 +212,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    elseif root_module_exists(PkgId(nothing, "LibGit2"))
-        LibGit2 = Base.root_module(Main, :LibGit2)
+    elseif root_module_exists(libgit2_id)
+        LibGit2 = root_module(libgit2_id)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo

@@ -54,7 +54,7 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 function show(io::IO, J::UniformScaling)
     s = "$(J.λ)"
-    if contains(s, r"\w+\s*[\+\-]\s*\w+")
+    if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"
     end
     print(io, "$(typeof(J))\n$s*I")
@@ -268,7 +268,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(uninitialized, n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)

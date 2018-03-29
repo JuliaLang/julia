@@ -2,7 +2,7 @@
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 using Pkg
 Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
+cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
 Pkg.update()
 Pkg.resolve()
 
@@ -23,11 +23,12 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
 const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
-for dir in readdir(STDLIB_DIR)
-    sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
-    if isfile(sourcefile)
-        cd(joinpath(@__DIR__, "src")) do
-            isdir("stdlib") || mkdir("stdlib")
+cd(joinpath(@__DIR__, "src")) do
+    Base.rm("stdlib"; recursive=true, force=true)
+    mkdir("stdlib")
+    for dir in readdir(STDLIB_DIR)
+        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+        if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
             if Sys.iswindows()
@@ -72,7 +73,6 @@ const PAGES = [
         "manual/missing.md",
         "manual/networking-and-streams.md",
         "manual/parallel-computing.md",
-        "manual/dates.md",
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
@@ -147,10 +147,10 @@ for stdlib in STDLIB_DOCS
 end
 
 makedocs(
-    build     = joinpath(pwd(), "_build/html/en"),
+    build     = joinpath(@__DIR__, "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = "doctest" in ARGS,
+    doctest   = ("doctest-fix" in ARGS) ? (:fix) : ("doctest" in ARGS),
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = false,

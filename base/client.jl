@@ -165,7 +165,7 @@ function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt)
     println(io)
 end
-display_error(er, bt) = display_error(STDERR, er, bt)
+display_error(er, bt) = display_error(stderr, er, bt)
 display_error(er) = display_error(er, [])
 
 function eval_user_input(@nospecialize(ast), show_value::Bool)
@@ -189,7 +189,7 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
                     try
                         invokelatest(display, value)
                     catch err
-                        println(STDERR, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
+                        println(stderr, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
                         rethrow(err)
                     end
                     println()
@@ -198,17 +198,17 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
             break
         catch err
             if errcount > 0
-                println(STDERR, "SYSTEM: show(lasterr) caused an error")
+                println(stderr, "SYSTEM: show(lasterr) caused an error")
             end
             errcount, lasterr = errcount+1, err
             if errcount > 2
-                println(STDERR, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                println(stderr, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
                 break
             end
             bt = catch_backtrace()
         end
     end
-    isa(STDIN, TTY) && println()
+    isa(stdin, TTY) && println()
     nothing
 end
 
@@ -218,7 +218,7 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
         ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
               s, sizeof(s), filename, sizeof(filename))
     end
-    if ex isa Symbol && all(equalto('_'), string(ex))
+    if ex isa Symbol && all(isequal('_'), string(ex))
         # remove with 0.7 deprecation
         Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
     end
@@ -244,11 +244,11 @@ incomplete_tag(ex) = :none
 function incomplete_tag(ex::Expr)
     Meta.isexpr(ex, :incomplete) || return :none
     msg = ex.args[1]
-    contains(msg, "string") && return :string
-    contains(msg, "comment") && return :comment
-    contains(msg, "requires end") && return :block
-    contains(msg, "\"`\"") && return :cmd
-    contains(msg, "character") && return :char
+    occursin("string", msg) && return :string
+    occursin("comment", msg) && return :comment
+    occursin("requires end", msg) && return :block
+    occursin("\"`\"", msg) && return :cmd
+    occursin("character", msg) && return :char
     return :other
 end
 
@@ -295,13 +295,8 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
-    # load ~/.juliarc file
-    startup && load_juliarc()
-
-    if repl || is_interactive
-        # load interactive-only libraries
-        eval(Main, :(using InteractiveUtils))
-    end
+    # load ~/.julia/config/startup.jl file
+    startup && load_julia_startup()
 
     # process cmds list
     for (cmd, arg) in cmds
@@ -333,7 +328,7 @@ function exec_options(opts)
     end
     repl |= is_interactive
     if repl
-        interactiveinput = isa(STDIN, TTY)
+        interactiveinput = isa(stdin, TTY)
         if interactiveinput
             global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
@@ -345,16 +340,16 @@ function exec_options(opts)
     nothing
 end
 
-function load_juliarc()
-    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
+function load_julia_startup()
+    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
-        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
+        include(Main, abspath(Sys.BINDIR, Base.SYSCONFDIR, "julia", "startup.jl"))
     else
-        include_ifexists(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "juliarc.jl"))
+        include_ifexists(Main, abspath(Sys.BINDIR, "..", "etc", "julia", "startup.jl"))
     end
-    include_ifexists(Main, abspath(homedir(), ".juliarc.jl"))
-    nothing
+    include_ifexists(Main, abspath(homedir(), ".julia", "config", "startup.jl"))
+    return nothing
 end
 
 const repl_hooks = []
@@ -364,8 +359,8 @@ const repl_hooks = []
 
 Register a one-argument function to be called before the REPL interface is initialized in
 interactive sessions; this is useful to customize the interface. The argument of `f` is the
-REPL object. This function should be called from within the `.juliarc.jl` initialization
-file.
+REPL object. This function should be called from within the `.julia/config/startup.jl`
+initialization file.
 """
 atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
@@ -374,8 +369,8 @@ function __atreplinit(repl)
         try
             f(repl)
         catch err
-            showerror(STDERR, err)
-            println(STDERR)
+            showerror(stderr, err)
+            println(stderr)
         end
     end
 end
@@ -387,10 +382,22 @@ const REPL_MODULE_REF = Ref{Module}()
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
     global active_repl
+    # load interactive-only libraries
+    if !isdefined(Main, :InteractiveUtils)
+        try
+            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+                eval(Main, :(const InteractiveUtils = $InteractiveUtils))
+                eval(Main, :(using .InteractiveUtils))
+            end
+        catch ex
+            @warn "Failed to insert InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+        end
+    end
+
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            term = REPL.Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
+            term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             color_set || (global have_color = REPL.Terminals.hascolor(term))
             banner && REPL.banner(term, term)
             if term.term_type == "dumb"
@@ -400,7 +407,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                 active_repl = REPL.LineEditREPL(term, have_color, true)
                 active_repl.history_file = history_file
             end
-            # Make sure any displays pushed in .juliarc.jl ends up above the
+            # Make sure any displays pushed in .julia/config/startup.jl ends up above the
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(active_repl))
             _atreplinit(active_repl)
@@ -412,7 +419,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             @warn "REPL provider not available: using basic fallback"
         end
         banner && Base.banner()
-        let input = STDIN
+        let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
                 ex = parse_input_line(read(input, String))
@@ -430,7 +437,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                 while isopen(input) || !eof(input)
                     if interactive
                         print("julia> ")
-                        flush(STDOUT)
+                        flush(stdout)
                     end
                     eval_user_input(parse_input_line(input), true)
                 end

@@ -27,7 +27,7 @@ using LinearAlgebra: BlasInt
         @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
         @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
         @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(uninitialized,6,6))
+        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(undef,6,6))
     end
 end
 
@@ -105,7 +105,7 @@ end
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
-        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(uninitialized,7,6))
+        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(undef,7,6))
         @test_throws LinearAlgebra.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
@@ -113,9 +113,9 @@ end
 
 @testset "geqp3, geqrt error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        x10, x11 = Vector{elty}.(uninitialized, (10, 11))
-        y10, y11 = Vector{LinearAlgebra.BlasInt}.(uninitialized, (10, 11))
-        A10x10, A11x10, A10x11, A11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,10), (10,11), (11,11)))
+        x10, x11 = Vector{elty}.(undef, (10, 11))
+        y10, y11 = Vector{LinearAlgebra.BlasInt}.(undef, (10, 11))
+        A10x10, A11x10, A10x11, A11x11 = Matrix{elty}.(undef, ((10,10), (11,10), (10,11), (11,11)))
         @test_throws DimensionMismatch LAPACK.geqlf!(A10x10, x11)
         @test_throws DimensionMismatch LAPACK.gelqf!(A10x10, x11)
         @test_throws DimensionMismatch LAPACK.geqp3!(A10x10, y11, x10)
@@ -130,8 +130,8 @@ end
 
 @testset "gels, gesv, getrs, getri error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A10x10, B11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,11)))
-        x10, x11 = Vector{LinearAlgebra.BlasInt}.(uninitialized, (10, 11))
+        A10x10, B11x11 = Matrix{elty}.(undef, ((10,10), (11,11)))
+        x10, x11 = Vector{LinearAlgebra.BlasInt}.(undef, (10, 11))
         @test_throws DimensionMismatch LAPACK.gels!('N',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gels!('T',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gesv!(A10x10,B11x11)
@@ -196,7 +196,7 @@ end
 
 @testset "gebal/gebak" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10) * Diagonal(exp10.(linspace(-10,10,10)))
+        A = rand(elty,10,10) * Diagonal(exp10.(range(-10, stop=10, length=10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
         Bvs = eigvecs(B)
@@ -259,8 +259,8 @@ end
         d  = rand(elty,10)
         dl = rand(elty,9)
         b  = rand(elty,10)
-        y10 = Vector{BlasInt}(uninitialized, 10)
-        x9, x11 = Vector{elty}.(uninitialized, (9, 11))
+        y10 = Vector{BlasInt}(undef, 10)
+        x9, x11 = Vector{elty}.(undef, (9, 11))
         @test_throws DimensionMismatch LAPACK.gttrf!(x11, d, du)
         @test_throws DimensionMismatch LAPACK.gttrf!(dl, d, x11)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
@@ -361,7 +361,7 @@ end
         B,ipiv = LAPACK.sytrf!('U',B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
-        @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
+        @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0),zero(BlasInt))
     end
 
     # Rook-pivoting variants
@@ -372,7 +372,7 @@ end
         B,ipiv = LAPACK.sytrf_rook!('U', B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
-        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0))
+        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0),zero(BlasInt))
         A = rand(elty, 10, 10)
         A = A + transpose(A) #symmetric!
         b = rand(elty, 10)
@@ -486,8 +486,8 @@ end
         B = rand(elty,10,10)
         C = copy(B)
         @test A\B ≈ LAPACK.ptsv!(rdv,ev,C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,Vector{elty}(uninitialized,10),C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,Matrix{elty}(uninitialized,11,11))
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,Vector{elty}(undef,10),C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,Matrix{elty}(undef,11,11))
     end
 end
 
@@ -506,12 +506,12 @@ end
         C = copy(B)
         if elty <: Complex
             @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(uninitialized,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(uninitialized,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(undef,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(undef,11,11))
         else
             @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(uninitialized,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,Matrix{elty}(uninitialized,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(undef,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,Matrix{elty}(undef,11,11))
         end
     end
 end
@@ -531,11 +531,11 @@ end
         C = copy(B)
         D,C = LAPACK.posv!('U',D,C)
         @test A\B ≈ C
-        offsizemat = Matrix{elty}(uninitialized, n+1, n+1)
+        offsizemat = Matrix{elty}(undef, n+1, n+1)
         @test_throws DimensionMismatch LAPACK.posv!('U', D, offsizemat)
         @test_throws DimensionMismatch LAPACK.potrs!('U', D, offsizemat)
 
-        @test LAPACK.potrs!('U',Matrix{elty}(uninitialized,0,0),elty[]) == elty[]
+        @test LAPACK.potrs!('U',Matrix{elty}(undef,0,0),elty[]) == elty[]
     end
 end
 

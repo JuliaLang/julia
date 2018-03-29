@@ -580,11 +580,11 @@ end
 # of the line.
 
 function edit_move_up(buf::IOBuffer)
-    npos = findprev(equalto(UInt8('\n')), buf.data, position(buf))
+    npos = findprev(isequal(UInt8('\n')), buf.data, position(buf))
     npos === nothing && return false # we're in the first line
     # We're interested in character count, not byte count
     offset = length(content(buf, npos => position(buf)))
-    npos2 = coalesce(findprev(equalto(UInt8('\n')), buf.data, npos-1), 0)
+    npos2 = coalesce(findprev(isequal(UInt8('\n')), buf.data, npos-1), 0)
     seek(buf, npos2)
     for _ = 1:offset
         pos = position(buf)
@@ -603,10 +603,10 @@ function edit_move_up(s)
 end
 
 function edit_move_down(buf::IOBuffer)
-    npos = coalesce(findprev(equalto(UInt8('\n')), buf.data[1:buf.size], position(buf)), 0)
+    npos = coalesce(findprev(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)), 0)
     # We're interested in character count, not byte count
     offset = length(String(buf.data[(npos+1):(position(buf))]))
-    npos2 = findnext(equalto(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
+    npos2 = findnext(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
     if npos2 === nothing #we're in the last line
         return false
     end
@@ -727,10 +727,10 @@ const _space = UInt8(' ')
 
 _notspace(c) = c != _space
 
-beginofline(buf, pos=position(buf)) = coalesce(findprev(equalto(_newline), buf.data, pos), 0)
+beginofline(buf, pos=position(buf)) = coalesce(findprev(isequal(_newline), buf.data, pos), 0)
 
 function lastindexline(buf, pos=position(buf))
-    eol = findnext(equalto(_newline), buf.data[pos+1:buf.size], 1)
+    eol = findnext(isequal(_newline), buf.data[pos+1:buf.size], 1)
     eol === nothing ? buf.size : pos + eol - 1
 end
 
@@ -1028,7 +1028,7 @@ function edit_lower_case(s)
 end
 function edit_title_case(s)
     set_action!(s, :edit_title_case)
-    edit_replace_word_right(s, ucfirst)
+    edit_replace_word_right(s, uppercasefirst)
 end
 
 function edit_replace_word_right(s, replace::Function)
@@ -1199,7 +1199,7 @@ end
 
 const wildcard = '\U10f7ff' # "Private Use" Char
 
-normalize_key(key::Char) = string(key)
+normalize_key(key::AbstractChar) = string(key)
 normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
@@ -1429,7 +1429,7 @@ function keymap_merge(target,source)
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
-        while isa(value, Union{Char,AbstractString})
+        while isa(value, Union{AbstractChar,AbstractString})
             value = normalize_key(value)
             if value in visited
                 error("Eager redirection cycle detected for key " * escape_string(key))
@@ -1441,7 +1441,7 @@ function keymap_merge(target,source)
             value = source[value]
         end
 
-        if isa(value, Union{Char,AbstractString})
+        if isa(value, Union{AbstractChar,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
                 error("Could not find redirected value " * escape_string(source[key]))
@@ -1519,16 +1519,6 @@ const escape_defaults = merge!(
     # reset mode commands
     AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
-
-function write_response_buffer(s::PromptState, data)
-    offset = s.input_buffer.ptr
-    ptr = data.response_buffer.ptr
-    seek(data.response_buffer, 0)
-    write(s.input_buffer, read(data.response_buffer, String))
-    s.input_buffer.ptr = offset + ptr - 2
-    data.response_buffer.ptr = ptr
-    refresh_line(s)
-end
 
 mutable struct SearchState <: ModeState
     terminal::AbstractTerminal
@@ -1848,7 +1838,7 @@ function move_line_start(s::MIState)
     if s.key_repeats > 0
         move_input_start(s)
     else
-        seek(buf, coalesce(findprev(equalto(UInt8('\n')), buf.data, curpos), 0))
+        seek(buf, coalesce(findprev(isequal(UInt8('\n')), buf.data, curpos), 0))
     end
 end
 
@@ -1861,7 +1851,7 @@ end
 
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
-    pos = findnext(equalto(UInt8('\n')), buf.data, position(buf)+1)
+    pos = findnext(isequal(UInt8('\n')), buf.data, position(buf)+1)
     if pos === nothing
         move_input_end(buf)
         return

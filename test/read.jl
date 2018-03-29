@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using DelimitedFiles
-using Random
+using DelimitedFiles, Random, Sockets
 
 mktempdir() do dir
 
@@ -53,10 +52,12 @@ function run_test_server(srv, text)
         try
             sock = accept(srv)
             try
-                write(sock,text)
+                write(sock, text)
             catch e
-                if typeof(e) != Base.UVError
-                    rethrow(e)
+                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
+                        rethrow(e)
+                    end
                 end
             finally
                 close(sock)
@@ -130,7 +131,7 @@ function cleanup()
     end
     empty!(open_streams)
     for tsk in tasks
-        wait(tsk)
+        Base._wait(tsk)
     end
     empty!(tasks)
 end
@@ -189,11 +190,11 @@ for (name, f) in l
     @test read(io(), Int) == read(filename,Int)
     s1 = io()
     s2 = IOBuffer(text)
-    @test read!(s1, Vector{UInt32}(uninitialized, 2)) == read!(s2, Vector{UInt32}(uninitialized, 2))
+    @test read!(s1, Vector{UInt32}(undef, 2)) == read!(s2, Vector{UInt32}(undef, 2))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 5)) == read!(s2, Vector{UInt8}(uninitialized, 5))
+    @test read!(s1, Vector{UInt8}(undef, 5)) == read!(s2, Vector{UInt8}(undef, 5))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 1)) == read!(s2, Vector{UInt8}(uninitialized, 1))
+    @test read!(s1, Vector{UInt8}(undef, 1)) == read!(s2, Vector{UInt8}(undef, 1))
     @test eof(s1)
     @test_throws EOFError read(s1, UInt8)
     @test eof(s1)
@@ -202,16 +203,16 @@ for (name, f) in l
 
     verbose && println("$name eof...")
     n = length(text) - 1
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); !eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); !eof(s))
     n = length(text)
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); eof(s))
     n = length(text) + 1
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
 
     old_text = text
     cleanup()
@@ -243,8 +244,8 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(uninitialized, n)
-            a2 = Vector{UInt8}(uninitialized, n)
+            a1 = Vector{UInt8}(undef, n)
+            a2 = Vector{UInt8}(undef, n)
             s1 = io()
             s2 = IOBuffer(text)
             n1 = readbytes!(s1, a1)
@@ -261,14 +262,14 @@ for (name, f) in l
         verbose && println("$name read!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l]
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(filename, Vector{UInt8}(uninitialized, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(IOBuffer(text), Vector{UInt8}(undef, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(filename, Vector{UInt8}(undef, n))
 
             cleanup()
         end
-        @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, length(text)+1))
+        @test_throws EOFError read!(io(), Vector{UInt8}(undef, length(text)+1))
 
 
         verbose && println("$name readuntil...")
@@ -314,7 +315,7 @@ for (name, f) in l
 
     if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(uninitialized, 4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
@@ -398,17 +399,17 @@ end
 test_read_nbyte()
 
 
-# DevNull
-@test !isreadable(DevNull)
-@test iswritable(DevNull)
-@test isopen(DevNull)
-@test write(DevNull, 0xff) === 1
-@test write(DevNull, Int32(1234)) === 4
-@test_throws EOFError read(DevNull, UInt8)
-@test close(DevNull) === nothing
-@test flush(DevNull) === nothing
-@test eof(DevNull)
-@test print(DevNull, "go to /dev/null") === nothing
+# devnull
+@test !isreadable(devnull)
+@test iswritable(devnull)
+@test isopen(devnull)
+@test write(devnull, 0xff) === 1
+@test write(devnull, Int32(1234)) === 4
+@test_throws EOFError read(devnull, UInt8)
+@test close(devnull) === nothing
+@test flush(devnull) === nothing
+@test eof(devnull)
+@test print(devnull, "go to /dev/null") === nothing
 
 
 let s = "qwerty"
@@ -554,7 +555,7 @@ end # mktempdir() do dir
 end
 
 let p = Pipe()
-    Base.link_pipe(p, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
     t = @schedule read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
@@ -563,7 +564,7 @@ let p = Pipe()
         end
         @async close(p.in)
     end
-    s = reinterpret(UInt16, wait(t))
+    s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end

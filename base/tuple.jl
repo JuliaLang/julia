@@ -159,7 +159,7 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i=1:n
         A[i] = f(t[i])
     end
@@ -175,7 +175,7 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
@@ -191,7 +191,7 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
 end
 function map(f, t1::Any16, t2::Any16, ts::Any16...)
     n = length(t1)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
@@ -289,12 +289,30 @@ function _eq(t1::Any16, t2::Any16, anymissing)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
-hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
-hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
+hash(::Tuple{}, h::UInt) = h + tuplehash_seed
+hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
+function hash(t::Any16, h::UInt)
+    out = h + tuplehash_seed
+    for i = length(t):-1:1
+        out = hash(t[i], out)
+    end
+    return out
+end
 
+<(::Tuple{}, ::Tuple{}) = false
+<(::Tuple{}, ::Tuple) = true
+<(::Tuple, ::Tuple{}) = false
 function <(t1::Tuple, t2::Tuple)
+    a, b = t1[1], t2[1]
+    eq = (a == b)
+    if ismissing(eq)
+        return missing
+    elseif !eq
+        return a < b
+    end
+    return tail(t1) < tail(t2)
+end
+function <(t1::Any16, t2::Any16)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]
@@ -308,7 +326,20 @@ function <(t1::Tuple, t2::Tuple)
     return n1 < n2
 end
 
+isless(::Tuple{}, ::Tuple{}) = false
+isless(::Tuple{}, ::Tuple) = true
+isless(::Tuple, ::Tuple{}) = false
+
+"""
+    isless(t1::Tuple, t2::Tuple)
+
+Returns true when t1 is less than t2 in lexicographic order.
+"""
 function isless(t1::Tuple, t2::Tuple)
+    a, b = t1[1], t2[1]
+    isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
+end
+function isless(t1::Any16, t2::Any16)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]

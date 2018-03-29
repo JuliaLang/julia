@@ -266,9 +266,9 @@ U factor:
 end
 
 @testset "propertynames" begin
-    names = sort!(string.(Base.propertynames(lufact(rand(3,3)))))
+    names = sort!(collect(string.(Base.propertynames(lufact(rand(3,3))))))
     @test names == ["L", "P", "U", "p"]
-    allnames = sort!(string.(Base.propertynames(lufact(rand(3,3)), true)))
+    allnames = sort!(collect(string.(Base.propertynames(lufact(rand(3,3)), true))))
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
 end
 

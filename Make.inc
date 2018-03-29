@@ -23,7 +23,9 @@ OPENBLAS_DYNAMIC_ARCH:=1
 endif
 OPENBLAS_USE_THREAD:=1
 
-# Use libraries available on the system instead of building them
+# Flags for using libraries available on the system instead of building them.
+# Please read the notes around usage of SYSTEM flags in README.md
+# Issues resulting from use of SYSTEM versions will generally not be accepted.
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
@@ -189,7 +191,6 @@ build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
-build_docdir := $(build_datarootdir)/doc/julia
 build_mandir := $(build_datarootdir)/man
 build_man1dir := $(build_mandir)/man1
 build_includedir := $(build_prefix)/include

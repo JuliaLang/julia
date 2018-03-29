@@ -36,7 +36,7 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
 end
 Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
-Cholesky(A::AbstractMatrix{T}, uplo::Char, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::BlasInt) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -47,7 +47,7 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     tol::Real
     info::BlasInt
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasInt},
+function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
                             rank::BlasInt, tol::Real, info::BlasInt) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
@@ -231,7 +231,9 @@ julia> A = [1 2; 2 50]
  2  50
 
 julia> cholfact!(A)
-ERROR: InexactError: convert(Int64, 6.782329983125268)
+ERROR: InexactError: Int64(Int64, 6.782329983125268)
+Stacktrace:
+[...]
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
@@ -298,7 +300,7 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholfact(A)
-LinearAlgebra.Cholesky{Float64,Array{Float64,2}}
+Cholesky{Float64,Array{Float64,2}}
 U factor:
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
  2.0  6.0  -8.0
@@ -393,7 +395,8 @@ function getproperty(C::Cholesky, d::Symbol)
         return getfield(C, d)
     end
 end
-Base.propertynames(F::Cholesky, private::Bool=false) = append!([:U,:L,:UL], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::Cholesky, private::Bool=false) =
+    (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
@@ -415,7 +418,8 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
         return getfield(C, d)
     end
 end
-Base.propertynames(F::CholeskyPivoted, private::Bool=false) = append!([:U,:L,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
+    (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 issuccess(C::Cholesky) = C.info == 0
 

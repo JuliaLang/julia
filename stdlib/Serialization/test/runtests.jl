@@ -235,7 +235,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Vector{TA1}(uninitialized, 3)
+    arr5 = Vector{TA1}(undef, 3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -255,7 +255,7 @@ end
 create_serialization_stream() do s # slices
     slc1 = view(UInt8[1,1,1,1], 2:3)
     serialize(s, slc1)
-    slc2 = view(repmat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
+    slc2 = view(repeat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
@@ -337,7 +337,7 @@ eval(Main, main_ex)
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    wait(schedule(t))
+    Base._wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -349,7 +349,7 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest wait(schedule(t))
+    @test_throws MyErrorTypeTest Base._wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -442,8 +442,8 @@ using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
 str = String(take!(io))
-@test !contains(str, "Instance1")
-@test contains(str, "Shell")
+@test !occursin("Instance1", str)
+@test occursin("Shell", str)
 
 end  # module Test13452
 

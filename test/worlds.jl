@@ -139,7 +139,7 @@ h265() = true
 loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
 @test_throws MethodError put_n_take!(h265, ())
-@test_throws MethodError wait(t265)
+@test_throws MethodError fetch(t265)
 @test istaskdone(t265)
 let ex = t265.exception
     @test ex.f == h265
@@ -152,7 +152,7 @@ let ex = t265.exception
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
-    @test contains(str, cmps)
+    @test occursin(cmps, str)
 end
 
 # test for generated function correctness
@@ -167,3 +167,30 @@ f_gen265(x::Type{Int}) = 3
 @test g_gen265(0) == 1
 @test f_gen265(Int) == 3
 @test g_gen265b(0) == 3
+
+# Test that old, invalidated specializations don't get revived for
+# intermediate worlds by later additions to the method table that
+# would have capped those specializations if they were still valid
+f26506(@nospecialize(x)) = 1
+g26506(x) = f26506(x[1])
+z = Any["ABC"]
+f26506(x::Int) = 2
+g26506(z) # Places an entry for f26506(::String) in mt.name.cache
+f26506(x::String) = 3
+cache = typeof(f26506).name.mt.cache
+# The entry we created above should have been truncated
+@test cache.min_world == cache.max_world
+c26506_1, c26506_2 = Condition(), Condition()
+# Captures the world age
+result26506 = Any[]
+t = Task(()->begin
+    wait(c26506_1)
+    push!(result26506, g26506(z))
+    notify(c26506_2)
+end)
+yield(t)
+f26506(x::Float64) = 4
+cache = typeof(f26506).name.mt.cache
+@test cache.min_world == cache.max_world
+notify(c26506_1); wait(c26506_2);
+@test result26506[1] == 3

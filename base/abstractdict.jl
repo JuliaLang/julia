@@ -90,15 +90,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(keys(a))
+julia> collect(keys(D))
 2-element Array{Char,1}:
- 'b'
  'a'
+ 'b'
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
@@ -115,15 +115,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(values(a))
+julia> collect(values(D))
 2-element Array{Int64,1}:
- 3
  2
+ 3
 ```
 """
 values(a::AbstractDict) = ValueIterator(a)
@@ -242,9 +242,8 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
-keytype(::Type{A}) where {A<:AbstractDict} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -257,8 +256,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{AbstractDict{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:AbstractDict} = valtype(supertype(A))
+valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -447,7 +445,19 @@ function filter(f, d::AbstractDict)
     return df
 end
 
-eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
+function eltype(::Type{<:AbstractDict{K,V}}) where {K,V}
+    if @isdefined(K)
+        if @isdefined(V)
+            return Pair{K,V}
+        else
+            return Pair{K}
+        end
+    elseif @isdefined(V)
+        return Pair{k,V} where k
+    else
+        return Pair
+    end
+end
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
@@ -531,8 +541,9 @@ See [`Dict`](@ref) for further help.
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Vector{Any}
+    count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(uninitialized, 32), 0)
+    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(undef, 32), 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
@@ -547,7 +558,7 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
         d
     end
 
-    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht))
+    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel)
 end
 
 IdDict() = IdDict{Any,Any}()
@@ -557,6 +568,21 @@ IdDict(ps::Pair{K,V}...)           where {K,V} = IdDict{K,V}(ps)
 IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
 IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
 IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
+
+TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
+dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
+dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
+function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
+    T = @default_eltype(kv)
+    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
+        return dict_with_eltype(DT_apply, kv, T)
+    end
+    return grow_to!(dict_with_eltype(DT_apply, T), kv)
+end
 
 function IdDict(kv)
     try
@@ -595,7 +621,9 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
         rehash!(d, max(length(d.ht)>>1, 32))
         d.ndel = 0
     end
-    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), d.ht, key, val)
+    inserted = RefValue{Cint}(0)
+    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    d.count += inserted[]
     return d
 end
 
@@ -610,12 +638,13 @@ function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
 end
 
 function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), d.ht, key, default)
-    # TODO: this can underestimate `ndel`
-    if val === default
+    found = RefValue{Cint}(0)
+    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
+    if found[] === Cint(0)
         return default
     else
-        (d.ndel += 1)
+        d.count -= 1
+        d.ndel += 1
         return val::V
     end
 end
@@ -635,6 +664,7 @@ function empty!(d::IdDict)
     resize!(d.ht, 32)
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
     d.ndel = 0
+    d.count = 0
     return d
 end
 
@@ -644,13 +674,7 @@ start(d::IdDict) = _oidd_nextind(d.ht, 0)
 done(d::IdDict, i) = (i == -1)
 next(d::IdDict{K,V}, i) where {K, V} = (Pair{K,V}(d.ht[i+1], d.ht[i+2]), _oidd_nextind(d.ht, i+2))
 
-function length(d::IdDict)
-    n = 0
-    for pair in d
-        n+=1
-    end
-    n
-end
+length(d::IdDict) = d.count
 
 copy(d::IdDict) = IdDict(d)
 
@@ -659,3 +683,37 @@ get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
 filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
+
+# Like Set, but using IdDict
+mutable struct IdSet{T} <: AbstractSet{T}
+    dict::IdDict{T,Nothing}
+
+    IdSet{T}() where {T} = new(IdDict{T,Nothing}())
+    IdSet{T}(s::IdSet{T}) where {T} = new(IdDict{T,Nothing}(s.dict))
+end
+
+IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
+IdSet() = IdSet{Any}()
+
+copy(s::IdSet{T}) where {T} = IdSet{T}(s)
+copymutable(s::IdSet{T}) where {T} = IdSet{T}(s)
+
+isempty(s::IdSet) = isempty(s.dict)
+length(s::IdSet)  = length(s.dict)
+in(x, s::IdSet) = haskey(s.dict, x)
+push!(s::IdSet, x) = (s.dict[x] = nothing; s)
+pop!(s::IdSet, x) = (pop!(s.dict, x); x)
+pop!(s::IdSet, x, deflt) = x in s ? pop!(s, x) : deflt
+delete!(s::IdSet, x) = (delete!(s.dict, x); s)
+
+sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
+empty!(s::IdSet) = (empty!(s.dict); s)
+
+filter!(f, d::IdSet) = unsafe_filter!(f, d)
+
+start(s::IdSet)       = start(s.dict)
+done(s::IdSet, state) = done(s.dict, state)
+function next(s::IdSet, state)
+    ((k, _), i) = next(s.dict, state)
+    return (k, i)
+end

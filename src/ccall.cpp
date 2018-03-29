@@ -486,6 +486,18 @@ static Value *runtime_apply_type(jl_codectx_t &ctx, jl_value_t *ty, jl_unionall_
     return ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
 }
 
+static const std::string make_errmsg(const char *fname, int n, const char *err)
+{
+    std::stringstream msg;
+    msg << fname;
+    if (n > 0)
+        msg << " argument " << n;
+    else
+        msg << " return";
+    msg << err;
+    return msg.str();
+}
+
 static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn, bool addressOf)
 {
     if (jlto != (jl_value_t*)jl_any_type && !jl_subtype(jvinfo.typ, jlto)) {
@@ -493,19 +505,14 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
             // allow a bit more flexibility for what can be passed to (void*) due to Ref{T} conversion behavior in input
             if (!jl_is_cpointer_type(jvinfo.typ)) {
                 // emit a typecheck, if not statically known to be correct
-                std::stringstream msg;
-                msg << "ccall argument ";
-                msg << argn;
-                emit_cpointercheck(ctx, jvinfo, msg.str());
+                emit_cpointercheck(ctx, jvinfo, make_errmsg("ccall", argn + 1, ""));
             }
         }
         else {
             // emit a typecheck, if not statically known to be correct
-            std::stringstream msg;
-            msg << "ccall argument ";
-            msg << argn;
+            std::string msg = make_errmsg("ccall", argn + 1, "");
             if (!jlto_env || !jl_has_typevar_from_unionall(jlto, jlto_env)) {
-                emit_typecheck(ctx, jvinfo, jlto, msg.str());
+                emit_typecheck(ctx, jvinfo, jlto, msg);
             }
             else {
                 jl_cgval_t jlto_runtime = mark_julia_type(ctx, runtime_apply_type(ctx, jlto, jlto_env), true, jl_any_type);
@@ -518,7 +525,7 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 ctx.builder.CreateCondBr(istype, passBB, failBB);
 
                 ctx.builder.SetInsertPoint(failBB);
-                emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg.str());
+                emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
                 ctx.builder.CreateUnreachable();
                 ctx.builder.SetInsertPoint(passBB);
             }
@@ -1173,22 +1180,24 @@ public:
     std::string err_msg;
     CallingConv::ID cc; // calling convention ABI
     bool llvmcall;
-    FunctionType *functype;
     jl_svec_t *at; // svec of julia argument types
     jl_value_t *rt; // julia return type
     jl_unionall_t *unionall_env; // UnionAll environment for `at` and `rt`
     size_t nargs; // number of actual arguments (can be different from the size of at when varargs)
     size_t isVa;
 
-    function_sig_t(Type *lrt, jl_value_t *rt, bool retboxed, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nargs, size_t isVa, CallingConv::ID cc, bool llvmcall)
+    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nargs, size_t isVa, CallingConv::ID cc, bool llvmcall)
       : fargt_vasig(NULL), lrt(lrt), retboxed(retboxed),
         prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
-        functype(NULL), at(at), rt(rt), unionall_env(unionall_env),
+        at(at), rt(rt), unionall_env(unionall_env),
         nargs(nargs), isVa(isVa)
     {
-        err_msg = generate_func_sig();
-        if (err_msg.empty())
-            functype = FunctionType::get(sret ? T_void : prt, fargt_sig, isVa);
+        err_msg = generate_func_sig(fname);
+    }
+
+    FunctionType *functype() const {
+        assert(err_msg.empty());
+        return FunctionType::get(sret ? T_void : prt, fargt_sig, isVa);
     }
 
     jl_cgval_t emit_a_ccall(
@@ -1198,10 +1207,10 @@ public:
             std::vector<bool> &addressOf,
             jl_cgval_t *argv,
             SmallVector<Value*, 16> &gc_uses,
-            bool static_rt);
+            bool static_rt) const;
 
 private:
-std::string generate_func_sig()
+std::string generate_func_sig(const char *fname)
 {
     size_t nargt = jl_svec_len(at);
     assert(rt && !jl_is_abstract_ref_type(rt));
@@ -1261,8 +1270,6 @@ std::string generate_func_sig()
         Type *t = NULL;
         bool isboxed;
         if (jl_is_abstract_ref_type(tti)) {
-            if (jl_is_typevar(jl_tparam0(tti)))
-                jl_error("ccall: argument type Ref should have an element type, not Ref{T}");
             tti = (jl_value_t*)jl_voidpointer_type;
             t = T_pint8;
             isboxed = false;
@@ -1284,11 +1291,7 @@ std::string generate_func_sig()
             if (isboxed)
                 t = T_prjlvalue;
             if (t == NULL || t == T_void) {
-                std::stringstream msg;
-                msg << "ccall: the type of argument ";
-                msg << (i + 1);
-                msg << " doesn't correspond to a C type";
-                return msg.str();
+                return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
             }
         }
 
@@ -1322,11 +1325,11 @@ std::string generate_func_sig()
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
 #if JL_LLVM_VERSION >= 50000
-                paramattrs.push_back(std::move(ab));
+                AttributeSet params = AttributeSet::get(jl_LLVMContext, ab);
 #else
                 AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
-                paramattrs.push_back(params);
 #endif
+                paramattrs.push_back(params);
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
@@ -1380,11 +1383,53 @@ static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
     jl_errorf("ccall: invalid calling convention %s", jl_symbol_name(lhd));
 }
 
+static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* &rt, jl_unionall_t *unionall_env, int n, const char *fname)
+{
+    // emit verification that the tparam for Ref isn't Any or a TypeVar
+    jl_value_t *ref = jl_tparam0(rt);
+    const char rt_err_msg_notany[] = " type Ref{Any} is invalid. use Ptr{Any} instead.";
+    if (ref == (jl_value_t*)jl_any_type && n == 0) {
+        emit_error(ctx, make_errmsg(fname, n, rt_err_msg_notany));
+        return false;
+    }
+    else if (jl_is_typevar(ref)) {
+        bool always_error = true;
+        if (unionall_env) {
+            int i;
+            jl_unionall_t *ua = unionall_env;
+            for (i = 0; jl_is_unionall(ua); i++) {
+                if (ua->var == (jl_tvar_t*)ref) {
+                    jl_cgval_t runtime_sp = emit_sparam(ctx, i);
+                    if (n > 0) {
+                        always_error = false;
+                    }
+                    else if (runtime_sp.constant) {
+                        if (runtime_sp.constant != (jl_value_t*)jl_any_type)
+                            always_error = false;
+                    }
+                    else {
+                        Value *notany = ctx.builder.CreateICmpNE(
+                                boxed(ctx, runtime_sp),
+                                maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
+                        error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
+                        always_error = false;
+                    }
+                    break;
+                }
+            }
+        }
+        if (always_error) {
+            emit_error(ctx, make_errmsg(fname, n, " type Ref should have an element type, not Ref{<:T}."));
+            return false;
+        }
+    }
+    return true;
+}
+
 static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl_value_t *at,
-                                          jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, const char *funcName,
+                                          jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, const char *fname,
                                           size_t &nargt, bool &isVa, Type *&lrt, bool &retboxed, bool &static_rt)
 {
-    assert(rt && !jl_is_abstract_ref_type(rt));
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
 
@@ -1395,7 +1440,7 @@ static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl
 
     lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed);
     if (lrt == NULL)
-        return "ccall: return type doesn't correspond to a C type";
+        return "return type doesn't correspond to a C type";
     else if (retboxed)
         lrt = T_prjlvalue;
 
@@ -1412,20 +1457,23 @@ static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl
         }
     }
 
-    if (!retboxed && static_rt) {
-        if (!jl_is_concrete_type(rt)) {
-            if (jl_is_cpointer_type(rt))
-                return "ccall: return type Ptr should have an element type (not Ptr{_<:T})";
-            else if (rt != jl_bottom_type)
-                return "ccall: return type must be a concrete DataType";
-        }
-    }
-
     nargt = jl_svec_len(at);
     isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(at, nargt - 1)));
-    if ((!isVa && nargt    != nccallargs) ||
-        ( isVa && nargt - 1 > nccallargs))
-        return "ccall: wrong number of arguments to C function";
+    if (!strcmp(fname, "ccall")) {
+        if (!retboxed && static_rt) {
+            if (!jl_is_concrete_type(rt)) {
+                if (jl_is_cpointer_type(rt))
+                    return "return type Ptr should have an element type (not Ptr{<:T})";
+                else if (rt != jl_bottom_type)
+                    return "return type must be a concrete DataType";
+            }
+        }
+
+        if (isVa ? (nccallargs < nargt - 1) :
+                   (nccallargs != nargt)) {
+            return "wrong number of arguments to ccall function";
+        }
+    }
 
     return "";
 }
@@ -1464,70 +1512,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(i < nccallargs);
         return args[6 + i];
     };
-
-    jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
-        ? (jl_unionall_t*)ctx.linfo->def.method->sig
-        : NULL;
-
-    if (jl_is_abstract_ref_type(rt)) {
-        // emit verification that the tparam for Ref isn't Any or a TypeVar
-        jl_value_t *ref = jl_tparam0(rt);
-        bool always_error = false;
-        if (ref == (jl_value_t*)jl_any_type) {
-            always_error = true;
-        }
-        else if (jl_is_typevar(ref)) {
-            always_error = true;
-            if (unionall) {
-                int i;
-                jl_unionall_t *ua = unionall;
-                for (i = 0; jl_is_unionall(ua); i++) {
-                    if (ua->var == (jl_tvar_t*)ref) {
-                        jl_cgval_t runtime_sp = emit_sparam(ctx, i);
-                        if (runtime_sp.constant) {
-                            if (runtime_sp.constant != (jl_value_t*)jl_any_type)
-                                always_error = false;
-                        }
-                        else {
-                            Value *notany = ctx.builder.CreateICmpNE(
-                                    boxed(ctx, runtime_sp),
-                                    maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
-                            error_unless(ctx, notany, "ccall: return type Ref{Any} is invalid. use Ptr{Any} instead.");
-                            always_error = false;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        if (always_error) {
-            emit_error(ctx, "ccall: return type Ref{Any} is invalid. use Ptr{Any} instead.");
-            JL_GC_POP();
-            return jl_cgval_t();
-        }
-        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
-    }
-
-    // some sanity checking and check whether there's a vararg
-    bool isVa;
-    size_t nargt;
-    Type *lrt;
-    bool retboxed;
-    bool static_rt;
-    std::string err = verify_ccall_sig(
-            /* inputs:  */
-            nccallargs, rt, at, unionall,
-            ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
-            ctx.funcName.c_str(),
-            /* outputs: */
-            nargt, isVa, lrt, retboxed, static_rt);
-    if (!err.empty()) {
-        emit_error(ctx, err);
-        JL_GC_POP();
-        return jl_cgval_t();
-    }
-    if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
-        jl_add_method_root(ctx, rt);
 
     auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
         if ((uintptr_t)fptr == ptr)
@@ -1574,6 +1558,53 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
         if (arg_root.Vboxed || arg_root.V) {
             gc_uses.push_back(arg_root.Vboxed ? arg_root.Vboxed : arg_root.V);
+        }
+    }
+
+    jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
+        ? (jl_unionall_t*)ctx.linfo->def.method->sig
+        : NULL;
+
+    if (jl_is_abstract_ref_type(rt)) {
+        if (!verify_ref_type(ctx, rt, unionall, 0, "ccall")) {
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
+        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
+    }
+
+    // some sanity checking and check whether there's a vararg
+    bool isVa;
+    size_t nargt;
+    Type *lrt;
+    bool retboxed;
+    bool static_rt;
+    const std::string err = verify_ccall_sig(
+            /* inputs:  */
+            nccallargs, rt, at, unionall,
+            ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
+            "ccall",
+            /* outputs: */
+            nargt, isVa, lrt, retboxed, static_rt);
+    if (!err.empty()) {
+        emit_error(ctx, "ccall " + err);
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
+    if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
+        jl_add_method_root(ctx, rt);
+    function_sig_t sig("ccall", lrt, rt, retboxed,
+                       (jl_svec_t*)at, unionall, nccallargs,
+                       isVa, cc, llvmcall);
+    for (size_t i = 0; i < nargt; i++) {
+        jl_value_t *tti = jl_svecref(at, i);
+        if (jl_is_vararg_type(tti))
+            tti = jl_unwrap_vararg(tti);
+        if (jl_is_abstract_ref_type(tti)) {
+            if (!verify_ref_type(ctx, tti, unionall, i + 1, "ccall")) {
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
         }
     }
 
@@ -1743,13 +1774,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_function_ptr)) {
         assert(!isVa && !llvmcall && nargt == 3);
         assert(lrt == T_size);
-        jl_value_t *f = argv[0].constant;
+        jl_value_t *ft = argv[0].typ;
         jl_value_t *frt = argv[1].constant;
         if (!frt) {
             if (jl_is_type_type(argv[1].typ) && !jl_has_free_typevars(argv[1].typ))
                 frt = jl_tparam0(argv[1].typ);
         }
-        if (f && frt) {
+        if (ft != jl_bottom_type && frt) {
             jl_value_t *fargt = argv[2].constant;;
             JL_GC_PUSH1(&fargt);
             if (!fargt && jl_is_type_type(argv[2].typ)) {
@@ -1763,7 +1794,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             if (fargt && jl_is_tuple_type(fargt)) {
                 Value *llvmf = NULL;
                 JL_TRY {
-                    llvmf = jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt);
+                    llvmf = jl_cfunction_cache(ft, frt, (jl_tupletype_t*)fargt);
                 }
                 JL_CATCH {
                     llvmf = NULL;
@@ -1812,8 +1843,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
 
-    function_sig_t sig(lrt, rt, retboxed, (jl_svec_t*)at, unionall, nccallargs,
-                       isVa, cc, llvmcall);
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
             symarg,
@@ -1833,12 +1862,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         std::vector<bool> &addressOf,
         jl_cgval_t *argv,
         SmallVector<Value*, 16> &gc_uses,
-        bool static_rt)
+        bool static_rt) const
 {
     if (!err_msg.empty()) {
         emit_error(ctx, err_msg);
         return jl_cgval_t();
     }
+
+    FunctionType *functype = this->functype();
 
     // save place before arguments, for possible insertion of temp arg area saving code.
     BasicBlock::InstListType &instList = ctx.builder.GetInsertBlock()->getInstList();
@@ -1871,7 +1902,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
-            jl_svec_len(ctx.linfo->sparam_vals) > 0) {
+                jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx.linfo->sparam_vals));
             if (jargty_in_env != jargty)
                 jl_add_method_root(ctx, jargty_in_env);
@@ -1889,7 +1920,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
 
             v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef,
-                                ai + 1, &needStackRestore);
+                                ai, &needStackRestore);
             bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
             if (byRef) {
                 v = decay_derived(v);
@@ -1906,7 +1937,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 return jl_cgval_t();
             }
             v = julia_to_address(ctx, largty, jargty_in_env, unionall_env, arg,
-                                 ai + 1, &needStackRestore);
+                                 ai, &needStackRestore);
             if (isa<UndefValue>(v)) {
                 return jl_cgval_t();
             }

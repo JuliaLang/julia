@@ -27,6 +27,8 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        # issue #26178
+        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
 
     @testset "Basic properties" begin
@@ -67,7 +69,7 @@ srand(1)
             @test op(D)==op(DM)
         end
 
-        for func in (det, trace)
+        for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
@@ -325,7 +327,7 @@ end
 end
 
 # allow construct from range
-@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
+@test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
@@ -415,8 +417,8 @@ end
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
-        fullDD = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
-        fullBB = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
+        fullDD = copyto!(Matrix{Matrix{T}}(undef, 2, 2), DD)
+        fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
                 (identity,  transpose), (transpose, identity ), (transpose, transpose) )

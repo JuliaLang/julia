@@ -95,7 +95,7 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 abstract type Sampler{E} end
 
-Base.eltype(::Type{Sampler{E}}) where {E} = E
+Base.eltype(::Type{<:Sampler{E}}) where {E} = E
 
 # temporarily for BaseBenchmarks
 RangeGenerator(x) = Sampler(GLOBAL_RNG, x)
@@ -198,19 +198,18 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 
 #### scalars
 
-rand(rng::AbstractRNG, X) = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} =
-    rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG, X)                                      = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
 
-rand(X) = rand(GLOBAL_RNG, X)
+rand(X)                   = rand(GLOBAL_RNG, X)
 rand(::Type{X}) where {X} = rand(GLOBAL_RNG, X)
 
 #### arrays
 
-rand!(A::AbstractArray{T}, X) where {T} = rand!(GLOBAL_RNG, A, X)
+rand!(A::AbstractArray{T}, X) where {T}             = rand!(GLOBAL_RNG, A, X)
 rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(GLOBAL_RNG, A, X)
 
-rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T} = rand!(rng, A, Sampler(rng, X))
+rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
 rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
 
 function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
@@ -223,7 +222,7 @@ end
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
-rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
+rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{eltype(X)}(undef, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
@@ -232,7 +231,7 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{eltype(X)}(uninitialized, dims), X)
+rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{eltype(X)}(undef, dims), X)
 rand(                ::Type{X}, dims::Dims) where {X} = rand(GLOBAL_RNG, X, dims)
 
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))

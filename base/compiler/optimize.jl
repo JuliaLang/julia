@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("compiler/ssair/driver.jl")
+
 #####################
 # OptimizationState #
 #####################
@@ -21,10 +23,11 @@ mutable struct OptimizationState
             s_edges = []
             frame.stmt_edges[1] = s_edges
         end
-        next_label = label_counter(frame.src.code) + 1
+        src = frame.src
+        next_label = max(label_counter(src.code), length(src.code)) + 10
         return new(frame.linfo, frame.vararg_type_container,
                    s_edges::Vector{Any},
-                   frame.src, frame.mod, frame.nargs,
+                   src, frame.mod, frame.nargs,
                    next_label, frame.min_valid, frame.max_valid,
                    frame.params)
     end
@@ -51,7 +54,7 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        next_label = label_counter(src.code) + 1
+        next_label = max(label_counter(src.code), length(src.code)) + 10
         vararg_type_container = nothing # if you want something more accurate, set it yourself :P
         return new(linfo, vararg_type_container,
                    s_edges::Vector{Any},
@@ -227,7 +230,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 const META_POP_LOC = Expr(:meta, :pop_loc)
 
-const ENABLE_VERIFY_VALUEINFO = (tmp = Array{Bool,0}(uninitialized); tmp[] = false; tmp)
+const ENABLE_VERIFY_VALUEINFO = (tmp = Array{Bool,0}(undef); tmp[] = false; tmp)
 
 # allocation optimization, must not be mutated.
 const EMPTY_USES = ValueUse[]
@@ -260,6 +263,8 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
+const enable_new_optimizer = RefValue(false)
+
 # converge the optimization work
 function optimize(me::InferenceState)
     # annotate fulltree with type information
@@ -267,6 +272,7 @@ function optimize(me::InferenceState)
 
     # run optimization passes on fulltree
     force_noinline = true
+    def = me.linfo.def
     if me.limited && me.cached && me.parent !== nothing
         # a top parent will be cached still, but not this intermediate work
         me.cached = false
@@ -280,27 +286,49 @@ function optimize(me::InferenceState)
         # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(opt)
         inlining_pass!(opt, opt.src.propagate_inbounds)
-        # Clean up after inlining
-        gotoifnot_elim_pass!(opt)
-        basic_dce_pass!(opt)
-        void_use_elim_pass!(opt)
-        copy_duplicated_expr_pass!(opt)
-        split_undef_flag_pass!(opt)
-        fold_constant_getfield_pass!(opt)
-        # Compute escape information
-        # and elide unnecessary allocations
-        alloc_elim_pass!(opt)
-        # Clean up for `alloc_elim_pass!`
-        gotoifnot_elim_pass!(opt)
-        basic_dce_pass!(opt)
-        void_use_elim_pass!(opt)
+        any_enter = any_phi = false
+        if enable_new_optimizer[]
+            any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
+            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
+        end
+        if enable_new_optimizer[] && !any_enter && isa(def, Method)
+            reindex_labels!(opt)
+            nargs = Int(opt.nargs) - 1
+            if def isa Method
+                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
+            else
+                topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
+            end
+            linetable = [topline]
+            ir = run_passes(opt.src, nargs, linetable)
+            replace_code!(opt.src, ir, nargs, linetable)
+            push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
+            any_phi = true
+        elseif !any_phi
+            # Clean up after inlining
+            gotoifnot_elim_pass!(opt)
+            basic_dce_pass!(opt)
+            void_use_elim_pass!(opt)
+            if !enable_new_optimizer[]
+                copy_duplicated_expr_pass!(opt)
+                split_undef_flag_pass!(opt)
+                fold_constant_getfield_pass!(opt)
+                # Compute escape information
+                # and elide unnecessary allocations
+                alloc_elim_pass!(opt)
+                # Clean up for `alloc_elim_pass!`
+                gotoifnot_elim_pass!(opt)
+                basic_dce_pass!(opt)
+                void_use_elim_pass!(opt)
+            end
+        end
         # Pop metadata before label reindexing
         let code = opt.src.code::Array{Any,1}
             meta_elim_pass!(code, coverage_enabled())
             filter!(x -> x !== nothing, code)
             force_noinline = peekmeta(code, :noinline)[1]
+            reindex_labels!(opt)
         end
-        reindex_labels!(opt)
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid
     end
@@ -368,7 +396,6 @@ function optimize(me::InferenceState)
             force_noinline = true
         end
     end
-    def = me.linfo.def
     if force_noinline
         me.src.inlineable = false
     elseif !me.src.inlineable && isa(def, Method)
@@ -575,6 +602,7 @@ function type_annotate!(sv::InferenceState)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
+    push!(body, LabelNode(nexpr + 1)) # add a terminal label for tracking phi
     i = 1
     while i <= nexpr
         st_i = states[i]
@@ -649,6 +677,8 @@ function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vecto
                 end
                 e.args[i] = x
             end
+        elseif isa(x, PiNode)
+            e.args[i] = PiNode(x.val, widenconst(x.typ))
         elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
             untypedload[x.id] = true
         end
@@ -721,6 +751,18 @@ function substitute!(
     end
     if isa(e, NewvarNode)
         return NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
+    end
+    if isa(e, PhiNode)
+        values = Vector{Any}(undef, length(e.values))
+        for i = 1:length(values)
+            isassigned(e.values, i) || continue
+            values[i] = substitute!(e.values[i], na, argexprs, spsig,
+                spvals, offset, boundscheck)
+        end
+        return PhiNode(e.edges, values)
+    end
+    if isa(e, PiNode)
+        return PiNode(substitute!(e.val, na, argexprs, spsig, spvals, offset, boundscheck), e.typ)
     end
     if isa(e, Expr)
         e = e::Expr
@@ -797,7 +839,7 @@ function is_pure_builtin(@nospecialize(f))
     end
 end
 
-function statement_effect_free(@nospecialize(e), src::CodeInfo, mod::Module)
+function statement_effect_free(@nospecialize(e), src, mod::Module)
     if isa(e, Expr)
         if e.head === :(=)
             return !isa(e.args[1], GlobalRef) && effect_free(e.args[2], src, mod, false)
@@ -813,7 +855,7 @@ end
 # detect some important side-effect-free calls (allow_volatile=true)
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
-function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatile::Bool)
+function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
     if isa(e, GlobalRef)
         return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
     elseif isa(e, Symbol)
@@ -882,7 +924,9 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             end
             fieldcount(typ) >= length(ea) - 1 || return false
             for fld_idx in 1:(length(ea) - 1)
-                exprtype(ea[fld_idx + 1], src, mod) ⊑ fieldtype(typ, fld_idx) || return false
+                eT = exprtype(ea[fld_idx + 1], src, mod)
+                fT = fieldtype(typ, fld_idx)
+                eT ⊑ fT || return false
             end
             # fall-through
         elseif head === :return
@@ -1422,16 +1466,20 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
 
     # make labels / goto statements unique
     # relocate inlining information
-    newlabels = zeros(Int, label_counter(body.args))
-    for i = 1:length(body.args)
+    body_len = length(body.args)
+    newlabels = zeros(Int, body_len + 1)
+    for i = 1:body_len
         a = body.args[i]
         if isa(a, LabelNode)
+            @assert a.label == i
             newlabel = genlabel(sv)
             newlabels[a.label] = newlabel.label
             body.args[i] = newlabel
         end
     end
-    for i = 1:length(body.args)
+    local end_label # if it ends in a goto, we might need to add a come-from label
+    npops = 0 # we don't require them to balance, so find out how many need to be added
+    for i = 1:body_len
         a = body.args[i]
         if isa(a, GotoNode)
             body.args[i] = GotoNode(newlabels[a.label])
@@ -1440,6 +1488,40 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 a.args[1] = newlabels[a.args[1]::Int]
             elseif a.head === :gotoifnot
                 a.args[2] = newlabels[a.args[2]::Int]
+            elseif a.head === :(=) && isa(a.args[2], PhiNode)
+                edges = a.args[2].edges
+                if !@isdefined end_label
+                    for edge in edges
+                        if edge == body_len
+                            end_label = genlabel(sv)
+                            newlabels[body_len + 1] = end_label.label
+                            break
+                        end
+                    end
+                end
+                edges = Any[newlabels[edge::Int + 1] - 1 for edge in edges]
+                a.args[2] = PhiNode(edges, a.args[2].values)
+            elseif a.head === :meta && length(a.args) > 0
+                a1 = a.args[1]
+                if a1 === :push_loc
+                    npops += 1
+                elseif a1 === :pop_loc
+                    if length(a.args) > 1
+                        npops_loc = a.args[2]::Int
+                        if npops_loc > npops # corrupt IR - try to normalize it to limit the impact
+                            a.args[2] = npops
+                            npops = 0
+                        else
+                            npops -= npops_loc
+                        end
+                    else
+                        if npops == 0 # corrupt IR - try to normalize it to limit the impact
+                            body.args[i] = nothing
+                        else
+                            npops -= 1
+                        end
+                    end
+                end
             end
         end
     end
@@ -1449,7 +1531,14 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     local retval
     multiret = false
     lastexpr = pop!(body.args)
-    if isa(lastexpr, LabelNode)
+    if @isdefined end_label
+        # clearly lastexpr must have been a come-from node (specifically, goto),
+        # so just need to push an empty basic-block here for the label numbering
+        # (later, we'll also push retstmt as the next statement)
+        push!(body.args, lastexpr)
+        push!(body.args, end_label)
+        lastexpr = nothing
+    elseif isa(lastexpr, LabelNode)
         push!(body.args, lastexpr)
         error_call = Expr(:call, GlobalRef(topmod, :error), "fatal error in type inference (lowering)")
         error_call.typ = Union{}
@@ -1512,27 +1601,23 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             isa(linenode.file, Symbol) && (file = linenode.file)
         end
     end
-    if do_coverage
+    npops += 1
+    if do_coverage || !isempty(stmts)
+        pop_loc = (npops == 1) ? Expr(:meta, :pop_loc) : Expr(:meta, :pop_loc, npops)
         # Check if we are switching module, which is necessary to catch user
         # code inlined into `Base` with `--code-coverage=user`.
-        # Assume we are inlining directly into `enclosing` instead of another
-        # function inlined in it
         mod = method.module
-        if mod === sv.mod
+        if !do_coverage || mod === sv.mod
             pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line))
         else
             pushfirst!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line, mod))
         end
-        push!(stmts, Expr(:meta, :pop_loc))
-    elseif !isempty(stmts)
-        pushfirst!(stmts, Expr(:meta, :push_loc, file,
-                             method.name, line))
-        if isa(stmts[end], LineNumberNode)
-            stmts[end] = Expr(:meta, :pop_loc)
+        if !do_coverage && !isempty(stmts) && isa(stmts[end], LineNumberNode)
+            stmts[end] = pop_loc
         else
-            push!(stmts, Expr(:meta, :pop_loc))
+            push!(stmts, pop_loc)
         end
     end
 
@@ -1680,6 +1765,15 @@ function ssavalue_increment(body::Expr, incr)
         body.args[i] = ssavalue_increment(body.args[i], incr)
     end
     return body
+end
+ssavalue_increment(body::PiNode, incr) = PiNode(ssavalue_increment(body.val, incr), body.typ)
+function ssavalue_increment(body::PhiNode, incr)
+    values = Vector{Any}(undef, length(body.values))
+    for i = 1:length(values)
+        isassigned(body.values, i) || continue
+        values[i] = ssavalue_increment(body.values[i], incr)
+    end
+    return PhiNode(body.edges, values)
 end
 
 function mk_getfield(texpr, i, T)
@@ -1833,7 +1927,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
     end
 =#
     for ninline = 1:100
-        ata = Vector{Any}(uninitialized, length(e.args))
+        ata = Vector{Any}(undef, length(e.args))
         ata[1] = ft
         for i = 2:length(e.args)
             a = exprtype(e.args[i], sv.src, sv.mod)
@@ -1862,7 +1956,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
 
         if f === _apply
             na = length(e.args)
-            newargs = Vector{Any}(uninitialized, na-2)
+            newargs = Vector{Any}(undef, na-2)
             newstmts = Any[]
             effect_free_upto = 0
             for i = 3:na
@@ -1967,7 +2061,7 @@ function add_slot!(src::CodeInfo, @nospecialize(typ), is_sa::Bool, name::Symbol=
     return SlotNumber(id)
 end
 
-function is_known_call(e::Expr, @nospecialize(func), src::CodeInfo, mod::Module)
+function is_known_call(e::Expr, @nospecialize(func), src, mod::Module)
     if e.head !== :call
         return false
     end
@@ -1975,7 +2069,7 @@ function is_known_call(e::Expr, @nospecialize(func), src::CodeInfo, mod::Module)
     return isa(f, Const) && f.val === func
 end
 
-function is_known_call_p(e::Expr, @nospecialize(pred), src::CodeInfo, mod::Module)
+function is_known_call_p(e::Expr, @nospecialize(pred), src, mod::Module)
     if e.head !== :call
         return false
     end
@@ -2765,7 +2859,7 @@ function split_disjoint_assign!(ctx::AllocOptContext, info, key)
     isdispatchelem(widenconst(ctx.sv.src.slottypes[key.first])) && return false # no splitting can be necessary
     alltypes = IdDict()
     ndefs = length(info.defs)
-    deftypes = Vector{Any}(uninitialized, ndefs)
+    deftypes = Vector{Any}(undef, ndefs)
     for i in 1:ndefs
         def = info.defs[i]
         defex = (def.assign::Expr).args[2]
@@ -2948,9 +3042,10 @@ end
 function structinfo_constant(ctx::AllocOptContext, @nospecialize(v), vt::DataType)
     nf = fieldcount(vt)
     if vt <: Tuple
-        si = StructInfo(Vector{Any}(uninitialized, nf), Symbol[], vt, false, false)
+        si = StructInfo(Vector{Any}(undef, nf), Symbol[], vt, false, false)
     else
-        si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, false, false)
+        si = StructInfo(Vector{Any}(undef, nf), collect(Symbol, fieldnames(vt)),
+                        vt, false, false)
     end
     for i in 1:nf
         if isdefined(v, i)
@@ -2966,7 +3061,8 @@ end
 structinfo_tuple(ex::Expr) = StructInfo(ex.args[2:end], Symbol[], Tuple, false, false)
 function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
     nf = fieldcount(vt)
-    si = StructInfo(Vector{Any}(uninitialized, nf), fieldnames(vt), vt, vt.mutable, true)
+    si = StructInfo(Vector{Any}(undef, nf), collect(Symbol, fieldnames(vt)),
+                    vt, vt.mutable, true)
     ninit = length(ex.args) - 1
     for i in 1:nf
         if i <= ninit
@@ -3462,9 +3558,9 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
     def = info.defs[1]
     si = ctx.structinfos[1]
     if !isempty(ctx.undef_fld) && has_setfield_undef
-        flag_vars = Vector{SlotNumber}(uninitialized, nf)
+        flag_vars = Vector{SlotNumber}(undef, nf)
     end
-    vars = Vector{Any}(uninitialized, nf)
+    vars = Vector{Any}(undef, nf)
     is_ssa = !var_has_static_undef(ctx.sv.src, key.first, key.second)
     def_exprs = Any[]
     if has_preserve
@@ -3731,7 +3827,7 @@ macro check_ast(ctx, ex)
             println("Code:")
             println(ctx.sv.src)
             println("Value Info Map:")
-            show_info(STDOUT, ctx.infomap, ctx)
+            show_info(stdout, ctx.infomap, ctx)
             ccall(:abort, Union{}, ())
         end
     end
@@ -4100,8 +4196,7 @@ function copy_duplicated_expr_pass!(sv::OptimizationState)
 end
 
 # fix label numbers to always equal the statement index of the label
-function reindex_labels!(sv::OptimizationState)
-    body = sv.src.code
+function reindex_labels!(body::Vector{Any})
     mapping = get_label_map(body)
     for i = 1:length(body)
         el = body[i]
@@ -4124,9 +4219,26 @@ function reindex_labels!(sv::OptimizationState)
                 labelnum = mapping[el.args[1]::Int]
                 @assert labelnum !== 0
                 el.args[1] = labelnum
+            elseif el.head === :(=)
+                if isa(el.args[2], PhiNode)
+                    edges = Any[mapping[edge::Int + 1] - 1 for edge in el.args[2].edges]
+                    el.args[2] = PhiNode(convert(Vector{Any}, edges), el.args[2].values)
+                end
             end
         end
     end
+    if body[end] isa LabelNode
+        # we usually have a trailing label for the purposes of phi numbering
+        # this can now be deleted also if unused
+        if label_counter(body, false) < length(body)
+            pop!(body)
+        end
+    end
+end
+
+
+function reindex_labels!(sv::OptimizationState)
+    reindex_labels!(sv.src.code)
 end
 
 function return_type(@nospecialize(f), @nospecialize(t))

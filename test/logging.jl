@@ -59,7 +59,7 @@ end
     @test record.file == Base.source_path()
     @test record.line == kwargs[:real_line]
     @test record.id isa Symbol
-    @test contains(String(record.id), r"^.*logging_[[:xdigit:]]{8}$")
+    @test occursin(r"^.*logging_[[:xdigit:]]{8}$", String(record.id))
 
     # User-defined metadata
     @test kwargs[:bar_val] === bar_val
@@ -69,13 +69,13 @@ end
 
     # Keyword values accessible from message block
     record2 = logs[2]
-    @test contains(record2, (Info,"test2"))
+    @test occursin((Info, "test2"), record2)
     kwargs = record2.kwargs
     @test kwargs[:value_in_msg_block] === 1000.0
 
     # Splatting of keywords
     record3 = logs[3]
-    @test contains(record3, (Info,"test3"))
+    @test occursin((Info, "test3"), record3)
     kwargs = record3.kwargs
     @test sort(collect(keys(kwargs))) == [:a, :b]
     @test kwargs[:a] === 1
@@ -221,11 +221,11 @@ end
 
 @testset "SimpleLogger" begin
     # Log level limiting
-    @test min_enabled_level(SimpleLogger(DevNull, Debug)) == Debug
-    @test min_enabled_level(SimpleLogger(DevNull, Error)) == Error
+    @test min_enabled_level(SimpleLogger(devnull, Debug)) == Debug
+    @test min_enabled_level(SimpleLogger(devnull, Error)) == Error
 
     # Log limiting
-    logger = SimpleLogger(DevNull)
+    logger = SimpleLogger(devnull)
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
@@ -265,6 +265,14 @@ end
     │   b = asdf
     └ @ Base other.jl:101
     """
+end
+
+# Issue #26273
+let m = Module(:Bare26273i, false)
+    eval(m, :(import Base: @error))
+    @test_logs (:error, "Hello") eval(m, quote
+        @error "Hello"
+    end)
 end
 
 end

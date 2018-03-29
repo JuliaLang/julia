@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Markdown
+using Test, Markdown
 import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
@@ -144,16 +144,16 @@ let text =
         @test Markdown.rst(md) == expected
     end
     let html = Markdown.html(md)
-        @test contains(html, ",<a href=\"#footnote-1\" class=\"footnote\">[1]</a>")
-        @test contains(html, ".<a href=\"#footnote-note\" class=\"footnote\">[note]</a>")
-        @test contains(html, "<div class=\"footnote\" id=\"footnote-1\"><p class=\"footnote-title\">1</p>")
-        @test contains(html, "<div class=\"footnote\" id=\"footnote-note\"><p class=\"footnote-title\">note</p>")
+        @test occursin(",<a href=\"#footnote-1\" class=\"footnote\">[1]</a>", html)
+        @test occursin(".<a href=\"#footnote-note\" class=\"footnote\">[note]</a>", html)
+        @test occursin("<div class=\"footnote\" id=\"footnote-1\"><p class=\"footnote-title\">1</p>", html)
+        @test occursin("<div class=\"footnote\" id=\"footnote-note\"><p class=\"footnote-title\">note</p>", html)
     end
     let latex = Markdown.latex(md)
-        @test contains(latex, ",\\footnotemark[1]")
-        @test contains(latex, ".\\footnotemark[note]")
-        @test contains(latex, "\n\\footnotetext[1]{Footnote text for")
-        @test contains(latex, "\n\\footnotetext[note]{A longer footnote:\n")
+        @test occursin(",\\footnotemark[1]", latex)
+        @test occursin(".\\footnotemark[note]", latex)
+        @test occursin("\n\\footnotetext[1]{Footnote text for", latex)
+        @test occursin("\n\\footnotetext[note]{A longer footnote:\n", latex)
     end
 end
 
@@ -239,9 +239,9 @@ let doc = Markdown.parse(
         3. b
         """
     )
-    @test contains(sprint(term, doc), "1. ")
-    @test contains(sprint(term, doc), "2. ")
-    @test !contains(sprint(term, doc), "3. ")
+    @test occursin("1. ", sprint(term, doc))
+    @test occursin("2. ", sprint(term, doc))
+    @test !occursin("3. ", sprint(term, doc))
 end
 
 # HTML output
@@ -1095,4 +1095,12 @@ let
     @test !haskey(md.meta, :foo)
     md.meta[:foo] = 42
     @test !haskey(md′.meta, :foo)
+end
+
+let
+    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
+    @test v.content[2].loose
+    @test !v.content[3].loose
+    @test v.content[5].loose
+    @test !v.content[7].loose
 end

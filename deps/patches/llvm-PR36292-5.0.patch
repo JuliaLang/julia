@@ -1,0 +1,97 @@
+From 94f96f87fa44f2fa2cf86ecb644d3cdc3fc609ad Mon Sep 17 00:00:00 2001
+From: Nemanja Ivanovic <nemanja.i.ibm@gmail.com>
+Date: Thu, 22 Feb 2018 03:02:41 +0000
+Subject: [PATCH] [PowerPC] Do not produce invalid CTR loop with an FRem
+
+An FRem instruction inside a loop should prevent the loop from being converted
+into a CTR loop since this is not an operation that is legal on any PPC
+subtarget. This will always be a call to a library function which means the
+loop will be invalid if this instruction is in the body.
+
+Fixes PR36292.
+
+
+git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@325739 91177308-0d34-0410-b5e6-96231b3b80d8
+---
+ lib/Target/PowerPC/PPCCTRLoops.cpp |  5 ++++-
+ test/CodeGen/PowerPC/pr36292.ll    | 46 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 50 insertions(+), 1 deletion(-)
+ create mode 100644 test/CodeGen/PowerPC/pr36292.ll
+
+diff --git a/lib/Target/PowerPC/PPCCTRLoops.cpp b/lib/Target/PowerPC/PPCCTRLoops.cpp
+index 53f33ac1fc0..97917a1d096 100644
+--- a/lib/Target/PowerPC/PPCCTRLoops.cpp
++++ b/lib/Target/PowerPC/PPCCTRLoops.cpp
+@@ -437,13 +437,16 @@ bool PPCCTRLoops::mightUseCTR(BasicBlock *BB) {
+         return true;
+     }
+ 
++    // FREM is always a call.
++    if (J->getOpcode() == Instruction::FRem)
++      return true;
++
+     if (STI->useSoftFloat()) {
+       switch(J->getOpcode()) {
+       case Instruction::FAdd:
+       case Instruction::FSub:
+       case Instruction::FMul:
+       case Instruction::FDiv:
+-      case Instruction::FRem:
+       case Instruction::FPTrunc:
+       case Instruction::FPExt:
+       case Instruction::FPToUI:
+diff --git a/test/CodeGen/PowerPC/pr36292.ll b/test/CodeGen/PowerPC/pr36292.ll
+new file mode 100644
+index 00000000000..a171918b9e0
+--- /dev/null
++++ b/test/CodeGen/PowerPC/pr36292.ll
+@@ -0,0 +1,46 @@
++; RUN: llc -verify-machineinstrs -mtriple=powerpc64le-unknown-unknown < %s  | \
++; RUN:   FileCheck %s --implicit-check-not=mtctr --implicit-check-not=bdnz
++$test = comdat any
++
++; No CTR loop due to frem (since it is always a call).
++define void @test() #0 comdat {
++; CHECK-LABEL: test:
++; CHECK:    ld 29, 0(3)
++; CHECK:    ld 30, 40(1)
++; CHECK:    xxlxor 31, 31, 31
++; CHECK:    cmpld 30, 29
++; CHECK-NEXT:    bge- 0, .LBB0_2
++; CHECK-NEXT:    .p2align 5
++; CHECK-NEXT:  .LBB0_1: # %bounds.ok
++; CHECK:    fmr 1, 31
++; CHECK-NEXT:    lfsx 2, 0, 3
++; CHECK-NEXT:    bl fmodf
++; CHECK-NEXT:    nop
++; CHECK-NEXT:    addi 30, 30, 1
++; CHECK-NEXT:    stfsx 1, 0, 3
++; CHECK-NEXT:    cmpld 30, 29
++; CHECK-NEXT:    blt+ 0, .LBB0_1
++; CHECK-NEXT:  .LBB0_2: # %bounds.fail
++; CHECK-NEXT:    std 30, 40(1)
++  %pos = alloca i64, align 8
++  br label %forcond
++
++forcond:                                          ; preds = %bounds.ok, %0
++  %1 = load i64, i64* %pos
++  %.len1 = load i64, i64* undef
++  %bounds.cmp = icmp ult i64 %1, %.len1
++  br i1 %bounds.cmp, label %bounds.ok, label %bounds.fail
++
++bounds.ok:                                        ; preds = %forcond
++  %2 = load float, float* undef
++  %3 = frem float 0.000000e+00, %2
++  store float %3, float* undef
++  %4 = load i64, i64* %pos
++  %5 = add i64 %4, 1
++  store i64 %5, i64* %pos
++  br label %forcond
++
++bounds.fail:                                      ; preds = %forcond
++  unreachable
++}
++
+-- 
+2.16.2
+

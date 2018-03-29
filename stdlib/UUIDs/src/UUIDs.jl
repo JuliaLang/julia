@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+__precompile__(true)
+
 module UUIDs
 
 using Random
@@ -28,11 +32,11 @@ by RFC 4122. Note that the Node ID is randomly generated (does not identify the 
 according to section 4.5 of the RFC.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
 julia> rng = MersenneTwister(1234);
 
 julia> uuid1(rng)
-2cc938da-5937-11e7-196e-0f4ef71aa64b
+fcbd9b64-1bc2-11e8-1f13-43a2532b2fa8
 ```
 """
 function uuid1(rng::AbstractRNG=Random.GLOBAL_RNG)
@@ -69,7 +73,7 @@ as specified by RFC 4122.
 julia> rng = MersenneTwister(1234);
 
 julia> uuid4(rng)
-82015f10-44cc-4827-996e-0f4ef71aa64b
+196f2941-2d58-45ba-9f13-43a2532b2fa8
 ```
 """
 function uuid4(rng::AbstractRNG=Random.GLOBAL_RNG)

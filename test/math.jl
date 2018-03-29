@@ -43,7 +43,7 @@ end
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
-    @test contains(sprint(show,π),"3.14159")
+    @test occursin("3.14159", sprint(show, π))
     @test widen(pi) === pi
 end
 
@@ -564,7 +564,7 @@ end
 end
 
 @testset "log/log1p" begin
-    # if using Tang's algorithm, should be accurate to within 0.56 ulps
+    # using Tang's algorithm, should be accurate to within 0.56 ulps
     X = rand(100)
     for x in X
         for n = -5:5
@@ -573,16 +573,16 @@ end
             for T in (Float32,Float64)
                 xt = T(x)
 
-                y = Base.Math.JuliaLibm.log(xt)
+                y = log(xt)
                 yb = log(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
-                y = Base.Math.JuliaLibm.log1p(xt)
+                y = log1p(xt)
                 yb = log1p(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
                 if n <= 0
-                    y = Base.Math.JuliaLibm.log1p(-xt)
+                    y = log1p(-xt)
                     yb = log1p(big(-xt))
                     @test abs(y-yb) <= 0.56*eps(T(yb))
                 end
@@ -860,6 +860,100 @@ end
         @test_throws DomainError acos(-T(Inf))
         @test_throws DomainError acos(T(Inf))
         @test isnan_type(T, acos(T(NaN)))
+    end
+end
+
+#prev, current, next float
+pcnfloat(x) = prevfloat(x), x, nextfloat(x)
+import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
+
+@testset "sinh" begin
+    for T in (Float32, Float64)
+        @test sinh(zero(T)) === zero(T)
+        @test sinh(-zero(T)) === -zero(T)
+        @test sinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test sinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test sinh(T(1000)) === T(Inf)
+        @test sinh(-T(1000)) === -T(Inf)
+        @test isnan_type(T, sinh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
+            @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "cosh" begin
+    for T in (Float32, Float64)
+        @test cosh(zero(T)) === one(T)
+        @test cosh(-zero(T)) === one(T)
+        @test cosh(nextfloat(zero(T))) === one(T)
+        @test cosh(prevfloat(zero(T))) === one(T)
+        @test cosh(T(1000)) === T(Inf)
+        @test cosh(-T(1000)) === T(Inf)
+        @test isnan_type(T, cosh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
+            @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "tanh" begin
+    for T in (Float32, Float64)
+        @test tanh(zero(T)) === zero(T)
+        @test tanh(-zero(T)) === -zero(T)
+        @test tanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test tanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test tanh(T(1000)) === one(T)
+        @test tanh(-T(1000)) === -one(T)
+        @test isnan_type(T, tanh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
+            @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
+            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "asinh" begin
+    for T in (Float32, Float64)
+        @test asinh(zero(T)) === zero(T)
+        @test asinh(-zero(T)) === -zero(T)
+        @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, asinh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)^28]))
+            @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
+            @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "acosh" begin
+    for T in (Float32, Float64)
+        @test_throws DomainError acosh(T(0.1))
+        @test acosh(one(T)) === zero(T)
+        @test isnan_type(T, acosh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([nextfloat(T(1.0)), T(2), T(2)^28]))
+            @test acosh(x) ≈ acosh(big(x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "atanh" begin
+    for T in (Float32, Float64)
+        @test_throws DomainError atanh(T(1.1))
+        @test atanh(zero(T)) === zero(T)
+        @test atanh(-zero(T)) === -zero(T)
+        @test atanh(one(T)) === T(Inf)
+        @test atanh(-one(T)) === -T(Inf)
+        @test atanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, atanh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([T(2.0)^-28, T(0.5)]))
+            @test atanh(x) ≈ atanh(big(x)) rtol=eps(T)
+            @test atanh(-x) ≈ atanh(big(-x)) rtol=eps(T)
+        end
     end
 end
 

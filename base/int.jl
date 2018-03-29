@@ -273,7 +273,8 @@ false
 """
     &(x, y)
 
-Bitwise and.
+Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
 
 # Examples
 ```jldoctest
@@ -282,6 +283,12 @@ julia> 4 & 10
 
 julia> 4 & 12
 4
+
+julia> true & missing
+missing
+
+julia> false & missing
+false
 ```
 """
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
@@ -289,7 +296,8 @@ julia> 4 & 12
 """
     |(x, y)
 
-Bitwise or.
+Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
 
 # Examples
 ```jldoctest
@@ -298,6 +306,12 @@ julia> 4 | 10
 
 julia> 4 | 1
 5
+
+julia> true | missing
+true
+
+julia> false | missing
+missing
 ```
 """
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
@@ -306,20 +320,20 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 """
     bswap(n)
 
-Byte-swap an integer. Flip the bits of its binary representation.
+Reverse the byte order of `n`.
 
 # Examples
 ```jldoctest
-julia> a = bswap(4)
-288230376151711744
+julia> a = bswap(0x10203040)
+0x40302010
 
 julia> bswap(a)
-4
+0x10203040
 
-julia> bin(1)
+julia> string(1, base = 2)
 "1"
 
-julia> bin(bswap(1))
+julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
@@ -452,7 +466,7 @@ end
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
-        @eval @doc ("""
+        @eval @doc """
             rem(x::Integer, T::Type{<:Integer}) -> T
             mod(x::Integer, T::Type{<:Integer}) -> T
             %(x::Integer, T::Type{<:Integer}) -> T
@@ -466,7 +480,7 @@ if nameof(@__MODULE__) === :Base
         julia> 129 % Int8
         -127
         ```
-        """ -> $fname(x::Integer, T::Type{<:Integer}))
+        """ $fname(x::Integer, T::Type{<:Integer})
     end
 end
 
@@ -478,7 +492,7 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits, [base]])
+    trunc([T,] x, [digits; base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -491,7 +505,7 @@ not representable.
 function trunc end
 
 """
-    floor([T,] x, [digits, [base]])
+    floor([T,] x, [digits; base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -504,7 +518,7 @@ not representable.
 function floor end
 
 """
-    ceil([T,] x, [digits, [base]])
+    ceil([T,] x, [digits; base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
@@ -703,7 +717,7 @@ if Core.sizeof(Int) == 4
         return Int128(div(BigInt(x), BigInt(y)))
     end
     function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))
+        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
     end
 
     function rem(x::Int128, y::Int128)

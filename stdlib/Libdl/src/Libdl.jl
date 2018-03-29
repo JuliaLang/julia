@@ -5,7 +5,7 @@ __precompile__(true)
 module Libdl
 @doc """
 Interface to libdl. Provides dynamic linking support.
-""" -> Libdl
+""" Libdl
 
 import Base.DL_LOAD_PATH
 
@@ -32,7 +32,7 @@ const RTLD_NOLOAD    = 0x00000020
 const RTLD_DEEPBIND  = 0x00000040
 const RTLD_FIRST     = 0x00000080
 
-@doc """
+"""
     RTLD_DEEPBIND
     RTLD_FIRST
     RTLD_GLOBAL
@@ -44,7 +44,7 @@ const RTLD_FIRST     = 0x00000080
 
 Enum constant for [`dlopen`](@ref). See your platform man page for details, if
 applicable.
-""" ->
+"""
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
 
 """

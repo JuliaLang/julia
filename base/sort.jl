@@ -2,16 +2,25 @@
 
 module Sort
 
-using Base.Order, Base.Checked
-using Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+import ..@__MODULE__, ..parentmodule
+const Base = parentmodule(@__MODULE__)
+using .Base.Order
+using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length, (:),
+    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+    AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
+    AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
+    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
+    length, resize!, fill
 
-import
-    Base.sort,
-    Base.sort!,
-    Base.issorted,
-    Base.sortperm,
-    Base.Slice,
-    Base.to_indices
+using .Base: >>>, !==
+
+import .Base:
+    sort,
+    sort!,
+    issorted,
+    sortperm,
+    Slice,
+    to_indices
 
 export # also exported by Base
     # order-only:
@@ -819,9 +828,13 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     @inbounds for i = 1:n
         where[x[i] + offs + 1] += 1
     end
-    cumsum!(where, where)
 
-    P = Vector{Int}(uninitialized, n)
+    #cumsum!(where, where)
+    @inbounds for i = 2:length(where)
+        where[i] += where[i-1]
+    end
+
+    P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
         label = x[i] + offs
         P[where[label]] = i
@@ -834,7 +847,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -847,24 +860,26 @@ julia> A = [4 3; 1 2]
  4  3
  1  2
 
-julia> sort(A, 1)
+julia> sort(A, dims = 1)
 2×2 Array{Int64,2}:
  1  2
  4  3
 
-julia> sort(A, 2)
+julia> sort(A, dims = 2)
 2×2 Array{Int64,2}:
  3  4
  1  2
 ```
 """
-function sort(A::AbstractArray, dim::Integer;
+function sort(A::AbstractArray;
+              dims::Integer,
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
               initialized::Union{Bool,Nothing}=nothing)
+    dim = dims
     if initialized !== nothing
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
@@ -983,6 +998,7 @@ slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 module Float
 using ..Sort
 using ...Order
+using ..Base: @inbounds, AbstractVector, Vector, last, axes
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!

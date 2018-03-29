@@ -4,7 +4,7 @@
 # Cross Platform tests for spawn. #
 ###################################
 
-using Random
+using Random, Sockets
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -45,22 +45,22 @@ end
 
 @test read(`$echocmd hello \| sort`, String) == "hello | sort\n"
 @test read(pipeline(`$echocmd hello`, sortcmd), String) == "hello\n"
-@test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
+@test length(run(pipeline(`$echocmd hello`, sortcmd), wait=false).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test contains(out,"world")
-@test contains(out,"hello")
+@test occursin("world", out)
+@test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-Sys.isunix() && run(pipeline(yescmd, `head`, DevNull))
+Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
     @schedule begin
-        p = spawn(pipeline(yescmd,DevNull))
+        p = run(pipeline(yescmd,devnull), wait=false)
         Base.notify(a,p)
         @test !success(p)
     end
@@ -93,7 +93,7 @@ end
 @test_broken  success(ignorestatus(pipeline(falsecmd, falsecmd)))
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
 
-# STDIN Redirection
+# stdin Redirection
 let file = tempname()
     run(pipeline(`$echocmd hello world`, file))
     @test read(pipeline(file, catcmd), String) == "hello world\n"
@@ -119,8 +119,8 @@ if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) 
         close(sock)
         return true
     end
-    @test wait(t1)
-    @test wait(t2)
+    @test fetch(t1)
+    @test fetch(t2)
 end
 
 @test read(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"]), String) == "Hello World\n"
@@ -166,7 +166,7 @@ let r, t
         try
             wait(r)
         end
-        p = spawn(`$sleepcmd 1`); wait(p)
+        p = run(`$sleepcmd 1`, wait=false); wait(p)
         @test p.exitcode == 0
         return true
     end
@@ -175,7 +175,7 @@ let r, t
     yield()
     put!(r,11)
     yield()
-    @test wait(t)
+    @test fetch(t)
 end
 
 # Test marking of IO
@@ -207,7 +207,7 @@ let r, t, sock
     @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
-    @test wait(t)
+    @test fetch(t)
 end
 
 # issue #4535
@@ -215,26 +215,26 @@ exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test read(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
+    @test read(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
     out = Pipe()
-    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr = out))
+    proc = run(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr = out), wait=false)
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,STDOUT)))
+let out = Pipe(), proc = run(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)), wait=false)
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
 
 # issue #5904
-@test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
+@test run(pipeline(ignorestatus(falsecmd), truecmd)) isa Base.AbstractPipe
 
 @testset "redirect_*" begin
-    let OLD_STDOUT = STDOUT,
+    let OLD_STDOUT = stdout,
         fname = tempname(),
         f = open(fname,"w")
 
@@ -243,7 +243,7 @@ end
         redirect_stdout(OLD_STDOUT)
         close(f)
         @test "Hello World\n" == read(fname, String)
-        @test OLD_STDOUT === STDOUT
+        @test OLD_STDOUT === stdout
         rm(fname)
     end
 end
@@ -260,7 +260,7 @@ let fname = tempname(), p
         unsafe_store!(convert(Ptr{Cint}, handle + 2 * sizeof(Ptr{Cvoid})), 15)
         nothing
     end
-    OLD_STDERR = STDERR
+    OLD_STDERR = stderr
     redirect_stderr(open($(repr(fname)), "w"))
     # Usually this would be done by GC. Do it manually, to make the failure
     # case more reliable.
@@ -272,7 +272,7 @@ let fname = tempname(), p
     import Base.zzzInvalidIdentifier
     """
     try
-        io = open(pipeline(`$exename --startup-file=no`, stderr=STDERR), "w")
+        io = open(pipeline(`$exename --startup-file=no`, stderr=stderr), "w")
         write(io, cmd)
         close(io)
         wait(io)
@@ -292,7 +292,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", read(STDIN, String))'`, ready = Condition(), t, infd, outfd
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
@@ -357,7 +357,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
-    wait(t)
+    Base._wait(t)
 end
 
 # issue #8529
@@ -369,7 +369,7 @@ let fname = tempname()
     else
         "cmd = pipeline(`echo asdf`, `cat`)"
     end)
-    for line in eachline(STDIN)
+    for line in eachline(stdin)
         run(cmd)
     end
     """
@@ -414,7 +414,7 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=DevNull)))
+@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull)))
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
@@ -445,11 +445,6 @@ end
 @test_throws ArgumentError run(Base.AndCmds(``, `$truecmd`))
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
-@test_throws ArgumentError spawn(Base.Cmd(``))
-@test_throws ArgumentError spawn(Base.AndCmds(``, ``))
-@test_throws ArgumentError spawn(Base.AndCmds(``, `$echocmd test`))
-@test_throws ArgumentError spawn(Base.AndCmds(`$echocmd test`, ``))
-
 # tests for reducing over collection of Cmd
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
@@ -462,7 +457,7 @@ if Sys.isunix()
         try
             for i = 1 : 100 * coalesce(ulimit_n, 1000)
                 p = Pipe()
-                Base.link_pipe(p)
+                Base.link_pipe!(p)
                 push!(ps, p)
             end
             if ulimit_n === nothing
@@ -484,12 +479,14 @@ end
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
 # issue #19864 (PR #20497)
-@test readchomp(pipeline(ignorestatus(
+let c19864 = readchomp(pipeline(ignorestatus(
         `$exename --startup-file=no -e '
             struct Error19864 <: Exception; end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
-    stderr=catcmd)) == "ERROR: correct19864"
+    stderr=catcmd))
+    @test occursin("ERROR: correct19864", c19864)
+end
 
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`
@@ -504,26 +501,31 @@ end
 
 ## Deadlock in spawning a cmd (#22832)
 # FIXME?
-#let stdout = Pipe(), stdin = Pipe()
-#    Base.link_pipe(stdout, julia_only_read=true)
-#    Base.link_pipe(stdin, julia_only_write=true)
-#    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
+#let out = Pipe(), inpt = Pipe()
+#    Base.link_pipe!(out, reader_supports_async=true)
+#    Base.link_pipe!(inpt, writer_supports_async=true)
+#    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
 #    @async begin # feed cat with 2 MB of data (zeros)
-#        write(stdin, zeros(UInt8, 1048576 * 2))
-#        close(stdin)
+#        write(inpt, zeros(UInt8, 1048576 * 2))
+#        close(inpt)
 #    end
 #    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(stdout.in) # make sure we can still close the write end
-#    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
+#    close(out.in) # make sure we can still close the write end
+#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
 #    @test success(p)
 #end
 
 # `kill` error conditions
-let p = spawn(`$sleepcmd 100`)
+let p = run(`$sleepcmd 100`, wait=false)
     # Should throw on invalid signals
     @test_throws Base.UVError kill(p, typemax(Cint))
     kill(p)
     wait(p)
     # Should not throw if already dead
     kill(p)
+end
+
+# Second argument of shell_parse
+let s = "   \$abc   "
+    @test s[Base.shell_parse(s)[2]] == "abc"
 end

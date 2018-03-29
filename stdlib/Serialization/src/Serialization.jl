@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Provide serialization of Julia objects via the functions
 * [`serialize`](@ref)
@@ -9,7 +11,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
+using Base: unaliascopy, unwrap_unionall
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -272,28 +274,11 @@ function serialize(s::AbstractSerializer, a::Array)
 end
 
 function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
-    b = trimmedsubarray(a)
+    # SubArray's copy only selects the relevant data (and reduces the size) but does not
+    # preserve the type of the argument. This internal function does both:
+    b = unaliascopy(a)
     serialize_any(s, b)
 end
-
-function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
-    dest = Array{eltype(V)}(uninitialized, trimmedsize(V))
-    copyto!(dest, V)
-    _trimmedsubarray(dest, V, (), V.indices...)
-end
-
-trimmedsize(V) = index_lengths(V.indices...)
-
-function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindices) where {T,N,P,I,LD}
-    LD && return SubArray{T,N,P,I,LD}(A, newindices, Base.compute_offset1(A, 1, newindices), 1)
-    SubArray{T,N,P,I,LD}(A, newindices, 0, 0)
-end
-_trimmedsubarray(A, V, newindices, index::ViewIndex, indices...) = _trimmedsubarray(A, V, (newindices..., trimmedindex(V.parent, length(newindices)+1, index)), indices...)
-
-trimmedindex(P, d, i::Real) = oftype(i, 1)
-trimmedindex(P, d, i::Colon) = i
-trimmedindex(P, d, i::Slice) = i
-trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
@@ -322,7 +307,7 @@ end
 
 function serialize(s::AbstractSerializer, n::BigInt)
     serialize_type(s, BigInt)
-    serialize(s, base(62,n))
+    serialize(s, string(n, base = 62))
 end
 
 function serialize(s::AbstractSerializer, n::BigFloat)
@@ -934,7 +919,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            a = Vector{elty}(uninitialized, d1)
+            a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
@@ -945,7 +930,7 @@ function deserialize_array(s::AbstractSerializer)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(uninitialized, dims)
+            A = Array{Bool, length(dims)}(undef, dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -958,12 +943,12 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read!(s.io, Array{elty}(uninitialized, dims))
+            A = read!(s.io, Array{elty}(undef, dims))
         end
         s.table[slot] = A
         return A
     end
-    A = Array{elty, length(dims)}(uninitialized, dims)
+    A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)

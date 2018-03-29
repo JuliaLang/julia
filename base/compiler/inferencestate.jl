@@ -64,6 +64,32 @@ mutable struct InferenceState
             sp = svec(sp...)
         else
             sp = linfo.sparam_vals
+            if _any(t->isa(t,TypeVar), sp)
+                sp = collect(Any, sp)
+            end
+        end
+        if !isa(sp, SimpleVector)
+            for i = 1:length(sp)
+                v = sp[i]
+                if v isa TypeVar
+                    ub = v.ub
+                    while ub isa TypeVar
+                        ub = ub.ub
+                    end
+                    if has_free_typevars(ub)
+                        ub = Any
+                    end
+                    lb = v.lb
+                    while lb isa TypeVar
+                        lb = lb.lb
+                    end
+                    if has_free_typevars(lb)
+                        lb = Bottom
+                    end
+                    sp[i] = TypeVar(v.name, lb, ub)
+                end
+            end
+            sp = svec(sp...)
         end
 
         nssavalues = src.ssavaluetypes::Int
@@ -78,8 +104,8 @@ mutable struct InferenceState
         argtypes = get_argtypes(result)
         vararg_type_container = nothing
         nargs = length(argtypes)
-        s_argtypes = VarTable(uninitialized, nslots)
-        src.slottypes = Vector{Any}(uninitialized, nslots)
+        s_argtypes = VarTable(undef, nslots)
+        src.slottypes = Vector{Any}(undef, nslots)
         for i in 1:nslots
             at = (i > nargs) ? Bottom : argtypes[i]
             if !toplevel && linfo.def.isva && i == nargs

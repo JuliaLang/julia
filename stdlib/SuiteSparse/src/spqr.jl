@@ -71,7 +71,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if e == C_NULL
         _E = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _E = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, n)
+        _E = Vector{CHOLMOD.SuiteSparse_long}(undef, n)
         for i in 1:n
             @inbounds _E[i] = unsafe_load(e, i) + 1
         end
@@ -86,7 +86,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if hpinv == C_NULL
         _HPinv = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, m)
+        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(undef, m)
         for i in 1:m
             @inbounds _HPinv[i] = unsafe_load(hpinv, i) + 1
         end
@@ -134,7 +134,7 @@ Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
-    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
+    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
 function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -148,9 +148,10 @@ function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) whe
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
+    R_ = SparseMatrixCSC(Sparse(R[]))
     return QRSparse(SparseMatrixCSC(Sparse(H[])),
                     vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(Sparse(R[])),
+                    SparseMatrixCSC(min(size(A)...), R_.n, R_.colptr, R_.rowval, R_.nzval),
                     p, hpinv)
 end
 
@@ -335,6 +336,8 @@ end
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
+LinearAlgebra.rank(F::QRSparse) = maximum(F.R.rowval)
+
 function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
@@ -355,8 +358,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         throw(DimensionMismatch("size(F) = $(size(F)) but size(B) = $(size(B))"))
     end
 
-    # The rank of F equal to the number of rows in R
-    rnk = size(F.R, 1)
+    # The rank of F equal might be reduced
+    rnk = rank(F)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
@@ -381,7 +384,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] = 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+                        view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)

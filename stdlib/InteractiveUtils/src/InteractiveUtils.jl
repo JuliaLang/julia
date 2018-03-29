@@ -5,8 +5,8 @@ __precompile__(true)
 module InteractiveUtils
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, @which, @edit, @less, @functionloc, @code_warntype, @code_typed,
-    @code_lowered, @code_llvm, @code_native
+    versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
+    @code_typed, @code_lowered, @code_llvm, @code_native
 
 import Base.Docs.apropos
 
@@ -14,6 +14,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
     to_tuple_type, signature_type, format_bytes
 
 using Markdown
+using LinearAlgebra  # for peakflops
 import Pkg
 
 include("editless.jl")
@@ -35,7 +36,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
                      (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
-             for v in sort!(names(m)) if isdefined(m, v) && contains(string(v), pattern) ]
+             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
 
     pushfirst!(rows, Any["name", "size", "summary"])
 
@@ -44,7 +45,7 @@ end
 varinfo(pat::Regex) = varinfo(Main, pat)
 
 """
-    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
 Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
@@ -52,7 +53,7 @@ controlled with boolean keyword arguments:
 - `packages`: print information about installed packages
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
@@ -67,7 +68,7 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
         end
         if Sys.iswindows()
             try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
@@ -105,13 +106,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
 
     println(io, "Environment:")
     for (k,v) in ENV
-        if contains(String(k), r"JULIA")
+        if occursin(r"JULIA", String(k))
             println(io, "  $(k) = $(v)")
         end
     end
     if verbose
         for (k,v) in ENV
-            if contains(String(k), r"PATH|FLAG|^TERM$|HOME")
+            if occursin(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -248,7 +249,7 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-3-element Array{Union{DataType, UnionAll},1}:
+3-element Array{Any,1}:
  Bool
  Signed
  Unsigned
@@ -257,7 +258,7 @@ julia> subtypes(Integer)
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 
 # dumptype is for displaying abstract type hierarchies,
-# based on Jameson Nash's examples/typetree.jl
+# based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
@@ -322,6 +323,39 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
         end
     end
     nothing
+end
+
+const Distributed_modref = Ref{Module}()
+
+"""
+    peakflops(n::Integer=2000; parallel::Bool=false)
+
+`peakflops` computes the peak flop rate of the computer by using double precision
+[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
+multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
+multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
+[`BLAS.set_num_threads(n)`](@ref).
+
+If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
+the worker processors. The flop rate of the entire parallel computer is returned. When
+running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
+of the problem that is solved on each processor.
+"""
+function peakflops(n::Integer=2000; parallel::Bool=false)
+    a = fill(1.,100,100)
+    t = @elapsed a2 = a*a
+    a = fill(1.,n,n)
+    t = @elapsed a2 = a*a
+    @assert a2[1,1] == n
+    if parallel
+        if !isassigned(Distributed_modref)
+            Distributed_modref[] = Base.require(Base, :Distributed)
+        end
+        Dist = Distributed_modref[]
+        sum(Dist.pmap(peakflops, fill(n, Dist.nworkers())))
+    else
+        2*Float64(n)^3 / t
+    end
 end
 
 @deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)

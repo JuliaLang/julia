@@ -106,7 +106,7 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Cvoid})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer - 1, false)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, convert(UInt64, pointer))]
-    res = Vector{StackFrame}(uninitialized, length(infos))
+    res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)
@@ -133,7 +133,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        assert(ip.code isa Core.CodeInfo)
+        @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym

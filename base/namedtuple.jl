@@ -103,14 +103,22 @@ indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 
-promote_typejoin(::Type{NamedTuple{n, S}}, ::Type{NamedTuple{n, T}}) where {n, S, T} =
-    NamedTuple{n, promote_typejoin(S, T)}
-
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T} = nt
+convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T}
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NamedTuple{names,T}(T(nt))
+end
+
+if nameof(@__MODULE__) === :Base
+    function Tuple(nt::NamedTuple{names}) where {names}
+        if @generated
+            return Expr(:tuple, Any[:(getfield(nt, $(QuoteNode(n)))) for n in names]...)
+        else
+            return tuple(nt...)
+        end
+    end
+    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
 end
 
 function show(io::IO, t::NamedTuple)
@@ -225,6 +233,8 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
 end
 
 merge(a::NamedTuple{()}, b::NamedTuple) = b
+
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
 """
     merge(a::NamedTuple, iterable)

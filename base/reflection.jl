@@ -32,6 +32,22 @@ Base
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
+    moduleroot(m::Module) -> Module
+
+Find the root module of a given module. This is the first module in the chain of
+parent modules of `m` which is either a registered root module or which is its
+own parent module.
+"""
+function moduleroot(m::Module)
+    while true
+        is_root_module(m) && return m
+        p = parentmodule(m)
+        p == m && return m
+        m = p
+    end
+end
+
+"""
     @__MODULE__ -> Module
 
 Get the `Module` of the toplevel eval,
@@ -129,19 +145,17 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 """
     fieldnames(x::DataType)
 
-Get an array of the fields of a `DataType`.
+Get a tuple with the names of the fields of a `DataType`.
 
 # Examples
 ```jldoctest
 julia> fieldnames(Rational)
-2-element Array{Symbol,1}:
- :num
- :den
+(:num, :den)
 ```
 """
-fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]
+fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
+fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
     nameof(t::DataType) -> Symbol
@@ -453,7 +467,6 @@ Compute a type that contains the intersection of `T` and `S`. Usually this will 
 smallest such type or one close to it.
 """
 typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
-typeseq(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; a<:b && b<:a)
 
 """
     fieldoffset(type, i)
@@ -1046,8 +1059,8 @@ max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 """
     propertynames(x, private=false)
 
-Get an array of the properties (`x.property`) of an object `x`.   This
-is typically the same as [`fieldnames(typeof(x))`](@ref), but types
+Get a tuple or a vector of the properties (`x.property`) of an object `x`.
+This is typically the same as [`fieldnames(typeof(x))`](@ref), but types
 that overload [`getproperty`](@ref) should generally overload `propertynames`
 as well to get the properties of an instance of the type.
 

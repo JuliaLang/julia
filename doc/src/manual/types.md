@@ -16,10 +16,11 @@ of function arguments to be deeply integrated with the language. Method dispatch
 detail in [Methods](@ref), but is rooted in the type system presented here.
 
 The default behavior in Julia when types are omitted is to allow values to be of any type. Thus,
-one can write many useful Julia programs without ever explicitly using types. When additional
+one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
-into previously "untyped" code. Doing so will typically increase both the performance and robustness
-of these systems, and perhaps somewhat counterintuitively, often significantly simplify them.
+into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
+of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
 is: dynamic, nominative and parametric. Generic types can be parameterized, and the hierarchical
@@ -246,7 +247,7 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
@@ -343,20 +344,16 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: convert(Int64, 23.5)
+ERROR: InexactError: Int64(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
+[...]
 ```
 
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
 julia> fieldnames(Foo)
-3-element Array{Symbol,1}:
- :bar
- :baz
- :qux
+(:bar, :baz, :qux)
 ```
 
 You can access the field values of a composite object using the traditional `foo.bar` notation:
@@ -375,8 +372,8 @@ julia> foo.qux
 Composite objects declared with `struct` are *immutable*; they cannot be modified
 after construction. This may seem odd at first, but it has several advantages:
 
-  * It can be more efficient. Some structs can be packed efficiently into arrays, and in some cases the
-    compiler is able to avoid allocating immutable objects entirely.
+  * It can be more efficient. Some structs can be packed efficiently into arrays, and
+    in some cases the compiler is able to avoid allocating immutable objects entirely.
   * It is not possible to violate the invariants provided by the type's constructors.
   * Code using immutable objects can be easier to reason about.
 
@@ -436,18 +433,22 @@ over time. If they would be considered identical, the type should probably be im
 
 To recap, two essential properties define immutability in Julia:
 
-  * An object with an immutable type is passed around (both in assignment statements and in function
-    calls) by copying, whereas a mutable type is passed around by reference.
-  * It is not permitted to modify the fields of a composite immutable type.
-
-It is instructive, particularly for readers whose background is C/C++, to consider why these two
-properties go hand in hand.  If they were separated, i.e., if the fields of objects passed around
-by copying could be modified, then it would become more difficult to reason about certain instances
-of generic code.  For example, suppose `x` is a function argument of an abstract type, and suppose
-that the function changes a field: `x.isprocessed = true`.  Depending on whether `x` is passed
-by copying or by reference, this statement may or may not alter the actual argument in the calling
-routine.  Julia sidesteps the possibility of creating functions with unknown effects in this scenario
-by forbidding modification of fields of objects passed around by copying.
+  * It is not permitted to modify the value of an immutable type.
+    * For bits types this means that the bit pattern of a value once set will never change
+      and that value is the identity of a bits type.
+    * For composite  types, this means that the identity of the values of its fields will
+      never change. When the fields are bits types, that means their bits will never change,
+      for fields whose values are mutable types like arrays, that means the fields will
+      always refer to the same mutable value even though that mutable value's content may
+      itself be modified.
+  * An object with an immutable type may be copied freely by the compiler since its
+    immutabity makes it impossible to programmatically distinguish between the original
+    object and a copy.
+    * In particular, this means that small enough immutable values like integers and floats
+      are typically passed to functions in registers (or stack allocated).
+    * Mutable values, on the other hand are heap-allocated and passed to
+      functions as pointers to heap-allocated values except in cases where the compiler
+      is sure that there's no way to tell that this is not what is happening.
 
 ## Declared Types
 
@@ -648,13 +649,11 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
-This may have arisen from a call to the constructor Point{Float64}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:114
+[...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+[...]
 ```
 
 Only one default constructor is generated for parametric types, since overriding it is not possible.
@@ -1192,7 +1191,7 @@ Closest candidates are:
   supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
-## Custom pretty-printing
+## [Custom pretty-printing](@id man-custom-pretty-printing)
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
 overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
@@ -1251,8 +1250,8 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 ```
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
+the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
+which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1269,7 +1268,7 @@ A `Polar` object will then display automatically using HTML in an environment th
 display, but you can call `show` manually to get HTML output if you want:
 
 ```jldoctest polartype
-julia> show(STDOUT, "text/html", Polar(3.0,4.0))
+julia> show(stdout, "text/html", Polar(3.0,4.0))
 <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 ```
 
@@ -1325,6 +1324,37 @@ julia> :($a + 2)
 julia> :($a == 2)
 :(3.0 * exp(4.0im) == 2)
 ```
+
+In some cases, it is useful to adjust the behavior of `show` methods depending
+on the context. This can be achieved via the [`IOContext`](@ref) type, which allows
+passing contextual properties together with a wrapped IO stream.
+For example, we can build a shorter representation in our `show` method
+when the `:compact` property is set to `true`, falling back to the long
+representation if the property is `false` or absent:
+```jldoctest polartype
+julia> function Base.show(io::IO, z::Polar)
+           if get(io, :compact, false)
+               print(io, z.r, "ℯ", z.Θ, "im")
+           else
+               print(io, z.r, " * exp(", z.Θ, "im)")
+           end
+       end
+```
+
+This new compact representation will be used when the passed IO stream is an `IOContext`
+object with the `:compact` property set. In particular, this is the case when printing
+arrays with multiple columns (where horizontal space is limited):
+```jldoctest polartype
+julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
+3.0ℯ4.0im
+
+julia> [Polar(3, 4.0) Polar(4.0,5.3)]
+1×2 Array{Polar{Float64},2}:
+ 3.0ℯ4.0im  4.0ℯ5.3im
+```
+
+See the [`IOContext`](@ref) documentation for a list of common properties which can be used
+to adjust printing.
 
 ## "Value types"
 

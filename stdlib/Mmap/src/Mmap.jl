@@ -7,6 +7,8 @@ Low level module for mmap (memory mapping of files).
 """
 module Mmap
 
+import Base: OS_HANDLE, INVALID_OS_HANDLE
+
 const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
@@ -24,8 +26,6 @@ for use in [`Mmap.mmap`](@ref Mmap.mmap). Used by `SharedArray` for creating sha
 
 # Examples
 ```jldoctest
-julia> using Mmap
-
 julia> anon = Mmap.Anonymous();
 
 julia> isreadable(anon)
@@ -44,9 +44,8 @@ Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
 
-const INVALID_HANDLE_VALUE = -1
-# const used for zeroed, anonymous memory; same value on Windows & Unix; say what?!
-gethandle(io::Anonymous) = INVALID_HANDLE_VALUE
+# const used for zeroed, anonymous memory
+gethandle(io::Anonymous) = INVALID_OS_HANDLE
 
 # platform-specific mmap utilities
 if Sys.isunix()
@@ -58,19 +57,19 @@ const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
-gethandle(io::IO) = fd(io)
+gethandle(io::IO) = RawFD(fd(io))
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::Int, shared::Bool)
+function settings(s::RawFD, shared::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
-    if s == INVALID_HANDLE_VALUE
+    if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
     else
-        mode = ccall(:fcntl,Cint,(Cint,Cint),s,F_GETFL)
+        mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
-        prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : PROT_READ | PROT_WRITE
+        prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
@@ -109,9 +108,9 @@ const FILE_MAP_READ          = DWORD(0x04)
 const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 function gethandle(io::IO)
-    handle = Libc._get_osfhandle(RawFD(fd(io))).handle
-    systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == -1)
-    return Int(handle)
+    handle = Libc._get_osfhandle(RawFD(fd(io)))
+    systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == INVALID_OS_HANDLE)
+    return handle
 end
 
 settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
@@ -191,7 +190,7 @@ function mmap(io::IO,
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(uninitialized, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -207,13 +206,14 @@ function mmap(io::IO,
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
-        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
-        systemerror("memory mapping failed", reinterpret(Int,ptr) == -1)
+        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
+            C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+        systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
         name, readonly, create = settings(io)
         szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (Cptrdiff_t, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
+        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
@@ -261,8 +261,6 @@ the byte representation is different.
 
 # Examples
 ```jldoctest
-julia> using Mmap
-
 julia> io = open("mmap.bin", "w+");
 
 julia> B = Mmap.mmap(io, BitArray, (25,30000));
@@ -301,7 +299,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(uninitialized, ntuple(i->0,Val(N))...)
+    B = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1

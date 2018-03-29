@@ -26,11 +26,16 @@ A function name may be used alone in place of the tuple (just `:function` or `"f
 this case the name is resolved within the current process. This form can be used to call C library
 functions, functions in the Julia runtime, or functions in an application linked to Julia.
 
-By default, Fortran compilers [generate mangled names](https://en.wikipedia.org/wiki/Name_mangling#Fortran)
-(for example, converting function names to lowercase or uppercase, often appending an underscore),
-and so to call a Fortran function via [`ccall`](@ref) you must pass the mangled identifier corresponding
-to the rule followed by your Fortran compiler.  Also, when calling a Fortran function, all inputs
-must be passed by reference.
+By default, Fortran compilers [generate mangled
+names](https://en.wikipedia.org/wiki/Name_mangling#Fortran) (for example,
+converting function names to lowercase or uppercase, often appending an
+underscore), and so to call a Fortran function via [`ccall`](@ref) you must pass
+the mangled identifier corresponding to the rule followed by your Fortran
+compiler.  Also, when calling a Fortran function, all inputs must be passed as
+pointers to allocated values on the heap or stack. This applies not only to
+arrays and other mutable objects which are normally heap-allocated, but also to
+scalar values such as integers and floats which are normally stack-allocated and
+commonly passed in registers when using C or Julia calling conventions.
 
 Finally, you can use [`ccall`](@ref) to actually generate a call to the library function. Arguments
 to [`ccall`](@ref) are as follows:
@@ -385,8 +390,9 @@ checks and is only meant to improve readability of the call.
 | `wchar_t`       | `Cwchar_t`           | `Int32` (UNIX), `UInt16` (Windows)           |
 
 !!! note
-    When calling a Fortran function, all inputs must be passed by reference, so all type correspondences
-    above should contain an additional `Ptr{..}` or `Ref{..}` wrapper around their type specification.
+    When calling Fortran, all inputs must be passed by pointers to heap- or stack-allocated
+    values, so all type correspondences above should contain an additional `Ptr{..}` or
+    `Ref{..}` wrapper around their type specification.
 
 !!! warning
     For string arguments (`char*`) the Julia type should be `Cstring` (if NUL- terminated data is
@@ -590,9 +596,10 @@ of pointers to memory managed by either Julia or C through the implicit call to 
 structs should be represented as fields of type `Ptr{T}` within the corresponding Julia struct
 types designed to mimic the internal structure of corresponding C structs.
 
-In Julia code wrapping calls to external Fortran routines, all input arguments should be declared
-as of type `Ref{T}`, as Fortran passes all variables by reference. The return type should either
-be `Cvoid` for Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
+In Julia code wrapping calls to external Fortran routines, all input arguments
+should be declared as of type `Ref{T}`, as Fortran passes all variables by
+pointers to memory locations. The return type should either be `Cvoid` for
+Fortran subroutines, or a `T` for Fortran functions returning the type `T`.
 
 ## Mapping C Functions to Julia
 
@@ -763,11 +770,13 @@ that has no internal fields and whose sole purpose is to be placed in the type p
 `Ptr` type.  The return type of the [`ccall`](@ref) is declared as `Ptr{gsl_permutation}`, since
 the memory allocated and pointed to by `output_ptr` is controlled by C (and not Julia).
 
-The input `n` is passed by value, and so the function's input signature is simply declared as
-`(Csize_t,)` without any `Ref` or `Ptr` necessary. (If the wrapper was calling a Fortran function
-instead, the corresponding function input signature should instead be `(Ref{Csize_t},)`, since
-Fortran variables are passed by reference.) Furthermore, `n` can be any type that is convertable
-to a `Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t, n)`](@ref).
+The input `n` is passed by value, and so the function's input signature is
+simply declared as `(Csize_t,)` without any `Ref` or `Ptr` necessary. (If the
+wrapper was calling a Fortran function instead, the corresponding function input
+signature should instead be `(Ref{Csize_t},)`, since Fortran variables are
+passed by pointers.) Furthermore, `n` can be any type that is convertable to a
+`Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t,
+n)`](@ref).
 
 Here is a second example wrapping the corresponding destructor:
 

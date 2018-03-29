@@ -5,6 +5,7 @@ using Random, LinearAlgebra, Test
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
+tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
 tc(r1::Transpose{Bool,BitVector}, r2::Union{Transpose{Bool,BitVector},Transpose{Bool,Vector{Bool}}}) = true
 tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
@@ -12,13 +13,13 @@ tc(r1,r2) = false
 bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
 
-function check_bitop_call(ret_type, func, args...)
-    r1 = func(args...)
-    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
+function check_bitop_call(ret_type, func, args...; kwargs...)
+    r1 = func(args...; kwargs...)
+    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
     ret_type ≢ nothing && @test isa(r1, ret_type)
     @test tc(r1, r2)
-    @test isequal(r1, ret_type ≡ nothing ? r2 : convert(ret_type, r2))
+    @test isequal(r1, ret_type ≡ nothing ? r2 : r2)
     @test bitcheck(r1)
 end
 macro check_bit_operation(ex, ret_type)
@@ -41,7 +42,7 @@ let t0 = time()
 end
 
 @testset "empty bitvector" begin
-    @test BitVector() == BitVector(uninitialized, 0)
+    @test BitVector() == BitVector(undef, 0)
 end
 
 # vectors size
@@ -160,8 +161,8 @@ timesofar("conversions")
     end
 
     @testset "sizeof (issue #7515)" begin
-        @test sizeof(BitVector(uninitialized, 64)) == 8
-        @test sizeof(BitVector(uninitialized, 65)) == 16
+        @test sizeof(BitVector(undef, 64)) == 8
+        @test sizeof(BitVector(undef, 65)) == 16
     end
 end
 
@@ -169,8 +170,8 @@ timesofar("utils")
 
 @testset "Constructors" begin
     @testset "non-Int dims constructors" begin
-        b1 = BitVector(uninitialized, Int32(v1))
-        b2 = BitVector(uninitialized, Int64(v1))
+        b1 = BitVector(undef, Int32(v1))
+        b2 = BitVector(undef, Int64(v1))
         @test size(b1) == size(b2)
 
         for c in [trues, falses]
@@ -191,8 +192,8 @@ timesofar("utils")
     end
 
     @testset "one" begin
-        @test Array(one(BitMatrix(uninitialized, 2,2))) == Matrix(I, 2, 2)
-        @test_throws DimensionMismatch one(BitMatrix(uninitialized, 2,3))
+        @test Array(one(BitMatrix(undef, 2,2))) == Matrix(I, 2, 2)
+        @test_throws DimensionMismatch one(BitMatrix(undef, 2,3))
     end
 
     # constructors should copy
@@ -1033,11 +1034,11 @@ timesofar("binary comparison")
     for d = 1:4
         j = rand(1:size(b1, d))
         #for j = 1 : size(b1, d)
-            @check_bit_operation slicedim(b1, d, j) BitArray{3}
+            @check_bit_operation selectdim(b1, d, j) SubArray{Bool, 3, BitArray{4}}
         #end
-        @check_bit_operation flipdim(b1, d) BitArray{4}
+        @check_bit_operation reverse(b1, dims=d) BitArray{4}
     end
-    @test_throws ArgumentError flipdim(b1, 5)
+    @test_throws ArgumentError reverse(b1, dims=5)
 
     b1 = bitrand(n1, n2)
     for k = 1:4
@@ -1071,9 +1072,9 @@ timesofar("binary comparison")
         i2 = circshift!(b1, -j)
         @test b2 == i2
 
-        @check_bit_operation slicedim(b1, 1, m) Bool
+        @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
-    @check_bit_operation slicedim(b1, 1, :) BitVector
+    @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
 end
 
 timesofar("datamove")
@@ -1086,7 +1087,7 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(!iszero, b1)    Union{Int,Nothing}
         @check_bit_operation findfirst(iszero, b1)     Union{Int,Nothing}
-        @check_bit_operation findfirst(equalto(3), b1) Union{Int,Nothing}
+        @check_bit_operation findfirst(isequal(3), b1) Union{Int,Nothing}
 
         @check_bit_operation findfirst(x->x, b1)     Union{Int,Nothing}
         @check_bit_operation findfirst(x->!x, b1)    Union{Int,Nothing}
@@ -1119,7 +1120,7 @@ timesofar("find")
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
-        @test findprev(b1, i) == findprev(equalto(true), b1, i) == findprev(identity, b1, i)
+        @test findprev(b1, i) == findprev(isequal(true), b1, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
     end
 
@@ -1229,9 +1230,9 @@ end
     b1 = bitrand(s1, s2, s3, s4)
     m1 = 1
     m2 = 3
-    @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
-    @check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
+    @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
     @check_bit_operation minimum(b1) Bool
@@ -1272,7 +1273,7 @@ timesofar("reductions")
         @test map(!=, b1, b2) == map((x,y)->x!=y, b1, b2) == (b1 .!= b2)
 
         @testset "map! for length $l" begin
-            b = BitVector(uninitialized, l)
+            b = BitVector(undef, l)
             @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
             @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b
@@ -1491,3 +1492,11 @@ end
 end
 
 timesofar("I/O")
+
+@testset "not strided" begin
+    @test_throws ErrorException pointer(trues(1))
+    @test_throws ErrorException pointer(trues(1),1)
+    b = falses(3)
+    b[:] = view(trues(10), [1,3,7])
+    @test b == trues(3)
+end

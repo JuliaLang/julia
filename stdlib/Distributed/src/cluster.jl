@@ -173,24 +173,24 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 ## worker creation and setup ##
 """
-    start_worker([out::IO=STDOUT], cookie::AbstractString=readline(STDIN))
+    start_worker([out::IO=stdout], cookie::AbstractString=readline(stdin))
 
 `start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
 worker.
 
-host:port information is written to stream `out` (defaults to STDOUT).
+host:port information is written to stream `out` (defaults to stdout).
 
-The function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT,
+The function closes stdin (after reading the cookie if required), redirects stderr to stdout,
 listens on a free port (or if specified, the port in the `--bind-to` command
 line option) and schedules tasks to process incoming TCP connections and requests.
 
 It does not return.
 """
-start_worker(cookie::AbstractString=readline(STDIN)) = start_worker(STDOUT, cookie)
-function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
-    close(STDIN) # workers will not use it
-    redirect_stderr(STDOUT)
+start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
+function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+    close(stdin) # workers will not use it
+    redirect_stderr(stdout)
 
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
@@ -206,7 +206,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
         process_messages(client, client, true)
     end
     print(out, "julia_worker:")  # print header
-    print(out, "$(dec(LPROC.bind_port))#") # print port
+    print(out, "$(string(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)
@@ -223,7 +223,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
         check_master_connect()
         while true; wait(); end
     catch err
-        print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
+        print(stderr, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -235,8 +235,8 @@ function redirect_worker_output(ident, stream)
     @schedule while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
-            # STDOUT's of "additional" workers started from an initial worker on a host are not available
-            # on the master directly - they are routed via the initial worker's STDOUT.
+            # stdout's of "additional" workers started from an initial worker on a host are not available
+            # on the master directly - they are routed via the initial worker's stdout.
             println(line)
         else
             println("      From worker $(ident):\t$line")
@@ -273,7 +273,7 @@ function read_worker_host_port(io::IO)
             end
             !istaskdone(readtask) && break
 
-            conninfo = wait(readtask)
+            conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
                 error("Unable to read host:port string from worker. Launch command exited with error?")
             end
@@ -324,9 +324,9 @@ function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClus
     cluster_manager = manager
 
     # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
-    assert(nprocs() <= 1)
-    assert(isempty(PGRP.refs))
-    assert(isempty(client_refs))
+    @assert nprocs() <= 1
+    @assert isempty(PGRP.refs)
+    @assert isempty(client_refs)
 
     # System is started in head node mode, cleanup related entries
     empty!(PGRP.workers)
@@ -416,7 +416,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    wait(t_launch)      # catches any thrown errors from the launch task
+    Base._wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.
@@ -493,7 +493,7 @@ end
 
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
-    assert(LPROC.id == 1)
+    @assert LPROC.id == 1
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -590,8 +590,8 @@ end
 
 additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
-    io_objs = Vector{Any}(uninitialized, np)
-    addresses = Vector{Any}(uninitialized, np)
+    io_objs = Vector{Any}(undef, np)
+    addresses = Vector{Any}(undef, np)
 
     for i in 1:np
         io = open(detach(cmd), "r+")
@@ -629,7 +629,7 @@ function check_master_connect()
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
             exit(1)
         end
     end
@@ -650,8 +650,8 @@ Set the passed cookie as the cluster cookie, then returns it.
 """
 function cluster_cookie(cookie)
     # The cookie must be an ASCII string with length <=  HDR_COOKIE_LEN
-    assert(isascii(cookie))
-    assert(length(cookie) <= HDR_COOKIE_LEN)
+    @assert isascii(cookie)
+    @assert length(cookie) <= HDR_COOKIE_LEN
 
     cookie = rpad(cookie, HDR_COOKIE_LEN)
 
@@ -685,7 +685,7 @@ function topology(t)
         Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
         t = :master_worker
     end
-    assert(t in [:all_to_all, :master_worker, :custom])
+    @assert t in [:all_to_all, :master_worker, :custom]
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else
@@ -1004,7 +1004,7 @@ end
 
 
 function interrupt(pid::Integer)
-    assert(myid() == 1)
+    @assert myid() == 1
     w = map_pid_wrkr[pid]
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
@@ -1026,7 +1026,7 @@ Interrupt the current executing task on the specified workers. This is equivalen
 pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
 """
 function interrupt(pids::AbstractVector=workers())
-    assert(myid() == 1)
+    @assert myid() == 1
     @sync begin
         for pid in pids
             @async interrupt(pid)
@@ -1120,11 +1120,11 @@ function init_parallel()
     global LPROC
     LPROC.id = 1
     cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
+    @assert isempty(PGRP.workers)
     register_worker(LPROC)
 end
 
-write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
+write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
 function process_opts(opts)
     # startup worker.

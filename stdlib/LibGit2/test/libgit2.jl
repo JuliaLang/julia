@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module LibGit2Tests
 
 import LibGit2
@@ -42,7 +43,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
+        p = run(detach(cmd), slave, slave, slave, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -152,8 +153,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_SSH), f) > 0
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_HTTPS), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) > 0
 end
 
 @testset "OID" begin
@@ -777,7 +778,7 @@ mktempdir() do dir
                     @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
-                    @test hex(commit_oid1) == hex(short_oid1)
+                    @test string(commit_oid1) == string(short_oid1)
                     @test cmp(commit_oid1, short_oid1) == 0
                     @test cmp(short_oid1, commit_oid1) == 0
                     @test !(short_oid1 < commit_oid1)
@@ -786,7 +787,7 @@ mktempdir() do dir
                     short_str = sprint(show, short_oid1)
                     @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
                     short_oid2 = LibGit2.GitShortHash(cmt)
-                    @test startswith(hex(commit_oid1), hex(short_oid2))
+                    @test startswith(string(commit_oid1), string(short_oid2))
 
                     LibGit2.with(LibGit2.GitCommit(repo, short_oid2)) do cmt2
                         @test commit_oid1 == LibGit2.GitHash(cmt2)
@@ -811,10 +812,10 @@ mktempdir() do dir
                     # test showing the commit
                     showstr = split(sprint(show, cmt), "\n")
                     # the time of the commit will vary so just test the first two parts
-                    @test contains(showstr[1], "Git Commit:")
-                    @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[4], "SHA:")
+                    @test occursin("Git Commit:", showstr[1])
+                    @test occursin("Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:", showstr[2])
+                    @test occursin("Committer: Name: TEST, Email: TEST@TEST.COM, Time:", showstr[3])
+                    @test occursin("SHA:", showstr[4])
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
                     @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
@@ -984,7 +985,7 @@ mktempdir() do dir
             LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
                 # this is slightly dubious, as it assumes the object has not been packed
                 # could be replaced by another binary format
-                hash_string = hex(commit_oid1)
+                hash_string = string(commit_oid1)
                 blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
 
                 id = LibGit2.addblob!(repo, blob_file)
@@ -995,7 +996,7 @@ mktempdir() do dir
                 # test showing a GitBlob
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"
-                @test contains(blob_show_strs[2], "Blob id:")
+                @test occursin("Blob id:", blob_show_strs[2])
                 @test blob_show_strs[3] == "Contents are binary."
 
                 blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
@@ -1084,9 +1085,9 @@ mktempdir() do dir
                 @test diff_strs[3] == "Number of files: 2"
                 @test diff_strs[4] == "Old file:"
                 @test diff_strs[5] == "DiffFile:"
-                @test contains(diff_strs[6], "Oid:")
-                @test contains(diff_strs[7], "Path:")
-                @test contains(diff_strs[8], "Size:")
+                @test occursin("Oid:", diff_strs[6])
+                @test occursin("Path:", diff_strs[7])
+                @test occursin("Size:", diff_strs[8])
                 @test isempty(diff_strs[9])
                 @test diff_strs[10] == "New file:"
 
@@ -1801,7 +1802,7 @@ mktempdir() do dir
 
                 @test LibGit2.credential_helpers(cfg, GitCredential("https", "github.com")) == expected
 
-                println(STDERR, "The following 'Resetting the helper list...' warning is expected:")
+                println(stderr, "The following 'Resetting the helper list...' warning is expected:")
                 @test_broken LibGit2.credential_helpers(cfg, GitCredential("https", "mygithost")) == expected[2]
             end
         end
@@ -2691,7 +2692,7 @@ mktempdir() do dir
                 pem = joinpath(root, common_name * ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))
+                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 # Find an available port by listening
@@ -2702,7 +2703,7 @@ mktempdir() do dir
                 # certificate. The minimal server can't actually serve a Git repository.
                 mkdir(joinpath(root, "Example.jl"))
                 pobj = cd(root) do
-                    spawn(`openssl s_server -key $key -cert $cert -WWW -accept $port`)
+                    run(`openssl s_server -key $key -cert $cert -WWW -accept $port`, wait=false)
                 end
 
                 errfile = joinpath(root, "error")

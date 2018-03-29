@@ -1,7 +1,7 @@
 # The Julia Manual
 
   * [Introduction](@ref man-introduction)
-  * [Getting Started](@ref)
+  * [Getting Started](@ref man-getting-started)
   * [Variables](@ref)
   * [Integers and Floating-Point Numbers](@ref)
   * [Mathematical Operations and Elementary Functions](@ref)
@@ -22,7 +22,7 @@
   * [Missing Values](@ref missing)
   * [Networking and Streams](@ref)
   * [Parallel Computing](@ref)
-  * [Date and DateTime](@ref)
+  * [Dates](@ref)
   * [Running External Programs](@ref)
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)

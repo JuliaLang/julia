@@ -409,8 +409,6 @@ JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
-    if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
-    if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
     JL_TYPECHK(<:, type, a);
     JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
@@ -1275,6 +1273,8 @@ void jl_init_primitives(void)
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
+    add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);

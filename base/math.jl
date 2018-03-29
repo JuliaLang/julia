@@ -15,17 +15,17 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        beta, lbeta, @evalpoly
 
-import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one,
+using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base: IEEEFloat
+using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -52,7 +52,7 @@ end
 """
     clamp(x, lo, hi)
 
-Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
+Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
 ```jldoctest
@@ -61,6 +61,12 @@ julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
  2.0
  9.0
+
+julia> clamp.([11,8,5],10,6) # an example where lo > hi
+3-element Array{Int64,1}:
+  6
+  6
+ 10
 ```
 """
 clamp(x::X, lo::L, hi::H) where {X,L,H} =
@@ -244,16 +250,13 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :asinh, :exp2, :expm1)
+for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-exp(x::Real) = exp(float(x))
-exp10(x::Real) = exp10(float(x))
-atan(x::Real) = atan(float(x))
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -376,9 +379,6 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
-
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
 """
 log(x::Number)
 
@@ -422,9 +422,6 @@ log10(x)
 Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
-
 # Examples
 ```jldoctest
 julia> log1p(-0.5)
@@ -435,7 +432,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
+for f in (:log2, :log10, :lgamma)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
@@ -737,26 +734,13 @@ end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
-function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
-
-    y = 2*floor(theta/(2*pi))
-    r = ((theta - y*P1) - y*P2) - y*P3
-    if (r > pi)
-        r -= (2*pi)
-    end
-    return r
-end
-
 ## rem2pi-related calculations ##
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
-    # [2] https://dx.doi.org/10.1007/BF01397083
+    # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
     zh = r+s
@@ -945,9 +929,10 @@ mod2pi(x) = rem2pi(x,RoundDown)
 """
     muladd(x, y, z)
 
-Combined multiply-add, computes `x*y+z` allowing the add and multiply to be contracted with
-each other or ones from other `muladd` and `@fastmath` to form `fma`
-if the transformation can improve performance.
+Combined multiply-add: computes `x*y+z`, but allowing the add and multiply to be merged
+with each other or with surrounding operations for performance.
+For example, this may be implemented as an [`fma`](@ref) if the hardware supports it
+efficiently.
 The result can be different on different machines and can also be different on the same machine
 due to constant propagation or other optimizations.
 See [`fma`](@ref).
@@ -985,12 +970,10 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 # More special functions
 include(joinpath("special", "exp.jl"))
 include(joinpath("special", "exp10.jl"))
+include(joinpath("special", "hyperbolic.jl"))
 include(joinpath("special", "trig.jl"))
 include(joinpath("special", "gamma.jl"))
 include(joinpath("special", "rem_pio2.jl"))
-
-module JuliaLibm
 include(joinpath("special", "log.jl"))
-end
 
 end # module

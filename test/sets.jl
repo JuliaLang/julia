@@ -11,7 +11,7 @@ using .Main.TestHelpers.OAs
     s = Set(data_in)
     data_out = collect(s)
     @test ===(typeof(data_out), Array{Any,1})
-    @test all(map(occursin(data_out), data_in))
+    @test all(map(in(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
@@ -221,6 +221,13 @@ end
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
     @test intersect([1, 2, 1], [2, 2]) == intersect!([1, 2, 1], [2, 2]) == [2]
+
+    # issue #25801
+    x = () ∩ (:something,)
+    y = () ∩ (42,)
+    @test isempty(x)
+    @test isempty(y)
+    @test eltype(x) == eltype(y) == Union{}
 end
 
 @testset "setdiff" begin
@@ -536,12 +543,27 @@ end
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
+
+    # test eltype promotion
+    x = @inferred replace([1, 2], 2=>2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+
+    x = @inferred replace([1, 2], 2=>missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace(x -> x > 1, [1, 2], missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+
+    # test that isequal is used
+    @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]
+    @test replace([1, missing], missing=>0) == [1, 0]
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
     a = [1, 2]
     b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet)
+    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
         A = C(a)
         B = C(b)
         @test A ⊆ B

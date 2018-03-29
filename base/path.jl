@@ -61,8 +61,8 @@ Return the current user's home directory.
 """
 function homedir()
     path_max = 1024
-    buf = Vector{UInt8}(uninitialized, path_max)
-    sz = Ref{Csize_t}(path_max + 1)
+    buf = Vector{UInt8}(undef, path_max)
+    sz = RefValue{Csize_t}(path_max + 1)
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
@@ -78,7 +78,7 @@ end
 
 
 if Sys.iswindows()
-    isabspath(path::String) = contains(path, path_absolute_re)
+    isabspath(path::String) = occursin(path_absolute_re, path)
 else
     isabspath(path::String) = startswith(path, '/')
 end
@@ -113,7 +113,7 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = contains(splitdrive(path)[2], path_directory_re)
+isdirpath(path::String) = occursin(path_directory_re, splitdrive(path)[2])
 
 """
     splitdir(path::AbstractString) -> (AbstractString, AbstractString)
@@ -219,7 +219,7 @@ function joinpath(a::String, b::String)
     !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
     isempty(a)                              ? string(C,b) :
-    contains(a[end:end], path_separator_re) ? string(C,a,b) :
+    occursin(path_separator_re, a[end:end]) ? string(C,a,b) :
                                               string(C,a,pathsep(a,b),b)
 end
 joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))

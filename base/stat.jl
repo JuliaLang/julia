@@ -57,28 +57,30 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(oct(filemode(st),6)), size=$(filesize(st)))")
+show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
 
 # stat & lstat functions
 
-const stat_buf = Vector{UInt8}(uninitialized, ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym, arg1type, arg)
-    quote
-        fill!(stat_buf,0)
-        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{UInt8}), $(esc(arg)), stat_buf)
-        r==0 || r==Base.UV_ENOENT || r==Base.UV_ENOTDIR || throw(UVError("stat",r))
+    return quote
+        stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
+        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
+        r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(UVError("stat", r))
         st = StatStruct(stat_buf)
-        if ispath(st) != (r==0)
+        if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
         end
-        st
+        return st
     end
 end
 
-stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
-stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
+stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
 stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
 lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
+if RawFD !== OS_HANDLE
+    global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
+end
+stat(fd::Integer)           = stat(RawFD(fd))
 
 """
     stat(file)
@@ -135,14 +137,14 @@ filesize(st::StatStruct) = st.size
 
 Equivalent to `stat(file).mtime`.
 """
-   mtime(st::StatStruct) = st.mtime
+mtime(st::StatStruct) = st.mtime
 
 """
     ctime(file)
 
 Equivalent to `stat(file).ctime`
 """
-   ctime(st::StatStruct) = st.ctime
+ctime(st::StatStruct) = st.ctime
 
 # mode type predicates
 
@@ -151,14 +153,14 @@ Equivalent to `stat(file).ctime`
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
 """
-    ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
 """
     isfifo(path) -> Bool
 
 Returns `true` if `path` is a FIFO, `false` otherwise.
 """
-    isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
+isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
     ischardev(path) -> Bool
@@ -177,16 +179,11 @@ Returns `true` if `path` is a directory, `false` otherwise.
 julia> isdir(homedir())
 true
 
-julia> f = open("test_file.txt", "w")
-IOStream(<file test_file.txt>)
-
-julia> isdir(f)
+julia> isdir("not/a/directory")
 false
-
-julia> close(f)
 ```
 """
-    isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
     isblockdev(path) -> Bool
@@ -210,24 +207,24 @@ julia> f = open("test_file.txt", "w");
 julia> isfile(f)
 true
 
-julia> close(f)
+julia> close(f); rm("test_file.txt")
 ```
 """
-    isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
+isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
     islink(path) -> Bool
 
 Returns `true` if `path` is a symbolic link, `false` otherwise.
 """
-    islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
+islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
     issocket(path) -> Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
 """
-  issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
+issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 # mode permission predicates
 

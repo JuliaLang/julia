@@ -22,11 +22,19 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schurfact!(A)
-LinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:
-[3.0 9.0; 0.0 -2.0]
-[0.961524 0.274721; -0.274721 0.961524]
-and values:
-[3.0, -2.0]
+Schur{Float64,Array{Float64,2}}
+T factor:
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+Z factor:
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+eigenvalues:
+2-element Array{Float64,1}:
+  3.0
+ -2.0
 
 julia> A
 2×2 Array{Float64,2}:
@@ -52,11 +60,19 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schurfact(A)
-LinearAlgebra.Schur{Float64,Array{Float64,2}} with factors T and Z:
-[3.0 9.0; 0.0 -2.0]
-[0.961524 0.274721; -0.274721 0.961524]
-and values:
-[3.0, -2.0]
+Schur{Float64,Array{Float64,2}}
+T factor:
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+Z factor:
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+eigenvalues:
+2-element Array{Float64,1}:
+  3.0
+ -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
 2×2 Array{Float64,2}:
@@ -77,7 +93,8 @@ function getproperty(F::Schur, d::Symbol)
     end
 end
 
-Base.propertynames(F::Schur) = append!([:Schur,:vectors], fieldnames(typeof(F)))
+Base.propertynames(F::Schur) =
+    (:Schur, :vectors, fieldnames(typeof(F))...)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
     println(io, summary(F))
@@ -280,7 +297,8 @@ function getproperty(F::GeneralizedSchur, d::Symbol)
     end
 end
 
-Base.propertynames(F::GeneralizedSchur) = append!([:values,:left,:right], fieldnames(typeof(F)))
+Base.propertynames(F::GeneralizedSchur) =
+    (:values, :left, :right, fieldnames(typeof(F))...)
 
 """
     schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector

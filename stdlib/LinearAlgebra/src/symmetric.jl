@@ -163,6 +163,9 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     end
 end
 
+convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
+convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
+
 const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
@@ -171,20 +174,20 @@ size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
-        return A.data[i, j]
-    elseif i == j
+    @inbounds if i == j
         return symmetric(A.data[i, j], Symbol(A.uplo))::symmetric_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
     else
         return transpose(A.data[j, i])
     end
 end
 @inline function getindex(A::Hermitian, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds if (A.uplo == 'U') == (i < j)
-        return A.data[i, j]
-    elseif i == j
+    @inbounds if i == j
         return hermitian(A.data[i, j], Symbol(A.uplo))::hermitian_type(eltype(A.data))
+    elseif (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
     else
         return adjoint(A.data[j, i])
     end
@@ -323,7 +326,7 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.collect(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
-trace(A::Hermitian) = real(trace(A.data))
+tr(A::Hermitian) = real(tr(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
 Base.conj!(A::HermOrSym) = typeof(A)(conj!(A.data), A.uplo)

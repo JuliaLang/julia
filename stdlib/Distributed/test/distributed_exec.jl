@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Serialization
+using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -179,6 +179,25 @@ testval = remotecall_fetch(wid2, fstore) do x
     end
 end
 @test testval == 1
+
+# Issue number #25847
+@everywhere function f25847(ref)
+    fetch(ref)
+    return true
+end
+
+f = remotecall_wait(identity, id_other, ones(10))
+rrid = Distributed.RRID(f.whence, f.id)
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+finalize(f)
+yield() # flush gc msgs
+@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
+
 
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
@@ -693,7 +712,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException wait(t)
+    @test_throws ErrorException Base._wait(t)
 end
 
 # issue #8207
@@ -716,7 +735,7 @@ let t = schedule(@task f13168(100))
     yield()
     @test t.state == :done
     @test_throws ErrorException schedule(t)
-    @test isa(wait(t),Float64)
+    @test isa(fetch(t),Float64)
 end
 
 # issue #13122
@@ -929,7 +948,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
 
         # OSX BLAS looks at an environment variable
         if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
+            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
     end
 
@@ -950,11 +969,12 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
+    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1004,7 +1024,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    wait(rmprocs(p; waitfor=0))
+    Base._wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1016,7 +1036,7 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(occursin(procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
 end
@@ -1036,8 +1056,8 @@ end
 # Test the following addprocs error conditions
 # - invalid host name - github issue #20372
 # - julia exe exiting with an error
-# - timeout reading host:port from worker STDOUT
-# - host:port not found in worker STDOUT in the first 1000 lines
+# - timeout reading host:port from worker stdout
+# - host:port not found in worker stdout in the first 1000 lines
 
 struct ErrorSimulator <: ClusterManager
     mode
@@ -1079,7 +1099,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
-    old_stdout = STDOUT
+    old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @schedule filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")
@@ -1092,7 +1112,7 @@ for (addp_testf, expected_errstr, env) in testruns
     catch ex
         redirect_stdout(old_stdout)
         close(stdout_in)
-        @test isempty(wait(stdout_txt))
+        @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end
@@ -1281,7 +1301,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
 end
@@ -1355,7 +1375,7 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
@@ -1383,7 +1403,7 @@ let
         rm(tmp_file, force=true)
         rm(tmp_file2, force=true)
         rm(tmp_dir2, force=true)
-        rm(tmp_dir, force=true)
+        #rm(tmp_dir, force=true)
     end
 end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
@@ -1441,7 +1461,7 @@ function reuseport_tests()
             ports_higher = []       # ports of pids higher than myid()
             for w in Distributed.PGRP.workers
                 w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
+                port = Sockets._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
                     # master connects to workers
                     push!(ports_higher, port)
@@ -1463,7 +1483,7 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(occursin(results), procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on

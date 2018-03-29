@@ -461,10 +461,6 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls);
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
-
-JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
-                                               jl_value_t *data);
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 void jl_uv_flush(uv_stream_t *stream);
 
 typedef struct _typeenv {
@@ -535,7 +531,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
                                              int isunboxed, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
-extern union jl_typemap_t jl_cfunction_list;
+extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;
@@ -1011,6 +1007,7 @@ extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
+extern jl_sym_t *unreachable_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
@@ -1035,6 +1032,7 @@ extern jl_sym_t *boundscheck_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *generated_sym;
 extern jl_sym_t *generated_only_sym;
+extern jl_sym_t *throw_undef_if_not_sym;
 
 struct _jl_sysimg_fptrs_t;
 

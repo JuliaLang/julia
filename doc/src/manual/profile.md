@@ -210,12 +210,12 @@ be very useful, but sometimes you want to start fresh; you can do so with [`Prof
 [`Profile.print`](@ref) has more options than we've described so far. Let's see the full declaration:
 
 ```julia
-function print(io::IO = STDOUT, data = fetch(); kwargs...)
+function print(io::IO = stdout, data = fetch(); kwargs...)
 ```
 
 Let's first discuss the two positional arguments, and later the keyword arguments:
 
-  * `io` -- Allows you to save the results to a buffer, e.g. a file, but the default is to print to `STDOUT`
+  * `io` -- Allows you to save the results to a buffer, e.g. a file, but the default is to print to `stdout`
     (the console).
   * `data` -- Contains the data you want to analyze; by default that is obtained from [`Profile.fetch()`](@ref),
     which pulls out the backtraces from a pre-allocated buffer. For example, if you want to profile
@@ -224,7 +224,7 @@ Let's first discuss the two positional arguments, and later the keyword argument
     ```julia
     data = copy(Profile.fetch())
     Profile.clear()
-    @profile Profile.print(STDOUT, data) # Prints the previous results
+    @profile Profile.print(stdout, data) # Prints the previous results
     Profile.print()                      # Prints results from Profile.print()
     ```
 

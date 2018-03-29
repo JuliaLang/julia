@@ -69,6 +69,8 @@ end
     @test !isless(missing, missing)
     @test !isless(missing, 1)
     @test isless(1, missing)
+
+    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
@@ -142,7 +144,7 @@ Base.zero(::Type{Unit}) = Unit(0)
 Base.one(::Type{Unit}) = 1
 
 @testset "elementary functions" begin
-    elementary_functions = [abs, abs2, sign,
+    elementary_functions = [abs, abs2, sign, real, imag,
                             acos, acosh, asin, asinh, atan, atanh, sin, sinh,
                             conj, cos, cosh, tan, tanh,
                             exp, exp2, expm1, log, log10, log1p, log2,
@@ -150,7 +152,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, isempty, transpose, float]
+                            isinteger, isreal, transpose, adjoint, float]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -197,7 +199,7 @@ end
 
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
-    @test sprint(showcompact, missing) == "missing"
+    @test sprint(show, missing, context=:compact => true) == "missing"
     @test sprint(show, [missing]) == "$Missing[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
@@ -218,6 +220,7 @@ end
     x = convert(Vector{Union{Int, Missing}}, [missing])
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
+    @test eltype(adjoint([1, missing])) == Union{Int, Missing}
 end
 
 @testset "== and != on arrays" begin

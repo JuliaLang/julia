@@ -1,7 +1,11 @@
 # Linear Algebra
 
+```@meta
+DocTestSetup = :(using LinearAlgebra)
+```
+
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
-of many common and useful linear algebra operations. Basic operations, such as [`trace`](@ref), [`det`](@ref),
+of many common and useful linear algebra operations. Basic operations, such as [`tr`](@ref), [`det`](@ref),
 and [`inv`](@ref) are all supported:
 
 ```jldoctest
@@ -11,7 +15,7 @@ julia> A = [1 2 3; 4 1 6; 7 8 1]
  4  1  6
  7  8  1
 
-julia> trace(A)
+julia> tr(A)
 3
 
 julia> det(A)
@@ -56,9 +60,17 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}} with factors L and U:
-[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
-[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
+LU{Float64,Array{Float64,2}}
+L factor:
+3×3 Array{Float64,2}:
+  1.0    0.0       0.0
+ -0.15   1.0       0.0
+ -0.3   -0.132196  1.0
+U factor:
+3×3 Array{Float64,2}:
+ -10.0  2.3     4.0
+   0.0  2.345  -3.4
+   0.0  0.0    -5.24947
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -72,17 +84,17 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 3×3 Tridiagonal{Float64,Array{Float64,1}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
 U factor:
-3×3 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
  1.0  0.142857  -0.8
- 0.0  1.0       -0.6
- 0.0  0.0        1.0
+  ⋅   1.0       -0.6
+  ⋅    ⋅         1.0
 permutation:
 3-element Array{Int64,1}:
  1
@@ -248,9 +260,7 @@ julia> b = [1 2 3; 4 5 6]
 julia> b - U
 ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
 Stacktrace:
- [1] checksquare at ./linalg/linalg.jl:220 [inlined]
- [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156
- [3] top-level scope
+[...]
 ```
 
 ## [Matrix factorizations](@id man-linalg-factorizations)
@@ -361,14 +371,13 @@ LinearAlgebra.normalize!
 LinearAlgebra.normalize
 LinearAlgebra.cond
 LinearAlgebra.condskeel
-LinearAlgebra.trace
+LinearAlgebra.tr
 LinearAlgebra.det
 LinearAlgebra.logdet
 LinearAlgebra.logabsdet
 Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
-Base.repmat
 Base.kron
 LinearAlgebra.linreg
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
@@ -413,7 +422,7 @@ Base.transpose
 LinearAlgebra.transpose!
 Base.adjoint
 LinearAlgebra.adjoint!
-LinearAlgebra.peakflops
+Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
 ```
@@ -619,4 +628,8 @@ LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!
 LinearAlgebra.LAPACK.trsyl!
+```
+
+```@meta
+DocTestSetup = nothing
 ```

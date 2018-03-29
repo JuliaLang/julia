@@ -153,4 +153,14 @@ end
         @test bar2.foo ∈ keys(bar2.fooDict)
         @test bar2.fooDict[bar2.foo] != nothing
     end
+
+    let d = IdDict(rand(2) => rand(2) for i = 1:100)
+        d2 = deepcopy(d)
+        for k in keys(d2)
+            @test haskey(d2, k)
+        end
+        for k in keys(d)
+            @test haskey(d, k)
+        end
+    end
 end

@@ -107,7 +107,7 @@ pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed
 regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
-indices in `reverse(s)` and vice-versa, and [`Unicode.graphemes`](@ref Base.Unicode.graphemes) to
+indices in `reverse(s)` and vice-versa, and `graphemes` from module `Unicode` to
 operate on user-visible "characters" (graphemes) rather than codepoints.
 See also [`Iterators.reverse`](@ref) for
 reverse-order iteration without making a copy. Custom string types must implement the
@@ -130,7 +130,7 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
-    sprint() do io
+    sprint(sizehint=sizeof(s)) do io
         i, j = firstindex(s), lastindex(s)
         while i ≤ j
             c, j = s[j], prevind(s, j)
