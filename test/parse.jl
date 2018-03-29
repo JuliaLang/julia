@@ -265,60 +265,62 @@ end
 @test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
 
 # issue #22480
-@test isnan(parse(Float64, "NaN", base=16))
-@test isnan(parse(Float64, "nan", base=16))
-@test isnan(parse(Float64, "nAN", base=16))
+@testset "Allow parsing Float-Strings in bases between 2 and 23" begin
+    @test isnan(parse(Float64, "NaN", base=16))
+    @test isnan(parse(Float64, "nan", base=16))
+    @test isnan(parse(Float64, "nAN", base=16))
 
-@test parse(Float64, "Inf", base=16) === Inf
-@test parse(Float64, "+Inf", base=16) === Inf
-@test parse(Float64, "-Inf", base=16) === -Inf
-@test parse(Float64, "inf", base=16) === Inf
-@test parse(Float64, "inf ", base=16) === Inf
+    @test parse(Float64, "Inf", base=16) === Inf
+    @test parse(Float64, "+Inf", base=16) === Inf
+    @test parse(Float64, "-Inf", base=16) === -Inf
+    @test parse(Float64, "inf", base=16) === Inf
+    @test parse(Float64, "inf ", base=16) === Inf
 
-@test parse(Float32, "100.1", base=2) === 4.5f0
-@test parse(Float32, "100.1  ", base=2) === 4.5f0
-@test parse(Float32, "+100.1", base=2) === 4.5f0
-@test parse(Float32, "-100.1", base=2) === -4.5f0
+    @test parse(Float32, "100.1", base=2) === 4.5f0
+    @test parse(Float32, "100.1  ", base=2) === 4.5f0
+    @test parse(Float32, "+100.1", base=2) === 4.5f0
+    @test parse(Float32, "-100.1", base=2) === -4.5f0
 
-@test parse(Float64, "ff.4", base=16) === 255.25
-@test parse(Float64, "+FF.4", base=16) === 255.25
-@test parse(Float64, "+ff.4  ", base=16) === 255.25
-@test parse(Float64, "  -ff.4", base=16) === -255.25
-@test parse(Float64, "1.1", base=2) === 1.5
-@test parse(Float64, "0.001", base=2) === 0.125
-@test parse(Float64, "100", base=2) === 4.0
-@test parse(Float64, "+100", base=2) === 4.0
-@test parse(Float64, "100 ", base=2) === 4.0
-@test parse(Float64, "100\t", base=2) === 4.0
-@test parse(Float64, "\t100", base=2) === 4.0
-@test parse(Float64, "-100.0", base=2) === -4.0
-@test parse(Float64, "0.1", base=3) === 0.3333333333333333
+    @test parse(Float64, "ff.4", base=16) === 255.25
+    @test parse(Float64, "+FF.4", base=16) === 255.25
+    @test parse(Float64, "+ff.4  ", base=16) === 255.25
+    @test parse(Float64, "  -ff.4", base=16) === -255.25
+    @test parse(Float64, "1.1", base=2) === 1.5
+    @test parse(Float64, "0.001", base=2) === 0.125
+    @test parse(Float64, "100", base=2) === 4.0
+    @test parse(Float64, "+100", base=2) === 4.0
+    @test parse(Float64, "100 ", base=2) === 4.0
+    @test parse(Float64, "100\t", base=2) === 4.0
+    @test parse(Float64, "\t100", base=2) === 4.0
+    @test parse(Float64, "-100.0", base=2) === -4.0
+    @test parse(Float64, "0.1", base=3) === 0.3333333333333333
 
-@test parse(Float64, "2.3e3", base=4) === 176.0
-@test parse(Float64, "2.3e-3", base=4) === 0.04296875
-@test_throws ArgumentError parse(Float64, "2.3e4", base=4)
-@test parse(Float64, "2.3e10", base=4) === 704.0
-@test parse(Float64, "2.3e4", base=5) === 1625.0
-@test parse(Float64, "2.3e23", base=5) === 3.173828125e9
-@test parse(Float64, "2.3e-23", base=5) === 2.12992e-9
-@test parse(Float64, "1e3", base=5) === 125.0
-@test_throws ArgumentError parse(Float64, "1e6", base=5)
-@test parse(Float64, "1e6", base=10) === 1000000.0
+    @test parse(Float64, "2.3e3", base=4) === 176.0
+    @test parse(Float64, "2.3e-3", base=4) === 0.04296875
+    @test_throws ArgumentError parse(Float64, "2.3e4", base=4)
+    @test parse(Float64, "2.3e10", base=4) === 704.0
+    @test parse(Float64, "2.3e4", base=5) === 1625.0
+    @test parse(Float64, "2.3e23", base=5) === 3.173828125e9
+    @test parse(Float64, "2.3e-23", base=5) === 2.12992e-9
+    @test parse(Float64, "1e3", base=5) === 125.0
+    @test_throws ArgumentError parse(Float64, "1e6", base=5)
+    @test parse(Float64, "1e6", base=10) === 1000000.0
 
-@test parse(BigFloat, "2.3e-23", base=5) == big"2.129919999999999999999999999999999999999999999999999999999999999999999999999986e-09"
+    @test parse(BigFloat, "2.3e-23", base=5) == big"2.129919999999999999999999999999999999999999999999999999999999999999999999999986e-09"
 
-@test_throws ArgumentError parse(Float64, "1.2e2 some nonesense", base=10)
-@test_throws ArgumentError parse(Float64, "1 .2e2", base=10)
-@test_throws ArgumentError parse(Float64, "1. 2e2", base=10)
-@test_throws ArgumentError parse(Float64, "1.2 e2", base=10)
-@test_throws ArgumentError parse(Float64, "1.2e 2", base=10)
-@test_throws ArgumentError parse(Float64, "nanana", base=10)
+    @test_throws ArgumentError parse(Float64, "1.2e2 some nonesense", base=10)
+    @test_throws ArgumentError parse(Float64, "1 .2e2", base=10)
+    @test_throws ArgumentError parse(Float64, "1. 2e2", base=10)
+    @test_throws ArgumentError parse(Float64, "1.2 e2", base=10)
+    @test_throws ArgumentError parse(Float64, "1.2e 2", base=10)
+    @test_throws ArgumentError parse(Float64, "nanana", base=10)
 
-@test parse(Float64, "1e3", base=16) === Float64(16^2 + 14*16^1 + 3*16^0)
-@test parse(Float64, "1e3", base=10)  === 1000.0
-@test parse(Float64, "1E3", base=10)  === 1000.0
+    @test parse(Float64, "1e3", base=16) === Float64(16^2 + 14*16^1 + 3*16^0)
+    @test parse(Float64, "1e3", base=10)  === 1000.0
+    @test parse(Float64, "1E3", base=10)  === 1000.0
 
-@test_throws ArgumentError parse(Float64, "14.0", base=3)
+    @test_throws ArgumentError parse(Float64, "14.0", base=3)
+end
 
 @testset "parse and tryparse type inference" begin
     @inferred parse(Int, "12")
