@@ -44,9 +44,10 @@ viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(
 # Slices may begin a section which may be followed by any number of Slices
 viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # A UnitRange can follow Slices, but only if all other indices are scalar
-viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{AbstractRange, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{AbstractRange, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -213,8 +214,8 @@ function getindex(V::FastSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + V.stride1*i]
     r
 end
-# We can avoid a multiplication if the first parent index is a Colon or UnitRange
-FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, UnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
+# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange
+FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
