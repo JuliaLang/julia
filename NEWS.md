@@ -629,8 +629,8 @@ Library improvements
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
-    ones of `Dict`. ([#25210])  
-        
+    ones of `Dict`. ([#25210])
+
   * Strings representing floating point numbers can now be parsed in bases 2 to 23 ([#22480]).
 
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
