@@ -6,15 +6,25 @@ using Test
 import LibGit2
 using Random
 
+function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, payload::Dict)
+    status = payload[:transfer_progress]
+    progress = unsafe_load(progress)
+
+    status[] = (current=progress.received_objects, total=progress.total_objects)
+
+    return Cint(0)
+end
+
 #########
 # TESTS #
 #########
 # init & clone
 mktempdir() do dir
     repo_url = "https://github.com/JuliaLang/Example.jl"
+
     @testset "Cloning repository" begin
-        @testset "with 'https' protocol" begin
-            repo_path = joinpath(dir, "Example1")
+        @testset "HTTPS protocol" begin
+            repo_path = joinpath(dir, "Example.HTTPS")
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
             repo = LibGit2.clone(repo_url, repo_path, credentials=c)
             try
@@ -25,12 +35,35 @@ mktempdir() do dir
             end
         end
 
-        @testset "with incorrect url" begin
+        @testset "Transfer progress callbacks" begin
+            status = Ref((current=0, total=-1))
+            callbacks = LibGit2.Callbacks(
+                :transfer_progress => (
+                    cfunction(transfer_progress, Cint, Tuple{Ptr{LibGit2.TransferProgress}, Any}),
+                    status,
+                )
+            )
+
+            repo_path = joinpath(dir, "Example.TransferProgress")
+            c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
+            repo = LibGit2.clone(repo_url, repo_path, credentials=c, callbacks=callbacks)
             try
-                repo_path = joinpath(dir, "Example2")
-                # credentials are required because github tries to authenticate on unknown repo
-                cred = LibGit2.UserPasswordCredential("JeffBezanson", "hunter2") # make sure Jeff is using a good password :)
-                c = LibGit2.CredentialPayload(cred, allow_prompt=false, allow_git_helpers=false)
+                @test isdir(repo_path)
+                @test isdir(joinpath(repo_path, ".git"))
+
+                @test status[].total >= 0
+                @test status[].current == status[].total
+            finally
+                close(repo)
+            end
+        end
+
+        @testset "Incorrect URL" begin
+            repo_path = joinpath(dir, "Example.IncorrectURL")
+            # credentials are required because github tries to authenticate on unknown repo
+            cred = LibGit2.UserPasswordCredential("JeffBezanson", "hunter2") # make sure Jeff is using a good password :)
+            c = LibGit2.CredentialPayload(cred, allow_prompt=false, allow_git_helpers=false)
+            try
                 LibGit2.clone(repo_url*randstring(10), repo_path, credentials=c)
                 error("unexpected")
             catch ex
@@ -39,12 +72,12 @@ mktempdir() do dir
             end
         end
 
-        @testset "with empty credentials" begin
+        @testset "Empty Credentials" begin
+            repo_path = joinpath(dir, "Example.EmptyCredentials")
+            # credentials are required because github tries to authenticate on unknown repo
+            cred = LibGit2.UserPasswordCredential("","") # empty credentials cause authentication error
+            c = LibGit2.CredentialPayload(cred, allow_prompt=false, allow_git_helpers=false)
             try
-                repo_path = joinpath(dir, "Example3")
-                # credentials are required because github tries to authenticate on unknown repo
-                cred = LibGit2.UserPasswordCredential("","") # empty credentials cause authentication error
-                c = LibGit2.CredentialPayload(cred, allow_prompt=false, allow_git_helpers=false)
                 LibGit2.clone(repo_url*randstring(10), repo_path, credentials=c)
                 error("unexpected")
             catch ex
