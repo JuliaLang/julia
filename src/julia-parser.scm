@@ -2382,7 +2382,7 @@
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
-                            (parse-unary-prefix s))))
+                            (parse-atom s #f))))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring
