@@ -789,16 +789,16 @@ A variable referring to the last computed value, automatically set at the intera
 kw"ans"
 
 """
-    devnull
+    DevNull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
 /dev/null on Unix or NUL on Windows. Usage:
 
 ```julia
-run(pipeline(`cat test.txt`, devnull))
+run(pipeline(`cat test.txt`, DevNull))
 ```
 """
-devnull
+DevNull
 
 # doc strings for code in boot.jl and built-ins
 

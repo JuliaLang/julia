@@ -471,14 +471,14 @@ JL_DLLEXPORT void jl_flush_cstdio(void)
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
+    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
     return stdout_obj;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
+    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
     return stderr_obj;
 }
 

@@ -238,7 +238,7 @@ end
         GC.enable(true)
         GC.gc()
     end
-    oldstderr = stderr
+    oldstderr = STDERR
     local newstderr, errstream
     try
         newstderr = redirect_stderr()

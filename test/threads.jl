@@ -27,7 +27,7 @@ function test_threaded_loop_and_atomic_add()
     # and were unique (via pigeon-hole principle).
     @test !(false in found)
     if was_inorder
-        println(stderr, "Warning: threaded loop executed in order")
+        println(STDERR, "Warning: threaded loop executed in order")
     end
 end
 

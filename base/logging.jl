@@ -335,10 +335,10 @@ end
         try
             # Give up and write to STDERR, in three independent calls to
             # increase the odds of it getting through.
-            print(stderr, "Exception handling log message: ")
-            println(stderr, err)
-            println(stderr, "  module=$_module  file=$filepath  line=$line")
-            println(stderr, "  Second exception: ", err2)
+            print(STDERR, "Exception handling log message: ")
+            println(STDERR, err)
+            println(STDERR, "  module=$_module  file=$filepath  line=$line")
+            println(STDERR, "  Second exception: ", err2)
         catch
         end
     end
@@ -449,7 +449,7 @@ current_logger() = current_logstate().logger
 #-------------------------------------------------------------------------------
 # SimpleLogger
 """
-    SimpleLogger(stream=stderr, min_level=Info)
+    SimpleLogger(stream=STDERR, min_level=Info)
 
 Simplistic logger for logging all messages with level greater than or equal to
 `min_level` to `stream`.
@@ -459,7 +459,7 @@ struct SimpleLogger <: AbstractLogger
     min_level::LogLevel
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::IO=STDERR, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -491,6 +491,6 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     nothing
 end
 
-_global_logstate = LogState(SimpleLogger(Core.stderr, CoreLogging.Info))
+_global_logstate = LogState(SimpleLogger(Core.STDERR, CoreLogging.Info))
 
 end # CoreLogging

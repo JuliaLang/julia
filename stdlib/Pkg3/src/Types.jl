@@ -581,7 +581,7 @@ function read_project(io::IO)
     return project
 end
 function read_project(file::String)
-    isfile(file) ? open(read_project, file) : read_project(devnull)
+    isfile(file) ? open(read_project, file) : read_project(DevNull)
 end
 
 function read_manifest(io::IO)
@@ -602,7 +602,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-        try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+        try isfile(file) ? open(read_manifest, file) : read_manifest(DevNull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -963,9 +963,9 @@ function registries(; clone_default=true)::Vector{String}
     if clone_default
         if !ispath(user_regs)
             mkpath(user_regs)
-            printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
+            printpkgstyle(STDOUT, :Cloning, "default registries into $user_regs")
             for (reg, url) in DEFAULT_REGISTRIES
-                printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
+                printpkgstyle(STDOUT, :Cloning, "registry $reg from $(repr(url))")
                 path = joinpath(user_regs, reg)
                 repo = LibGit2.clone(url, path)
                 close(repo)
@@ -1177,7 +1177,7 @@ end
 
 # TODO: use ctx specific context
 function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
-    printpkgstyle(stdout, cmd, text...; kwargs...)
+    printpkgstyle(STDOUT, cmd, text...; kwargs...)
 end
 
 

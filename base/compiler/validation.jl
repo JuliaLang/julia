@@ -61,10 +61,10 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
         if !isempty(errors)
             for e in errors
                 if linfo.def isa Method
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for method ",
                             linfo.def, ": ", e)
                 else
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
+                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
                             linfo.def, ": ", e)
                 end
             end

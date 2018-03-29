@@ -10,7 +10,7 @@ end
 
 function genfile(f::Function, pkg::String, dir::String, file::String)
     path = joinpath(dir, pkg, file)
-    println(stdout, "    $path")
+    println(STDOUT, "    $path")
     mkpath(dirname(path))
     open(f, path, "w")
     return

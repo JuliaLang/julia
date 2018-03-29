@@ -15,7 +15,7 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, optimize, run_p
             x = T_IFUNC[i]
             push!(fs, x[3])
         else
-            println(stderr, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
+            println(STDERR, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
         end
     end
     for f in fs

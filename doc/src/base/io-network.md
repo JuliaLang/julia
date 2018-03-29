@@ -3,9 +3,9 @@
 ## General I/O
 
 ```@docs
-Base.stdout
-Base.stderr
-Base.stdin
+Base.STDOUT
+Base.STDERR
+Base.STDIN
 Base.open
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)

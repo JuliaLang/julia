@@ -75,7 +75,7 @@ end
 function check_args(args)
     checked = intersect(args, options)
     if length(checked) == 0 || length(checked) != length(args)
-        println(stderr, "Usage: julia-config [", join(options, " | "), "]")
+        println(STDERR, "Usage: julia-config [", join(options, " | "), "]")
         exit(1)
     end
 end

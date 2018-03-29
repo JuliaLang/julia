@@ -53,7 +53,7 @@ include("ConsoleLogger.jl")
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
 
 function __init__()
-    global_logger(ConsoleLogger(stderr))
+    global_logger(ConsoleLogger(STDERR))
 end
 
 end

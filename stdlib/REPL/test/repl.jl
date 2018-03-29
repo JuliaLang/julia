@@ -21,24 +21,24 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    input = Pipe()
-    output = Pipe()
-    err = Pipe()
-    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
-    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
-    Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
+    stdin = Pipe()
+    stdout = Pipe()
+    stderr = Pipe()
+    Base.link_pipe!(stdin, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stdout, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(stderr, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(stdin.out, stdout.in, stderr.in), true)
     repl.options = options
 
-    f(input.in, output.out, repl)
+    f(stdin.in, stdout.out, repl)
     t = @async begin
-        close(input.in)
-        close(output.in)
-        close(err.in)
+        close(stdin.in)
+        close(stdout.in)
+        close(stderr.in)
     end
-    @test read(err.out, String) == ""
-    #display(read(output.out, String))
+    @test read(stderr.out, String) == ""
+    #display(read(stdout.out, String))
     Base._wait(t)
     nothing
 end
@@ -158,7 +158,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #10120
     # ensure that command quoting works correctly
-    let s, old_stdout = stdout
+    let s, old_stdout = STDOUT
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
@@ -904,7 +904,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
+    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

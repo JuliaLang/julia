@@ -247,9 +247,9 @@ julia> String(take!(io))
 ```
 
 ```jldoctest
-julia> print(IOContext(stdout, :compact => false), 1.12341234)
+julia> print(IOContext(STDOUT, :compact => false), 1.12341234)
 1.12341234
-julia> print(IOContext(stdout, :compact => true), 1.12341234)
+julia> print(IOContext(STDOUT, :compact => true), 1.12341234)
 1.12341
 ```
 
@@ -263,9 +263,9 @@ julia> function f(io::IO)
        end
 f (generic function with 1 method)
 
-julia> f(stdout)
+julia> f(STDOUT)
 loooooong
-julia> f(IOContext(stdout, :short => true))
+julia> f(IOContext(STDOUT, :short => true))
 short
 ```
 """
@@ -311,7 +311,7 @@ Write an informative text representation of a value to the current output stream
 should overload `show(io, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
 """
-show(x) = show(stdout::IO, x)
+show(x) = show(STDOUT::IO, x)
 
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
@@ -535,7 +535,7 @@ function show_supertypes(io::IO, typ::DataType)
     end
 end
 
-show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
+show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
 
 """
     @show
@@ -1762,7 +1762,7 @@ DeeplyNested
     1: DeeplyNested
 ```
 """
-dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit => true), arg; maxdepth=maxdepth)
+dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
 """
@@ -1961,8 +1961,8 @@ function print_bit_chunk(io::IO, c::UInt64, l::Integer = 64)
     end
 end
 
-print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(stdout, c, l)
-print_bit_chunk(c::UInt64) = print_bit_chunk(stdout, c)
+print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
+print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
     isempty(B) && return
@@ -1974,6 +1974,6 @@ function bitshow(io::IO, B::BitArray)
     l = _mod64(length(B)-1) + 1
     print_bit_chunk(io, Bc[end], l)
 end
-bitshow(B::BitArray) = bitshow(stdout, B)
+bitshow(B::BitArray) = bitshow(STDOUT, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)
