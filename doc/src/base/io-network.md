@@ -126,9 +126,5 @@ Base.Multimedia.istextmime
 
 ```@docs
 Base.bytesavailable
-Base.ntoh
-Base.hton
-Base.ltoh
-Base.htol
 Base.ENDIAN_BOM
 ```

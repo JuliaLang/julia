@@ -22,7 +22,11 @@ export
     @ip_str,
     IPAddr,
     IPv4,
-    IPv6
+    IPv6,
+    ntoh,
+    hton,
+    ltoh,
+    htol
 
 import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
 
@@ -39,6 +43,48 @@ using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associ
 
 include("IPAddr.jl")
 include("addrinfo.jl")
+
+## ntoh & hton ##
+
+if ENDIAN_BOM == 0x01020304
+    ntoh(x) = x
+    hton(x) = x
+    ltoh(x) = bswap(x)
+    htol(x) = bswap(x)
+else
+    ntoh(x) = bswap(x)
+    hton(x) = bswap(x)
+    ltoh(x) = x
+    htol(x) = x
+end
+
+"""
+    ntoh(x)
+
+Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
+"""
+ntoh(x)
+
+"""
+    hton(x)
+
+Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
+"""
+hton(x)
+
+"""
+    ltoh(x)
+
+Converts the endianness of a value from Little-endian to that used by the Host.
+"""
+ltoh(x)
+
+"""
+    htol(x)
+
+Converts the endianness of a value from that used by the Host to Little-endian.
+"""
+htol(x)
 
 """
     TCPSocket(; delay=true)

@@ -901,6 +901,10 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
+    @deprecate_stdlib htol           Sockets true
+    @deprecate_stdlib hton           Sockets true
+    @deprecate_stdlib ltoh           Sockets true
+    @deprecate_stdlib ntoh           Sockets true
 
 end
 end

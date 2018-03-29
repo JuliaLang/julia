@@ -414,22 +414,13 @@ function readlines(filename::AbstractString; kw...)
 end
 readlines(s=stdin; kw...) = collect(eachline(s; kw...))
 
-## byte-order mark, ntoh & hton ##
+## byte-order mark ##
 
 let a = UInt32[0x01020304]
     endian_bom = GC.@preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
-    global ntoh, hton, ltoh, htol
     if endian_bom == 0x01
-        ntoh(x) = x
-        hton(x) = x
-        ltoh(x) = bswap(x)
-        htol(x) = bswap(x)
         const global ENDIAN_BOM = 0x01020304
     elseif endian_bom == 0x04
-        ntoh(x) = bswap(x)
-        hton(x) = bswap(x)
-        ltoh(x) = x
-        htol(x) = x
         const global ENDIAN_BOM = 0x04030201
     else
         error("seriously? what is this machine?")
@@ -444,34 +435,6 @@ Little-endian machines will contain the value `0x04030201`. Big-endian machines 
 the value `0x01020304`.
 """
 ENDIAN_BOM
-
-"""
-    ntoh(x)
-
-Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
-"""
-ntoh(x)
-
-"""
-    hton(x)
-
-Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
-"""
-hton(x)
-
-"""
-    ltoh(x)
-
-Converts the endianness of a value from Little-endian to that used by the Host.
-"""
-ltoh(x)
-
-"""
-    htol(x)
-
-Converts the endianness of a value from that used by the Host to Little-endian.
-"""
-htol(x)
 
 
 """
