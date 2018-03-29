@@ -771,10 +771,10 @@ function _include_dependency(mod::Module, _path::AbstractString)
     if prev === nothing
         path = abspath(_path)
     else
-        path = joinpath(dirname(prev), _path)
+        path = normpath(joinpath(dirname(prev), _path))
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (mod, normpath(path), mtime(path)))
+        push!(_require_dependencies, (mod, path, mtime(path)))
     end
     return path, prev
 end
