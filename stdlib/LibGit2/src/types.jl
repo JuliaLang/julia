@@ -188,6 +188,22 @@ The fields represent:
     perfdata_payload::Ptr{Cvoid}
 end
 
+"""
+    LibGit2.TransferProgress
+
+Transfer progress information used by the `transfer_progress` remote callback.
+Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/type/git_transfer_progress) struct.
+"""
+@kwdef struct TransferProgress
+    total_objects::Cuint
+    indexed_objects::Cuint
+    received_objects::Cuint
+    local_objects::Cuint
+    total_deltas::Cuint
+    indexed_deltas::Cuint
+    received_bytes::Csize_t
+end
+
 @kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
     sideband_progress::Ptr{Cvoid}
