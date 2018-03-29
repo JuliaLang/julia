@@ -7,6 +7,14 @@ struct LineInfoNode
 end
 const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
+if true
+    import Base: Base, @show
+else
+    macro show(s)
+        return :(println(stdout, $(QuoteNode(s)), " = ", $(esc(s))))
+    end
+end
+
 include("compiler/ssair/ir.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/slot2ssa.jl")
@@ -15,11 +23,7 @@ include("compiler/ssair/passes.jl")
 include("compiler/ssair/inlining2.jl")
 include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
-
-
-macro show(s)
-    # return :(println($(QuoteNode(s)), " = ", $(esc(s))))
-end
+@isdefined(Base) && include("compiler/ssair/show.jl")
 
 function normalize_expr(stmt::Expr)
     if stmt.head === :gotoifnot

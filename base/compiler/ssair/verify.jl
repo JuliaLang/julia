@@ -1,6 +1,10 @@
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
-    macro verify_error(args...)
-        nothing
+    macro verify_error(arg)
+        arg isa String && return esc(:(println($arg)))
+        arg isa Expr && arg.head === :string || error()
+        pushfirst!(arg.args, :println)
+        arg.head = :call
+        return esc(arg)
     end
 end
 
@@ -20,7 +24,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         else
             if !dominates(domtree, def_bb, use_bb)
                 enable_new_optimizer[] = false
-                #@Base.show ir
+                @show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
             end
@@ -41,8 +45,8 @@ function verify_ir(ir::IRCode)
         if first(block.stmts) != last_end + 1
             enable_new_optimizer[] = false
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
-            #@Base.show ranges
-            #@Base.show (first(block.stmts), last_end)
+            @show ranges
+            @show (first(block.stmts), last_end)
             @verify_error "First statement of BB $idx ($(first(block.stmts))) does not match end of previous ($last_end)"
             error()
         end
@@ -55,9 +59,9 @@ function verify_ir(ir::IRCode)
         end
         for s in block.succs
             if !(idx in ir.cfg.blocks[s].preds)
-                #@Base.show ir.cfg
-                #@Base.show ir
-                #@Base.show ir.argtypes
+                @show ir.cfg
+                @show ir
+                @show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
                 error()
             end
@@ -72,8 +76,8 @@ function verify_ir(ir::IRCode)
                 edge = stmt.edges[i]
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
                     enable_new_optimizer[] = false
-                    #@Base.show ir.argtypes
-                    #@Base.show ir
+                    @show ir.argtypes
+                    @show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error()
                 end

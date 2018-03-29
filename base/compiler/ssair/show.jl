@@ -82,7 +82,7 @@ function Base.show(io::IO, code::IRCode)
     bb_idx = 1
     perm = sortperm(code.new_nodes, by = x->x[1])
     new_nodes_perm = Iterators.Stateful(perm)
-    for idx in Iterators.eachindex(code.stmts)
+    for idx in eachindex(code.stmts)
         if !isassigned(code.stmts, idx)
             # This is invalid, but do something useful rather
             # than erroring, to make debugging easier
@@ -106,7 +106,7 @@ function Base.show(io::IO, code::IRCode)
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && code.new_nodes[Base.peek(new_nodes_perm)][1] == idx
+        while !isempty(new_nodes_perm) && code.new_nodes[peek(new_nodes_perm)][1] == idx
             node_idx = popfirst!(new_nodes_perm)
             _, typ, node, line = code.new_nodes[node_idx]
             node_idx += length(code.stmts)
