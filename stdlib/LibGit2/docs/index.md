@@ -41,6 +41,7 @@ LibGit2.GitShortHash
 LibGit2.GitSignature
 LibGit2.GitStatus
 LibGit2.GitTag
+LibGit2.GitTransferProgress
 LibGit2.GitTree
 LibGit2.IndexEntry
 LibGit2.IndexTime
