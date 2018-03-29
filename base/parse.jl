@@ -46,8 +46,9 @@ end
 function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
-    c, startpos = next(s,startpos)
-    c, startpos, j
+    c = @inbounds s[startpos]
+    startpos = nextind(s, startpos)
+    return c, startpos, j
 end
 
 function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
@@ -72,8 +73,9 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && !done(s,i)
-            c, i = next(s,i)
+        if c == '0' && i ≤ lastindex(s)
+            c = @inbounds s[i]
+            i = nextind(s, i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
                 c, i, j = parseint_next(s,i,endpos)
@@ -123,7 +125,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             n *= sgn
             return n
         end
-        c, i = next(s,i)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         isspace(c) && break
     end
     (T <: Signed) && (n *= sgn)
@@ -144,10 +147,12 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return nothing
         end
         (i > endpos) && return n
-        c, i = next(s,i)
+        c = @inbounds s[i]
+        i = nextind(s, i)
     end
     while i <= endpos
-        c, i = next(s,i)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         if !isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -223,33 +228,37 @@ function parsefloat_preamble(s::AbstractString, base::Int)
     i = firstindex(s)
     c = ' '
     sign = 1
-    while !done(s, i) && isspace(c)
-        c, i = next(s,i)
+    while i ≤ lastindex(s) && isspace(c)
+        c = @inbounds s[i]
+        i = nextind(s, i)
     end
     if c in ('-', '+')
         sign = (c == '-') ? -1 : 1
-        c, i = next(s, i)
+        c = @inbounds s[i]
+        i = nextind(s, i)
     end
-    while !done(s, i) && isspace(c)
-        c, i = next(s,i)
+    while i ≤ lastindex(s) && isspace(c)
+        c = @inbounds s[i]
+        i = nextind(s, i)
     end
-    done(s,i) && throw(ArgumentError("input string is empty or only contains whitespace"))
+    i > lastindex(s) && throw(ArgumentError("input string is empty or only contains whitespace"))
     startpos = i-1
     return sign, startpos
 end
 
 function _rest_is_space(s, i, T)
-    while !done(s, i)
-        c, i = next(s,i)
+    while i ≤ lastindex(s)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         isspace(c) || throw(ArgumentError("cannot parse $s as $T"))
     end
     true
 end
 
-function _represents_nan_or_inf(s, i, case, T)
+function _represents_nan_or_inf(s, i, nan_or_inf, T)
     for j in 1:3
-        c,_ = next(s,i+j-1)
-        lowercase(c) == case[j] || return false
+        c = @inbounds s[i+j-1]
+        lowercase(c) == nan_or_inf[j] || return false
     end
     _rest_is_space(s, i+3, T)
 end
@@ -258,7 +267,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     base = check_valid_base(base, 23) #do not allow base > 23: 'n' would be ambiguous
     sign, i = parsefloat_preamble(s, base)
 
-    if !done(s, i+2)
+    if i+2 ≤ lastindex(s)
         _represents_nan_or_inf(s, i, "nan", T) && return T(NaN)
         _represents_nan_or_inf(s, i, "inf", T) && return sign*T(Inf)
     end
@@ -266,8 +275,9 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     baseunder15 = base < 15 # only interpret 'e' as scientific notation if unambiguous
     b = T(base)
     res = zero(T)
-    while !done(s, i)
-        c, i = next(s, i)
+    while i ≤ lastindex(s)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         isspace(c) && break
         c == '.' && break
         if baseunder15 && lowercase(c) == 'e'
@@ -280,9 +290,10 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     end
 
     n = 0
-    while !done(s, i)
+    while i ≤ lastindex(s)
         n -= 1
-        c, i = next(s, i)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         isspace(c) && break
         baseunder15 && lowercase(c) == 'e' && break
         tmp = parse(Int, c, base=base)
@@ -292,8 +303,9 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
 
     expsign = 1
     exponent = 0
-    while baseunder15 && !done(s, i)
-        c, i = next(s, i)
+    while baseunder15 && i ≤ lastindex(s)
+        c = @inbounds s[i]
+        i = nextind(s, i)
         isspace(c) && break
         if c == '-'
             expsign = -1
