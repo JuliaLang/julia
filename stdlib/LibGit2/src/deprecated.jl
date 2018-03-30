@@ -24,30 +24,15 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     coalesce(Base.prompt(msg, default=default, password=password), "")
 end
 
-# PR #23640
-# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
-#  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
-function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
-        # Note: Be careful not to show the contents of the credentials as it could reveal a
-        # password.
-        if payload === nothing
-            msg = "`LibGit2.$f($sig; payload=nothing)` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload())` instead."
-            p = CredentialPayload()
-        else
-            cred = payload
-            C = typeof(cred)
-            msg = "`LibGit2.$f($sig; payload=$C(...))` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...)))` instead."
-            p = CredentialPayload(cred)
-        end
-        Base.depwarn(msg, f)
-    else
-        p = payload::CredentialPayload
+# PR #26437
+# when this deprecation is deleted, remove all calls to it, and remove the keyword of:
+# `payload` from "src/LibGit2.jl"
+function deprecate_payload_keyword(f, sig, payload)
+    if payload !== nothing
+        Base.depwarn(string(
+            "`LibGit2.$f($sig; payload=cred)` is deprecated, use ",
+            "`LibGit2.$f($sig; credentials=cred)` instead."), f)
     end
-    return p
 end
 
 @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
