@@ -355,6 +355,7 @@ trunc(::Type{Integer},  x) = trunc(Int, x)
 
 round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} =
     trunc(T, _round(x, r))
+
 ceil(::Type{T}, x::AbstractFloat)  = round(T, x, RoundUp)
 floor(::Type{T}, x::AbstractFloat) = round(T, x, RoundDown)
 round(::Type{T}, x::AbstractFloat) = round(T, x, RoundNearest)
@@ -651,7 +652,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (_round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -672,7 +673,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (_round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
