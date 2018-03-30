@@ -337,39 +337,28 @@ end
 unsafe_trunc(::Type{UInt128}, x::Float16) = unsafe_trunc(UInt128, Float32(x))
 unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
-# matches convert methods
-# also determines floor, ceil, round
-trunc(::Type{Signed}, x::Float32) = trunc(Int,x)
-trunc(::Type{Signed}, x::Float64) = trunc(Int,x)
-trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
-trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
-trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
-trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
-trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
+_round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+_round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+_round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
+_round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
+_round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
+_round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
+_round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
+_round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
-# fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
-floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
-ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
-round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
+_round(x::Float16, r::RoundingMode) = Float16(round(Float32(x, r)))
 
-trunc(x::Float64) = trunc_llvm(x)
-trunc(x::Float32) = trunc_llvm(x)
-trunc(x::Float16) = Float16(trunc(Float32(x)))
+# all float -> integer conversions are defined in terms of `trunc`
+trunc(::Type{Signed},   x) = trunc(Int, x)
+trunc(::Type{Unsigned}, x) = trunc(UInt,x)
+trunc(::Type{Integer},  x) = trunc(Int, x)
 
-floor(x::Float64) = floor_llvm(x)
-floor(x::Float32) = floor_llvm(x)
-floor(x::Float16) = Float16(floor(Float32(x)))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} =
+    trunc(T, _round(x, r))
+ceil(::Type{T}, x::AbstractFloat)  = round(T, x, RoundUp)
+floor(::Type{T}, x::AbstractFloat) = round(T, x, RoundDown)
+round(::Type{T}, x::AbstractFloat) = round(T, x, RoundNearest)
 
-ceil(x::Float64) = ceil_llvm(x)
-ceil(x::Float32) = ceil_llvm(x)
-ceil(x::Float16) = Float16( ceil(Float32(x)))
-
-round(x::Float64) = rint_llvm(x)
-round(x::Float32) = rint_llvm(x)
-round(x::Float16) = Float16(round(Float32(x)))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32

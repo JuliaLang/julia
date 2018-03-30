@@ -1500,11 +1500,17 @@ end
            false)
 
 # PR 26156
-@deprecate trunc(x, digits, base) trunc(x, digits, base = base)
-@deprecate floor(x, digits, base) floor(x, digits, base = base)
-@deprecate ceil(x, digits, base) ceil(x, digits, base = base)
-@deprecate round(x, digits, base) round(x, digits, base = base)
-@deprecate signif(x, digits, base) signif(x, digits, base = base)
+@deprecate trunc(x, digits) trunc(x; digits=digits)
+@deprecate floor(x, digits) floor(x; digits=digits)
+@deprecate ceil(x, digits) ceil(x; digits=digits)
+@deprecate round(x, digits) round(x; digits=digits)
+@deprecate signif(x, digits) round(x; sigdigits=digits, base = base)
+
+@deprecate trunc(x, digits, base) trunc(x; digits=digits, base = base)
+@deprecate floor(x, digits, base) floor(x; digits=digits, base = base)
+@deprecate ceil(x, digits, base) ceil(x; digits=digits, base = base)
+@deprecate round(x, digits, base) round(x; digits=digits, base = base)
+@deprecate signif(x, digits, base) round(x; sigdigits=digits, base = base)
 
 # issue #25965
 @deprecate spawn(cmds::AbstractCmd) run(cmds, wait = false)

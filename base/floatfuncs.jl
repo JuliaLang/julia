@@ -44,8 +44,8 @@ isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
     round([T,] x, [r::RoundingMode])
-    round(x, [r::RoundingMode]; digits::Integer[, base = 10])
-    round(x, [r::RoundingMode]; sigdigits::Integer[, base = 10])
+    round(x, [r::RoundingMode]; digits::Integer= [, base = 10])
+    round(x, [r::RoundingMode]; sigdigits::Integer= [, base = 10])
 
 Rounds the number `x`.
 
@@ -59,11 +59,10 @@ after the decimal place (or before if negative), in base `base`.
 If the `sigdigits` keyword argument is provided, it rounds to the specified number of
 significant digits, in base `base`.
 
-The [`RoundingMode`](@ref) `r` controls the direction of the rounding: when no rounding
-mode is specified, the global mode will be used (see [`rounding`](@ref)), which by default
-is round to the nearest integer ([`RoundNearest`](@ref) mode), with ties (fractional
-values of 0.5) being rounded to the nearest even integer.
-
+The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the default is
+[`RoundNearest`](@ref), which rounds to the nearest integer, with ties (fractional values
+of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
+results if the global rounding mode is changed (see [`rounding`](@ref)).
 
 # Examples
 ```jldoctest
@@ -120,16 +119,20 @@ To extend `round` to new numeric types, it is typically sufficient to define `Ba
 round(T::Type, x)
 
 round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T,round(x,r))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, _round(x,r))
 
 function round(x, r::RoundingMode=RoundNearest;
     digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
     _round(x,r,digits,sigdigits,base)
 end
+trunc(x; kwargs...) = round(x, RoundToZero; kwargs...)
+floor(x; kwargs...) = round(x, RoundDown; kwargs...)
+ceil(x; kwargs...)  = round(x, RoundUp; kwargs...)
+
 _round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = _round(x, r)
+_round(x::Integer, r::RoundingMode) = x
 
 function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
-    fx = float(x)
     if digits >= 0
         sc = oftype(fx, base)^digits
         r = round(fx * sc, r) / sc
@@ -152,22 +155,25 @@ function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
     return r
 end
 
+hidigit(x::Integer, base) = ndigits0z(x, base)
+function hidigit(x::Real, base)
+    fx = float(x)
+    if base == 10
+        return 1 + floor(Int, log10(abs(fx)))
+    elseif base == 2
+        return 1 + exponent(x)
+    else
+        return 1 + floor(Int, log(abs(fx), base))
+    end
+end
 
 function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
-    fx = float(x)
-    if base == 2
-        hidig = 1 + exponent(x)
-    elseif base == 10
-        hidig = 1 + floor(Int, log10(abs(fx)))
-    else
-        hidig = 1 + floor(Int, log(abs(fx), base))
-    end
-    _round(fx, r, sigdigits-hidig, nothing, base)
+    h = hidigit(x, base)
+    _round(x, r, sigdigits-h, nothing, base)
 end
 
 _round(x, r::RoundingMode, digits::Integer, sigdigits::Integer, base) =
     throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments.")
-
 
 # C-style round
 function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
