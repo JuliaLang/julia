@@ -66,7 +66,7 @@ function gen_versionranges(dict::Dict{K,Set{VersionNumber}}, srtvers::Vector{Ver
         vranges[vreq] = VersionRange[]
         while !isempty(vset)
             vn0 = minimum(vset)
-            i = findfirst(equalto(vn0), srtvers)
+            i = findfirst(isequal(vn0), srtvers)
             @assert i ≠ 0
             pop!(vset, vn0)
             vn1 = vn0

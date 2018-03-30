@@ -109,8 +109,14 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+function cross(a::AbstractVector, b::AbstractVector)
+    if !(length(a) == length(b) == 3)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+end
 
 """
     triu(M)
@@ -720,12 +726,12 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 """
 function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     s = svdvals(A)
-    sum(x -> x > tol*s[1], s)
+    count(x -> x > tol*s[1], s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
-    trace(M)
+    tr(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
 
@@ -736,15 +742,15 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> trace(A)
+julia> tr(A)
 5
 ```
 """
-function trace(A::AbstractMatrix)
+function tr(A::AbstractMatrix)
     checksquare(A)
     sum(diag(A))
 end
-trace(x::Number) = x
+tr(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}

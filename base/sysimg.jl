@@ -7,9 +7,6 @@ using Core.Intrinsics, Core.IR
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
-getproperty(x, f::Symbol) = getfield(x, f)
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
-
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
@@ -17,6 +14,9 @@ getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+
+getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 function include_relative end
 function include(mod::Module, path::AbstractString)
@@ -153,26 +153,26 @@ include("reinterpretarray.jl")
 
 # ## dims-type-converting Array constructors for convenience
 # type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
+Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
+Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
 # type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
-Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
-Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
-Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
+Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
+Array{T}(::UndefInitializer, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(undef, Int(m), Int(n), Int(o))
+Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(Tuple{Vararg{Int}}, d))
 # dimensionality but not type specified, accepting dims as series of Integers
-Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
-Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
+Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
+Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
 # empty vector constructor
-Vector() = Vector{Any}(uninitialized, 0)
+Vector() = Vector{Any}(undef, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), missing)
 # type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, d...), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, d...), missing)
 
 include("abstractdict.jl")
 
@@ -232,8 +232,9 @@ include("strings/basic.jl")
 include("strings/string.jl")
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReshapedArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
@@ -324,27 +325,6 @@ include("weakkeydict.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
-
-# To limit dependency on rand functionality (implemented in the Random
-# module), Crand is used in file.jl, and could be used in error.jl
-# (but it breaks a test)
-"""
-    Crand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
-"""
-Crand() = ccall(:rand, Cuint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
-Crand(::Type{Float64}) = Crand(UInt32) / 2^32
-
-"""
-    Csrand([seed])
-
-Interface with the C `srand(seed)` function.
-"""
-Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 # functions defined in Random
 function rand end
@@ -454,6 +434,7 @@ include("loading.jl")
 # misc useful functions & macros
 include("util.jl")
 
+creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
 let BINDIR = Sys.BINDIR
     init_depot_path(BINDIR)
@@ -495,8 +476,8 @@ function __init__()
             ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
         end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
     end
-    # for the few uses of Crand in Base:
-    Csrand()
+    # for the few uses of Libc.rand in Base:
+    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
@@ -711,7 +692,7 @@ end
     ## functions that were re-exported from Base
     @deprecate_stdlib nonzeros   SparseArrays true
     @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
     @deprecate_stdlib dropzeros  SparseArrays true
     @deprecate_stdlib dropzeros! SparseArrays true
     @deprecate_stdlib issparse   SparseArrays true
@@ -802,7 +783,7 @@ end
     @deprecate_stdlib svdvals!    LinearAlgebra true
     @deprecate_stdlib svdvals     LinearAlgebra true
     @deprecate_stdlib sylvester   LinearAlgebra true
-    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true tr
     @deprecate_stdlib transpose!  LinearAlgebra true
     # @deprecate_stdlib transpose   LinearAlgebra true
     @deprecate_stdlib tril!       LinearAlgebra true
@@ -927,23 +908,27 @@ end
 # Clear global state
 empty!(Core.ARGS)
 empty!(Base.ARGS)
-empty!(DEPOT_PATH)
 empty!(LOAD_PATH)
-@eval Base.Sys BINDIR = ""
+@eval Base creating_sysimg = false
+Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
+
 
 tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
 tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
 
 println("Sysimage built. Summary:")
 print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
-print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); showcompact((tot_time_base          / tot_time) * 100); println("%")
-print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); showcompact((Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
 if isfile("userimg.jl")
-print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); showcompact((tot_time_userimg       / tot_time) * 100); println("%")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
 end
-print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); showcompact((tot_time_precompile    / tot_time) * 100); println("%")
+print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_precompile    / tot_time) * 100); println("%")
 end
+
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)

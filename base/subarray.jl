@@ -44,9 +44,10 @@ viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(
 # Slices may begin a section which may be followed by any number of Slices
 viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # A UnitRange can follow Slices, but only if all other indices are scalar
-viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{AbstractRange, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{AbstractRange, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -78,7 +79,7 @@ unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.i
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
 function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
-    dest = Array{T}(uninitialized, index_lengths(V.indices...))
+    dest = Array{T}(undef, index_lengths(V.indices...))
     copyto!(dest, V)
     SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
 end
@@ -213,8 +214,8 @@ function getindex(V::FastSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + V.stride1*i]
     r
 end
-# We can avoid a multiplication if the first parent index is a Colon or UnitRange
-FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, UnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
+# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange
+FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
@@ -265,6 +266,8 @@ compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
+
+elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false
@@ -350,7 +353,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Vector{Int}(uninitialized, nd)
+    dimindex = Vector{Int}(undef, nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1

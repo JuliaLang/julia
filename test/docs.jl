@@ -669,10 +669,10 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+@test occursin("cor", sprint(apropos, "pearson"))
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -1002,6 +1002,9 @@ end
 @test Text("docstring1") ≠ Text("docstring2")
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
 
 # issue 21016
 module I21016

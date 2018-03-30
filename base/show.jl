@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined values")
+
 # first a few multiline show functions for types defined before the MIME type:
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
@@ -89,8 +91,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(uninitialized, min(rows, length(t)))
-        vs = Vector{AbstractString}(uninitialized, min(rows, length(t)))
+        ks = Vector{AbstractString}(undef, min(rows, length(t)))
+        vs = Vector{AbstractString}(undef, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
@@ -205,8 +207,8 @@ IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(c
 Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
- - use `(key => value) in dict` to see if this particular combination is in the properties set
- - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+ - use `(key => value) in io` to see if this particular combination is in the properties set
+ - use `get(io, key, default)` to retrieve the most recent value for a particular key
 
 The following properties are in common use:
 
@@ -435,11 +437,15 @@ end
 show(io::IO, x::DataType) = show_datatype(io, x)
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
-# If an object with this name exists in 'from', we need to check that it's the same object
-# and that it's not deprecated (to avoid deprecating warnings when calling getfield)
-isvisible(sym::Symbol, parent::Module, from::Module) =
-    isdefined(from, sym) && !isdeprecated(from, sym) && !isdeprecated(parent, sym) &&
-        getfield(from, sym) === getfield(parent, sym)
+# If an object with this name exists in 'from', we need to check that it's the same binding
+# and that it's not deprecated.
+function isvisible(sym::Symbol, parent::Module, from::Module)
+    owner = ccall(:jl_binding_owner, Any, (Any, Any), parent, sym)
+    from_owner = ccall(:jl_binding_owner, Any, (Any, Any), from, sym)
+    return owner !== nothing && from_owner === owner &&
+        !isdeprecated(parent, sym) &&
+        isdefined(from, sym) # if we're going to return true, force binding resolution
+end
 
 function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
@@ -469,7 +475,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
     # Print module prefix unless type is visible from module passed to IOContext
     # If :module is not set, default to Main. nothing can be used to force printing prefix
     from = get(io, :module, Main)
-    if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
+    if isdefined(tn, :module) && (hidden || from === nothing || !isvisible(sym, tn.module, from))
         show(io, tn.module)
         if !hidden
             print(io, ".")
@@ -593,7 +599,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
     isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
-    printnames = Vector{String}(uninitialized, length(slotnames))
+    printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
@@ -763,8 +769,8 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 
 ## AST decoding helpers ##
 
-is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 function isidentifier(s::AbstractString)
     isempty(s) && return false
     c, rest = Iterators.peel(s)
@@ -966,7 +972,7 @@ end
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if (isa(func, Symbol) && func !== :(:)) ||
+    if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Expr) && (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
@@ -1364,7 +1370,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if prec >= 0
             show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_args = Vector{Any}(uninitialized, length(args) - 1)
+            show_args = Vector{Any}(undef, length(args) - 1)
             show_args[1] = args[1]
             show_args[2:end] = args[3:end]
             show_list(io, show_args, ' ', indent)
@@ -1940,41 +1946,6 @@ end
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
     print(io, "Iterators.Pairs(::$D, ::$I)")
 end
-
-"""
-    showcompact(x)
-    showcompact(io::IO, x)
-
-Show a compact representation of a value to `io`. If `io` is not specified, the
-default is to print to [`stdout`](@ref).
-
-This is used for printing array elements without repeating type information (which would
-be redundant with that printed once for the whole array), and without line breaks inside
-the representation of an element.
-
-To offer a compact representation different from its standard one, a custom type should
-test `get(io, :compact, false)` in its normal [`show`](@ref) method.
-
-# Examples
-```jldoctest
-julia> A = [1. 2.; 3. 4]
-2×2 Array{Float64,2}:
- 1.0  2.0
- 3.0  4.0
-
-julia> showcompact(A)
-[1.0 2.0; 3.0 4.0]
-```
-"""
-showcompact(x) = showcompact(stdout, x)
-function showcompact(io::IO, x)
-    if get(io, :compact, false)
-        show(io, x)
-    else
-        show(IOContext(io, :compact => true), x)
-    end
-end
-
 
 # printing BitArrays
 

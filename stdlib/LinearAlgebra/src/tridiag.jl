@@ -331,7 +331,7 @@ function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     for i=n-1:-1:1
         φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
     end
-    α = Matrix{T}(uninitialized, n, n)
+    α = Matrix{T}(undef, n, n)
     for i=1:n, j=1:n
         sign = (i+j)%2==0 ? (+) : (-)
         if i<j

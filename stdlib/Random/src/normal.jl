@@ -176,10 +176,10 @@ for randfun in [:randn, :randexp]
         $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
 
         # generating arrays
-        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(uninitialized, dims))
+        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(undef, dims))
         # Note that this method explicitly does not define $randfun(rng, T),
         # in order to prevent an infinite recursion.
-        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(uninitialized, dim1, dims...))
+        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(undef, dim1, dims...))
         $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
         $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
         $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)

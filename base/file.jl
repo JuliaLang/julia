@@ -37,7 +37,7 @@ import .Base.RefValue
 Get the current working directory.
 """
 function pwd()
-    b = Vector{UInt8}(uninitialized, 1024)
+    b = Vector{UInt8}(undef, 1024)
     len = RefValue{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
@@ -284,7 +284,7 @@ end
 if Sys.iswindows()
 
 function tempdir()
-    temppath = Vector{UInt16}(uninitialized, 32767)
+    temppath = Vector{UInt16}(undef, 32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -296,7 +296,7 @@ end
 const temp_prefix = cwstring("jl_")
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Vector{UInt16}(uninitialized, 32767)
+    tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = coalesce(findfirst(iszero,tname), 0)-1
     if uunique == 0 || lentname <= 0
@@ -312,7 +312,7 @@ function mktemp(parent=tempdir())
 end
 
 function mktempdir(parent=tempdir())
-    seed::UInt32 = Base.Crand(UInt32)
+    seed::UInt32 = Libc.rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1

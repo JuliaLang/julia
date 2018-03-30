@@ -97,6 +97,8 @@ abstract type AbstractRange{T} <: AbstractArray{T,1} end
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
 RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
+convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)
+
 ## ordinal ranges
 
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
@@ -256,8 +258,10 @@ end
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
 _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
-    _linspace(Float64, start, stop, len, 1)
-## for Float16, Float32, and Float64 see twiceprecision.jl
+    _linspace(float(T), start, stop, len)
+## for Float16, Float32, and Float64 we hit twiceprecision.jl to lift to higher precision StepRangeLen
+# for all other types we fall back to a plain old LinRange
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where T = LinRange{T}(start, stop, len)
 
 function show(io::IO, r::LinRange)
     print(io, "range(")
@@ -510,7 +514,7 @@ function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
 end
 
 function unsafe_getindex(r::LinRange, i::Integer)
-    lerpi.(i-1, r.lendiv, r.start, r.stop)
+    lerpi(i-1, r.lendiv, r.start, r.stop)
 end
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
@@ -856,7 +860,7 @@ function vcat(rs::AbstractRange{T}...) where T
     for ra in rs
         n += length(ra)
     end
-    a = Vector{T}(uninitialized, n)
+    a = Vector{T}(undef, n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x
@@ -917,7 +921,7 @@ in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r
 in(x::Real, r::AbstractRange{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
-in(x::Char, r::AbstractRange{Char}) =
+in(x::AbstractChar, r::AbstractRange{<:AbstractChar}) =
     !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(Int(x) - Int(first(r)), step(r)) == 0)
 

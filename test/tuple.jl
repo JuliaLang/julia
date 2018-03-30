@@ -9,11 +9,6 @@ struct BitPerm_19352
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
 
-# #17198
-@test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
-# #21238
-@test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
-
 @testset "conversion and construction" begin
     @test convert(Tuple, ()) === ()
     @test convert(Tuple, (1, 2)) === (1, 2)
@@ -41,17 +36,23 @@ end
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
 
-    # TODO: seems like these all should throw BoundsError?
     @test_throws MethodError convert(Tuple{Int}, ())
+    @test_throws MethodError convert(Tuple{Any}, ())
     @test_throws MethodError convert(Tuple{Int, Vararg{Int}}, ())
-    @test_throws BoundsError convert(Tuple{}, (1, 2, 3))
-    @test_throws BoundsError convert(Tuple{}, (1.0, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1.0, 2, 3))
     @test_throws MethodError convert(NTuple{3, Int}, ())
     @test_throws MethodError convert(NTuple{3, Int}, (1, 2))
-    @test_throws BoundsError convert(NTuple{3, Int}, (1, 2, 3, 4))
+    @test_throws MethodError convert(NTuple{3, Int}, (1, 2, 3, 4))
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, ())
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2))
-    @test_throws BoundsError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    # #17198
+    @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+    # #21238
+    @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
+    # issue #26589
+    @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -405,24 +406,24 @@ end
 end
 
 @testset "find" begin
-    @test findall(equalto(1), (1, 2)) == [1]
-    @test findall(equalto(1), (1, 1)) == [1, 2]
-    @test isempty(findall(equalto(1), ()))
-    @test isempty(findall(equalto(1), (2, 3)))
+    @test findall(isequal(1), (1, 2)) == [1]
+    @test findall(isequal(1), (1, 1)) == [1, 2]
+    @test isempty(findall(isequal(1), ()))
+    @test isempty(findall(isequal(1), (2, 3)))
 
-    @test findfirst(equalto(1), (1, 2)) == 1
-    @test findlast(equalto(1), (1, 2)) == 1
-    @test findfirst(equalto(1), (1, 1)) == 1
-    @test findlast(equalto(1), (1, 1)) == 2
-    @test findfirst(equalto(1), ()) === nothing
-    @test findlast(equalto(1), ()) === nothing
-    @test findfirst(equalto(1), (2, 3)) === nothing
-    @test findlast(equalto(1), (2, 3)) === nothing
+    @test findfirst(isequal(1), (1, 2)) == 1
+    @test findlast(isequal(1), (1, 2)) == 1
+    @test findfirst(isequal(1), (1, 1)) == 1
+    @test findlast(isequal(1), (1, 1)) == 2
+    @test findfirst(isequal(1), ()) === nothing
+    @test findlast(isequal(1), ()) === nothing
+    @test findfirst(isequal(1), (2, 3)) === nothing
+    @test findlast(isequal(1), (2, 3)) === nothing
 
-    @test findnext(equalto(1), (1, 2), 1) == 1
-    @test findprev(equalto(1), (1, 2), 2) == 1
-    @test findnext(equalto(1), (1, 1), 2) == 2
-    @test findprev(equalto(1), (1, 1), 1) == 1
-    @test findnext(equalto(1), (2, 3), 1) === nothing
-    @test findprev(equalto(1), (2, 3), 2) === nothing
+    @test findnext(isequal(1), (1, 2), 1) == 1
+    @test findprev(isequal(1), (1, 2), 2) == 1
+    @test findnext(isequal(1), (1, 1), 2) == 2
+    @test findprev(isequal(1), (1, 1), 1) == 1
+    @test findnext(isequal(1), (2, 3), 1) === nothing
+    @test findprev(isequal(1), (2, 3), 2) === nothing
 end

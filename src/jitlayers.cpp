@@ -1048,6 +1048,12 @@ static void handleAllErrors(ArchiveWriterError E, HandlerT Handler) {
         Handler(E);
 }
 #endif
+#if JL_LLVM_VERSION >= 60000
+static void reportWriterError(const ErrorInfoBase &E) {
+    std::string err = E.message();
+    jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
+}
+#else
 static void reportWriterError(ArchiveWriterError E) {
     std::string ContextStr = E.first.str();
     std::string err;
@@ -1056,6 +1062,7 @@ static void reportWriterError(ArchiveWriterError E) {
     err += E.second.message();
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
+#endif
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup

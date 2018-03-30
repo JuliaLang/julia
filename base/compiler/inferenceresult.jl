@@ -23,7 +23,7 @@ function get_argtypes(result::InferenceResult)
     toplevel = !isa(linfo.def, Method)
     atypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
     nargs::Int = toplevel ? 0 : linfo.def.nargs
-    args = Vector{Any}(uninitialized, nargs)
+    args = Vector{Any}(undef, nargs)
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1
@@ -46,10 +46,10 @@ function get_argtypes(result::InferenceResult)
         for i = 1:laty
             atyp = atypes[i]
             if i == laty && isvarargtype(atyp)
-                atyp = unwrap_unionall(atyp).parameters[1]
+                atyp = unwrapva(atyp)
                 atail -= 1
             end
-            if isa(atyp, TypeVar)
+            while isa(atyp, TypeVar)
                 atyp = atyp.ub
             end
             if isa(atyp, DataType) && isdefined(atyp, :instance)

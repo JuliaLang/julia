@@ -257,7 +257,7 @@ asm(
 
 #elif defined(_CPU_ARM_)
 
-#define MAX_INTERP_STATE_SIZE 32
+#define MAX_INTERP_STATE_SIZE 48
 
 // Check that the interpreter state can fit
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,

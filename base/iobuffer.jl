@@ -435,22 +435,19 @@ read(io::GenericIOBuffer) = read!(io,StringVector(bytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
 
-function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
+function occursin(delim::UInt8, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,bytesavailable(buf))
-    q == C_NULL && return nothing
-    return Int(q-p+1)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    return q != C_NULL
 end
 
-function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
+function occursin(delim::UInt8, buf::GenericIOBuffer)
     data = buf.data
-    for i = buf.ptr : buf.size
+    for i = buf.ptr:buf.size
         @inbounds b = data[i]
-        if b == delim.x
-            return i - buf.ptr + 1
-        end
+        b == delim && return true
     end
-    return nothing
+    return false
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)

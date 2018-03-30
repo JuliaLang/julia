@@ -122,7 +122,7 @@ end
 @test typeof(@inferred(reduce(+, 0.0, ones(3,3,3), dims=1))) == Array{Float64, 3}
 
 @testset "empty cases" begin
-    A = Matrix{Int}(uninitialized, 0,1)
+    A = Matrix{Int}(undef, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
@@ -336,6 +336,18 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
     @test_throws ArgumentError sum(abs2, Areduc, dims=region)
     @test_throws ArgumentError maximum(abs, Areduc, dims=region)
     @test_throws ArgumentError minimum(abs, Areduc, dims=region)
+end
+
+# issue #26488
+@testset "don't map over initial values not provided" begin
+    @test sum(x->x+1, [1], dims=1)[1] === sum(x->x+1, [1]) === 2
+    @test prod(x->x+1, [1], dims=1)[1] === prod(x->x+1, [1]) === 2
+    @test mapreduce(x->x+1, +, [1], dims=1)[1] === mapreduce(x->x+1, +, [1]) === 2
+    @test mapreduce(x->x+1, *, [1], dims=1)[1] === mapreduce(x->x+1, *, [1]) === 2
+    @test mapreduce(!, &, [false], dims=1)[1] === mapreduce(!, &, [false]) === true
+    @test mapreduce(!, |, [true], dims=1)[1] === mapreduce(!, |, [true]) === false
+    @test mapreduce(x->1/x, max, [1], dims=1)[1] === mapreduce(x->1/x, max, [1]) === 1.0
+    @test mapreduce(x->-1/x, min, [1], dims=1)[1] === mapreduce(x->-1/x, min, [1]) === -1.0
 end
 
 # check type of result

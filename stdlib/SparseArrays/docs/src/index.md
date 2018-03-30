@@ -211,7 +211,7 @@ SparseArrays.nnz
 SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
-SparseArrays.blkdiag
+SparseArrays.blockdiag
 SparseArrays.sprand
 SparseArrays.sprandn
 SparseArrays.nonzeros

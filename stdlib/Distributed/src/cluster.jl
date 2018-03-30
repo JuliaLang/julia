@@ -590,8 +590,8 @@ end
 
 additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
-    io_objs = Vector{Any}(uninitialized, np)
-    addresses = Vector{Any}(uninitialized, np)
+    io_objs = Vector{Any}(undef, np)
+    addresses = Vector{Any}(undef, np)
 
     for i in 1:np
         io = open(detach(cmd), "r+")
@@ -1124,7 +1124,7 @@ function init_parallel()
     register_worker(LPROC)
 end
 
-write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
+write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
 function process_opts(opts)
     # startup worker.

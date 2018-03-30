@@ -190,11 +190,11 @@ for (name, f) in l
     @test read(io(), Int) == read(filename,Int)
     s1 = io()
     s2 = IOBuffer(text)
-    @test read!(s1, Vector{UInt32}(uninitialized, 2)) == read!(s2, Vector{UInt32}(uninitialized, 2))
+    @test read!(s1, Vector{UInt32}(undef, 2)) == read!(s2, Vector{UInt32}(undef, 2))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 5)) == read!(s2, Vector{UInt8}(uninitialized, 5))
+    @test read!(s1, Vector{UInt8}(undef, 5)) == read!(s2, Vector{UInt8}(undef, 5))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 1)) == read!(s2, Vector{UInt8}(uninitialized, 1))
+    @test read!(s1, Vector{UInt8}(undef, 1)) == read!(s2, Vector{UInt8}(undef, 1))
     @test eof(s1)
     @test_throws EOFError read(s1, UInt8)
     @test eof(s1)
@@ -203,16 +203,16 @@ for (name, f) in l
 
     verbose && println("$name eof...")
     n = length(text) - 1
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); !eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); !eof(s))
     n = length(text)
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); eof(s))
     n = length(text) + 1
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
 
     old_text = text
     cleanup()
@@ -244,8 +244,8 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(uninitialized, n)
-            a2 = Vector{UInt8}(uninitialized, n)
+            a1 = Vector{UInt8}(undef, n)
+            a2 = Vector{UInt8}(undef, n)
             s1 = io()
             s2 = IOBuffer(text)
             n1 = readbytes!(s1, a1)
@@ -262,14 +262,14 @@ for (name, f) in l
         verbose && println("$name read!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l]
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(filename, Vector{UInt8}(uninitialized, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(IOBuffer(text), Vector{UInt8}(undef, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(filename, Vector{UInt8}(undef, n))
 
             cleanup()
         end
-        @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, length(text)+1))
+        @test_throws EOFError read!(io(), Vector{UInt8}(undef, length(text)+1))
 
 
         verbose && println("$name readuntil...")
@@ -315,7 +315,7 @@ for (name, f) in l
 
     if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(uninitialized, 4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1

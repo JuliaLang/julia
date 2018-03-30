@@ -7,7 +7,7 @@ mutable struct Buffer
     size::Int
 
     function Buffer(bufsize)
-        data = Vector{UInt8}(uninitialized, bufsize)
+        data = Vector{UInt8}(undef, bufsize)
         return new(data, pointer(data), 0)
     end
 end

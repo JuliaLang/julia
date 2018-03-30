@@ -200,8 +200,8 @@ module IteratorsMD
     Linear index to cartesian index conversion exploits the fact that a
     `CartesianIndices` is an `AbstractArray` and can be indexed linearly:
 
-    ```jldoctest subarray
-    julia> cartesian = CartesianIndices(1:3,1:2)
+    ```jldoctest
+    julia> cartesian = CartesianIndices((1:3, 1:2))
     3×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
      CartesianIndex(1, 1)  CartesianIndex(1, 2)
      CartesianIndex(2, 1)  CartesianIndex(2, 2)
@@ -220,12 +220,8 @@ module IteratorsMD
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
         CartesianIndices{N,typeof(inds)}(inds)
-    CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} =
-        CartesianIndices(inds)
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
         CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
-    CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} =
-        CartesianIndices(inds)
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
@@ -388,8 +384,8 @@ module IteratorsMD
 
     The main purpose of this type is intuitive conversion from cartesian to linear indexing:
 
-    ```jldoctest subarray
-    julia> linear = LinearIndices(1:3,1:2)
+    ```jldoctest
+    julia> linear = LinearIndices((1:3, 1:2))
     LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
      1  4
      2  5
@@ -406,9 +402,7 @@ module IteratorsMD
     LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
     LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} = LinearIndices(CartesianIndices(inds))
     LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
     LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
     LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
@@ -1193,13 +1187,13 @@ julia> fill!(A, 2.)
  2.0  2.0  2.0
  2.0  2.0  2.0
 
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(uninitialized, 3), a); a[1] = 2; A
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
  [2, 1, 1]
  [2, 1, 1]
  [2, 1, 1]
 
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(uninitialized, 3), f())
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
 3-element Array{Int64,1}:
  1
  1
@@ -1359,7 +1353,7 @@ julia> src = reshape(Vector(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(uninitialized, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
 
 julia> circcopy!(dest, src)
 OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
@@ -1866,7 +1860,7 @@ julia> extrema(A, (1,2))
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
     sz[[dims...]] = 1
-    B = Array{Tuple{eltype(A),eltype(A)}}(uninitialized, sz...)
+    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
     return extrema!(B, A)
 end
 
@@ -1892,8 +1886,10 @@ end
 end
 
 # Show for pairs() with Cartesian indicies. Needs to be here rather than show.jl for bootstrap order
-function Base.showarg(io::IO, r::Union{Iterators.Pairs{<:Integer, <:Any, <:Any, T} where T <: Union{AbstractVector, Tuple},
-                                       Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T} where T <: AbstractArray}, toplevel)
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{AbstractVector, Tuple}
+    print(io, "pairs(::$T)")
+end
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T <: AbstractArray
     print(io, "pairs(::$T)")
 end
 

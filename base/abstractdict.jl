@@ -543,7 +543,7 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Vector{Any}
     count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(uninitialized, 32), 0, 0)
+    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(undef, 32), 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()

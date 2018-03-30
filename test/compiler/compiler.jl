@@ -890,7 +890,7 @@ end
 f22290() = return 3
 for i in 1:3
     ir = sprint(io -> code_llvm(io, f22290, Tuple{}))
-    @test contains(ir, "julia_f22290")
+    @test occursin("julia_f22290", ir)
 end
 
 # constant inference of isdefined
@@ -1091,8 +1091,8 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
-@eval test_const_return(()->Core.sizeof($(Array{Int,0}(uninitialized))), Tuple{}, sizeof(Int))
-@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(uninitialized, 2, 2))), Tuple{}, 4 * 2 * 2)
+@eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
+@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)

@@ -33,7 +33,7 @@ _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
 
 function replace_colon(A::AbstractArray, I)
-    Iout = Vector{Any}(uninitialized, length(I))
+    Iout = Vector{Any}(undef, length(I))
     I == (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
@@ -52,7 +52,7 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
-    Ac = Array{eltype(A)}(uninitialized, size(A))
+    Ac = Array{eltype(A)}(undef, size(A))
     copyto!(Ac, A)
 end
 
@@ -577,11 +577,18 @@ let
 end
 
 # ref issue #17351
-@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+@test @inferred(reverse(view([1 2; 3 4], :, 1), dims=1)) == [3, 1]
 
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
+end
+
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
 end
 
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4

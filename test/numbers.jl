@@ -410,14 +410,14 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(showcompact, 666666.6) == "6.66667e5"
-    @test sprint(showcompact, 666666.049) == "666666.0"
-    @test sprint(showcompact, 666665.951) == "666666.0"
-    @test sprint(showcompact, 66.66666) == "66.6667"
-    @test sprint(showcompact, -666666.6) == "-6.66667e5"
-    @test sprint(showcompact, -666666.049) == "-666666.0"
-    @test sprint(showcompact, -666665.951) == "-666666.0"
-    @test sprint(showcompact, -66.66666) == "-66.6667"
+    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
+    @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
+    @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
+    @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
+    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
+    @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
+    @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
+    @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
 
     @test repr(1.0f0) == "1.0f0"
     @test repr(-1.0f0) == "-1.0f0"
@@ -2484,8 +2484,8 @@ end
 f20065(B, i) = UInt8(B[i])
 @testset "issue 20065" begin
     # f20065 must be called from global scope to exhibit the buggy behavior
-    for B in (Vector{Bool}(uninitialized, 10),
-                Matrix{Bool}(uninitialized, 10,10),
+    for B in (Vector{Bool}(undef, 10),
+                Matrix{Bool}(undef, 10,10),
                 reinterpret(Bool, rand(UInt8, 10)))
         @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
         for i in 1:length(B)
@@ -2564,7 +2564,7 @@ end
                             (-T(Inf), "-Inf")]
                 @assert x isa T
                 @test string(x) == sx
-                @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+                @test sprint(show, x, context=:compact => true) == sx
                 @test sprint(print, x) == sx
             end
         end

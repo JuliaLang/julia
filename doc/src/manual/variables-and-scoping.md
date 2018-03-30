@@ -359,11 +359,11 @@ something like `let x = x` since the two `x` variables are distinct and have sep
 Here is an example where the behavior of `let` is needed:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -378,13 +378,13 @@ variable `i`, so the two closures behave identically. We can use `let` to create
 for `i`:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            let i = i
                Fs[i] = ()->i
            end
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -418,7 +418,7 @@ introduced in their body scopes are freshly allocated for each loop iteration, a
 were surrounded by a `let` block:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2);
+julia> Fs = Vector{Any}(undef, 2);
 
 julia> for j = 1:2
            Fs[j] = ()->j

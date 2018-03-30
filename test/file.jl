@@ -816,7 +816,7 @@ end
 ###################
 
 function test_LibcFILE(FILEp)
-    buf = Vector{UInt8}(uninitialized, 8)
+    buf = Vector{UInt8}(undef, 8)
     str = ccall(:fread, Csize_t, (Ptr{Cvoid}, Csize_t, Csize_t, Ptr{Cvoid}), buf, 1, 8, FILEp)
     @test String(buf) == "Hello, w"
     @test position(FILEp) == 8

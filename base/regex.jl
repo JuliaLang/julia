@@ -141,19 +141,17 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-function contains(s::AbstractString, r::Regex, offset::Integer=0)
+function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
-function contains(s::SubString, r::Regex, offset::Integer=0)
+function occursin(r::Regex, s::SubString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
                      r.match_data)
 end
-
-(r::Regex)(s) = contains(s, r)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -212,8 +210,11 @@ function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
     end
     opts = re.match_options
     compile(re)
-    PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
-        ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
+    if PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
+        (Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)
+    else
+        nothing
+    end
 end
 findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"

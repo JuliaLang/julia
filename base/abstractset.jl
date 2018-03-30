@@ -109,7 +109,8 @@ Maintain order with arrays.
 """
 intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
 intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
-intersect!(s::AbstractSet, itr) = intersect!(s, union!(emptymutable(s), itr))
+intersect!(s::AbstractSet, itr) =
+    intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
 
 """
     setdiff(s, itrs...)
@@ -215,6 +216,16 @@ false
 ```
 """
 function issubset(l, r)
+
+    rlen = length(r)
+    #This threshold was empirically determined by repeatedly
+    #sampling using these two methods.
+    lenthresh = 70
+
+    if rlen > lenthresh && !isa(r, AbstractSet)
+       return issubset(l, Set(r))
+    end
+
     for elt in l
         if !in(elt, r)
             return false

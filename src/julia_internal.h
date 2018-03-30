@@ -531,7 +531,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
                                              int isunboxed, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
-extern union jl_typemap_t jl_cfunction_list;
+extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;

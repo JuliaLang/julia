@@ -636,9 +636,10 @@ end
 
 # range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
+function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
-    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len)
+    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
     imin = round(Int, tmin*(len-1)+1)
     imin = clamp(imin, 1, Int(len))
@@ -650,7 +651,7 @@ function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, d
 end
 
 # For len < 2
-function _linspace1(::Type{T}, start, stop, len::Integer) where T
+function _linspace1(::Type{T}, start, stop, len::Integer) where T<:IEEEFloat
     len >= 0 || throw(ArgumentError("range($start, stop=$stop, length=$len): negative length"))
     if len <= 1
         len == 1 && (start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ")))

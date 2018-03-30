@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
 
 # starts with and ends with predicates
 
@@ -185,7 +185,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (code points) long. If `s` is already `n` characters long, an equal
@@ -197,12 +197,12 @@ julia> lpad("March", 10)
 "     March"
 ```
 """
-lpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = lpad(string(s), n, string(p))
+lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s), n, string(p))
 
 function lpad(
-    s::Union{Char,AbstractString},
+    s::Union{AbstractChar,AbstractString},
     n::Integer,
-    p::Union{Char,AbstractString}=' ',
+    p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
     m = n - length(s)
     m ≤ 0 && return string(s)
@@ -212,7 +212,7 @@ function lpad(
 end
 
 """
-    rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (code points) long. If `s` is already `n` characters long, an equal
@@ -224,12 +224,12 @@ julia> rpad("March", 20)
 "March               "
 ```
 """
-rpad(s, n::Integer, p::Union{Char,AbstractString}=' ') = rpad(string(s), n, string(p))
+rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s), n, string(p))
 
 function rpad(
-    s::Union{Char,AbstractString},
+    s::Union{AbstractChar,AbstractString},
     n::Integer,
-    p::Union{Char,AbstractString}=' ',
+    p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
     m = n - length(s)
     m ≤ 0 && return string(s)
@@ -239,17 +239,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+    split(s::AbstractString; limit::Integer=0, keep::Bool=false)
+    split(s::AbstractString, chars; limit::Integer=0, keep::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
 character delimiters, which may be specified in any of the formats allowed by
 [`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
 or as a single character or collection of characters.
 
-If `chars` is omitted, it defaults to the set of all space characters, and
-`keep` is taken to be `false`. The two keyword arguments are optional: they are a
-maximum size for the result and a flag determining whether empty fields should be kept in
-the result.
+If `chars` is omitted, it defaults to the set of all space characters.
+
+The optional keyword arguments are:
+ - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
+ - `keep`: whether empty fields should be kept in the result. Default is `false` without
+   a `chars` argument, `true` with a `chars` argument.
 
 # Examples
 ```jldoctest
@@ -267,12 +270,12 @@ function split end
 split(str::T, splitter;
       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
     _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
-split(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
-split(str::T, splitter::Char;
+    _split(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+split(str::T, splitter::AbstractChar;
       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+    _split(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = 1 # firstindex(str)
@@ -334,12 +337,12 @@ function rsplit end
 
 rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
     _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
-rsplit(str::T, splitter::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}};
+rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
        limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, occursin(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
-rsplit(str::T, splitter::Char;
+  _rsplit(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+rsplit(str::T, splitter::AbstractChar;
        limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, equalto(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+  _rsplit(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     n = lastindex(str)
@@ -362,13 +365,13 @@ _replace(io, repl::Function, str, r, pattern) =
 _replace(io, repl::Function, str, r, pattern::Function) =
     print(io, repl(str[first(r)]))
 
-replace(str::String, pat_repl::Pair{Char}; count::Integer=typemax(Int)) =
-    replace(str, equalto(first(pat_repl)) => last(pat_repl); count=count)
+replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
+    replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
 
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{Char}},
-                                            AbstractVector{Char},Set{Char}}};
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
+                                            AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
         count::Integer=typemax(Int)) =
-    replace(str, occursin(first(pat_repl)) => last(pat_repl), count=count)
+    replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
 
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
@@ -410,7 +413,7 @@ If `count` is provided, replace at most `count` occurrences.
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
 where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
-character (when `pat` is a `Char` or a collection of `Char`).
+character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
@@ -473,7 +476,7 @@ julia> hex2bytes(a)
 function hex2bytes end
 
 hex2bytes(s::AbstractString) = hex2bytes(String(s))
-hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(uninitialized, length(s) >> 1), s)
+hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
 
 _firstbyteidx(s::String) = 1
 _firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
@@ -525,7 +528,7 @@ julia> bytes2hex(b)
 ```
 """
 function bytes2hex(a::AbstractArray{UInt8})
-    b = Vector{UInt8}(uninitialized, 2*length(a))
+    b = Vector{UInt8}(undef, 2*length(a))
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]

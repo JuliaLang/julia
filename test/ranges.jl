@@ -249,14 +249,14 @@ end
         @test length(0.0:-0.5) == 0
         @test length(1:2:0) == 0
     end
-    @testset "findall(::OccursIn, ::Array)" begin
-        @test findall(occursin(3:20), [5.2, 3.3]) == findall(occursin(Vector(3:20)), [5.2, 3.3])
+    @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
+        @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
 
         let span = 5:20,
             r = -7:3:42
-            @test findall(occursin(span), r) == 5:10
+            @test findall(in(span), r) == 5:10
             r = 15:-2:-38
-            @test findall(occursin(span), r) == 1:6
+            @test findall(in(span), r) == 1:6
         end
     end
     @testset "reverse" begin
@@ -1109,16 +1109,16 @@ end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
-        @test findall(occursin(r), r) === findall(occursin(1:length(r)), r) ===
-              findall(occursin(r), 1:length(r)) === 1:length(r)
+        @test findall(in(r), r) === findall(in(1:length(r)), r) ===
+              findall(in(r), 1:length(r)) === 1:length(r)
         io = IOBuffer()
         show(io, r)
         str = String(take!(io))
         @test str == "Base.OneTo(3)"
     end
     let r = Base.OneTo(7)
-        @test findall(occursin(2:(length(r) - 1)), r) === 2:(length(r) - 1)
-        @test findall(occursin(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
+        @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
+        @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
 end
 
@@ -1223,4 +1223,18 @@ end
     @test_throws ArgumentError range(1, step=4)
     @test_throws ArgumentError range(nothing, length=2)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+end
+
+@testset "issue #23300#issuecomment-371575548" begin
+    for (start, stop) in ((-5, 5), (-5.0, 5), (-5, 5.0), (-5.0, 5.0))
+        @test @inferred(range(big(start), stop=big(stop), length=11)) isa LinRange{BigFloat}
+        @test Float64.(@inferred(range(big(start), stop=big(stop), length=11))) == range(start, stop=stop, length=11)
+        @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
+    end
+end
+
+@testset "Issue #26532" begin
+    x = range(3, stop=3, length=5)
+    @test step(x) == 0.0
+    @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end

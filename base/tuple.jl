@@ -159,7 +159,7 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i=1:n
         A[i] = f(t[i])
     end
@@ -175,7 +175,7 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
@@ -191,7 +191,7 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
 end
 function map(f, t1::Any16, t2::Any16, ts::Any16...)
     n = length(t1)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end

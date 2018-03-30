@@ -1,0 +1,161 @@
+From affdc737e799481828ec327d9ee7ead64bdb7ba2 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Sat, 10 Mar 2018 17:24:31 -0500
+Subject: [PATCH] [JumpThreading] Don't select an edge that we know we can't
+ thread
+
+Summary:
+In r312664 (D36404), JumpThreading stopped threading edges into
+loop headers. Unfortunately, I observed a significant performance
+regression as a result of this change. Upon further investigation,
+the problematic pattern looked something like this (after
+many high level optimizations):
+
+```
+while (true) {
+    bool cond = ...;
+    if (!cond) {
+        <body>
+    }
+    if (cond)
+        break;
+}
+```
+
+Now, naturally we want jump threading to essentially eliminate the
+second if check and hook up the edges appropriately. However, the
+above mentioned change, prevented it from doing this because it would
+have to thread an edge into the loop header.
+
+Upon further investigation, what is happening is that since both branches
+are threadable, JumpThreading picks one of them at arbitrarily. In my
+case, because of the way that the IR ended up, it tended to pick
+the one to the loop header, bailing out immediately after. However,
+if it had picked the one to the exit block, everything would have
+worked out fine (because the only remaining branch would then be folded,
+not thraded which is acceptable).
+
+Thus, to fix this problem, we can simply eliminate loop headers from
+consideration as possible threading targets earlier, to make sure that
+if there are multiple eligible branches, we can still thread one of
+the ones that don't target a loop header.
+
+Reviewers: hfinkel, kparzysz, haicheng, bmakam
+
+Subscribers: vchuravy, brzycki, mcrosier, llvm-commits
+
+Differential Revision: https://reviews.llvm.org/D42260
+---
+ lib/Transforms/Scalar/JumpThreading.cpp      | 15 +++++-
+ test/Transforms/JumpThreading/header-succ.ll | 72 ++++++++++++++++++++++++++++
+ 2 files changed, 86 insertions(+), 1 deletion(-)
+ create mode 100644 test/Transforms/JumpThreading/header-succ.ll
+
+diff --git a/lib/Transforms/Scalar/JumpThreading.cpp b/lib/Transforms/Scalar/JumpThreading.cpp
+index 141c9938bf8..ccca37ce116 100644
+--- a/lib/Transforms/Scalar/JumpThreading.cpp
++++ b/lib/Transforms/Scalar/JumpThreading.cpp
+@@ -1629,8 +1629,21 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
+   // threadable destination (the common case) we can avoid this.
+   BasicBlock *MostPopularDest = OnlyDest;
+ 
+-  if (MostPopularDest == MultipleDestSentinel)
++  if (MostPopularDest == MultipleDestSentinel) {
++    // Remove any loop headers from the Dest list, ThreadEdge conservatively
++    // won't process them, but we might have other destination that are eligible
++    // and we still want to process.
++    erase_if(PredToDestList,
++             [&](const std::pair<BasicBlock *, BasicBlock *> &PredToDest) {
++               return LoopHeaders.count(PredToDest.second) != 0;
++             });
++
++    if (PredToDestList.empty()) {
++      return false;
++    }
++
+     MostPopularDest = FindMostPopularDest(BB, PredToDestList);
++  }
+ 
+   // Now that we know what the most popular destination is, factor all
+   // predecessors that will jump to it into a single predecessor.
+diff --git a/test/Transforms/JumpThreading/header-succ.ll b/test/Transforms/JumpThreading/header-succ.ll
+new file mode 100644
+index 00000000000..1e65e737d4a
+--- /dev/null
++++ b/test/Transforms/JumpThreading/header-succ.ll
+@@ -0,0 +1,72 @@
++; RUN: opt -S -jump-threading < %s | FileCheck %s
++
++; Check that the heuristic for avoiding accidental introduction of irreducible
++; loops doesn't also prevent us from threading simple constructs where this
++; isn't a problem.
++
++declare void @opaque_body()
++
++define void @jump_threading_loopheader() {
++; CHECK-LABEL: @jump_threading_loopheader
++top:
++    br label %entry
++
++entry:
++    %ind = phi i32 [0, %top], [%nextind, %latch]
++    %nextind = add i32 %ind, 1
++    %cmp = icmp ule i32 %ind, 10
++; CHECK: br i1 %cmp, label %latch, label %exit
++    br i1 %cmp, label %body, label %latch
++
++body:
++    call void @opaque_body()
++; CHECK: br label %entry
++    br label %latch
++
++latch:
++    %cond = phi i2 [1, %entry], [2, %body]
++    switch i2 %cond, label %unreach [
++        i2 2, label %entry
++        i2 1, label %exit
++    ]
++
++unreach:
++    unreachable
++
++exit:
++    ret void
++}
++
++; We also need to check the opposite order of the branches, in the switch
++; instruction because jump-threading relies on that to decide which edge to
++; try to thread first
++define void @jump_threading_loopheader2() {
++; CHECK-LABEL: @jump_threading_loopheader2
++top:
++    br label %entry
++
++entry:
++    %ind = phi i32 [0, %top], [%nextind, %latch]
++    %nextind = add i32 %ind, 1
++    %cmp = icmp ule i32 %ind, 10
++; CHECK: br i1 %cmp, label %latch, label %exit
++    br i1 %cmp, label %body, label %latch
++
++body:
++    call void @opaque_body()
++; CHECK: br label %entry
++    br label %latch
++
++latch:
++    %cond = phi i2 [1, %entry], [2, %body]
++    switch i2 %cond, label %unreach [
++        i2 2, label %entry
++        i2 1, label %exit
++    ]
++
++unreach:
++    unreachable
++
++exit:
++    ret void
++}
+-- 
+2.16.2
+

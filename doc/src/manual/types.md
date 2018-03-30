@@ -247,7 +247,7 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
@@ -372,8 +372,8 @@ julia> foo.qux
 Composite objects declared with `struct` are *immutable*; they cannot be modified
 after construction. This may seem odd at first, but it has several advantages:
 
-  * It can be more efficient. Some structs can be packed efficiently into arrays, and in some cases the
-    compiler is able to avoid allocating immutable objects entirely.
+  * It can be more efficient. Some structs can be packed efficiently into arrays, and
+    in some cases the compiler is able to avoid allocating immutable objects entirely.
   * It is not possible to violate the invariants provided by the type's constructors.
   * Code using immutable objects can be easier to reason about.
 
@@ -433,18 +433,22 @@ over time. If they would be considered identical, the type should probably be im
 
 To recap, two essential properties define immutability in Julia:
 
-  * An object with an immutable type is passed around (both in assignment statements and in function
-    calls) by copying, whereas a mutable type is passed around by reference.
-  * It is not permitted to modify the fields of a composite immutable type.
-
-It is instructive, particularly for readers whose background is C/C++, to consider why these two
-properties go hand in hand.  If they were separated, i.e., if the fields of objects passed around
-by copying could be modified, then it would become more difficult to reason about certain instances
-of generic code.  For example, suppose `x` is a function argument of an abstract type, and suppose
-that the function changes a field: `x.isprocessed = true`.  Depending on whether `x` is passed
-by copying or by reference, this statement may or may not alter the actual argument in the calling
-routine.  Julia sidesteps the possibility of creating functions with unknown effects in this scenario
-by forbidding modification of fields of objects passed around by copying.
+  * It is not permitted to modify the value of an immutable type.
+    * For bits types this means that the bit pattern of a value once set will never change
+      and that value is the identity of a bits type.
+    * For composite  types, this means that the identity of the values of its fields will
+      never change. When the fields are bits types, that means their bits will never change,
+      for fields whose values are mutable types like arrays, that means the fields will
+      always refer to the same mutable value even though that mutable value's content may
+      itself be modified.
+  * An object with an immutable type may be copied freely by the compiler since its
+    immutabity makes it impossible to programmatically distinguish between the original
+    object and a copy.
+    * In particular, this means that small enough immutable values like integers and floats
+      are typically passed to functions in registers (or stack allocated).
+    * Mutable values, on the other hand are heap-allocated and passed to
+      functions as pointers to heap-allocated values except in cases where the compiler
+      is sure that there's no way to tell that this is not what is happening.
 
 ## Declared Types
 
@@ -1187,7 +1191,7 @@ Closest candidates are:
   supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
-## Custom pretty-printing
+## [Custom pretty-printing](@id man-custom-pretty-printing)
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
 overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
@@ -1320,6 +1324,37 @@ julia> :($a + 2)
 julia> :($a == 2)
 :(3.0 * exp(4.0im) == 2)
 ```
+
+In some cases, it is useful to adjust the behavior of `show` methods depending
+on the context. This can be achieved via the [`IOContext`](@ref) type, which allows
+passing contextual properties together with a wrapped IO stream.
+For example, we can build a shorter representation in our `show` method
+when the `:compact` property is set to `true`, falling back to the long
+representation if the property is `false` or absent:
+```jldoctest polartype
+julia> function Base.show(io::IO, z::Polar)
+           if get(io, :compact, false)
+               print(io, z.r, "ℯ", z.Θ, "im")
+           else
+               print(io, z.r, " * exp(", z.Θ, "im)")
+           end
+       end
+```
+
+This new compact representation will be used when the passed IO stream is an `IOContext`
+object with the `:compact` property set. In particular, this is the case when printing
+arrays with multiple columns (where horizontal space is limited):
+```jldoctest polartype
+julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
+3.0ℯ4.0im
+
+julia> [Polar(3, 4.0) Polar(4.0,5.3)]
+1×2 Array{Polar{Float64},2}:
+ 3.0ℯ4.0im  4.0ℯ5.3im
+```
+
+See the [`IOContext`](@ref) documentation for a list of common properties which can be used
+to adjust printing.
 
 ## "Value types"
 

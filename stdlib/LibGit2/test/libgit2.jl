@@ -153,8 +153,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_SSH), f) > 0
-    @test findfirst(equalto(LibGit2.Consts.FEATURE_HTTPS), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) > 0
 end
 
 @testset "OID" begin
@@ -726,6 +726,11 @@ mktempdir() do dir
                 @test repo_str == "LibGit2.GitRepo($(sprint(show,LibGit2.path(repo))))"
             end
         end
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+            @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
+        end
     end
 
     @testset "Update cache repository" begin
@@ -812,10 +817,10 @@ mktempdir() do dir
                     # test showing the commit
                     showstr = split(sprint(show, cmt), "\n")
                     # the time of the commit will vary so just test the first two parts
-                    @test contains(showstr[1], "Git Commit:")
-                    @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[4], "SHA:")
+                    @test occursin("Git Commit:", showstr[1])
+                    @test occursin("Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:", showstr[2])
+                    @test occursin("Committer: Name: TEST, Email: TEST@TEST.COM, Time:", showstr[3])
+                    @test occursin("SHA:", showstr[4])
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
                     @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
@@ -996,7 +1001,7 @@ mktempdir() do dir
                 # test showing a GitBlob
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"
-                @test contains(blob_show_strs[2], "Blob id:")
+                @test occursin("Blob id:", blob_show_strs[2])
                 @test blob_show_strs[3] == "Contents are binary."
 
                 blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
@@ -1085,9 +1090,9 @@ mktempdir() do dir
                 @test diff_strs[3] == "Number of files: 2"
                 @test diff_strs[4] == "Old file:"
                 @test diff_strs[5] == "DiffFile:"
-                @test contains(diff_strs[6], "Oid:")
-                @test contains(diff_strs[7], "Path:")
-                @test contains(diff_strs[8], "Size:")
+                @test occursin("Oid:", diff_strs[6])
+                @test occursin("Path:", diff_strs[7])
+                @test occursin("Size:", diff_strs[8])
                 @test isempty(diff_strs[9])
                 @test diff_strs[10] == "New file:"
 
@@ -1258,6 +1263,15 @@ mktempdir() do dir
             close(our_repo)
             close(up_repo)
         end
+
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+
+            LibGit2.with(LibGit2.GitRepo(joinpath(dir, "Example.Push"))) do repo
+                @test_throws ArgumentError LibGit2.push(repo, callbacks=callbacks, credentials=cred_payload)
+            end
+        end
     end
 
     @testset "Fetch from cache repository" begin
@@ -1317,6 +1331,15 @@ mktempdir() do dir
                 @test fh_strs[2] == "Name: $(fh.name)"
                 @test fh_strs[3] == "URL: $(fh.url)"
                 @test fh_strs[5] == "Merged: $(fh.ismerge)"
+            end
+        end
+
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+
+            LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
+                @test_throws ArgumentError LibGit2.fetch(repo, callbacks=callbacks, credentials=cred_payload)
             end
         end
     end

@@ -107,26 +107,21 @@ enum RefTags {
 #define RELOC_TAG_OFFSET 28
 
 
-/* read and write in network (bigendian) order: */
+/* read and write in host byte order */
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))
 
 static void write_uint32(ios_t *s, uint32_t i)
 {
-    write_uint8(s, (i >> 24) & 0xff);
-    write_uint8(s, (i >> 16) & 0xff);
-    write_uint8(s, (i >> 8) & 0xff);
-    write_uint8(s, i        & 0xff);
+    ios_write(s, (char*)&i, 4);
 }
 
 static uint32_t read_uint32(ios_t *s)
 {
-    uint32_t b3 = read_uint8(s);
-    uint32_t b2 = read_uint8(s);
-    uint32_t b1 = read_uint8(s);
-    uint32_t b0 = read_uint8(s);
-    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+    uint32_t x = 0;
+    ios_read(s, (char*)&x, 4);
+    return x;
 }
 
 
@@ -767,11 +762,11 @@ static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
 }
 
 
-static inline uint32_t load_uint32_be(uintptr_t *base)
+static inline uint32_t load_uint32(uintptr_t *base)
 {
     uint32_t v = **(uint32_t**)base;
     *base += 4;
-    return ntohl(v);
+    return v;
 }
 
 
@@ -781,7 +776,7 @@ static void jl_read_symbols(jl_serializer_state *s)
     uintptr_t base = (uintptr_t)&s->symbols->buf[0];
     uintptr_t end = base + s->symbols->size;
     while (base < end) {
-        uint32_t len = load_uint32_be(&base);
+        uint32_t len = load_uint32(&base);
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
@@ -884,7 +879,7 @@ static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
     size_t size = s->s->size;
     while (1) {
         uintptr_t val = (uintptr_t)&s->relocs->buf[s->relocs->bpos];
-        uint32_t offset = load_uint32_be(&val);
+        uint32_t offset = load_uint32(&val);
         s->relocs->bpos += sizeof(uint32_t);
         if (offset == 0)
             break;
@@ -904,7 +899,7 @@ void gc_sweep_sysimg(void)
     if (relocs == 0)
         return;
     while (1) {
-        uint32_t offset = load_uint32_be(&relocs);
+        uint32_t offset = load_uint32(&relocs);
         if (offset == 0)
             break;
         jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
@@ -931,7 +926,7 @@ static jl_value_t *jl_read_value(jl_serializer_state *s)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
     uintptr_t val = base + s->s->bpos;
-    uint32_t offset = load_uint32_be(&val);
+    uint32_t offset = load_uint32(&val);
     s->s->bpos += sizeof(uint32_t);
     if (offset == 0)
         return NULL;
@@ -952,7 +947,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
-        uint32_t offset = load_uint32_be(&val);
+        uint32_t offset = load_uint32(&val);
         if (offset != 0) {
             int cfunc = 0;
             if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {
@@ -997,7 +992,7 @@ static void jl_update_all_gvars(jl_serializer_state *s)
     uintptr_t gvars = (uintptr_t)&s->gvar_record->buf[0];
     uintptr_t end = gvars + s->gvar_record->size;
     while (gvars < end) {
-        uint32_t offset = load_uint32_be(&gvars);
+        uint32_t offset = load_uint32(&gvars);
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset);
             *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;

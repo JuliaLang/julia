@@ -100,7 +100,7 @@ function peek(p::Parser) #, i::Int=0
 end
 
 "Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"
-function consume(p::Parser, ch::Char)
+function consume(p::Parser, ch::AbstractChar)
     eof(p) && return false
     c = peek(p)
     if get(c) == ch
@@ -111,7 +111,7 @@ function consume(p::Parser, ch::Char)
     end
 end
 
-function expect(p::Parser, ch::Char)
+function expect(p::Parser, ch::AbstractChar)
     consume(p, ch) && return true
     lo = position(p)
     if eof(p)

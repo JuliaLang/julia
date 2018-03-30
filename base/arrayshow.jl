@@ -39,7 +39,7 @@ methods. By default returns a string of the same width as original with a
 centered cdot, used in printing of structural zeros of structured matrices.
 Accept keyword args `c` for alternate single character marker.
 """
-function replace_with_centered_mark(s::AbstractString;c::Char = '⋅')
+function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
     N = length(s)
     return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
@@ -476,7 +476,10 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
-    @assert X isa typeinfo "$(typeof(X)) is not a subtype of $typeinfo"
+    if !(X isa typeinfo)
+        @assert typeinfo.name.module ∉ (Base, Core) "$(typeof(X)) is not a subtype of $typeinfo"
+        typeinfo = Any # no error for user-defined types
+    end
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)

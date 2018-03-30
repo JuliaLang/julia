@@ -110,8 +110,8 @@ end
         @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
-    @testset "blkdiag concatenation" begin
-        @test blkdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+    @testset "blockdiag concatenation" begin
+        @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
     end
 
     @testset "concatenation promotion" begin
@@ -434,7 +434,7 @@ end
         @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
     end
     @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(uninitialized, length(A.colptr) - 1))
+        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(undef, length(A.colptr) - 1))
     end
     @testset "common error checking of permute[!] methods / permutation validity" begin
         @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
@@ -539,9 +539,16 @@ end
     @test length(K) == length(J) == length(V) == 2
 end
 
-@testset "issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
+@testset "findall" begin
+    # issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
     A = sparse(I, 5, 5)
     @test findall(A) == findall(x -> x == true, A) == findall(Array(A))
+    # Non-stored entries are true
+    @test findall(x -> x == false, A) == findall(x -> x == false, Array(A))
+
+    # Not all stored entries are true
+    @test findall(sparse([true false])) == [CartesianIndex(1, 1)]
+    @test findall(x -> x > 1, sparse([1 2])) == [CartesianIndex(1, 2)]
 end
 
 @testset "issue #5824" begin
@@ -1445,8 +1452,8 @@ end
 end
 
 @testset "trace" begin
-    @test_throws DimensionMismatch trace(spzeros(5,6))
-    @test trace(sparse(1.0I, 5, 5)) == 5
+    @test_throws DimensionMismatch tr(spzeros(5,6))
+    @test tr(sparse(1.0I, 5, 5)) == 5
 end
 
 @testset "spdiagm" begin
@@ -2218,6 +2225,15 @@ end
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
     @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
+end
+
+@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
+    B = SparseMatrixCSC{Int,Int}(2, 3,
+        [1, 3, 4, 5],
+        [1, 2, 1, 2, 999, 999, 999, 999],
+        [1, 2, 3, 6, 999, 999, 999, 999]
+    )
+    @test maximum(B) == 6
 end
 
 end # module

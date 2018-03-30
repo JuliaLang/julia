@@ -87,7 +87,7 @@ temp_pkg_dir() do
                 end
             end
             @test isa(ex,Pkg.PkgError)
-            @test contains(ex.msg, "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git")
+            @test occursin("Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git", ex.msg)
         end
     end
 
@@ -415,16 +415,16 @@ temp_pkg_dir() do
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
         msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build("BuildFail")'`, String)
-        @test contains(msg, "Building BuildFail")
-        @test !contains(msg, "Build failed for BuildFail")
+        @test occursin("Building BuildFail", msg)
+        @test !occursin("Build failed for BuildFail", msg)
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
         msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build("BuildFail")'`, String)
-        @test contains(msg, "Building BuildFail")
-        @test contains(msg, "Build failed for BuildFail")
-        @test contains(msg, "Pkg.build(\"BuildFail\")")
-        @test contains(msg, "Throw build error")
+        @test occursin("Building BuildFail", msg)
+        @test occursin("Build failed for BuildFail", msg)
+        @test occursin("Pkg.build(\"BuildFail\")", msg)
+        @test occursin("Throw build error", msg)
     end
 
     # issue #15948
@@ -432,8 +432,8 @@ temp_pkg_dir() do
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build(\"$package\")"`), String)
-        @test contains(msg, "$package is not an installed package")
-        @test !contains(msg, "signal (15)")
+        @test occursin("$package is not an installed package", msg)
+        @test !occursin("signal (15)", msg)
     end
 
     # issue #20695
@@ -506,7 +506,7 @@ temp_pkg_dir() do
             Pkg.add("Iterators")
             Pkg.update("Iterators")
         end
-        @test all(!contains(l.message,"updated but were already imported") for l in logs)
+        @test all(!occursin("updated but were already imported", l.message) for l in logs)
 
         # Do it again, because the above Iterators test will update things prematurely
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
@@ -522,9 +522,9 @@ temp_pkg_dir() do
         logs,_ = Test.collect_test_logs() do
             Pkg.update("ColorTypes")
         end
-        @test any(contains(l, (:info,r"Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+")) for l in logs)
-        @test any(contains(l, (:info,r"Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+")) for l in logs)
-        @test !any(contains(l, (:info,r"Upgrading Colors")) for l in logs)
+        @test any(occursin((:info, r"Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+"), l) for l in logs)
+        @test any(occursin((:info, r"Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+"), l) for l in logs)
+        @test !any(occursin((:info, r"Upgrading Colors"), l) for l in logs)
 
         @test Pkg.installed("Colors") == v"0.6.4"
 
@@ -547,7 +547,7 @@ temp_pkg_dir() do
         Pkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
             "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); using Example; import Pkg; Pkg.update(\"$package\")"`), String)
-        @test contains(msg, Regex("- $package.*Restart Julia to use the updated versions","s"))
+        @test occursin(Regex("- $package.*Restart Julia to use the updated versions","s"), msg)
     end
 
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
@@ -572,24 +572,24 @@ temp_pkg_dir() do
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
             code = "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.build(\"$package\")"
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
-            @test contains(msg, "JULIA_RC_LOADED defined false")
-            @test contains(msg, "Main.JULIA_RC_LOADED defined false")
+            @test occursin("JULIA_RC_LOADED defined false", msg)
+            @test occursin("Main.JULIA_RC_LOADED defined false", msg)
 
             msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
-            @test contains(msg, "JULIA_RC_LOADED defined false")
-            @test contains(msg, "Main.JULIA_RC_LOADED defined true")
+            @test occursin("JULIA_RC_LOADED defined false", msg)
+            @test occursin("Main.JULIA_RC_LOADED defined true", msg)
 
             code = "redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); import Pkg; Pkg.test(\"$package\")"
 
             msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
-            @test contains(msg, "JULIA_RC_LOADED defined false")
-            @test contains(msg, "Main.JULIA_RC_LOADED defined false")
+            @test occursin("JULIA_RC_LOADED defined false", msg)
+            @test occursin("Main.JULIA_RC_LOADED defined false", msg)
 
             # Note: Since both the startup-file and "runtests.jl" are run in the Main
             # module any global variables created in the startup file can be referenced.
             msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
-            @test contains(msg, "JULIA_RC_LOADED defined true")
-            @test contains(msg, "Main.JULIA_RC_LOADED defined true")
+            @test occursin("JULIA_RC_LOADED defined true", msg)
+            @test occursin("Main.JULIA_RC_LOADED defined true", msg)
         end
     end
 
@@ -660,7 +660,7 @@ end
 
 let io = IOBuffer()
     Base.showerror(io, Pkg.Entry.PkgTestError("ppp"), backtrace())
-    @test !contains(String(take!(io)), "backtrace()")
+    @test !occursin("backtrace()", String(take!(io)))
 end
 
 @testset "Relative path operations" begin

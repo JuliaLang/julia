@@ -119,8 +119,8 @@ fake_repl() do stdin_write, stdout_read, repl
     #    readuntil(stdout_read, "shell> ")
     #    write(stdin_write, "echo hello >/dev/null\n")
     #    let s = readuntil(stdout_read, "\n", keep=true)
-    #        @test contains(s, "shell> ") # make sure we echoed the prompt
-    #        @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
+    #        @test occursin("shell> ", s) # make sure we echoed the prompt
+    #        @test occursin("echo hello >/dev/null", s) # make sure we echoed the input
     #    end
     #    @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #end
@@ -131,8 +131,8 @@ fake_repl() do stdin_write, stdout_read, repl
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "'\n") # invalid input
         s = readuntil(stdout_read, "\n")
-        @test contains(s, "shell> ") # check for the echo of the prompt
-        @test contains(s, "'") # check for the echo of the input
+        @test occursin("shell> ", s) # check for the echo of the prompt
+        @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
@@ -146,8 +146,8 @@ fake_repl() do stdin_write, stdout_read, repl
     #        readuntil(stdout_read, "shell> ")
     #        write(stdin_write, "echo \$123 >$tmp\n")
     #        let s = readuntil(stdout_read, "\n")
-    #            @test contains(s, "shell> ") # make sure we echoed the prompt
-    #            @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
+    #            @test occursin("shell> ", s) # make sure we echoed the prompt
+    #            @test occursin("echo \$123 >$tmp", s) # make sure we echoed the input
     #        end
     #        @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #        @test read(tmp, String) == "123\n"
@@ -173,11 +173,11 @@ fake_repl() do stdin_write, stdout_read, repl
                 # if shell width is precisely the text width,
                 # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
-                @test contains(s, "shell> ")
+                @test occursin("shell> ", s)
                 s = readuntil(stdout_read, "\n", keep=true)
                 @test s == "\r\r\n"
             else
-                @test contains(s, "shell> ")
+                @test occursin("shell> ", s)
             end
             s = readuntil(stdout_read, "\n", keep=true)
             @test s == "\e[0m\n" # the child has exited
@@ -193,7 +193,7 @@ fake_repl() do stdin_write, stdout_read, repl
     let
         write(stdin_write, "\0\n")
         s = readuntil(stdout_read, "\n\n")
-        @test !contains(s, "invalid character")
+        @test !occursin("invalid character", s)
     end
 
     # Test that accepting a REPL result immediately shows up, not
@@ -213,10 +213,10 @@ fake_repl() do stdin_write, stdout_read, repl
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test findfirst("[2h", readline(stdout_read)) == 0:-1
+    @test findfirst("[2h", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test findfirst("[2~", readline(stdout_read)) == 0:-1
+    @test findfirst("[2~", readline(stdout_read)) === nothing
     readline(stdout_read)
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
@@ -699,7 +699,7 @@ function test19864()
     REPL.print_response(buf, Error19864(), [], false, false, nothing)
     return String(take!(buf))
 end
-@test contains(test19864(), "correct19864")
+@test occursin("correct19864", test19864())
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
@@ -837,13 +837,12 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;", keep=true)
-            @test !contains(LineEdit.prompt_string(altprompt), output)
-            @test !contains("julia> ", output)
+            @test !occursin(output, LineEdit.prompt_string(altprompt))
+            @test !occursin(output, "julia> ")
 
             # Check the history file
             history = read(histfile, String)
-            @test contains(history,
-                           r"""
+            @test occursin(r"""
                            ^\#\ time:\ .*\n
                             \#\ mode:\ julia\n
                             \t1\ \+\ 1;\n
@@ -858,7 +857,7 @@ for keys = [altkeys, merge(altkeys...)],
                             \#\ time:\ .*\n
                             \#\ mode:\ julia\n
                             \t1\ \*\ 1;\n$
-                           """xm)
+                           """xm, history)
         end
     finally
         rm(histfile, force=true)

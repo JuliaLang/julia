@@ -919,7 +919,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            a = Vector{elty}(uninitialized, d1)
+            a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
@@ -930,7 +930,7 @@ function deserialize_array(s::AbstractSerializer)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(uninitialized, dims)
+            A = Array{Bool, length(dims)}(undef, dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -943,12 +943,12 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read!(s.io, Array{elty}(uninitialized, dims))
+            A = read!(s.io, Array{elty}(undef, dims))
         end
         s.table[slot] = A
         return A
     end
-    A = Array{elty, length(dims)}(uninitialized, dims)
+    A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)

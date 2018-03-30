@@ -341,7 +341,7 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
 end
 
 
-function trace(A::Matrix{T}) where T
+function tr(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
     for i=1:n
@@ -376,7 +376,7 @@ julia> kron(A, B)
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(uninitialized, size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
@@ -481,7 +481,7 @@ e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
 For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](@ref)) is
 used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
-[^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
+[^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](https://doi.org/10.1137/090768539)
 
 # Examples
 ```jldoctest
@@ -608,9 +608,9 @@ employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur for
 ([`schur`](@ref)) is computed and the triangular algorithm is used on the
 triangular factor.
 
-[^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](http://dx.doi.org/10.1137/110852553)
+[^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](https://doi.org/10.1137/110852553)
 
-[^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
+[^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](https://doi.org/10.1137/120885991)
 
 # Examples
 ```jldoctest
@@ -669,7 +669,7 @@ and then the complex square root of the triangular factor.
 
     Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix",
     Linear Algebra and its Applications, 52-53, 1983, 127-140.
-    [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
+    [doi:10.1016/0024-3795(83)80010-X](https://doi.org/10.1016/0024-3795(83)80010-X)
 
 # Examples
 ```jldoctest
@@ -1222,6 +1222,8 @@ function factorize(A::StridedMatrix{T}) where T
     end
     qrfact(A, Val(true))
 end
+factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
+factorize(A::Transpose) = transpose(factorize(parent(A)))
 
 ## Moore-Penrose pseudoinverse
 
@@ -1236,7 +1238,7 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*maximum(size(M))`, which is essentially machine epsilon
+`eps(real(float(one(eltype(M)))))*minumum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
 `tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
@@ -1267,13 +1269,13 @@ julia> M * N
 
 [^S84]: G. W. Stewart, "Rank Degeneracy", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. [doi:10.1137/0905030](http://epubs.siam.org/doi/abs/10.1137/0905030)
 
-[^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](http://dx.doi.org/10.1109/29.1585)
+[^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
 function pinv(A::StridedMatrix{T}, tol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Matrix{Tout}(uninitialized, n, m)
+        return Matrix{Tout}(undef, n, m)
     end
     if istril(A)
         if istriu(A)

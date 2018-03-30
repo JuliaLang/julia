@@ -14,7 +14,7 @@ TESTS = all stdlib $(TESTGROUPS) \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
 # run `make print-TESTS` to see a list of all tests that can be run
 
-EMBEDDING_ARGS := JULIA=$(JULIA_EXECUTABLE) BIN=$(SRCDIR)/embedding
+EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC)"
 
 default: all
 

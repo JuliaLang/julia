@@ -323,7 +323,15 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
-    jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
+    jl_method_t *m = def->func.method;
+    if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
+        // ensure `__init__()` gets strongly-hinted, specialized, and compiled
+        jl_specializations_get_linfo(m, m->sig, jl_emptysvec, jl_world_counter);
+        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->sig);
+    }
+    else {
+        jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
+    }
     return 1;
 }
 

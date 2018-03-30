@@ -1240,13 +1240,16 @@
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
-                       `(|.| ,ex (quote ,(parse-atom s)))))
+                       (if (or (eqv? (peek-token s) #\newline)
+                               (ts:space? s)) ;; uses side effect of previous peek-token
+                           (error "space not allowed after \":\" used for quoting"))
+                       `(|.| ,ex (quote ,(parse-atom s #f)))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
                        `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
-                     (let ((name (parse-atom s)))
+                     (let ((name (parse-atom s #f)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
                            `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
                                        ,@(cddr name))
@@ -1561,6 +1564,8 @@
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
                (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+          (if (reserved-word? name)
+              (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
           (list 'module (if (eq? word 'module) 'true 'false) name
                 `(block ,loc ,@(cdr body)))))
@@ -1862,7 +1867,8 @@
              (if (and (not semicolon)
                       (length= outer 1)
                       (null? vec))
-                 (begin (expect-space-before s 'for)
+                 (begin ;; if we get here, there must have been some kind of space or separator
+                        ;;(expect-space-before s 'for)
                         (take-token s)
                         (parse-comprehension s (car outer) closer))
                  (error "invalid comprehension syntax")))
@@ -1873,13 +1879,6 @@
                                 "\"; got \""
                                 (deparse (car vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer))))))))
-
-(define (peek-non-newline-token s)
-  (let loop ((t (peek-token s)))
-    (if (newline? t)
-        (begin (take-token s)
-               (loop (peek-token s)))
-        t)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))

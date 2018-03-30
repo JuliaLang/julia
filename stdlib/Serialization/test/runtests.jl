@@ -235,7 +235,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Vector{TA1}(uninitialized, 3)
+    arr5 = Vector{TA1}(undef, 3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -442,8 +442,8 @@ using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
 str = String(take!(io))
-@test !contains(str, "Instance1")
-@test contains(str, "Shell")
+@test !occursin("Instance1", str)
+@test occursin("Shell", str)
 
 end  # module Test13452
 

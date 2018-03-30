@@ -33,7 +33,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 """
 parse(T::Type, str; base = Int)
 
-function parse(::Type{T}, c::Char; base::Integer = 36) where T<:Integer
+function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -278,16 +278,16 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find index of ± separating real/imaginary parts (if any)
-    i₊ = coalesce(findnext(occursin(('+','-')), s, i), 0)
+    i₊ = coalesce(findnext(in(('+','-')), s, i), 0)
     if i₊ == i # leading ± sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
-    iᵢ = coalesce(findprev(occursin(('m','i','j')), s, e), 0)
+    iᵢ = coalesce(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'

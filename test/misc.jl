@@ -14,7 +14,7 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
+        @test occursin("1 == 2", ex.msg)
     end
 end
 # test @assert message
@@ -44,8 +44,8 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
+        @test !occursin("1 == 2", ex.msg)
+        @test occursin("random_object", ex.msg)
     end
 end
 # if the second argument is an expression, c
@@ -82,7 +82,7 @@ let
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test contains(warning_str, "f()")
+    @test occursin("f()", warning_str)
 end
 
 # lock / unlock
@@ -371,16 +371,16 @@ end
 
 let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !contains(optstring, "Ptr")
+    @test !occursin("Ptr", optstring)
     @test endswith(optstring, "\n)")
-    @test contains(optstring, " = \"")
+    @test occursin(" = \"", optstring)
 end
 let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
-    @test !contains(optstring, "\n")
-    @test !contains(optstring, "Ptr")
-    @test contains(optstring, " = \"")
+    @test !occursin("\n", optstring)
+    @test !occursin("Ptr", optstring)
+    @test occursin(" = \"", optstring)
 end
 
 # Base.securezero! functions (#17579)
@@ -579,7 +579,7 @@ end
 
 include("testenv.jl")
 
-let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
+let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     local cmd = `$test_exename $flags deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
@@ -589,3 +589,9 @@ end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# issue #26310
+@test_warn "could not import" eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn eval(Main, :(import .Main))
+@test_nowarn eval(Main, :(import ....Main))

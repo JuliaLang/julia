@@ -331,20 +331,20 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for str in (sprint(code_warntype, f, types),
                 repr("text/plain", src))
         for var in must_used_vars
-            @test contains(str, string(var))
+            @test occursin(string(var), str)
         end
-        @test !contains(str, "Any")
-        @test !contains(str, "ANY")
+        @test !occursin("::Any", str)
+        @test !occursin("::ANY", str)
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && contains(str, Regex("_$i\\b"))
+                if name in must_used_vars && occursin(Regex("_$i\\b"), str)
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, Regex("_$i\\b"))
+                @test !occursin(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -363,7 +363,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && contains(str, Regex("_$i\\b"))
+        if name in must_used_vars && occursin(Regex("_$i\\b"), str)
             must_used_checked[name] = true
         end
     end
@@ -374,8 +374,10 @@ end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
                         [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
-@test used_dup_var_tested15714
+                        [:array_var15714])
+#This test doesn't work with the new optimizer because we drop slotnames
+#We may want to test it against debug info eventually
+#@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
