@@ -173,7 +173,7 @@ function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
 end
 
 _round(x, r::RoundingMode, digits::Integer, sigdigits::Integer, base) =
-    throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments.")
+    throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
 
 # C-style round
 function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
