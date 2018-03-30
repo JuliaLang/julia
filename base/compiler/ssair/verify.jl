@@ -97,6 +97,18 @@ function verify_ir(ir::IRCode)
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end
+        elseif isa(stmt, PhiCNode)
+            for i = 1:length(stmt.values)
+                val = stmt.values[i]
+                if !isa(val, SSAValue)
+                    @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
+                    error()
+                end
+                if !isa(ir[val], UpsilonNode)
+                    @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
+                    error()
+                end
+            end
         else
             for op in userefs(stmt)
                 op = op[]

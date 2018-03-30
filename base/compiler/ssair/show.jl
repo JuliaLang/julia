@@ -1,7 +1,9 @@
+if Pair != Base.Pair
 import Base: Base, IOContext, string, join, sprint
 IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
 length(s::String) = Base.length(s)
 ^(s::String, i::Int) = Base.:^(s, i)
+end
 
 function Base.show(io::IO, cfg::CFG)
     foreach(pairs(cfg.blocks)) do (idx, block)

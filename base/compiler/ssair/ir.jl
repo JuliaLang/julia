@@ -280,7 +280,7 @@ function userefs(@nospecialize(x))
     end
 end
 
-function iterate(it::UseRefIterator, use=1)
+@noinline function iterate(it::UseRefIterator, use=1)
     x = UseRef(it, use)
     v = x[]
     v === OOBToken() && return nothing
