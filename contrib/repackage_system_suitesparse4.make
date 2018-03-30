@@ -31,6 +31,8 @@ default:
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(build_private_libdir)/libamd.$(SHLIB_EXT)
 	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libcamd.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libcamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_private_libdir) -lsuitesparseconfig $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(build_private_libdir)/libcamd.$(SHLIB_EXT)
+	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libccolamd.$(SHLIB_EXT) $(LDFLAGS) $(LIBBLAS) -L$(build_private_libdir) -lsuitesparseconfig $(RPATH_ORIGIN)
+	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(build_private_libdir)/libccolamd.$(SHLIB_EXT)
 	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libcolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libcolamd.$(SHLIB_EXT) $(LDFLAGS) $(LIBBLAS) -L$(build_private_libdir) -lsuitesparseconfig $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(build_private_libdir)/libcolamd.$(SHLIB_EXT)
 	$(CXX) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libcholmod.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) $(LIBBLAS) -L$(build_private_libdir) -lsuitesparseconfig -lcolamd -lccolamd -lcamd -lamd $(RPATH_ORIGIN)
