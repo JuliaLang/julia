@@ -27,6 +27,7 @@ end
 # load snapshotted dependencies
 include("../ext/TOML/src/TOML.jl")
 
+include("GitTools.jl")
 include("PlatformEngines.jl")
 include("Types.jl")
 include("Display.jl")
