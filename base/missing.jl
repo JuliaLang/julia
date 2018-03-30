@@ -218,3 +218,47 @@ end
     @inbounds v = itr.x[i]::eltype(itr)
     (v, _next_nonmissing_ind(itr.x, state))
 end
+
+"""
+    lift(f)
+    lift(f, x...; kw...)
+
+Lift function `f` so that it returns `missing` when any of its positional arguments
+is `missing`. Otherwise `f` is applied to its arguments.
+
+The form `lift(f)` returns an anonymous function that has lifted behavior.
+The form `lift(f, x...; kw...)` returns `missing` if any of `x` is `missing`
+and otherwise returns `f(x...; kw...)`.
+
+# Examples
+```jldoctest
+julia> g = lift(uppercase);
+
+julia> g("a")
+"A"
+
+julia> g(missing)
+missing
+
+julia> lift(parse, Int, "aa", base=16)
+170
+
+julia> lift(parse, missing, "aa", base=16)
+missing
+
+julia> lift(parse).(Int, ["1", "2", missing])
+3-element Array{Union{Missing, Int64},1}:
+ 1
+ 2
+  missing
+
+julia> lift.(parse, Int, ["a", "b", missing], base=16)
+3-element Array{Union{Missing, Int64},1}:
+ 10
+ 11
+   missing
+```
+"""
+lift(f::Function) = (x...; kw...) -> any(ismissing, x) ? missing : f(x...; kw...)
+lift(f::Function, x; kw...) = ismissing(x) ? missing : f(x; kw...)
+lift(f::Function, x...; kw...) = any(ismissing, x) ? missing : f(x...; kw...)

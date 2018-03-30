@@ -222,6 +222,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.lift
 ```
 
 ## System

@@ -705,6 +705,7 @@ export
     ismissing,
     missing,
     skipmissing,
+    lift,
 
 # time
     sleep,
