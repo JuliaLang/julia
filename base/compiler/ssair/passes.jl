@@ -146,12 +146,14 @@ function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=
             # For now, we don't track setfields structs through phi nodes
             allow_phinode || break
             push!(intermediaries, defidx)
-            possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
-                isassigned(def.values, n) || return false
-                value = def.values[n]
-                edge_typ = compact_exprtype(compact, value)
-                return edge_typ ⊑ typeconstraint
-            end)
+            possible_predecessors = let def=def, typeconstraint=typeconstraint
+                collect(Iterators.filter(1:length(def.edges)) do n
+                    isassigned(def.values, n) || return false
+                    value = def.values[n]
+                    edge_typ = widenconst(compact_exprtype(compact, value))
+                    return typeintersect(edge_typ, typeconstraint) !== Union{}
+                end)
+            end
             # For now, only look at unique predecessors
             if length(possible_predecessors) == 1
                 n = possible_predecessors[1]
