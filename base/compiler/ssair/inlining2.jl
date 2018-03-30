@@ -550,7 +550,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         end
 
         @timeit "inline IR inflation" if src.codelocs === nothing
-            topline = LineInfoNode(method.module, method.name, method.file, method.line, 0)
+            topline = LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)
             inline_linetable = [topline]
             push!(ast, LabelNode(length(ast) + 1))
             ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)

@@ -139,9 +139,13 @@ function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=
                 def = def.val
             end
             continue
+        elseif isa(def, FastForward)
+            def = def.to
+            append!(phi_locs, def.phi_locs)
         elseif isa(def, PhiNode)
             # For now, we don't track setfields structs through phi nodes
             allow_phinode || break
+            push!(intermediaries, defidx)
             possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
                 isassigned(def.values, n) || return false
                 value = def.values[n]
@@ -187,6 +191,11 @@ function process_immutable_preserve(new_preserves, compact, def)
             push!(new_preserves, arg)
         end
     end
+end
+
+struct FastForward
+    to
+    phi_locs
 end
 
 function getfield_elim_pass!(ir::IRCode, domtree)
@@ -292,16 +301,18 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             field === nothing && continue
             isdefined(obj, field) || continue
             val = getfield(obj, field)
-	        is_inlineable_constant(val) || continue
+            is_inlineable_constant(val) || continue
             forwarded = quoted(val)
         end
         # Step 4: Remember any phinodes we need to insert
         if !isempty(phi_locs) && isa(forwarded, SSAValue)
             # TODO: We have have to use BB ids for phi_locs
             # to avoid index invalidation.
-            push!(insertions, (idx, phi_locs))
+            push!(insertions, idx)
+            compact[idx] = FastForward(forwarded, phi_locs)
+        else
+            compact[idx] = forwarded
         end
-        compact[idx] = forwarded
     end
     ir = finish(compact)
     # Now go through any mutable structs and see which ones we can eliminate
@@ -389,17 +400,19 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
-	    new_expr.typ = useexpr.typ
-	    ir[SSAValue(use)] = new_expr
+            new_expr.typ = useexpr.typ
+            ir[SSAValue(use)] = new_expr
         end
     end
-    for (idx, phi_locs) in insertions
+    for idx in insertions
         # For non-dominating load-store forward, we may have to insert extra phi nodes
         # TODO: Can use the domtree to eliminate unnecessary phis, but ok for now
-        forwarded = ir.stmts[idx]
+        ff = ir.stmts[idx]
+        @assert isa(ff, FastForward)
+        forwarded = ff.to
         if isa(forwarded, SSAValue)
             forwarded_typ = ir.types[forwarded.id]
-            for (pred, pos) in reverse!(phi_locs)
+            for (pred, pos) in reverse!(ff.phi_locs)
                 node = PhiNode()
                 push!(node.edges, pred)
                 push!(node.values, forwarded)

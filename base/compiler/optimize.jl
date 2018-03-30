@@ -263,7 +263,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(true)
+const enable_new_optimizer = RefValue(false)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -292,15 +292,20 @@ function optimize(me::InferenceState)
             force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
             #@timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
             replace_code_newstyle!(opt.src, ir, nargs, linetable)
-            any_phi = true
-        elseif false # !any_phi
+        else
+            # This pass is required for the AST to be valid in codegen
+            # if any `SSAValue` is created by type inference. Ref issue #6068
+            # This (and `reindex_labels!`) needs to be run for `!me.optimize`
+            # if we start to create `SSAValue` in type inference when not
+            # optimizing and use unoptimized IR in codegen.
             gotoifnot_elim_pass!(opt)
             inlining_pass!(opt, opt.src.propagate_inbounds)
             # Clean up after inlining
             gotoifnot_elim_pass!(opt)
             basic_dce_pass!(opt)
             void_use_elim_pass!(opt)
-            if !enable_new_optimizer[]
+            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
+            if !any_phi && !enable_new_optimizer[]
                 copy_duplicated_expr_pass!(opt)
                 split_undef_flag_pass!(opt)
                 fold_constant_getfield_pass!(opt)
@@ -312,20 +317,6 @@ function optimize(me::InferenceState)
                 basic_dce_pass!(opt)
                 void_use_elim_pass!(opt)
             end
-            # Pop metadata before label reindexing
-            let code = opt.src.code::Array{Any,1}
-                meta_elim_pass!(code, coverage_enabled())
-                filter!(x -> x !== nothing, code)
-                force_noinline = peekmeta(code, :noinline)[1]
-                reindex_labels!(opt)
-            end
-        elseif enable_new_optimizer[]
-            # This pass is required for the AST to be valid in codegen
-            # if any `SSAValue` is created by type inference. Ref issue #6068
-            # This (and `reindex_labels!`) needs to be run for `!me.optimize`
-            # if we start to create `SSAValue` in type inference when not
-            # optimizing and use unoptimized IR in codegen.
-            gotoifnot_elim_pass!(opt)
             # Pop metadata before label reindexing
             let code = opt.src.code::Array{Any,1}
                 meta_elim_pass!(code, coverage_enabled())
