@@ -5,8 +5,7 @@
 
 Abstract supertype for complex numbers.
 """
-abstract type AbstractComplex <: Number
-end
+abstract type AbstractComplex <: Number end
 
 """
     Complex{T<:Real} <: AbstractComplex
