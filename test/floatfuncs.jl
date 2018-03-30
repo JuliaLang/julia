@@ -79,24 +79,24 @@ end
 @testset "significant digits" begin
     # (would be nice to have a smart vectorized
     # version of signif)
-    @test signif(123.456, 1) ≈ 100.
-    @test signif(123.456, 3) ≈ 123.
-    @test signif(123.456, 5) ≈ 123.46
-    @test signif(123.456, 8, base = 2) ≈ 123.5
-    @test signif(123.456, 2, base = 4) ≈ 128.0
-    @test signif(0.0, 1) === 0.0
-    @test signif(-0.0, 1) === -0.0
-    @test signif(1.2, 2) === 1.2
-    @test signif(1.0, 6) === 1.0
-    @test signif(0.6, 1) === 0.6
-    @test signif(7.262839104539736, 2) === 7.3
-    @test isinf(signif(Inf, 3))
-    @test isnan(signif(NaN, 3))
-    @test signif(1.12312, 1000) === 1.12312
-    @test signif(Float32(7.262839104539736), 3) === Float32(7.26)
-    @test signif(Float32(7.262839104539736), 4) === Float32(7.263)
-    @test signif(Float32(1.2), 3) === Float32(1.2)
-    @test signif(Float32(1.2), 5) === Float32(1.2)
-    @test signif(Float16(0.6), 2) === Float16(0.6)
-    @test signif(Float16(1.1), 70) === Float16(1.1)
+    @test round(123.456, sigdigits=1) ≈ 100.
+    @test round(123.456, sigdigits=3) ≈ 123.
+    @test round(123.456, sigdigits=5) ≈ 123.46
+    @test round(123.456, sigdigits=8, base = 2) ≈ 123.5
+    @test round(123.456, sigdigits=2, base = 4) ≈ 128.0
+    @test round(0.0, sigdigits=1) === 0.0
+    @test round(-0.0, sigdigits=1) === -0.0
+    @test round(1.2, sigdigits=2) === 1.2
+    @test round(1.0, sigdigits=6) === 1.0
+    @test round(0.6, sigdigits=1) === 0.6
+    @test round(7.262839104539736, sigdigits=2) === 7.3
+    @test isinf(round(Inf, sigdigits=3))
+    @test isnan(round(NaN, sigdigits=3))
+    @test round(1.12312, sigdigits=1000) === 1.12312
+    @test round(Float32(7.262839104539736), sigdigits=3) === Float32(7.26)
+    @test round(Float32(7.262839104539736), sigdigits=4) === Float32(7.263)
+    @test round(Float32(1.2), sigdigits=3) === Float32(1.2)
+    @test round(Float32(1.2), sigdigits=5) === Float32(1.2)
+    @test round(Float16(0.6), sigdigits=2) === Float16(0.6)
+    @test round(Float16(1.1), sigdigits=70) === Float16(1.1)
 end
