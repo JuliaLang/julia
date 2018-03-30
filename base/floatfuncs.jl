@@ -140,7 +140,7 @@ function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
         isc = oftype(fx, base)^-digits
         r = round(fx / isc, r) * isc
     end
-    
+
     if !isfinite(r)
         if digits > 0
             return fx
