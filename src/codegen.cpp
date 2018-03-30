@@ -1196,23 +1196,33 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             jl_finalize_module(m.release(), !toplevel);
         }
 
-        // if not inlineable, code won't be needed again
-        if (JL_DELETE_NON_INLINEABLE &&
-                // don't delete code when debugging level >= 2
-                jl_options.debug_level <= 1 &&
-                // don't delete toplevel code
-                jl_is_method(li->def.method) &&
-                // don't change inferred state
-                li->inferred &&
-                // and there is something to delete (test this before calling jl_ast_flag_inlineable)
-                li->inferred != jl_nothing &&
-                // don't delete inlineable code, unless it is constant
-                (li->jlcall_api == JL_API_CONST || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
-                // don't delete code when generating a precompile file
-                !imaging_mode &&
-                // don't delete code when it's not actually directly being used
-                world) {
-            li->inferred = jl_nothing;
+        if (// don't alter `inferred` when the code is not directly being used
+            world &&
+            // don't change inferred state
+            li->inferred) {
+            if (// keep code when keeping everything
+                !(JL_DELETE_NON_INLINEABLE) ||
+                // keep code when debugging level >= 2
+                jl_options.debug_level > 1) {
+                // update the stored code
+                if (li->inferred != (jl_value_t*)src) {
+                    if (jl_is_method(li->def.method))
+                        src = (jl_code_info_t*)jl_compress_ast(li->def.method, src);
+                    li->inferred = (jl_value_t*)src;
+                    jl_gc_wb(li, src);
+                }
+            }
+            else if (// don't delete toplevel code
+                     jl_is_method(li->def.method) &&
+                     // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                     li->inferred != jl_nothing &&
+                     // don't delete inlineable code, unless it is constant
+                     (li->jlcall_api == JL_API_CONST || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
+                     // don't delete code when generating a precompile file
+                     !imaging_mode) {
+                // if not inlineable, code won't be needed again
+                li->inferred = jl_nothing;
+            }
         }
 
         // Step 6: Done compiling: Restore global state
