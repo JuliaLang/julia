@@ -1,14 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Complex{T<:Real} <: Number
+    AbstractComplex <: Number
+
+Abstract supertype for complex numbers.
+"""
+abstract type AbstractComplex <: Number
+end
+
+"""
+    Complex{T<:Real} <: AbstractComplex
 
 Complex number type with real and imaginary part of type `T`.
 
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 """
-struct Complex{T<:Real} <: Number
+struct Complex{T<:Real} <: AbstractComplex
     re::T
     im::T
 end
