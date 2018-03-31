@@ -123,6 +123,7 @@ round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T
 
 function round(x, r::RoundingMode=RoundNearest;
     digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
+    isfinite(x) || return x
     _round(x,r,digits,sigdigits,base)
 end
 trunc(x; kwargs...) = round(x, RoundToZero; kwargs...)
@@ -133,6 +134,7 @@ _round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = _round(x
 _round(x::Integer, r::RoundingMode) = x
 
 function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
+    fx = float(x)
     if digits >= 0
         sc = oftype(fx, base)^digits
         r = round(fx * sc, r) / sc
@@ -157,13 +159,14 @@ end
 
 hidigit(x::Integer, base) = ndigits0z(x, base)
 function hidigit(x::Real, base)
+    iszero(x) && return 0
     fx = float(x)
     if base == 10
         return 1 + floor(Int, log10(abs(fx)))
     elseif base == 2
         return 1 + exponent(x)
     else
-        return 1 + floor(Int, log(abs(fx), base))
+        return 1 + floor(Int, log(base, abs(fx)))
     end
 end
 
