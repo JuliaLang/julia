@@ -24,7 +24,7 @@ default:
 	mkdir -p $(build_private_libdir)
 	mkdir -p $(JULIAHOME)/deps/build/SuiteSparse-SYSTEM/lib
 	cd $(JULIAHOME)/deps/build/SuiteSparse-SYSTEM/lib && \
-	rm -f $(build_private_libdir)/lib{amd,cholmod,colamd,spqr,umfpack}.$(SHLIB_EXT)
+	rm -f $(build_private_libdir)/lib{amd,camd,cholmod,ccolamd,colamd,spqr,umfpack}.$(SHLIB_EXT)
 	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libsuitesparseconfig.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libsuitesparseconfig.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(build_private_libdir)/libsuitesparseconfig.$(SHLIB_EXT)
 	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libamd.a $(NO_WHOLE_ARCHIVE) -o $(build_private_libdir)/libamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_private_libdir) -lsuitesparseconfig $(RPATH_ORIGIN)
