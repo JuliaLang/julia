@@ -243,6 +243,10 @@ function is_specializable_vararg_slot(@nospecialize(arg), sv::InferenceState)
             isa(sv.vararg_type_container, DataType))
 end
 
+function method_for_specialization_heuristics(sv::InferenceState)
+    return method_for_specialization_heuristics(sv.src, (sv.linfo.specTypes, sv.linfo.def))
+end
+
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)

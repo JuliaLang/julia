@@ -1315,7 +1315,7 @@ end
 
 function f24852_gen_cinfo_inflated(X, Y, f, x, y)
     method, code_info = f24852_kernel_cinfo(x, y)
-    code_info.signature_for_inference_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
+    code_info.signature_for_specialization_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
     return code_info
 end
 
@@ -1364,7 +1364,7 @@ result = f24852_kernel(x, y)
 @test result === f24852_early_uninflated(x, y)
 @test result === f24852_early_inflated(x, y)
 
-# TODO: test that `expand_early = true` + inflated `signature_for_inference_heuristics`
+# TODO: test that `expand_early = true` + inflated `signature_for_specialization_heuristics`
 # can be used to tighten up some inference result.
 
 # Test that Conditional doesn't get widened to Bool too quickly

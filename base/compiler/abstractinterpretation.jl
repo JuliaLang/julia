@@ -187,16 +187,19 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
+    spoofed_sig, spoofed_method = method_for_specialization_heuristics(method, sig, sparams, sv.params.world)
+    spoofed_sv_sig, spoofed_sv_method = method_for_specialization_heuristics(sv)
     while !(infstate === nothing)
         infstate = infstate::InferenceState
-        if method === infstate.linfo.def
-            if infstate.linfo.specTypes == sig
-                # avoid widening when detecting self-recursion
-                # TODO: merge call cycle and return right away
-                topmost = nothing
-                edgecycle = true
-                break
-            end
+        working_sig, working_method = method_for_specialization_heuristics(infstate)
+        if working_sig == spoofed_sig
+            # avoid widening when detecting self-recursion
+            # TODO: merge call cycle and return right away
+            topmost = nothing
+            edgecycle = true
+            break
+        end
+        if spoofed_method === working_method
             if topmost === nothing
                 # inspect the parent of this edge,
                 # to see if they are the same Method as sv
@@ -205,7 +208,8 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 for parent in infstate.callers_in_cycle
                     # check in the cycle list first
                     # all items in here are mutual parents of all others
-                    if parent.linfo.def === sv.linfo.def
+                    _, parent_method = method_for_specialization_heuristics(parent)
+                    if parent_method === spoofed_sv_method
                         topmost = infstate
                         edgecycle = true
                         break
@@ -215,7 +219,8 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        if parent.cached && parent.linfo.def === sv.linfo.def
+                        _, parent_method = method_for_specialization_heuristics(parent)
+                        if parent.cached && parent_method === spoofed_sv_method
                             topmost = infstate
                             edgecycle = true
                         end
