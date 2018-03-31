@@ -1570,6 +1570,11 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+# PR #26647
+# The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
+# To remove this deprecation, remove the `keep` argument from the function signatures as well as
+# the internal logic that deals with the renaming. These live in base/strings/util.jl.
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -802,7 +802,7 @@ end
 function completions(full, index)
     pre = full[1:index]
 
-    pre_words = split(pre, ' ', keep=true)
+    pre_words = split(pre, ' ', keepempty=true)
 
     # first word should always be a command
     if isempty(pre_words)
