@@ -129,9 +129,10 @@ script:
     # compile / install Julia
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - if [ `uname` = "Darwin" ]; then
-        for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
+        for name in suitesparseconfig spqr umfpack colamd cholmod amd; do
             install -pm755 usr/lib/julia/lib${name}*.dylib* /tmp/julia/lib/julia/;
         done;
+        install -pm755 usr/lib/libsuitesparse_wrapper*.dylib* /tmp/julia/lib/julia/;
       fi
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
