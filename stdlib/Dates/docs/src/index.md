@@ -108,7 +108,7 @@ it is much more efficient to first create a [`Dates.DateFormat`](@ref), and pass
 a raw format string.
 
 ```jldoctest
-julia> df = DateFormat("y-m-d");
+julia> df = DateFormat("y-m-d")
 
 julia> dt = Date("2015-01-01",df)
 2015-01-01
@@ -303,14 +303,14 @@ First the mapping is loaded into the `LOCALES` variable:
 
 ```jldoctest tdate2
 julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
-                        "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+                        "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
 julia> french_monts_abbrev = ["janv","févr","mars","avril","mai","juin",
-                              "juil","août","sept","oct","nov","déc"];
+                              "juil","août","sept","oct","nov","déc"]
 
-julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
+julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]
 
-julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""]);
+julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""])
 ```
 
  The above mentioned functions can then be used to perform the queries:
@@ -457,7 +457,7 @@ adjustment criterion.
 For example:
 
 ```jldoctest
-julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday
+julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday # Returns true if the day of the week of x is Tuesday
 
 julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
 2014-07-15
@@ -484,7 +484,7 @@ range:
 ```jldoctest
 # Pittsburgh street cleaning; Every 2nd Tuesday from April to November
 # Date range from January 1st, 2014 to January 1st, 2015
-julia> dr = Dates.Date(2014):Day(1):Dates.Date(2015);
+julia> dr = Dates.Date(2014):Day(1):Dates.Date(2015)
 
 julia> filter(dr) do x
            Dates.dayofweek(x) == Dates.Tue &&
