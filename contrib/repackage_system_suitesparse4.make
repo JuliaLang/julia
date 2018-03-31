@@ -13,7 +13,7 @@ ifeq ($(USE_SYSTEM_LAPACK),0)
 
 $(build_private_libdir)/libgfortblas.dylib:
 	mkdir -p $(build_private_libdir)
-	make -C ../deps/ @$
+	make -C ../deps/ $@
 
 default: $(build_private_libdir)/libgfortblas.dylib
 endif
