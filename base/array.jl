@@ -941,7 +941,7 @@ julia> a[1:6]
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, nl-l)
+        _growend!(a, nl-l)
     elseif nl != l
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
