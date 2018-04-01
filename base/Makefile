@@ -163,7 +163,7 @@ endif
 endif
 endef
 
-# the following excludes: libuv.a, libutf8proc.a, suitesparse*
+# the following excludes: libuv.a, libutf8proc.a
 
 $(eval $(call symlink_system_library,$(LIBMNAME)))
 ifneq ($(USE_SYSTEM_LIBM),0)
@@ -185,6 +185,14 @@ $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
+$(eval $(call symlink_system_library,libamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libccolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcholmod,SUITESPARSE))
+$(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
+$(eval $(call symlink_system_library,libspqr,SUITESPARSE))
+$(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
 ifneq ($(DISABLE_LIBUNWIND),0)
 $(eval $(call symlink_system_library,libunwind,LIBUNWIND))
 endif
