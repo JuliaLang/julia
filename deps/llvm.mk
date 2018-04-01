@@ -525,11 +525,13 @@ $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0 (probably)
+$(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL326843-missing-header)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-r327540)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0_D27296-libssp)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-6.0-D44650))
+$(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
