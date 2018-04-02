@@ -799,6 +799,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            Base._downloadsecurity[] = "package build"
             cd($(repr(dirname(build_file))))
             include($(repr(build_file)))
             """
@@ -815,9 +816,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 @error("Error building `$name`; see log file for further info")
         end
         with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); might_need_to_resolve=might_need_to_resolve) do
-            Base.downloadsecurity("package build") do
-                run_build()
-            end
+            run_build()
         end
     end
     return

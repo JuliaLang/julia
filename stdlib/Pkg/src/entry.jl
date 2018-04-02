@@ -590,6 +590,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+        Base._downloadsecurity[] = "package build"
         open("$(escape_string(errfile))", "a") do f
             pkg, build_file = "$pkg", "$(escape_string(build_file))"
             try
@@ -615,9 +616,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
         ```
-    Base.downloadsecurity("package build") do
-        success(pipeline(cmd, stdout=stdout, stderr=stderr))
-    end
+    success(pipeline(cmd, stdout=stdout, stderr=stderr))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
