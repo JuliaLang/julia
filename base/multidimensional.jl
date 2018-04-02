@@ -249,8 +249,9 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     # AbstractArray implementation
+    Base.axes(iter::CartesianIndices{N,R}) where {N,R} = iter.indices
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @inline Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
+    @inline Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(I)
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
     ndims(::Type{CartesianIndices{N}}) where {N} = N
@@ -418,6 +419,7 @@ module IteratorsMD
         @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
         return result
     end
+    @inline Base.getindex(iter::LinearIndices{1,R}, i::Int) where {R} = i
 end  # IteratorsMD
 
 
