@@ -79,7 +79,7 @@ const _downloadsecurity = Ref("") # non-empty in secure download contexts
 
 function shacheck(filename::AbstractString, sha::Nothing)
     if !isempty(_downloadsecurity[])
-        depwarn("Calling download without an sha=\"...\" argument for validation is deprecated in the security context: $(_downloadsecurity[])", shacheck)
+        depwarn("Calling download without an sha=\"...\" argument for validation is deprecated in the security context: $(_downloadsecurity[])", :shacheck)
     end
 end
 
