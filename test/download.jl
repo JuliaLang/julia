@@ -7,6 +7,17 @@ mktempdir() do temp_dir
     @test isfile(file)
     @test !isempty(read(file))
 
+    # Download a file and check its SHA-256 hash
+    file = joinpath(temp_dir, "html")
+    @test file == download("http://httpbin.org/html", file,
+          sha="3f324f9914742e62cf082861ba03b207282dba781c3349bee9d7c1b5ef8e0bfe")
+    @test_throws ErrorException file == download("http://httpbin.org/html", file,
+        sha="3f324f9914742e62cf082861ba03b207282dba781c3349bee9d7c1b5ef8e0000")
+    @test_throws ArgumentError file == download("http://httpbin.org/html", file,
+        sha="3f324f9914742e62cf082861ba03b207282dba781c3349bee9d7c1b5ef8e0xxx")
+    @test_throws ArgumentError file == download("http://httpbin.org/html", file,
+        sha="3f324f9914742e62cf082861ba03b207282dba781c3349bee9d7c1b5ef8e0")
+
     # Download an empty file
     empty_file = joinpath(temp_dir, "empty")
     @test download("http://httpbin.org/status/200", empty_file) == empty_file

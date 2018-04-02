@@ -815,7 +815,9 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 @error("Error building `$name`; see log file for further info")
         end
         with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); might_need_to_resolve=might_need_to_resolve) do
-            run_build()
+            Base.downloadsecurity("package build") do
+                run_build()
+            end
         end
     end
     return
@@ -1070,4 +1072,3 @@ function init(ctx::Context)
 end
 
 end # module
-

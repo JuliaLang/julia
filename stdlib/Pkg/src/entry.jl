@@ -615,8 +615,9 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
         ```
-
-    success(pipeline(cmd, stdout=stdout, stderr=stderr))
+    Base.downloadsecurity("package build") do
+        success(pipeline(cmd, stdout=stdout, stderr=stderr))
+    end
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
