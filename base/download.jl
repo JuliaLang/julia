@@ -107,13 +107,7 @@ function shacheck(filename::AbstractString, sha::AbstractString)
         end
         h = Vector{UInt8}(undef, 32)
         ccall((:mbedtls_sha256_finish,:libmbedtls), Cvoid, (Ptr{UInt8},Ptr{UInt8}), ctx,h)
-        i = firstindex(sha)
-        for hbyte in h
-            j = nextind(sha, i)
-            hbyte == parse(UInt8, sha[i], base=16)<<4 + parse(UInt8, sha[j], base=16) ||
-                error("downloaded file ", filename, " had incorrect SHA256 hash")
-            i = nextind(sha, j)
-        end
+        sha == bytes2hex(h) || error("downloaded file ", filename, " had incorrect SHA256 hash")
     finally
         ccall((:mbedtls_sha256_free,:libmbedtls), Cvoid, (Ptr{UInt8},), ctx)
     end
