@@ -783,8 +783,10 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
         match.best_idx = i;
         feature_size = new_feature_size;
     }
-    if (match.best_idx == (uint32_t)-1)
-        jl_error("Unable to find compatible target in system image.");
+    if (match.best_idx == (uint32_t)-1) {
+	match.best_idx = 0;
+        //jl_error("Unable to find compatible target in system image.");
+    }
     return match;
 }
 

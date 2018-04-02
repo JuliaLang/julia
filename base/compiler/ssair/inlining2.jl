@@ -140,7 +140,8 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
 
     compact = IncrementalCompact(ir)
     compact.result_bbs = new_cfg_blocks
-    nnewnodes = length(compact.result) + sum(todo) do (_a, _b, _c, _d, _e, ir2, _f)
+    nnewnodes = length(compact.result)
+    for (_a, _b, _c, _d, _e, ir2, _f) in todo
         length(ir2.stmts) + length(ir2.new_nodes)
     end
     resize!(compact, nnewnodes)
