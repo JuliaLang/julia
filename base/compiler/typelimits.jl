@@ -4,7 +4,7 @@
 # limitation parameters #
 #########################
 
-const MAX_TYPEUNION_LEN = 3
+const MAX_TYPEUNION_LEN = 4
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
@@ -327,64 +327,63 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         # XXX: this should never happen
         return Any
     end
-    # converge the Tuple part of the Union less quickly
-    # this is a bit more tricky than other branch, so
-    # do this first, so that the lattice is over Tuple is associative:
-    # tmerge(A, tmerge(B, C)) == tmerge(tmerge(A, B), C)
-    tuplea = typeintersect(typea, Tuple)
-    tupleb = typeintersect(typeb, Tuple)
-    if tuplea !== Union{} && tupleb !== Union{}
-        if isconcretetype(tuplea) && isconcretetype(tupleb)
-            # if the tuple part is concrete, try just returning the Union
-            u = Union{typea, typeb}
-            if unionlen(u) <= MAX_TYPEUNION_LEN
-                return u
-            end
+    # if we didn't start with any unions, then always OK to form one now
+    if !(typea isa Union || typeb isa Union)
+        # except if we might have switched Union and Tuple below, or would do so
+        if (isconcretetype(typea) && isconcretetype(typeb)) || !(typea <: Tuple && typeb <: Tuple)
+            return Union{typea, typeb}
         end
-        # otherwise, make a single non-concrete Tuple containing both
-        tuplejoin = Tuple
-        if tuplea <: Tuple && tupleb <: Tuple
-            # converge the Tuple element-wise if they are the same length
-            # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
-            if nothing !== tuplelen(tuplea) === tuplelen(tupleb)
-                tuplejoin = tuplemerge(tuplea, tupleb)
-            end
-            # TODO: else, merge them into a single Tuple{Vararg{T}} instead (#22120)?
-        end
-        # now rejoin it with the rest of the type union elements
-        typea = Union{tuplejoin, typea}
     end
-    u = Union{typea, typeb}
+    # collect the list of types from past tmerge calls returning Union
+    # and then reduce over that list
+    types = Any[]
+    _uniontypes(typea, types)
+    _uniontypes(typeb, types)
+    typenames = Vector{Core.TypeName}(undef, length(types))
+    for i in 1:length(types)
+        # check that we will be able to analyze (and simplify) everything
+        # bail if everything isn't a well-formed DataType
+        ti = types[i]
+        uw = unwrap_unionall(ti)
+        (uw isa DataType && ti <: uw.name.wrapper) || return Any
+        typenames[i] = uw.name
+    end
+    # see if any of the union elements have the same TypeName
+    # in which case, simplify this tmerge by replacing it with
+    # the widest possible version of itself (the wrapper)
+    for i in 1:length(types)
+        ti = types[i]
+        for j in (i + 1):length(types)
+            if typenames[i] === typenames[j]
+                tj = types[j]
+                if ti <: tj
+                    types[i] = Union{}
+                    break
+                elseif tj <: ti
+                    types[j] = Union{}
+                    typenames[j] = Any.name
+                else
+                    widen = typenames[i].wrapper
+                    if typenames[i] === Tuple.name
+                        # try to widen Tuple slower: make a single non-concrete Tuple containing both
+                        # converge the Tuple element-wise if they are the same length
+                        # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
+                        if nothing !== tuplelen(ti) === tuplelen(tj)
+                            widen = tuplemerge(ti, tj)
+                        end
+                        # TODO: else, try to merge them into a single Tuple{Vararg{T}} instead (#22120)?
+                    end
+                    types[i] = Union{}
+                    types[j] = widen
+                    break
+                end
+            end
+        end
+    end
+    u = Union{types...}
     if unionlen(u) <= MAX_TYPEUNION_LEN
-        # don't let type unions get too big
-        # this sets our convergence rate (e.g. worst-case compiler performance)
+        # don't let type unions get too big, if the above didn't reduce it enough
         return u
-    end
-    # see if either of them is a DataType
-    # which can be used to collapse the Union
-    # by swapping it for the widest possible version
-    # of itself (the wrapper)
-    # this currently violates associativity, which reduces the predictability
-    # of the result but is not inherently wrong
-    # TODO: instead, call `uniontypes` on `u`, and swap all of the results for their wrappers
-    unwrapa = unwrap_unionall(typea)
-    unwrapb = unwrap_unionall(typeb)
-    if unwrapa isa DataType
-        wrapa = unwrapa.name.wrapper
-        if typea <: wrapa
-            u = Union{wrapa, typeb}
-            if unionlen(u) <= MAX_TYPEUNION_LEN
-                return u
-            end
-        end
-    elseif unwrapb isa DataType
-        wrapb = unwrapb.name.wrapper
-        if typeb <: wrapb
-            u = Union{typea, wrapb}
-            if unionlen(u) <= MAX_TYPEUNION_LEN
-                return u
-            end
-        end
     end
     # finally, just return the widest possible type
     return Any
@@ -409,12 +408,11 @@ function tuplemerge(@nospecialize(a), @nospecialize(b))
     @assert lar === lbr && a.name === b.name === Tuple.name "assertion failure"
     p = Vector{Any}(undef, lar)
     for i = 1:lar
-        api = ap[i]
-        bpi = bp[i]
-        if unionlen(unwrap_unionall(api)) + unionlen(unwrap_unionall(bpi)) > MAX_TYPEUNION_LEN
-            p[i] = Any
+        ui = Union{ap[i], bp[i]}
+        if unionlen(ui) < MAX_TYPEUNION_LEN
+            p[i] = ui
         else
-            p[i] = Union{api, bpi}
+            p[i] = Any
         end
     end
     return Tuple{p...}
