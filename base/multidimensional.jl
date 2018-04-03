@@ -410,16 +410,13 @@ module IteratorsMD
     LinearIndices(A::AbstractArray) = LinearIndices(CartesianIndices(A))
 
     # AbstractArray implementation
-    Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
+    Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexLinear()
     Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
     Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
-    @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        dims = length.(iter.indices)
-        #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
-        @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
-        return result
+    function Base.getindex(iter::LinearIndices{N,R}, i::Int) where {N,R}
+        @boundscheck checkbounds(iter, i)
+        i
     end
-    @inline Base.getindex(iter::LinearIndices{1,R}, i::Int) where {R} = i
 end  # IteratorsMD
 
 
