@@ -1872,6 +1872,10 @@ end
         @test @inferred(f26009(A, 2:2)) == reshape(2:4:20, 1, :)
         @test @inferred(f26009(A, 2)) == 2:4:20
     end
+    A = reshape(1:24, 4, 3, 2)
+    @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
+    @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
+    @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
 end
 
 ###
