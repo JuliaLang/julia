@@ -51,7 +51,7 @@ function choosetests(choices = [])
         "some", "meta", "stacktraces", "docs",
         "misc", "threads",
         "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "compile", "inline",
+        "checked", "bitset", "floatfuncs", "precompile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
