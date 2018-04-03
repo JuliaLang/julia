@@ -121,32 +121,33 @@ round(T::Type, x)
 round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
 round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, _round(x,r))
 
-function round(x, r::RoundingMode=RoundNearest;
+function round(x::Real, r::RoundingMode=RoundNearest;
     digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
     isfinite(x) || return x
     _round(x,r,digits,sigdigits,base)
 end
-trunc(x; kwargs...) = round(x, RoundToZero; kwargs...)
-floor(x; kwargs...) = round(x, RoundDown; kwargs...)
-ceil(x; kwargs...)  = round(x, RoundUp; kwargs...)
+trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
+floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
+ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
 
 _round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = _round(x, r)
 _round(x::Integer, r::RoundingMode) = x
 
-function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
-    fx = float(x)
-    if digits >= 0
-        sc = oftype(fx, base)^digits
-        r = round(fx * sc, r) / sc
-    else
-        isc = oftype(fx, base)^-digits
-        r = round(fx / isc, r) * isc
+# round x to multiples of 1/invstep
+function _round_invstep(x, invstep, r::RoundingMode)
+    y = _round(x * invstep, r) / invstep
+    if !isfinite(y)
+        return x
     end
+    return y
+end
 
-    if !isfinite(r)
-        if digits > 0
-            return fx
-        elseif x > 0
+# round x to multiples of step
+function _round_step(x, step, r::RoundingMode)
+    # TODO: use div with rounding mode
+    y = _round(x / step, r) * step
+    if !isfinite(y)
+        if x > 0
             return (r == RoundUp ? oftype(x, Inf) : zero(fx))
         elseif x < 0
             return (r == RoundDown ? -oftype(x, Inf) : -zero(fx))
@@ -154,7 +155,18 @@ function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
             return fx
         end
     end
-    return r
+    return y
+end
+
+function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
+    fx = float(x)
+    if digits >= 0
+        invstep = oftype(fx, base)^digits
+        _round_invstep(fx, invstep, r)
+    else
+        step = oftype(fx, base)^-digits
+        _round_step(fx, step, r)
+    end
 end
 
 hidigit(x::Integer, base) = ndigits0z(x, base)
