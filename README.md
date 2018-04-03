@@ -265,13 +265,8 @@ If you do choose to use the `USE_SYSTEM_*` flags, note that `/usr/local` is not 
 to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your `Make.user`, though doing so may interfere with
 other dependencies.
 
-Some known issues on FreeBSD are:
-
-* The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
-  set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
-
-* The `Pkg` test suite segfaults on FreeBSD 11.1, likely due to a change in FreeBSD's default handling of stack guarding.
-  See [issue #23328](https://github.com/JuliaLang/julia/issues/23328) for more information.
+Note that the x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
+set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 ### Windows
 
