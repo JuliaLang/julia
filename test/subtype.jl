@@ -1259,3 +1259,17 @@ end
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
+
+# issue #26654
+@test !(Ref{Union{Int64, Ref{Number}}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Int64, Val{Number}}} <: Ref{Union{Val{T}, T}} where T)
+@test !(Ref{Union{Ref{Number}, Int64}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Val{Number}, Int64}} <: Ref{Union{Val{T}, T}} where T)
+
+# issue #26180
+@test !(Ref{Union{Ref{Int64}, Ref{Number}}} <: Ref{Ref{T}} where T)
+@test !(Ref{Union{Ref{Int64}, Ref{Number}}} <: Ref{Union{Ref{T}, Ref{T}}} where T)
+
+# issue #25240, #26405
+f26405(::Type{T}) where {T<:Union{Integer, Missing}} = T
+@test f26405(Union{Missing, Int}) == Union{Missing, Int}
