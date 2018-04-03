@@ -625,23 +625,27 @@ static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > (ml->max_world | max_world_mask))
             continue;
-        // TODO: more efficient
-        jl_value_t *a = types;
-        jl_value_t *b = (jl_value_t*)ml->sig;
-        while (jl_is_unionall(a)) a = ((jl_unionall_t*)a)->body;
-        while (jl_is_unionall(b)) b = ((jl_unionall_t*)b)->body;
-        size_t na = jl_nparams(a), nb = jl_nparams(b);
-        assert(na > 0 && nb > 0);
-        if (!jl_is_vararg_type(jl_tparam(a,na-1)) && !jl_is_vararg_type(jl_tparam(b,nb-1))) {
+        // unroll the first few cases here, to the extent that is possible to do fast and easily
+        jl_value_t *a = jl_unwrap_unionall(types);
+        jl_value_t *b = jl_unwrap_unionall((jl_value_t*)ml->sig);
+        size_t na = jl_nparams(a);
+        size_t nb = jl_nparams(b);
+        int va_a = na > 0 && jl_is_vararg_type(jl_tparam(a, na - 1));
+        int va_b = nb > 0 && jl_is_vararg_type(jl_tparam(b, nb - 1));
+        if (!va_a && !va_b) {
             if (na != nb)
                 continue;
         }
-        if (na > 1 && nb > 1) {
-            if (jl_obviously_unequal(jl_tparam(a,1), jl_tparam(b,1)))
+        if (na - va_a > 0 && nb - va_b > 0) {
+            if (jl_obviously_unequal(jl_tparam(a, 0), jl_tparam(b, 0)))
                 continue;
-            if (na > 2 && nb > 2) {
-                if (jl_obviously_unequal(jl_tparam(a,2), jl_tparam(b,2)))
+            if (na - va_a > 1 && nb - va_b > 1) {
+                if (jl_obviously_unequal(jl_tparam(a, 1), jl_tparam(b, 1)))
                     continue;
+                if (na - va_a > 2 && nb - va_b > 2) {
+                    if (jl_obviously_unequal(jl_tparam(a, 2), jl_tparam(b, 2)))
+                        continue;
+                }
             }
         }
         if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig))

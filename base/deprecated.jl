@@ -1364,6 +1364,8 @@ export readandwrite
 
 @deprecate flipdim(A, d) reverse(A, dims=d)
 
+@deprecate squeeze(A, dims) squeeze(A, dims=dims)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
@@ -1575,6 +1577,11 @@ function search(buf::IOBuffer, delim::UInt8)
     q == C_NULL && return nothing
     return Int(q-p+1)
 end
+
+# PR #26647
+# The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
+# To remove this deprecation, remove the `keep` argument from the function signatures as well as
+# the internal logic that deals with the renaming. These live in base/strings/util.jl.
 
 # END 0.7 deprecations
 

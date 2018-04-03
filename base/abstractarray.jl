@@ -570,10 +570,10 @@ to_shape(r::OneTo) = Int(last(r))
 to_shape(r::AbstractUnitRange) = r
 
 """
-    similar(storagetype, indices)
+    similar(storagetype, axes)
 
 Create an uninitialized mutable array analogous to that specified by
-`storagetype`, but with `indices` specified by the last
+`storagetype`, but with `axes` specified by the last
 argument. `storagetype` might be a type or a function.
 
 **Examples**:
