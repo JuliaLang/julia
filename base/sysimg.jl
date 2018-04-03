@@ -53,7 +53,7 @@ let SOURCE_PATH = ""
     global _include
     function _include(mod::Module, path)
         prev = SOURCE_PATH
-        path = joinpath(dirname(prev), path)
+        path = normpath(joinpath(dirname(prev), path))
         push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         result = Core.include(mod, path)
