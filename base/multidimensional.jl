@@ -251,7 +251,10 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = iter.indices
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @inline Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(I)
+    @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
+        @boundscheck checkbounds(iter, I...)
+        CartesianIndex(I)
+    end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
     ndims(::Type{CartesianIndices{N}}) where {N} = N
