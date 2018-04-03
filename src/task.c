@@ -711,29 +711,52 @@ void jl_init_tasks(void)
 #else /* JULIA_ENABLE_PARTR */
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"), NULL, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(7,
+                        jl_perm_symsvec(16,
                                         "storage",
                                         "state",
                                         "result",
                                         "exception",
                                         "backtrace",
                                         "logstate",
-                                        "code"),
-                        jl_svec(7,
+                                        "args",
+                                        "mfunc",
+                                        "rargs",
+                                        "mredfunc",
+                                        "cq_head",
+                                        "cq_lock_owner",
+                                        "cq_lock_count",
+                                        "next",
+                                        "parent",
+                                        "red_result"),
+                        jl_svec(16,
                                 jl_any_type,
                                 jl_sym_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_any_type),
-                        0, 1, 6);
-    // TODO: how to make this opaque to Julia?
+                        0, 1, 12);
+    jl_svecset(jl_task_type->types, 7, (jl_value_t*)jl_method_instance_type);
+    jl_svecset(jl_task_type->types, 9, (jl_value_t*)jl_method_instance_type);
+    jl_svecset(jl_task_type->types, 10, (jl_value_t*)jl_task_type);
+    jl_svecset(jl_task_type->types, 13, (jl_value_t*)jl_task_type);
+    jl_svecset(jl_task_type->types, 14, (jl_value_t*)jl_task_type);
     jl_condition_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Condition"), NULL, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "notify", "waitq"),
-                        jl_svec(2, jl_uint8_type, jl_any_type),
-                        0, 1, 2);
+                        jl_perm_symsvec(4, "notify", "waitq_head", "waitq_lock_owner", "waitq_lock_count"),
+                        jl_svec(4, jl_uint8_type, jl_any_type, jl_int64_type, jl_int32_type),
+                        0, 1, 4);
+    jl_svecset(jl_condition_type->types, 1, (jl_value_t*)jl_task_type);
 #endif /* JULIA_ENABLE_PARTR */
 
     done_sym = jl_symbol("done");
