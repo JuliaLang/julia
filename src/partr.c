@@ -477,10 +477,12 @@ static void sync_grains(jl_task_t *task)
     if (task->red) {
         task->result = reduce(task->arr, task->red, &task->rfptr, task->mredfunc,
                               task->rargs, task->result, task->grain_num);
+        jl_gc_wb(task, task->result);
 
         /*  if this task is last, set the result in the parent task */
         if (task->result) {
             task->parent->red_result = task->result;
+            jl_gc_wb(task->parent, task->parent->red_result);
             was_last = 1;
         }
     }
@@ -506,6 +508,7 @@ static void sync_grains(jl_task_t *task)
         if (task->grain_num == 0) {
             jl_task_yield(0);
             task->result = task->red_result;
+            jl_gc_wb(task, task->result);
         }
     }
 }
@@ -889,8 +892,10 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
         /* ensure the task didn't finish before we got the lock */
         if (task->state != done_sym  &&  task->state != failed_sym) {
             /* add the current task to the CQ */
-            if (task->cq.head == NULL)
+            if (task->cq.head == NULL) {
                 task->cq.head = ptls->current_task;
+                jl_gc_wb(task, task->cq.head);
+            }
             else {
                 jl_task_t *pt = task->cq.head;
                 while (pt->next)
@@ -983,7 +988,9 @@ JL_DLLEXPORT jl_condition_t *jl_condition_new(void)
     jl_condition_t *cond = (jl_condition_t *)
             jl_gc_alloc(ptls, sizeof (jl_condition_t), jl_condition_type);
     cond->notify = 0;
+    jl_gc_wb(cond, cond->notify);
     cond->waitq.head = NULL;
+    jl_gc_wb(cond, cond->waitq.head);
     JL_MUTEX_INIT(&cond->waitq.lock);
 
     return cond;
@@ -999,8 +1006,10 @@ JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
     if (!c->notify) {
         JL_LOCK(&c->waitq.lock);
         if (!c->notify) {
-            if (c->waitq.head == NULL)
+            if (c->waitq.head == NULL) {
                 c->waitq.head = ptls->current_task;
+                jl_gc_wb(c, c->waitq.head);
+            }
             else {
                 jl_task_t *pt = c->waitq.head;
                 while (pt->next)
@@ -1023,8 +1032,10 @@ JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
 {
     JL_LOCK(&c->waitq.lock);
     c->notify = 1;
+    jl_gc_wb(c, c->notify);
     jl_task_t *qtask = c->waitq.head;
     c->waitq.head = NULL;
+    jl_gc_wb(c, c->waitq.head);
     JL_UNLOCK(&c->waitq.lock);
 
     jl_task_t *qnext;

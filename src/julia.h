@@ -1656,8 +1656,27 @@ struct _jl_task_t {
     jl_value_t *backtrace;
     jl_value_t *logstate;
 
+    /* task entry point, arguments */
+    jl_value_t *args;
+    jl_method_instance_t *mfunc;
+
+    /* reduction function entry point, arguments */
+    jl_value_t *rargs;
+    jl_method_instance_t *mredfunc;
+
+    /* completion queue */
+    jl_taskq_t cq;
+
     /* to link this task into queues */
     jl_task_t *next;
+
+    /* parent (first) task of a parfor set */
+    jl_task_t *parent;
+
+    /* parfor reduction result */
+    jl_value_t *red_result;
+
+    /* --- hidden --- */
 
     /* context and stack */
     jl_jmp_buf ctx;
@@ -1669,10 +1688,11 @@ struct _jl_task_t {
 
     arraylist_t locks;
 
-    /* task entry point, arguments, result, etc. */
-    jl_value_t *args;
-    jl_method_instance_t *mfunc;
+    /* task function pointer */
     jl_generic_fptr_t fptr;
+
+    /* reduction function pointer, for parfors */
+    jl_generic_fptr_t rfptr;
 
     /* current exception handler */
     jl_handler_t *eh;
@@ -1692,23 +1712,9 @@ struct _jl_task_t {
     /* grain's range, for parfors */
     int64_t start, end;
 
-    /* reduction function, for parfors */
-    jl_value_t *rargs;
-    jl_method_instance_t *mredfunc;
-    jl_generic_fptr_t rfptr;
-
-    /* parent (first) task of a parfor set */
-    jl_task_t *parent;
-
     /* to synchronize/reduce grains of a parfor */
     arriver_t *arr;
     reducer_t *red;
-
-    /* parfor reduction result */
-    jl_value_t *red_result;
-
-    /* completion queue */
-    jl_taskq_t cq;
 
     /* task settings */
     int8_t  settings;
