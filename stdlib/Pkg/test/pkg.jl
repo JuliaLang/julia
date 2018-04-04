@@ -151,7 +151,7 @@ temp_pkg_dir() do
         end
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
             LibGit2.add!(repo, "README.md")
-            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
             LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
         end
 
@@ -182,7 +182,7 @@ temp_pkg_dir() do
 
         test_commit = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
             LibGit2.add!(repo, "README.md")
-            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
             LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
         end
         Pkg.checkout("Example")
