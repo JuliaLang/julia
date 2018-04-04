@@ -182,5 +182,8 @@ function choosetests(choices = [])
     explicit_pkg3    || filter!(x -> x != "Pkg3/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
+    # Filter out tests from the test groups in the stdlibs
+    filter!(!in(skip_tests), tests)
+
     tests, net_on, exit_on_error, seed
 end
