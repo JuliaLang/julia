@@ -41,3 +41,11 @@ let A = reshape(1:20, 5, 4)
     @test !(R2 isa StridedArray)
     @test R * ones(4, 5) == R2 * ones(4,5) == copy(R) * ones(4,5) == copy(R2) * ones(4,5)
 end
+
+# but ensure that strided views of strided reinterpret arrays are still strided
+let A = collect(reshape(1:20, 5, 4))
+    R = reinterpret(Int32, A)
+    @test R isa StridedArray
+    @test view(R, :, :) isa StridedArray
+    @test reshape(R, :) isa StridedArray
+end
