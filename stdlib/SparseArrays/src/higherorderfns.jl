@@ -6,7 +6,7 @@ module HigherOrderFns
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, copy, copyto!
 
-using Base: TupleLL, TupleLLEnd, front, tail, to_shape
+using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
@@ -82,11 +82,11 @@ Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.Style{Tuple}) = Broadcast
 Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
 
 # Dispatch on broadcast operations by number of arguments
-const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},ElType,Axes,Indexing<:Union{Nothing,TupleLL{TupleLLEnd,TupleLLEnd}},F} =
-    Broadcasted{Style,ElType,Axes,Indexing,F,TupleLL{TupleLLEnd,TupleLLEnd}}
-const SpBroadcasted1{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,TupleLL},F,Args<:TupleLL{<:SparseVecOrMat,TupleLLEnd}} =
+const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},ElType,Axes,Indexing<:Union{Nothing,Tuple{}},F} =
+    Broadcasted{Style,ElType,Axes,Indexing,F,Tuple{}}
+const SpBroadcasted1{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat}} =
     Broadcasted{Style,ElType,Axes,Indexing,F,Args}
-const SpBroadcasted2{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,TupleLL},F,Args<:TupleLL{<:SparseVecOrMat,TupleLL{<:SparseVecOrMat,TupleLLEnd}}} =
+const SpBroadcasted2{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
     Broadcasted{Style,ElType,Axes,Indexing,F,Args}
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
@@ -151,7 +151,7 @@ function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N
                         _map_notzeropres!(f, fofzeros, C, A, Bs...)
 end
 # (3) broadcast[!] entry points
-copy(bc::SpBroadcasted1) = _noshapecheck_map(bc.f, bc.args.head)
+copy(bc::SpBroadcasted1) = _noshapecheck_map(bc.f, bc.args[1])
 
 @inline function copyto!(C::SparseVecOrMat, bc::Broadcasted0{Nothing})
     isempty(C) && return _finishempty!(C)
@@ -192,14 +192,11 @@ end
 @inline _aresameshape(A) = true
 @inline _aresameshape(A, B) = size(A) == size(B)
 @inline _aresameshape(A, B, Cs...) = _aresameshape(A, B) ? _aresameshape(B, Cs...) : false
-@inline _aresameshape(t::TupleLL{<:Any,TupleLLEnd}) = true
-@inline _aresameshape(t::TupleLL{<:Any,<:TupleLL}) =
-    _aresameshape(t.head, t.rest.head) ? _aresameshape(t.rest) : false
 @inline _checksameshape(As...) = _aresameshape(As...) || throw(DimensionMismatch("argument shapes must match"))
-@inline _all_args_isa(t::TupleLL{<:Any,TupleLLEnd}, ::Type{T}) where T = isa(t.head, T)
-@inline _all_args_isa(t::TupleLL, ::Type{T}) where T = isa(t.head, T) & _all_args_isa(t.rest, T)
-@inline _all_args_isa(t::TupleLL{<:Broadcasted,TupleLLEnd}, ::Type{T}) where T = _all_args_isa(t.head.args, T)
-@inline _all_args_isa(t::TupleLL{<:Broadcasted}, ::Type{T}) where T = _all_args_isa(t.head.args, T) & _all_args_isa(t.rest, T)
+@inline _all_args_isa(t::Tuple{Any}, ::Type{T}) where T = isa(t[1], T)
+@inline _all_args_isa(t::Tuple{Any,Vararg{Any}}, ::Type{T}) where T = isa(t[1], T) & _all_args_isa(tail(t), T)
+@inline _all_args_isa(t::Tuple{Broadcasted}, ::Type{T}) where T = _all_args_isa(t[1].args, T)
+@inline _all_args_isa(t::Tuple{Broadcasted,Vararg{Any}}, ::Type{T}) where T = _all_args_isa(t[1].args, T) & _all_args_isa(tail(t), T)
 @inline _densennz(shape::NTuple{1}) = shape[1]
 @inline _densennz(shape::NTuple{2}) = shape[1] * shape[2]
 _maxnnzfrom(shape::NTuple{1}, A) = nnz(A) * div(shape[1], A.n)
@@ -953,28 +950,18 @@ end
 # (10) broadcast over combinations of broadcast scalars and sparse vectors/matrices
 
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
-@inline copy(bc::Broadcasted{<:SPVM}) = _copy(bc.args, bc)
-
-# Incorporate types into the function in the common f(::Type{T}, ::SparseVecOrMat) case
-# This prevents losing the type information within a tuple or unspecialized argument
-const Args2{S,T} = Base.TupleLL{S,Base.TupleLL{T,Base.TupleLLEnd}}
-function _copy(::Args2{Type{T},S}, bc::Broadcasted{<:SPVM}) where {T,S<:SparseVecOrMat}
-    BC = Broadcasted{typeof(BroadcastStyle(typeof(bc))),eltype(bc)}
-    copy(BC(x->bc.f(bc.args.head, x), bc.args.rest, bc.axes, bc.indexing))
-end
-
-function _copy(::Any, bc::Broadcasted{<:SPVM})
+@inline function copy(bc::Broadcasted{<:SPVM})
     bcf = flatten(bc)
-    return __copy(bcf.f, Tuple(bcf.args)...)
+    return _copy(bcf.f, Tuple(bcf.args)...)
 end
 
-__copy(f, args::SparseVector...) = _shapecheckbc(f, args...)
-__copy(f, args::SparseMatrixCSC...) = _shapecheckbc(f, args...)
-__copy(f, args::SparseVecOrMat...) = _diffshape_broadcast(f, args...)
+_copy(f, args::SparseVector...) = _shapecheckbc(f, args...)
+_copy(f, args::SparseMatrixCSC...) = _shapecheckbc(f, args...)
+_copy(f, args::SparseVecOrMat...) = _diffshape_broadcast(f, args...)
 # Otherwise, we incorporate scalars into the function and re-dispatch
-function __copy(f, args...)
+function _copy(f, args...)
     parevalf, passedargstup = capturescalars(f, args)
-    return __copy(parevalf, passedargstup...)
+    return _copy(parevalf, passedargstup...)
 end
 
 function _shapecheckbc(f, args...)
@@ -983,7 +970,7 @@ end
 
 
 function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
-    if bc.f === identity && bc isa SpBroadcasted1 && Base.axes(dest) == (A = bc.args.head; Base.axes(A))
+    if bc.f === identity && bc isa SpBroadcasted1 && Base.axes(dest) == (A = bc.args[1]; Base.axes(A))
         return copyto!(dest, A)
     end
     bcf = flatten(bc)
@@ -1002,7 +989,7 @@ function _copyto!(f, dest, As::SparseVecOrMat...)
 end
 
 function _copyto!(f, dest, args...)
-    # As contains nothing but SparseVecOrMat and scalars
+    # args contains nothing but SparseVecOrMat and scalars
     # See below for capturescalars
     parevalf, passedsrcargstup = capturescalars(f, args)
     _copyto!(parevalf, dest, passedsrcargstup...)
@@ -1029,9 +1016,13 @@ end
 @inline function _capturescalars(arg, mixedargs...)
     let (rest, f) = _capturescalars(mixedargs...)
         if nonscalararg(arg)
-            return (arg, rest...), (head, tail...) -> (head, f(tail...)...) # pass-through to broadcast
+            return (arg, rest...), @inline function(head, tail...)
+                (head, f(tail...)...)
+            end # pass-through to broadcast
         else
-            return rest, (tail...) -> (arg, f(tail...)...) # add back scalararg after (in makeargs)
+            return rest, @inline function(tail...)
+                (arg, f(tail...)...)
+            end # add back scalararg after (in makeargs)
         end
     end
 end

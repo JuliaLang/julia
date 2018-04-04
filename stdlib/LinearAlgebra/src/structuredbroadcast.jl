@@ -1,6 +1,6 @@
 ## Broadcast styles
 import Base.Broadcast
-using Base.Broadcast: DefaultArrayStyle, broadcast_similar
+using Base.Broadcast: DefaultArrayStyle, broadcast_similar, tail
 
 struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
@@ -54,12 +54,10 @@ structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElT
 # Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
 # system will return Tridiagonal when there's more than one Bidiagonal, but when
 # there's only one, we need to make figure out upper or lower
-find_bidiagonal(bc::Broadcast.Broadcasted) = find_bidiagonal(bc.args)
-find_bidiagonal(ll::Base.TupleLL) = find_bidiagonal(ll.head, ll.rest)
-find_bidiagonal(x) = throw(ArgumentError("could not find Bidiagonal within broadcast expression"))
-find_bidiagonal(a::Bidiagonal, rest) = a
-find_bidiagonal(n::Union{Base.TupleLL,Broadcast.Broadcasted}, rest) = find_bidiagonal(find_bidiagonal(n), rest)
-find_bidiagonal(x, rest) = find_bidiagonal(rest)
+find_bidiagonal() = throw(ArgumentError("could not find Bidiagonal within broadcast expression"))
+find_bidiagonal(a::Bidiagonal, rest...) = a
+find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
+find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
     ex = find_bidiagonal(bc)
     return Bidiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1), ex.uplo)
@@ -80,13 +78,12 @@ structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n)
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
 # preserve both zeros and ones (for Unit***erTriangular) and symmetry (for SymTridiagonal)
-const Args1{T} = Base.TupleLL{T,Base.TupleLLEnd}
-const Args2{S,T} = Base.TupleLL{S,Base.TupleLL{T,Base.TupleLLEnd}}
+const TypeFuncs = Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}
 isstructurepreserving(::Any) = false
 isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args)
-isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Args1{<:StructuredMatrix}) = true
-isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Args1{<:StructuredMatrix}) = true
-isstructurepreserving(::Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}, ::Args2{<:Type,<:StructuredMatrix}) = true
+isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Tuple{StructuredMatrix}) = true
+isstructurepreserving(::TypeFuncs, ::Tuple{StructuredMatrix}) = true
+isstructurepreserving(::Base.Broadcast.TypeArgFunction{<:TypeFuncs,<:Any,1}, ::Tuple{StructuredMatrix}) = true
 isstructurepreserving(f, args) = false
 
 _iszero(n::Number) = iszero(n)

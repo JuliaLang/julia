@@ -705,7 +705,6 @@ end
 show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
-show(io::IO, t::TupleLL) = show_delim_array(io, t, '{', ',', '}', true)
 
 show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
