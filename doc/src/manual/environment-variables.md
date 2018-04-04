@@ -314,12 +314,6 @@ event listener for just-in-time (JIT) profiling.
 
 Arguments to be passed to the LLVM backend.
 
-!!! note
-
-    This environment variable has an effect only if Julia was compiled with
-    `JL_DEBUG_BUILD` set — in particular, the `julia-debug` executable is always
-    compiled with this build variable.
-
 ### `JULIA_DEBUG_LOADING`
 
 If set, then Julia prints detailed information about the cache in the loading

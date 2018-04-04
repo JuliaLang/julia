@@ -50,9 +50,8 @@ development version of LLVM.
 
 ## Passing options to LLVM
 
-You can pass options to LLVM using *debug* builds of Julia. To create a debug build, run `make debug`.
-The resulting executable is `usr/bin/julia-debug`. You can pass LLVM options to this executable
-via the environment variable `JULIA_LLVM_ARGS`. Here are example settings using `bash` syntax:
+You can pass LLVM options to via the environment variable `JULIA_LLVM_ARGS`.
+Here are example settings using `bash` syntax:
 
   * `export JULIA_LLVM_ARGS = -print-after-all` dumps IR after each pass.
   * `export JULIA_LLVM_ARGS = -debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
