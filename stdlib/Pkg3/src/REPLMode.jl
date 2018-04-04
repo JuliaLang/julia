@@ -769,9 +769,9 @@ function complete_option(s, i1, i2)
 end
 
 function complete_package(s, i1, i2, lastcommand, project_opt)
-    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT]
         return complete_installed_package(s, i1, i2, project_opt)
-    elseif lastcommand in [CMD_ADD]
+    elseif lastcommand in [CMD_ADD, CMD_DEVELOP]
         return complete_remote_package(s, i1, i2)
     end
     return String[], 0:-1, false
