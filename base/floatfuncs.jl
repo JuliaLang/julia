@@ -44,8 +44,8 @@ isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
     round([T,] x, [r::RoundingMode])
-    round(x, [r::RoundingMode]; digits::Integer= [, base = 10])
-    round(x, [r::RoundingMode]; sigdigits::Integer= [, base = 10])
+    round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
+    round(x, [r::RoundingMode]; sigdigits::Integer, base = 10)
 
 Rounds the number `x`.
 
