@@ -44,10 +44,11 @@ function move_to_node1(t)
         splice!(tests, findfirst(isequal(t), tests))
         push!(node1_tests, t)
     end
+    nothing
 end
 
-# Base.compile only works from node 1, so compile test is handled specially
-move_to_node1("compile")
+# Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("precompile")
 move_to_node1("SharedArrays")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
