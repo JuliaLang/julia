@@ -84,11 +84,16 @@ endif # OS == WINNT
 else
 LLVM_FLAGS += --disable-assertions
 endif # LLVM_ASSERTIONS
-ifeq ($(LLVM_DEBUG), 1)
-LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
+ifneq ($(LLVM_DEBUG), 0)
+LLVM_FLAGS += --enable-debug-symbols --enable-keep-symbols
 ifeq ($(OS), WINNT)
 LLVM_CXXFLAGS += -Wa,-mbig-obj
 endif # OS == WINNT
+ifeq ($(LLVM_DEBUG), 1)
+LLVM_FLAGS += --disable-optimized
+else #RelWithDebInfo
+LLVM_FLAGS += --enable-optimized
+endif
 else
 LLVM_FLAGS += --enable-optimized
 endif # LLVM_DEBUG
