@@ -148,11 +148,11 @@ function _round_step(x, step, r::RoundingMode)
     y = _round(x / step, r) * step
     if !isfinite(y)
         if x > 0
-            return (r == RoundUp ? oftype(x, Inf) : zero(fx))
+            return (r == RoundUp ? oftype(x, Inf) : zero(x))
         elseif x < 0
-            return (r == RoundDown ? -oftype(x, Inf) : -zero(fx))
+            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
         else
-            return fx
+            return x
         end
     end
     return y
