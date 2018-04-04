@@ -1681,7 +1681,7 @@ end
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
-    indices = Array(R)
+    indices = collect(R)
     @test indices[1] == CartesianIndex{2}(2,3)
     @test indices[2] == CartesianIndex{2}(3,3)
     @test indices[4] == CartesianIndex{2}(5,3)
@@ -1702,8 +1702,8 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianIndices((3:5,-7:7)) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
-    @test CartesianIndices((3,-7:7)) == CartesianIndex.(3, reshape(-7:7, 1, :))
+    @test collect(CartesianIndices((3:5,-7:7))) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
+    @test collect(CartesianIndices((3,-7:7))) == CartesianIndex.(3, reshape(-7:7, 1, :))
 end
 
 # All we really care about is that we have an optimized
