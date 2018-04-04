@@ -8,7 +8,7 @@ import LibGit2
 
 include("utils.jl")
 
-const TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+const TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
 function git_init_package(tmp, path)
