@@ -245,7 +245,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(m, linfo);
         }
 
-        if (linfo->jlcall_api == JL_API_CONST)
+        if (linfo->invoke != jl_fptr_trampoline)
             continue;
         src = m->source;
         // TODO: the `unspecialized` field is not yet world-aware, so we can't store
@@ -253,7 +253,7 @@ static void _compile_all_deq(jl_array_t *found)
         //src = jl_type_infer(&linfo, jl_world_counter, 1);
         //m->unspecialized = linfo;
         //jl_gc_wb(m, linfo);
-        //if (linfo->jlcall_api == JL_API_CONST)
+        //if (linfo->trampoline != jl_fptr_trampoline)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
@@ -274,8 +274,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     if (m->source &&
         (!m->unspecialized ||
          (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
-          m->unspecialized->jlcall_api != JL_API_CONST &&
-          m->unspecialized->fptr == NULL))) {
+          m->unspecialized->invoke == jl_fptr_trampoline))) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
     }
@@ -311,8 +310,8 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->jlcall_api != JL_API_CONST &&
-            (l->func.linfo->fptr ||
+            l->func.linfo->invoke != jl_fptr_const_return &&
+            (l->func.linfo->invoke != jl_fptr_trampoline ||
              (l->func.linfo->inferred &&
               l->func.linfo->inferred != jl_nothing &&
               jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&

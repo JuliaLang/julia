@@ -731,7 +731,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 backedges = NULL;
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
-        write_uint8(s->s, li->jlcall_api == JL_API_CONST ? JL_API_CONST : 0);
+        write_uint8(s->s, li->invoke == jl_fptr_const_return ? 2 : 0);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1550,7 +1550,6 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     li->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->backedges);
     if (li->backedges)
         jl_gc_wb(li, li->backedges);
-    li->unspecialized_ducttape = NULL;
     if (internal == 1) {
         li->min_world = 0;
         li->max_world = 0;
@@ -1570,8 +1569,11 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->inInference = 0;
-    li->fptr = NULL;
-    li->jlcall_api = read_int8(s->s);
+    li->specptr.fptr = NULL;
+    if (read_int8(s->s) == 2)
+        li->invoke = jl_fptr_const_return;
+    else
+        li->invoke = jl_fptr_trampoline;
     li->compile_traced = 0;
     return (jl_value_t*)li;
 }

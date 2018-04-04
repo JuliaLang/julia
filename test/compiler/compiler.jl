@@ -1031,9 +1031,9 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
-        @test linfo.jlcall_api == 2
+        @test Core.Compiler.invoke_api(linfo) == 2
     end
-    if linfo.jlcall_api == 2
+    if Core.Compiler.invoke_api(linfo) == 2
         @test linfo.inferred_const == val
         return
     end
