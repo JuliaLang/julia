@@ -70,10 +70,10 @@ For specializing broadcast on custom types, see
 Base.BroadcastStyle
 Base.broadcast_similar
 Base.broadcast_indices
-Base.Broadcast.Scalar
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
+Base.Broadcast.broadcastable
 ```
 
 ## Indexing and assignment
