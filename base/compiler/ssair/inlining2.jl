@@ -503,7 +503,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             continue
         end
 
-        if linfo.jlcall_api == 2
+        if invoke_api(linfo) == 2
             # in this case function can be inlined to a constant
             add_backedge!(linfo, sv)
             ir[SSAValue(idx)] = linfo.inferred_const
