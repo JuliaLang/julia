@@ -330,5 +330,4 @@ end
 @test @inferred isempty(findall(isequal('é'), ""))
 
 # issue #18109
-s_18109 = "fooα🐨βcd3"
-@test findlast(isequal('o'), s_18109) == 3
+@test findlast(isequal('o'), "fooα🐨βcd3") == 3
