@@ -12,14 +12,14 @@ if Sys.iswindows()
         # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
         downloadfile = "($client).DownloadFile('$(replace(url, "'" => "''"))', '$(replace(filename, "'" => "''"))')"
         # PowerShell v3 or later is required for Tls12
-        ps = run(pipeline(`$ps -Version 3 -NoProfile -Command "$tls12; $downloadfile"`; stderr=stderr); wait=false)
+        proc = run(pipeline(`$ps -Version 3 -NoProfile -Command "$tls12; $downloadfile"`; stderr=stderr); wait=false)
         if !success(proc)
             if proc.exitcode % Int32 == -393216
                 # appears to be "wrong version" exit code, based on
                 # https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks-common
                 error("Downloading files requires Windows Management Framework 3.0 or later.")
             end
-            pipeline_error(ps)
+            pipeline_error(proc)
         end
         filename
     end
