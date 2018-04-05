@@ -177,7 +177,7 @@ function choosetests(choices = [])
         end
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-    prepend!(tests, new_tests)
+    append!(tests, new_tests)
     explicit_pkg     || filter!(x -> x != "Pkg/pkg",        tests)
     explicit_pkg3    || filter!(x -> x != "Pkg3/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
