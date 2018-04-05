@@ -4,7 +4,7 @@ module LibGit2Tests
 
 import LibGit2
 using Test
-using Random, Serialization
+using Random, Serialization, Sockets
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))

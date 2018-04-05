@@ -769,17 +769,26 @@ function substitute!(
         head = e.head
         if head === :static_parameter
             return quoted(spvals[e.args[1]])
+        elseif head === :cfunction
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            if !(e.args[2] isa QuoteNode) # very common no-op
+                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
+            end
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+            e.args[4] = svec(Any[
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                for argt
+                in e.args[4] ]...)
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
                     e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
                 elseif i == 3
-                    argtuple = Any[
+                    e.args[3] = svec(Any[
                         ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
                         for argt
-                        in e.args[3] ]
-                    e.args[3] = svec(argtuple...)
+                        in e.args[3] ]...)
                 elseif i == 4
                     @assert isa((e.args[4]::QuoteNode).value, Symbol)
                 elseif i == 5
