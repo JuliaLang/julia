@@ -712,9 +712,9 @@ end
 end
 
 #test that it can auto complete with spaces in file/path
-let path = tempdir(),
-    space_folder = randstring() * " α",
-    dir = joinpath(path, space_folder),
+mktempdir() do path
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
