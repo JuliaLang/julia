@@ -181,3 +181,12 @@ end
 
     @test fldmod1(4.0, 3) == fldmod1(4, 3)
 end
+
+@testset "Fix12" begin
+    x = 9
+    y = 7.0
+    fx = Base.Fix1(/, x)
+    fy = Base.Fix2(/, y)
+    @test fx(y) == x / y
+    @test fy(x) == x / y
+end
