@@ -1260,6 +1260,15 @@ let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
 
+# issue #24521
+g24521(::T, ::T) where {T} = T
+@test_throws MethodError g24521(Tuple{Any}, Tuple{T} where T)
+@test g24521(Vector, Matrix) == UnionAll
+@test [Tuple{Vararg{Int64,N} where N}, Tuple{Vararg{Int64,N}} where N] isa Vector{Type}
+f24521(::Type{T}, ::Type{T}) where {T} = T
+@test f24521(Tuple{Any}, Tuple{T} where T) == Tuple{Any}
+@test f24521(Tuple{Vararg{Int64,N} where N}, Tuple{Vararg{Int64,N}} where N) == Tuple{Vararg{Int64,N}} where N
+
 # issue #26654
 @test !(Ref{Union{Int64, Ref{Number}}} <: Ref{Union{Ref{T}, T}} where T)
 @test !(Ref{Union{Int64, Val{Number}}} <: Ref{Union{Val{T}, T}} where T)

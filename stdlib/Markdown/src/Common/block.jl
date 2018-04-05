@@ -53,7 +53,7 @@ function hashheader(stream::IO, md::MD)
         eatindent(stream) || return false
         level = 0
         while startswith(stream, '#') level += 1 end
-        level < 1 || level > 6 && return false
+        (level < 1 || level > 6) && return false
 
         c = ' '
         # Allow empty headers, but require a space
