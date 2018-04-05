@@ -2,8 +2,7 @@
 
 # update! takes in variable-length data, buffering it into blocklen()-sized pieces,
 # calling transform!() when necessary to update the internal hash state.
-function update!(context::T, data::U, datalen=length(data)) where
-    {T<:SHA_CTX, U<:AbstractBytes}
+function update!(context::T, data::U, datalen=length(data)) where {T<:SHA_CTX, U<:AbstractBytes}
     # We need to do all our arithmetic in the proper bitwidth
     UIntXXX = typeof(context.bytecount)
 
