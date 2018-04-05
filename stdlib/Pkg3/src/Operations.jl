@@ -799,6 +799,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.DL_LOAD_PATH)
             append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            Base._downloadsecurity[] = "package build"
             cd($(repr(dirname(build_file))))
             include($(repr(build_file)))
             """
@@ -1070,4 +1071,3 @@ function init(ctx::Context)
 end
 
 end # module
-
