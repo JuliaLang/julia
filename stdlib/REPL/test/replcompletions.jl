@@ -712,27 +712,27 @@ end
 end
 
 #test that it can auto complete with spaces in file/path
-let path = tempdir(),
-    space_folder = randstring() * " α",
-    dir = joinpath(path, space_folder),
+mktempdir() do path
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c,r = test_scomplete(s)
+            c, r = test_scomplete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c,r = test_complete(s)
+            c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
-        c,r = test_complete(s)
+        c, r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
 
@@ -744,11 +744,11 @@ let path = tempdir(),
                 if !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
-                    c,r,res = test_scomplete(test_dir)
+                    c, r, res = test_scomplete(test_dir)
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c,r,res  = test_complete("\""*test_dir)
+                c, r, res = test_complete("\""*test_dir)
                 @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
