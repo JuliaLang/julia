@@ -6025,6 +6025,14 @@ let a = Foo17149()
     @test a === a
 end
 
+#issue #22792
+foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
+@test foo_22792(Union{Int,UInt}) == 1
+foo_22792(::Union) = 2;
+@test foo_22792(Union{Int,UInt}) == 1
+@test foo_22792(Union{Int8,UInt}) == 1
+@test foo_22792(Union{Int,UInt}) == 1
+
 # issue #25907
 g25907a(x) = x[1]::Integer
 @test g25907a(Union{Int, UInt, Nothing}[1]) === 1
