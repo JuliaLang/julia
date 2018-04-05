@@ -359,7 +359,9 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
         return b;
-    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
+    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b) &&
+        // issue #24521: don't merge Type{T} where typeof(T) varies
+        !(jl_is_type_type(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b)))) {
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
     }
