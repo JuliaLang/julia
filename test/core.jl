@@ -6010,6 +6010,11 @@ let a = Foo17149()
     @test a === a
 end
 
+# issue #21004
+const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+@test_throws ArgumentError PTuple_21004(1)
+@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
 @test foo_22792(Union{Int,UInt}) == 1
