@@ -1395,7 +1395,7 @@ let
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
                      include("testfile2"))
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include(joinpath("2", "testfile")))
+                     include("2/testfile"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally

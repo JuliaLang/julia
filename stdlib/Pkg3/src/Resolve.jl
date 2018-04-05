@@ -2,8 +2,8 @@
 
 module Resolve
 
-include(joinpath("resolve", "VersionWeights.jl"))
-include(joinpath("resolve", "MaxSum.jl"))
+include("resolve/VersionWeights.jl")
+include("resolve/MaxSum.jl")
 
 using ..Types, ..GraphType, ..Resolve.MaxSum
 import ..Types: uuid_julia
