@@ -58,7 +58,7 @@ function clone(url, source_path; header=nothing, kwargs...)
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
     callbacks = LibGit2.Callbacks(
         :transfer_progress => (
-            cfunction(transfer_progress, Cint, Tuple{Ptr{LibGit2.TransferProgress}, Any}),
+            @cfunction(transfer_progress, Cint, (Ptr{LibGit2.TransferProgress}, Any)),
             transfer_payload,
         )
     )
@@ -84,7 +84,7 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
     callbacks = LibGit2.Callbacks(
         :transfer_progress => (
-            cfunction(transfer_progress, Cint, Tuple{Ptr{LibGit2.TransferProgress}, Any}),
+            @cfunction(transfer_progress, Cint, (Ptr{LibGit2.TransferProgress}, Any)),
             transfer_payload,
         )
     )
