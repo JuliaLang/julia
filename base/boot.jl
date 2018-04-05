@@ -159,8 +159,7 @@ export
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     UndefKeywordError,
     # AST representation
-    Expr, QuoteNode, LineNumberNode, GlobalRef, PiNode, PhiNode,
-    PhiCNode, UpsilonNode, LineInfoNode,
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -444,10 +443,12 @@ end
 # module providing the IR object model
 module IR
 export CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, LineInfoNode
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
 import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, LineInfoNode
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
 end
 
