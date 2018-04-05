@@ -287,6 +287,17 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     return rt, edgecycle
 end
 
+# This is only for use with `Conditional`.
+# In general, usage of this is wrong.
+function ssa_def_expr(@nospecialize(arg), sv::InferenceState)
+    while isa(arg, SSAValue)
+        def = sv.ssavalue_defs[arg.id + 1]
+        stmt = sv.src.code[def]::Expr
+        arg = stmt.args[2]
+    end
+    return arg
+end
+
 # `typ` is the inferred type for expression `arg`.
 # if the expression constructs a container (e.g. `svec(x,y,z)`),
 # refine its type to an array of element types.
@@ -300,12 +311,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         end
     end
 
-    while isa(arg, SSAValue)
-        def = sv.ssavalue_defs[arg.id + 1]
-        stmt = sv.src.code[def]::Expr
-        arg = stmt.args[2]
-    end
-
+    arg = ssa_def_expr(arg, sv)
     if is_specializable_vararg_slot(arg, sv)
         return Any[rewrap_unionall(p, sv.linfo.specTypes) for p in sv.vararg_type_container.parameters]
     end
@@ -476,8 +482,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
-                a = fargs[2]
-                if isa(a, fieldtype(Conditional, :var))
+                a = ssa_def_expr(fargs[2], sv)
+                if isa(a, Slot)
                     aty = widenconst(argtypes[2])
                     tty_ub, isexact_tty = instanceof_tfunc(argtypes[3])
                     if isexact_tty && !isa(tty_ub, TypeVar)
@@ -493,18 +499,18 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     return Bool
                 end
             elseif f === (===)
-                a = fargs[2]
-                b = fargs[3]
+                a = ssa_def_expr(fargs[2], sv)
+                b = ssa_def_expr(fargs[3], sv)
                 aty = argtypes[2]
                 bty = argtypes[3]
                 # if doing a comparison to a singleton, consider returning a `Conditional` instead
-                if isa(aty, Const) && isa(b, fieldtype(Conditional, :var))
+                if isa(aty, Const) && isa(b, Slot)
                     if isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
                         return Conditional(b, aty, typesubtract(widenconst(bty), typeof(aty.val)))
                     end
                     return isa(rt, Const) ? rt : Conditional(b, aty, bty)
                 end
-                if isa(bty, Const) && isa(a, fieldtype(Conditional, :var))
+                if isa(bty, Const) && isa(a, Slot)
                     if isdefined(typeof(bty.val), :instance) # same for b
                         return Conditional(a, bty, typesubtract(widenconst(aty), typeof(bty.val)))
                     end

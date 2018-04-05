@@ -655,6 +655,25 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tinde
     return tagval;
 }
 
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex)
+{
+    Value *loc;
+    if (Constant *cv = dyn_cast<Constant>(v)) {
+        loc = get_pointer_to_constant(cv, "", *jl_Module);
+    }
+    else {
+        loc = emit_static_alloca(ctx, v->getType());
+        ctx.builder.CreateStore(v, loc);
+    }
+    return mark_julia_slot(loc, typ, tindex, tbaa_stack);
+}
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v)
+{
+    if (v.ispointer())
+        return v;
+    return value_to_pointer(ctx, v.V, v.typ, v.TIndex);
+}
+
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
     if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
@@ -672,18 +691,10 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
-    if (v && T->isAggregateType() && !isboxed) {
+    if (v && !isboxed && v->getType()->isAggregateType()) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc;
-        if (Constant *cv = dyn_cast<Constant>(v)) {
-            loc = get_pointer_to_constant(cv, "", *jl_Module);
-        }
-        else {
-            loc = emit_static_alloca(ctx, T);
-            ctx.builder.CreateStore(v, loc);
-        }
-        return mark_julia_slot(loc, typ, NULL, tbaa_stack);
+        return value_to_pointer(ctx, v, typ, NULL);
     }
     return jl_cgval_t(v, NULL, isboxed, typ, NULL);
 }
@@ -963,6 +974,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
 }
 
 // given a value marked with type `v.typ`, compute the mapping and/or boxing to return a value of type `typ`
+// TODO: should this set TIndex when trivial (such as 0x80 or concrete types) ?
 static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ)
 {
     if (typ == (jl_value_t*)jl_typeofbottom_type)
@@ -1197,23 +1209,33 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             jl_finalize_module(m.release(), !toplevel);
         }
 
-        // if not inlineable, code won't be needed again
-        if (JL_DELETE_NON_INLINEABLE &&
-                // don't delete code when debugging level >= 2
-                jl_options.debug_level <= 1 &&
-                // don't delete toplevel code
-                jl_is_method(li->def.method) &&
-                // don't change inferred state
-                li->inferred &&
-                // and there is something to delete (test this before calling jl_ast_flag_inlineable)
-                li->inferred != jl_nothing &&
-                // don't delete inlineable code, unless it is constant
-                (li->invoke == jl_fptr_const_return || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
-                // don't delete code when generating a precompile file
-                !imaging_mode &&
-                // don't delete code when it's not actually directly being used
-                world) {
-            li->inferred = jl_nothing;
+        if (// don't alter `inferred` when the code is not directly being used
+            world &&
+            // don't change inferred state
+            li->inferred) {
+            if (// keep code when keeping everything
+                !(JL_DELETE_NON_INLINEABLE) ||
+                // keep code when debugging level >= 2
+                jl_options.debug_level > 1) {
+                // update the stored code
+                if (li->inferred != (jl_value_t*)src) {
+                    if (jl_is_method(li->def.method))
+                        src = (jl_code_info_t*)jl_compress_ast(li->def.method, src);
+                    li->inferred = (jl_value_t*)src;
+                    jl_gc_wb(li, src);
+                }
+            }
+            else if (// don't delete toplevel code
+                     jl_is_method(li->def.method) &&
+                     // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                     li->inferred != jl_nothing &&
+                     // don't delete inlineable code, unless it is constant
+                     (li->invoke == jl_fptr_const_return || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
+                     // don't delete code when generating a precompile file
+                     !imaging_mode) {
+                // if not inlineable, code won't be needed again
+                li->inferred = jl_nothing;
+            }
         }
 
         // Step 6: Done compiling: Restore global state
@@ -3110,7 +3132,10 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
     jl_cgval_t f = emit_expr(ctx, args[0]);
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
-        return emit_intrinsic(ctx, (intrinsic)*(uint32_t*)jl_data_ptr(f.constant), args, nargs - 1);
+        JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
+        if (fi == JL_I::select_value)
+            return emit_select_value(ctx, args, nargs - 1, rt);
+        return emit_intrinsic(ctx, fi, args, nargs - 1);
     }
 
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);

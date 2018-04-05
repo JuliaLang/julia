@@ -2069,10 +2069,11 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
         return UndefValue::get(T_int8);
     if (val.constant)
         return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
-    if (val.isboxed)
-        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+    if (val.isboxed)
+        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
     return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
 }
 
