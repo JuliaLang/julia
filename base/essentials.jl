@@ -533,6 +533,7 @@ lastindex(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
+keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
 linearindices(v::SimpleVector) = axes(v, 1)
