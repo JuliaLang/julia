@@ -886,7 +886,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
     write_env(ctx)
 end
 
-function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec})
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; new_git = UUID[])
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
     any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
@@ -912,13 +912,14 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(ctx, pkgs)
-    new = apply_versions(ctx, pkgs)
+    new_apply = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
-    build_versions(ctx, new)
+    build_versions(ctx, union(new_apply, new_git))
 end
 
 function up(ctx::Context, pkgs::Vector{PackageSpec})
     # resolve upgrade levels to version specs
+    new_git = UUID[]
     for pkg in pkgs
         if pkg.uuid in keys(ctx.stdlibs)
             pkg.version = VersionSpec()
@@ -929,7 +930,8 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         info = manifest_info(ctx.env, pkg.uuid)
         if haskey(info, "repo-url")
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
-            handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
+            new = handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
+            append!(new_git, new)
         else
             ver = VersionNumber(info["version"])
             if level == UPLEVEL_FIXED
@@ -945,9 +947,9 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(ctx, pkgs)
-    new = apply_versions(ctx, pkgs)
+    new_apply = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
-    build_versions(ctx, new)
+    build_versions(ctx, union(new_apply, new_git))
 end
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec})

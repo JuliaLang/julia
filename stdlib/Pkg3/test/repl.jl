@@ -126,18 +126,24 @@ temp_pkg_dir() do project_path; cd(project_path) do
             pkg"develop Example#c37b675"
             @test locate_name("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
             Pkg3.test("Example")
-            # Test an unregistered package
-            p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
-            p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
-            Pkg3.REPLMode.pkgstr("develop $(p1_path)")
-            Pkg3.REPLMode.pkgstr("develop $(p2_path)")
-            @test locate_name("UnregisteredWithProject") == joinpath(p1_path, "src", "UnregisteredWithProject.jl")
-            @test locate_name("UnregisteredWithoutProject") == joinpath(p2_path, "src", "UnregisteredWithoutProject.jl")
-            @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"
-            @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
-            Pkg3.test("UnregisteredWithoutProject")
-            Pkg3.test("UnregisteredWithProject")
         end # withenv
+
+        # Test an unregistered package
+        p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
+        p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
+        p1_new_path = joinpath(tmp, "UnregisteredWithProject")
+        p2_new_path = joinpath(tmp, "UnregisteredWithoutProject")
+        cp(p1_path, p1_new_path)
+        cp(p2_path, p2_new_path)
+        Pkg3.REPLMode.pkgstr("develop $(p1_new_path)")
+        Pkg3.REPLMode.pkgstr("develop $(p2_new_path)")
+        Pkg3.REPLMode.pkgstr("build")
+        @test locate_name("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
+        @test locate_name("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
+        @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"
+        @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
+        Pkg3.test("UnregisteredWithoutProject")
+        Pkg3.test("UnregisteredWithProject")
     end # mktempdir
     # nested
     try

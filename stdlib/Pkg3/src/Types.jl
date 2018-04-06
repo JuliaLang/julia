@@ -625,6 +625,7 @@ end
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
     creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_DEVELOPED
@@ -673,16 +674,19 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             else
                 mkpath(dev_pkg_path)
                 mv(project_path, dev_pkg_path; force=true)
+                push!(new_uuids, pkg.uuid)
             end
             pkg.path = dev_pkg_path
         end
         @assert pkg.path != nothing
     end
+    return new_uuids
 end
 
 function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
     creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_REPO_ADDED
@@ -745,9 +749,11 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
             mv(project_path, version_path; force=true)
+            push!(new_uuids, pkg.uuid)
         end
         @assert pkg.version isa VersionNumber
     end
+    return new_uuids
 end
 
 function parse_package!(env, pkg, project_path)
