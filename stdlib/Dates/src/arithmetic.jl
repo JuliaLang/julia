@@ -97,3 +97,6 @@ end
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
+
+# Allow dates and times to broadcast as unwrapped scalars
+Base.Broadcast.broadcastable(x::AbstractTime) = Ref(x)

@@ -383,7 +383,7 @@ julia> i = 1;
 
 julia> while i <= 5
            println(i)
-           i += 1
+           global i += 1
        end
 1
 2
@@ -471,7 +471,7 @@ julia> while true
            if i >= 5
                break
            end
-           i += 1
+           global i += 1
        end
 1
 2
@@ -527,8 +527,25 @@ julia> for i = 1:2, j = 3:4
 (2, 4)
 ```
 
-A `break` statement inside such a loop exits the entire nest of loops, not just
-the inner one.
+With this syntax, iterables may still refer to outer loop variables; e.g. `for i = 1:n, j = 1:i`
+is valid.
+However a `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+Both variables (`i` and `j`) are set to their current iteration values each time the inner loop runs.
+Therefore, assignments to `i` will not be visible to subsequent iterations:
+
+```jldoctest
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+           i = 0
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
+```
+
+If this example were rewritten to use a `for` keyword for each variable, then the output would
+be different: the second and fourth values would contain `0`.
 
 Every statement in julia is an expression, and a `for` loop is no exception.
 Its value is `nothing`:
@@ -612,7 +629,7 @@ below all interrupt the normal flow of control.
 | [`RemoteException`](@ref)     |
 | [`MethodError`](@ref)         |
 | [`OverflowError`](@ref)       |
-| [`ParseError`](@ref)          |
+| [`Meta.ParseError`](@ref)     |
 | [`SystemError`](@ref)         |
 | [`TypeError`](@ref)           |
 | [`UndefRefError`](@ref)       |
@@ -969,7 +986,7 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
+Let us explore the low level construct [`yieldto`](@ref) to understand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
 that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning

@@ -81,4 +81,10 @@ end
     @test A*xs ≈ A*xd
 end
 
+@testset "Issue 26368" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qrfact(A)
+    @test F.Q*F.R == A[F.prow,F.pcol]
+end
+
 end

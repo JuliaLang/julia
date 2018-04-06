@@ -6,8 +6,8 @@ struct DNSError <: Exception
 end
 
 function show(io::IO, err::DNSError)
-    print(io, "DNSError: ", err.host, ", ", struverror(err.code),
-                                      " (", uverrorname(err.code), ")")
+    print(io, "DNSError: ", err.host, ", ", Base.struverror(err.code),
+                                      " (", Base.uverrorname(err.code), ")")
 end
 
 function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})

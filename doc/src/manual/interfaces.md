@@ -399,7 +399,7 @@ julia> mean(A)
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
-something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
+something other than 1), you should specialize `axes`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
@@ -443,7 +443,8 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.broadcast_similar(f, ::DestStyle, ::Type{ElType}, inds, As...)` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (for AbstractArrays, defaults to `axes(A)`) |
+| `Base.broadcast_indices(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (defaults to [`axes(A)`](@ref)) |
+| `Base.broadcastable(x)` | Convert `x` to an object that has `axes` and supports indexing |
 | **Bypassing default machinery** | |
 | `broadcast(f, As...)` | Complete bypass of broadcasting machinery |
 | `broadcast(f, ::DestStyle, ::Nothing, ::Nothing, As...)` | Bypass after container type is computed |
@@ -452,21 +453,43 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `broadcast!(f, dest, ::BroadcastStyle, As...)` | Bypass in-place broadcast, specialization on `BroadcastStyle` |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
-"dot" operations like `A .+ b`. Any `AbstractArray` type supports broadcasting,
-but the default result (output) type is `Array`. To specialize the result for specific input type(s),
-the main task is the allocation of an appropriate result object.
-(This is not an issue for `broadcast!`, where
-the result object is passed as an argument.) This process is split into two stages: computation
-of the behavior and type from the arguments ([`Base.BroadcastStyle`](@ref)), and allocation of the object
-given the resulting type with [`Base.broadcast_similar`](@ref).
+"dot" operations like `A .+ b` or `f.(x, y)`. Any object that has [`axes`](@ref) and supports
+indexing can participate as an argument in broadcasting, and by default the result is stored
+in an `Array`. This basic framework is extensible in three major ways:
 
-`Base.BroadcastStyle` is an abstract type from which all styles are
+* Ensuring that all arguments support broadcast
+* Selecting an appropriate output array for the given set of arguments
+* Selecting an efficient implementation for the given set of arguments
+
+Not all types support `axes` and indexing, but many are convenient to allow in broadcast.
+The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
+it to return something different that supports `axes` and indexing if it does not. By
+default, this is the identity function for all `AbstractArray`s and `Number`s — they already
+support `axes` and indexing. For a handful of other types (including but not limited to
+types themselves, functions, special singletons like `missing` and `nothing`, and dates),
+`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
+"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+`Base.broadcastable` to define their shape, but they should follow the convention that
+`collect(Base.broadcastable(x)) == collect(x)`. A notable exception are `AbstractString`s;
+they are special-cased to behave as scalars for the purposes of broadcast even though they
+are iterable collections of their characters.
+
+The next two steps (selecting the output array and implementation) are dependent upon
+determining a single answer for a given set of arguments. Broadcast must take all the varied
+types of its arguments and collapse them down to just one output array and one
+implementation. Broadcast calls this single answer a "style." Every broadcastable object
+each has its own preferred style, and a promotion-like system is used to combine these
+styles into a single answer — the "destination style".
+
+### Broadcast Styles
+
+`Base.BroadcastStyle` is the abstract type from which all styles are
 derived. When used as a function it has two possible forms,
 unary (single-argument) and binary.
 The unary variant states that you intend to
 implement specific broadcasting behavior and/or output type,
-and do not wish to rely on the default fallback ([`Broadcast.Scalar`](@ref) or [`Broadcast.DefaultArrayStyle`](@ref)).
-To achieve this, you can define a custom `BroadcastStyle` for your object:
+and do not wish to rely on the default fallback ([`Broadcast.DefaultArrayStyle`](@ref)).
+To override these defaults, you can define a custom `BroadcastStyle` for your object:
 
 ```julia
 struct MyStyle <: Broadcast.BroadcastStyle end
@@ -485,6 +508,8 @@ leverage one of the general broadcast wrappers:
 When your broadcast operation involves several arguments, individual argument styles get
 combined to determine a single `DestStyle` that controls the type of the output container.
 For more detail, see [below](@ref writing-binary-broadcasting-rules).
+
+### Selecting an appropriate output array
 
 The actual allocation of the result array is handled by `Base.broadcast_similar`:
 
@@ -562,6 +587,8 @@ julia> a .+ [5,10]
  13  14
 ```
 
+### [Extending broadcast with custom implementations](@id extending-in-place-broadcast)
+
 Finally, it's worth noting that sometimes it's easier simply to bypass the machinery for
 computing result types and container sizes, and just do everything manually. For example,
 you can convert a `UnitRange{Int}` `r` to a `UnitRange{BigInt}` with `big.(r)`; the definition
@@ -580,7 +607,40 @@ the internal machinery to compute the container type, element type, and indices 
 Broadcast.broadcast(::typeof(somefunction), ::MyStyle, ::Type{ElType}, inds, As...)
 ```
 
-### [Writing binary broadcasting rules](@id writing-binary-broadcasting-rules)
+Extending `broadcast!` (in-place broadcast) should be done with care, as it is easy to introduce
+ambiguities between packages. To avoid these ambiguities, we adhere to the following conventions.
+
+First, if you want to specialize on the destination type, say `DestType`, then you should
+define a method with the following signature:
+
+```julia
+broadcast!(f, dest::DestType, ::Nothing, As...)
+```
+
+Note that no bounds should be placed on the types of `f` and `As...`.
+
+Second, if specialized `broadcast!` behavior is desired depending on the input types,
+you should write [binary broadcasting rules](@ref writing-binary-broadcasting-rules) to
+determine a custom `BroadcastStyle` given the input types, say `MyBroadcastStyle`, and you should define a method with the following
+signature:
+
+```julia
+broadcast!(f, dest, ::MyBroadcastStyle, As...)
+```
+
+Note the lack of bounds on `f`, `dest`, and `As...`.
+
+Third, simultaneously specializing on both the type of `dest` and the `BroadcastStyle` is fine. In this case,
+it is also allowed to specialize on the types of the source arguments (`As...`). For example, these method signatures are OK:
+
+```julia
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As...)
+broadcast!(f, dest::DestType, ::MyBroadcastStyle, As::AbstractArray...)
+broadcast!(f, dest::DestType, ::Broadcast.DefaultArrayStyle{0}, As::Number...)
+```
+
+
+#### [Writing binary broadcasting rules](@id writing-binary-broadcasting-rules)
 
 The precedence rules are defined by binary `BroadcastStyle` calls:
 
@@ -592,10 +652,10 @@ where `Style12` is the `BroadcastStyle` you want to choose for outputs involving
 arguments of `Style1` and `Style2`. For example,
 
 ```julia
-Base.BroadcastStyle(::Broadcast.Style{Tuple}, ::Broadcast.Scalar) = Broadcast.Style{Tuple}()
+Base.BroadcastStyle(::Broadcast.Style{Tuple}, ::Broadcast.AbstractArrayStyle{0}) = Broadcast.Style{Tuple}()
 ```
 
-indicates that `Tuple` "wins" over scalars (the output container will be a tuple).
+indicates that `Tuple` "wins" over zero-dimensional arrays (the output container will be a tuple).
 It is worth noting that you do not need to (and should not) define both argument orders
 of this call; defining one is sufficient no matter what order the user supplies the arguments in.
 
@@ -643,37 +703,3 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
-
-### [Extending `broadcast!`](@id extending-in-place-broadcast)
-
-Extending `broadcast!` (in-place broadcast) should be done with care, as it is easy to introduce
-ambiguities between packages. To avoid these ambiguities, we adhere to the following conventions.
-
-First, if you want to specialize on the destination type, say `DestType`, then you should
-define a method with the following signature:
-
-```julia
-broadcast!(f, dest::DestType, ::Nothing, As...)
-```
-
-Note that no bounds should be placed on the types of `f` and `As...`.
-
-Second, if specialized `broadcast!` behavior is desired depending on the input types,
-you should write [binary broadcasting rules](@ref writing-binary-broadcasting-rules) to
-determine a custom `BroadcastStyle` given the input types, say `MyBroadcastStyle`, and you should define a method with the following
-signature:
-
-```julia
-broadcast!(f, dest, ::MyBroadcastStyle, As...)
-```
-
-Note the lack of bounds on `f`, `dest`, and `As...`.
-
-Third, simultaneously specializing on both the type of `dest` and the `BroadcastStyle` is fine. In this case,
-it is also allowed to specialize on the types of the source arguments (`As...`). For example, these method signatures are OK:
-
-```julia
-broadcast!(f, dest::DestType, ::MyBroadcastStyle, As...)
-broadcast!(f, dest::DestType, ::MyBroadcastStyle, As::AbstractArray...)
-broadcast!(f, dest::DestType, ::Broadcast.Scalar, As::Number...)
-```

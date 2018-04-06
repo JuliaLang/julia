@@ -51,6 +51,9 @@ public:
     void visitLoadInst(LoadInst &LI);
     void visitMemSetInst(MemSetInst &MI);
     void visitMemTransferInst(MemTransferInst &MTI);
+
+private:
+    void PoisonValues(std::vector<Value *> &Worklist);
 };
 
 bool PropagateJuliaAddrspaces::runOnFunction(Function &F) {
@@ -74,67 +77,137 @@ static bool isSpecialAS(unsigned AS) {
     return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
 }
 
+void PropagateJuliaAddrspaces::PoisonValues(std::vector<Value *> &Worklist) {
+    while (!Worklist.empty()) {
+        Value *CurrentV = Worklist.back();
+        Worklist.pop_back();
+        for (Value *User : CurrentV->users()) {
+            if (Visited.count(User))
+                continue;
+            Visited.insert(CurrentV);
+            Worklist.push_back(User);
+        }
+    }
+}
+
 Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
-    Value *CurrentV = V;
+    std::vector<Value *> Worklist;
+    std::set<Value *> LocalVisited;
+    Worklist.push_back(V);
     // Follow pointer casts back, see if we're based on a pointer in
     // an untracked address space, in which case we're allowed to drop
     // intermediate addrspace casts.
-    while (true) {
-        Stack.push_back(CurrentV);
-        if (isa<BitCastInst>(CurrentV))
-            CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
-        else if (isa<AddrSpaceCastInst>(CurrentV)) {
-            CurrentV = cast<AddrSpaceCastInst>(CurrentV)->getOperand(0);
-            if (!isSpecialAS(getValueAddrSpace(CurrentV)))
-                break;
+    while (!Worklist.empty()) {
+        Value *CurrentV = Worklist.back();
+        Worklist.pop_back();
+        if (LocalVisited.count(CurrentV)) {
+            continue;
         }
-        else if (isa<GetElementPtrInst>(CurrentV)) {
-            if (LiftingMap.count(CurrentV)) {
-                CurrentV = LiftingMap[CurrentV];
-                break;
-            } else if (Visited.count(CurrentV)) {
-                return nullptr;
+        while (true) {
+            if (auto *BCI = dyn_cast<BitCastInst>(CurrentV))
+                CurrentV = BCI->getOperand(0);
+            else if (auto *ACI = dyn_cast<AddrSpaceCastInst>(CurrentV)) {
+                CurrentV = ACI->getOperand(0);
+                if (!isSpecialAS(getValueAddrSpace(ACI)))
+                    break;
             }
-            Visited.insert(CurrentV);
-            CurrentV = cast<GetElementPtrInst>(CurrentV)->getOperand(0);
-        } else
-            break;
-    }
-    if (!CurrentV->getType()->isPointerTy())
-        return nullptr;
-    if (isSpecialAS(getValueAddrSpace(CurrentV)))
-        return nullptr;
-    // Ok, we're allowed to change the address space of this load, go back and
-    // reconstitute any GEPs in the new address space.
-    for (Value *V : llvm::reverse(Stack)) {
-        GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V);
-        if (!GEP)
-            continue;
-        if (LiftingMap.count(GEP)) {
-            CurrentV = LiftingMap[GEP];
-            continue;
+            else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
+                if (LiftingMap.count(GEP)) {
+                    CurrentV = LiftingMap[GEP];
+                    break;
+                } else if (Visited.count(GEP)) {
+                    return nullptr;
+                }
+                Stack.push_back(GEP);
+                LocalVisited.insert(GEP);
+                CurrentV = GEP->getOperand(0);
+            } else if (auto *Phi = dyn_cast<PHINode>(CurrentV)) {
+                if (LiftingMap.count(Phi)) {
+                    break;
+                }
+                for (Value *Incoming : Phi->incoming_values()) {
+                    Worklist.push_back(Incoming);
+                }
+                Stack.push_back(Phi);
+                LocalVisited.insert(Phi);
+                break;
+            } else {
+                // Ok, we've reached a leaf - check if it is eligible for lifting
+                if (!CurrentV->getType()->isPointerTy() ||
+                    isSpecialAS(getValueAddrSpace(CurrentV))) {
+                    // If not, poison all (recursive) users of this value, to prevent
+                    // looking at them again in future iterations.
+                    Worklist.clear();
+                    Worklist.push_back(CurrentV);
+                    Visited.insert(CurrentV);
+                    PoisonValues(Worklist);
+                    return nullptr;
+                }
+                break;
+            }
         }
-        GetElementPtrInst *NewGEP = cast<GetElementPtrInst>(GEP->clone());
-        ToInsert.push_back(std::make_pair(NewGEP, GEP));
-        Type *GEPTy = GEP->getSourceElementType();
-        Type *NewRetTy = cast<PointerType>(GEP->getType())->getElementType()->getPointerTo(getValueAddrSpace(CurrentV));
-        NewGEP->mutateType(NewRetTy);
-        if (cast<PointerType>(CurrentV->getType())->getElementType() != GEPTy) {
-            auto *BCI = new BitCastInst(CurrentV, GEPTy->getPointerTo());
-            ToInsert.push_back(std::make_pair(BCI, NewGEP));
+    }
+
+    // Go through and insert lifted versions of all instructions on the list.
+    std::vector<Value *> ToRevisit;
+    for (Value *V : Stack) {
+        if (LiftingMap.count(V))
+            continue;
+        if (auto *GEP = dyn_cast<GetElementPtrInst>(V)) {
+            auto *NewGEP = cast<GetElementPtrInst>(GEP->clone());
+            ToInsert.push_back(std::make_pair(NewGEP, GEP));
+            Type *NewRetTy = cast<PointerType>(GEP->getType())->getElementType()->getPointerTo(0);
+            NewGEP->mutateType(NewRetTy);
+            LiftingMap[GEP] = NewGEP;
+            ToRevisit.push_back(NewGEP);
+        } else if (auto *Phi = dyn_cast<PHINode>(V)) {
+            auto *NewPhi = cast<PHINode>(Phi->clone());
+            ToInsert.push_back(std::make_pair(NewPhi, Phi));
+            Type *NewRetTy = cast<PointerType>(Phi->getType())->getElementType()->getPointerTo(0);
+            NewPhi->mutateType(NewRetTy);
+            LiftingMap[Phi] = NewPhi;
+            ToRevisit.push_back(NewPhi);
+        }
+    }
+
+    auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) {
+        Type *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(0);
+        while (!LiftingMap.count(CurrentV)) {
+            if (isa<BitCastInst>(CurrentV))
+                CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
+            else if (isa<AddrSpaceCastInst>(CurrentV))
+                CurrentV = cast<AddrSpaceCastInst>(CurrentV)->getOperand(0);
+            else
+                break;
+        }
+        if (LiftingMap.count(CurrentV))
+            CurrentV = LiftingMap[CurrentV];
+        if (CurrentV->getType() != TargetType) {
+            auto *BCI = new BitCastInst(CurrentV, TargetType);
+            ToInsert.push_back(std::make_pair(BCI, InsertPt));
             CurrentV = BCI;
         }
-        NewGEP->setOperand(GetElementPtrInst::getPointerOperandIndex(), CurrentV);
-        LiftingMap[GEP] = NewGEP;
-        CurrentV = NewGEP;
+        return CurrentV;
+    };
+
+    // Now go through and update the operands
+    for (Value *V : ToRevisit) {
+        if (GetElementPtrInst *NewGEP = dyn_cast<GetElementPtrInst>(V)) {
+            NewGEP->setOperand(GetElementPtrInst::getPointerOperandIndex(),
+                CollapseCastsAndLift(NewGEP->getOperand(GetElementPtrInst::getPointerOperandIndex()),
+                NewGEP));
+        } else if (PHINode *NewPhi = dyn_cast<PHINode>(V)) {
+            for (size_t i = 0; i < NewPhi->getNumIncomingValues(); ++i) {
+                NewPhi->setIncomingValue(i, CollapseCastsAndLift(NewPhi->getIncomingValue(i),
+                    NewPhi->getIncomingBlock(i)->getTerminator()));
+            }
+        } else {
+            assert(false && "Shouldn't have reached here");
+        }
     }
-    if (LocTy && cast<PointerType>(CurrentV->getType())->getElementType() != LocTy) {
-        auto *BCI = new BitCastInst(CurrentV, LocTy->getPointerTo());
-        ToInsert.push_back(std::make_pair(BCI, InsertPt));
-        CurrentV = BCI;
-    }
-    return CurrentV;
+
+    return CollapseCastsAndLift(V, cast<Instruction>(V));
 }
 
 void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {

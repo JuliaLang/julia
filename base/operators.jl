@@ -73,6 +73,10 @@ Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 # Implementation
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
+
+[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
+[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
+should therefore also implement [`hash`](@ref).
 """
 ==(x, y) = x === y
 
@@ -146,7 +150,7 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    typeseq(T, S)
+    T<:S && S<:T
 end
 function !=(T::Type, S::Type)
     @_pure_meta
@@ -809,43 +813,72 @@ julia> filter(!isalpha, str)
 """
 !(f::Function) = (x...)->!f(x...)
 
-struct EqualTo{T} <: Function
+"""
+    Fix1(f, x)
+
+A type representing a partially-applied version of the two-argument function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+"""
+struct Fix1{F,T} <: Function
+    f::F
     x::T
 
-    EqualTo(x::T) where {T} = new{T}(x)
+    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::EqualTo)(y) = isequal(f.x, y)
+(f::Fix1)(y) = f.f(f.x, y)
 
 """
-    equalto(x)
+    Fix2(f, x)
 
-Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
-`y->isequal(x,y)`.
-
-The returned function is of type `Base.EqualTo`. This allows dispatching to
-specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+A type representing a partially-applied version of the two-argument function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
 """
-const equalto = EqualTo
-
-struct OccursIn{T} <: Function
+struct Fix2{F,T} <: Function
+    f::F
     x::T
 
-    OccursIn(x::T) where {T} = new{T}(x)
+    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::OccursIn)(y) = y in f.x
+(f::Fix2)(y) = f.f(y, f.x)
 
 """
-    occursin(x)
+    isequal(x)
 
-Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
-`y -> y in x`.
+Create a function that compares its argument to `x` using [`isequal`](@ref), i.e.
+a function equivalent to `y -> isequal(y, x)`.
 
-The returned function is of type `Base.OccursIn`. This allows dispatching to
-specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+The returned function is of type `Base.Fix2{typeof(isequal)}`, which can be
+used to implement specialized methods.
 """
-const occursin = OccursIn
+isequal(x) = Fix2(isequal, x)
+
+"""
+    ==(x)
+
+Create a function that compares its argument to `x` using [`==`](@ref), i.e.
+a function equivalent to `y -> y == x`.
+
+The returned function is of type `Base.Fix2{typeof(==)}`, which can be
+used to implement specialized methods.
+"""
+==(x) = Fix2(==, x)
+
+"""
+    in(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
+a function equivalent to `y -> y in x`.
+
+The returned function is of type `Base.Fix2{typeof(in)}`, which can be
+used to implement specialized methods.
+"""
+in(x) = Fix2(in, x)
 
 """
     splat(f)

@@ -274,9 +274,12 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
-    @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
+    llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    @test llvmf1 != C_NULL
+    llvmf2 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, false, params)
+    @test llvmf2 != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf1) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf2) != C_NULL
 end
 
 # issue #15714
@@ -331,20 +334,20 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for str in (sprint(code_warntype, f, types),
                 repr("text/plain", src))
         for var in must_used_vars
-            @test contains(str, string(var))
+            @test occursin(string(var), str)
         end
-        @test !contains(str, "Any")
-        @test !contains(str, "ANY")
+        @test !occursin("::Any", str)
+        @test !occursin("::ANY", str)
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && contains(str, Regex("_$i\\b"))
+                if name in must_used_vars && occursin(Regex("_$i\\b"), str)
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, Regex("_$i\\b"))
+                @test !occursin(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -363,7 +366,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && contains(str, Regex("_$i\\b"))
+        if name in must_used_vars && occursin(Regex("_$i\\b"), str)
             must_used_checked[name] = true
         end
     end
@@ -374,8 +377,10 @@ end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
                         [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
-@test used_dup_var_tested15714
+                        [:array_var15714])
+#This test doesn't work with the new optimizer because we drop slotnames
+#We may want to test it against debug info eventually
+#@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
@@ -393,7 +398,9 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
+end
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -406,7 +413,9 @@ ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
+end
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false

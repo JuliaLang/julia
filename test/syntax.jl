@@ -685,7 +685,6 @@ function count_meta_loc(exprs)
         end
         @test push_count >= pop_count
     end
-    @test push_count == pop_count
     return push_count
 end
 
@@ -760,8 +759,7 @@ f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
 f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
-@test is_pop_loc(f2_exprs[end])
-@test Meta.isexpr(f2_exprs[end - 1], :return)
+@test Meta.isexpr(f2_exprs[end], :return) || Meta.isexpr(f2_exprs[end-1], :return)
 
 if Base.JLOptions().can_inline != 0
     @test count_meta_loc(f1_exprs) == 1
@@ -1364,5 +1362,27 @@ end
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
 
+@test_throws ParseError Meta.parse("a.: b")
+@test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
+@test Meta.parse("a.:catch") == Expr(:., :a, QuoteNode(:catch))
+@test Meta.parse("a.end") == Expr(:., :a, QuoteNode(:end))
+@test Meta.parse("a.catch") == Expr(:., :a, QuoteNode(:catch))
+@test Meta.parse("a.function") == Expr(:., :a, QuoteNode(:function))
+
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
+
+# Module name cannot be a reserved word.
+@test_throws ParseError Meta.parse("module module end")
+
+@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid identifier name \"true\"")
+@test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
+@test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
+
+# issue #26507
+@test Meta.parse("@try x") == Expr(:macrocall, Symbol("@try"), LineNumberNode(1,:none), :x)
+@test Meta.parse("@catch x") == Expr(:macrocall, Symbol("@catch"), LineNumberNode(1,:none), :x)
+@test Meta.parse("@\$x") == Expr(:macrocall, Symbol("@\$"), LineNumberNode(1,:none), :x)
+
+# issue #26717
+@test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")

@@ -371,12 +371,13 @@ end
 function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
     hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
     sock = @handle_as hand LibuvStream
-    @assert sock.status == StatusConnecting
     if status >= 0
-        sock.status = StatusOpen
+        if !(sock.status == StatusClosed || sock.status == StatusClosing)
+            sock.status = StatusOpen
+        end
         notify(sock.connectnotify)
     else
-        sock.status = StatusInit
+        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), hand)
         err = UVError("connect", status)
         notify_error(sock.connectnotify, err)
     end
@@ -644,12 +645,12 @@ include("PipeServer.jl")
 # libuv callback handles
 
 function __init__()
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}})
-    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cstring, Cstring})
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint})
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
+    global uv_jl_getaddrinfocb = @cfunction(uv_getaddrinfocb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid}))
+    global uv_jl_getnameinfocb = @cfunction(uv_getnameinfocb, Cvoid, (Ptr{Cvoid}, Cint, Cstring, Cstring))
+    global uv_jl_recvcb        = @cfunction(uv_recvcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint))
+    global uv_jl_sendcb        = @cfunction(uv_sendcb, Cvoid, (Ptr{Cvoid}, Cint))
+    global uv_jl_connectioncb  = @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint))
+    global uv_jl_connectcb     = @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint))
 end
 
 # deprecations

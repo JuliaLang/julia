@@ -452,8 +452,36 @@ I have $100 in my account.
 ## Triple-Quoted String Literals
 
 When strings are created using triple-quotes (`"""..."""`) they have some special behavior that
-can be useful for creating longer blocks of text. First, if the opening `"""` is followed by a
-newline, the newline is stripped from the resulting string.
+can be useful for creating longer blocks of text.
+
+First, triple-quoted strings are also dedented to the level of the least-indented line.
+This is useful for defining strings within code that is indented. For example:
+
+```jldoctest
+julia> str = """
+           Hello,
+           world.
+         """
+"  Hello,\n  world.\n"
+```
+
+In this case the final (empty) line before the closing `"""` sets the indentation level.
+
+The dedentation level is determined as the longest common starting sequence of spaces or
+tabs in all lines, excluding the line following the opening `"""` and lines containing
+only spaces or tabs (the line containing the closing `"""` is always included).
+Then for all lines, excluding the text following the opening `"""`, the common starting
+sequence is removed (including lines containing only spaces and tabs if they start with
+this sequence), e.g.:
+```jldoctest
+julia> """    This
+         is
+           a test"""
+"    This\nis\n  a test"
+```
+
+Next, if the opening `"""` is followed by a newline,
+the newline is stripped from the resulting string.
 
 ```julia
 """hello"""
@@ -474,20 +502,20 @@ but
 hello"""
 ```
 
-will contain a literal newline at the beginning. Trailing whitespace is left unaltered. They can
-contain `"` symbols without escaping. Triple-quoted strings are also dedented to the level of
-the least-indented line. This is useful for defining strings within code that is indented. For
-example:
+will contain a literal newline at the beginning.
+
+Stripping of the newline is performed after the dedentation for example:
 
 ```jldoctest
-julia> str = """
-           Hello,
-           world.
-         """
-"  Hello,\n  world.\n"
+julia> """
+         Hello,
+         world."""
+"Hello,\nworld."
 ```
 
-In this case the final (empty) line before the closing `"""` sets the indentation level.
+Trailing whitespace is left unaltered.
+
+Triple-quoted string literals can contain `"` symbols without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
@@ -515,45 +543,45 @@ true
 You can search for the index of a particular character using the [`findfirst`](@ref) function:
 
 ```jldoctest
-julia> findfirst(equalto('x'), "xylophone")
+julia> findfirst(isequal('x'), "xylophone")
 1
 
-julia> findfirst(equalto('p'), "xylophone")
+julia> findfirst(isequal('p'), "xylophone")
 5
 
-julia> findfirst(equalto('z'), "xylophone")
+julia> findfirst(isequal('z'), "xylophone")
 ```
 
 You can start the search for a character at a given offset by using [`findnext`](@ref)
 with a third argument:
 
 ```jldoctest
-julia> findnext(equalto('o'), "xylophone", 1)
+julia> findnext(isequal('o'), "xylophone", 1)
 4
 
-julia> findnext(equalto('o'), "xylophone", 5)
+julia> findnext(isequal('o'), "xylophone", 5)
 7
 
-julia> findnext(equalto('o'), "xylophone", 8)
+julia> findnext(isequal('o'), "xylophone", 8)
 ```
 
-You can use the [`contains`](@ref) function to check if a substring is contained in a string:
+You can use the [`occursin`](@ref) function to check if a substring is found within a string:
 
 ```jldoctest
-julia> contains("Hello, world.", "world")
+julia> occursin("world", "Hello, world.")
 true
 
-julia> contains("Xylophon", "o")
+julia> occursin("o", "Xylophon")
 true
 
-julia> contains("Xylophon", "a")
+julia> occursin("a", "Xylophon")
 false
 
-julia> contains("Xylophon", 'o')
+julia> occursin('o', "Xylophon")
 true
 ```
 
-The last example shows that [`contains`](@ref) can also look for a character literal.
+The last example shows that [`occursin`](@ref) can also look for a character literal.
 
 Two other handy string functions are [`repeat`](@ref) and [`join`](@ref):
 
@@ -608,20 +636,20 @@ julia> typeof(ans)
 Regex
 ```
 
-To check if a regex matches a string, use [`contains`](@ref):
+To check if a regex matches a string, use [`occursin`](@ref):
 
 ```jldoctest
-julia> contains("not a comment", r"^\s*(?:#|$)")
+julia> occursin(r"^\s*(?:#|$)", "not a comment")
 false
 
-julia> contains("# a comment", r"^\s*(?:#|$)")
+julia> occursin(r"^\s*(?:#|$)", "# a comment")
 true
 ```
 
-As one can see here, [`contains`](@ref) simply returns true or false, indicating whether the
-given regex matches the string or not. Commonly, however, one wants to know not just whether a
-string matched, but also *how* it matched. To capture this information about a match, use the
-[`match`](@ref) function instead:
+As one can see here, [`occursin`](@ref) simply returns true or false, indicating whether a
+match for the given regex occurs in the string. Commonly, however, one wants to know not
+just whether a string matched, but also *how* it matched. To capture this information about
+a match, use the [`match`](@ref) function instead:
 
 ```jldoctest
 julia> match(r"^\s*(?:#|$)", "not a comment")

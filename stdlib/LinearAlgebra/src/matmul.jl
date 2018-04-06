@@ -491,9 +491,10 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-const Abuf = Vector{UInt8}(undef, tilebufsize)
-const Bbuf = Vector{UInt8}(undef, tilebufsize)
-const Cbuf = Vector{UInt8}(undef, tilebufsize)
+# per-thread arrays of buffers resized by __init__ if needed
+const Abuf = [Vector{UInt8}(undef, tilebufsize)]
+const Bbuf = [Vector{UInt8}(undef, tilebufsize)]
+const Cbuf = [Vector{UInt8}(undef, tilebufsize)]
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     mA, nA = lapack_size(tA, A)
@@ -532,8 +533,8 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     if tile_size > 0
         sz = (tile_size, tile_size)
         # FIXME: This code is completely invalid!!!
-        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf)), sz)
-        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf)), sz)
+        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf[Threads.threadid()])), sz)
+        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf[Threads.threadid()])), sz)
 
         z1 = zero(A[1, 1]*B[1, 1] + A[1, 1]*B[1, 1])
         z = convert(promote_type(typeof(z1), R), z1)
@@ -554,7 +555,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
             end
         else
             # FIXME: This code is completely invalid!!!
-            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf)), sz)
+            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf[Threads.threadid()])), sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)
                 jlen = jlim-jb+1

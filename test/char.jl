@@ -232,7 +232,7 @@ end
         end
         @test sprint(show, c) == rep
         if Base.isoverlong(c)
-            @test contains(sprint(show, "text/plain", c), rep*": [overlong]")
+            @test occursin(rep*": [overlong]", sprint(show, "text/plain", c))
         end
     end
 

@@ -120,7 +120,7 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
 
 """
     @eval [mod,] ex
@@ -210,7 +210,7 @@ end
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    isvarargtype(t2) ? rewrap_unionall(t2.parameters[1],t) : t
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -223,6 +223,7 @@ end
 typename(union::UnionAll) = typename(union.body)
 
 convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
 convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
@@ -368,14 +369,14 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
+                _growend!(out, 16)
                 l += 16
             end
             Core.arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
+    _deleteend!(out, l-i+1)
     out
 end
 
@@ -763,4 +764,3 @@ ismissing(::Missing) = true
 
 function popfirst! end
 function peek end
-

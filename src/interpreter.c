@@ -335,7 +335,7 @@ SECT_INTERP static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interp
         argv[i - 1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
+    jl_value_t *result = meth->invoke(meth, argv, nargs - 1);
     JL_GC_POP();
     return result;
 }
@@ -581,6 +581,29 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
+                // This is a bit tricky, but supports the implementation of PhiC nodes.
+                // They are conceptually slots, but the slot to store to doesn't get explicitly
+                // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
+                // nicely with the rest of the SSA representation). In a compiler, we would figure
+                // out which slot to store to at compile time when we encounter the statement. We
+                // can't quite do that here, but we do something similar: We scan the catch entry
+                // block (the only place where PhiC nodes may occur) to find all the Upsilons we
+                // can possibly encounter. Then, we remember which slot they store to (we abuse the
+                // SSA value result array for this purpose). TODO: We could do this only the first
+                // time we encounter a given enter.
+                size_t catch_ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
+                while (catch_ip < ns) {
+                    jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
+                    if (!jl_is_phicnode(phicnode))
+                        break;
+                    jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
+                    for (size_t i = 0; i < jl_array_len(values); ++i) {
+                        jl_value_t *val = jl_array_ptr_ref(values, i);
+                        assert(jl_is_ssavalue(val));
+                        s->locals[jl_source_nslots(s->src) + ((jl_ssavalue_t*)val)->id - 1] = jl_box_ssavalue(catch_ip);
+                    }
+                    catch_ip += 1;
+                }
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, s, s->ip + 1, toplevel);
                 }
@@ -671,17 +694,19 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
 {
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     JL_GC_PUSH1(&src);
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        if (lam->def.method->source) {
-            src = (jl_code_info_t*)lam->def.method->source;
+    if (jl_is_method(lam->def.method)) {
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            if (lam->def.method->source) {
+                src = (jl_code_info_t*)lam->def.method->source;
+            }
+            else {
+                assert(lam->def.method->generator);
+                src = jl_code_for_staged(lam);
+            }
         }
-        else {
-            assert(lam->def.method->generator);
-            src = jl_code_for_staged(lam);
+        if (src && (jl_value_t*)src != jl_nothing) {
+            src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
         }
-    }
-    if (src && (jl_value_t*)src != jl_nothing) {
-        src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
     }
     if (!src || !jl_is_code_info(src)) {
         jl_error("source missing for method called in interpreter");
@@ -730,10 +755,8 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     return (void*)r;
 }
 
-SECT_INTERP jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
+SECT_INTERP jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    if (lam->jlcall_api == JL_API_CONST)
-        return lam->inferred_const;
     struct jl_interpret_call_args callback_args = { lam, args, nargs };
     return (jl_value_t*)enter_interpreter_frame(jl_interpret_call_callback, (void *)&callback_args);
 }

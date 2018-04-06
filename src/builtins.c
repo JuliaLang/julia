@@ -409,8 +409,6 @@ JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
-    if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
-    if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
     JL_TYPECHK(<:, type, a);
     JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
@@ -1181,13 +1179,13 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
+jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return jl_gf_mtable(b)->cache.leaf->func.linfo->fptr;
+    return jl_gf_mtable(b)->cache.leaf->func.linfo->specptr.fptr1;
 }
 
-static void add_builtin_func(const char *name, jl_fptr_t fptr)
+static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
 {
     jl_mk_builtin_func(NULL, name, fptr);
 }
@@ -1277,6 +1275,8 @@ void jl_init_primitives(void)
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
+    add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);
+    add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);

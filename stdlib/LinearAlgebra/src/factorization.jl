@@ -56,7 +56,7 @@ inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
-Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))
+Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

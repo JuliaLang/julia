@@ -7,27 +7,38 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir, ..print_first_command_header
-import ..Operations, ..Display
+import ..Operations, ..Display, ..GitTools
 using ..Types, ..TOML
 
 
-preview_info() = @info("In preview mode")
+preview_info() = printstyled("───── Preview mode ─────\n"; color=Base.info_color(), bold=true)
 
-add(pkg::Union{String, PackageSpec}; kwargs...)               = add([pkg]; kwargs...)
-add(pkgs::Vector{String}; kwargs...)      = add([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-add(pkgs::Vector{PackageSpec}; kwargs...) = add(Context(), pkgs; kwargs...)
+include("generate.jl")
 
-function add(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
+add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
+
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    handle_repos!(ctx.env, pkgs)
-    project_resolve!(ctx.env, pkgs)
+    if mode == :develop
+        handle_repos_develop!(ctx, pkgs)
+    else
+        handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+    end
+    project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
-    ensure_resolved(ctx.env, pkgs, true)
-    Operations.add(ctx, pkgs)
+    ensure_resolved(ctx.env, pkgs, registry=true)
+    Operations.add_or_develop(ctx, pkgs)
+    ctx.preview && preview_info()
 end
+
+add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
+develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
+@deprecate checkout develop
 
 
 rm(pkg::Union{String, PackageSpec}; kwargs...)               = rm([pkg]; kwargs...)
@@ -38,9 +49,10 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     Operations.rm(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -61,35 +73,35 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         info("Skipping updating registry in preview mode")
     else
         for reg in registries()
-            if !isdir(joinpath(reg, ".git"))
-                @info("Registry at $reg is not a git repo, skipping update")
-            end
-            @info("Updating registry at $reg")
-            LibGit2.with(LibGit2.GitRepo, reg) do repo
-                if LibGit2.isdirty(repo)
-                    push!(errors, (reg, "registry dirty"))
-                    return
-                end
-                if !LibGit2.isattached(repo)
-                    push!(errors, (reg, "registry detached"))
-                    return
-                end
-                branch = LibGit2.headname(repo)
-                LibGit2.fetch(repo)
-                ff_succeeded = try
-                    LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
-                catch e
-                    e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
-                    push!(errors, (reg, "branch origin/$branch not found"))
-                    return
-                end
-
-                if !ff_succeeded
-                    try LibGit2.rebase!(repo, "origin/$branch")
-                    catch e
-                        e isa LibGit2.GitError || rethrow(e)
-                        push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+            if isdir(joinpath(reg, ".git"))
+                regpath = pathrepr(ctx, reg)
+                printpkgstyle(ctx, :Updating, "registry at ", regpath)
+                LibGit2.with(LibGit2.GitRepo, reg) do repo
+                    if LibGit2.isdirty(repo)
+                        push!(errors, (regpath, "registry dirty"))
                         return
+                    end
+                    if !LibGit2.isattached(repo)
+                        push!(errors, (regpath, "registry detached"))
+                        return
+                    end
+                    branch = LibGit2.headname(repo)
+                    GitTools.fetch(repo)
+                    ff_succeeded = try
+                        LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
+                    catch e
+                        e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
+                        push!(errors, (reg, "branch origin/$branch not found"))
+                        return
+                    end
+
+                    if !ff_succeeded
+                        try LibGit2.rebase!(repo, "origin/$branch")
+                        catch e
+                            e isa LibGit2.GitError || rethrow(e)
+                            push!(errors, (reg, "registry failed to rebase on origin/$branch"))
+                            return
+                        end
                     end
                 end
             end
@@ -117,11 +129,12 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
             end
         end
     else
-        project_resolve!(ctx.env, pkgs)
+        project_deps_resolve!(ctx.env, pkgs)
         manifest_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs)
     end
     Operations.up(ctx, pkgs)
+    ctx.preview && preview_info()
 end
 
 
@@ -133,7 +146,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.pin(ctx, pkgs)
 end
@@ -148,31 +161,10 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs; registry=true)
     Operations.free(ctx, pkgs)
 end
 
-
-#deprecated
-@deprecate checkout develop
-
-develop(pkg::Union{String, PackageSpec}; kwargs...)  = develop([pkg]; kwargs...)
-develop(pkg::String, branch::String; kwargs...)      = develop([(PackageSpec(pkg), branch)]; kwargs...)
-develop(pkg::PackageSpec, branch::String; kwargs...) = develop([(pkg, branch)]; kwargs...)
-develop(pkgs::Vector{String}; kwargs...)             = develop([(PackageSpec(pkg), nothing) for pkg in pkgs]; kwargs...)
-develop(pkgs::Vector{PackageSpec}; kwargs...)        = develop([(pkg, nothing) for pkg in pkgs]; kwargs...)
-develop(pkgs_branches::Vector; kwargs...)            = develop(Context(), pkgs_branches; kwargs...)
-
-function develop(ctx::Context, pkgs_branches::Vector; path = devdir(), kwargs...)
-    print_first_command_header()
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-    pkgs = [p[1] for p in pkgs_branches]
-    project_resolve!(ctx.env, pkgs)
-    registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs)
-    Operations.develop(ctx, pkgs_branches; path = path)
-end
 
 
 test(;kwargs...)                                  = test(PackageSpec[], kwargs...)
@@ -184,7 +176,13 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     print_first_command_header()
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
+    if isempty(pkgs)
+        # TODO: Allow this?
+        ctx.env.pkg == nothing && cmderror("trying to test unnamed project")
+        push!(pkgs, ctx.env.pkg)
+    end
     project_resolve!(ctx.env, pkgs)
+    project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.test(ctx, pkgs; coverage=coverage)
@@ -298,21 +296,26 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
         end
     end
     bytes, mb = Base.prettyprint_getunits(sz, length(Base._mem_units), Int64(1024))
-    byte_save_str = length(paths_to_delete) == 0 ? "" : (" saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
+    byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
+    ctx.preview && preview_info()
 end
 
 
 function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID})
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
-        info = manifest_info(ctx.env, pkg.uuid)
         pkg.uuid in uuids && continue
         push!(uuids, pkg.uuid)
-        if haskey(info, "deps")
-            pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
-            _get_deps!(ctx, pkgs, uuids)
+        if Types.is_project(ctx.env, pkg)
+            pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in ctx.env.project["deps"]]
+        else
+            info = manifest_info(ctx.env, pkg.uuid)
+            if haskey(info, "deps")
+                pkgs = [PackageSpec(name, UUID(uuid)) for (name, uuid) in info["deps"]]
+            end
         end
+        _get_deps!(ctx, pkgs, uuids)
     end
 end
 
@@ -324,21 +327,28 @@ build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     print_first_command_header()
     Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
     if isempty(pkgs)
-        for (name, infos) in ctx.env.manifest, info in infos
-            uuid = UUID(info["uuid"])
-            push!(pkgs, PackageSpec(name, uuid))
+        if ctx.env.pkg !== nothing
+            push!(pkgs, ctx.env.pkg)
+        else
+            for (name, infos) in ctx.env.manifest, info in infos
+                uuid = UUID(info["uuid"])
+                push!(pkgs, PackageSpec(name, uuid))
+            end
         end
     end
     for pkg in pkgs
         pkg.mode = PKGMODE_MANIFEST
     end
+    project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)
     Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
+    ctx.preview && preview_info()
 end
 
 init() = init(Context())

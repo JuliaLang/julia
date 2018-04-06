@@ -53,7 +53,7 @@ function hashheader(stream::IO, md::MD)
         eatindent(stream) || return false
         level = 0
         while startswith(stream, '#') level += 1 end
-        level < 1 || level > 6 && return false
+        (level < 1 || level > 6) && return false
 
         c = ' '
         # Allow empty headers, but require a space
@@ -211,11 +211,11 @@ function admonition(stream::IO, block::MD)
             let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
-                if contains(line, untitled)
+                if occursin(untitled, line)
                     m = match(untitled, line)
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], ucfirst(m.captures[1])
-                elseif contains(line, titled)
+                    m.captures[1], uppercasefirst(m.captures[1])
+                elseif occursin(titled, line)
                     m = match(titled, line)
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
@@ -250,12 +250,11 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
-
-    List(x::AbstractVector, b::Integer) = new(x, b)
-    List(x::AbstractVector) = new(x, -1)
-    List(b::Integer) = new(Any[], b)
+    loose::Bool # TODO: Renderers should use this field
 end
-
+List(x::AbstractVector, b::Integer) = List(x, b, false)
+List(x::AbstractVector) = List(x, -1)
+List(b::Integer) = List(Any[], b)
 List(xs...) = List(vcat(xs...))
 
 isordered(list::List) = list.ordered >= 0
@@ -270,12 +269,12 @@ function list(stream::IO, block::MD)
         indent = isempty(bullet) ? (return false) : length(bullet)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if contains(bullet, BULLETS)
+            if occursin(BULLETS, bullet)
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif contains(bullet, r"^ {0,3}\d+(\.|\))( |$)")
+            elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
-                r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
+                r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
                 Base.parse(Int, match(r, bullet).captures[1]), r
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
@@ -302,8 +301,8 @@ function list(stream::IO, block::MD)
                     println(buffer)
                 end
             else
-                newline = false
                 if startswith(stream, " "^indent)
+                    newline && (list.loose = true)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
@@ -314,11 +313,13 @@ function list(stream::IO, block::MD)
                         break
                     else
                         # Start of a new list item.
+                        newline && (list.loose = true)
                         count += 1
                         count > 1 && pushitem!(list, buffer)
                         print(buffer, readline(stream, keep=true))
                     end
                 end
+                newline = false
             end
         end
         count == length(list.items) || pushitem!(list, buffer)

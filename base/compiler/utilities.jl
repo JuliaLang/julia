@@ -4,6 +4,14 @@
 # generic #
 ###########
 
+if !isdefined(@__MODULE__, Symbol("@timeit"))
+    # This is designed to allow inserting timers when loading a second copy
+    # of inference for performing performance experiments.
+    macro timeit(args...)
+        esc(args[end])
+    end
+end
+
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(@nospecialize(f), a)
     for x in a
@@ -87,6 +95,10 @@ end
 ###########################
 # MethodInstance/CodeInfo #
 ###########################
+
+function invoke_api(li::MethodInstance)
+    return ccall(:jl_invoke_api, Cint, (Any,), li)
+end
 
 function get_staged(li::MethodInstance)
     try
@@ -181,6 +193,8 @@ function exprtype(@nospecialize(x), src, mod::Module)
         return (x::TypedSlot).typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
+    elseif isa(x, Argument)
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
     elseif isa(x, Symbol)
         return abstract_eval_global(mod, x::Symbol)
     elseif isa(x, QuoteNode)

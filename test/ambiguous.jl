@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+world_counter() = ccall(:jl_get_world_counter, UInt, ())
+
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__
 ambig(x, y) = 1
@@ -69,7 +71,7 @@ end
 # Test that non-ambiguous cases work
 let io = IOBuffer()
     @test precompile(ambig, (Int, Int)) == true
-    cf = cfunction(ambig, Int, Tuple{Int, Int})
+    cf = @eval @cfunction(ambig, Int, (Int, Int))
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
     @test length(code_typed(ambig, (Int, Int))) == 1
@@ -78,8 +80,9 @@ end
 # Test that ambiguous cases fail appropriately
 let io = IOBuffer()
     @test precompile(ambig, (UInt8, Int)) == false
-    cf = cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
-    @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
+    cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
+    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), world_counter()),
+                 ccall(cf, Int, (UInt8, Int), 1, 2))
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
     @test length(code_typed(ambig, (UInt8, Int))) == 0

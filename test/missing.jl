@@ -69,6 +69,8 @@ end
     @test !isless(missing, missing)
     @test !isless(missing, 1)
     @test isless(1, missing)
+
+    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin

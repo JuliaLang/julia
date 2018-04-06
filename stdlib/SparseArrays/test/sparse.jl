@@ -162,11 +162,11 @@ end
 @testset "squeeze" begin
     for i = 1:5
         am = sprand(20, 1, 0.2)
-        av = squeeze(am, 2)
+        av = squeeze(am, dims=2)
         @test ndims(av) == 1
         @test all(av.==am)
         am = sprand(1, 20, 0.2)
-        av = squeeze(am, 1)
+        av = squeeze(am, dims=1)
         @test ndims(av) == 1
         @test all(av' .== am)
     end
@@ -539,9 +539,16 @@ end
     @test length(K) == length(J) == length(V) == 2
 end
 
-@testset "issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
+@testset "findall" begin
+    # issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
     A = sparse(I, 5, 5)
     @test findall(A) == findall(x -> x == true, A) == findall(Array(A))
+    # Non-stored entries are true
+    @test findall(x -> x == false, A) == findall(x -> x == false, Array(A))
+
+    # Not all stored entries are true
+    @test findall(sparse([true false])) == [CartesianIndex(1, 1)]
+    @test findall(x -> x > 1, sparse([1 2])) == [CartesianIndex(1, 2)]
 end
 
 @testset "issue #5824" begin
@@ -1356,7 +1363,7 @@ end
 @testset "error conditions for reshape, and squeeze" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
-    @test_throws ArgumentError squeeze(A,(1, 1))
+    @test_throws ArgumentError squeeze(A,dims=(1, 1))
 end
 
 @testset "float" begin
@@ -1445,8 +1452,8 @@ end
 end
 
 @testset "trace" begin
-    @test_throws DimensionMismatch trace(spzeros(5,6))
-    @test trace(sparse(1.0I, 5, 5)) == 5
+    @test_throws DimensionMismatch tr(spzeros(5,6))
+    @test tr(sparse(1.0I, 5, 5)) == 5
 end
 
 @testset "spdiagm" begin
@@ -2218,6 +2225,15 @@ end
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
     @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
+end
+
+@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
+    B = SparseMatrixCSC{Int,Int}(2, 3,
+        [1, 3, 4, 5],
+        [1, 2, 1, 2, 999, 999, 999, 999],
+        [1, 2, 3, 6, 999, 999, 999, 999]
+    )
+    @test maximum(B) == 6
 end
 
 end # module

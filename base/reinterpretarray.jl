@@ -44,6 +44,7 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     tuple(size1, tail(psize)...)
 end
 
+elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @inline @propagate_inbounds getindex(a::ReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])

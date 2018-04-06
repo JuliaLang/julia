@@ -151,6 +151,10 @@ Language changes
   * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
     Now it is evaluated in the scope outside the `for` loop.
 
+  * In `for i in x, j in y`, all variables now have fresh bindings on each iteration of the
+    innermost loop. For example, an assignment to `i` will not be visible on the next `j`
+    loop iteration ([#330]).
+
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
 
@@ -452,6 +456,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `indexin` now returns the first rather than the last matching index ([#25998]).
 
+  * `parse(::Type, ::Char)` now uses a default base of 10, like other number parsing
+    methods, instead of 36 ([#26576]).
+
 Library improvements
 --------------------
 
@@ -460,6 +467,11 @@ Library improvements
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
+
+  * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
+    inputs, it "steals" the memory buffer, leaving them with an empty buffer which
+    is guaranteed not to be shared with the `String` object. For other types of vectors
+    (in particular immutable vectors), a copy is made and the input is not truncated ([#26093]).
 
   * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
 
@@ -557,8 +569,8 @@ Library improvements
 
   * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
-  * New function `equalto(x)`, which returns a function that compares its argument to `x`
-    using `isequal` ([#23812]).
+  * `isequal`, `==`, and `in` have one argument "curried" forms. For example `isequal(x)`
+    returns a function that compares its argument to `x` using `isequal` ([#26436]).
 
   * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
     This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
@@ -622,8 +634,9 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
-  * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
-    keyword argument. ([#26156])
+  * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
+    keyword arguments. ([#26156], [#26670])
+
 
 Compiler/Runtime improvements
 -----------------------------
@@ -654,6 +667,12 @@ Deprecated or removed
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
+
+  * The use of a positional dimension argument has largely been deprecated in favor of a
+    `dims` keyword argument. This includes the functions `sum`, `prod`, `maximum`,
+    `minimum`, `all`, `any`, `findmax`, `findmin`, `mean`, `varm`, `std`, `var`, `cov`,
+    `cor`, `median`, `mapreducedim`, `reducedim`, `sort`, `accumulate`, `accumulate!`,
+    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, and `squeeze` ([#25501]).
 
   * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
     `axes(a, d)` ([#25057]).
@@ -905,6 +924,12 @@ Deprecated or removed
   * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
     and in the future `map` will operate only on values ([#5794]).
 
+  * Previously, broadcast defaulted to treating its arguments as scalars if they were not
+    arrays. This behavior is deprecated, and in the future `broadcast` will default to
+    iterating over all its arguments. Wrap arguments you wish to be treated as scalars with
+    `Ref()` or a 1-tuple. Package developers can choose to allow a non-iterable type `T` to
+    always behave as a scalar by implementing `broadcastable(x::T) = Ref(x)` ([#26212]).
+
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
@@ -1022,8 +1047,11 @@ Deprecated or removed
     `F.Q` instead of `F[:Q]` ([#25184]).
 
   * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
-    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
-    predicates for some methods ([#24673]
+    `findlast`/`findprev` respectively, in combination with curried `isequal` and `in`
+    predicates for some methods ([#24673]).
+
+  * `search(buf::IOBuffer, delim::UInt8)` has been deprecated in favor of either `occursin(delim, buf)`
+    (to test containment) or `readuntil(buf, delim)` (to read data up to `delim`) ([#26600]).
 
   * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
 
@@ -1033,7 +1061,7 @@ Deprecated or removed
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
 
-  * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
+  * `findin(a, b)` has been deprecated in favor of `findall(in(b), a)` ([#24673]).
 
   * `module_name` has been deprecated in favor of a new, general `nameof` function. Similarly,
     the unexported `Base.function_name` and `Base.datatype_name` have been deprecated in favor
@@ -1070,6 +1098,11 @@ Deprecated or removed
   * The `remove_destination` keyword argument to `cp`, `mv`, and the unexported `cptree`
     has been renamed to `force` ([#25979]).
 
+  * `contains` has been deprecated in favor of a more general `occursin` function, which
+    takes its arguments in reverse order from `contains` ([#26283]).
+
+  * `Regex` objects are no longer callable. Use `occursin` instead ([#26283]).
+
   * The methods of `range` based on positional arguments have been deprecated in favor of
     keyword arguments ([#25896]).
 
@@ -1098,6 +1131,11 @@ Deprecated or removed
   * `showcompact(io, x...)` has been deprecated in favor of
     `show(IOContext(io, :compact => true), x...)` ([#26080]).
     Use `sprint(show, x..., context=:compact => true)` instead of `sprint(showcompact, x...)`.
+
+  * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
+    `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
+
+  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
 Command-line option changes
 ---------------------------
@@ -1279,7 +1317,6 @@ Command-line option changes
 [#23750]: https://github.com/JuliaLang/julia/issues/23750
 [#23757]: https://github.com/JuliaLang/julia/issues/23757
 [#23805]: https://github.com/JuliaLang/julia/issues/23805
-[#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23816]: https://github.com/JuliaLang/julia/issues/23816
 [#23885]: https://github.com/JuliaLang/julia/issues/23885
 [#23902]: https://github.com/JuliaLang/julia/issues/23902
@@ -1380,7 +1417,9 @@ Command-line option changes
 [#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
 [#25763]: https://github.com/JuliaLang/julia/issues/25763
+[#25786]: https://github.com/JuliaLang/julia/issues/25786
 [#25812]: https://github.com/JuliaLang/julia/issues/25812
+[#25815]: https://github.com/JuliaLang/julia/issues/25815
 [#25830]: https://github.com/JuliaLang/julia/issues/25830
 [#25845]: https://github.com/JuliaLang/julia/issues/25845
 [#25854]: https://github.com/JuliaLang/julia/issues/25854
@@ -1396,4 +1435,15 @@ Command-line option changes
 [#26009]: https://github.com/JuliaLang/julia/issues/26009
 [#26071]: https://github.com/JuliaLang/julia/issues/26071
 [#26080]: https://github.com/JuliaLang/julia/issues/26080
+[#26093]: https://github.com/JuliaLang/julia/issues/26093
 [#26149]: https://github.com/JuliaLang/julia/issues/26149
+[#26154]: https://github.com/JuliaLang/julia/issues/26154
+[#26156]: https://github.com/JuliaLang/julia/issues/26156
+[#26161]: https://github.com/JuliaLang/julia/issues/26161
+[#26262]: https://github.com/JuliaLang/julia/issues/26262
+[#26284]: https://github.com/JuliaLang/julia/issues/26284
+[#26286]: https://github.com/JuliaLang/julia/issues/26286
+[#26436]: https://github.com/JuliaLang/julia/issues/26436
+[#26442]: https://github.com/JuliaLang/julia/issues/26442
+[#26600]: https://github.com/JuliaLang/julia/issues/26600
+[#26670]: https://github.com/JuliaLang/julia/issues/26670

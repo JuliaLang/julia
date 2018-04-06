@@ -5,7 +5,7 @@ STDLIBDIR := $(abspath $(JULIAHOME)/stdlib)
 include $(JULIAHOME)/Make.inc
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
-TESTGROUPS = unicode strings
+TESTGROUPS = unicode strings compiler
 TESTS = all stdlib $(TESTGROUPS) \
         $(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out TestHelpers runtests testdefs, \
@@ -14,7 +14,7 @@ TESTS = all stdlib $(TESTGROUPS) \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
 # run `make print-TESTS` to see a list of all tests that can be run
 
-EMBEDDING_ARGS := JULIA=$(JULIA_EXECUTABLE) BIN=$(SRCDIR)/embedding
+EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC)"
 
 default: all
 

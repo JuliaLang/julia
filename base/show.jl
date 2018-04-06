@@ -751,7 +751,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 ## AST printing constants ##
 
 const indent_width = 4
-const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
+const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([
@@ -760,7 +760,6 @@ const expr_infix_wide = Set{Symbol}([
     :(&&), :(||), :(<:), :($=), :(⊻=)]) # `$=` should be removed after deprecation is removed, issue #18977
 const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
-const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
@@ -972,7 +971,7 @@ end
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if (isa(func, Symbol) && func !== :(:)) ||
+    if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Expr) && (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
@@ -1214,7 +1213,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # unary operator (i.e. "!z")
         elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
-            if isa(func_args[1], Expr) || func_args[1] in all_ops
+            if isa(func_args[1], Expr) || isoperator(func_args[1])
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, func_args[1], indent, func_prec)

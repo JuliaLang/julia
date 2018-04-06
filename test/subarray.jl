@@ -24,7 +24,7 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, sd)
+    squeeze(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]
@@ -582,6 +582,13 @@ end
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
+end
+
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
 end
 
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4

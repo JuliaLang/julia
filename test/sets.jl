@@ -11,7 +11,7 @@ using .Main.TestHelpers.OAs
     s = Set(data_in)
     data_out = collect(s)
     @test ===(typeof(data_out), Array{Any,1})
-    @test all(map(occursin(data_out), data_in))
+    @test all(map(in(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
@@ -221,6 +221,13 @@ end
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
     @test intersect([1, 2, 1], [2, 2]) == intersect!([1, 2, 1], [2, 2]) == [2]
+
+    # issue #25801
+    x = () ∩ (:something,)
+    y = () ∩ (42,)
+    @test isempty(x)
+    @test isempty(y)
+    @test eltype(x) == eltype(y) == Union{}
 end
 
 @testset "setdiff" begin

@@ -268,7 +268,7 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 ## libc character class predicates ##
 
 """
-    islower(c::AbstractChar) -> Bool
+    islowercase(c::AbstractChar) -> Bool
 
 Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
@@ -276,22 +276,22 @@ Letter: Lowercase.
 
 # Examples
 ```jldoctest
-julia> islower('α')
+julia> islowercase('α')
 true
 
-julia> islower('Γ')
+julia> islowercase('Γ')
 false
 
-julia> islower('❤')
+julia> islowercase('❤')
 false
 ```
 """
-islower(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_LL
+islowercase(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_LL
 
 # true for Unicode upper and mixed case
 
 """
-    isupper(c::AbstractChar) -> Bool
+    isuppercase(c::AbstractChar) -> Bool
 
 Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
@@ -299,17 +299,17 @@ Letter: Uppercase, or Lt, Letter: Titlecase.
 
 # Examples
 ```jldoctest
-julia> isupper('γ')
+julia> isuppercase('γ')
 false
 
-julia> isupper('Γ')
+julia> isuppercase('Γ')
 true
 
-julia> isupper('❤')
+julia> isuppercase('❤')
 false
 ```
 """
-function isupper(c::AbstractChar)
+function isuppercase(c::AbstractChar)
     cat = category_code(c)
     cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
 end
@@ -533,7 +533,7 @@ converted to lowercase, otherwise they are left unchanged.
 By default, all non-letters are considered as word separators;
 a predicate can be passed as the `wordsep` keyword to determine
 which characters should be considered as word separators.
-See also [`ucfirst`](@ref) to capitalize only the first
+See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
 
 # Examples
@@ -564,22 +564,22 @@ function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool
 end
 
 """
-    ucfirst(s::AbstractString) -> String
+    uppercasefirst(s::AbstractString) -> String
 
 Return `s` with the first character converted to uppercase (technically "title
 case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
 character of every word in `s`.
 
-See also: [`lcfirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+See also: [`lowercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
 [`titlecase`](@ref)
 
 # Examples
 ```jldoctest
-julia> ucfirst("python")
+julia> uppercasefirst("python")
 "Python"
 ```
 """
-function ucfirst(s::AbstractString)
+function uppercasefirst(s::AbstractString)
     isempty(s) && return ""
     c = s[1]
     c′ = titlecase(c)
@@ -588,20 +588,20 @@ function ucfirst(s::AbstractString)
 end
 
 """
-    lcfirst(s::AbstractString)
+    lowercasefirst(s::AbstractString)
 
 Return `s` with the first character converted to lowercase.
 
-See also: [`ucfirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+See also: [`uppercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
 [`titlecase`](@ref)
 
 # Examples
 ```jldoctest
-julia> lcfirst("Julia")
+julia> lowercasefirst("Julia")
 "julia"
 ```
 """
-function lcfirst(s::AbstractString)
+function lowercasefirst(s::AbstractString)
     isempty(s) && return ""
     c = s[1]
     c′ = lowercase(c)

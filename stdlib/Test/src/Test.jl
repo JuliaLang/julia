@@ -404,7 +404,7 @@ function get_test_result(ex, source)
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
 
             if isa(a, Expr) && a.head == :...
-                push!(escaped_args, Expr(:..., esc(a)))
+                push!(escaped_args, Expr(:..., esc(a.args[1])))
             else
                 push!(escaped_args, esc(a))
             end
@@ -533,8 +533,8 @@ end
 
 # Test for warning messages (deprecated)
 
-contains_warn(output, s::AbstractString) = contains(output, s)
-contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::AbstractString) = occursin(s, output)
+contains_warn(output, s::Regex) = occursin(s, output)
 contains_warn(output, s::Function) = s(output)
 contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 

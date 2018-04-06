@@ -30,7 +30,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     function UUID(s::AbstractString)
         s = lowercase(s)
 
-        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+        if !occursin(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
             throw(ArgumentError("Malformed UUID string: $(repr(s))"))
         end
 

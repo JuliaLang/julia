@@ -87,7 +87,7 @@ function declared_floor(x::Float64)
 end
 @test declared_floor(4.2) ≈ 4.
 ir = sprint(code_llvm, declared_floor, Tuple{Float64})
-@test contains(ir, "call double @llvm.floor.f64") # should be inlined
+@test occursin("call double @llvm.floor.f64", ir) # should be inlined
 
 function doubly_declared_floor(x::Float64)
     llvmcall(

@@ -24,6 +24,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError (Array{T} where T<:Vararg{Int})
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
+@test_throws TypeError TypeVar(:T) <: Any
+@test_throws TypeError TypeVar(:T) >: Any
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -99,17 +102,17 @@ Type{Integer}  # cache this
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{String,String},Tuple{GenericString,String},
-                            Tuple{String,GenericString},Tuple{Int,String,Int}),
-                   Tuple{Any,AbstractString,Vararg{Int}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Integer}})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{String,String}, Tuple{GenericString,String},
+               Tuple{String,GenericString}, Tuple{Int,String,Int}) ==
+    Tuple{Any,AbstractString,Vararg{Int}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Int8}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Integer}}
+@test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
+@test typejoin(Union{Int,AbstractString}, Int8) == Any
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
@@ -126,6 +129,20 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -1239,9 +1256,9 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
     # Misaligned pointer
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
 end
 
 struct FooBar2515
@@ -4764,21 +4781,6 @@ let
     @test k(1) == 1
 end
 
-# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
-#            causing heap-use-after-free when compiling f18054
-function f18054()
-    return Cint(0)
-end
-cfunction(f18054, Cint, Tuple{})
-
-# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
-dummy18996() = return nothing
-function main18986()
-    cfunction(dummy18986, Cvoid, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
-end
-@test_throws ErrorException main18986()
-
 # issue #18085
 f18085(a, x...) = (0, )
 for (f, g) in ((:asin, :sin), (:acos, :cos))
@@ -4790,11 +4792,11 @@ end
 # issue #18236 constant VecElement in ast triggers codegen assertion/undef
 # VecElement of scalar
 v18236 = VecElement(1.0)
-ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
+ptr18236 = @cfunction(identity, VecElement{Float64}, (VecElement{Float64},))
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
+@test !occursin("double undef", sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}))
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4802,8 +4804,8 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 # We should be at least testing this on some platforms.
 # Not sure if there's a better way to trigger unboxing in codegen.
 v18236_2 = VecElement((Int8(1), Int8(2)))
-ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
-                       Tuple{VecElement{NTuple{2,Int8}}})
+ptr18236_2 = @cfunction(identity, VecElement{NTuple{2,Int8}},
+                        (VecElement{NTuple{2,Int8}},))
 @eval @noinline f18236_2(ptr) = ccall(ptr, VecElement{NTuple{2,Int8}},
                                       (VecElement{NTuple{2,Int8}},),
                                       $v18236_2)
@@ -6014,6 +6016,9 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
 
 # issue 22098
 macro m22098 end
@@ -6039,8 +6044,30 @@ let a = Foo17149()
     @test a === a
 end
 
+# issue #21004
+const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+@test_throws ArgumentError PTuple_21004(1)
+@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+
+#issue #22792
+foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
+@test foo_22792(Union{Int,UInt}) == 1
+foo_22792(::Union) = 2;
+@test foo_22792(Union{Int,UInt}) == 1
+@test foo_22792(Union{Int8,UInt}) == 1
+@test foo_22792(Union{Int,UInt}) == 1
+
 # issue #25907
 g25907a(x) = x[1]::Integer
 @test g25907a(Union{Int, UInt, Nothing}[1]) === 1
 g25907b(x) = x[1]::Complex
 @test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
+
+#issue #26363
+@test eltype(Ref(Float64(1))) === Float64
+
+# issue #23206
+g1_23206(::Tuple{Type{Int}, T}) where T = 0
+g2_23206(::Tuple{Type{Int}}) = 1
+@test_throws MethodError g1_23206(tuple(Int, 2))
+@test_throws MethodError g2_23206(tuple(Int, 2))

@@ -48,8 +48,8 @@ end
 @test length(run(pipeline(`$echocmd hello`, sortcmd), wait=false).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test contains(out,"world")
-@test contains(out,"hello")
+@test occursin("world", out)
+@test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -267,7 +267,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, @cfunction(thrash, Cvoid, (Ptr{Cvoid},)))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
@@ -479,12 +479,14 @@ end
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
 # issue #19864 (PR #20497)
-@test readchomp(pipeline(ignorestatus(
+let c19864 = readchomp(pipeline(ignorestatus(
         `$exename --startup-file=no -e '
             struct Error19864 <: Exception; end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
-    stderr=catcmd)) == "ERROR: correct19864"
+    stderr=catcmd))
+    @test occursin("ERROR: correct19864", c19864)
+end
 
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`

@@ -553,7 +553,9 @@ at runtime.
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure
 also contains a value for `width`. In such a case the rightmost occurrence takes precedence; in
-this example, `width` is certain to have the value `2`.
+this example, `width` is certain to have the value `2`. However, explicitly specifying the same keyword
+argument multiple times, for example `plot(x, y, width=2, width=3)`, is not allowed and results in
+a syntax error.
 
 ## Evaluation Scope of Default Values
 

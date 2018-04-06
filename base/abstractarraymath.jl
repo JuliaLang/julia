@@ -43,7 +43,7 @@ _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 """
-    squeeze(A, dims)
+    squeeze(A; dims)
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
@@ -57,14 +57,15 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
-julia> squeeze(a,3)
+julia> squeeze(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
  1  3
  2  4
 ```
 """
-function squeeze(A::AbstractArray, dims::Dims)
+squeeze(A; dims) = _squeeze(A, dims)
+function _squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
         length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
@@ -80,9 +81,7 @@ function squeeze(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
-
-squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
-
+_squeeze(A::AbstractArray, dim::Integer) = _squeeze(A, (Int(dim),))
 
 ## Unary operators ##
 
@@ -117,7 +116,7 @@ julia> selectdim(A, 2, 3)
  7
 ```
 """
-@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(axes(A), i, d))
+@inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, setindex(map(Slice, axes(A)), i, d))
 @noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)

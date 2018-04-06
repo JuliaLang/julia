@@ -408,8 +408,8 @@ end
 
 # Ref as 0-dimensional array for broadcast
 @test (-).(C_NULL, C_NULL)::UInt == 0
-@test (+).(1, Ref(2)) == fill(3)
-@test (+).(Ref(1), Ref(2)) == fill(3)
+@test (+).(1, Ref(2)) == 3
+@test (+).(Ref(1), Ref(2)) == 3
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
@@ -545,7 +545,7 @@ end
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
 @testset "treat type arguments as scalars, DataArrays issue 229" begin
-    @test Broadcast.combine_styles(AbstractArray) == Broadcast.Scalar()
+    @test Broadcast.combine_styles(Broadcast.broadcastable(AbstractArray)) == Base.Broadcast.DefaultArrayStyle{0}()
     @test broadcast(==, [1], AbstractArray) == BitArray([false])
     @test broadcast(==, 1, AbstractArray) == false
 end
@@ -574,8 +574,27 @@ end
     @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
 
     @test isequal(
-        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1]), Set([2])] .∪ Ref(Set([3])),
         [Set([1, 3]), Set([2, 3])])
+end
+
+# A bare bones custom type that supports broadcast
+struct Foo26601{T}
+    data::T
+end
+Base.axes(f::Foo26601) = axes(f.data)
+Base.getindex(f::Foo26601, i...) = getindex(f.data, i...)
+Base.ndims(::Type{Foo26601{T}}) where {T} = ndims(T)
+Base.Broadcast.broadcastable(f::Foo26601) = f
+@testset "barebones custom object broadcasting" begin
+    for d in (rand(Float64, ()), rand(5), rand(5,5), rand(5,5,5))
+        f = Foo26601(d)
+        @test f .* 2 == d .* 2
+        @test f .* (1:5) == d .* (1:5)
+        @test f .* reshape(1:25,5,5) == d .* reshape(1:25,5,5)
+        @test sqrt.(f) == sqrt.(d)
+        @test f .* (1,2,3,4,5) == d .* (1,2,3,4,5)
+    end
 end
 
 @testset "broadcast resulting in tuples" begin

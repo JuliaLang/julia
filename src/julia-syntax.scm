@@ -264,10 +264,6 @@
             `(,@head (curly Vararg ,(cadr las)))
             `(,@head ,las)))))
 
-(define (hidden-name? s)
-  (and (symbol? s)
-       (eqv? (string.char (string s) 0) #\#)))
-
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
@@ -344,7 +340,7 @@
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
@@ -761,17 +757,6 @@
                                             ,val))
                                    (list-head field-names (length args)) args)))))))))
 
-;; insert a statement after line number node
-(define (prepend-stmt stmt body)
-  (if (and (pair? body) (eq? (car body) 'block))
-      (cond ((atom? (cdr body))
-             `(block ,stmt (null)))
-            ((linenum? (cadr body))
-             `(block ,(cadr body) ,stmt ,@(cddr body)))
-            (else
-             `(block ,stmt ,@(cdr body))))
-      body))
-
 ;; insert item at start of arglist
 (define (arglist-unshift sig item)
   (if (and (pair? sig) (pair? (car sig)) (eq? (caar sig) 'parameters))
@@ -1016,7 +1001,10 @@
              (newa  '())
              (stmts '()))
     (if (null? argl)
-        (cons (reverse newa) (reverse stmts))
+        (cons (reverse newa) (if (null? stmts)
+                                 stmts
+                                 ;; return `nothing` from the assignments (issue #26518)
+                                 (reverse (cons '(null) stmts))))
         (let ((a (transform-arg (car argl))))
           (loop (cdr argl) (cons (car a) newa)
                 (if (cdr a) (cons (cdr a) stmts) stmts))))))
@@ -1034,7 +1022,7 @@
          (rett  (if dcl (caddr name) '(core Any)))
          (name  (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
-           (if (or (eq? name 'true) (eq? name 'false))
+           (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
            `(method ,name))
           ((not (pair? name))  e)
@@ -1577,43 +1565,66 @@
 ;; If false, this will try to warn only for uses of the last value after the loop.
 (define *warn-all-loop-vars* #f)
 
-(define (expand-for while lhs X elsebody body)
-  ;; (for (= lhs X) body)
-  (let* ((coll   (make-ssavalue))
-         (state  (gensy))
-         (outer? (and (pair? lhs) (eq? (car lhs) 'outer)))
-         (lhs    (if outer? (cadr lhs) lhs)))
-    `(block (= ,coll ,(expand-forms X))
-            (= ,state (call (top start) ,coll))
-            ;; TODO avoid `local declared twice` error from this
-            ;;,@(if outer? `((local ,lhs)) '())
-            ,@(if outer? `((require-existing-local ,lhs)) '())
-            ,(expand-forms
-              `(,while
-                (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                (block
-                 ;; NOTE: enable this to force loop-local var
-                 #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                 ,@(if (not outer?)
-                       (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
-                       '())
-                 ,(lower-tuple-assignment (list lhs state)
-                                          `(call (top next) ,coll ,state))
-                 ,body)
-                 ,elsebody)))))
+(define (expand-for lhss itrs body elsebody)
+  (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
+  (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
+         ;; TODO: maybe filter these to remove vars not assigned in the loop
+         (delete-duplicates
+          (filter (lambda (x) (not (underscore-symbol? x)))
+                  (apply append
+                         (map lhs-vars
+                              (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
+    `(break-block
+      loop-exit
+      ,(let nest ((lhss lhss)
+                  (itrs itrs))
+         (if (null? lhss)
+             body
+             (let* ((coll  (make-ssavalue))
+                    (state (gensy))
+                    (outer (outer? (car lhss)))
+                    (lhs   (if outer (cadar lhss) (car lhss)))
+                    (body
+                     `(block
+                       ;; NOTE: enable this to force loop-local var
+                       #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                       ,@(if (not outer)
+                             (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
+                             '())
+                       ,(lower-tuple-assignment (list lhs state)
+                                                `(call (top next) ,coll ,state))
+                       ,(nest (cdr lhss) (cdr itrs))))
+                    (body
+                     (if (null? (cdr lhss))
+                         `(break-block
+                           loop-cont
+                           (let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
+                             ,body)
+                           (null))
+                         `(scope-block ,body))))
+               `(block (= ,coll ,(car itrs))
+                       (= ,state (call (top start) ,coll))
+                       ;; TODO avoid `local declared twice` error from this
+                       ;;,@(if outer `((local ,lhs)) '())
+                       ,@(if outer `((require-existing-local ,lhs)) '())
+                       (_while
+                        (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
+                        ,body)))))
+      ,elsebody)))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
-(define (func-for-generator-ranges expr range-exprs)
+(define (func-for-generator-ranges expr range-exprs flat outervars)
   (let* ((vars    (map cadr range-exprs))
          (argname (if (and (length= vars 1) (symbol? (car vars)))
                       (car vars)
                       (gensy)))
+         (myvars  (lhs-vars `(tuple ,@vars)))
          (splat (cond ((eq? argname (car vars))  '())
                       ((length= vars 1)
-                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
+                       `(,@(map (lambda (v) `(local ,v)) myvars)
                          (= ,(car vars) ,argname)))
                       (else
-                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
+                       `(,@(map (lambda (v) `(local ,v)) myvars)
                          (= (tuple ,@vars) ,argname))))))
     (if (and (null? splat)
              (length= expr 3) (eq? (car expr) 'call)
@@ -1621,7 +1632,37 @@
              (not (dotop? (cadr expr)))
              (not (expr-contains-eq argname (cadr expr))))
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
-        `(-> ,argname (block ,@splat ,expr)))))
+        (let ((expr (cond ((and flat (pair? expr) (eq? (car expr) 'generator))
+                           (expand-generator expr #f (delete-duplicates (append outervars myvars))))
+                          ((and flat (pair? expr) (eq? (car expr) 'flatten))
+                           (expand-generator (cadr expr) #t (delete-duplicates (append outervars myvars))))
+                          ((pair? outervars)
+                           `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter (lambda (x) (not (underscore-symbol? x)))
+                                                                               outervars)))
+                              ,expr))
+                          (else expr))))
+          `(-> ,argname (block ,@splat ,expr))))))
+
+(define (expand-generator e flat outervars)
+  (let* ((expr  (cadr e))
+         (filt? (eq? (car (caddr e)) 'filter))
+         (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+         (ranges (map caddr range-exprs))
+         (iter (if (length= ranges 1)
+                   (car ranges)
+                   `(call (top product) ,@ranges)))
+         (iter (if filt?
+                   `(call (|.| (top Iterators) 'Filter)
+                          ,(func-for-generator-ranges (cadr (caddr e)) range-exprs #f '())
+                          ,iter)
+                   iter))
+         (gen  `(call (top Generator)
+                      ,(func-for-generator-ranges expr range-exprs flat outervars)
+                      ,iter)))
+    (expand-forms
+     (if flat
+         `(call (top Flatten) ,gen)
+         gen))))
 
 (define (ref-to-view expr)
   (if (and (pair? expr) (eq? (car expr) 'ref))
@@ -1957,7 +1998,7 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
-      ((symbol-like? lhs)
+      ((and (symbol-like? lhs) (valid-name? lhs))
        `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
@@ -2222,13 +2263,6 @@
                       (expand-forms (cadddr e))
                       '(null))))
 
-   'inner-while
-   (lambda (e)
-     `(_while ,(expand-forms (cadr e))
-              (break-block loop-cont
-                           (scope-block ,(blockify (expand-forms (caddr e))))
-                           (null))))
-
    'break
    (lambda (e)
      (case (length e)
@@ -2240,19 +2274,11 @@
 
    'for
    (lambda (e)
-     (let nest ((ranges (if (eq? (car (cadr e)) 'block)
-                            (cdr (cadr e))
-                            (list (cadr e))))
-                (first  #t))
-       (expand-for (if first 'while 'inner-while)
-                   (cadr (car ranges))
-                   (caddr (car ranges))
-                   (if (and (length> e 3) first)
-                     (cadddr e) ;; elsebody
-                     '(null))
-                   (if (null? (cdr ranges))
-                       (caddr e)  ;; body
-                       (nest (cdr ranges) #f)))))
+     (let ((ranges (if (eq? (car (cadr e)) 'block)
+                       (cdr (cadr e))
+                       (list (cadr e))))
+           (elsebody  (if (length> e 3) (cadddr e) '(null))))
+       (expand-forms (expand-for (map cadr ranges) (map caddr ranges) (caddr e) elsebody))))
 
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
@@ -2356,26 +2382,10 @@
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
-   (lambda (e)
-     (let* ((expr  (cadr e))
-            (filt? (eq? (car (caddr e)) 'filter))
-            (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
-            (ranges (map caddr range-exprs))
-            (iter (if (length= ranges 1)
-                      (car ranges)
-                      `(call (top product) ,@ranges)))
-            (iter (if filt?
-                      `(call (|.| (top Iterators) 'Filter)
-                             ,(func-for-generator-ranges (cadr (caddr e)) range-exprs)
-                             ,iter)
-                      iter)))
-       (expand-forms
-        `(call (top Generator)
-               ,(func-for-generator-ranges expr range-exprs)
-               ,iter))))
+   (lambda (e) (expand-generator e #f '()))
 
    'flatten
-   (lambda (e) (expand-forms `(call (top Flatten) ,(cadr e))))
+   (lambda (e) (expand-generator (cadr e) #t '()))
 
    'comprehension
    (lambda (e)
@@ -2536,6 +2546,10 @@
                         (cdr e))
               tab)))
 
+(define (check-valid-name e)
+  (or (valid-name? e)
+      (error (string "invalid identifier name \"" e "\""))))
+
 ;; local variable identification and renaming, derived from:
 ;; 1. (local x) expressions inside this scope-block and lambda
 ;; 2. (const x) expressions in a scope-block where x is not declared global
@@ -2546,9 +2560,10 @@
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
-        ((eq? (car e) 'local) '(null)) ;; remove local decls
-        ((eq? (car e) 'local-def) '(null)) ;; remove local decls
-        ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
+        ((memq (car e) '(local local-def implicit-global))
+         (check-valid-name (cadr e))
+         ;; remove local and implicit-global decls
+         '(null))
         ((eq? (car e) 'require-existing-local)
          (if (not (memq (cadr e) env))
              (error "no outer variable declaration exists for \"for outer\""))
@@ -3053,7 +3068,7 @@ f(x) = yt(x)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop decl
                                                implicit-global global globalref outerref
-                                               const = null method call foreigncall ssavalue
+                                               const = null method call foreigncall cfunction ssavalue
                                                gc_preserve_begin gc_preserve_end))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
@@ -3400,7 +3415,7 @@ f(x) = yt(x)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new the_exception isdefined call invoke foreigncall gc_preserve_begin)))))
+           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3577,7 +3592,7 @@ f(x) = yt(x)
                   ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new foreigncall)
+            ((call new foreigncall cfunction)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
                             (for-each (lambda (a)
@@ -3595,6 +3610,11 @@ f(x) = yt(x)
                                         (list (cadr e)))
                                     (list-head (cddr e) 4)
                                     (compile-args (list-tail e 6) break-labels linearize-args)))
+                           ;; NOTE: arguments of cfunction must be left in place
+                           ;;       except for argument 2 (fptr)
+                           ((eq? (car e) 'cfunction)
+                            (let ((fptr (car (compile-args (list (caddr e)) break-labels linearize-args))))
+                              (cons (cadr e) (cons fptr (cdddr e)))))
                            ;; TODO: evaluate first argument to cglobal some other way
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)

@@ -8,15 +8,16 @@ JULIAHOME        := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
 
-.PHONY: help clean cleanall html pdf linkcheck doctest check deps deploy
+.PHONY: help clean cleanall html pdf linkcheck doctest doctest-fix check deps deploy
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
-	@echo "  html      to make standalone HTML files"
-	@echo "  pdf       to make standalone PDF file"
-	@echo "  linkcheck to check all external links for integrity"
-	@echo "  doctest   to run all doctests embedded in the documentation"
-	@echo "  check     to run linkcheck and doctests"
+	@echo "  html        to make standalone HTML files"
+	@echo "  pdf         to make standalone PDF file"
+	@echo "  linkcheck   to check all external links for integrity"
+	@echo "  doctest     to run all doctests embedded in the documentation"
+	@echo "  doctest-fix to update all doctests embedded in the documentation"
+	@echo "  check       to run linkcheck and doctests"
 
 UnicodeData.txt:
 	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
@@ -54,6 +55,11 @@ doctest: deps
 	@echo "Running all embedded 'doctests'."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- doctest
 	@echo "Checks finished."
+
+doctest-fix: deps
+	@echo "Updating all embedded 'doctests'."
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- doctest-fix
+	@echo "Update finished."
 
 check: deps
 	@echo "Running all embedded 'doctests' and checking external links."

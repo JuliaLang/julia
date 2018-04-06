@@ -1036,7 +1036,7 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(occursin(procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
 end
@@ -1301,7 +1301,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
 end
@@ -1375,7 +1375,7 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
@@ -1395,7 +1395,7 @@ let
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
                      include("testfile2"))
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include(joinpath("2", "testfile")))
+                     include("2/testfile"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1483,7 +1483,7 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(occursin(results), procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on

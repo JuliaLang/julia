@@ -237,16 +237,17 @@ end
     @test vec(b) == vec(a)
 
     a = rand(1, 1, 8, 8, 1)
-    @test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
-    @test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
-    @test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
-    @test_throws ArgumentError squeeze(a, 0)
-    @test_throws ArgumentError squeeze(a, (1, 1))
-    @test_throws ArgumentError squeeze(a, (1, 2, 1))
-    @test_throws ArgumentError squeeze(a, (1, 1, 2))
-    @test_throws ArgumentError squeeze(a, 3)
-    @test_throws ArgumentError squeeze(a, 4)
-    @test_throws ArgumentError squeeze(a, 6)
+    @test @inferred(squeeze(a, dims=1)) == @inferred(squeeze(a, dims=(1,))) == reshape(a, (1, 8, 8, 1))
+    @test @inferred(squeeze(a, dims=(1, 5))) == squeeze(a, dims=(5, 1)) == reshape(a, (1, 8, 8))
+    @test @inferred(squeeze(a, dims=(1, 2, 5))) == squeeze(a, dims=(5, 2, 1)) == reshape(a, (8, 8))
+    @test_throws UndefKeywordError squeeze(a)
+    @test_throws ArgumentError squeeze(a, dims=0)
+    @test_throws ArgumentError squeeze(a, dims=(1, 1))
+    @test_throws ArgumentError squeeze(a, dims=(1, 2, 1))
+    @test_throws ArgumentError squeeze(a, dims=(1, 1, 2))
+    @test_throws ArgumentError squeeze(a, dims=3)
+    @test_throws ArgumentError squeeze(a, dims=4)
+    @test_throws ArgumentError squeeze(a, dims=6)
 
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
@@ -291,34 +292,34 @@ end
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findall(occursin(b), a)
+    ind = findall(in(b), a)
     @test ind == [3,4]
-    @test findall(occursin(Int[]), a) == Int[]
-    @test findall(occursin(a), Int[]) == Int[]
+    @test findall(in(Int[]), a) == Int[]
+    @test findall(in(a), Int[]) == Int[]
 
     a = [1,2,3,4,5]
     b = [2,3,4,6]
-    @test findall(occursin(b), a) == [2,3,4]
-    @test findall(occursin(a), b) == [1,2,3]
-    @test findall(occursin(Int[]), a) == Int[]
-    @test findall(occursin(a), Int[]) == Int[]
+    @test findall(in(b), a) == [2,3,4]
+    @test findall(in(a), b) == [1,2,3]
+    @test findall(in(Int[]), a) == Int[]
+    @test findall(in(a), Int[]) == Int[]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
-    @test findall(occursin(b), a) == [4]
-    @test findall(occursin(b), [a[1:4]; a[4:end]]) == [4,5]
+    @test findall(in(b), a) == [4]
+    @test findall(in(b), [a[1:4]; a[4:end]]) == [4,5]
 
-    @test findall(occursin(NaN), [1.0, NaN, 2.0]) == [2]
-    @test findall(occursin(NaN), [1.0, 2.0, NaN]) == [3]
+    @test findall(in(NaN), [1.0, NaN, 2.0]) == [2]
+    @test findall(in(NaN), [1.0, 2.0, NaN]) == [3]
 
-    @testset "findall(::OccursIn, b) for uncomparable element types" begin
+    @testset "findall(in(x), b) for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
-        @test findall(occursin(1 + 1im), a) == [1]
-        @test findall(occursin(a), a)       == [1,2]
+        @test findall(in(1 + 1im), a) == [1]
+        @test findall(in(a), a)       == [1,2]
     end
 
-    @test findall(occursin([1, 2]), 2) == [1]
-    @test findall(occursin([1, 2]), 3) == []
+    @test findall(in([1, 2]), 2) == [1]
+    @test findall(in([1, 2]), 3) == []
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
@@ -458,32 +459,32 @@ end
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
-    @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
-    @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
+    @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
+    @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
     @test findfirst(isodd, [2,4,6,2,0]) == nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
-    @test findnext(equalto(1),a,4) == 6
-    @test findnext(equalto(5),a,4) == nothing
+    @test findnext(isequal(1),a,4) == 6
+    @test findnext(isequal(5),a,4) == nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
     @test findlast(a.==5) == nothing
-    @test findlast(equalto(3), [1,2,4,1,2,3,4]) == 6
+    @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
     @test findlast(isodd, [2,4,6,2,0]) == nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
     @test findprev(!iszero,a,1) == nothing
-    @test findprev(equalto(1),a,4) == 2
-    @test findprev(equalto(1),a,8) == 6
+    @test findprev(isequal(1),a,4) == 2
+    @test findprev(isequal(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
-    @test findfirst(equalto(0x00), [0x01, 0x00]) == 2
-    @test findlast(equalto(0x00), [0x01, 0x00]) == 2
-    @test findnext(equalto(0x00), [0x00, 0x01, 0x00], 2) == 3
-    @test findprev(equalto(0x00), [0x00, 0x01, 0x00], 2) == 1
+    @test findfirst(isequal(0x00), [0x01, 0x00]) == 2
+    @test findlast(isequal(0x00), [0x01, 0x00]) == 2
+    @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
+    @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -1261,7 +1262,7 @@ end
 
         # logical indexing
         a = [1:10;]; acopy = copy(a)
-        @test deleteat!(a, map(occursin(idx), 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+        @test deleteat!(a, map(in(idx), 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]
@@ -1676,11 +1677,11 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianIndices(2:5, 3:5)
+    R = CartesianIndices((2:5, 3:5))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
-    indices = Array(R)
+    indices = collect(R)
     @test indices[1] == CartesianIndex{2}(2,3)
     @test indices[2] == CartesianIndex{2}(3,3)
     @test indices[4] == CartesianIndex{2}(5,3)
@@ -1701,8 +1702,8 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianIndices((3:5,-7:7)) == CartesianIndices(3:5,-7:7)
-    @test CartesianIndices((3,-7:7)) == CartesianIndices(3:3,-7:7)
+    @test collect(CartesianIndices((3:5,-7:7))) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
+    @test collect(CartesianIndices((3,-7:7))) == CartesianIndex.(3, reshape(-7:7, 1, :))
 end
 
 # All we really care about is that we have an optimized
@@ -1871,6 +1872,10 @@ end
         @test @inferred(f26009(A, 2:2)) == reshape(2:4:20, 1, :)
         @test @inferred(f26009(A, 2)) == 2:4:20
     end
+    A = reshape(1:24, 4, 3, 2)
+    @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
+    @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
+    @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
 end
 
 ###

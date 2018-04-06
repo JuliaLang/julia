@@ -85,13 +85,20 @@ function process_events(block::Bool)
     end
 end
 
+function uv_alloc_buf end
+function uv_readcb end
+function uv_writecb_task end
+function uv_return_spawn end
+function uv_asynccb end
+function uv_timercb end
+
 function reinit_stdio()
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Cvoid, Tuple{Ptr{Cvoid}, Csize_t, Ptr{Cvoid}})
-    global uv_jl_readcb        = cfunction(uv_readcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}})
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Cvoid, Tuple{Ptr{Cvoid}, Int64, Int32})
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Cvoid, Tuple{Ptr{Cvoid}})
-    global uv_jl_timercb       = cfunction(uv_timercb, Cvoid, Tuple{Ptr{Cvoid}})
+    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
+    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
+    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
+    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
+    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
+    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))

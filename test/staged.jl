@@ -148,11 +148,14 @@ module TestGeneratedThrow
     end
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    inited = false
     function __init__()
-        code_typed(foo,(); optimize = false)
-        cfunction(foo,Cvoid,Tuple{})
+        code_typed(foo, (); optimize = false)
+        @cfunction(foo, Cvoid, ())
+        global inited = true
     end
 end
+@test TestGeneratedThrow.inited
 
 # @generated functions including inner functions
 @generated function _g_f_with_inner(x)
@@ -274,10 +277,10 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
-    @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), generated=false)), "2 * x")
-    @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
+    @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(Base.add_int)(x, x)", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747

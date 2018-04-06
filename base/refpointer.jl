@@ -33,7 +33,7 @@ end
 
 ### General Methods for Ref{T} type
 
-eltype(x::Type{Ref{T}}) where {T} = T
+eltype(x::Type{<:Ref{T}}) where {T} = @isdefined(T) ? T : Any
 convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
 
 # create Ref objects for general object conversion

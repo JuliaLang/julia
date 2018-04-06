@@ -1255,7 +1255,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
 
     # group versions into sets that behave identically
     # each set is represented by its highest-valued member
-    repr_vers = sort!(Int[findlast(equalto(repr_vecs[w0]), cvecs) for w0 = 1:neq])
+    repr_vers = sort!(Int[findlast(isequal(repr_vecs[w0]), cvecs) for w0 = 1:neq])
     @assert all(repr_vers .> 0)
     @assert repr_vers[end] == eff_spp0
 

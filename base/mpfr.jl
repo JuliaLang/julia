@@ -936,7 +936,7 @@ end
 
 function _prettify_bigfloat(s::String)::String
     mantissa, exponent = split(s, 'e')
-    if !contains(mantissa, '.')
+    if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
     mantissa = rstrip(mantissa, '0')

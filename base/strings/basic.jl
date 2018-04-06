@@ -194,8 +194,6 @@ Symbol(s::AbstractString) = Symbol(String(s))
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
-promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
-
 ## string & character concatenation ##
 
 """
@@ -648,6 +646,7 @@ length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
 strides(s::CodeUnits) = (1,)
+elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 start(s::CodeUnits) = 1
