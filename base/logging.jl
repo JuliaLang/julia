@@ -297,8 +297,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
-        if std_level >= getindex(_min_enabled_level)
-            logstate = current_logstate()
+        if std_level >= getindex($_min_enabled_level)
+            logstate = $current_logstate()
             if std_level >= logstate.min_enabled_level
                 logger = logstate.logger
                 _module = $_module
@@ -306,17 +306,17 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 group = $group
                 # Second chance at an early bail-out, based on arbitrary
                 # logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
+                if $shouldlog(logger, level, _module, group, id)
                     file = $file
                     line = $line
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        $handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
                     catch err
-                        if !catch_exceptions(logger)
+                        if !$catch_exceptions(logger)
                             rethrow(err)
                         end
-                        logging_error(logger, level, _module, group, id, file, line, err)
+                        $logging_error(logger, level, _module, group, id, file, line, err)
                     end
                 end
             end
