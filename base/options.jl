@@ -34,7 +34,6 @@ struct JLOptions
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
-    outputjitbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
     incremental::Int8

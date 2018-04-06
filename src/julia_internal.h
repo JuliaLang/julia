@@ -321,14 +321,11 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
-jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force);
-jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world);
-jl_llvm_functions_t jl_compile_linfo(
-        jl_method_instance_t **pli,
-        jl_code_info_t *src JL_MAYBE_UNROOTED,
-        size_t world,
-        const jl_cgparams_t *params);
+jl_code_info_t *jl_type_infer(jl_method_instance_t **pmeth JL_ROOTS_TEMPORARILY, size_t world, int force);
+jl_callptr_t jl_generate_fptr(jl_method_instance_t **pmeth, size_t world);
+jl_callptr_t jl_generate_fptr_for_unspecialized(jl_method_instance_t *unspec);
 jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pmeth, size_t world);
+
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
 int jl_code_requires_compiler(jl_code_info_t *src);
@@ -478,7 +475,7 @@ void jl_init_types(void);
 void jl_init_box_caches(void);
 void jl_init_frontend(void);
 void jl_init_primitives(void);
-void *jl_init_llvm(void);
+void jl_init_llvm(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
@@ -559,11 +556,20 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
+JL_DLLEXPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
+        int raw_mc, char getwrapper, const char* asm_variant);
+JL_DLLEXPORT void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params);
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module);
 
-void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
-int32_t jl_get_llvm_gv(jl_value_t *p);
-int32_t jl_assign_functionID(const char *fname);
+void *jl_create_native(jl_array_t *methods);
+void jl_dump_native(void *native_code,
+        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+        const char *sysimg_data, size_t sysimg_len);
+int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p);
+void jl_get_function_id(void *native_code, jl_method_instance_t *linfo,
+        int32_t *func_idx, int32_t *specfunc_idx);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);

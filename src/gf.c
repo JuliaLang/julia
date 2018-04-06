@@ -253,6 +253,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     jl_method_instance_t *li = *pli;
     if (li->inInference && !force)
         return NULL;
+    if (jl_is_method(li->def.method) && li->def.method->unspecialized == li)
+        return NULL; // be careful never to infer the unspecialized method, this would not be valid
 
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 3);
@@ -290,11 +292,12 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
 
 int jl_is_rettype_inferred(jl_method_instance_t *li)
 {
-    if (!li->inferred)
+    jl_value_t *code = li->inferred;
+    if (!code)
         return 0;
-    if (jl_is_code_info(li->inferred) && !((jl_code_info_t*)li->inferred)->inferred)
-        return 0;
-    return 1;
+    if (code == jl_nothing || jl_ast_flag_inferred((jl_array_t*)code))
+        return 1;
+    return 0;
 }
 
 struct set_world {
@@ -416,8 +419,6 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
     li->invoke = jl_fptr_trampoline;
-    li->functionObjectsDecls.functionObject = NULL;
-    li->functionObjectsDecls.specFunctionObject = NULL;
     li->rettype = rettype;
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
@@ -1739,6 +1740,25 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
+static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
+{
+    // one unspecialized version of a function can be shared among all cached specializations
+    jl_method_t *def = method->def.method;
+    if (def->source == NULL) {
+        // generated functions might instead randomly just never get inferred, sorry
+        return method;
+    }
+    if (def->unspecialized == NULL) {
+        JL_LOCK(&def->writelock);
+        if (def->unspecialized == NULL) {
+            def->unspecialized = jl_get_specialized(def, def->sig, jl_emptysvec);
+            jl_gc_wb(def, def->unspecialized);
+        }
+        JL_UNLOCK(&def->writelock);
+    }
+    return def->unspecialized;
+}
+
 jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world)
 {
     jl_method_instance_t *li = *pli;
@@ -1753,8 +1773,6 @@ jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world
         if (jl_is_method(def) && def->unspecialized) {
             jl_method_instance_t *unspec = def->unspecialized;
             if (unspec->invoke != jl_fptr_trampoline) {
-                li->functionObjectsDecls.functionObject = NULL;
-                li->functionObjectsDecls.specFunctionObject = NULL;
                 li->specptr = unspec->specptr;
                 li->inferred = unspec->inferred;
                 if (li->inferred)
@@ -1770,8 +1788,6 @@ jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world
         if (!jl_code_requires_compiler(src)) {
             li->inferred = (jl_value_t*)src;
             jl_gc_wb(li, src);
-            li->functionObjectsDecls.functionObject = NULL;
-            li->functionObjectsDecls.specFunctionObject = NULL;
             li->invoke = jl_fptr_interpret_call;
             return jl_fptr_interpret_call;
         }
@@ -1782,52 +1798,8 @@ jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world
         }
     }
 
-    jl_llvm_functions_t decls = li->functionObjectsDecls;
-    if (decls.functionObject == NULL) {
-        // if we don't have decls already, try to generate it now
-        jl_code_info_t *src = NULL;
-        if (jl_is_method(li->def.method) && !jl_is_rettype_inferred(li) &&
-                 jl_symbol_name(li->def.method->name)[0] != '@') {
-            // don't bother with typeinf on macros or toplevel thunks
-            // but try to infer everything else
-            src = jl_type_infer(pli, world, 0);
-            li = *pli;
-        }
-
-        // check again, because jl_type_infer may have changed li or compiled it
-        fptr = li->invoke;
-        if (fptr != jl_fptr_trampoline)
-            return fptr;
-        decls = li->functionObjectsDecls;
-        if (decls.functionObject == NULL) {
-            decls = jl_compile_linfo(pli, src, world, &jl_default_cgparams);
-            li = *pli;
-        }
-
-        // check again, of course
-        fptr = li->invoke;
-        if (fptr != jl_fptr_trampoline)
-            return fptr;
-
-        // if it's not inferred (inference failed / disabled), try to just use the unspecialized fptr
-        if (!li->inferred) {
-            if (jl_is_method(li->def.method) && li->def.method->unspecialized) {
-                jl_method_instance_t *unspec = li->def.method->unspecialized;
-                fptr = unspec->invoke;
-                if (fptr != jl_fptr_trampoline) {
-                    li->specptr = unspec->specptr;
-                    li->inferred_const = unspec->inferred_const;
-                    if (li->inferred_const)
-                        jl_gc_wb(li, li->inferred_const);
-                    li->invoke = fptr;
-                    return fptr;
-                }
-            }
-        }
-    }
-
     // ask codegen to make the fptr
-    fptr = jl_generate_fptr(pli, decls, world);
+    fptr = jl_generate_fptr(pli, world);
     return fptr;
 }
 
@@ -1835,6 +1807,34 @@ JL_DLLEXPORT jl_value_t *jl_fptr_trampoline(jl_method_instance_t *m, jl_value_t 
 {
     size_t world = jl_get_ptls_states()->world_age;
     jl_callptr_t fptr = jl_compile_method_internal(&m, world);
+    if (fptr == NULL) {
+        // couldn't compile F in the JIT right now, so try something else
+        if (jl_is_method(m->def.method)) {
+            // for methods, instead get an unspecialized (uninferred) version of the code
+            // and return its fptr instead
+            // TODO: always just run this in the interpreter instead?
+            jl_method_instance_t *unspec = jl_get_unspecialized(m);
+            (void)jl_generate_fptr_for_unspecialized(unspec);
+            if (unspec->invoke) {
+                // use unspec pointers
+                m->specptr = unspec->specptr;
+                m->inferred = unspec->inferred;
+                if (m->inferred)
+                    jl_gc_wb(m, m->inferred);
+                m->inferred_const = unspec->inferred_const;
+                if (m->inferred_const)
+                    jl_gc_wb(m, m->inferred_const);
+                m->invoke = unspec->invoke;
+                fptr = unspec->invoke;
+            }
+        }
+        if (fptr == NULL) {
+            // if all else fails, fall back to the interpreter
+            // this should pretty much never happen, but will if the compiler fails
+            // (because of staged functions or llvmcall or other codegen bugs, for example)
+            fptr = &jl_fptr_interpret_call;
+        }
+    }
     return fptr(m, args, nargs);
 }
 
@@ -1928,14 +1928,11 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_method_instance_t *li = jl_get_specialization1(types, world);
     if (li == NULL)
         return 0;
-    jl_code_info_t *src = NULL;
-    if (!jl_is_rettype_inferred(li))
-        src = jl_type_infer(&li, world, 0);
     if (li->invoke != jl_fptr_const_return) {
         if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
             // If we are saving LLVM or native code, generate the LLVM IR so that it'll
             // be included in the saved LLVM module.
-            jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+            (void)jl_generate_fptr(&li, world);
         }
         else if (!jl_options.outputji) {
             // If we are only saving ji files (e.g. package pre-compilation for now),
@@ -1943,6 +1940,9 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
             // Otherwise (this branch), assuming we are at runtime (normal JIT) and
             // we should generate the native code.
             (void)jl_compile_method_internal(&li, world);
+        }
+        else if (!jl_is_rettype_inferred(li)) {
+            (void)jl_type_infer(&li, world, 0);
         }
     }
     return 1;
@@ -2019,7 +2019,7 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 static jl_value_t *verify_type(jl_value_t *v)
 {
-    assert(jl_typeof(jl_typeof(v)));
+    assert(v && jl_typeof(v) && jl_typeof(jl_typeof(v)) == (jl_value_t*)jl_datatype_type);
     return v;
 }
 

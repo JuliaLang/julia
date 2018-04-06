@@ -146,7 +146,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateZExt(x, to);
 }
 
-static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt)
 {
     // assumes `jl_justbits(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
@@ -158,7 +158,7 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     if (jl_is_vecelement_type((jl_value_t*)bt))
         bt = (jl_datatype_t*)jl_tparam0(bt);
 
-    Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
+    Type *lt = julia_struct_to_llvm(ctx, (jl_value_t*)bt, NULL, NULL);
 
     if (type_is_ghost(lt))
         return UndefValue::get(lt);
@@ -194,7 +194,7 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
         size_t offs = jl_field_offset(bt, i);
         assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
-        Type *lft = julia_type_to_llvm(ft);
+        Type *lft = julia_type_to_llvm(ctx, ft);
         if (type_is_ghost(lft))
             continue;
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
@@ -249,7 +249,7 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
             fields.push_back(ConstantInt::get(T_int8, sel));
         }
         else {
-            Constant *val = julia_const_to_llvm(ov, (jl_datatype_t*)ft);
+            Constant *val = julia_const_to_llvm(ctx, ov, (jl_datatype_t*)ft);
             fields.push_back(val);
         }
     }
@@ -262,7 +262,7 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
     return ConstantArray::get(at, fields);
 }
 
-static Constant *julia_const_to_llvm(jl_value_t *e)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
 {
     if (e == jl_true)
         return ConstantInt::get(T_int8, 1);
@@ -271,7 +271,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     jl_value_t *bt = jl_typeof(e);
     if (!jl_justbits(bt))
         return NULL;
-    return julia_const_to_llvm(e, (jl_datatype_t*)bt);
+    return julia_const_to_llvm(ctx, e, (jl_datatype_t*)bt);
 }
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
@@ -332,7 +332,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return UndefValue::get(to); // type mismatch error
     }
 
-    Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
+    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
         Value *unboxed = emit_unboxed_coercion(ctx, to, c ? c : x.V);
         if (!dest)
@@ -441,7 +441,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
 
     // Examine the second argument //
     bool isboxed;
-    Type *vxt = julia_type_to_llvm(v.typ, &isboxed);
+    Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
 
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
@@ -474,7 +474,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     if (!v.ispointer())
         vx = v.V;
     else if (v.constant)
-        vx = julia_const_to_llvm(v.constant);
+        vx = julia_const_to_llvm(ctx, v.constant);
 
     if (v.ispointer() && vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
@@ -648,7 +648,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     }
     else {
         bool isboxed;
-        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
+        Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
         return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
@@ -711,7 +711,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     }
     else {
         bool isboxed;
-        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
+        Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
         typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
@@ -802,7 +802,7 @@ static jl_cgval_t emit_select_value(jl_codectx_t &ctx, jl_value_t **args, size_t
 
     Value *ifelse_result;
     bool isboxed;
-    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
+    Type *llt1 = julia_type_to_llvm(ctx, t1, &isboxed);
     if (t1 != t2)
         isboxed = true;
     if (!isboxed) {
@@ -1130,7 +1130,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         *newtyp = tuptyp;
 
         Value *tupval;
-        tupval = UndefValue::get(julia_type_to_llvm((jl_value_t*)tuptyp));
+        tupval = UndefValue::get(julia_type_to_llvm(ctx, (jl_value_t*)tuptyp));
         tupval = ctx.builder.CreateInsertValue(tupval, val, ArrayRef<unsigned>(0));
         tupval = ctx.builder.CreateInsertValue(tupval, obyte, ArrayRef<unsigned>(1));
         return tupval;

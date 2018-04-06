@@ -159,19 +159,6 @@ struct strrefcomp {
     }
 };
 
-extern "C" tracer_cb jl_linfo_tracer;
-static std::vector<jl_method_instance_t*> triggered_linfos;
-void jl_callback_triggered_linfos(void)
-{
-    if (triggered_linfos.empty())
-        return;
-    if (jl_linfo_tracer) {
-        std::vector<jl_method_instance_t*> to_process(std::move(triggered_linfos));
-        for (jl_method_instance_t *linfo : to_process)
-            jl_call_tracer(jl_linfo_tracer, (jl_value_t*)linfo);
-    }
-}
-
 class JuliaJITEventListener: public JITEventListener
 {
     std::map<size_t, ObjectInfo, revcomp> objectmap;
@@ -380,23 +367,7 @@ public:
             jl_method_instance_t *linfo = NULL;
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
-                if (linfo->compile_traced)
-                    triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
-                const char *F = linfo->functionObjectsDecls.functionObject;
-                const char *specF = linfo->functionObjectsDecls.specFunctionObject;
-                if (linfo->invoke == jl_fptr_trampoline) {
-                    if (specF && sName.equals(specF)) {
-                        def_spec.push_back({linfo, Addr});
-                        if (!strcmp(F, "jl_fptr_args"))
-                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_args});
-                        else if (!strcmp(F, "jl_fptr_sparam"))
-                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_sparam});
-                    }
-                    else if (sName.equals(F)) {
-                        def_invoke.push_back({linfo, Addr});
-                    }
-                }
             }
             if (linfo)
                 linfomap[Addr] = std::make_pair(Size, linfo);

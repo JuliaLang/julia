@@ -697,6 +697,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
     // Ignore constant return value for now.
     threadwork.fptr = jl_compile_method_internal(&threadwork.mfunc, world);
     if (threadwork.fptr == jl_fptr_const_return)
+        // Ignore constant return value for now.
         return jl_nothing;
     threadwork.args = args;
     threadwork.nargs = nargs;
@@ -813,6 +814,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
     size_t world = jl_get_ptls_states()->world_age;
     jl_callptr_t fptr = jl_compile_method_internal(&mfunc, world);
     if (fptr == jl_fptr_const_return)
+        // Ignore constant return value for now.
         return jl_nothing;
     return ti_run_fun(fptr, mfunc, args, nargs);
 }

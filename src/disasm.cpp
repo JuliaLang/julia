@@ -259,10 +259,66 @@ void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
         LinePrinter.emit_finish(Out);
 }
 
+static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW)
+{
+    // strip metadata from all instructions in all functions in the module
+    Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
+    for (Function &f : m->functions()) {
+        if (AAW)
+            AAW->addSubprogram(&f, f.getSubprogram());
+        for (BasicBlock &f_bb : f) {
+            for (Instruction &inst : f_bb) {
+                if (deletelast) {
+                    deletelast->eraseFromParent();
+                    deletelast = nullptr;
+                }
+                // remove dbg.declare and dbg.value calls
+                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                    deletelast = &inst;
+                    continue;
+                }
+
+                // iterate over all metadata kinds and set to NULL to remove
+                if (all_meta) {
+                    SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                    inst.getAllMetadataOtherThanDebugLoc(MDForInst);
+                    for (const auto &md_iter : MDForInst) {
+                        inst.setMetadata(md_iter.first, NULL);
+                    }
+                }
+                // record debug location before erasing it
+                if (AAW)
+                    AAW->addDebugLoc(&inst, inst.getDebugLoc());
+                inst.setDebugLoc(DebugLoc());
+            }
+            if (deletelast) {
+                deletelast->eraseFromParent();
+                deletelast = nullptr;
+            }
+        }
+        f.setSubprogram(NULL);
+    }
+    if (all_meta) {
+        for (GlobalObject &g : m->global_objects()) {
+            g.clearMetadata();
+        }
+    }
+    // now that the subprogram is not referenced, we can delete it too
+    if (NamedMDNode *md = m->getNamedMetadata("llvm.dbg.cu"))
+        m->eraseNamedMetadata(md);
+    //if (NamedMDNode *md = m->getNamedMetadata("llvm.module.flags"))
+    //    m->eraseNamedMetadata(md);
+}
+
+void jl_strip_llvm_debug(Module *m)
+{
+    jl_strip_llvm_debug(m, false, NULL);
+}
+
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
+jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -280,43 +336,8 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
     }
     else {
         Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            // strip metadata from all instructions in all functions in the module
-            Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
-            for (Function &f2 : m->functions()) {
-                AAW.addSubprogram(&f2, f2.getSubprogram());
-                for (BasicBlock &f2_bb : f2) {
-                    for (Instruction &inst : f2_bb) {
-                        if (deletelast) {
-                            deletelast->eraseFromParent();
-                            deletelast = nullptr;
-                        }
-                        // remove dbg.declare and dbg.value calls
-                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
-                            deletelast = &inst;
-                            continue;
-                        }
-
-                        // iterate over all metadata kinds and set to NULL to remove
-                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
-                        inst.getAllMetadataOtherThanDebugLoc(MDForInst);
-                        for (const auto &md_iter : MDForInst) {
-                            inst.setMetadata(md_iter.first, NULL);
-                        }
-                        // record debug location before erasing it
-                        AAW.addDebugLoc(&inst, inst.getDebugLoc());
-                        inst.setDebugLoc(DebugLoc());
-                    }
-                    if (deletelast) {
-                        deletelast->eraseFromParent();
-                        deletelast = nullptr;
-                    }
-                }
-            }
-            for (GlobalObject &g2 : m->global_objects()) {
-                g2.clearMetadata();
-            }
-        }
+        if (strip_ir_metadata)
+            jl_strip_llvm_debug(m, true, &AAW);
         if (dump_module) {
             m->print(stream, &AAW);
         }
@@ -528,8 +549,9 @@ void SymbolTable::createSymbols()
         }
         else {
             const char *global = lookupLocalPC(addr);
-            if (global)
+            if (global || !global[0])
                 isymb->second = global;
+            // TODO: free(global)?
         }
     }
 }

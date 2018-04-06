@@ -287,8 +287,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->invoke = jl_fptr_trampoline;
     li->specptr.fptr = NULL;
     li->compile_traced = 0;
-    li->functionObjectsDecls.functionObject = NULL;
-    li->functionObjectsDecls.specFunctionObject = NULL;
     li->specTypes = NULL;
     li->inInference = 0;
     li->def.value = NULL;
