@@ -114,15 +114,16 @@ const Warn          = LogLevel(    1000)
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
+const LogLevelNames = Dict(
+    BelowMinLevel  => "BelowMinLevel",
+    Debug          => "Debug",
+    Info           => "Info",
+    Warn           => "Warn",
+    Error          => "Error",
+    AboveMaxLevel  => "AboveMaxLevel")
+
 function show(io::IO, level::LogLevel)
-    if     level == BelowMinLevel  print(io, "BelowMinLevel")
-    elseif level == Debug          print(io, "Debug")
-    elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
-    elseif level == Error          print(io, "Error")
-    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
-    else                           print(io, "LogLevel($(level.level))")
-    end
+    print(io, get(LogLevelNames, level, "LogLevel($(level.level))"))
 end
 
 
