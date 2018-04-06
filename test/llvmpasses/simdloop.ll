@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia.so -LowerSIMDLoop -S %s | FileCheck %s
+; RUN: opt -load libjulia%shlibext -LowerSIMDLoop -S %s | FileCheck %s
 
 define void @simd_test(double *%a, double *%b) {
 top:
