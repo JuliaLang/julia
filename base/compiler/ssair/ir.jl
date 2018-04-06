@@ -560,7 +560,7 @@ function reverse_affinity_stmt_after(compact::IncrementalCompact, idx::Int)
     entry[1] == idx + 1 && entry[2]
 end
 
-function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int, Int}=(compact.idx, 1))
+function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
     old_result_idx = compact.result_idx
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
         return nothing
