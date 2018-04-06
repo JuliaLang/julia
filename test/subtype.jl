@@ -1282,3 +1282,13 @@ f24521(::Type{T}, ::Type{T}) where {T} = T
 # issue #25240, #26405
 f26405(::Type{T}) where {T<:Union{Integer, Missing}} = T
 @test f26405(Union{Missing, Int}) == Union{Missing, Int}
+
+# issue #24748
+abstract type Foo24748{T1,T2,T3} end
+@test !(Foo24748{Int,Float64,Ref{Integer}} <: Foo24748{<:T,<:T,Ref{T}} where T)
+
+# issue #26129
+@test !(Tuple{Type{Union{Missing, Float64}}, Type{Vector{Missing}}} <: Tuple{Type{T}, Type{Vector{T}}} where T)
+@test !(Tuple{Type{Union{Missing, Float64}}, Type{Vector{Float64}}} <: Tuple{Type{T}, Type{Vector{T}}} where T)
+@test [[1],[missing]] isa Vector{Vector}
+@test [[missing],[1]] isa Vector{Vector}
