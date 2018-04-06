@@ -866,7 +866,8 @@ function abstract_eval_global(M::Module, s::Symbol)
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
-    typ = src.ssavaluetypes[s.id + 1]
+    new_style_ir = src.codelocs !== nothing
+    typ = src.ssavaluetypes[new_style_ir ? s.id : (s.id + 1)]
     if typ === NOT_FOUND
         return Bottom
     end
