@@ -584,7 +584,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
             active_bb += 1
             finish_current_bb!(compact, old_result_idx)
         end
-        (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
+        (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
         return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
     end
     # This will get overwritten in future iterations if
