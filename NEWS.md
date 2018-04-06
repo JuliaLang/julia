@@ -634,8 +634,9 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
-  * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
-    keyword argument. ([#26156])
+  * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
+    keyword arguments. ([#26156], [#26670])
+
 
 Compiler/Runtime improvements
 -----------------------------
@@ -1134,6 +1135,8 @@ Deprecated or removed
   * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
     `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
 
+  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
+
 Command-line option changes
 ---------------------------
 
@@ -1443,3 +1446,4 @@ Command-line option changes
 [#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
 [#26600]: https://github.com/JuliaLang/julia/issues/26600
+[#26670]: https://github.com/JuliaLang/julia/issues/26670

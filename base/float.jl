@@ -348,28 +348,26 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
+floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,_round(x, RoundDown))
 floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
+ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,_round(x, RoundUp))
 ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
+round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,_round(x, RoundNearest))
 round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
-trunc(x::Float64) = trunc_llvm(x)
-trunc(x::Float32) = trunc_llvm(x)
-trunc(x::Float16) = Float16(trunc(Float32(x)))
+_round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+_round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+_round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
+_round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
+_round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
+_round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
+_round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
+_round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
-floor(x::Float64) = floor_llvm(x)
-floor(x::Float32) = floor_llvm(x)
-floor(x::Float16) = Float16(floor(Float32(x)))
-
-ceil(x::Float64) = ceil_llvm(x)
-ceil(x::Float32) = ceil_llvm(x)
-ceil(x::Float16) = Float16( ceil(Float32(x)))
-
-round(x::Float64) = rint_llvm(x)
-round(x::Float32) = rint_llvm(x)
-round(x::Float16) = Float16(round(Float32(x)))
+_round(x::Float16, r::RoundingMode{:ToZero}) = Float16(_round(Float32(x), r))
+_round(x::Float16, r::RoundingMode{:Down}) = Float16(_round(Float32(x), r))
+_round(x::Float16, r::RoundingMode{:Up}) = Float16(_round(Float32(x), r))
+_round(x::Float16, r::RoundingMode{:Nearest}) = Float16(_round(Float32(x), r))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -662,7 +660,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (_round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -683,7 +681,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (_round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
