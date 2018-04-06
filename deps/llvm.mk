@@ -69,39 +69,15 @@ LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
-LLVM_FLAGS += --disable-profiling --enable-static --enable-targets=$(LLVM_TARGETS)
-LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
-# LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
-# We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
-LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir)
-LLVM_MFLAGS += LD="$(LD)"
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
-ifeq ($(OS), WINNT)
-LLVM_FLAGS += --disable-embed-stdcxx
-endif # OS == WINNT
-else
-LLVM_FLAGS += --disable-assertions
 endif # LLVM_ASSERTIONS
-ifneq ($(LLVM_DEBUG), 0)
-LLVM_FLAGS += --enable-debug-symbols --enable-keep-symbols
+ifeq ($(LLVM_DEBUG), 1)
 ifeq ($(OS), WINNT)
 LLVM_CXXFLAGS += -Wa,-mbig-obj
 endif # OS == WINNT
-ifeq ($(LLVM_DEBUG), 1)
-LLVM_FLAGS += --disable-optimized
-else #RelWithDebInfo
-LLVM_FLAGS += --enable-optimized
-endif
-else
-LLVM_FLAGS += --enable-optimized
 endif # LLVM_DEBUG
-ifeq ($(USE_LIBCPP), 1)
-LLVM_FLAGS += --enable-libcpp
-endif # USE_LIBCPP
 ifeq ($(OS), WINNT)
-LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 ifneq ($(BUILD_OS),WINNT)
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake
@@ -110,26 +86,18 @@ endif # OS == WINNT
 ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
-LLVM_FLAGS += --enable-shared
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-LLVM_FLAGS += --with-intel-jitevents
-ifeq ($(OS), WINNT)
-LLVM_FLAGS += --disable-threads
-endif # OS == WINNT
-else
-LLVM_FLAGS += --disable-threads
+LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON
 endif # USE_INTEL_JITEVENTS
 
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
-LLVM_FLAGS += --with-oprofile=/usr/
+LLVM_CMAKE += -DLLVM_USE_OPROFILE:BOOL=ON
 endif # USE_OPROFILE_JITEVENTS
 
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(USECLANG),1)
-LLVM_FLAGS += --enable-cxx11
-else
+ifeq ($(USECLANG),0)
 LLVM_CXXFLAGS += -std=c++0x
 endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
@@ -148,14 +116,12 @@ LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
-LLVM_FLAGS += --disable-terminfo
 else
 LLVM_CFLAGS += -fsanitize=address
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
 endif
-LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 endif # LLVM_SANITIZE
 
 ifeq ($(LLVM_LTO),1)
@@ -176,39 +142,16 @@ else
 LLVM_LIBCXX_LDFLAGS :=
 endif # BUILD_CUSTOM_LIBCXX
 
-ifneq ($(LLVM_CXXFLAGS),)
-LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
-LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
-endif # LLVM_CXXFLAGS
-ifneq ($(LLVM_CFLAGS),)
-LLVM_FLAGS += CFLAGS="$(LLVM_CFLAGS)"
-LLVM_MFLAGS += CFLAGS="$(LLVM_CFLAGS)"
-endif # LLVM_CFLAGS
-
-ifneq ($(LLVM_CPPFLAGS),)
-LLVM_FLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
-LLVM_MFLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
-endif
-ifneq ($(LLVM_LDFLAGS),)
-LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
-LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
-endif
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
 
-ifeq ($(BUILD_LLVM_CLANG),1)
-LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
-else
+ifeq ($(BUILD_LLVM_CLANG),0)
 # block default building of Clang
-LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
 LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
 LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
 endif
-ifeq ($(BUILD_LLDB),1)
-LLVM_MFLAGS += OPTIONAL_DIRS=lldb
-else
+ifeq ($(BUILD_LLDB),0)
 # block default building of lldb
-LLVM_MFLAGS += OPTIONAL_DIRS=
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
@@ -250,7 +193,6 @@ $(llvm_python_workaround):
 	/usr/bin/env python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf $(llvm_python_location) "$@/python" && \
 	ln -sf $(llvm_python_location)-config "$@/python-config"
-LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/tools/find_python2)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
