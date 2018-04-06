@@ -226,11 +226,6 @@ JL_EXTENSION typedef union {
     // 4 interpreter
 } jl_generic_specptr_t;
 
-typedef struct _jl_llvm_functions_t {
-    const char *functionObject;         // jl_callptr_t llvm Function name
-    const char *specFunctionObject;     // specialized llvm Function name (on sig+rettype)
-} jl_llvm_functions_t;
-
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
 // This type describes a single function body
@@ -341,11 +336,9 @@ typedef struct _jl_code_instance_t {
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // compilation state cache
+    uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
     jl_callptr_t invoke; // jlcall entry point
     jl_generic_specptr_t specptr; // private data for `jlcall entry point`
-    // names of declarations in the JIT,
-    // suitable for referencing in LLVM IR
-    jl_llvm_functions_t functionObjectsDecls;
 } jl_code_instance_t;
 
 // all values are callable as Functions
@@ -442,8 +435,6 @@ typedef struct _jl_datatype_t {
     uint8_t isbitstype; // relevant query for C-api and type-parameters
     uint8_t zeroinit; // if one or more fields requires zero-initialization
     uint8_t isinlinealloc; // if this is allocated inline
-    void *struct_decl;  //llvm::Type*
-    void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
 } jl_datatype_t;
 
 typedef struct {
@@ -1159,6 +1150,8 @@ STATIC_INLINE jl_value_t *jl_typemap_entry_sig(jl_typemap_t *tmap JL_PROPAGATES_
     return (jl_value_t*)((jl_typemap_entry_t*)tmap)->sig;
 }
 
+JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
+
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub);
@@ -1528,7 +1521,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT ios_t *jl_create_system_image(void);
+JL_DLLEXPORT ios_t *jl_create_system_image(void *);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
@@ -1865,7 +1858,6 @@ typedef struct {
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
-    const char *outputjitbc;
     const char *outputo;
     const char *outputji;
     const char *output_code_coverage;
@@ -1971,8 +1963,6 @@ typedef struct {
 // codegen interface ----------------------------------------------------------
 
 typedef struct {
-    int cached;             // can the compiler use/populate the compilation cache?
-
     int track_allocations;  // can we track allocations?
     int code_coverage;      // can we measure coverage?
     int static_alloc;       // is the compiler allowed to allocate statically?

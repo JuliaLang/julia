@@ -72,7 +72,7 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> ncode_in_flight;
+static StringMap<jl_code_instance_t*> codeinst_in_flight;
 static std::string mangle(const std::string &Name, const DataLayout &DL)
 {
     std::string MangledName;
@@ -84,7 +84,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    ncode_in_flight[mangle(name, DL)] = codeinst;
+    codeinst_in_flight[mangle(name, DL)] = codeinst;
 }
 
 
@@ -324,8 +324,6 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_spec;
-        std::vector<std::pair<jl_code_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
         for (const auto &sym_size : symbols) {
@@ -361,25 +359,11 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (linfo_it != ncode_in_flight.end()) {
-                codeinst = linfo_it->second;
-                ncode_in_flight.erase(linfo_it);
-                const char *F = codeinst->functionObjectsDecls.functionObject;
-                const char *specF = codeinst->functionObjectsDecls.specFunctionObject;
-                if (codeinst->invoke == NULL) {
-                    if (specF && sName.equals(specF)) {
-                        def_spec.push_back({codeinst, Addr});
-                        if (!strcmp(F, "jl_fptr_args"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_args});
-                        else if (!strcmp(F, "jl_fptr_sparam"))
-                            def_invoke.push_back({codeinst, (uintptr_t)&jl_fptr_sparam});
-                    }
-                    else if (sName.equals(F)) {
-                        def_invoke.push_back({codeinst, Addr});
-                    }
-                }
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
             }
             if (codeinst)
                 linfomap[Addr] = std::make_pair(Size, codeinst->def);
@@ -392,12 +376,7 @@ public:
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
            }
-       }
-       // now process these in order, so we ensure the closure values are updated before enabling the invoke pointer
-       for (auto &def : def_spec)
-           def.first->specptr.fptr = (void*)def.second;
-       for (auto &def : def_invoke)
-           def.first->invoke = (jl_callptr_t)def.second;
+        }
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
     }

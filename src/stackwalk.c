@@ -527,7 +527,7 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
     for (size_t i = 0; i < bt_size; ) {
         if (bt_data[i] == JL_BT_INTERP_FRAME) {
             jl_safe_printf("Interpreter frame (ip: %d)\n", (int)bt_data[i+2]);
-            jl_static_show(JL_STDERR, (jl_value_t*)bt_data[i+1]);
+            jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)bt_data[i+1]);
             i += 3;
         } else {
             jl_gdblookup(bt_data[i] - 1);
