@@ -222,7 +222,8 @@
            ((copyast)      (deparse (cadr e)))
            ((quote inert)
             (if (and (symbol? (cadr e))
-                     (not (= (string.char (string (cadr e)) 0) #\=)))
+                     (not (memv (string.char (string (cadr e)) 0)
+                                '(#\= #\:))))
                 (string ":" (deparse (cadr e)))
                 (string ":(" (deparse (cadr e)) ")")))
            (else
