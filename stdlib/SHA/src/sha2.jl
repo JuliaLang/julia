@@ -81,82 +81,59 @@ macro R17_80(j, T)
     end)
 end
 
-function transform!(context::Union{SHA2_224_CTX,SHA2_256_CTX})
-    pbuf = buffer_pointer(context)
-    # Initialize registers with the previous intermediate values (our state)
-    a, b, c, d, e, f, g, h = context.state
-
-    # Initial Rounds
-    @R1_16( 1, 256); @R1_16( 2, 256); @R1_16( 3, 256); @R1_16( 4, 256);
-    @R1_16( 5, 256); @R1_16( 6, 256); @R1_16( 7, 256); @R1_16( 8, 256);
-    @R1_16( 9, 256); @R1_16(10, 256); @R1_16(11, 256); @R1_16(12, 256);
-    @R1_16(13, 256); @R1_16(14, 256); @R1_16(15, 256); @R1_16(16, 256);
-
-    # Other Rounds 64
-    @R17_80(17, 256); @R17_80(18, 256); @R17_80(19, 256); @R17_80(20, 256);
-    @R17_80(21, 256); @R17_80(22, 256); @R17_80(23, 256); @R17_80(24, 256);
-    @R17_80(25, 256); @R17_80(26, 256); @R17_80(27, 256); @R17_80(28, 256);
-    @R17_80(29, 256); @R17_80(30, 256); @R17_80(31, 256); @R17_80(32, 256);
-    @R17_80(33, 256); @R17_80(34, 256); @R17_80(35, 256); @R17_80(36, 256);
-    @R17_80(37, 256); @R17_80(38, 256); @R17_80(39, 256); @R17_80(40, 256);
-    @R17_80(41, 256); @R17_80(42, 256); @R17_80(43, 256); @R17_80(44, 256);
-    @R17_80(45, 256); @R17_80(46, 256); @R17_80(47, 256); @R17_80(48, 256);
-    @R17_80(49, 256); @R17_80(50, 256); @R17_80(51, 256); @R17_80(52, 256);
-    @R17_80(53, 256); @R17_80(54, 256); @R17_80(55, 256); @R17_80(56, 256);
-    @R17_80(57, 256); @R17_80(58, 256); @R17_80(59, 256); @R17_80(60, 256);
-    @R17_80(61, 256); @R17_80(62, 256); @R17_80(63, 256); @R17_80(64, 256);
-
-    # Compute the current intermediate hash value
-    @inbounds begin
-        context.state[1] += a
-        context.state[2] += b
-        context.state[3] += c
-        context.state[4] += d
-        context.state[5] += e
-        context.state[6] += f
-        context.state[7] += g
-        context.state[8] += h
+macro R_init(T)
+    expr = :()
+    for i in 1:16
+        expr = :($expr; @R1_16($i, $T))
     end
+    return esc(expr)
 end
 
-function transform!(context::Union{SHA2_384_CTX,SHA2_512_CTX})
-    pbuf = buffer_pointer(context)
-    # Initialize registers with the previous intermediate values (our state)
-    a, b, c, d, e, f, g, h = context.state
+macro R_end(T)
 
-    # Initial Rounds
-    @R1_16( 1, 512); @R1_16( 2, 512); @R1_16( 3, 512); @R1_16( 4, 512);
-    @R1_16( 5, 512); @R1_16( 6, 512); @R1_16( 7, 512); @R1_16( 8, 512);
-    @R1_16( 9, 512); @R1_16(10, 512); @R1_16(11, 512); @R1_16(12, 512);
-    @R1_16(13, 512); @R1_16(14, 512); @R1_16(15, 512); @R1_16(16, 512);
+    if T == 256
+        n_rounds = 64
+    elseif T == 512
+        n_rounds = 80
+    end
 
-    # Other Rounds 80
-    @R17_80(17, 512); @R17_80(18, 512); @R17_80(19, 512); @R17_80(20, 512);
-    @R17_80(21, 512); @R17_80(22, 512); @R17_80(23, 512); @R17_80(24, 512);
-    @R17_80(25, 512); @R17_80(26, 512); @R17_80(27, 512); @R17_80(28, 512);
-    @R17_80(29, 512); @R17_80(30, 512); @R17_80(31, 512); @R17_80(32, 512);
-    @R17_80(33, 512); @R17_80(34, 512); @R17_80(35, 512); @R17_80(36, 512);
-    @R17_80(37, 512); @R17_80(38, 512); @R17_80(39, 512); @R17_80(40, 512);
-    @R17_80(41, 512); @R17_80(42, 512); @R17_80(43, 512); @R17_80(44, 512);
-    @R17_80(45, 512); @R17_80(46, 512); @R17_80(47, 512); @R17_80(48, 512);
-    @R17_80(49, 512); @R17_80(50, 512); @R17_80(51, 512); @R17_80(52, 512);
-    @R17_80(53, 512); @R17_80(54, 512); @R17_80(55, 512); @R17_80(56, 512);
-    @R17_80(57, 512); @R17_80(58, 512); @R17_80(59, 512); @R17_80(60, 512);
-    @R17_80(61, 512); @R17_80(62, 512); @R17_80(63, 512); @R17_80(64, 512);
-    @R17_80(65, 512); @R17_80(66, 512); @R17_80(67, 512); @R17_80(68, 512);
-    @R17_80(69, 512); @R17_80(70, 512); @R17_80(71, 512); @R17_80(72, 512);
-    @R17_80(73, 512); @R17_80(74, 512); @R17_80(75, 512); @R17_80(76, 512);
-    @R17_80(77, 512); @R17_80(78, 512); @R17_80(79, 512); @R17_80(80, 512);
+    expr = :()
+    for i in 17:n_rounds
+        expr = :($expr; @R17_80($i, $T))
+    end
 
-    # Compute the current intermediate hash value
-    @inbounds begin
-        context.state[1] += a
-        context.state[2] += b
-        context.state[3] += c
-        context.state[4] += d
-        context.state[5] += e
-        context.state[6] += f
-        context.state[7] += g
-        context.state[8] += h
+    return esc(expr)
+end
+
+@generated function transform!(context::Union{SHA2_224_CTX, SHA2_256_CTX,
+                                              SHA2_384_CTX, SHA2_512_CTX})
+    if context <: Union{SHA2_224_CTX,SHA2_256_CTX}
+        T = 256
+    elseif context <: Union{SHA2_384_CTX,SHA2_512_CTX}
+        T = 512
+    end
+
+    return quote
+        pbuf = buffer_pointer(context)
+        # Initialize registers with the previous intermediate values (our state)
+        a, b, c, d, e, f, g, h = context.state
+
+        # Initial Rounds
+        @R_init($T)
+
+        # Other Rounds
+        @R_end($T)
+
+        # Compute the current intermediate hash value
+        @inbounds begin
+            context.state[1] += a
+            context.state[2] += b
+            context.state[3] += c
+            context.state[4] += d
+            context.state[5] += e
+            context.state[6] += f
+            context.state[7] += g
+            context.state[8] += h
+        end
     end
 end
