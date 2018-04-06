@@ -100,14 +100,18 @@ Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Arr
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
     OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 
-Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
+Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
 
-Base.fill(v, inds::NTuple{N, AbstractUnitRange}) where{N} =
-    fill!(OffsetArray(Array{typeof(v), N}(undef, map(length, inds)), map(indsoffset, inds)), v)
-Base.AbstractArray{T}(::UndefInitializer, inds::NTuple{N,AbstractUnitRange}) where {T,N} =
-    OffsetArray(Array{T, N}(undef, map(length, inds)), map(indsoffset, inds))
-Base.AbstractArray{T,N}(::UndefInitializer, inds::NTuple{N,AbstractUnitRange}) where {T,N} =
-    OffsetArray(Array{T, N}(undef, map(length, inds)), map(indsoffset, inds))
+Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(Array{typeof(v), N}(undef, map(indslength, inds)), map(indsoffset, inds)), v)
+Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), zero(T))
+Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), one(T))
+Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), true)
+Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), false)
 
 @inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
@@ -167,6 +171,9 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
+indslength(r::AbstractRange) = length(r)
+indslength(i::Integer) = i
+
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
