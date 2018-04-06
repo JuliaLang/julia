@@ -202,7 +202,7 @@ end
         next1 = iterate(str, i1)
         @assert next1 !== nothing
         c1, i1 = next1
-        c2, i2 = iterate(d.d, i2)
+        next2 = iterate(d.d, i2)
         @assert next2 !== nothing
         c2, i2 = next2
         if c1 != c2
